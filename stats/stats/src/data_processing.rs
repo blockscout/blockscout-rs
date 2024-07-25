@@ -89,7 +89,7 @@ mod tests {
     use rust_decimal_macros::dec;
 
     use super::*;
-    use crate::tests::point_construction::{v_decimal, v_int};
+    use crate::tests::point_construction::{d_v_decimal, d_v_int};
 
     #[test]
     fn test_deltas_works_int() {
@@ -99,43 +99,43 @@ mod tests {
             // Normal case: 3 sequential dates with increments
             (
                 vec![
-                    v_int("2100-01-01", 100),
-                    v_int("2100-01-02", 110),
-                    v_int("2100-01-03", 120),
+                    d_v_int("2100-01-01", 100),
+                    d_v_int("2100-01-02", 110),
+                    d_v_int("2100-01-03", 120),
                 ],
                 90,
                 vec![
-                    v_int("2100-01-01", 10),
-                    v_int("2100-01-02", 10),
-                    v_int("2100-01-03", 10),
+                    d_v_int("2100-01-01", 10),
+                    d_v_int("2100-01-02", 10),
+                    d_v_int("2100-01-03", 10),
                 ],
             ),
             // Increments and decrements with integer values
             (
                 vec![
-                    v_int("2100-01-01", 100),
-                    v_int("2100-01-02", 110),
-                    v_int("2100-01-03", 90),
+                    d_v_int("2100-01-01", 100),
+                    d_v_int("2100-01-02", 110),
+                    d_v_int("2100-01-03", 90),
                 ],
                 95,
                 vec![
-                    v_int("2100-01-01", 5),
-                    v_int("2100-01-02", 10),
-                    v_int("2100-01-03", -20),
+                    d_v_int("2100-01-01", 5),
+                    d_v_int("2100-01-02", 10),
+                    d_v_int("2100-01-03", -20),
                 ],
             ),
             // Missing dates with integer values
             (
                 vec![
-                    v_int("2100-01-01", 100),
-                    v_int("2100-01-05", 150),
-                    v_int("2100-01-10", 130),
+                    d_v_int("2100-01-01", 100),
+                    d_v_int("2100-01-05", 150),
+                    d_v_int("2100-01-10", 130),
                 ],
                 95,
                 vec![
-                    v_int("2100-01-01", 5),
-                    v_int("2100-01-05", 50),
-                    v_int("2100-01-10", -20),
+                    d_v_int("2100-01-01", 5),
+                    d_v_int("2100-01-05", 50),
+                    d_v_int("2100-01-10", -20),
                 ],
             ),
         ];
@@ -153,43 +153,43 @@ mod tests {
             // Normal case: 3 sequential dates with increments
             (
                 vec![
-                    v_decimal("2100-01-01", dec!(100.5)),
-                    v_decimal("2100-01-02", dec!(110.75)),
-                    v_decimal("2100-01-03", dec!(120.25)),
+                    d_v_decimal("2100-01-01", dec!(100.5)),
+                    d_v_decimal("2100-01-02", dec!(110.75)),
+                    d_v_decimal("2100-01-03", dec!(120.25)),
                 ],
                 dec!(90.0),
                 vec![
-                    v_decimal("2100-01-01", dec!(10.5)),
-                    v_decimal("2100-01-02", dec!(10.25)),
-                    v_decimal("2100-01-03", dec!(9.5)),
+                    d_v_decimal("2100-01-01", dec!(10.5)),
+                    d_v_decimal("2100-01-02", dec!(10.25)),
+                    d_v_decimal("2100-01-03", dec!(9.5)),
                 ],
             ),
             // Increments and decrements with decimal values
             (
                 vec![
-                    v_decimal("2100-01-01", dec!(100.5)),
-                    v_decimal("2100-01-02", dec!(110.75)),
-                    v_decimal("2100-01-03", dec!(90.25)),
+                    d_v_decimal("2100-01-01", dec!(100.5)),
+                    d_v_decimal("2100-01-02", dec!(110.75)),
+                    d_v_decimal("2100-01-03", dec!(90.25)),
                 ],
                 dec!(95.0),
                 vec![
-                    v_decimal("2100-01-01", dec!(5.5)),
-                    v_decimal("2100-01-02", dec!(10.25)),
-                    v_decimal("2100-01-03", dec!(-20.5)),
+                    d_v_decimal("2100-01-01", dec!(5.5)),
+                    d_v_decimal("2100-01-02", dec!(10.25)),
+                    d_v_decimal("2100-01-03", dec!(-20.5)),
                 ],
             ),
             // Missing dates with decimal values
             (
                 vec![
-                    v_decimal("2100-01-01", dec!(100.5)),
-                    v_decimal("2100-01-05", dec!(150.25)),
-                    v_decimal("2100-01-10", dec!(130.75)),
+                    d_v_decimal("2100-01-01", dec!(100.5)),
+                    d_v_decimal("2100-01-05", dec!(150.25)),
+                    d_v_decimal("2100-01-10", dec!(130.75)),
                 ],
                 dec!(95.0),
                 vec![
-                    v_decimal("2100-01-01", dec!(5.5)),
-                    v_decimal("2100-01-05", dec!(49.75)),
-                    v_decimal("2100-01-10", dec!(-19.5)),
+                    d_v_decimal("2100-01-01", dec!(5.5)),
+                    d_v_decimal("2100-01-05", dec!(49.75)),
+                    d_v_decimal("2100-01-10", dec!(-19.5)),
                 ],
             ),
         ];
@@ -207,43 +207,43 @@ mod tests {
             // Normal case: 3 sequential dates with increments
             (
                 vec![
-                    v_int("2100-01-01", 10),
-                    v_int("2100-01-02", 20),
-                    v_int("2100-01-03", 30),
+                    d_v_int("2100-01-01", 10),
+                    d_v_int("2100-01-02", 20),
+                    d_v_int("2100-01-03", 30),
                 ],
                 100,
                 vec![
-                    v_int("2100-01-01", 110),
-                    v_int("2100-01-02", 130),
-                    v_int("2100-01-03", 160),
+                    d_v_int("2100-01-01", 110),
+                    d_v_int("2100-01-02", 130),
+                    d_v_int("2100-01-03", 160),
                 ],
             ),
             // Increments and decrements with integer values
             (
                 vec![
-                    v_int("2100-01-01", 0),
-                    v_int("2100-01-02", -10),
-                    v_int("2100-01-03", 20),
+                    d_v_int("2100-01-01", 0),
+                    d_v_int("2100-01-02", -10),
+                    d_v_int("2100-01-03", 20),
                 ],
                 100,
                 vec![
-                    v_int("2100-01-01", 100),
-                    v_int("2100-01-02", 90),
-                    v_int("2100-01-03", 110),
+                    d_v_int("2100-01-01", 100),
+                    d_v_int("2100-01-02", 90),
+                    d_v_int("2100-01-03", 110),
                 ],
             ),
             // Missing dates with integer values
             (
                 vec![
-                    v_int("2100-01-01", 10),
-                    v_int("2100-01-05", 20),
-                    v_int("2100-01-10", 30),
+                    d_v_int("2100-01-01", 10),
+                    d_v_int("2100-01-05", 20),
+                    d_v_int("2100-01-10", 30),
                 ],
                 100,
                 vec![
-                    v_int("2100-01-01", 110),
-                    v_int("2100-01-05", 130),
-                    v_int("2100-01-10", 160),
+                    d_v_int("2100-01-01", 110),
+                    d_v_int("2100-01-05", 130),
+                    d_v_int("2100-01-10", 160),
                 ],
             ),
         ];
@@ -261,43 +261,43 @@ mod tests {
             // Normal case: 3 sequential dates with increments
             (
                 vec![
-                    v_decimal("2100-01-01", dec!(100.5)),
-                    v_decimal("2100-01-02", dec!(110.75)),
-                    v_decimal("2100-01-03", dec!(120.25)),
+                    d_v_decimal("2100-01-01", dec!(100.5)),
+                    d_v_decimal("2100-01-02", dec!(110.75)),
+                    d_v_decimal("2100-01-03", dec!(120.25)),
                 ],
                 dec!(100.0),
                 vec![
-                    v_decimal("2100-01-01", dec!(200.5)),
-                    v_decimal("2100-01-02", dec!(311.25)),
-                    v_decimal("2100-01-03", dec!(431.5)),
+                    d_v_decimal("2100-01-01", dec!(200.5)),
+                    d_v_decimal("2100-01-02", dec!(311.25)),
+                    d_v_decimal("2100-01-03", dec!(431.5)),
                 ],
             ),
             // Increments and decrements with decimal values
             (
                 vec![
-                    v_decimal("2100-01-01", dec!(100.5)),
-                    v_decimal("2100-01-02", dec!(110.75)),
-                    v_decimal("2100-01-03", dec!(90.25)),
+                    d_v_decimal("2100-01-01", dec!(100.5)),
+                    d_v_decimal("2100-01-02", dec!(110.75)),
+                    d_v_decimal("2100-01-03", dec!(90.25)),
                 ],
                 dec!(0.0),
                 vec![
-                    v_decimal("2100-01-01", dec!(100.5)),
-                    v_decimal("2100-01-02", dec!(211.25)),
-                    v_decimal("2100-01-03", dec!(301.5)),
+                    d_v_decimal("2100-01-01", dec!(100.5)),
+                    d_v_decimal("2100-01-02", dec!(211.25)),
+                    d_v_decimal("2100-01-03", dec!(301.5)),
                 ],
             ),
             // Missing dates with decimal values
             (
                 vec![
-                    v_decimal("2100-01-01", dec!(100.5)),
-                    v_decimal("2100-01-05", dec!(150.25)),
-                    v_decimal("2100-01-10", dec!(130.75)),
+                    d_v_decimal("2100-01-01", dec!(100.5)),
+                    d_v_decimal("2100-01-05", dec!(150.25)),
+                    d_v_decimal("2100-01-10", dec!(130.75)),
                 ],
                 dec!(1.0),
                 vec![
-                    v_decimal("2100-01-01", dec!(101.5)),
-                    v_decimal("2100-01-05", dec!(251.75)),
-                    v_decimal("2100-01-10", dec!(382.5)),
+                    d_v_decimal("2100-01-01", dec!(101.5)),
+                    d_v_decimal("2100-01-05", dec!(251.75)),
+                    d_v_decimal("2100-01-10", dec!(382.5)),
                 ],
             ),
         ];

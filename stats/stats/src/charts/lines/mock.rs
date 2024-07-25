@@ -123,9 +123,9 @@ pub type PseudoRandomMockLine<DateRange, ValueRange, Policy> = DirectVecLocalDbC
     MockLineProperties,
 >;
 
-pub struct PredefinedMockSource<Data, Policy>(PhantomData<(Data, Policy)>);
+pub struct PredefinedMockRetrieve<Data, Policy>(PhantomData<(Data, Policy)>);
 
-impl<Data, Policy, T, V> RemoteQueryBehaviour for PredefinedMockSource<Data, Policy>
+impl<Data, Policy, T, V> RemoteQueryBehaviour for PredefinedMockRetrieve<Data, Policy>
 where
     Data: Get<Value = Vec<TimespanValue<T, V>>>,
     Policy: Get<Value = MissingDatePolicy>,
@@ -142,3 +142,6 @@ where
         Ok(mock_trim_lines(Data::get(), cx.time, range, Policy::get()))
     }
 }
+
+pub type PredefinedMockSource<Data, Policy> =
+    RemoteDatabaseSource<PredefinedMockRetrieve<Data, Policy>>;

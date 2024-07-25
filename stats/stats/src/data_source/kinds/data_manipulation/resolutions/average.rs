@@ -184,7 +184,7 @@ mod tests {
         data_source::kinds::data_manipulation::map::MapParseTo,
         gettable_const,
         lines::PseudoRandomMockRetrieve,
-        tests::point_construction::{d, dt, v, v_double, v_int, week_of, week_v_double},
+        tests::point_construction::{d, d_v, d_v_double, d_v_int, dt, week_of, week_v_double},
         MissingDatePolicy,
     };
 
@@ -204,10 +204,10 @@ mod tests {
             zip_same_timespan::<NaiveDate, i64, _>(
                 vec![],
                 vec![
-                    v("2024-07-05", "5R"),
-                    v("2024-07-07", "7R"),
-                    v("2024-07-08", "8R"),
-                    v("2024-07-11", "11R"),
+                    d_v("2024-07-05", "5R"),
+                    d_v("2024-07-07", "7R"),
+                    d_v("2024-07-08", "8R"),
+                    d_v("2024-07-11", "11R"),
                 ]
             ),
             vec![
@@ -220,10 +220,10 @@ mod tests {
         assert_eq!(
             zip_same_timespan::<NaiveDate, _, i64>(
                 vec![
-                    v("2024-07-05", "5L"),
-                    v("2024-07-07", "7L"),
-                    v("2024-07-08", "8L"),
-                    v("2024-07-11", "11L"),
+                    d_v("2024-07-05", "5L"),
+                    d_v("2024-07-07", "7L"),
+                    d_v("2024-07-08", "8L"),
+                    d_v("2024-07-11", "11L"),
                 ],
                 vec![]
             ),
@@ -237,15 +237,15 @@ mod tests {
         assert_eq!(
             zip_same_timespan(
                 vec![
-                    v("2024-07-08", "8L"),
-                    v("2024-07-09", "9L"),
-                    v("2024-07-10", "10L"),
+                    d_v("2024-07-08", "8L"),
+                    d_v("2024-07-09", "9L"),
+                    d_v("2024-07-10", "10L"),
                 ],
                 vec![
-                    v("2024-07-05", "5R"),
-                    v("2024-07-07", "7R"),
-                    v("2024-07-08", "8R"),
-                    v("2024-07-11", "11R"),
+                    d_v("2024-07-05", "5R"),
+                    d_v("2024-07-07", "7R"),
+                    d_v("2024-07-08", "8R"),
+                    d_v("2024-07-11", "11R"),
                 ]
             ),
             vec![
@@ -271,16 +271,16 @@ mod tests {
         assert_eq!(
             weekly_average_from(
                 vec![
-                    v_double("2024-07-08", 5.0),
-                    v_double("2024-07-10", 34.2),
-                    v_double("2024-07-14", 10.3),
-                    v_double("2024-07-17", 5.0)
+                    d_v_double("2024-07-08", 5.0),
+                    d_v_double("2024-07-10", 34.2),
+                    d_v_double("2024-07-14", 10.3),
+                    d_v_double("2024-07-17", 5.0)
                 ],
                 vec![
-                    v_int("2024-07-08", 100),
-                    v_int("2024-07-10", 2),
-                    v_int("2024-07-14", 12),
-                    v_int("2024-07-17", 5)
+                    d_v_int("2024-07-08", 100),
+                    d_v_int("2024-07-10", 2),
+                    d_v_int("2024-07-14", 12),
+                    d_v_int("2024-07-17", 5)
                 ]
             ),
             vec![

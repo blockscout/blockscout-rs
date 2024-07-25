@@ -20,30 +20,51 @@ pub fn dt(time: &str) -> NaiveDateTime {
     time.parse().unwrap()
 }
 
-pub fn v(date: &str, value: &str) -> DateValue<String> {
+pub fn d_v(date: &str, value: &str) -> DateValue<String> {
     DateValue::<String> {
         timespan: d(date),
         value: value.to_string(),
     }
 }
 
-pub fn v_int(date: &str, value: i64) -> DateValue<i64> {
+pub fn d_v_int(date: &str, value: i64) -> DateValue<i64> {
     DateValue::<i64> {
         timespan: d(date),
         value,
     }
 }
 
-pub fn v_decimal(date: &str, value: Decimal) -> DateValue<Decimal> {
+pub fn d_v_decimal(date: &str, value: Decimal) -> DateValue<Decimal> {
     DateValue::<Decimal> {
         timespan: d(date),
         value,
     }
 }
 
-pub fn v_double(date: &str, value: f64) -> DateValue<f64> {
+pub fn d_v_double(date: &str, value: f64) -> DateValue<f64> {
     DateValue::<f64> {
         timespan: d(date),
+        value,
+    }
+}
+
+pub fn week_v(week_of_date: &str, value: &str) -> WeekValue<String> {
+    WeekValue::<String> {
+        timespan: week_of(week_of_date),
+        value: value.to_string(),
+    }
+}
+
+pub fn week_v_int(week_of_date: &str, value: i64) -> WeekValue<i64> {
+    WeekValue::<i64> {
+        timespan: week_of(week_of_date),
+        value,
+    }
+}
+
+pub fn week_v_decimal(week_of_date: &str, value: Decimal) -> WeekValue<Decimal> {
+    WeekValue::<Decimal> {
+        timespan: week_of(week_of_date),
         value,
     }
 }
