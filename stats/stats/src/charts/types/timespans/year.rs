@@ -33,7 +33,11 @@ impl Year {
         NaiveDate::from_yo_opt(self.0, 1).unwrap_or(NaiveDate::MIN)
     }
 
-    pub fn clamp_by_naive_date_range(self) -> Self {
+    pub fn number(self) -> i32 {
+        self.clamp_by_naive_date_range().0
+    }
+
+    fn clamp_by_naive_date_range(self) -> Self {
         if let Some(_) = NaiveDate::from_yo_opt(self.0, 1) {
             self
         } else {
