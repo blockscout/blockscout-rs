@@ -11,28 +11,25 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{DataSource, UpdateContext},
-    types::{
-        week::{Week, WeekValue},
-        DateValue, Timespan, TimespanValue,
-    },
+    types::{ConsistsOf, Timespan, TimespanValue},
     UpdateError,
 };
 
 use super::{extend_to_timespan_boundaries, reduce_each_timespan};
 
-/// Take last value within each timespan range.
-pub struct LastValueWeekly<DS>(PhantomData<DS>)
-where
-    DS: DataSource;
+/// Takes last value within each timespan range.
+pub struct LastValueLowerResolution<DS, LowerRes>(PhantomData<(DS, LowerRes)>);
 
-impl<DS, Value> DataSource for LastValueWeekly<DS>
+impl<DS, LowerRes, HigherRes, Value> DataSource for LastValueLowerResolution<DS, LowerRes>
 where
+    LowerRes: Timespan + ConsistsOf<HigherRes> + Eq + Send,
+    HigherRes: Clone,
     Value: Send + Debug,
-    DS: DataSource<Output = Vec<DateValue<Value>>>,
+    DS: DataSource<Output = Vec<TimespanValue<HigherRes, Value>>>,
 {
     type MainDependencies = DS;
     type ResolutionDependencies = ();
-    type Output = Vec<WeekValue<Value>>;
+    type Output = Vec<TimespanValue<LowerRes, Value>>;
 
     fn mutex_id() -> Option<String> {
         // just an adapter
@@ -57,20 +54,20 @@ where
         range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        let time_range_for_weeks = range.map(extend_to_timespan_boundaries::<Week>);
-        let daily_data = DS::query_data(
+        let time_range_for_lower_res = range.map(extend_to_timespan_boundaries::<LowerRes>);
+        let high_res_data = DS::query_data(
             cx,
-            time_range_for_weeks.clone(),
+            time_range_for_lower_res.clone(),
             dependency_data_fetch_timer,
         )
         .await?;
         Ok(reduce_each_timespan(
-            daily_data,
-            |t| Week::from_date(t.timespan),
+            high_res_data,
+            |t| LowerRes::from_smaller(t.timespan.clone()),
             |a| {
                 let last = a.into_iter().rev().next();
                 last.map(|p| TimespanValue {
-                    timespan: Week::from_date(p.timespan),
+                    timespan: LowerRes::from_smaller(p.timespan),
                     value: p.value,
                 })
             },
@@ -91,11 +88,11 @@ mod tests {
         gettable_const,
         lines::PredefinedMockSource,
         tests::point_construction::{d_v_int, dt, week_v_int},
-        types::DateValue,
+        types::{week::Week, DateValue},
         MissingDatePolicy,
     };
 
-    use super::LastValueWeekly;
+    use super::LastValueLowerResolution;
 
     #[tokio::test]
     async fn last_value_weekly_works() {
@@ -111,7 +108,7 @@ mod tests {
 
         type MockSource = PredefinedMockSource<MockData, PolicyGrowth>;
 
-        type MockSourceWeekly = LastValueWeekly<MockSource>;
+        type MockSourceWeekly = LastValueLowerResolution<MockSource, Week>;
 
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();

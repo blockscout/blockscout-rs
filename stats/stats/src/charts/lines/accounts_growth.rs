@@ -3,7 +3,7 @@
 use super::new_accounts::NewAccountsInt;
 use crate::{
     data_source::kinds::{
-        data_manipulation::resolutions::last_value::LastValueWeekly,
+        data_manipulation::resolutions::last_value::LastValueLowerResolution,
         local_db::{
             parameters::update::batching::parameters::Batch30Weeks,
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
@@ -43,8 +43,11 @@ delegated_property_with_resolution!(WeeklyProperties {
 
 pub type AccountsGrowth = DailyCumulativeLocalDbChartSource<NewAccountsInt, Properties>;
 
-pub type AccountsGrowthWeekly =
-    DirectVecLocalDbChartSource<LastValueWeekly<AccountsGrowth>, Batch30Weeks, WeeklyProperties>;
+pub type AccountsGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<AccountsGrowth, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
