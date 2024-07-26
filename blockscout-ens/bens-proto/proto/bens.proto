@@ -84,6 +84,9 @@ message DetailedDomain {
   map<string, string> other_addresses = 9;
   // Information about protocol that domain belongs to
   ProtocolInfo protocol = 12;
+  bool stored_offchain = 13;
+  bool resolved_with_wildcard = 14;
+  optional Address resolver_address = 15;
 }
 
 message ProtocolInfo {

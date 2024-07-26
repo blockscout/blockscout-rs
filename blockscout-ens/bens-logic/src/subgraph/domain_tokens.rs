@@ -1,8 +1,8 @@
 use super::{DomainToken, DomainTokenType};
-use crate::entity::subgraph::domain::DetailedDomain;
+use crate::{entity::subgraph::domain::DetailedDomain, protocols::DomainNameOnProtocol};
+use alloy::primitives::Address;
 use anyhow::Context;
 use bigdecimal::{num_bigint::BigInt, Num};
-use ethers::types::Address;
 use std::str::FromStr;
 
 #[tracing::instrument(
@@ -15,18 +15,16 @@ use std::str::FromStr;
 )]
 pub fn extract_tokens_from_domain(
     domain: &DetailedDomain,
-    native_token_contract: Option<Address>,
+    name: &DomainNameOnProtocol<'_>,
 ) -> Result<Vec<DomainToken>, anyhow::Error> {
     let mut tokens = vec![];
+    if let Some(contract) = name.deployed_protocol.protocol.info.native_token_contract {
+        let is_second_level_domain = name.inner.level() == 2;
+        let is_native_domain = name.tld_is_native();
 
-    if let Some(contract) = native_token_contract {
-        let is_second_level_domain = domain
-            .name
-            .as_ref()
-            .map(|name| name.matches('.').count() == 1)
-            .unwrap_or(true);
         // native NFT exists only if domain is second level (like abc.eth and not abc.abc.eth)
-        if is_second_level_domain {
+        // and if tld is native (like .eth and not .xyz)
+        if is_second_level_domain && is_native_domain {
             let labelhash = domain
                 .labelhash
                 .as_ref()
@@ -63,7 +61,13 @@ fn token_id(hexed_id: &str) -> Result<String, anyhow::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        blockscout::BlockscoutClient,
+        protocols::{DeployedProtocol, Network, Protocol, Tld},
+    };
+    use nonempty::nonempty;
     use pretty_assertions::assert_eq;
+    use std::sync::Arc;
 
     #[inline]
     fn domain(
@@ -168,12 +172,29 @@ mod tests {
                     },
                 ],
             ),
+            // tld is not native
+            (
+                domain("levvv.xyz", "0x0200", "0x0100", owner, None),
+                addr(native_contract),
+                vec![],
+            )
         ] {
-
-            let tokens = extract_tokens_from_domain(&domain, native_token_contract)
+            let mut protocol = Protocol::default();
+            protocol.info.tld_list = nonempty![Tld::new("eth")];
+            protocol.info.native_token_contract = native_token_contract;
+            let deployed_protocol = DeployedProtocol {
+                protocol: &protocol,
+                deployment_network: &Network {
+                    blockscout_client: Arc::new(BlockscoutClient::new("http://localhost:8545".parse().unwrap(), 1, 1)),
+                    rpc_url: None,
+                    use_protocols: vec![],
+                },
+            };
+            let name = DomainNameOnProtocol::from_str(domain.name.as_ref().unwrap(), deployed_protocol).unwrap();
+            let tokens = extract_tokens_from_domain(&domain, &name)
                 .expect("failed to extract tokens from domain");
 
-            assert_eq!(tokens, expected_tokens);
+            assert_eq!(tokens, expected_tokens, "failed for domain: {}", name.inner.name);
         }
     }
 }

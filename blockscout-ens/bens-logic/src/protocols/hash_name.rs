@@ -1,9 +1,27 @@
-use ethers::{types::Bytes, utils::keccak256};
+use alloy::primitives::{keccak256, B256};
+use alloy_ccip_read::DomainIdProvider;
+
+#[derive(Clone)]
+pub struct CustomDomainIdGenerator {
+    empty_label_hash: Option<B256>,
+}
+
+impl DomainIdProvider for CustomDomainIdGenerator {
+    fn generate(&self, name: &str) -> B256 {
+        hash_ens_domain_name(name, self.empty_label_hash)
+    }
+}
+
+impl CustomDomainIdGenerator {
+    pub fn new(empty_label_hash: Option<B256>) -> Self {
+        Self { empty_label_hash }
+    }
+}
 
 /// Implementation of
 /// https://docs.ens.domains/contract-api-reference/name-processing#algorithm
 /// with custom empty_label_hash
-pub fn hash_ens_domain_name(name: &str, empty_label_hash: Option<Bytes>) -> Bytes {
+pub fn hash_ens_domain_name(name: &str, empty_label_hash: Option<B256>) -> B256 {
     if name.is_empty() {
         empty_label_hash.unwrap_or_else(|| [0; 32].into())
     } else {
@@ -11,11 +29,11 @@ pub fn hash_ens_domain_name(name: &str, empty_label_hash: Option<Bytes>) -> Byte
         let remainder_hash = hash_ens_domain_name(remainder, empty_label_hash);
         let label_hash = keccak256(label.as_bytes());
         let concatenated: Vec<u8> = remainder_hash.into_iter().chain(label_hash).collect();
-        keccak256(concatenated).into()
+        keccak256(concatenated)
     }
 }
 
-pub fn domain_id(name: &str, empty_label_hash: Option<Bytes>) -> String {
+pub fn domain_id(name: &str, empty_label_hash: Option<B256>) -> String {
     hex(hash_ens_domain_name(name, empty_label_hash))
 }
 
@@ -29,7 +47,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hex::FromHex;
+    use alloy::hex::FromHex;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -77,7 +95,7 @@ mod tests {
                 "0x7dd2724da2c399aa963a8ecf14e2a017b7f12026dcdf17277f96ac263d0ffbae",
             ),
         ] {
-            let genome_testnet_empty_label = Bytes::from_hex(
+            let genome_testnet_empty_label = B256::from_hex(
                 "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
             )
             .expect("valid hex");

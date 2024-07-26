@@ -13,8 +13,8 @@ pub use protocoler::{
 pub enum ProtocolError {
     #[error("Network with id {0} not found")]
     NetworkNotFound(i64),
-    #[error("name '{0}' is invalid")]
-    InvalidName(String),
+    #[error("name '{name}' is invalid: {reason}")]
+    InvalidName { name: String, reason: String },
     #[error("protocol not found: {0}")]
     ProtocolNotFound(String),
     #[error("internal error: {0}")]

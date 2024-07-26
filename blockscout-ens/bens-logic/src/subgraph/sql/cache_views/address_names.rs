@@ -2,7 +2,7 @@ use super::CachedView;
 use crate::{
     entity::subgraph::domain::DomainWithAddress,
     protocols::Protocol,
-    subgraphs_reader::sql::{
+    subgraph::sql::{
         utils, DbErr, DOMAIN_BLOCK_RANGE_WHERE_CLAUSE, DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE,
         DOMAIN_NOT_EXPIRED_WHERE_CLAUSE,
     },

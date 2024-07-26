@@ -1,7 +1,7 @@
 use crate::{
     entity::subgraph::domain_event::DomainEventTransaction,
     protocols::{DomainName, Protocol},
-    subgraphs_reader::{pagination::Order, sql::DbErr, EventSort, GetDomainHistoryInput},
+    subgraph::{pagination::Order, sql::DbErr, EventSort, GetDomainHistoryInput},
 };
 use anyhow::Context;
 use lazy_static::lazy_static;

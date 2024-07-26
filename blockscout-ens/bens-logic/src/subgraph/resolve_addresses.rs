@@ -1,9 +1,9 @@
 use crate::{
     entity::subgraph::domain::DomainWithAddress,
     protocols::{hash_name::hex, AddressResolveTechnique, DomainName, Protocol},
-    subgraphs_reader::{sql, sql::DbErr},
+    subgraph::{sql, sql::DbErr},
 };
-use ethers::types::Address;
+use alloy::primitives::Address;
 use nonempty::{nonempty, NonEmpty};
 use sqlx::PgPool;
 use std::{

@@ -1,4 +1,4 @@
-use crate::subgraphs_reader::{DomainPaginationInput, Paginator};
+use crate::subgraph::{DomainPaginationInput, Paginator};
 use anyhow::Context;
 use nonempty::NonEmpty;
 use sea_query::{Alias, Expr, SelectStatement, UnionType};

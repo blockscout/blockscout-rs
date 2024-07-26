@@ -1,5 +1,5 @@
+use alloy::primitives::TxHash;
 use cached::proc_macro::cached;
-use ethers::types::TxHash;
 use futures::StreamExt;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
@@ -40,7 +40,7 @@ use reqwest::StatusCode;
 use serde::{de::DeserializeOwned, Deserialize};
 #[derive(Debug, Clone, Deserialize)]
 pub struct TransactionFrom {
-    pub hash: ethers::types::Address,
+    pub hash: alloy::primitives::Address,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,7 +48,7 @@ pub struct Transaction {
     pub timestamp: String,
     pub method: Option<String>,
     pub from: TransactionFrom,
-    pub hash: ethers::types::TxHash,
+    pub hash: alloy::primitives::TxHash,
     pub block: i64,
 }
 
@@ -93,7 +93,7 @@ where
 )]
 pub async fn cached_transaction(
     client: &BlockscoutClient,
-    transaction_hash: &ethers::types::TxHash,
+    transaction_hash: &alloy::primitives::TxHash,
 ) -> reqwest_middleware::Result<Response<Transaction>> {
     let response = client
         .inner
@@ -112,14 +112,14 @@ impl BlockscoutClient {
     #[instrument(name = "blockscout_api:transaction", skip(self), err, level = "debug")]
     pub async fn transaction(
         &self,
-        transaction_hash: &ethers::types::TxHash,
+        transaction_hash: &alloy::primitives::TxHash,
     ) -> reqwest_middleware::Result<Response<Transaction>> {
         cached_transaction(self, transaction_hash).await
     }
 
     pub async fn transactions_batch(
         self: Arc<Self>,
-        transaction_hashes: impl IntoIterator<Item = ethers::types::TxHash>,
+        transaction_hashes: impl IntoIterator<Item = alloy::primitives::TxHash>,
     ) -> reqwest_middleware::Result<HashMap<TxHash, Response<Transaction>>> {
         let fetches = futures::stream::iter(transaction_hashes.into_iter().map(|hash| {
             let client = self.clone();

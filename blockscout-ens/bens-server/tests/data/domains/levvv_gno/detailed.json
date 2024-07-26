@@ -21,5 +21,10 @@
       "type": "NATIVE_DOMAIN_TOKEN"
     }
   ],
-  "protocol": {{ genome_protocol | json_encode() | safe }}
+  "protocol": {{ genome_protocol | json_encode() | safe }},
+  "resolved_with_wildcard": false,
+  "resolver_address": {
+    "hash": "0x6D3B3F99177FB2A5de7F9E928a9BD807bF7b5BAD"
+  },
+  "stored_offchain": false
 }

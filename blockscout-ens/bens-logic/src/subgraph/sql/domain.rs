@@ -1,16 +1,16 @@
 use crate::{
     entity::subgraph::domain::{DetailedDomain, Domain},
-    protocols::{hash_name::hex, DomainName, DomainNameOnProtocol, Protocol},
-    subgraphs_reader::{
+    protocols::{hash_name::hex, DomainNameOnProtocol, Protocol},
+    subgraph::{
         sql::{utils, DbErr},
         DomainPaginationInput, GetDomainInput, LookupAddressInput,
     },
 };
-use ethers::addressbook::Address;
+use alloy::primitives::Address;
 use nonempty::NonEmpty;
 use sea_query::{Alias, Condition, Expr, PostgresQueryBuilder, SelectStatement};
 use sql_gen::QueryBuilderExt;
-use sqlx::postgres::{PgPool, PgQueryResult};
+use sqlx::postgres::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
@@ -79,7 +79,8 @@ resolved_address,
 resolver,
 to_timestamp(ttl) as ttl,
 is_migrated,
-created_at,
+stored_offchain,
+resolved_with_wildcard,
 to_timestamp(created_at) as registration_date,
 owner,
 registrant,
@@ -89,13 +90,17 @@ COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired
 "#;
 
 const DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
+vid,
 id,
 name,
 resolved_address,
+resolver,
 created_at,
 to_timestamp(created_at) as registration_date,
 owner,
 wrapped_owner,
+stored_offchain,
+resolved_with_wildcard,
 to_timestamp(expiry_date) as expiry_date,
 COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired
 "#;
@@ -115,7 +120,15 @@ pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 "#;
 
 // TODO: rewrite to sea_query generation
-#[instrument(name = "get_domain", skip(pool), err(level = "error"), level = "info")]
+#[instrument(
+    skip_all,
+    err(level = "error"),
+    level = "info",
+    fields(
+        domain_name = %domain_name.inner.name,
+        protocol_slug = %domain_name.deployed_protocol.protocol.info.slug)
+    )
+]
 pub async fn get_domain(
     pool: &PgPool,
     domain_name: &DomainNameOnProtocol<'_>,
@@ -166,7 +179,7 @@ pub enum FindDomainsInput<'a> {
     Protocols(Vec<&'a Protocol>),
 }
 
-#[instrument(name = "find_domains", skip_all, err(level = "error"), level = "info")]
+#[instrument(skip_all, err(level = "error"), level = "info")]
 pub async fn find_domains(
     pool: &PgPool,
     input: FindDomainsInput<'_>,
@@ -228,11 +241,11 @@ pub async fn find_domains(
 }
 
 #[instrument(
-    name = "find_resolved_addresses",
     skip_all,
     err(level = "error"),
-    level = "info"
-)]
+    level = "info",
+    fields(address = %input.address))
+]
 pub async fn find_resolved_addresses(
     pool: &PgPool,
     protocols: NonEmpty<&Protocol>,
@@ -258,11 +271,11 @@ pub async fn find_resolved_addresses(
 }
 
 #[instrument(
-    name = "count_domains_by_address",
     skip_all,
     err(level = "error"),
-    level = "info"
-)]
+    level = "info",
+    fields(address = %address))
+]
 pub async fn count_domains_by_address(
     pool: &PgPool,
     protocols: NonEmpty<&Protocol>,
@@ -290,29 +303,6 @@ pub async fn count_domains_by_address(
         .fetch_one(pool)
         .await?;
     Ok(count)
-}
-
-// TODO: rewrite to sea_query generation
-#[instrument(
-    name = "update_domain_name",
-    skip(pool),
-    err(level = "error"),
-    level = "info"
-)]
-pub async fn update_domain_name(
-    pool: &PgPool,
-    schema: &str,
-    name: DomainName,
-) -> Result<PgQueryResult, DbErr> {
-    let result = sqlx::query(&format!(
-        "UPDATE {schema}.domain SET name = $1, label_name = $2 WHERE id = $3;"
-    ))
-    .bind(&name.name)
-    .bind(&name.label_name)
-    .bind(&name.id)
-    .execute(pool)
-    .await?;
-    Ok(result)
 }
 
 fn gen_sql_select_domains_by_address(

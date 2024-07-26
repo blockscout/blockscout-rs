@@ -16,7 +16,7 @@ ingestor = "block_ingestor_node"
 
 [chains.mainnet]
 provider = [
-    { label = "mainnet", url = "https://api.zmok.io/mainnet/oaen6dy8ff6hju9k", features = [] }
+    { label = "mainnet", url = "https://ethereum-rpc.publicnode.com", features = [] }
 ]
 shard = "primary"
 
@@ -24,6 +24,7 @@ shard = "primary"
 provider = [
     { label = "sepolia", url = "https://sepolia.gateway.tenderly.co", features = [] }
 ]
+shard = "primary"
 
 [chains.gnosis-chiado]
 provider = [

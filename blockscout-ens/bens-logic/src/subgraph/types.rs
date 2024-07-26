@@ -3,11 +3,11 @@ use crate::{
     entity::subgraph::domain::{DetailedDomain, Domain},
     protocols::{Network, Protocol},
 };
-use ethers::types::Address;
+use alloy::primitives::Address;
 use nonempty::NonEmpty;
 use sea_query::{Alias, IntoIden};
 use serde::Deserialize;
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 #[derive(Debug, Clone)]
 pub struct GetDomainInput {
@@ -125,4 +125,41 @@ pub struct LookupOutput {
     pub domain: Domain,
     pub protocol: Protocol,
     pub deployment_network: Network,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolverInSubgraph {
+    pub resolver_address: Address,
+    pub domain_id: String,
+}
+
+impl FromStr for ResolverInSubgraph {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let (resolver_address, domain_id) = value
+            .split_once('-')
+            .ok_or_else(|| anyhow::anyhow!("Invalid resolver in subgraph format: {}", value))?;
+        let resolver_address = Address::from_str(resolver_address)?;
+
+        Ok(Self {
+            domain_id: domain_id.to_string(),
+            resolver_address,
+        })
+    }
+}
+
+impl Display for ResolverInSubgraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.resolver_address, self.domain_id)
+    }
+}
+
+impl ResolverInSubgraph {
+    pub fn new(resolver_address: Address, domain_id: String) -> Self {
+        Self {
+            resolver_address,
+            domain_id,
+        }
+    }
 }
