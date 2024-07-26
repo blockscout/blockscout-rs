@@ -31,10 +31,10 @@ pub trait Timespan {
     {
         self.start_timestamp()..self.saturating_next_timespan().start_timestamp()
     }
-    fn add_duration(&self, duration: TimespanDuration<Self>) -> Self
+    fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized;
-    fn sub_duration(&self, duration: TimespanDuration<Self>) -> Self
+    fn saturating_sub(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized;
 }

@@ -44,7 +44,7 @@ impl Timespan for NaiveDate {
         day_start(self)
     }
 
-    fn add_duration(&self, duration: TimespanDuration<Self>) -> Self
+    fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized,
     {
@@ -52,7 +52,7 @@ impl Timespan for NaiveDate {
             .unwrap_or(NaiveDate::MAX)
     }
 
-    fn sub_duration(&self, duration: TimespanDuration<Self>) -> Self
+    fn saturating_sub(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized,
     {

@@ -225,7 +225,7 @@ where
     let mut current_start = start;
 
     loop {
-        let next_start = current_start.clone().add_duration(max_step.clone()); // finish the ranges right at the end
+        let next_start = current_start.clone().saturating_add(max_step.clone()); // finish the ranges right at the end
         let next_start_timestamp = next_start.start_timestamp();
         if next_start_timestamp > end {
             if end == Resolution::from_date(end.date_naive()).start_timestamp() {

@@ -97,7 +97,7 @@ impl Timespan for Week {
         self.saturating_first_day().start_timestamp()
     }
 
-    fn add_duration(&self, duration: TimespanDuration<Self>) -> Self
+    fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized,
     {
@@ -108,7 +108,7 @@ impl Timespan for Week {
         Self::from_date(result_week_date)
     }
 
-    fn sub_duration(&self, duration: TimespanDuration<Self>) -> Self
+    fn saturating_sub(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized,
     {
