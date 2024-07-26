@@ -318,7 +318,7 @@ macro_rules! construct_update_group {
     };
 }
 
-pub type ArcUpdateGroup = Arc<dyn for<'a> UpdateGroup + Send + Sync + 'static>;
+pub type ArcUpdateGroup = Arc<dyn UpdateGroup + Send + Sync + 'static>;
 
 /// Synchronized update group. Wrapper around [`UpdateGroup`] with
 /// synchronization mechanism.
