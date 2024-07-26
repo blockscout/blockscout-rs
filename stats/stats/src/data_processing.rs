@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 
 use crate::{
-    charts::types::DateValue,
+    charts::types::timespans::DateValue,
     types::{Timespan, TimespanValue},
     UpdateError,
 };

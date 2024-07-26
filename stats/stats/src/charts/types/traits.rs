@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 
 use crate::charts::ResolutionKind;
 
-use super::{week::Week, TimespanDuration, TimespanValue};
+use super::{timespans::Week, TimespanDuration, TimespanValue};
 
 pub trait Timespan {
     /// Construct the timespan from a date within the timespan.

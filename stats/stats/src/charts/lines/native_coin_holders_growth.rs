@@ -13,7 +13,7 @@ use crate::{
         },
         UpdateContext,
     },
-    types::DateValue,
+    types::timespans::DateValue,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 

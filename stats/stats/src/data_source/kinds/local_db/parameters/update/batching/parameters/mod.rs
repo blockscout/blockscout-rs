@@ -4,7 +4,7 @@ use sea_orm::DatabaseConnection;
 use crate::{
     charts::db_interaction::write::insert_data_many,
     gettable_const,
-    types::{week::Week, Timespan, TimespanDuration, TimespanValue},
+    types::{timespans::Week, Timespan, TimespanDuration, TimespanValue},
     UpdateError,
 };
 

@@ -258,7 +258,7 @@ where
 mod tests {
     use crate::{
         tests::point_construction::{d, dt},
-        types::week::Week,
+        types::timespans::Week,
         utils::day_start,
     };
 
@@ -386,7 +386,7 @@ mod tests {
                     dirty_force_update_and_check, map_str_tuple_to_owned, simple_test_chart,
                 },
             },
-            types::DateValue,
+            types::timespans::DateValue,
             ChartProperties, MissingDatePolicy, Named,
         };
 

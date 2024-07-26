@@ -3,11 +3,11 @@ use chrono::{Days, NaiveDate};
 use sea_orm::{prelude::*, FromQueryResult, TryGetable};
 
 use crate::{
-    charts::chart_properties_portrait::imports::ResolutionKind, impl_into_string_timespan_value,
+    charts::chart_properties_portrait::imports::ResolutionKind,
+    impl_into_string_timespan_value,
+    types::{db::DbDateValue, Timespan, TimespanDuration, TimespanValue},
     utils::day_start,
 };
-
-use super::{db::DbDateValue, TimespanValue};
 
 impl<V: TryGetable> FromQueryResult for TimespanValue<NaiveDate, V> {
     fn from_query_result(res: &QueryResult, pre: &str) -> Result<Self, DbErr> {
@@ -17,7 +17,7 @@ impl<V: TryGetable> FromQueryResult for TimespanValue<NaiveDate, V> {
 
 pub type DateValue<V> = TimespanValue<NaiveDate, V>;
 
-impl super::Timespan for NaiveDate {
+impl Timespan for NaiveDate {
     fn from_date(date: NaiveDate) -> Self {
         date
     }
@@ -44,7 +44,7 @@ impl super::Timespan for NaiveDate {
         day_start(self)
     }
 
-    fn add_duration(&self, duration: super::TimespanDuration<Self>) -> Self
+    fn add_duration(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized,
     {
@@ -52,7 +52,7 @@ impl super::Timespan for NaiveDate {
             .unwrap_or(NaiveDate::MAX)
     }
 
-    fn sub_duration(&self, duration: super::TimespanDuration<Self>) -> Self
+    fn sub_duration(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized,
     {

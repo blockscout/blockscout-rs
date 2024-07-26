@@ -6,7 +6,7 @@ use crate::{
         local_db::DailyCumulativeLocalDbChartSource,
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    types::DateValue,
+    types::timespans::DateValue,
     utils::sql_with_range_filter_opt,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };

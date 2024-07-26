@@ -73,7 +73,7 @@ where
 mod tests {
     use crate::{
         tests::point_construction::{d, dt, week_of},
-        types::week::Week,
+        types::timespans::Week,
     };
 
     use super::*;

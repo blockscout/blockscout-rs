@@ -13,7 +13,7 @@ use crate::{
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     delegated_property_with_resolution,
-    types::week::Week,
+    types::timespans::Week,
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
 };

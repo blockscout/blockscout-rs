@@ -191,10 +191,7 @@ mod tests {
         gettable_const,
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
         tests::point_construction::{d, d_v, d_v_double, d_v_int, dt, week_of, week_v_double},
-        types::{
-            week::{Week, WeekValue},
-            DateValue,
-        },
+        types::timespans::{DateValue, Week, WeekValue},
         MissingDatePolicy,
     };
 

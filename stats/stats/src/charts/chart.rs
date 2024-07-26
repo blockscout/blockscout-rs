@@ -208,7 +208,7 @@ macro_rules! delegated_property_with_resolution {
             type Resolution = $res;
 
             fn resolution() -> $crate::charts::chart::ResolutionKind {
-                use $crate::charts::types::Timespan;
+                use $crate::types::Timespan;
 
                 <Self as $crate::charts::chart::ChartProperties>::Resolution::enum_variant()
             }

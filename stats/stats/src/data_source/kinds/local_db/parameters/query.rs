@@ -6,7 +6,7 @@ use crate::{
     charts::db_interaction::read::get_counter_data,
     data_source::{kinds::local_db::parameter_traits::QueryBehaviour, UpdateContext},
     get_line_chart_data,
-    types::{DateValue, Timespan, TimespanValue},
+    types::{timespans::DateValue, Timespan, TimespanValue},
     utils::exclusive_datetime_range_to_inclusive,
     ChartProperties, UpdateError,
 };

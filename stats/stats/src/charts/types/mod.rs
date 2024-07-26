@@ -1,14 +1,12 @@
-mod day;
 pub mod db;
 mod duration;
 mod extended;
+pub mod timespans;
 mod traits;
-pub mod week;
 
 use entity::chart_data;
 use sea_orm::Set;
 
-pub use day::DateValue;
 pub use duration::TimespanDuration;
 pub use extended::ExtendedTimespanValue;
 pub use traits::{ConsistsOf, Timespan, TimespanValueTrait, ZeroTimespanValue};

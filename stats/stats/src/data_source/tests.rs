@@ -23,7 +23,7 @@ use crate::{
     construct_update_group,
     data_source::kinds::local_db::parameters::update::batching::parameters::PassVecStep,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-    types::DateValue,
+    types::timespans::DateValue,
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::sql_with_range_filter_opt,
     ChartProperties, MissingDatePolicy, Named, UpdateError,

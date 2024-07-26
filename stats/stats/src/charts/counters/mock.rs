@@ -9,7 +9,7 @@ use crate::{
         types::Get,
         UpdateContext,
     },
-    types::DateValue,
+    types::timespans::DateValue,
     ChartProperties, Named, UpdateError,
 };
 

@@ -88,7 +88,7 @@ mod tests {
         gettable_const,
         lines::PredefinedMockSource,
         tests::point_construction::{d_v_int, dt, week_v_int},
-        types::{week::Week, DateValue},
+        types::timespans::{DateValue, Week},
         MissingDatePolicy,
     };
 

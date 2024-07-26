@@ -10,7 +10,7 @@ use crate::{
         UpdateContext,
     },
     missing_date::fit_into_range,
-    types::{DateValue, Timespan, TimespanValue},
+    types::{timespans::DateValue, Timespan, TimespanValue},
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 

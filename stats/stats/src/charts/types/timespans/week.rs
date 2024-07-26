@@ -3,9 +3,11 @@ use std::ops::{Range, RangeInclusive};
 use chrono::{Days, NaiveDate, NaiveWeek, Weekday};
 use rust_decimal::Decimal;
 
-use crate::{charts::ResolutionKind, impl_into_string_timespan_value};
-
-use super::TimespanValue;
+use crate::{
+    charts::ResolutionKind,
+    impl_into_string_timespan_value,
+    types::{Timespan, TimespanDuration, TimespanValue},
+};
 
 pub const WEEK_START: Weekday = Weekday::Mon;
 
@@ -70,7 +72,7 @@ impl Clone for Week {
     }
 }
 
-impl super::Timespan for Week {
+impl Timespan for Week {
     fn from_date(date: NaiveDate) -> Self {
         Week::new(date)
     }
@@ -95,7 +97,7 @@ impl super::Timespan for Week {
         self.saturating_first_day().start_timestamp()
     }
 
-    fn add_duration(&self, duration: super::TimespanDuration<Self>) -> Self
+    fn add_duration(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized,
     {
@@ -106,7 +108,7 @@ impl super::Timespan for Week {
         Self::from_date(result_week_date)
     }
 
-    fn sub_duration(&self, duration: super::TimespanDuration<Self>) -> Self
+    fn sub_duration(&self, duration: TimespanDuration<Self>) -> Self
     where
         Self: Sized,
     {

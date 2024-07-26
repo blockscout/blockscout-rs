@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::DateValue,
+    charts::types::timespans::DateValue,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -18,7 +18,7 @@ use crate::{
     },
     delegated_property_with_resolution,
     missing_date::trim_out_of_range_sorted,
-    types::week::Week,
+    types::timespans::Week,
     utils::sql_with_range_filter_opt,
     ChartProperties, Named, UpdateError,
 };

@@ -10,7 +10,7 @@ use crate::{
         },
     },
     delegated_property_with_resolution,
-    types::week::Week,
+    types::timespans::Week,
     ChartProperties, MissingDatePolicy, Named,
 };
 

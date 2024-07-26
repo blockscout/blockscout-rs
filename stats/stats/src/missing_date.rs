@@ -235,7 +235,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        charts::types::DateValue,
+        charts::types::timespans::DateValue,
         tests::point_construction::{d, d_v, d_v_int},
     };
 
@@ -555,7 +555,10 @@ mod tests {
             d_v_int("2100-01-03", 3),
         ];
         trim_out_of_range_sorted(&mut data, d("2100-01-02")..=d("2100-01-10"));
-        assert_eq!(data, vec![d_v_int("2100-01-02", 2), d_v_int("2100-01-03", 3)]);
+        assert_eq!(
+            data,
+            vec![d_v_int("2100-01-02", 2), d_v_int("2100-01-03", 3)]
+        );
 
         // Single element in range
         let mut data = vec![

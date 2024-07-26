@@ -2,7 +2,9 @@ use crate::{
     charts::{chart::ChartMetadata, ChartKey},
     data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
-    types::{DateValue, ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue},
+    types::{
+        timespans::DateValue, ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
+    },
     utils::exclusive_datetime_range_to_inclusive,
     ChartProperties, MissingDatePolicy, UpdateError,
 };

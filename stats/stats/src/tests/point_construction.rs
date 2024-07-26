@@ -4,8 +4,8 @@ use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 
 use crate::{
-    charts::types::DateValue,
-    types::week::{Week, WeekValue},
+    charts::types::timespans::DateValue,
+    types::timespans::{Week, WeekValue},
 };
 
 pub fn week_of(date: &str) -> Week {

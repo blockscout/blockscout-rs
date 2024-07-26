@@ -347,7 +347,7 @@ mod tests {
             },
             gettable_const,
             tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-            types::{DateValue, TimespanValue},
+            types::{timespans::DateValue, TimespanValue},
             update_group::{SyncUpdateGroup, UpdateGroup},
             ChartProperties, Named, UpdateError,
         };
