@@ -43,7 +43,8 @@
           "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
           "docs_url": "https://docs.ens.domains/"
         },
-        "try_offchain_resolve": true
+        "try_offchain_resolve": true,
+        "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
       },
       "genome": {
         "tld_list": ["gno"],
