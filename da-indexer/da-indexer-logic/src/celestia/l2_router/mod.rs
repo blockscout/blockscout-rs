@@ -21,10 +21,16 @@ impl L2Router {
     }
 
     pub fn from_settings(settings: L2RouterSettings) -> Result<Self> {
-        let routes = fs::read_to_string(settings.routes_path)?;
+        let routes = fs::read_to_string(&settings.routes_path).map_err(|err| {
+            anyhow::anyhow!(
+                "failed to read routes file from path {}: {}",
+                settings.routes_path,
+                err
+            )
+        })?;
         let router: L2Router = toml::from_str(&routes)?;
         router.routes.iter().for_each(|(namespace, config)| {
-            tracing::info!("Registered route: {} -> {:?}", namespace, config);
+            tracing::info!("registered route: {} -> {:?}", namespace, config);
         });
         Ok(router)
     }
