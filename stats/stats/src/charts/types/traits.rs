@@ -17,7 +17,7 @@ pub trait Timespan {
     /// to store in database.
     fn into_date(self) -> NaiveDate;
     /// Get the next interval right after the current one (saturating)
-    fn saturating_next_timespan(&self) -> Self;
+    fn saturating_next_timespan(&self) -> Self; // todo: default impl using add / sub
     /// Get the interval right before the current one (saturating)
     fn saturating_previous_timespan(&self) -> Self;
     /// Converting type into runtime enum variant
