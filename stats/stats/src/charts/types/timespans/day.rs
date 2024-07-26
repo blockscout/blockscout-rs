@@ -40,7 +40,7 @@ impl Timespan for NaiveDate {
         ResolutionKind::Day
     }
 
-    fn start_timestamp(&self) -> chrono::DateTime<chrono::Utc> {
+    fn saturating_start_timestamp(&self) -> chrono::DateTime<chrono::Utc> {
         day_start(self)
     }
 

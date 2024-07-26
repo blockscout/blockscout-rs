@@ -199,9 +199,9 @@ impl<Resolution: Timespan> BatchRange<Resolution> {
     pub fn into_date_time_range(self) -> Range<DateTime<Utc>> {
         match self {
             BatchRange::Full(Range { start, end }) => {
-                start.start_timestamp()..end.into_time_range().start
+                start.saturating_start_timestamp()..end.into_time_range().start
             }
-            BatchRange::Partial { start, end } => start.start_timestamp()..end,
+            BatchRange::Partial { start, end } => start.saturating_start_timestamp()..end,
         }
     }
 }
@@ -226,9 +226,9 @@ where
 
     loop {
         let next_start = current_start.clone().saturating_add(max_step.clone()); // finish the ranges right at the end
-        let next_start_timestamp = next_start.start_timestamp();
+        let next_start_timestamp = next_start.saturating_start_timestamp();
         if next_start_timestamp > end {
-            if end == Resolution::from_date(end.date_naive()).start_timestamp() {
+            if end == Resolution::from_date(end.date_naive()).saturating_start_timestamp() {
                 // the last interval can be represented as `Resolution` without
                 // any fractions
                 let end_timespan = Resolution::from_date(end.date_naive());
@@ -297,7 +297,7 @@ mod tests {
             ),
         ] {
             // let expected: Vec<_> = expected.into_iter().map(|r| r.0..r.1).collect();
-            let actual = generate_batch_ranges(from, to, TimespanDuration::days(30)).unwrap();
+            let actual = generate_batch_ranges(from, to, TimespanDuration::from_days(30)).unwrap();
             assert_eq!(expected, actual);
         }
 
@@ -307,7 +307,7 @@ mod tests {
             generate_batch_ranges(
                 d("2015-07-20"),
                 day_start(&d("2015-07-21")),
-                TimespanDuration::days(1)
+                TimespanDuration::from_days(1)
             )
             .unwrap()
         );
@@ -319,7 +319,7 @@ mod tests {
             generate_batch_ranges(
                 d("2015-07-20"),
                 day_start(&d("2015-07-22")),
-                TimespanDuration::days(1)
+                TimespanDuration::from_days(1)
             )
             .unwrap()
         )
@@ -399,7 +399,7 @@ mod tests {
         static INPUTS: OnceLock<SharedInputsStorage> = OnceLock::new();
 
         gettable_const!(ThisInputs: SharedInputsStorage = INPUTS.get_or_init(|| Arc::new(Mutex::new(vec![]))).clone());
-        gettable_const!(Batch1Day: TimespanDuration<NaiveDate> = TimespanDuration::days(1));
+        gettable_const!(Batch1Day: TimespanDuration<NaiveDate> = TimespanDuration::from_days(1));
 
         type ThisRecordingStep = RecordingPassStep<InMemoryRecorder<ThisInputs>>;
         struct ThisTestChartProps;

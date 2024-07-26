@@ -23,13 +23,14 @@ pub trait Timespan {
     /// Converting type into runtime enum variant
     fn enum_variant() -> ResolutionKind;
     /// Extract the start of given timespan as UTC timestamp
-    fn start_timestamp(&self) -> DateTime<Utc>;
+    fn saturating_start_timestamp(&self) -> DateTime<Utc>;
     /// Represent the timespan as UTC timestamp range
     fn into_time_range(self) -> Range<DateTime<Utc>>
     where
         Self: Sized,
     {
-        self.start_timestamp()..self.saturating_next_timespan().start_timestamp()
+        self.saturating_start_timestamp()
+            ..self.saturating_next_timespan().saturating_start_timestamp()
     }
     fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self
     where

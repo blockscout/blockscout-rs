@@ -25,10 +25,10 @@ pub fn extend_to_timespan_boundaries<T: Timespan>(
 ) -> Range<DateTime<Utc>> {
     let timespan_range = date_range_to_timespan::<T>(range);
     // start of timespan containing range start
-    let start: DateTime<Utc> = timespan_range.start().start_timestamp();
+    let start: DateTime<Utc> = timespan_range.start().saturating_start_timestamp();
     // start of timespan following range end (to get exclusive range again)
     let timespan_after_range = timespan_range.end().saturating_next_timespan();
-    let end = timespan_after_range.start_timestamp();
+    let end = timespan_after_range.saturating_start_timestamp();
     start..end
 }
 

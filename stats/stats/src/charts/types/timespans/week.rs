@@ -93,8 +93,8 @@ impl Timespan for Week {
         ResolutionKind::Week
     }
 
-    fn start_timestamp(&self) -> chrono::DateTime<chrono::Utc> {
-        self.saturating_first_day().start_timestamp()
+    fn saturating_start_timestamp(&self) -> chrono::DateTime<chrono::Utc> {
+        self.saturating_first_day().saturating_start_timestamp()
     }
 
     fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self

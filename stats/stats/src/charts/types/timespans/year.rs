@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 
 use crate::{
@@ -8,6 +10,22 @@ use crate::{
 /// Year number within range of `chrono::NaiveDate`
 #[derive(Copy, Clone)]
 pub struct Year(i32);
+
+impl PartialEq for Year {
+    fn eq(&self, other: &Self) -> bool {
+        self.clamp_by_naive_date_range().0 == other.clamp_by_naive_date_range().0
+    }
+}
+
+impl Eq for Year {}
+
+impl Debug for Year {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Year")
+            .field(&self.clamp_by_naive_date_range().0)
+            .finish()
+    }
+}
 
 impl Year {
     /// First day of the year or `NaiveDate::MIN`
@@ -34,7 +52,7 @@ impl Timespan for Year {
     }
 
     fn into_date(self) -> NaiveDate {
-        self.saturating_first_day()
+        self.clamp_by_naive_date_range().saturating_first_day()
     }
 
     fn saturating_next_timespan(&self) -> Self {
@@ -57,8 +75,8 @@ impl Timespan for Year {
         ResolutionKind::Year
     }
 
-    fn start_timestamp(&self) -> DateTime<Utc> {
-        self.saturating_first_day().start_timestamp()
+    fn saturating_start_timestamp(&self) -> DateTime<Utc> {
+        self.saturating_first_day().saturating_start_timestamp()
     }
 
     fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self
@@ -75,5 +93,126 @@ impl Timespan for Year {
     {
         let sub_years: i32 = duration.repeats().try_into().unwrap_or(std::i32::MAX);
         Self(self.0.saturating_sub(sub_years)).clamp_by_naive_date_range()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        tests::point_construction::{d, dt},
+        utils::day_start,
+    };
+
+    use super::*;
+
+    use pretty_assertions::{assert_eq, assert_ne};
+
+    #[test]
+    fn year_date_conversion_works() {
+        assert_eq!(Year::from_date(d("2015-01-01")), Year(2015));
+        assert_eq!(Year::from_date(d("2015-12-31")), Year(2015));
+        assert_eq!(Year::from_date(d("2012-02-29")), Year(2012));
+        assert_eq!(Year::from_date(NaiveDate::MAX), Year(NaiveDate::MAX.year()));
+        assert_eq!(Year::from_date(NaiveDate::MIN), Year(NaiveDate::MIN.year()));
+        assert_eq!(Year(2015).into_date(), d("2015-01-01"));
+        assert_eq!(Year(2012).into_date(), d("2012-01-01"));
+        assert_eq!(Year(i32::MIN).into_date(), NaiveDate::MIN);
+        assert_eq!(
+            Year(i32::MAX).into_date(),
+            NaiveDate::from_yo_opt(NaiveDate::MAX.year(), 1).unwrap()
+        );
+    }
+
+    #[test]
+    fn year_eq_works() {
+        // all years with inner values outside `NaiveDate` range are treated equally
+        // (in order not to panic on such cases).
+        // this test checks that eq works for this case
+        let max_date_year = Year::from_date(NaiveDate::MAX);
+        assert_eq!(max_date_year, Year(max_date_year.0 + 1));
+        assert_eq!(max_date_year, Year(i32::MAX));
+        assert_ne!(max_date_year, Year(max_date_year.0 - 1));
+
+        let min_date_year = Year::from_date(NaiveDate::MIN);
+        assert_eq!(min_date_year, Year(min_date_year.0 - 1));
+        assert_eq!(min_date_year, Year(i32::MIN));
+        assert_ne!(min_date_year, Year(min_date_year.0 + 1));
+    }
+
+    #[test]
+    fn year_saturating_first_day_works() {
+        assert_eq!(
+            Year::from_date(d("2015-01-01")).saturating_first_day(),
+            d("2015-01-01")
+        );
+        assert_eq!(
+            Year::from_date(d("2015-01-02")).saturating_first_day(),
+            d("2015-01-01")
+        );
+        assert_eq!(
+            Year::from_date(d("2015-12-31")).saturating_first_day(),
+            d("2015-01-01")
+        );
+        assert_eq!(
+            Year::from_date(NaiveDate::MAX).saturating_first_day(),
+            NaiveDate::from_yo_opt(NaiveDate::MAX.year(), 1).unwrap()
+        );
+        // saturation works
+        assert_eq!(
+            Year::from_date(NaiveDate::MIN).saturating_first_day(),
+            NaiveDate::MIN
+        );
+    }
+
+    #[test]
+    fn year_saturating_arithmetics_works() {
+        assert_eq!(
+            Year(2016).saturating_add(TimespanDuration::from_timespan_repeats(16)),
+            Year(2032)
+        );
+        assert_eq!(
+            Year(2016).saturating_sub(TimespanDuration::from_timespan_repeats(16)),
+            Year(2000)
+        );
+
+        assert_eq!(
+            Year(2016).saturating_add(TimespanDuration::from_timespan_repeats(u64::MAX)),
+            Year::from_date(NaiveDate::MAX)
+        );
+        assert_eq!(
+            Year(2016).saturating_sub(TimespanDuration::from_timespan_repeats(u64::MAX)),
+            Year::from_date(NaiveDate::MIN)
+        );
+
+        assert_eq!(
+            Year::from_date(NaiveDate::MAX)
+                .saturating_add(TimespanDuration::from_timespan_repeats(1)),
+            Year::from_date(NaiveDate::MAX)
+        );
+        assert_eq!(
+            Year::from_date(NaiveDate::MIN)
+                .saturating_sub(TimespanDuration::from_timespan_repeats(1)),
+            Year::from_date(NaiveDate::MIN)
+        );
+    }
+
+    #[test]
+    fn year_saturating_first_timestamp_works() {
+        assert_eq!(
+            Year::from_date(d("2015-01-01")).saturating_start_timestamp(),
+            dt("2015-01-01T00:00:00").and_utc()
+        );
+        assert_eq!(
+            Year::from_date(d("2015-12-31")).saturating_start_timestamp(),
+            dt("2015-01-01T00:00:00").and_utc()
+        );
+        assert_eq!(
+            Year::from_date(NaiveDate::MAX).saturating_start_timestamp(),
+            day_start(&NaiveDate::from_yo_opt(NaiveDate::MAX.year(), 1).unwrap())
+        );
+        assert_eq!(
+            Year::from_date(NaiveDate::MIN).saturating_start_timestamp(),
+            DateTime::<Utc>::MIN_UTC
+        );
     }
 }
