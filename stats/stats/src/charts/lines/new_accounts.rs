@@ -6,7 +6,7 @@ use crate::{
         kinds::{
             data_manipulation::{
                 map::{MapParseTo, MapToString},
-                resolutions::sum::SumWeekly,
+                resolutions::sum::SumLowerResolution,
             },
             local_db::{
                 parameters::update::batching::parameters::{Batch30Weeks, BatchMaxDays},
@@ -116,7 +116,7 @@ delegated_property_with_resolution!(WeeklyProperties {
 
 pub type NewAccounts = DirectVecLocalDbChartSource<NewAccountsRemote, BatchMaxDays, Properties>;
 pub type NewAccountsWeekly = DirectVecLocalDbChartSource<
-    MapToString<SumWeekly<NewAccountsInt>>,
+    MapToString<SumLowerResolution<NewAccountsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;

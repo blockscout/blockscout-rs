@@ -16,28 +16,25 @@ use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{DataSource, UpdateContext},
-    types::{
-        week::{Week, WeekValue},
-        DateValue, Timespan, TimespanValue,
-    },
+    types::{ConsistsOf, Timespan, TimespanValue},
     UpdateError,
 };
 
 use super::{extend_to_timespan_boundaries, reduce_each_timespan};
 
 /// Sum points within each timespan range.
-pub struct SumWeekly<DS>(PhantomData<DS>)
-where
-    DS: DataSource;
+pub struct SumLowerResolution<DS, LowerRes>(PhantomData<(DS, LowerRes)>);
 
-impl<DS, Value> DataSource for SumWeekly<DS>
+impl<DS, LowerRes, HigherRes, Value> DataSource for SumLowerResolution<DS, LowerRes>
 where
+    LowerRes: Timespan + ConsistsOf<HigherRes> + Eq + Debug + Send,
+    HigherRes: Clone + Debug,
     Value: AddAssign + Zero + Send + Debug,
-    DS: DataSource<Output = Vec<DateValue<Value>>>,
+    DS: DataSource<Output = Vec<TimespanValue<HigherRes, Value>>>,
 {
     type MainDependencies = DS;
     type ResolutionDependencies = ();
-    type Output = Vec<WeekValue<Value>>;
+    type Output = Vec<TimespanValue<LowerRes, Value>>;
 
     fn mutex_id() -> Option<String> {
         // just an adapter
@@ -62,42 +59,42 @@ where
         range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        let time_range_for_weeks = range.map(extend_to_timespan_boundaries::<Week>);
-        let daily_data = DS::query_data(
+        let time_range_for_lower_res = range.map(extend_to_timespan_boundaries::<LowerRes>);
+        let high_res_data = DS::query_data(
             cx,
-            time_range_for_weeks.clone(),
+            time_range_for_lower_res.clone(),
             dependency_data_fetch_timer,
         )
         .await?;
         Ok(reduce_each_timespan(
-            daily_data,
-            |t| Week::from_date(t.timespan),
-            |l_timespan_data| {
+            high_res_data,
+            |t| LowerRes::from_smaller(t.timespan.clone()),
+            |data_for_one_l_res| {
                 let Some(TimespanValue {
-                    timespan: first_date,
+                    timespan: first_h_res,
                     value: _,
-                }) = l_timespan_data.first()
+                }) = data_for_one_l_res.first()
                 else {
                     return None;
                 };
-                let current_l_timespan = Week::new(first_date.clone());
+                let current_l_res = LowerRes::from_smaller(first_h_res.clone());
                 let mut total = Value::zero();
                 for TimespanValue {
-                    timespan: s_timespan,
+                    timespan: h_res,
                     value,
-                } in l_timespan_data
+                } in data_for_one_l_res
                 {
                     debug_assert_eq!(
-                        current_l_timespan,
-                        Week::from_date(s_timespan),
-                        "must've returned only data within current week ({:?}); got {}",
-                        current_l_timespan,
-                        s_timespan
+                        current_l_res,
+                        LowerRes::from_smaller(h_res.clone()),
+                        "must've returned only data within current lower res timespan ({:?}); got {:?}",
+                        current_l_res,
+                        h_res
                     );
                     total += value;
                 }
                 Some(TimespanValue {
-                    timespan: current_l_timespan,
+                    timespan: current_l_res,
                     value: total,
                 })
             },
@@ -118,11 +115,11 @@ mod tests {
         gettable_const,
         lines::PredefinedMockSource,
         tests::point_construction::{d_v_int, dt, week_v_int},
-        types::DateValue,
+        types::{week::Week, DateValue},
         MissingDatePolicy,
     };
 
-    use super::SumWeekly;
+    use super::SumLowerResolution;
 
     #[tokio::test]
     async fn sum_weekly_works() {
@@ -138,7 +135,7 @@ mod tests {
 
         type MockSource = PredefinedMockSource<MockData, PolicyGrowth>;
 
-        type MockSourceWeekly = SumWeekly<MockSource>;
+        type MockSourceWeekly = SumLowerResolution<MockSource, Week>;
 
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
