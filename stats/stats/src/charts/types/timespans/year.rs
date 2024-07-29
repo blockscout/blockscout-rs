@@ -23,13 +23,15 @@ impl Eq for Year {}
 
 impl PartialOrd for Year {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.number().partial_cmp(&other.number())
+        self.number_within_naive_date()
+            .partial_cmp(&other.number_within_naive_date())
     }
 }
 
 impl Ord for Year {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.number().cmp(&other.number())
+        self.number_within_naive_date()
+            .cmp(&other.number_within_naive_date())
     }
 }
 
@@ -47,7 +49,8 @@ impl Year {
         NaiveDate::from_yo_opt(self.0, 1).unwrap_or(NaiveDate::MIN)
     }
 
-    pub fn number(self) -> i32 {
+    /// Number of the year (within `NaiveDate::MIN`)
+    pub fn number_within_naive_date(self) -> i32 {
         self.clamp_by_naive_date_range().0
     }
 
