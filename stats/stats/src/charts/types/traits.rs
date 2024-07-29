@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 
 use crate::charts::ResolutionKind;
 
-use super::{timespans::Week, TimespanDuration, TimespanValue};
+use super::{TimespanDuration, TimespanValue};
 
 pub trait Timespan {
     /// Construct the timespan from a date within the timespan.
@@ -130,17 +130,7 @@ pub trait ConsistsOf<SmallerTimespan> {
     /// Note that `from` is usually not a reversible function.
     /// I.e. for some smaller timespan `s`, `T::from_smaller(s).into_smaller() != s`
     /// can be true
-    fn from_smaller(date: SmallerTimespan) -> Self;
+    fn from_smaller(smaller: SmallerTimespan) -> Self;
     /// Convert the timespan into a corresponding smaller timespan (contained in `self`).
     fn into_smaller(self) -> SmallerTimespan;
-}
-
-impl ConsistsOf<NaiveDate> for Week {
-    fn from_smaller(date: NaiveDate) -> Self {
-        Week::from_date(date)
-    }
-
-    fn into_smaller(self) -> NaiveDate {
-        Week::into_date(self)
-    }
 }

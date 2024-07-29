@@ -6,7 +6,7 @@ use rust_decimal::Decimal;
 use crate::{
     charts::ResolutionKind,
     impl_into_string_timespan_value,
-    types::{Timespan, TimespanDuration, TimespanValue},
+    types::{ConsistsOf, Timespan, TimespanDuration, TimespanValue},
 };
 
 pub const WEEK_START: Weekday = Weekday::Mon;
@@ -117,6 +117,16 @@ impl Timespan for Week {
             .checked_sub_days(Days::new(duration.repeats() * 7))
             .unwrap_or(NaiveDate::MIN);
         Self::from_date(result_week_date)
+    }
+}
+
+impl ConsistsOf<NaiveDate> for Week {
+    fn from_smaller(date: NaiveDate) -> Self {
+        Week::from_date(date)
+    }
+
+    fn into_smaller(self) -> NaiveDate {
+        Week::into_date(self)
     }
 }
 

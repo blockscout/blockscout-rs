@@ -1,7 +1,7 @@
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 
 use crate::{
-    types::{Timespan, TimespanDuration},
+    types::{ConsistsOf, Timespan, TimespanDuration},
     ResolutionKind,
 };
 
@@ -88,6 +88,16 @@ impl Timespan for Month {
             ))
             .unwrap_or(NaiveDate::MIN);
         Self::from_date(result_month_date)
+    }
+}
+
+impl ConsistsOf<NaiveDate> for Month {
+    fn from_smaller(date: NaiveDate) -> Self {
+        Month::from_date(date)
+    }
+
+    fn into_smaller(self) -> NaiveDate {
+        Month::into_date(self)
     }
 }
 

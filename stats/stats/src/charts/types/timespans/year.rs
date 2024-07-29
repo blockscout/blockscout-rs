@@ -3,9 +3,11 @@ use std::fmt::Debug;
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 
 use crate::{
-    types::{Timespan, TimespanDuration},
+    types::{ConsistsOf, Timespan, TimespanDuration},
     ResolutionKind,
 };
+
+use super::Month;
 
 /// Year number within range of `chrono::NaiveDate`
 #[derive(Copy, Clone)]
@@ -97,6 +99,26 @@ impl Timespan for Year {
     {
         let sub_years: i32 = duration.repeats().try_into().unwrap_or(std::i32::MAX);
         Self(self.0.saturating_sub(sub_years)).clamp_by_naive_date_range()
+    }
+}
+
+impl ConsistsOf<NaiveDate> for Year {
+    fn from_smaller(date: NaiveDate) -> Self {
+        Year::from_date(date)
+    }
+
+    fn into_smaller(self) -> NaiveDate {
+        Year::into_date(self)
+    }
+}
+
+impl ConsistsOf<Month> for Year {
+    fn from_smaller(month: Month) -> Self {
+        Year::from_date(month.into_date())
+    }
+
+    fn into_smaller(self) -> Month {
+        Month::from_date(Year::into_date(self))
     }
 }
 
