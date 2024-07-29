@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{cmp::Ordering, fmt::Debug};
 
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 
@@ -20,6 +20,18 @@ impl PartialEq for Year {
 }
 
 impl Eq for Year {}
+
+impl PartialOrd for Year {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.number().partial_cmp(&other.number())
+    }
+}
+
+impl Ord for Year {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.number().cmp(&other.number())
+    }
+}
 
 impl Debug for Year {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

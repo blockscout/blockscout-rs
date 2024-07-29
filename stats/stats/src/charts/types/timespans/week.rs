@@ -1,4 +1,7 @@
-use std::ops::{Range, RangeInclusive};
+use std::{
+    cmp::Ordering,
+    ops::{Range, RangeInclusive},
+};
 
 use chrono::{Days, NaiveDate, NaiveWeek, Weekday};
 use rust_decimal::Decimal;
@@ -47,7 +50,7 @@ impl PartialEq for Week {
 impl Eq for Week {}
 
 impl PartialOrd for Week {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         // `None` means `NaiveDate::MIN`'s week
         // which fits well with `Option`'s "`None` is less than `Some`"
         // policy
@@ -57,7 +60,7 @@ impl PartialOrd for Week {
 }
 
 impl Ord for Week {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         // `None` means `NaiveDate::MIN`'s week
         // which fits well with `Option`'s "`None` is less than `Some`"
         // policy

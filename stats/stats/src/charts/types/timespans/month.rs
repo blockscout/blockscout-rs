@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 
 use crate::{
@@ -26,6 +28,20 @@ impl PartialEq for Month {
 }
 
 impl Eq for Month {}
+
+impl PartialOrd for Month {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.saturating_first_day()
+            .partial_cmp(&other.saturating_first_day())
+    }
+}
+
+impl Ord for Month {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.saturating_first_day()
+            .cmp(&other.saturating_first_day())
+    }
+}
 
 impl Month {
     fn saturating_first_month_day(date: NaiveDate) -> NaiveDate {
