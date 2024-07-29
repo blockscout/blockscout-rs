@@ -4,7 +4,10 @@ use sea_orm::DatabaseConnection;
 use crate::{
     charts::db_interaction::write::insert_data_many,
     gettable_const,
-    types::{timespans::Week, Timespan, TimespanDuration, TimespanValue},
+    types::{
+        timespans::{Month, Week, Year},
+        Timespan, TimespanDuration, TimespanValue,
+    },
     UpdateError,
 };
 
@@ -20,6 +23,8 @@ gettable_const!(Batch30Days: TimespanDuration<NaiveDate> = TimespanDuration::fro
 gettable_const!(BatchMaxDays: TimespanDuration<NaiveDate> = TimespanDuration::from_days(u64::MAX));
 gettable_const!(Batch30Weeks: TimespanDuration<Week> = TimespanDuration::from_timespan_repeats(30));
 gettable_const!(BatchMaxWeeks: TimespanDuration<Week> = TimespanDuration::from_timespan_repeats(u64::MAX));
+gettable_const!(Batch36Months: TimespanDuration<Month> = TimespanDuration::from_timespan_repeats(36));
+gettable_const!(Batch30Years: TimespanDuration<Year> = TimespanDuration::from_timespan_repeats(30));
 
 /// Pass the vector data from main dependency right into the database
 pub struct PassVecStep;
