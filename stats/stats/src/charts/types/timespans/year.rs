@@ -15,7 +15,7 @@ pub struct Year(i32);
 
 impl PartialEq for Year {
     fn eq(&self, other: &Self) -> bool {
-        self.clamp_by_naive_date_range().0 == other.clamp_by_naive_date_range().0
+        self.number_within_naive_date() == other.number_within_naive_date()
     }
 }
 
@@ -38,7 +38,7 @@ impl Ord for Year {
 impl Debug for Year {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Year")
-            .field(&self.clamp_by_naive_date_range().0)
+            .field(&self.number_within_naive_date())
             .finish()
     }
 }
@@ -78,17 +78,13 @@ impl Timespan for Year {
 
     fn saturating_next_timespan(&self) -> Self {
         // always ensure we stay within `NaiveDate`
-        // first clamp to make sure we don't stay on max value if value is too large
-        let self_clamped = self.clamp_by_naive_date_range();
-        let next = Self(self_clamped.0.saturating_add(1));
+        let next = Self(self.number_within_naive_date().saturating_add(1));
         next.clamp_by_naive_date_range()
     }
 
     fn saturating_previous_timespan(&self) -> Self {
         // always ensure we stay within `NaiveDate`
-        // first clamp to make sure we don't stay on min value if value is too small
-        let self_clamped = self.clamp_by_naive_date_range();
-        let prev = Self(self_clamped.0.saturating_sub(1));
+        let prev = Self(self.number_within_naive_date().saturating_sub(1));
         prev.clamp_by_naive_date_range()
     }
 
@@ -105,7 +101,7 @@ impl Timespan for Year {
         Self: Sized,
     {
         let add_years = duration.repeats().try_into().unwrap_or(std::i32::MAX);
-        Self(self.0.saturating_add(add_years)).clamp_by_naive_date_range()
+        Self(self.number_within_naive_date().saturating_add(add_years)).clamp_by_naive_date_range()
     }
 
     fn saturating_sub(&self, duration: TimespanDuration<Self>) -> Self
@@ -113,7 +109,7 @@ impl Timespan for Year {
         Self: Sized,
     {
         let sub_years: i32 = duration.repeats().try_into().unwrap_or(std::i32::MAX);
-        Self(self.0.saturating_sub(sub_years)).clamp_by_naive_date_range()
+        Self(self.number_within_naive_date().saturating_sub(sub_years)).clamp_by_naive_date_range()
     }
 }
 
