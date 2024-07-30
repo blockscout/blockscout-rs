@@ -190,33 +190,38 @@ pub trait ChartProperties: Sync + Named {
 }
 
 #[macro_export]
-macro_rules! delegated_property_with_resolution {
-    ($type_name:ident {
-        resolution: $res:ty,
+macro_rules! delegated_properties_with_resolutions {
+    (
+        delegate: {
+            $($type_name:ident : $res:ty),+
+            $(,)?
+        }
         ..$source_type:ty
-    }) => {
+    ) => {
+        $(
         pub struct $type_name;
 
-        impl $crate::charts::chart::Named for $type_name {
+        impl $crate::charts::Named for $type_name {
             fn name() -> ::std::string::String {
-                <$source_type as $crate::charts::chart::Named>::name()
+                <$source_type as $crate::charts::Named>::name()
             }
         }
 
         #[portrait::fill(portrait::delegate($source_type))]
-        impl $crate::charts::chart::ChartProperties for $type_name {
+        impl $crate::charts::ChartProperties for $type_name {
             type Resolution = $res;
 
-            fn resolution() -> $crate::charts::chart::ResolutionKind {
+            fn resolution() -> $crate::charts::ResolutionKind {
                 use $crate::types::Timespan;
 
-                <Self as $crate::charts::chart::ChartProperties>::Resolution::enum_variant()
+                <Self as $crate::charts::ChartProperties>::Resolution::enum_variant()
             }
 
-            fn key() -> $crate::charts::chart::ChartKey {
-                $crate::charts::chart::ChartKey::new(Self::name(), Self::resolution())
+            fn key() -> $crate::charts::ChartKey {
+                $crate::charts::ChartKey::new(Self::name(), Self::resolution())
             }
         }
+        )+
     };
 }
 
