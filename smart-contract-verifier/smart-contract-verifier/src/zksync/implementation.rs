@@ -1,8 +1,4 @@
-use crate::{
-    compiler::{CompactVersion, DetailedVersion, DownloadCache, FetchError, Fetcher},
-    decode_hex,
-    zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract},
-};
+use crate::{compiler::{CompactVersion, DetailedVersion, DownloadCache, FetchError, Fetcher}, decode_hex, Version, zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract}};
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -17,6 +13,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+use std::collections::HashSet;
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use verification_common::verifier_alliance::{
@@ -277,17 +274,20 @@ impl CompilerInput for Input {
         self
     }
 
-    fn normalize_output_selection(&mut self, _version: &CompactVersion) {
+    fn normalize_output_selection(&mut self, version: &CompactVersion) {
         use input::settings::selection::{
             file::{flag::Flag, File},
             Selection,
         };
+        let per_contract_flags = if version.to_semver() < &semver::Version::new(1, 3, 6) {
+            HashSet::from([Flag::ABI, Flag::StorageLayout])
+        } else {
+            HashSet::from([Flag::ABI, Flag::Devdoc, Flag::Userdoc, Flag::StorageLayout])
+        };
         let output_selection = Selection {
             all: Some(File {
                 per_file: None,
-                per_contract: Some(
-                    [Flag::ABI, Flag::Devdoc, Flag::Userdoc, Flag::StorageLayout].into(),
-                ),
+                per_contract: Some(per_contract_flags),
             }),
         };
         self.settings.output_selection = Some(output_selection);

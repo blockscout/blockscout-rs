@@ -54,6 +54,25 @@ async fn simple_standard_json() {
 }
 
 #[tokio::test]
+async fn zksolc_1_3_5() {
+    const ROUTE: &str = "/api/v2/zksync-verifier/solidity/sources:verify-standard-json";
+
+    let test_case = types::from_file::<StandardJson>("zksolc_1_3_5");
+
+    let server = super::start().await;
+
+    let request = test_case.to_request();
+    let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
+        &server.base_url,
+        ROUTE,
+        &request,
+    )
+    .await;
+
+    test_case.check_verify_response(response);
+}
+
+#[tokio::test]
 async fn cannot_compile() {
     const ROUTE: &str = "/api/v2/zksync-verifier/solidity/sources:verify-standard-json";
 
