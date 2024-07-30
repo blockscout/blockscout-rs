@@ -175,7 +175,7 @@ fn creation_domain_from_rpc_resolution(
         labelhash: Some(from_user.inner.labelhash().to_vec()),
         parent: parent.map(|p| p.id),
         subdomain_count: 0,
-        resolved_address: Some(ccip_read_info.addr.to_string()),
+        resolved_address: Some(ccip_read_info.addr.to_string().to_lowercase()),
         resolver: Some(resolver.to_string()),
         is_migrated: true,
         stored_offchain: ccip_read_info.stored_offchain,
