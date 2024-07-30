@@ -1,8 +1,10 @@
 use std::{cmp::Ordering, fmt::Debug};
 
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
+use rust_decimal::Decimal;
 
 use crate::{
+    impl_into_string_timespan_value,
     types::{ConsistsOf, Timespan, TimespanDuration},
     ResolutionKind,
 };
@@ -132,6 +134,10 @@ impl ConsistsOf<Month> for Year {
         Month::from_date(Year::into_date(self))
     }
 }
+
+impl_into_string_timespan_value!(Year, i64);
+impl_into_string_timespan_value!(Year, f64);
+impl_into_string_timespan_value!(Year, Decimal);
 
 #[cfg(test)]
 mod tests {
