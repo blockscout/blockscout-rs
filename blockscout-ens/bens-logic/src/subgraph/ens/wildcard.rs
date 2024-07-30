@@ -41,7 +41,7 @@ pub async fn maybe_wildcard_resolution_with_cache(
         Err(err) => {
             tracing::error!(
                 name = from_user.inner.name,
-                error = %err,
+                error = ?err,
                 "error while trying wildcard resolution"
             );
             cached::Return::new(None)
@@ -57,19 +57,25 @@ async fn try_wildcard_resolution(
         return Ok(None);
     };
 
-    if let Some(domain) = &maybe_existing_domain {
+    let maybe_found_domain = maybe_existing_domain.and_then(|domain| {
         if domain.id == from_user.inner.id {
-            if !domain.resolved_with_wildcard {
-                // we found domain that resolved by graph node already, skip it
-                return Ok(None);
-            } else {
-                // domain is resolved with wildcard, so we need to recheck it
-                tracing::info!(
-                    domain_id = domain.id,
-                    domain_name = domain.name,
-                    "found domain with wildcard-resolution, rechecking it"
-                )
-            }
+            Some(domain)
+        } else {
+            None
+        }
+    });
+
+    if let Some(domain) = &maybe_found_domain {
+        if !domain.resolved_with_wildcard {
+            // we found domain that resolved by graph node already, skip it
+            return Ok(None);
+        } else {
+            // domain is resolved with wildcard, so we need to recheck it
+            tracing::info!(
+                domain_id = domain.id,
+                domain_name = domain.name,
+                "found domain with wildcard-resolution, rechecking it"
+            )
         }
     };
 
@@ -81,7 +87,7 @@ async fn try_wildcard_resolution(
         Ok(Some(creation_domain_from_rpc_resolution(
             from_user,
             result,
-            maybe_existing_domain,
+            maybe_found_domain,
         )))
     } else {
         Ok(None)
