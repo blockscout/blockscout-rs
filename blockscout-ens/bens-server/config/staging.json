@@ -4,7 +4,7 @@
     "networks": {
       "11155111": {
         "blockscout": {
-          "url": "https://eth-sepolia.k8s-dev.com"
+          "url": "https://eth-sepolia.k8s-dev.blockscout.com"
         },
         "use_protocols": [
           "ens", "genome", "mode"
