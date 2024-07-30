@@ -435,7 +435,6 @@ fn remove_addresses_from_batch(addresses: impl IntoIterator<Item = Address>) -> 
 
 fn address_should_be_ignored(address: &Address) -> bool {
     let str = format!("{address:#x}");
-    tracing::info!("str={str}");
     UNRESOLVABLE_ADDRESSES_PREFIXES
         .iter()
         .any(|prefix| str.starts_with(prefix))
