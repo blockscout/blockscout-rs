@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use cron::Schedule;
 use primitive_types::H256;
-use s3::{request::ResponseData, Bucket};
+use s3::{request_trait::ResponseData, Bucket};
 use std::{collections::HashSet, marker::PhantomData, path::PathBuf, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tokio::task::JoinHandle;
