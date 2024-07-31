@@ -1,11 +1,11 @@
 [routes.0x00000000000000000000000000000000000000ca1de12a1f4dbe943b6b]
-chain_type = "Arbitrum"
-chain_id = 123
+l2_chain_type = "Arbitrum"
+l2_chain_id = 123
 l2_api_url = "http://localhost:3001"
 l2_blockscout_url = "http://arbitrum.blockscout.com"
 
 [routes.0x00000000000000000000000000000000000000000008e5f679bf7116cb]
-chain_type = "Optimism"
-chain_id = 123420111
+l2_chain_type = "Optimism"
+l2_chain_id = 123420111
 l2_api_url = "https://opcelestia-raspberry.gelatoscout.com/"
 l2_blockscout_url = "https://opcelestia-raspberry.gelatoscout.com/"

@@ -4,7 +4,7 @@ use super::{types::L2BatchMetadata, L2Config};
 use anyhow::Result;
 use blockscout_display_bytes::Bytes;
 use chrono::DateTime;
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -63,14 +63,17 @@ pub async fn get_l2_batch(
 
     Ok(Some(L2BatchMetadata {
         chain_type: super::types::L2Type::Optimism,
-        chain_id: config.chain_id,
+        l2_chain_id: config.l2_chain_id,
         l2_batch_id: response.internal_id.to_string(),
         l2_start_block: response.l2_block_start,
         l2_end_block: response.l2_block_end,
         l2_batch_tx_count: response.tx_count as u32,
-        l2_blockscout_url: config.l2_blockscout_url.clone(),
+        l2_blockscout_url: Url::parse(&config.l2_blockscout_url)?
+            .join(&format!("batches/{}", response.internal_id))?
+            .to_string(),
         l1_tx_hash: response.l1_tx_hashes[0].clone(),
         l1_tx_timestamp: DateTime::parse_from_rfc3339(&response.l1_timestamp)?.timestamp() as u64,
+        l1_chain_id: config.l1_chain_id,
         related_blobs,
     }))
 }

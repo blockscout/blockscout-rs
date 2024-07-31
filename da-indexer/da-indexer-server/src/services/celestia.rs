@@ -93,14 +93,15 @@ impl Celestia for CelestiaService {
             .collect();
 
         Ok(Response::new(CelestiaL2BatchMetadata {
-            chain_id: l2_batch_metadata.chain_id,
+            l2_chain_id: l2_batch_metadata.l2_chain_id,
             l2_batch_id: l2_batch_metadata.l2_batch_id,
             l2_start_block: l2_batch_metadata.l2_start_block,
             l2_end_block: l2_batch_metadata.l2_end_block,
             l2_blockscout_url: l2_batch_metadata.l2_blockscout_url,
+            l2_batch_tx_count: l2_batch_metadata.l2_batch_tx_count,
             l1_tx_hash: l2_batch_metadata.l1_tx_hash,
             l1_tx_timestamp: l2_batch_metadata.l1_tx_timestamp,
-            l2_batch_tx_count: l2_batch_metadata.l2_batch_tx_count,
+            l1_chain_id: l2_batch_metadata.l1_chain_id,
             related_blobs,
         }))
     }

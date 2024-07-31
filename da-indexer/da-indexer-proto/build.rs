@@ -22,10 +22,10 @@ fn compile(
             ".blockscout.daIndexer.v1.HealthCheckRequest.service",
             "#[serde(default)]"
         )
-        // .field_attribute(
-        //     ".blockscout.daIndexer.v1.<MessageName>.<DefaultFieldName>",
-        //     "#[serde(default)]"
-        // )
+        .message_attribute(
+            ".blockscout.daIndexer.v1.CelestiaL2BatchMetadata",
+            "#[serde_with::skip_serializing_none]"
+        )
         ;
     config.compile_protos(protos, includes)?;
     Ok(())

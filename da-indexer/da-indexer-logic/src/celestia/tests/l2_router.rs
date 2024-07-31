@@ -29,20 +29,21 @@ async fn test_optimism_router() {
         .unwrap();
 
     assert_eq!(batch_metadata.chain_type, L2Type::Optimism);
-    assert_eq!(batch_metadata.chain_id, 123420111);
+    assert_eq!(batch_metadata.l2_chain_id, 123420111);
     assert_eq!(batch_metadata.l2_batch_id, "5");
     assert_eq!(batch_metadata.l2_start_block, 29996);
     assert_eq!(batch_metadata.l2_end_block, 33082);
     assert_eq!(batch_metadata.l2_batch_tx_count, 1);
     assert_eq!(
         batch_metadata.l2_blockscout_url,
-        "http://raspberry.blockscout.com",
+        "http://raspberry.blockscout.com/batches/5",
     );
     assert_eq!(
         batch_metadata.l1_tx_hash,
         "0xf41211e966ec23032dde713d1f775ae5cb07dc5e15951281e6844d74cc02a930",
     );
     assert_eq!(batch_metadata.l1_tx_timestamp, 1703067444);
+    assert_eq!(batch_metadata.l1_chain_id, None);
     assert_eq!(batch_metadata.related_blobs.len(), 1);
 }
 
@@ -63,20 +64,21 @@ async fn test_arbitrum_router() {
         .unwrap()
         .unwrap();
     assert_eq!(batch_metadata.chain_type, L2Type::Arbitrum);
-    assert_eq!(batch_metadata.chain_id, 123);
+    assert_eq!(batch_metadata.l2_chain_id, 123);
     assert_eq!(batch_metadata.l2_batch_id, "610699");
     assert_eq!(batch_metadata.l2_start_block, 217961563);
     assert_eq!(batch_metadata.l2_end_block, 217962052);
     assert_eq!(batch_metadata.l2_batch_tx_count, 3061);
     assert_eq!(
         batch_metadata.l2_blockscout_url,
-        "http://arbitrum.blockscout.com",
+        "http://arbitrum.blockscout.com/batches/610699",
     );
     assert_eq!(
         batch_metadata.l1_tx_hash,
         "0x6090384cc3f60874ee6e4bcd213629f0b68ef7607fd012714905ebc28c28078e",
     );
     assert_eq!(batch_metadata.l1_tx_timestamp, 1717415255);
+    assert_eq!(batch_metadata.l1_chain_id, Some(12));
     assert_eq!(batch_metadata.related_blobs.len(), 0);
 }
 
@@ -86,19 +88,21 @@ async fn create_test_router() -> L2Router {
     routes.insert(
         "0x00000000000000000000000000000000000000000008e5f679bf7116cb".to_string(),
         L2Config {
-            chain_type: L2Type::Optimism,
-            chain_id: 123420111,
+            l2_chain_type: L2Type::Optimism,
+            l2_chain_id: 123420111,
             l2_api_url: mock_server.uri(),
             l2_blockscout_url: "http://raspberry.blockscout.com".to_string(),
+            l1_chain_id: None,
         },
     );
     routes.insert(
         "0x00000000000000000000000000000000000000ca1de12a1f4dbe943b6b".to_string(),
         L2Config {
-            chain_type: L2Type::Arbitrum,
-            chain_id: 123,
+            l2_chain_type: L2Type::Arbitrum,
+            l2_chain_id: 123,
             l2_api_url: mock_server.uri(),
             l2_blockscout_url: "http://arbitrum.blockscout.com".to_string(),
+            l1_chain_id: Some(12),
         },
     );
 
