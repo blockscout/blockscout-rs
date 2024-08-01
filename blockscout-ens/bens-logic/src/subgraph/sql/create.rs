@@ -69,11 +69,15 @@ async fn update_domain(
         r#"
         UPDATE {schema}.domain
         SET
-            resolved_address = $1
-        WHERE vid = $2
+            resolved_address = $1,
+            stored_offchain = $2,
+            resolved_with_wildcard = $3
+        WHERE vid = $4
         "#
     ))
     .bind(&domain.resolved_address)
+    .bind(domain.stored_offchain)
+    .bind(domain.resolved_with_wildcard)
     .bind(vid)
     .execute(pool)
     .await?;

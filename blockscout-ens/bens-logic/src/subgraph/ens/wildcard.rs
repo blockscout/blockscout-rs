@@ -21,7 +21,7 @@ use std::str::FromStr;
     convert = r#"{
             from_user.inner.id.to_string()
         }"#,
-    time = 3600, // 60 * 60 seconds = 1 hour
+    time = 14400, // 4 * 60 * 60 seconds = 4 hours
     size = 500,
     sync_writes = true,
     with_cached_flag = true,
@@ -56,38 +56,21 @@ async fn try_wildcard_resolution(
     let Some((resolver_address, maybe_existing_domain)) = any_resolver(db, from_user).await? else {
         return Ok(None);
     };
-
-    let maybe_found_domain = maybe_existing_domain.and_then(|domain| {
-        if domain.id == from_user.inner.id {
-            Some(domain)
-        } else {
-            None
-        }
-    });
-
-    if let Some(domain) = &maybe_found_domain {
-        if !domain.resolved_with_wildcard {
-            // we found domain that resolved by graph node already, skip it
-            return Ok(None);
-        } else {
-            // domain is resolved with wildcard, so we need to recheck it
-            tracing::info!(
-                domain_id = domain.id,
-                domain_name = domain.name,
-                "found domain with wildcard-resolution, rechecking it"
-            )
-        }
-    };
-
     let result = ccip_read::call_to_resolver(from_user, resolver_address)
         .await
         .context("resolve using ccip call")?;
-
     if !result.addr.is_zero() {
+        let maybe_domain_to_update = maybe_existing_domain.and_then(|domain| {
+            if domain.id == from_user.inner.id {
+                Some(domain)
+            } else {
+                None
+            }
+        });
         Ok(Some(creation_domain_from_rpc_resolution(
             from_user,
             result,
-            maybe_found_domain,
+            maybe_domain_to_update,
         )))
     } else {
         Ok(None)
@@ -179,7 +162,7 @@ fn creation_domain_from_rpc_resolution(
         resolver: Some(resolver.to_string()),
         is_migrated: true,
         stored_offchain: ccip_read_info.stored_offchain,
-        resolved_with_wildcard: true,
+        resolved_with_wildcard: ccip_read_info.resolved_with_wildcard,
         created_at: now.timestamp().into(),
         owner: Address::ZERO.to_string(),
         wrapped_owner: None,

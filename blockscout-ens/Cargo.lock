@@ -355,9 +355,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-ccip-read"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88bb5205bb9d5bdc078746070b358d71073dbc3ce386fbb2c9acb7138db1a1d3"
+checksum = "84215aa610e088a90981a1e443ea38f469b7244a06dce2677b32adc330de3dfa"
 dependencies = [
  "alloy",
  "anyhow",

@@ -63,6 +63,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .context("database connect")?,
     );
     if settings.database.run_migrations {
+        tracing::info!("running migrations");
         bens_logic::migrations::run(&pool).await?;
     }
     let networks = settings

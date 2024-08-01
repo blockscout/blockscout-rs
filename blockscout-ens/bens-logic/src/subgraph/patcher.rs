@@ -26,13 +26,7 @@ impl SubgraphPatcher {
     ) -> Result<(), anyhow::Error> {
         let protocol = from_user.deployed_protocol.protocol;
         let level = from_user.inner.level();
-        let range = if from_user.tld_is_native() {
-            // sub.domain.eth
-            3..=MAX_LEVEL
-        } else {
-            // any_domains.xyz
-            2..=MAX_LEVEL
-        };
+        let range = 2..=MAX_LEVEL;
         let level_is_fine = range.contains(&level);
         if protocol.info.try_offchain_resolve && level_is_fine {
             offchain_resolve(db, from_user).await?
