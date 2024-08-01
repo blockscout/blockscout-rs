@@ -17,6 +17,7 @@ pub struct DomainInfoFromCcipRead {
     pub addr: Address,
     pub resolver_address: Address,
     pub stored_offchain: bool,
+    pub resolved_with_wildcard: bool,
 }
 
 #[instrument(
@@ -42,6 +43,7 @@ pub async fn call_to_resolver(
         resolver_address,
         name: name.inner.name.clone(),
         stored_offchain: result.ccip_read_used,
+        resolved_with_wildcard: result.wildcard_used,
     })
 }
 

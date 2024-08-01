@@ -7,9 +7,10 @@ use std::str::FromStr;
 
 #[tracing::instrument(
     level = "info",
-    skip(domain),
+    skip_all,
     fields(
         domain_name = domain.name,
+        native_token_contract = ?name.deployed_protocol.protocol.info.native_token_contract,
     ),
     err,
 )]
