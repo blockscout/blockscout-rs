@@ -124,6 +124,7 @@ impl ChartKey {
     }
 }
 
+// todo: impl from
 impl Into<String> for ChartKey {
     fn into(self) -> String {
         self.as_string()

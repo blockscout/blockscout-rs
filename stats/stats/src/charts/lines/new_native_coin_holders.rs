@@ -1,12 +1,21 @@
 use crate::{
     charts::ChartProperties,
     data_source::kinds::{
-        data_manipulation::{delta::Delta, map::MapToString},
+        data_manipulation::{
+            delta::Delta,
+            map::{MapParseTo, MapToString},
+            resolutions::sum::SumLowerResolution,
+        },
         local_db::{
-            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
         },
     },
+    delegated_properties_with_resolutions,
     lines::native_coin_holders_growth::NativeCoinHoldersGrowthInt,
+    types::timespans::{Month, Week, Year},
     Named,
 };
 
@@ -29,10 +38,36 @@ impl ChartProperties for Properties {
     }
 }
 
+delegated_properties_with_resolutions!(
+    delegate: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    }
+    ..Properties
+);
+
 pub type NewNativeCoinHolders = DirectVecLocalDbChartSource<
     MapToString<Delta<NativeCoinHoldersGrowthInt>>,
     Batch30Days,
     Properties,
+>;
+pub type NewNativeCoinHoldersInt = MapParseTo<NewNativeCoinHolders, i64>;
+pub type NewNativeCoinHoldersWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewNativeCoinHoldersInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewNativeCoinHoldersMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewNativeCoinHoldersInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewNativeCoinHoldersMonthlyInt = MapParseTo<NewNativeCoinHoldersMonthly, i64>;
+pub type NewNativeCoinHoldersYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewNativeCoinHoldersMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
 >;
 
 #[cfg(test)]
@@ -50,6 +85,36 @@ mod tests {
                 ("2022-11-10", "0"),
                 ("2022-11-11", "-1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_native_coin_holders_weekly() {
+        simple_test_chart::<NewNativeCoinHoldersWeekly>(
+            "update_new_native_coin_holders_weekly",
+            vec![("2022-11-07", "7")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_native_coin_holders_monthly() {
+        simple_test_chart::<NewNativeCoinHoldersMonthly>(
+            "update_new_native_coin_holders_monthly",
+            vec![("2022-11-01", "7")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_native_coin_holders_yearly() {
+        simple_test_chart::<NewNativeCoinHoldersYearly>(
+            "update_new_native_coin_holders_yearly",
+            vec![("2022-01-01", "7")],
         )
         .await;
     }

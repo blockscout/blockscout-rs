@@ -25,142 +25,64 @@ mod verified_contracts_growth;
 mod mock;
 
 pub use accounts_growth::{
-    AccountsGrowth,
-    AccountsGrowthWeekly,
-    // AccountsGrowthMonthly,
-    // AccountsGrowthYearly,
+    AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };
-pub use active_accounts::{
-    ActiveAccounts,
-    // ActiveAccountsWeekly,
-    // ActiveAccountsMonthly,
-    // ActiveAccountsYearly,
-};
+pub use active_accounts::ActiveAccounts;
 pub use average_block_rewards::{
-    AverageBlockRewards,
-    AverageBlockRewardsWeekly,
-    // AverageBlockRewardsMonthly,
-    // AverageBlockRewardsYearly,
+    AverageBlockRewards, AverageBlockRewardsMonthly, AverageBlockRewardsWeekly,
+    AverageBlockRewardsYearly,
 };
 pub use average_block_size::{
-    AverageBlockSize,
-    // AverageBlockSizeWeekly,
-    // AverageBlockSizeMonthly,
-    // AverageBlockSizeYearly,
+    AverageBlockSize, AverageBlockSizeMonthly, AverageBlockSizeWeekly, AverageBlockSizeYearly,
 };
 pub use average_gas_limit::{
-    AverageGasLimit,
-    // AverageGasLimitWeekly,
-    // AverageGasLimitMonthly,
-    // AverageGasLimitYearly,
+    AverageGasLimit, AverageGasLimitMonthly, AverageGasLimitWeekly, AverageGasLimitYearly,
 };
 pub use average_gas_price::{
-    AverageGasPrice,
-    // AverageGasPriceWeekly,
-    // AverageGasPriceMonthly,
-    // AverageGasPriceYearly,
+    AverageGasPrice, AverageGasPriceMonthly, AverageGasPriceWeekly, AverageGasPriceYearly,
 };
 pub use average_txn_fee::{
-    AverageTxnFee,
-    // AverageTxnFeeWeekly,
-    // AverageTxnFeeMonthly,
-    // AverageTxnFeeYearly,
+    AverageTxnFee, AverageTxnFeeMonthly, AverageTxnFeeWeekly, AverageTxnFeeYearly,
 };
 pub use contracts_growth::{
-    ContractsGrowth,
-    // ContractsGrowthWeekly,
-    // ContractsGrowthMonthly,
-    // ContractsGrowthYearly,
+    ContractsGrowth, ContractsGrowthMonthly, ContractsGrowthWeekly, ContractsGrowthYearly,
 };
 pub use gas_used_growth::{
-    GasUsedGrowth,
-    // GasUsedGrowthWeekly,
-    // GasUsedGrowthMonthly,
-    // GasUsedGrowthYearly,
+    GasUsedGrowth, GasUsedGrowthMonthly, GasUsedGrowthWeekly, GasUsedGrowthYearly,
 };
 pub use native_coin_holders_growth::{
-    NativeCoinHoldersGrowth,
-    // NativeCoinHoldersGrowthWeekly,
-    // NativeCoinHoldersGrowthMonthly,
-    // NativeCoinHoldersGrowthYearly,
+    NativeCoinHoldersGrowth, NativeCoinHoldersGrowthMonthly, NativeCoinHoldersGrowthWeekly,
+    NativeCoinHoldersGrowthYearly,
 };
 pub use native_coin_supply::{
-    NativeCoinSupply,
-    // NativeCoinSupplyWeekly,
-    // NativeCoinSupplyMonthly,
-    // NativeCoinSupplyYearly,
+    NativeCoinSupply, NativeCoinSupplyMonthly, NativeCoinSupplyWeekly, NativeCoinSupplyYearly,
 };
-pub use new_accounts::{
-    NewAccounts,
-    NewAccountsWeekly,
-    // NewAccountsMonthly,
-    // NewAccountsYearly,
-};
-pub use new_blocks::{
-    NewBlocks,
-    // NewBlocksWeekly,
-    // NewBlocksMonthly,
-    // NewBlocksYearly,
-};
+pub use new_accounts::{NewAccounts, NewAccountsMonthly, NewAccountsWeekly, NewAccountsYearly};
+pub use new_blocks::{NewBlocks, NewBlocksMonthly, NewBlocksWeekly, NewBlocksYearly};
 pub use new_contracts::{
-    NewContracts,
-    // NewContractsWeekly,
-    // NewContractsMonthly,
-    // NewContractsYearly,
+    NewContracts, NewContractsMonthly, NewContractsWeekly, NewContractsYearly,
 };
 pub use new_native_coin_holders::{
-    NewNativeCoinHolders,
-    // NewNativeCoinHoldersWeekly,
-    // NewNativeCoinHoldersMonthly,
-    // NewNativeCoinHoldersYearly,
+    NewNativeCoinHolders, NewNativeCoinHoldersMonthly, NewNativeCoinHoldersWeekly,
+    NewNativeCoinHoldersYearly,
 };
 pub use new_native_coin_transfers::{
-    NewNativeCoinTransfersInt,
-    {
-        NewNativeCoinTransfers,
-        // NewNativeCoinTransfersWeekly,
-        // NewNativeCoinTransfersMonthly,
-        // NewNativeCoinTransfersYearly,
-    },
+    NewNativeCoinTransfers, NewNativeCoinTransfersInt, NewNativeCoinTransfersMonthly,
+    NewNativeCoinTransfersWeekly, NewNativeCoinTransfersYearly,
 };
-pub use new_txns::{
-    NewTxnsInt,
-    {
-        NewTxns,
-        // NewTxnsWeekly,
-        // NewTxnsMonthly,
-        // NewTxnsYearly,
-    },
-};
+pub use new_txns::{NewTxns, NewTxnsInt, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
 pub use new_verified_contracts::{
-    NewVerifiedContracts,
-    // NewVerifiedContractsWeekly,
-    // NewVerifiedContractsMonthly,
-    // NewVerifiedContractsYearly,
+    NewVerifiedContracts, NewVerifiedContractsMonthly, NewVerifiedContractsWeekly,
+    NewVerifiedContractsYearly,
 };
-pub use txns_fee::{
-    TxnsFee,
-    // TxnsFeeWeekly,
-    // TxnsFeeMonthly,
-    // TxnsFeeYearly,
-};
-pub use txns_growth::{
-    TxnsGrowth,
-    // TxnsGrowthWeekly,
-    // TxnsGrowthMonthly,
-    // TxnsGrowthYearly,
-};
+pub use txns_fee::{TxnsFee, TxnsFeeMonthly, TxnsFeeWeekly, TxnsFeeYearly};
+pub use txns_growth::{TxnsGrowth, TxnsGrowthMonthly, TxnsGrowthWeekly, TxnsGrowthYearly};
 pub use txns_success_rate::{
-    TxnsSuccessRate,
-    // TxnsSuccessRateWeekly,
-    // TxnsSuccessRateMonthly,
-    // TxnsSuccessRateYearly,
+    TxnsSuccessRate, TxnsSuccessRateMonthly, TxnsSuccessRateWeekly, TxnsSuccessRateYearly,
 };
 pub use verified_contracts_growth::{
-    VerifiedContractsGrowth,
-    // VerifiedContractsGrowthWeekly,
-    // VerifiedContractsGrowthMonthly,
-    // VerifiedContractsGrowthYearly,
+    VerifiedContractsGrowth, VerifiedContractsGrowthMonthly, VerifiedContractsGrowthWeekly,
+    VerifiedContractsGrowthYearly,
 };
 
 #[cfg(test)]

@@ -5,12 +5,12 @@ use crate::{
     data_source::kinds::{
         data_manipulation::resolutions::last_value::LastValueLowerResolution,
         local_db::{
-            parameters::update::batching::parameters::Batch30Weeks,
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
         },
     },
-    delegated_property_with_resolution,
-    types::timespans::Week,
+    delegated_properties_with_resolutions,
+    types::timespans::{Month, Week, Year},
     ChartProperties, MissingDatePolicy, Named,
 };
 
@@ -36,17 +36,30 @@ impl ChartProperties for Properties {
     }
 }
 
-delegated_property_with_resolution!(WeeklyProperties {
-    resolution: Week,
+delegated_properties_with_resolutions!(
+    delegate: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    }
     ..Properties
-});
+);
 
 pub type AccountsGrowth = DailyCumulativeLocalDbChartSource<NewAccountsInt, Properties>;
-
 pub type AccountsGrowthWeekly = DirectVecLocalDbChartSource<
     LastValueLowerResolution<AccountsGrowth, Week>,
     Batch30Weeks,
     WeeklyProperties,
+>;
+pub type AccountsGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<AccountsGrowth, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type AccountsGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<AccountsGrowthMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
 >;
 
 #[cfg(test)]
@@ -65,6 +78,36 @@ mod tests {
                 ("2022-11-11", "8"),
                 ("2023-03-01", "9"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_accounts_growth_weekly() {
+        simple_test_chart::<AccountsGrowthWeekly>(
+            "update_accounts_growth_weekly",
+            vec![("2022-11-07", "8"), ("2023-02-27", "9")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_accounts_growth_monthly() {
+        simple_test_chart::<AccountsGrowthMonthly>(
+            "update_accounts_growth_monthly",
+            vec![("2022-11-01", "8"), ("2023-03-01", "9")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_accounts_growth_yearly() {
+        simple_test_chart::<AccountsGrowthYearly>(
+            "update_accounts_growth_yearly",
+            vec![("2022-01-01", "8"), ("2023-01-01", "9")],
         )
         .await;
     }

@@ -2,11 +2,18 @@ use std::ops::Range;
 
 use crate::{
     data_source::kinds::{
-        data_manipulation::map::{Map, MapFunction},
-        local_db::DailyCumulativeLocalDbChartSource,
+        data_manipulation::{
+            map::{Map, MapFunction},
+            resolutions::last_value::LastValueLowerResolution,
+        },
+        local_db::{
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    types::timespans::DateValue,
+    delegated_properties_with_resolutions,
+    types::timespans::{DateValue, Month, Week, Year},
     utils::sql_with_range_filter_opt,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
@@ -80,11 +87,35 @@ impl ChartProperties for Properties {
     }
 }
 
+delegated_properties_with_resolutions!(
+    delegate: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    }
+    ..Properties
+);
+
 pub type GasUsedGrowth = DailyCumulativeLocalDbChartSource<NewGasUsedRemote, Properties>;
+pub type GasUsedGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<GasUsedGrowth, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type GasUsedGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<GasUsedGrowth, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type GasUsedGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<GasUsedGrowthMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::GasUsedGrowth;
+    use super::*;
     use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
 
     #[tokio::test]
@@ -102,6 +133,48 @@ mod tests {
                 ("2023-02-01", "389580"),
                 ("2023-03-01", "403140"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_gas_used_growth_weekly() {
+        simple_test_chart::<GasUsedGrowthWeekly>(
+            "update_gas_used_growth_weekly",
+            vec![
+                ("2022-11-07", "250680"),
+                ("2022-11-28", "288350"),
+                ("2022-12-26", "334650"),
+                ("2023-01-30", "389580"),
+                ("2023-02-27", "403140"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_gas_used_growth_monthly() {
+        simple_test_chart::<GasUsedGrowthMonthly>(
+            "update_gas_used_growth_monthly",
+            vec![
+                ("2022-11-01", "250680"),
+                ("2022-12-01", "288350"),
+                ("2023-01-01", "334650"),
+                ("2023-02-01", "389580"),
+                ("2023-03-01", "403140"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_gas_used_growth_yearly() {
+        simple_test_chart::<GasUsedGrowthYearly>(
+            "update_gas_used_growth_yearly",
+            vec![("2022-01-01", "288350"), ("2023-01-01", "403140")],
         )
         .await;
     }

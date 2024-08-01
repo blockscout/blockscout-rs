@@ -2,12 +2,17 @@ use std::ops::Range;
 
 use crate::{
     data_source::kinds::{
-        data_manipulation::map::MapToString,
+        data_manipulation::{map::MapToString, resolutions::last_value::LastValueLowerResolution},
         local_db::{
-            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    delegated_properties_with_resolutions,
+    types::timespans::{Month, Week, Year},
     ChartProperties, Named,
 };
 
@@ -99,8 +104,32 @@ impl ChartProperties for Properties {
     }
 }
 
+delegated_properties_with_resolutions!(
+    delegate: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    }
+    ..Properties
+);
+
 pub type NativeCoinSupply =
     DirectVecLocalDbChartSource<NativeCoinSupplyRemoteString, Batch30Days, Properties>;
+pub type NativeCoinSupplyWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinSupply, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NativeCoinSupplyMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinSupply, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NativeCoinSupplyYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinSupplyMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -117,6 +146,36 @@ mod tests {
                 ("2022-11-10", "6000"),
                 ("2022-11-11", "5000"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_supply_weekly() {
+        simple_test_chart::<NativeCoinSupplyWeekly>(
+            "update_native_coin_supply_weekly",
+            vec![("2022-11-07", "5000")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_supply_monthly() {
+        simple_test_chart::<NativeCoinSupplyMonthly>(
+            "update_native_coin_supply_monthly",
+            vec![("2022-11-01", "5000")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_supply_yearly() {
+        simple_test_chart::<NativeCoinSupplyYearly>(
+            "update_native_coin_supply_yearly",
+            vec![("2022-01-01", "5000")],
         )
         .await;
     }

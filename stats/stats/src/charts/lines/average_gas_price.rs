@@ -2,12 +2,20 @@ use std::ops::Range;
 
 use crate::{
     data_source::kinds::{
-        data_manipulation::map::MapToString,
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            resolutions::average::AverageLowerResolution,
+        },
         local_db::{
-            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    delegated_properties_with_resolutions,
+    types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
 };
@@ -15,6 +23,8 @@ use crate::{
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
+
+use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
 const GWEI: i64 = 1_000_000_000;
 
@@ -71,8 +81,34 @@ impl ChartProperties for Properties {
     }
 }
 
+delegated_properties_with_resolutions!(
+    delegate: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    }
+    ..Properties
+);
+
 pub type AverageGasPrice =
     DirectVecLocalDbChartSource<AverageGasPriceRemoteString, Batch30Days, Properties>;
+pub type AverageGasPriceWeekly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewBlocksInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type AverageGasPriceMonthly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewBlocksInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type AverageGasPriceYearly = DirectVecLocalDbChartSource<
+    MapToString<
+        AverageLowerResolution<MapParseTo<AverageGasPriceMonthly, f64>, NewBlocksMonthlyInt, Year>,
+    >,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -93,6 +129,51 @@ mod tests {
                 ("2023-01-01", "1.123456789"),
                 ("2023-02-01", "9.5493827065"),
                 ("2023-03-01", "1.123456789"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_gas_price_weekly() {
+        simple_test_chart::<AverageGasPriceWeekly>(
+            "update_average_gas_price_weekly",
+            vec![
+                ("2022-11-07", "2.8166666638499995"),
+                ("2022-11-28", "6.5160493762"),
+                ("2022-12-26", "1.123456789"),
+                ("2023-01-30", "9.5493827065"),
+                ("2023-02-27", "1.123456789"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_gas_price_monthly() {
+        simple_test_chart::<AverageGasPriceMonthly>(
+            "update_average_gas_price_monthly",
+            vec![
+                ("2022-11-01", "2.8166666638499995"),
+                ("2022-12-01", "6.5160493762"),
+                ("2023-01-01", "1.123456789"),
+                ("2023-02-01", "9.5493827065"),
+                ("2023-03-01", "1.123456789"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_gas_price_yearly() {
+        simple_test_chart::<AverageGasPriceYearly>(
+            "update_average_gas_price_yearly",
+            vec![
+                ("2022-01-01", "3.1866049350849996"),
+                ("2023-01-01", "3.9320987615000003"),
             ],
         )
         .await;

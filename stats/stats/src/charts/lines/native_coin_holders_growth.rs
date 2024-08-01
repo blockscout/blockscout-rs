@@ -4,16 +4,22 @@ use crate::{
     charts::db_interaction::write::{create_chart, insert_data_many},
     data_source::{
         kinds::{
-            data_manipulation::map::MapParseTo,
+            data_manipulation::{
+                map::MapParseTo, resolutions::last_value::LastValueLowerResolution,
+            },
             local_db::{
                 parameter_traits::{CreateBehaviour, UpdateBehaviour},
-                parameters::DefaultQueryVec,
-                LocalDbChartSource,
+                parameters::{
+                    update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
+                    DefaultQueryVec,
+                },
+                DirectVecLocalDbChartSource, LocalDbChartSource,
             },
         },
         UpdateContext,
     },
-    types::timespans::DateValue,
+    delegated_properties_with_resolutions,
+    types::timespans::{DateValue, Month, Week, Year},
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
@@ -367,10 +373,33 @@ where
     Ok(days)
 }
 
+delegated_properties_with_resolutions!(
+    delegate: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    }
+    ..Properties
+);
+
 pub type NativeCoinHoldersGrowth =
     LocalDbChartSource<(), (), Create, Update, DefaultQueryVec<Properties>, Properties>;
-
 pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, i64>;
+pub type NativeCoinHoldersGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinHoldersGrowth, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NativeCoinHoldersGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinHoldersGrowth, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NativeCoinHoldersGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinHoldersGrowthMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -388,6 +417,36 @@ mod tests {
                 ("2022-11-10", "8"),
                 ("2022-11-11", "7"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_holders_growth_weekly() {
+        simple_test_chart::<NativeCoinHoldersGrowthWeekly>(
+            "update_native_coin_holders_growth_weekly",
+            vec![("2022-11-07", "7")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_holders_growth_monthly() {
+        simple_test_chart::<NativeCoinHoldersGrowthMonthly>(
+            "update_native_coin_holders_growth_monthly",
+            vec![("2022-11-01", "7")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_holders_growth_yearly() {
+        simple_test_chart::<NativeCoinHoldersGrowthYearly>(
+            "update_native_coin_holders_growth_yearly",
+            vec![("2022-01-01", "7")],
         )
         .await;
     }

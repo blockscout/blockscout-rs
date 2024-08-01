@@ -9,16 +9,18 @@ use crate::{
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
-                parameters::update::batching::parameters::{Batch30Weeks, BatchMaxDays},
+                parameters::update::batching::parameters::{
+                    Batch30Weeks, Batch30Years, Batch36Months, BatchMaxDays,
+                },
                 DirectVecLocalDbChartSource,
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
         UpdateContext,
     },
-    delegated_property_with_resolution,
+    delegated_properties_with_resolutions,
     missing_date::trim_out_of_range_sorted,
-    types::timespans::Week,
+    types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
     ChartProperties, Named, UpdateError,
 };
@@ -109,19 +111,33 @@ impl ChartProperties for Properties {
     }
 }
 
-delegated_property_with_resolution!(WeeklyProperties {
-    resolution: Week,
+delegated_properties_with_resolutions!(
+    delegate: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    }
     ..Properties
-});
+);
 
 pub type NewAccounts = DirectVecLocalDbChartSource<NewAccountsRemote, BatchMaxDays, Properties>;
+pub type NewAccountsInt = MapParseTo<NewAccounts, i64>;
 pub type NewAccountsWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewAccountsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
-
-pub type NewAccountsInt = MapParseTo<NewAccounts, i64>;
+pub type NewAccountsMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewAccountsInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewAccountsMonthlyInt = MapParseTo<NewAccountsMonthly, i64>;
+pub type NewAccountsYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewAccountsMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -139,6 +155,36 @@ mod tests {
                 ("2022-11-11", "4"),
                 ("2023-03-01", "1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_accounts_weekly() {
+        simple_test_chart::<NewAccountsWeekly>(
+            "update_new_accounts_weekly",
+            vec![("2022-11-07", "8"), ("2023-02-27", "1")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_accounts_monthly() {
+        simple_test_chart::<NewAccountsMonthly>(
+            "update_new_accounts_monthly",
+            vec![("2022-11-01", "8"), ("2023-03-01", "1")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_accounts_yearly() {
+        simple_test_chart::<NewAccountsYearly>(
+            "update_new_accounts_yearly",
+            vec![("2022-01-01", "8"), ("2023-01-01", "1")],
         )
         .await;
     }

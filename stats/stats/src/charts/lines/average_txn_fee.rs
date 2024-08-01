@@ -4,12 +4,20 @@ use std::ops::Range;
 
 use crate::{
     data_source::kinds::{
-        data_manipulation::map::MapToString,
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            resolutions::average::AverageLowerResolution,
+        },
         local_db::{
-            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    delegated_properties_with_resolutions,
+    types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
 };
@@ -17,6 +25,8 @@ use crate::{
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
+
+use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
 const ETHER: i64 = i64::pow(10, 18);
 
@@ -65,12 +75,38 @@ impl ChartProperties for Properties {
     }
 }
 
+delegated_properties_with_resolutions!(
+    delegate: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    }
+    ..Properties
+);
+
 pub type AverageTxnFee =
     DirectVecLocalDbChartSource<AverageTxnFeeRemoteString, Batch30Days, Properties>;
+pub type AverageTxnFeeWeekly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFee, f64>, NewBlocksInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type AverageTxnFeeMonthly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFee, f64>, NewBlocksInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type AverageTxnFeeYearly = DirectVecLocalDbChartSource<
+    MapToString<
+        AverageLowerResolution<MapParseTo<AverageTxnFeeMonthly, f64>, NewBlocksMonthlyInt, Year>,
+    >,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::AverageTxnFee;
+    use super::*;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
@@ -87,6 +123,51 @@ mod tests {
                 ("2023-01-01", "0.000023592592569"),
                 ("2023-02-01", "0.0002005370368365"),
                 ("2023-03-01", "0.000023592592569"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_txn_fee_weekly() {
+        simple_test_chart::<AverageTxnFeeWeekly>(
+            "update_average_txn_fee_weekly",
+            vec![
+                ("2022-11-07", "0.00005914999994085"),
+                ("2022-11-28", "0.0001368370369002"),
+                ("2022-12-26", "0.000023592592569"),
+                ("2023-01-30", "0.0002005370368365"),
+                ("2023-02-27", "0.000023592592569"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_txn_fee_monthly() {
+        simple_test_chart::<AverageTxnFeeMonthly>(
+            "update_average_txn_fee_monthly",
+            vec![
+                ("2022-11-01", "0.00005914999994085"),
+                ("2022-12-01", "0.0001368370369002"),
+                ("2023-01-01", "0.000023592592569"),
+                ("2023-02-01", "0.0002005370368365"),
+                ("2023-03-01", "0.000023592592569"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_txn_fee_yearly() {
+        simple_test_chart::<AverageTxnFeeYearly>(
+            "update_average_txn_fee_yearly",
+            vec![
+                ("2022-01-01", "0.000066918703636785"),
+                ("2023-01-01", "0.0000825740739915"),
             ],
         )
         .await;

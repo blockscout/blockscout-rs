@@ -7,10 +7,11 @@ use tokio::sync::Mutex;
 
 use super::{
     kinds::{
-        data_manipulation::map::MapParseTo,
+        data_manipulation::{map::MapParseTo, resolutions::last_value::LastValueLowerResolution},
         local_db::{
             parameters::update::batching::{
-                parameter_traits::BatchStepBehaviour, parameters::Batch30Days,
+                parameter_traits::BatchStepBehaviour,
+                parameters::{Batch30Days, Batch30Weeks, Batch30Years, Batch36Months},
             },
             BatchLocalDbChartSourceWithDefaultParams, DailyCumulativeLocalDbChartSource,
             DirectVecLocalDbChartSource,
@@ -22,8 +23,9 @@ use super::{
 use crate::{
     construct_update_group,
     data_source::kinds::local_db::parameters::update::batching::parameters::PassVecStep,
+    delegated_properties_with_resolutions,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-    types::timespans::DateValue,
+    types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::sql_with_range_filter_opt,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
@@ -117,8 +119,32 @@ impl ChartProperties for ContractsGrowthProperties {
 }
 
 // We can use convenient common implementation to get growth chart
+delegated_properties_with_resolutions!(
+    delegate: {
+        ContractsGrowthWeeklyProperties:  Week,
+        ContractsGrowthMonthlyProperties: Month,
+        ContractsGrowthYearlyProperties: Year,
+    }
+    ..ContractsGrowthProperties
+);
+
 pub type ContractsGrowth =
     DailyCumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
+pub type ContractsGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<ContractsGrowth, Week>,
+    Batch30Weeks,
+    ContractsGrowthWeeklyProperties,
+>;
+pub type ContractsGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<ContractsGrowth, Month>,
+    Batch36Months,
+    ContractsGrowthMonthlyProperties,
+>;
+pub type ContractsGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<ContractsGrowth, Year>,
+    Batch30Years,
+    ContractsGrowthYearlyProperties,
+>;
 
 // const B: <NewContracts as DataSource>::Output = 0;
 
@@ -165,7 +191,13 @@ type AlternativeContractsGrowth = BatchLocalDbChartSourceWithDefaultParams<
 
 // Put the data sources into the group
 construct_update_group!(ExampleUpdateGroup {
-    charts: [NewContracts, ContractsGrowth],
+    charts: [
+        NewContracts,
+        ContractsGrowth,
+        ContractsGrowthWeekly,
+        ContractsGrowthMonthly,
+        ContractsGrowthYearly,
+    ],
 });
 
 #[tokio::test]

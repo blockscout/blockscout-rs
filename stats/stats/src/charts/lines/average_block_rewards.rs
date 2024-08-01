@@ -7,13 +7,15 @@ use crate::{
             resolutions::average::AverageLowerResolution,
         },
         local_db::{
-            parameters::update::batching::parameters::{Batch30Days, Batch30Weeks},
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
             DirectVecLocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    delegated_property_with_resolution,
-    types::timespans::Week,
+    delegated_properties_with_resolutions,
+    types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
 };
@@ -22,7 +24,7 @@ use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
-use super::NewBlocks;
+use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
 const ETH: i64 = 1_000_000_000_000_000_000;
 
@@ -71,29 +73,42 @@ impl ChartProperties for Properties {
     }
 }
 
-delegated_property_with_resolution!(WeeklyProperties {
-    resolution: Week,
+delegated_properties_with_resolutions!(
+    delegate: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    }
     ..Properties
-});
+);
 
 pub type AverageBlockRewards =
     DirectVecLocalDbChartSource<AverageBlockRewardsRemoteString, Batch30Days, Properties>;
-
 pub type AverageBlockRewardsWeekly = DirectVecLocalDbChartSource<
-    MapToString<
-        AverageLowerResolution<
-            MapParseTo<AverageBlockRewards, f64>,
-            MapParseTo<NewBlocks, i64>,
-            Week,
-        >,
-    >,
+    MapToString<AverageLowerResolution<MapParseTo<AverageBlockRewards, f64>, NewBlocksInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
+>;
+pub type AverageBlockRewardsMonthly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageBlockRewards, f64>, NewBlocksInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type AverageBlockRewardsYearly = DirectVecLocalDbChartSource<
+    MapToString<
+        AverageLowerResolution<
+            MapParseTo<AverageBlockRewardsMonthly, f64>,
+            NewBlocksMonthlyInt,
+            Year,
+        >,
+    >,
+    Batch30Years,
+    YearlyProperties,
 >;
 
 #[cfg(test)]
 mod tests {
-    use super::{AverageBlockRewards, AverageBlockRewardsWeekly};
+    use super::*;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
@@ -133,6 +148,37 @@ mod tests {
                 ("2022-12-26", "0"),
                 ("2023-01-30", "1"),
                 ("2023-02-27", "2"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_block_rewards_monthly() {
+        simple_test_chart::<AverageBlockRewardsMonthly>(
+            "update_average_block_rewards_monthly",
+            vec![
+                ("2022-11-01", "1.7777777777777777"),
+                ("2022-12-01", "4"),
+                ("2023-01-01", "0"),
+                ("2023-02-01", "1"),
+                ("2023-03-01", "2"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_block_rewards_yearly() {
+        simple_test_chart::<AverageBlockRewardsYearly>(
+            "update_average_block_rewards_yearly",
+            vec![
+                // (2*3+1.75*4+3+4)/10 = 2
+                ("2022-01-01", "2"),
+                // (0+1+2)/3 = 1
+                ("2023-01-01", "1"),
             ],
         )
         .await;
