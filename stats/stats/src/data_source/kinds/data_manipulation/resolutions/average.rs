@@ -175,10 +175,14 @@ where
                     ),
                 }
             }
-            Some(TimespanValue {
-                timespan: current_l_res,
-                value: weight_times_avg_sum / total_weight as f64,
-            })
+            if total_weight != 0 {
+                Some(TimespanValue {
+                    timespan: current_l_res,
+                    value: weight_times_avg_sum / total_weight as f64,
+                })
+            } else {
+                None
+            }
         },
     );
     l_res_averages.into_iter().filter_map(|x| x).collect_vec()
@@ -377,6 +381,59 @@ mod tests {
             vec![
                 week_v_double("2024-07-08", week_1_average),
                 week_v_double("2024-07-15", 5.0)
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn average_weekly_works_with_inbalanced_weights_or_averages() {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        gettable_const!(MockDailyAverage: Vec<DateValue<f64>> = vec![
+            d_v_double("2022-11-09", 1.0),
+            d_v_double("2022-11-10", 1.0),
+            d_v_double("2022-11-11", 1.0),
+            d_v_double("2022-11-12", 1.0),
+            d_v_double("2022-12-01", 1.0),
+            d_v_double("2023-01-01", 1.0),
+            d_v_double("2023-02-01", 1.0),
+        ]);
+        gettable_const!(MockWeights: Vec<DateValue<i64>> = vec![
+            d_v_int("2022-11-09", 1),
+            d_v_int("2022-11-10", 3),
+            d_v_int("2022-11-11", 4),
+            d_v_int("2022-11-12", 1),
+            d_v_int("2022-12-01", 1),
+            d_v_int("2023-01-01", 1),
+            d_v_int("2023-02-01", 1),
+            d_v_int("2023-03-01", 1),
+        ]);
+        gettable_const!(Policy: MissingDatePolicy = MissingDatePolicy::FillZero);
+
+        type PredefinedDailyAverage = PredefinedMockSource<MockDailyAverage, Policy>;
+        type PredefinedWeights = PredefinedMockSource<MockWeights, Policy>;
+
+        type TestedAverageSource =
+            AverageLowerResolution<PredefinedDailyAverage, PredefinedWeights, Week>;
+
+        // db is not used in mock
+        let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+
+        let context = UpdateContext {
+            db: &empty_db,
+            blockscout: &empty_db,
+            time: dt("2023-03-30T09:00:00").and_utc(),
+            force_full: false,
+        };
+        assert_eq!(
+            TestedAverageSource::query_data(&context, None, &mut AggregateTimer::new())
+                .await
+                .unwrap(),
+            vec![
+                week_v_double("2022-11-07", 1.0),
+                week_v_double("2022-11-28", 1.0),
+                week_v_double("2022-12-26", 1.0),
+                week_v_double("2023-01-30", 1.0),
             ]
         );
     }
