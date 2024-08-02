@@ -1,4 +1,4 @@
-use da_indexer_logic::celestia::indexer::Indexer;
+use da_indexer_logic::indexer::Indexer;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::time::sleep;
@@ -13,9 +13,8 @@ pub async fn run(
 
     // If the first connect fails, the function will return an error immediately.
     // All subsequent reconnects are done inside tokio task and will not propagate to above.
-    let mut indexer =
-        Indexer::new(db_connection.clone(), settings.celestia_indexer.clone()).await?;
-    let delay = settings.celestia_indexer.restart_delay;
+    let mut indexer = Indexer::new(db_connection.clone(), settings.indexer.clone()).await?;
+    let delay = settings.indexer.restart_delay;
 
     tokio::spawn(async move {
         loop {
@@ -33,7 +32,7 @@ pub async fn run(
 
                 tracing::info!("re-connecting to rpc");
 
-                match Indexer::new(db_connection.clone(), settings.celestia_indexer.clone()).await {
+                match Indexer::new(db_connection.clone(), settings.indexer.clone()).await {
                     Ok(new_indexer) => {
                         indexer = new_indexer;
                         break;

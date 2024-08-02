@@ -4,8 +4,11 @@ config_version: 3
 http:
   rules:
 
-    - selector: blockscout.daIndexer.v1.DaService.GetCelestiaBlob
+    - selector: blockscout.daIndexer.v1.CelestiaService.GetBlob
       get: /api/v1/celestia/blob
+
+    - selector: blockscout.daIndexer.v1.EigenDaService.GetBlob
+      get: /api/v1/eigenda/blob
     
     #################### Health ####################
 

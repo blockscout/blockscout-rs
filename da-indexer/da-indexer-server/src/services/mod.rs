@@ -1,5 +1,7 @@
-mod da;
+mod celestia;
+mod eigenda;
 mod health;
 
-pub use da::DaService;
+pub use celestia::CelestiaService;
+pub use eigenda::EigenDaService;
 pub use health::HealthService;
