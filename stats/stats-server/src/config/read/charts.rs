@@ -15,7 +15,7 @@ impl From<LineChartInfo<EnabledChartSettings>> for proto::LineChartInfo {
             title: value.settings.title,
             description: value.settings.description,
             units: value.settings.units,
-            enabled_resolutions: value
+            resolutions: value
                 .settings
                 .resolutions
                 .into_list()

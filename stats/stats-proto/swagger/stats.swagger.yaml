@@ -174,7 +174,7 @@ definitions:
         type: string
       units:
         type: string
-      enabled_resolutions:
+      resolutions:
         type: array
         items:
           type: string
@@ -202,6 +202,8 @@ definitions:
     type: object
     properties:
       date:
+        type: string
+      date_to:
         type: string
       value:
         type: string

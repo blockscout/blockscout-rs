@@ -38,6 +38,7 @@ fn is_approximate_serialization() {
     // serialize
     let point = proto::Point {
         date: "2024-03-14".to_owned(),
+        date_to: "2024-03-14".to_owned(),
         value: "188542399".to_owned(),
         is_approximate: false,
     };
@@ -48,6 +49,7 @@ fn is_approximate_serialization() {
     );
     let point = proto::Point {
         date: "2024-03-14".to_owned(),
+        date_to: "2024-03-14".to_owned(),
         value: "188542399".to_owned(),
         is_approximate: true,
     };

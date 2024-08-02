@@ -19,3 +19,5 @@ pub use charts::{
     lines, types, ChartKey, ChartProperties, ChartPropertiesObject, MissingDatePolicy, Named,
     ResolutionKind, UpdateError,
 };
+
+pub use utils::exclusive_datetime_range_to_inclusive;
