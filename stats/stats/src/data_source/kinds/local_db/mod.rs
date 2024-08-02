@@ -156,11 +156,11 @@ where
     Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties,
-    ChartProps::Resolution: Debug,
+    ChartProps::Resolution: Ord + Clone + Debug,
 {
     /// Performs common checks and prepares values useful for further
     /// update. Then proceeds to update according to parameters.
-    async fn update_itself(
+    async fn update_itself_inner(
         cx: &UpdateContext<'_>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
@@ -188,7 +188,7 @@ where
         let min_blockscout_block = get_min_block_blockscout(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let last_accurate_point = last_accurate_point::<ChartProps::Resolution, ChartProps, Query>(
+        let last_accurate_point = last_accurate_point::<ChartProps, Query>(
             chart_id,
             min_blockscout_block,
             cx.db,
@@ -237,7 +237,7 @@ where
     Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties,
-    ChartProps::Resolution: Debug + Send,
+    ChartProps::Resolution: Ord + Clone + Debug + Send,
 {
     type MainDependencies = MainDep;
     type ResolutionDependencies = ResolutionDep;
@@ -260,7 +260,7 @@ where
             .start_timer();
         tracing::info!(chart = ChartProps::name(), "started chart update");
 
-        Self::update_itself(cx, &mut dependency_data_fetch_timer)
+        Self::update_itself_inner(cx, &mut dependency_data_fetch_timer)
             .await
             .inspect_err(|err| {
                 metrics::UPDATE_ERRORS

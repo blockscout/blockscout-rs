@@ -49,7 +49,7 @@ where
         let values: Vec<TimespanValue<C::Resolution, String>> =
             get_line_chart_data::<C::Resolution>(
                 cx.db,
-                &C::key(),
+                &C::name(),
                 start,
                 end,
                 None,

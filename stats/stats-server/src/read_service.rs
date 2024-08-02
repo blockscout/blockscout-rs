@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::FromStr, sync::Arc};
+use std::{clone::Clone, cmp::Ord, collections::BTreeMap, fmt::Debug, str::FromStr, sync::Arc};
 
 use crate::{
     config::types,
@@ -12,9 +12,14 @@ use chrono::{Duration, NaiveDate, Utc};
 use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
-    entity::sea_orm_active_enums::ChartType, ChartKey, MissingDatePolicy, ReadError, ResolutionKind,
+    entity::sea_orm_active_enums::ChartType,
+    types::{
+        timespans::{Month, Week, Year},
+        Timespan,
+    },
+    MissingDatePolicy, ReadError, ResolutionKind,
 };
-use stats_proto::blockscout::stats::v1 as proto_v1;
+use stats_proto::blockscout::stats::v1::{self as proto_v1, Point};
 use tonic::{Request, Response, Status};
 
 #[derive(Clone)]
@@ -78,6 +83,97 @@ fn convert_resolution(input: proto_v1::Resolution) -> ResolutionKind {
         proto_v1::Resolution::Week => ResolutionKind::Week,
         proto_v1::Resolution::Month => ResolutionKind::Month,
         proto_v1::Resolution::Year => ResolutionKind::Year,
+    }
+}
+
+async fn get_serialized_line_chart_data<Resolution>(
+    db: &DatabaseConnection,
+    chart_name: String,
+    from: Option<NaiveDate>,
+    to: Option<NaiveDate>,
+    interval_limit: Option<Duration>,
+    policy: MissingDatePolicy,
+    mark_approx: u64,
+) -> Result<Vec<Point>, ReadError>
+where
+    Resolution: Timespan + Clone + Ord + Debug,
+{
+    let from = from.map(|f| Resolution::from_date(f));
+    let to = to.map(|t| Resolution::from_date(t));
+    let data = stats::get_line_chart_data::<Resolution>(
+        db,
+        &chart_name,
+        from,
+        to,
+        interval_limit,
+        policy,
+        true,
+        mark_approx,
+    )
+    .await?;
+    Ok(serialize_line_points(data))
+}
+
+/// enum dispatch for `get_serialized_line_chart_data``
+async fn get_serialized_line_chart_data_resolution_dispatch(
+    db: &DatabaseConnection,
+    chart_name: String,
+    resolution: ResolutionKind,
+    from: Option<NaiveDate>,
+    to: Option<NaiveDate>,
+    interval_limit: Option<Duration>,
+    policy: MissingDatePolicy,
+    mark_approx: u64,
+) -> Result<Vec<Point>, ReadError> {
+    match resolution {
+        ResolutionKind::Day => {
+            get_serialized_line_chart_data::<NaiveDate>(
+                db,
+                chart_name,
+                from,
+                to,
+                interval_limit,
+                policy,
+                mark_approx,
+            )
+            .await
+        }
+        ResolutionKind::Week => {
+            get_serialized_line_chart_data::<Week>(
+                db,
+                chart_name,
+                from,
+                to,
+                interval_limit,
+                policy,
+                mark_approx,
+            )
+            .await
+        }
+        ResolutionKind::Month => {
+            get_serialized_line_chart_data::<Month>(
+                db,
+                chart_name,
+                from,
+                to,
+                interval_limit,
+                policy,
+                mark_approx,
+            )
+            .await
+        }
+        ResolutionKind::Year => {
+            get_serialized_line_chart_data::<Year>(
+                db,
+                chart_name,
+                from,
+                to,
+                interval_limit,
+                policy,
+                mark_approx,
+            )
+            .await
+        }
     }
 }
 
@@ -159,20 +255,18 @@ impl StatsService for ReadService {
         let policy = chart_info.missing_date_policy;
         let mark_approx = chart_info.approximate_trailing_points;
         let interval_limit = Some(self.limits.request_interval_limit);
-        let data = stats::get_line_chart_data(
+        let serialized_chart = get_serialized_line_chart_data_resolution_dispatch(
             &self.db,
-            &ChartKey::new(request.name, ResolutionKind::Day),
+            request.name,
+            resolution,
             from,
             to,
             interval_limit,
             policy,
-            true,
             mark_approx,
         )
         .await
         .map_err(map_read_error)?;
-
-        let serialized_chart = serialize_line_points(data);
         Ok(Response::new(proto_v1::LineChart {
             chart: serialized_chart,
         }))

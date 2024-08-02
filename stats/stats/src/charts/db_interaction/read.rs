@@ -10,7 +10,7 @@ use crate::{
 };
 
 use blockscout_db::entity::blocks;
-use chrono::{DateTime, Days, Duration, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Utc};
 use entity::{chart_data, charts, sea_orm_active_enums::ChartResolution};
 use itertools::Itertools;
 use sea_orm::{
@@ -20,13 +20,14 @@ use sea_orm::{
 };
 use std::{collections::HashMap, fmt::Debug};
 use thiserror::Error;
+use tracing::instrument;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ReadError {
     #[error("database error {0}")]
     DB(#[from] DbErr),
     #[error("chart {0} not found")]
-    ChartNotFound(String),
+    ChartNotFound(ChartKey),
     #[error("date interval limit ({0}) is exceeded; choose smaller time interval.")]
     IntervalLimitExceeded(Duration),
 }
@@ -171,7 +172,7 @@ pub async fn get_chart_metadata(
         )
         .one(db)
         .await?
-        .ok_or_else(|| ReadError::ChartNotFound(chart.name().into()))?;
+        .ok_or_else(|| ReadError::ChartNotFound(chart.clone()))?;
     Ok(ChartMetadata {
         last_updated_at: chart.last_updated_at.map(|t| t.with_timezone(&Utc)),
         id: chart.id,
@@ -268,7 +269,7 @@ pub async fn get_chart_metadata(
 #[allow(clippy::too_many_arguments)]
 pub async fn get_line_chart_data<Resolution>(
     db: &DatabaseConnection,
-    chart: &ChartKey,
+    chart_name: &String,
     from: Option<Resolution>,
     to: Option<Resolution>,
     interval_limit: Option<Duration>,
@@ -282,13 +283,15 @@ where
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
         .filter(
-            charts::Column::Name
-                .eq(chart.name())
-                .and(charts::Column::Resolution.eq(ChartResolution::from(*chart.resolution()))),
+            charts::Column::Name.eq(chart_name).and(
+                charts::Column::Resolution.eq(ChartResolution::from(Resolution::enum_variant())),
+            ),
         )
         .one(db)
         .await?
-        .ok_or_else(|| ReadError::ChartNotFound(chart.name().into()))?;
+        .ok_or_else(|| {
+            ReadError::ChartNotFound(ChartKey::new(chart_name.into(), Resolution::enum_variant()))
+        })?;
 
     // may contain points outside the range
     let db_data =
@@ -442,59 +445,22 @@ struct SyncInfo {
 /// Get last 'finalized' row (for which no recomputations needed).
 ///
 /// In case of inconsistencies or set `force_full`, returns `None`.
-pub async fn last_accurate_point<Resolution, ChartProps, Query>(
+#[instrument(level="info", skip_all, fields(min_blockscout_block = min_blockscout_block, chart =? ChartProps::key()))]
+pub async fn last_accurate_point<ChartProps, Query>(
     chart_id: i32,
     min_blockscout_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
     approximate_trailing_points: u64,
     policy: MissingDatePolicy,
-) -> Result<Option<TimespanValue<Resolution, String>>, UpdateError>
+) -> Result<Option<TimespanValue<ChartProps::Resolution, String>>, UpdateError>
 where
-    Resolution: Timespan,
     ChartProps: ChartProperties + ?Sized,
+    ChartProps::Resolution: Ord + Clone + Debug,
     Query: QueryBehaviour,
 {
-    let Some(day_point) = last_accurate_point_raw::<ChartProps, Query>(
-        chart_id,
-        min_blockscout_block,
-        db,
-        force_full,
-        approximate_trailing_points,
-        policy,
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-    let TimespanValue {
-        timespan: date,
-        value,
-    } = day_point;
-    let timespan: Resolution = Resolution::from_date(date);
-    Ok(Some(TimespanValue { timespan, value }))
-}
-
-/// `last_accurate_point` but without converting to the requested
-/// timespan
-async fn last_accurate_point_raw<C, Q>(
-    chart_id: i32,
-    min_blockscout_block: i64,
-    db: &DatabaseConnection,
-    force_full: bool,
-    approximate_trailing_points: u64,
-    policy: MissingDatePolicy,
-) -> Result<Option<DateValue<String>>, UpdateError>
-where
-    C: ChartProperties + ?Sized,
-    Q: QueryBehaviour,
-{
     let row = if force_full {
-        tracing::info!(
-            min_blockscout_block = min_blockscout_block,
-            chart = C::name(),
-            "running full update due to force override"
-        );
+        tracing::info!("running full update due to force override");
         None
     } else {
         let recorded_min_blockscout_block: Option<SyncInfo> = chart_data::Entity::find()
@@ -505,30 +471,25 @@ where
             .one(db)
             .await
             .map_err(UpdateError::StatsDB)?;
-        let metadata = get_chart_metadata(db, &C::key()).await?;
+        let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
 
         match recorded_min_blockscout_block {
             Some(recorded_min_blockscout_block) => {
                 let Some(last_updated_at) = metadata.last_updated_at else {
                     // data is present, but `last_updated_at` is not set
-                    tracing::info!(
-                        min_blockscout_block = min_blockscout_block,
-                        chart = C::name(),
-                        "running full update due to lack of last_updated_at"
-                    );
+                    tracing::info!("running full update due to lack of last_updated_at");
                     return Ok(None);
                 };
-                let last_updated_date = last_updated_at.date_naive();
+                let last_updated_timespan =
+                    ChartProps::Resolution::from_date(last_updated_at.date_naive());
 
-                let data = get_line_chart_data(
+                let data = get_line_chart_data::<ChartProps::Resolution>(
                     db,
-                    &C::key(),
-                    Some(
-                        last_updated_date
-                            .checked_sub_days(Days::new(approximate_trailing_points))
-                            .unwrap_or(NaiveDate::MIN),
-                    ),
-                    Some(last_updated_date),
+                    &ChartProps::name(),
+                    Some(last_updated_timespan.saturating_sub(
+                        TimespanDuration::from_timespan_repeats(approximate_trailing_points),
+                    )),
+                    Some(last_updated_timespan),
                     None,
                     policy,
                     true,
@@ -546,43 +507,31 @@ where
                     }
                 });
                 let Some(last_accurate_point) = last_accurate_point else {
-                    return Err(UpdateError::Internal("No accurate data whereas".into()));
+                    return Err(UpdateError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
                 };
 
                 if let Some(block) = recorded_min_blockscout_block.min_blockscout_block {
                     if block == min_blockscout_block {
                         tracing::info!(
-                            min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = C::name(),
                             last_accurate_point = ?last_accurate_point,
                             "running partial update"
                         );
                         Some(last_accurate_point)
                     } else {
                         tracing::info!(
-                            min_blockscout_block = min_blockscout_block,
                             min_chart_block = block,
-                            chart = C::name(),
                             "running full update due to min blocks mismatch"
                         );
                         None
                     }
                 } else {
-                    tracing::info!(
-                        min_blockscout_block = min_blockscout_block,
-                        chart = C::name(),
-                        "running full update due to lack of saved min block"
-                    );
+                    tracing::info!("running full update due to lack of saved min block");
                     None
                 }
             }
             None => {
-                tracing::info!(
-                    min_blockscout_block = min_blockscout_block,
-                    chart = C::name(),
-                    "running full update due to lack of history data"
-                );
+                tracing::info!("running full update due to lack of history data");
                 None
             }
         }
@@ -707,9 +656,9 @@ mod tests {
 
         let db = init_db("get_chart_int_mock").await;
         insert_mock_data(&db).await;
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            &ChartKey::new("newBlocksPerDay".into(), ResolutionKind::Day),
+            &"newBlocksPerDay".to_string(),
             None,
             None,
             None,
@@ -748,9 +697,9 @@ mod tests {
 
         let db = init_db("get_chart_data_skipped_works").await;
         insert_mock_data(&db).await;
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            &ChartKey::new("newVerifiedContracts".into(), ResolutionKind::Day),
+            &"newVerifiedContracts".to_string(),
             Some(d("2022-11-14")),
             Some(d("2022-11-15")),
             None,
@@ -776,9 +725,9 @@ mod tests {
             data
         );
 
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            &ChartKey::new("newVerifiedContracts".into(), ResolutionKind::Day),
+            &"newVerifiedContracts".to_string(),
             Some(d("2022-11-12")),
             Some(d("2022-11-14")),
             None,
@@ -809,9 +758,9 @@ mod tests {
             data
         );
 
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            &ChartKey::new(TxnsGrowth::name(), ResolutionKind::Day),
+            &TxnsGrowth::name(),
             Some(d("2022-11-28")),
             Some(d("2022-11-30")),
             None,
@@ -865,7 +814,7 @@ mod tests {
         // No missing points
         assert!(chart_id_matches_key(&db, 1, "totalBlocks", ResolutionKind::Day).await);
         assert_eq!(
-            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -881,7 +830,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -897,7 +846,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,
@@ -916,7 +865,7 @@ mod tests {
         // Missing points
         assert!(chart_id_matches_key(&db, 4, &TxnsGrowth::name(), ResolutionKind::Day).await);
         assert_eq!(
-            last_accurate_point::<NaiveDate, TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -932,7 +881,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<NaiveDate, TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -948,7 +897,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<NaiveDate, TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
+            last_accurate_point::<TxnsGrowth, DefaultQueryVec<TxnsGrowth>>(
                 4,
                 1,
                 &db,
@@ -975,7 +924,7 @@ mod tests {
 
         assert!(chart_id_matches_key(&db, 1, "totalBlocks", ResolutionKind::Day).await);
         assert_eq!(
-            last_accurate_point::<NaiveDate, TotalBlocks, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<TotalBlocks, DefaultQueryVec<TotalBlocks>>(
                 1,
                 1,
                 &db,

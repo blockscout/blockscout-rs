@@ -1,11 +1,12 @@
-use chrono::NaiveDate;
 use stats::{
     exclusive_datetime_range_to_inclusive,
     types::{ExtendedTimespanValue, Timespan},
 };
 use stats_proto::blockscout::stats::v1::Point;
 
-pub fn serialize_line_points(data: Vec<ExtendedTimespanValue<NaiveDate, String>>) -> Vec<Point> {
+pub fn serialize_line_points<Resolution: Timespan>(
+    data: Vec<ExtendedTimespanValue<Resolution, String>>,
+) -> Vec<Point> {
     data.into_iter()
         .map(|point| {
             let time_range =

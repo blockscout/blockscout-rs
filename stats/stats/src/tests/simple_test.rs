@@ -4,13 +4,15 @@ use crate::{
         source::DataSource,
         types::{UpdateContext, UpdateParameters},
     },
-    get_line_chart_data, get_raw_counters, ChartProperties, MissingDatePolicy,
+    get_line_chart_data, get_raw_counters,
+    types::Timespan,
+    ChartProperties, MissingDatePolicy,
 };
 use blockscout_service_launcher::test_database::TestDbGuard;
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use pretty_assertions::assert_eq;
 use sea_orm::DatabaseConnection;
-use std::str::FromStr;
+use std::{fmt::Debug, str::FromStr};
 
 pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
     l.into_iter()
@@ -21,10 +23,14 @@ pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
 /// `test_name` must be unique to avoid db clashes
 ///
 /// returns db handles to continue testing if needed
-pub async fn simple_test_chart<C: DataSource + ChartProperties>(
+pub async fn simple_test_chart<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
-) -> (TestDbGuard, TestDbGuard) {
+) -> (TestDbGuard, TestDbGuard)
+where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
     let (db, blockscout) = init_db_all(test_name).await;
@@ -76,12 +82,15 @@ pub async fn simple_test_chart<C: DataSource + ChartProperties>(
 /// Expects to have `test_name` db's initialized (e.g. by [`simple_test_chart`]).
 ///
 /// Tests that force update with existing data works correctly
-pub async fn dirty_force_update_and_check<C: DataSource + ChartProperties>(
+pub async fn dirty_force_update_and_check<C>(
     db: &DatabaseConnection,
     blockscout: &DatabaseConnection,
     expected: Vec<(&str, &str)>,
     update_time_override: Option<DateTime<Utc>>,
-) {
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
     // some later time so that the update is not skipped
@@ -112,13 +121,16 @@ pub async fn dirty_force_update_and_check<C: DataSource + ChartProperties>(
 }
 
 /// `test_name` must be unique to avoid db clashes
-pub async fn ranged_test_chart<C: DataSource + ChartProperties>(
+pub async fn ranged_test_chart<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
-    from: NaiveDate,
-    to: NaiveDate,
+    from: C::Resolution,
+    to: C::Resolution,
     update_time: Option<NaiveDateTime>,
-) {
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
     let (db, blockscout) = init_db_all(test_name).await;
@@ -141,8 +153,8 @@ pub async fn ranged_test_chart<C: DataSource + ChartProperties>(
     assert_eq!(
         &get_chart::<C>(
             &db,
-            Some(from),
-            Some(to),
+            Some(from.clone()),
+            Some(to.clone()),
             policy,
             false,
             approximate_trailing_points,
@@ -168,17 +180,21 @@ pub async fn ranged_test_chart<C: DataSource + ChartProperties>(
     );
 }
 
-async fn get_chart<C: DataSource + ChartProperties>(
+async fn get_chart<C>(
     db: &DatabaseConnection,
-    from: Option<NaiveDate>,
-    to: Option<NaiveDate>,
+    from: Option<C::Resolution>,
+    to: Option<C::Resolution>,
     policy: MissingDatePolicy,
     fill_missing_dates: bool,
     approximate_trailing_points: u64,
-) -> Vec<(String, String)> {
-    let data = get_line_chart_data(
+) -> Vec<(String, String)>
+where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let data = get_line_chart_data::<C::Resolution>(
         db,
-        &C::key(),
+        &C::name(),
         from,
         to,
         None,
@@ -189,7 +205,7 @@ async fn get_chart<C: DataSource + ChartProperties>(
     .await
     .unwrap();
     data.into_iter()
-        .map(|p| (p.timespan.to_string(), p.value))
+        .map(|p| (p.timespan.into_date().to_string(), p.value))
         .collect()
 }
 

@@ -167,9 +167,9 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            &NewBlocks::key(),
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -203,9 +203,9 @@ mod tests {
         // need to update time so that the update is not ignored as the same one
         cx.time = chrono::DateTime::<Utc>::from_str("2022-11-12T13:00:00Z").unwrap();
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            &NewBlocks::key(),
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -260,9 +260,9 @@ mod tests {
             force_full: true,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            &NewBlocks::key(),
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -363,9 +363,9 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            &NewBlocks::key(),
+            &NewBlocks::name(),
             None,
             None,
             None,

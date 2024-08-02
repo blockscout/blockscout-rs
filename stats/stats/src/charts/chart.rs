@@ -19,7 +19,7 @@ pub enum UpdateError {
     #[error("stats database error: {0}")]
     StatsDB(DbErr),
     #[error("chart {0} not found")]
-    ChartNotFound(String),
+    ChartNotFound(ChartKey),
     #[error("date interval limit ({limit}) is exceeded; choose smaller time interval.")]
     IntervalLimitExceeded { limit: Duration },
     #[error("internal error: {0}")]
