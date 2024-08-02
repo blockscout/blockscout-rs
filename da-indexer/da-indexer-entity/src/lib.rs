@@ -4,3 +4,5 @@ pub mod prelude;
 
 pub mod celestia_blobs;
 pub mod celestia_blocks;
+pub mod eigenda_batches;
+pub mod eigenda_blobs;

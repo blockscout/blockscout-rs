@@ -5,11 +5,22 @@ package blockscout.daIndexer.v1;
 option go_package = "github.com/blockscout/blockscout-rs/da-indexer";
 
 
-service DaService {
-  rpc GetCelestiaBlob(GetCelestiaBlobRequest) returns (Blob) {}
+service CelestiaService {
+  rpc GetBlob(GetCelestiaBlobRequest) returns (CelestiaBlob) {}
+  rpc GetL2BatchMetadata(CelestiaBlobId) returns (CelestiaL2BatchMetadata) {}
 }
 
-message Blob {
+service EigenDaService {
+  rpc GetBlob(GetEigenDaBlobRequest) returns (EigenDaBlob) {}
+}
+
+message GetCelestiaBlobRequest {
+  uint64 height = 1;
+  string commitment = 2;
+  optional bool skip_data = 3;
+}
+
+message CelestiaBlob {
   uint64 height = 1;
   string namespace = 2;
   string commitment = 3;
@@ -18,8 +29,37 @@ message Blob {
   optional string data = 6;
 }
 
-message GetCelestiaBlobRequest {
+message CelestiaBlobId {
   uint64 height = 1;
-  string commitment = 2;
+  string namespace = 2;
+  string commitment = 3;
+}
+
+message CelestiaL2BatchMetadata {
+  uint32 l2_chain_id = 1;
+  string l2_batch_id = 2;
+  uint64 l2_start_block = 3;
+  uint64 l2_end_block = 4;
+  uint32 l2_batch_tx_count = 5;
+  string l2_blockscout_url = 6;
+  string l1_tx_hash = 7;
+  uint64 l1_tx_timestamp = 8;
+  optional uint32 l1_chain_id = 9;
+  repeated CelestiaBlobId related_blobs = 10;
+}
+
+message GetEigenDaBlobRequest {
+  string batch_header_hash = 1;
+  uint32 blob_index = 2;
   optional bool skip_data = 3;
+}
+
+message EigenDaBlob {
+  string batch_header_hash = 1;
+  uint64 batch_id = 2;
+  uint32 blob_index = 3;
+  uint64 l1_confirmation_block = 4;
+  string l1_confirmation_tx_hash = 5;
+  uint64 size = 6;
+  optional string data = 7;
 }
