@@ -85,10 +85,10 @@ impl From<ResolutionKind> for ChartResolution {
 impl From<ResolutionKind> for String {
     fn from(value: ResolutionKind) -> Self {
         match value {
-            ResolutionKind::Day => "day",
-            ResolutionKind::Week => "week",
-            ResolutionKind::Month => "month",
-            ResolutionKind::Year => "year",
+            ResolutionKind::Day => "DAY",
+            ResolutionKind::Week => "WEEK",
+            ResolutionKind::Month => "MONTH",
+            ResolutionKind::Year => "YEAR",
         }
         .into()
     }
