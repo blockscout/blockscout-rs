@@ -142,7 +142,7 @@ impl_into_string_timespan_value!(Year, Decimal);
 #[cfg(test)]
 mod tests {
     use crate::{
-        tests::point_construction::{d, dt},
+        tests::point_construction::{d, dt, month_of},
         utils::day_start,
     };
 
@@ -163,6 +163,37 @@ mod tests {
         assert_eq!(
             Year(i32::MAX).into_date(),
             NaiveDate::from_yo_opt(NaiveDate::MAX.year(), 1).unwrap()
+        );
+    }
+
+    #[test]
+    fn year_month_conversion_works() {
+        assert_eq!(Year::from_smaller(month_of("2015-01-01")), Year(2015));
+        assert_eq!(Year::from_smaller(month_of("2015-12-31")), Year(2015));
+        assert_eq!(Year::from_smaller(month_of("2012-02-29")), Year(2012));
+        assert_eq!(
+            Year::from_smaller(Month::from_date(NaiveDate::MAX)),
+            Year(NaiveDate::MAX.year())
+        );
+        assert_eq!(
+            Year::from_smaller(Month::from_date(NaiveDate::MIN)),
+            Year(NaiveDate::MIN.year())
+        );
+        assert_eq!(
+            <Year as ConsistsOf<Month>>::into_smaller(Year(2015)),
+            month_of("2015-01-01")
+        );
+        assert_eq!(
+            <Year as ConsistsOf<Month>>::into_smaller(Year(2012)),
+            month_of("2012-01-01")
+        );
+        assert_eq!(
+            <Year as ConsistsOf<Month>>::into_smaller(Year(i32::MIN)),
+            Month::from_date(NaiveDate::MIN)
+        );
+        assert_eq!(
+            <Year as ConsistsOf<Month>>::into_smaller(Year(i32::MAX)),
+            Month::from_date(NaiveDate::from_yo_opt(NaiveDate::MAX.year(), 1).unwrap())
         );
     }
 

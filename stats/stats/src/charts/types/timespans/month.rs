@@ -227,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn year_saturating_arithmetics_works() {
+    fn month_saturating_arithmetics_works() {
         assert_eq!(
             Month::from_date(d("2015-06-01"))
                 .saturating_add(TimespanDuration::from_timespan_repeats(3)),

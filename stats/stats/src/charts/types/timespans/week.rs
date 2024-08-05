@@ -14,6 +14,7 @@ use crate::{
 
 pub const WEEK_START: Weekday = Weekday::Mon;
 
+/// Week starting from Monday.
 pub struct Week(NaiveWeek);
 
 impl std::fmt::Debug for Week {
@@ -185,6 +186,7 @@ impl Week {
         Week::new(prev_week_last_day)
     }
 
+    // todo: remove
     // iterating over ranges with custom inner types is nightly-only
     // https://users.rust-lang.org/t/implement-trait-step-in-1-76-0/108204/8
     pub fn range_into_iter(range: Range<Week>) -> WeekRangeIterator {
@@ -225,10 +227,24 @@ impl_into_string_timespan_value!(Week, Decimal);
 mod tests {
     use itertools::Itertools;
 
-    use crate::tests::point_construction::week_of;
+    use crate::tests::point_construction::{d, week_of};
 
     use super::*;
 
+    #[test]
+    fn week_into_date_works() {
+        // expected to not change as this is used for storage
+        assert_eq!(week_of("2024-07-08").into_date(), d("2024-07-08"));
+        assert_eq!(week_of("2024-07-10").into_date(), d("2024-07-08"));
+        assert_eq!(week_of("2024-07-14").into_date(), d("2024-07-08"));
+        assert_eq!(Week::new(NaiveDate::MIN).into_date(), NaiveDate::MIN);
+        assert_eq!(
+            Week::new(NaiveDate::MAX).into_date(),
+            NaiveDate::MAX.week(Weekday::Mon).first_day()
+        );
+    }
+
+    // also indirectly tests conversion from date
     #[test]
     fn week_eq_works() {
         // weeks for this month are
@@ -242,6 +258,37 @@ mod tests {
         assert_eq!(week_of("2024-07-15"), week_of("2024-07-21"));
 
         assert_ne!(week_of("2024-07-14"), week_of("2024-07-15"));
+    }
+
+    #[test]
+    fn week_checked_days_works() {
+        // weeks for this month are
+        // 8-14, 15-21, 22-28
+        assert_eq!(
+            week_of("2024-07-08").checked_days(),
+            Some(d("2024-07-08")..=d("2024-07-14"))
+        );
+        assert_eq!(
+            week_of("2024-07-14").checked_days(),
+            Some(d("2024-07-08")..=d("2024-07-14"))
+        );
+        assert_eq!(
+            week_of("2024-07-15").checked_days(),
+            Some(d("2024-07-15")..=d("2024-07-21"))
+        );
+        // not always must be true, but current `MAX` and `MIN`
+        // are not Sunday & Monday respectively
+        assert_eq!(Week::new(NaiveDate::MAX).checked_days(), None);
+        assert_eq!(Week::new(NaiveDate::MIN).checked_days(), None);
+
+        assert!(Week::new(NaiveDate::MAX)
+            .saturating_previous_week()
+            .checked_days()
+            .is_some());
+        assert!(Week::new(NaiveDate::MIN)
+            .saturating_next_week()
+            .checked_days()
+            .is_some());
     }
 
     #[test]

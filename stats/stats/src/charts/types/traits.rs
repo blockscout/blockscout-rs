@@ -15,6 +15,8 @@ pub trait Timespan {
     fn from_date(date: NaiveDate) -> Self;
     /// Convert the timespan into a corresponding date
     /// to store in database.
+    ///
+    /// Using `from_date` on resulting date will always result in equal timespan.
     fn into_date(self) -> NaiveDate;
     /// Get the next interval right after the current one (saturating)
     fn saturating_next_timespan(&self) -> Self; // todo: default impl using add / sub
