@@ -24,7 +24,7 @@ impl MigrationTrait for Migration {
 
 fn get_table_definitions() -> Vec<String> {
     let sql = r#"
-        /* Needed for gen_random_uuid() */
+        /* Needed for gen_random_uuid() and digest(..) */
         CREATE EXTENSION pgcrypto;
 
         /*
@@ -41,15 +41,37 @@ fn get_table_definitions() -> Vec<String> {
         */
         CREATE TABLE code
         (
-            /* the keccak256 hash of the `code` column */
+            /* the sha256 hash of the `code` column */
             code_hash   bytea NOT NULL PRIMARY KEY,
+
+            /* timestamps */
+            created_at  timestamptz NOT NULL DEFAULT NOW(),
+            updated_at  timestamptz NOT NULL DEFAULT NOW(),
+
+            /* ownership */
+            created_by  varchar NOT NULL DEFAULT (current_user),
+            updated_by  varchar NOT NULL DEFAULT (current_user),
+
+            /*
+                 the keccak256 hash of the `code` column
+
+                 can be useful for lookups, as keccak256 is more common for Ethereum
+                 but we cannot use it as a primary key because postgres does not support the keccak256, and
+                 we cannot guarantee at the database level that provided value is the correct `code` hash
+            */
+            code_hash_keccak bytea NOT NULL,
 
             /* the bytecode */
             code    bytea
+
+            CONSTRAINT code_hash_check
+                CHECK (code IS NOT NULL and code_hash = digest(code, 'sha256') or code IS NULL and code_hash = '\x')
         );
 
+        CREATE INDEX code_code_hash_keccak ON code USING btree(code_hash_keccak);
+
         /* ensure the sentinel value exists */
-        INSERT INTO code (code_hash, code) VALUES ('\x', NULL);
+        INSERT INTO code (code_hash, code_hash_keccak, code) VALUES ('\x', '\x', NULL);
 
         /*
             The `contracts` table stores information which can be used to identify a unique contract in a
@@ -61,6 +83,14 @@ fn get_table_definitions() -> Vec<String> {
         (
             /* an opaque id */
             id  uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
+
+            /* timestamps */
+            created_at  timestamptz NOT NULL DEFAULT NOW(),
+            updated_at  timestamptz NOT NULL DEFAULT NOW(),
+
+            /* ownership */
+            created_by  varchar NOT NULL DEFAULT (current_user),
+            updated_by  varchar NOT NULL DEFAULT (current_user),
 
             /*
                 the creation code is the calldata (for eoa creations) or the instruction input (for create/create2)
@@ -88,6 +118,14 @@ fn get_table_definitions() -> Vec<String> {
         (
             /* an opaque id*/
             id  uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
+
+            /* timestamps */
+            created_at  timestamptz NOT NULL DEFAULT NOW(),
+            updated_at  timestamptz NOT NULL DEFAULT NOW(),
+
+            /* ownership */
+            created_by  varchar NOT NULL DEFAULT (current_user),
+            updated_by  varchar NOT NULL DEFAULT (current_user),
 
             /*
                 these three fields uniquely identify a specific deployment of a contract, assuming
@@ -245,7 +283,26 @@ fn get_table_definitions() -> Vec<String> {
             runtime_values          jsonb,
             runtime_transformations jsonb,
 
-            CONSTRAINT verified_contracts_pseudo_pkey UNIQUE (compilation_id, deployment_id)
+            CONSTRAINT verified_contracts_pseudo_pkey UNIQUE (compilation_id, deployment_id),
+
+            CONSTRAINT verified_contracts_creation_values_is_object
+                CHECK (creation_values IS NULL OR jsonb_typeof(creation_values) = 'object'),
+            CONSTRAINT verified_contracts_creation_transformations_is_array
+                CHECK (creation_transformations IS NULL OR jsonb_typeof(creation_transformations) = 'array'),
+
+            CONSTRAINT verified_contracts_runtime_values_is_object
+                CHECK (runtime_values IS NULL OR jsonb_typeof(runtime_values) = 'object'),
+            CONSTRAINT verified_contracts_runtime_transformations_is_array
+                CHECK (runtime_transformations IS NULL OR jsonb_typeof(runtime_transformations) = 'array'),
+
+            CONSTRAINT verified_contracts_match_exists
+                CHECK (creation_match = true OR runtime_match = true),
+            CONSTRAINT verified_contracts_creation_match_integrity
+                CHECK ((creation_match = false AND creation_values IS NULL AND creation_transformations IS NULL) OR
+                       (creation_match = true AND creation_values IS NOT NULL AND creation_transformations IS NOT NULL)),
+            CONSTRAINT verified_contracts_runtime_match_integrity
+                CHECK ((runtime_match = false AND runtime_values IS NULL AND runtime_transformations IS NULL) OR
+                       (runtime_match = true AND runtime_values IS NOT NULL AND runtime_transformations IS NOT NULL))
         );
 
         CREATE INDEX verified_contracts_deployment_id ON verified_contracts USING btree (deployment_id);
@@ -295,7 +352,7 @@ fn get_timestamp_triggers() -> Vec<String> {
             CREATE FUNCTION trigger_set_updated_at()
             RETURNS TRIGGER AS $$
             BEGIN
-                NEW.updated_by = NOW();
+                NEW.updated_at = NOW();
                 RETURN NEW;
             END;
             $$ LANGUAGE plpgsql;
@@ -306,7 +363,10 @@ fn get_timestamp_triggers() -> Vec<String> {
                 DECLARE
                     t_name text;
                 BEGIN
-                    FOR t_name IN (VALUES ('compiled_contracts'),
+                    FOR t_name IN (VALUES ('code'),
+                                          ('contracts'),
+                                          ('contract_deployments'),
+                                          ('compiled_contracts'),
                                           ('verified_contracts'))
                         LOOP
                             EXECUTE format('CREATE TRIGGER insert_set_created_at
@@ -389,7 +449,10 @@ fn get_ownership_triggers() -> Vec<String> {
                 DECLARE
                     t_name text;
                 BEGIN
-                    FOR t_name IN (VALUES ('compiled_contracts'),
+                    FOR t_name IN (VALUES ('code'),
+                                          ('contracts'),
+                                          ('contract_deployments'),
+                                          ('compiled_contracts'),
                                           ('verified_contracts'))
                         LOOP
                             EXECUTE format('CREATE TRIGGER insert_set_created_by
