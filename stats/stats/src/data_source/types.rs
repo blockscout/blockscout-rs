@@ -32,7 +32,6 @@ impl<'a> UpdateContext<'a> {
     }
 }
 
-// todo: assoc type
 pub trait Get {
     type Value;
     fn get() -> Self::Value;

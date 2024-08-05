@@ -80,7 +80,6 @@ mod tests {
 
     use pretty_assertions::assert_eq;
 
-    // todo: other timespans
     #[test]
     fn date_range_to_timespan_weeks_works() {
         // weeks for this month (2024-07) are
