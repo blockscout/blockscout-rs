@@ -84,7 +84,12 @@ where
                 ChartProps::Resolution,
             >(cx, range.start().clone())
             .await?;
-            tracing::info!(range =? range.clone().into_date_time_range(), previous_step_last_point =? previous_step_last_point, "run {}/{} step of batch update", i + 1, n);
+            tracing::info!(
+                range =? range.clone().into_date_time_range(),
+                previous_step_last_point =? previous_step_last_point,
+                chart =% ChartProps::key(),
+                "run {}/{} step of batch update", i + 1, n
+            );
             let now = Instant::now();
             let found = batch_update_values_step::<
                 MainDep,
@@ -103,7 +108,12 @@ where
             // for query in `get_previous_step_last_point` to work correctly
             Self::update_metadata(cx.db, chart_id, range.into_date_time_range().end).await?;
             let elapsed: std::time::Duration = now.elapsed();
-            tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
+            tracing::info!(
+                found =? found,
+                elapsed =? elapsed,
+                chart =% ChartProps::key(),
+                "{}/{} step of batch done", i + 1, n
+            );
         }
         Ok(())
     }

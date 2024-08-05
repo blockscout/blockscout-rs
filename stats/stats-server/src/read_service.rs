@@ -242,7 +242,7 @@ impl StatsService for ReadService {
             .filter(|static_info| static_info.chart_type == ChartType::Line)
             .ok_or_else(|| {
                 Status::not_found(format!(
-                    "chart {}({}) not found",
+                    "line chart {}({}) not found",
                     request.name,
                     String::from(resolution)
                 ))
