@@ -1,7 +1,4 @@
-use std::{
-    cmp::Ordering,
-    ops::{Range, RangeInclusive},
-};
+use std::{cmp::Ordering, ops::RangeInclusive};
 
 use chrono::{Days, NaiveDate, NaiveWeek, Weekday};
 use rust_decimal::Decimal;
@@ -185,36 +182,6 @@ impl Week {
             .unwrap_or(NaiveDate::MIN);
         Week::new(prev_week_last_day)
     }
-
-    // todo: remove
-    // iterating over ranges with custom inner types is nightly-only
-    // https://users.rust-lang.org/t/implement-trait-step-in-1-76-0/108204/8
-    pub fn range_into_iter(range: Range<Week>) -> WeekRangeIterator {
-        WeekRangeIterator(range)
-    }
-
-    // iterating over ranges with custom inner types is nightly-only
-    // https://users.rust-lang.org/t/implement-trait-step-in-1-76-0/108204/8
-    pub fn range_inclusive_into_iter(range: RangeInclusive<Week>) -> WeekRangeIterator {
-        let (start, end) = range.into_inner();
-        WeekRangeIterator(start..(&end).saturating_next_week())
-    }
-}
-
-pub struct WeekRangeIterator(Range<Week>);
-
-impl Iterator for WeekRangeIterator {
-    type Item = Week;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.0.is_empty() {
-            None
-        } else {
-            let next = self.0.start.clone();
-            self.0.start = next.saturating_next_week();
-            Some(next)
-        }
-    }
 }
 
 pub type WeekValue<V> = TimespanValue<Week, V>;
@@ -225,8 +192,6 @@ impl_into_string_timespan_value!(Week, Decimal);
 
 #[cfg(test)]
 mod tests {
-    use itertools::Itertools;
-
     use crate::tests::point_construction::{d, week_of};
 
     use super::*;
@@ -289,46 +254,6 @@ mod tests {
             .saturating_next_week()
             .checked_days()
             .is_some());
-    }
-
-    #[test]
-    fn week_iterator_works() {
-        // weeks for this month are
-        // 8-14, 15-21, 22-28
-
-        for range in [
-            week_of("2024-07-08")..week_of("2024-07-22"),
-            week_of("2024-07-08")..week_of("2024-07-28"),
-            week_of("2024-07-14")..week_of("2024-07-28"),
-        ] {
-            assert_eq!(
-                Week::range_into_iter(range.clone()).collect_vec(),
-                vec![week_of("2024-07-08"), week_of("2024-07-15")]
-            );
-            assert_eq!(
-                Week::range_inclusive_into_iter(range.start..=range.end).collect_vec(),
-                vec![
-                    week_of("2024-07-08"),
-                    week_of("2024-07-15"),
-                    week_of("2024-07-22")
-                ]
-            );
-        }
-
-        for range in [
-            week_of("2024-07-08")..week_of("2024-07-15"),
-            week_of("2024-07-08")..week_of("2024-07-21"),
-            week_of("2024-07-14")..week_of("2024-07-21"),
-        ] {
-            assert_eq!(
-                Week::range_into_iter(range.clone()).collect_vec(),
-                vec![week_of("2024-07-08")]
-            );
-            assert_eq!(
-                Week::range_inclusive_into_iter(range.start..=range.end).collect_vec(),
-                vec![week_of("2024-07-08"), week_of("2024-07-15")]
-            );
-        }
     }
 
     #[test]
