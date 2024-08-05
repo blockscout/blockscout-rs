@@ -19,9 +19,19 @@ pub trait Timespan {
     /// Using `from_date` on resulting date will always result in equal timespan.
     fn into_date(self) -> NaiveDate;
     /// Get the next interval right after the current one (saturating)
-    fn saturating_next_timespan(&self) -> Self; // todo: default impl using add / sub
+    fn saturating_next_timespan(&self) -> Self
+    where
+        Self: Sized,
+    {
+        self.saturating_add(TimespanDuration::from_timespan_repeats(1))
+    }
     /// Get the interval right before the current one (saturating)
-    fn saturating_previous_timespan(&self) -> Self;
+    fn saturating_previous_timespan(&self) -> Self
+    where
+        Self: Sized,
+    {
+        self.saturating_sub(TimespanDuration::from_timespan_repeats(1))
+    }
     /// Converting type into runtime enum variant
     fn enum_variant() -> ResolutionKind;
     /// Extract the start of given timespan as UTC timestamp

@@ -78,18 +78,6 @@ impl Timespan for Year {
         self.clamp_by_naive_date_range().saturating_first_day()
     }
 
-    fn saturating_next_timespan(&self) -> Self {
-        // always ensure we stay within `NaiveDate`
-        let next = Self(self.number_within_naive_date().saturating_add(1));
-        next.clamp_by_naive_date_range()
-    }
-
-    fn saturating_previous_timespan(&self) -> Self {
-        // always ensure we stay within `NaiveDate`
-        let prev = Self(self.number_within_naive_date().saturating_sub(1));
-        prev.clamp_by_naive_date_range()
-    }
-
     fn enum_variant() -> ResolutionKind {
         ResolutionKind::Year
     }

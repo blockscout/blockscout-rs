@@ -66,14 +66,6 @@ impl Timespan for Month {
         Self::saturating_first_month_day(self.date_in_month)
     }
 
-    fn saturating_next_timespan(&self) -> Self {
-        Self::saturating_add(&self, TimespanDuration::from_timespan_repeats(1))
-    }
-
-    fn saturating_previous_timespan(&self) -> Self {
-        Self::saturating_sub(&self, TimespanDuration::from_timespan_repeats(1))
-    }
-
     fn enum_variant() -> ResolutionKind {
         ResolutionKind::Month
     }

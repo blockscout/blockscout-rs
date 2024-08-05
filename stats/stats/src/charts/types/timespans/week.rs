@@ -82,14 +82,6 @@ impl Timespan for Week {
         self.saturating_first_day()
     }
 
-    fn saturating_next_timespan(&self) -> Self {
-        self.saturating_next_week()
-    }
-
-    fn saturating_previous_timespan(&self) -> Self {
-        self.saturating_previous_week()
-    }
-
     fn enum_variant() -> ResolutionKind {
         ResolutionKind::Week
     }
