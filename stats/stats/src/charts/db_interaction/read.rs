@@ -547,8 +547,12 @@ mod tests {
         charts::ResolutionKind,
         counters::TotalBlocks,
         data_source::kinds::local_db::parameters::DefaultQueryVec,
-        lines::TxnsGrowth,
-        tests::{init_db::init_db, point_construction::d},
+        lines::{TxnsGrowth, TxnsGrowthMonthly},
+        tests::{
+            init_db::init_db,
+            point_construction::{d, month_of},
+        },
+        types::timespans::Month,
         Named,
     };
     use chrono::DateTime;
@@ -605,6 +609,15 @@ mod tests {
                 )),
                 ..Default::default()
             },
+            charts::ActiveModel {
+                name: Set(TxnsGrowth::name().to_string()),
+                resolution: Set(ChartResolution::Month),
+                chart_type: Set(ChartType::Line),
+                last_updated_at: Set(Some(
+                    DateTime::parse_from_rfc3339("2022-11-30T08:08:08+00:00").unwrap(),
+                )),
+                ..Default::default()
+            },
         ])
         .exec(db)
         .await
@@ -621,6 +634,9 @@ mod tests {
             mock_chart_data(4, "2022-11-17", 123),
             mock_chart_data(4, "2022-11-19", 323),
             mock_chart_data(4, "2022-11-29", 1000),
+            mock_chart_data(5, "2022-08-17", 12),
+            mock_chart_data(5, "2022-09-19", 100),
+            mock_chart_data(5, "2022-10-29", 1000),
         ])
         .exec(db)
         .await
@@ -648,7 +664,6 @@ mod tests {
         );
     }
 
-    // todo: test other resolutions
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn get_chart_int_mock() {
@@ -683,6 +698,90 @@ mod tests {
                 ExtendedTimespanValue {
                     timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                     value: "200".into(),
+                    is_approximate: true,
+                },
+            ],
+            data
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_chart_int_monthly() {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let db = init_db("get_chart_int_monthly").await;
+        insert_mock_data(&db).await;
+        let data = get_line_chart_data::<Month>(
+            &db,
+            &TxnsGrowth::name(),
+            None,
+            None,
+            None,
+            MissingDatePolicy::FillPrevious,
+            true,
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            vec![
+                ExtendedTimespanValue {
+                    timespan: month_of("2022-08-01"),
+                    value: "12".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: month_of("2022-09-01"),
+                    value: "100".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: month_of("2022-10-01"),
+                    value: "1000".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: month_of("2022-11-01"),
+                    value: "1000".into(),
+                    is_approximate: true,
+                },
+            ],
+            data
+        );
+
+        let data = get_line_chart_data::<Month>(
+            &db,
+            &TxnsGrowth::name(),
+            None,
+            None,
+            None,
+            MissingDatePolicy::FillZero,
+            true,
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            vec![
+                ExtendedTimespanValue {
+                    timespan: month_of("2022-08-01"),
+                    value: "12".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: month_of("2022-09-01"),
+                    value: "100".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: month_of("2022-10-01"),
+                    value: "1000".into(),
+                    is_approximate: false,
+                },
+                ExtendedTimespanValue {
+                    timespan: month_of("2022-11-01"),
+                    value: "0".into(),
                     is_approximate: true,
                 },
             ],
@@ -914,18 +1013,17 @@ mod tests {
         );
     }
 
-    // todo: test missed points with both policies
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn last_accurate_point_resolutions_work() {
+    async fn last_accurate_point_monthly_works() {
         let _ = tracing_subscriber::fmt::try_init();
-        let db = init_db("last_accurate_point_resolutions_work").await;
+        let db = init_db("last_accurate_point_monthly_works").await;
         insert_mock_data(&db).await;
 
-        assert!(chart_id_matches_key(&db, 1, "totalBlocks", ResolutionKind::Day).await);
+        assert!(chart_id_matches_key(&db, 5, &TxnsGrowth::name(), ResolutionKind::Month).await);
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DefaultQueryVec<TotalBlocks>>(
-                1,
+            last_accurate_point::<TxnsGrowthMonthly, DefaultQueryVec<TxnsGrowthMonthly>>(
+                5,
                 1,
                 &db,
                 false,
@@ -934,10 +1032,42 @@ mod tests {
             )
             .await
             .unwrap(),
-            Some(DateValue::<String> {
-                timespan: d("2022-11-11"),
-                value: "1150".to_string()
-            })
+            Some(TimespanValue {
+                timespan: month_of("2022-10-01"),
+                value: "1000".into(),
+            }),
+        );
+        assert_eq!(
+            last_accurate_point::<TxnsGrowthMonthly, DefaultQueryVec<TxnsGrowthMonthly>>(
+                5,
+                1,
+                &db,
+                false,
+                0,
+                MissingDatePolicy::FillPrevious
+            )
+            .await
+            .unwrap(),
+            Some(TimespanValue {
+                timespan: month_of("2022-11-01"),
+                value: "1000".into(),
+            }),
+        );
+        assert_eq!(
+            last_accurate_point::<TxnsGrowthMonthly, DefaultQueryVec<TxnsGrowthMonthly>>(
+                5,
+                1,
+                &db,
+                false,
+                0,
+                MissingDatePolicy::FillZero
+            )
+            .await
+            .unwrap(),
+            Some(TimespanValue {
+                timespan: month_of("2022-11-01"),
+                value: "0".into(),
+            }),
         );
     }
 }
