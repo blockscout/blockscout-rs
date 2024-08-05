@@ -231,12 +231,11 @@ where
     data.into_iter().filter(is_within_range).collect()
 }
 
-//todo: test other resolutions?? in particular, months (variable len)
 #[cfg(test)]
 mod tests {
     use crate::{
         charts::types::timespans::DateValue,
-        tests::point_construction::{d, d_v, d_v_int},
+        tests::point_construction::{d, d_v, d_v_int, m_v, month_of, w_v, week_of, y_v, year_of},
     };
 
     use super::*;
@@ -244,7 +243,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn fill_zeros_works() {
+    fn fill_zeros_works_daily() {
         for (data, expected, from, to) in [
             (vec![], vec![], None, None),
             (vec![], vec![], Some(d("2100-01-01")), None),
@@ -333,6 +332,132 @@ mod tests {
                 ],
                 Some(d("2023-07-12")),
                 Some(d("2023-07-13")),
+            ),
+        ] {
+            let actual =
+                fill_missing_points(data, MissingDatePolicy::FillZero, from, to, None).unwrap();
+            assert_eq!(expected, actual)
+        }
+    }
+
+    #[test]
+    fn fill_zeros_works_weekly() {
+        for (data, expected, from, to) in [
+            (
+                vec![w_v("2022-01-01", "01")],
+                vec![w_v("2021-12-27", "01")],
+                Some(week_of("2022-01-01")),
+                Some(week_of("2022-01-01")),
+            ),
+            (
+                vec![w_v("2022-01-01", "01")],
+                vec![w_v("2021-12-27", "01"), w_v("2022-01-03", "0")],
+                Some(week_of("2022-01-01")),
+                Some(week_of("2022-01-09")),
+            ),
+            (
+                vec![w_v("2022-01-01", "01")],
+                vec![
+                    w_v("2021-12-20", "0"),
+                    w_v("2021-12-27", "01"),
+                    w_v("2022-01-03", "0"),
+                ],
+                Some(week_of("2021-12-26")),
+                Some(week_of("2022-01-09")),
+            ),
+            (
+                vec![w_v("2022-01-01", "01"), w_v("2022-01-15", "01")],
+                vec![
+                    w_v("2021-12-27", "01"),
+                    w_v("2022-01-03", "0"),
+                    w_v("2022-01-10", "01"),
+                ],
+                Some(week_of("2021-12-27")),
+                Some(week_of("2022-01-10")),
+            ),
+        ] {
+            let actual =
+                fill_missing_points(data, MissingDatePolicy::FillZero, from, to, None).unwrap();
+            assert_eq!(expected, actual)
+        }
+    }
+
+    #[test]
+    fn fill_zeros_works_monthly() {
+        for (data, expected, from, to) in [
+            (
+                vec![m_v("2022-01-01", "01")],
+                vec![m_v("2022-01-01", "01")],
+                Some(month_of("2022-01-01")),
+                Some(month_of("2022-01-01")),
+            ),
+            (
+                vec![m_v("2022-01-01", "01")],
+                vec![m_v("2022-01-01", "01"), m_v("2022-02-01", "0")],
+                Some(month_of("2022-01-01")),
+                Some(month_of("2022-02-01")),
+            ),
+            (
+                vec![m_v("2022-01-01", "01")],
+                vec![
+                    m_v("2021-12-20", "0"),
+                    m_v("2022-01-01", "01"),
+                    m_v("2022-02-01", "0"),
+                ],
+                Some(month_of("2021-12-01")),
+                Some(month_of("2022-02-01")),
+            ),
+            (
+                vec![m_v("2022-01-01", "01"), m_v("2022-03-01", "01")],
+                vec![
+                    m_v("2022-01-01", "01"),
+                    m_v("2022-02-01", "0"),
+                    m_v("2022-03-01", "01"),
+                ],
+                Some(month_of("2022-01-01")),
+                Some(month_of("2022-03-01")),
+            ),
+        ] {
+            let actual =
+                fill_missing_points(data, MissingDatePolicy::FillZero, from, to, None).unwrap();
+            assert_eq!(expected, actual)
+        }
+    }
+
+    #[test]
+    fn fill_zeros_works_yearly() {
+        for (data, expected, from, to) in [
+            (
+                vec![y_v("2022-01-01", "01")],
+                vec![y_v("2022-01-01", "01")],
+                Some(year_of("2022-01-01")),
+                Some(year_of("2022-01-01")),
+            ),
+            (
+                vec![y_v("2022-01-01", "01")],
+                vec![y_v("2022-01-01", "01"), y_v("2023-01-01", "0")],
+                Some(year_of("2022-01-01")),
+                Some(year_of("2023-01-01")),
+            ),
+            (
+                vec![y_v("2022-01-01", "01")],
+                vec![
+                    y_v("2021-01-01", "0"),
+                    y_v("2022-01-01", "01"),
+                    y_v("2023-01-01", "0"),
+                ],
+                Some(year_of("2021-01-01")),
+                Some(year_of("2023-02-01")),
+            ),
+            (
+                vec![y_v("2022-01-01", "01"), y_v("2024-03-01", "01")],
+                vec![
+                    y_v("2022-01-01", "01"),
+                    y_v("2023-02-01", "0"),
+                    y_v("2024-02-01", "01"),
+                ],
+                Some(year_of("2022-01-01")),
+                Some(year_of("2024-03-01")),
             ),
         ] {
             let actual =

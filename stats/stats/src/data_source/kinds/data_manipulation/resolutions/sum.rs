@@ -114,7 +114,7 @@ mod tests {
         data_source::{DataSource, UpdateContext},
         gettable_const,
         lines::PredefinedMockSource,
-        tests::point_construction::{d_v_int, dt, week_v_int},
+        tests::point_construction::{d_v_int, dt, w_v_int},
         types::timespans::{DateValue, Week},
         MissingDatePolicy,
     };
@@ -161,7 +161,7 @@ mod tests {
             MockSourceWeekly::query_data(&context, None, &mut AggregateTimer::new())
                 .await
                 .unwrap(),
-            vec![week_v_int("2024-07-08", 4), week_v_int("2024-07-22", 1239),]
+            vec![w_v_int("2024-07-08", 4), w_v_int("2024-07-22", 1239),]
         );
     }
 }

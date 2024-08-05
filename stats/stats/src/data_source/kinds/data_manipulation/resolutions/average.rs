@@ -194,7 +194,7 @@ mod tests {
         data_source::kinds::data_manipulation::map::MapParseTo,
         gettable_const,
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
-        tests::point_construction::{d, d_v, d_v_double, d_v_int, dt, week_of, week_v_double},
+        tests::point_construction::{d, d_v, d_v_double, d_v_int, dt, w_v_double, week_of},
         types::timespans::{DateValue, Week, WeekValue},
         MissingDatePolicy,
     };
@@ -295,8 +295,8 @@ mod tests {
                 ]
             ),
             vec![
-                week_v_double("2024-07-08", week_1_average),
-                week_v_double("2024-07-15", 5.0)
+                w_v_double("2024-07-08", week_1_average),
+                w_v_double("2024-07-15", 5.0)
             ],
         )
     }
@@ -379,8 +379,8 @@ mod tests {
                 .await
                 .unwrap(),
             vec![
-                week_v_double("2024-07-08", week_1_average),
-                week_v_double("2024-07-15", 5.0)
+                w_v_double("2024-07-08", week_1_average),
+                w_v_double("2024-07-15", 5.0)
             ]
         );
     }
@@ -430,10 +430,10 @@ mod tests {
                 .await
                 .unwrap(),
             vec![
-                week_v_double("2022-11-07", 1.0),
-                week_v_double("2022-11-28", 1.0),
-                week_v_double("2022-12-26", 1.0),
-                week_v_double("2023-01-30", 1.0),
+                w_v_double("2022-11-07", 1.0),
+                w_v_double("2022-11-28", 1.0),
+                w_v_double("2022-12-26", 1.0),
+                w_v_double("2023-01-30", 1.0),
             ]
         );
     }
