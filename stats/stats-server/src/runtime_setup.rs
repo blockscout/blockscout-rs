@@ -11,7 +11,6 @@ use stats::{
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
-    hash::Hash,
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -20,7 +19,26 @@ use tokio::sync::Mutex;
 pub struct EnabledChartEntry {
     pub settings: EnabledChartSettings,
     /// Static information presented as dynamic object
-    pub enabled_resolutions: HashMap<ResolutionKind, ChartPropertiesObject>,
+    pub enabled_resolutions: HashMap<ResolutionKind, EnabledResolutionEntry>,
+}
+
+#[derive(Clone, Debug)]
+pub struct EnabledResolutionEntry {
+    pub name: String,
+    pub chart_type: ChartType,
+    pub missing_date_policy: stats::MissingDatePolicy,
+    pub approximate_trailing_points: u64,
+}
+
+impl From<ChartPropertiesObject> for EnabledResolutionEntry {
+    fn from(value: ChartPropertiesObject) -> Self {
+        Self {
+            name: value.name,
+            chart_type: value.chart_type,
+            missing_date_policy: value.missing_date_policy,
+            approximate_trailing_points: value.approximate_trailing_points,
+        }
+    }
 }
 
 /// Everything needed to operate update group
@@ -40,17 +58,20 @@ pub struct RuntimeSetup {
     pub charts_info: BTreeMap<String, EnabledChartEntry>,
 }
 
-fn new_set_check_duplicates<T: Hash + Eq, I: IntoIterator<Item = T>>(
-    iter: I,
-) -> Result<HashSet<T>, T> {
-    let mut result = HashSet::default();
-    for item in iter.into_iter() {
-        let prev_value = result.replace(item);
-        if let Some(prev_value) = prev_value {
-            return Err(prev_value);
-        }
+/// Combine 2 disjoint (by key) maps into a single map.
+///
+/// `Err(k)` when maps are not disjoint (`k` - key present both in `a` and `b`).
+fn combine_disjoint_maps<K: Ord + Clone, V>(
+    mut a: BTreeMap<K, V>,
+    b: BTreeMap<K, V>,
+) -> Result<BTreeMap<K, V>, K> {
+    for (k, v) in b {
+        match a.entry(k) {
+            Entry::Vacant(en) => en.insert(v),
+            Entry::Occupied(en) => return Err(en.key().clone()),
+        };
     }
-    Ok(result)
+    Ok(a)
 }
 
 impl RuntimeSetup {
@@ -67,62 +88,8 @@ impl RuntimeSetup {
         layout: config::layout::Config,
         update_groups: config::update_groups::Config,
     ) -> anyhow::Result<Self> {
-        let enabled_charts_config = Self::keep_enabled(
-            charts,
-            Self::all_members()
-                .into_iter()
-                .map(|(key, _)| key)
-                .collect(),
-        )?;
-        let enabled_counters = Self::enabled_keys(enabled_charts_config.counters.clone());
-        let enabled_counters = new_set_check_duplicates(enabled_counters)
-            .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
-        if enabled_counters
-            .iter()
-            .find(|a| a.resolution() != &ResolutionKind::Day)
-            .is_some()
-        {
-            return Err(anyhow::anyhow!(
-                "Resolutions other than 'Day' are not supported for counters"
-            ));
-        }
-
-        let enabled_lines = Self::enabled_keys(enabled_charts_config.lines.clone());
-        let enabled_lines = new_set_check_duplicates(enabled_lines)
-            .map_err(|id| anyhow::anyhow!("encountered same id twice: {}", id))?;
-
-        let mut counters_unknown = enabled_counters.clone();
-        let mut lines_unknown = enabled_lines.clone();
-        let settings = Self::extract_united_chart_settings(&enabled_charts_config);
-        let enabled_resolutions: BTreeMap<ChartKey, ChartPropertiesObject> = Self::all_members()
-            .into_iter()
-            .filter(|(key, chart)| match chart.chart_type {
-                ChartType::Counter => counters_unknown.remove(key),
-                ChartType::Line => lines_unknown.remove(key),
-            })
-            .filter_map(|(key, chart)| {
-                settings.get(key.name()).and_then(|settings| {
-                    if settings.resolutions.is_enabled(key.resolution()) {
-                        Some((key, chart))
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect();
-
-        let charts_info: BTreeMap<String, EnabledChartEntry> =
-            Self::combine_resolutions(enabled_resolutions, &settings)?;
-
-        if !counters_unknown.is_empty() || !lines_unknown.is_empty() {
-            return Err(anyhow::anyhow!(
-                "found unknown charts: {:?}",
-                counters_unknown.union(&lines_unknown)
-            ));
-        }
-
+        let charts_info = Self::build_charts_info(charts)?;
         let update_groups = Self::init_update_groups(update_groups, &charts_info)?;
-
         Ok(Self {
             lines_layout: layout.line_chart_categories,
             update_groups,
@@ -130,120 +97,81 @@ impl RuntimeSetup {
         })
     }
 
-    fn enabled_keys(charts: BTreeMap<String, EnabledChartSettings>) -> Vec<ChartKey> {
-        charts
-            .into_iter()
-            .flat_map(|(name, settings)| {
-                settings
-                    .resolutions
-                    .into_list()
-                    .into_iter()
-                    .map(move |r| ChartKey::new(name.clone(), r))
-            })
-            .collect()
+    /// Build charts info from settings for one type of charts.
+    ///
+    /// `Err(Vec<ChartKey>)` - some unknown charts+resolutions are present in settings
+    fn charts_info_from_settings(
+        charts_settings: BTreeMap<String, AllChartSettings>,
+        settings_chart_type: ChartType,
+    ) -> Result<BTreeMap<String, EnabledChartEntry>, Vec<ChartKey>> {
+        let available_resolutions = Self::all_members();
+        let mut unknown_charts = vec![];
+
+        let mut charts_info = BTreeMap::new();
+
+        for (name, settings) in charts_settings {
+            if let Some(enabled_chart_settings) = settings.clone().into_enabled() {
+                let mut enabled_resolutions_properties = HashMap::new();
+                for (resolution, resolution_setting) in settings.resolutions.into_list() {
+                    let key = ChartKey::new(name.clone(), resolution);
+                    let resolution_properties = available_resolutions
+                        .get(&key)
+                        .filter(|props| props.chart_type == settings_chart_type)
+                        .cloned();
+                    match (resolution_setting, resolution_properties) {
+                        // enabled
+                        (Some(true), Some(enabled_props)) | (None, Some(enabled_props)) => {
+                            enabled_resolutions_properties
+                                .insert(*key.resolution(), enabled_props.into());
+                        }
+                        // disabled, everything correct
+                        (Some(false), Some(_)) | (None, None) => (),
+                        // setting is set but chart is unknown
+                        (Some(true), None) | (Some(false), None) => unknown_charts.push(key),
+                    }
+                }
+                charts_info.insert(
+                    name,
+                    EnabledChartEntry {
+                        settings: enabled_chart_settings,
+                        enabled_resolutions: enabled_resolutions_properties,
+                    },
+                );
+            }
+        }
+
+        if !unknown_charts.is_empty() {
+            Err(unknown_charts)
+        } else {
+            Ok(charts_info)
+        }
     }
 
-    fn combine_resolutions(
-        enabled_resolutions: BTreeMap<ChartKey, ChartPropertiesObject>,
-        settings: &BTreeMap<String, EnabledChartSettings>,
+    fn build_charts_info(
+        charts_config: config::charts::Config<AllChartSettings>,
     ) -> anyhow::Result<BTreeMap<String, EnabledChartEntry>> {
-        let mut result: BTreeMap<String, EnabledChartEntry> = BTreeMap::new();
-        for (key, properties) in enabled_resolutions {
-            match result.entry(key.name().to_string()) {
-                Entry::Vacant(v) => {
-                    let settings = settings
-                        .get(key.name())
-                        .ok_or(anyhow::anyhow!(
-                            // must've checked presence of the settings when checking status
-                            // of resolution (on/off)
-                            "No settings for an enabled resolution. Likely a bug in the code"
-                        ))?
-                        .clone();
-                    v.insert(EnabledChartEntry {
-                        settings,
-                        enabled_resolutions: HashMap::from([(*key.resolution(), properties)]),
-                    });
-                }
-                Entry::Occupied(mut o) => {
-                    if let Some(_) = o
-                        .get_mut()
-                        .enabled_resolutions
-                        .insert(*key.resolution(), properties)
-                    {
-                        // in `enabled_resolutions`
-                        panic!("Duplicate keys in BTreeMap");
-                    };
-                }
-            }
-        }
-        Ok(result)
-    }
+        let counters_info =
+            Self::charts_info_from_settings(charts_config.counters, ChartType::Counter);
+        let lines_info = Self::charts_info_from_settings(charts_config.lines, ChartType::Line);
 
-    fn keep_enabled_in_section(
-        section: BTreeMap<String, AllChartSettings>,
-        available_resolutions_for_chart: &BTreeMap<String, HashSet<ResolutionKind>>,
-    ) -> anyhow::Result<BTreeMap<String, EnabledChartSettings>> {
-        let mut enabled_section = BTreeMap::new();
-        for (id, settings) in section {
-            let enabled_settings = EnabledChartSettings::from_all(
-                settings,
-                available_resolutions_for_chart
-                    .get(&id)
-                    .unwrap_or(&HashSet::new()),
-            )
-            .map_err(|rs| {
-                anyhow::anyhow!("Some enabled resolutions are not available for chart {id}: {rs:?}")
-            })?;
-            if let Some(enabled_settings) = enabled_settings {
-                enabled_section.insert(id, enabled_settings);
-            }
-        }
-        Ok(enabled_section)
-    }
-
-    /// Keep settings for enabled & existing keys (charts + resolutions)
-    fn keep_enabled(
-        charts: config::charts::Config<AllChartSettings>,
-        all_possible_keys: HashSet<ChartKey>,
-    ) -> anyhow::Result<config::charts::Config<EnabledChartSettings>> {
-        let available_resolutions_for_chart = {
-            let mut map: BTreeMap<String, HashSet<ResolutionKind>> = BTreeMap::new();
-            for key in all_possible_keys {
-                match map.entry(key.name().to_string()) {
-                    Entry::Occupied(mut o) => {
-                        o.get_mut().insert(*key.resolution());
-                    }
-                    Entry::Vacant(v) => {
-                        v.insert(HashSet::from([*key.resolution()]));
-                    }
+        let (counters_info, lines_info) = match (counters_info, lines_info) {
+            (Ok(c), Ok(l)) => (c, l),
+            (counters_result, lines_result) => {
+                let mut unknown_charts = vec![];
+                if let Err(c) = counters_result {
+                    unknown_charts.extend(c);
                 }
+                if let Err(l) = lines_result {
+                    unknown_charts.extend(l);
+                }
+                return Err(anyhow::anyhow!(
+                    "non-existent charts+resolutions are present in settings: {unknown_charts:?}",
+                ));
             }
-            map
         };
-        // no need to filter `update_schedule` list because extra names
-        // will be ignored anyway
-        let counters =
-            Self::keep_enabled_in_section(charts.counters, &available_resolutions_for_chart)?;
-        let lines = Self::keep_enabled_in_section(charts.lines, &available_resolutions_for_chart)?;
-        Ok(config::charts::Config { counters, lines })
-    }
 
-    /// Get settings for both counters and line charts in single data structure.
-    /// Assumes that config is valid.
-    fn extract_united_chart_settings(
-        config: &config::charts::Config<EnabledChartSettings>,
-    ) -> BTreeMap<String, EnabledChartSettings> {
-        config
-            .counters
-            .iter()
-            .map(|(id, settings)| (id.clone(), settings.clone()))
-            .chain(
-                config
-                    .lines
-                    .iter()
-                    .map(|(id, settings)| (id.clone(), settings.clone())),
-            )
-            .collect()
+        combine_disjoint_maps(counters_info, lines_info)
+            .map_err(|duplicate_name| anyhow::anyhow!("duplicate chart name: {duplicate_name:?}",))
     }
 
     fn all_update_groups() -> Vec<ArcUpdateGroup> {
@@ -335,7 +263,7 @@ impl RuntimeSetup {
     }
 
     /// Make map & check for duplicate names
-    fn construct_group_map(
+    fn build_group_map(
         groups: Vec<ArcUpdateGroup>,
     ) -> anyhow::Result<BTreeMap<String, ArcUpdateGroup>> {
         let mut map = BTreeMap::new();
@@ -357,7 +285,7 @@ impl RuntimeSetup {
     ) -> anyhow::Result<BTreeMap<String, UpdateGroupEntry>> {
         let update_groups = Self::all_update_groups();
         let dep_mutexes = Self::create_all_dependencies_mutexes(update_groups.clone());
-        let update_groups = Self::construct_group_map(update_groups)?;
+        let update_groups = Self::build_group_map(update_groups)?;
         let mut result = BTreeMap::new();
 
         // checks that all groups are present in config.

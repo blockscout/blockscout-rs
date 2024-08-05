@@ -64,16 +64,16 @@ fn map_read_error(err: ReadError) -> Status {
     }
 }
 
-/// Add chart settings to each chart id in layout
+/// Add chart information to each chart id in layout
 ///
-/// Returns `None` if settings were not found for some chart.
-fn add_settings_to_layout(
+/// Returns `None` if info were not found for some chart.
+fn add_chart_info_to_layout(
     layout: Vec<types::LineChartCategory>,
-    settings: BTreeMap<String, EnabledChartEntry>,
+    chart_info: BTreeMap<String, EnabledChartEntry>,
 ) -> Vec<proto_v1::LineChartSection> {
     layout
         .into_iter()
-        .map(|cat| cat.intersect_settings(&settings))
+        .map(|cat| cat.intersect_info(&chart_info))
         .collect()
 }
 
@@ -277,8 +277,8 @@ impl StatsService for ReadService {
         _request: Request<proto_v1::GetLineChartsRequest>,
     ) -> Result<Response<proto_v1::LineCharts>, Status> {
         let layout = self.charts.lines_layout.clone();
-        let settings = self.charts.charts_info.clone();
-        let sections = add_settings_to_layout(layout, settings);
+        let info = self.charts.charts_info.clone();
+        let sections = add_chart_info_to_layout(layout, info);
 
         Ok(Response::new(proto_v1::LineCharts { sections }))
     }

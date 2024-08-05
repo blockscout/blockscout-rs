@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use cron::Schedule;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::ResolutionKind;
@@ -21,6 +22,15 @@ pub struct ResolutionsSettings {
 }
 
 impl ResolutionsSettings {
+    pub fn into_list(self) -> Vec<(ResolutionKind, Option<bool>)> {
+        vec![
+            (ResolutionKind::Day, self.day),
+            (ResolutionKind::Week, self.week),
+            (ResolutionKind::Month, self.month),
+            (ResolutionKind::Year, self.year),
+        ]
+    }
+
     fn into_enabled_field(
         setting: Option<bool>,
         kind: ResolutionKind,
@@ -118,32 +128,42 @@ fn enabled_default() -> bool {
     true
 }
 
+impl AllChartSettings {
+    /// `Some(_)` - The chart is enabled.
+    ///
+    /// `None` - The chart is disabled.
+    pub fn into_enabled(self) -> Option<EnabledChartSettings> {
+        if self.enabled {
+            Some(EnabledChartSettings {
+                units: self.units,
+                title: self.title,
+                description: self.description,
+            })
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct EnabledChartSettings {
     pub title: String,
     pub description: String,
     pub units: Option<String>,
-    pub resolutions: ResolutionsEnabled,
 }
 
 impl EnabledChartSettings {
-    /// * `Ok(Some(_))` - The chart is enabled and resolutions are correct
-    /// * `Ok(None)` - The chart is disabled
-    /// * `Err(<resolutions>)` - The chart is enabled, but some enabled resolutions are
-    /// not available for this chart
-    pub fn from_all(
-        value: AllChartSettings,
-        available_resolutions: &HashSet<ResolutionKind>,
-    ) -> Result<Option<Self>, Vec<ResolutionKind>> {
+    /// * `Some(_)` - The chart is enabled
+    /// * `None` - The chart is disabled
+    pub fn from_all(value: AllChartSettings) -> Option<Self> {
         if value.enabled {
-            Ok(Some(EnabledChartSettings {
+            Some(EnabledChartSettings {
                 units: value.units,
                 title: value.title,
                 description: value.description,
-                resolutions: value.resolutions.into_enabled(&available_resolutions)?,
-            }))
+            })
         } else {
-            Ok(None)
+            None
         }
     }
 }
@@ -173,25 +193,39 @@ pub struct LineChartCategory {
 }
 
 impl LineChartCategory {
+    fn build_proto_line_chart_info(
+        id: String,
+        entry: &EnabledChartEntry,
+    ) -> proto_v1::LineChartInfo {
+        let settings = entry.settings.clone();
+        proto_v1::LineChartInfo {
+            id,
+            title: settings.title,
+            description: settings.description,
+            units: settings.units,
+            resolutions: entry
+                .enabled_resolutions
+                .keys()
+                .into_iter()
+                .map(|r| String::from(*r))
+                .collect_vec(),
+        }
+    }
+
     /// Add settings to the charts within category.
     ///
     /// If the settings are not present - remove the chart (i.e. remove disabled
     /// or nonexistent charts)
-    pub fn intersect_settings(
+    pub fn intersect_info(
         self,
-        settings: &BTreeMap<String, EnabledChartEntry>,
+        info: &BTreeMap<String, EnabledChartEntry>,
     ) -> proto_v1::LineChartSection {
         let charts: Vec<_> = self
             .charts_order
             .into_iter()
             .flat_map(|c: String| {
-                settings.get(&c).map(|e| {
-                    LineChartInfo {
-                        id: c,
-                        settings: e.settings.clone(),
-                    }
-                    .into()
-                })
+                info.get(&c)
+                    .map(|e| Self::build_proto_line_chart_info(c, e))
             })
             .collect();
         proto_v1::LineChartSection {
