@@ -1,9 +1,9 @@
 use chrono::NaiveDate;
 use entity::chart_data;
 
-use sea_orm::{FromQueryResult, Set, TryGetable};
+use sea_orm::{DbErr, FromQueryResult, QueryResult, Set, TryGetable};
 
-use super::timespans::DateValue;
+use super::{timespans::DateValue, TimespanValue};
 
 // Separate type instead of `TimespanValue` just to derive `FromQueryResult`
 /// Internal (database) representation of data points.
@@ -39,5 +39,11 @@ impl DbDateValue<String> {
             created_at: Default::default(),
             min_blockscout_block: Set(min_blockscout_block),
         }
+    }
+}
+
+impl<V: TryGetable> FromQueryResult for TimespanValue<NaiveDate, V> {
+    fn from_query_result(res: &QueryResult, pre: &str) -> Result<Self, DbErr> {
+        DbDateValue::<V>::from_query_result(res, pre).map(|dv| dv.into())
     }
 }

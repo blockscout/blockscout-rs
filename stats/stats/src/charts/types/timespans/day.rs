@@ -1,19 +1,12 @@
 use chrono::{Days, NaiveDate};
-
-use sea_orm::{prelude::*, FromQueryResult, TryGetable};
+use rust_decimal::Decimal;
 
 use crate::{
     charts::chart_properties_portrait::imports::ResolutionKind,
     impl_into_string_timespan_value,
-    types::{db::DbDateValue, Timespan, TimespanDuration, TimespanValue},
+    types::{Timespan, TimespanDuration, TimespanValue},
     utils::day_start,
 };
-
-impl<V: TryGetable> FromQueryResult for TimespanValue<NaiveDate, V> {
-    fn from_query_result(res: &QueryResult, pre: &str) -> Result<Self, DbErr> {
-        DbDateValue::<V>::from_query_result(res, pre).map(|dv| dv.into())
-    }
-}
 
 pub type DateValue<V> = TimespanValue<NaiveDate, V>;
 
