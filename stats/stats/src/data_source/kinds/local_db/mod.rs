@@ -181,7 +181,7 @@ where
     fn observe_query_time(time: Duration) {
         if time > Duration::ZERO {
             metrics::CHART_FETCH_NEW_DATA_TIME
-                .with_label_values(&[&Self::name(), &String::from(Self::resolution())])
+                .with_label_values(&[&ChartProps::key().to_string()])
                 .observe(time.as_secs_f64());
         }
     }
@@ -223,7 +223,7 @@ where
 
         let mut dependency_data_fetch_timer = AggregateTimer::new();
         let _update_timer = metrics::CHART_UPDATE_TIME
-            .with_label_values(&[&ChartProps::name(), &String::from(ChartProps::resolution())])
+            .with_label_values(&[&ChartProps::key().to_string()])
             .start_timer();
         tracing::info!(chart =% ChartProps::key(), "started chart update");
 
@@ -231,10 +231,7 @@ where
             .await
             .inspect_err(|err| {
                 metrics::UPDATE_ERRORS
-                    .with_label_values(&[
-                        &ChartProps::name(),
-                        &String::from(ChartProps::resolution()),
-                    ])
+                    .with_label_values(&[&ChartProps::key().to_string()])
                     .inc();
                 tracing::error!(
                     chart =% ChartProps::key(),
