@@ -1,4 +1,4 @@
-//! Construct other resolutions taking last value within the range.
+//! Constructors for lower resolutions taking last value within the range.
 //!
 //! Intended for "growth" charts where cumulative number of something
 //! is presented.

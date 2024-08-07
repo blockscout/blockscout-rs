@@ -1,4 +1,4 @@
-//! Construct other resolutions taking sum of values within the range.
+//! Constructors for lower resolutions taking sum of values within the range.
 //!
 //! Intended for "new"/"delta" charts where change of something
 //! is presented.

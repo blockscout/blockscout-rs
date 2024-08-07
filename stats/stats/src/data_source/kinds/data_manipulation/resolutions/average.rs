@@ -1,4 +1,4 @@
-/// Non-daily average values charts
+//! Constructors for lower resolutions of average value charts
 use std::{cmp::Ordering, fmt::Debug, marker::PhantomData, ops::Range};
 
 use blockscout_metrics_tools::AggregateTimer;
