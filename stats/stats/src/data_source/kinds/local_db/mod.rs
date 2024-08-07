@@ -63,24 +63,6 @@ where
     Query: QueryBehaviour,
     ChartProps: ChartProperties;
 
-/// Chart with default create/query and batch update with configurable step logic
-pub type BatchLocalDbChartSourceWithDefaultParams<MainDep, ResolutionDep, BatchStep, ChartProps> =
-    LocalDbChartSource<
-        MainDep,
-        ResolutionDep,
-        DefaultCreate<ChartProps>,
-        BatchUpdate<
-            MainDep,
-            ResolutionDep,
-            BatchStep,
-            Batch30Days,
-            DefaultQueryVec<ChartProps>,
-            ChartProps,
-        >,
-        DefaultQueryVec<ChartProps>,
-        ChartProps,
-    >;
-
 // not in `data_manipulation` because it requires retrieving latest (self) value before
 // next batch
 /// Chart with cumulative data calculated from delta dependency
@@ -131,21 +113,6 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
     DefaultQueryLast<C>,
     C,
 >;
-
-pub type MonthlyLocalDbChartSource<DailySource, AggregationBehaviour> =
-    (DailySource, AggregationBehaviour);
-
-pub type YearlyLocalDbChartSource<MonthlySource, AggregationBehaviour> =
-    (MonthlySource, AggregationBehaviour);
-
-// pub type
-
-// pub type AverageLocalDbChartSource<DailyAverageSource, DayWeightSource, C> =
-//     (DailyAverageSource, DayWeightSource, C);
-
-// pub type CumulativeLocalDbChartSource<DailyGrowthSource, C> = (DailyGrowthSource, C);
-
-// pub type DeltaLocalDbChartSource<DailyDeltaSource, C> = (DailyDeltaSource, C);
 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
     LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>

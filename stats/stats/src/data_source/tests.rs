@@ -9,12 +9,15 @@ use super::{
     kinds::{
         data_manipulation::{map::MapParseTo, resolutions::last_value::LastValueLowerResolution},
         local_db::{
-            parameters::update::batching::{
-                parameter_traits::BatchStepBehaviour,
-                parameters::{Batch30Days, Batch30Weeks, Batch30Years, Batch36Months},
+            parameters::{
+                update::batching::{
+                    parameter_traits::BatchStepBehaviour,
+                    parameters::{Batch30Days, Batch30Weeks, Batch30Years, Batch36Months},
+                    BatchUpdate,
+                },
+                DefaultCreate, DefaultQueryVec,
             },
-            BatchLocalDbChartSourceWithDefaultParams, DailyCumulativeLocalDbChartSource,
-            DirectVecLocalDbChartSource,
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource, LocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
@@ -146,8 +149,6 @@ pub type ContractsGrowthYearly = DirectVecLocalDbChartSource<
     ContractsGrowthYearlyProperties,
 >;
 
-// const B: <NewContracts as DataSource>::Output = 0;
-
 // Alternatively, if we wanted to preform some custom logic on each batch step, we could do
 #[allow(unused)]
 struct ContractsGrowthCustomBatchStepBehaviour;
@@ -182,10 +183,19 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
 }
 
 #[allow(unused)]
-type AlternativeContractsGrowth = BatchLocalDbChartSourceWithDefaultParams<
+type AlternativeContractsGrowth = LocalDbChartSource<
     NewContracts,
     (),
-    ContractsGrowthCustomBatchStepBehaviour,
+    DefaultCreate<ContractsGrowthProperties>,
+    BatchUpdate<
+        NewContracts,
+        (),
+        ContractsGrowthCustomBatchStepBehaviour,
+        Batch30Days,
+        DefaultQueryVec<ContractsGrowthProperties>,
+        ContractsGrowthProperties,
+    >,
+    DefaultQueryVec<ContractsGrowthProperties>,
     ContractsGrowthProperties,
 >;
 
