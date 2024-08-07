@@ -10,11 +10,11 @@
 //! (you can also check [`data_source` documentation](crate::data_source) or tests there)
 //!
 //! 1. Create multiple connected charts
-//! (e.g.
-//! [`DirectVecLocalDbChartSource`](crate::data_source::kinds::local_db::DirectVecLocalDbChartSource)
-//! or
-//! [`CumulativeLocalDbChartSource`](crate::data_source::kinds::local_db::CumulativeLocalDbChartSource)
-//! ).
+//!     (e.g.
+//!     [`DirectVecLocalDbChartSource`](crate::data_source::kinds::local_db::DirectVecLocalDbChartSource)
+//!     or
+//!     [`DailyCumulativeLocalDbChartSource`](crate::data_source::kinds::local_db::DailyCumulativeLocalDbChartSource)
+//!     ).
 //! 2. Construct simple (non-sync) update groups via `construct_update_group!`
 //! 3. Create mutexes (1-1 for each chart)
 //! 4. Create synchronous versions of groups with [`SyncUpdateGroup::new`]
@@ -157,19 +157,23 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// > A ⇨ B
 ///
 /// See possible configurations of enabled charts:
+///
 /// - Both `A` and `B` are enabled:\
-/// > **A** ➡ **B**\
-/// Group triggers `A`, which triggers `B`. Everything is fine.
+/// > **A** ➡ **B**
+/// > Group triggers `A`, which triggers `B`. Everything is fine.
+///
 /// - `A` is on, `B` is off:\
 /// > **A** ➡ **B**\
-/// Group triggers `A`, which triggers `B`. Everything is fine.
+/// > Group triggers `A`, which triggers `B`. Everything is fine.
+///
 /// - `A` is off, `B` is on:\
 /// > A ⇨ B\
-/// Group only contains `A`, which means nothing is triggered. Quite counter-intuitive
-/// (`B` is not triggered even though it's enabled).
+/// > Group only contains `A`, which means nothing is triggered. Quite counter-intuitive
+/// > (`B` is not triggered even though it's enabled).
+///
 /// - `A` is off, `B` is off:\
 /// > A ⇨ B\
-/// Nothing happens, as expected.
+/// > Nothing happens, as expected.
 ///
 /// Therefore, to make working with updates easier, it is highly recommended to include all
 /// dependencies into the group. Later this check might be included into the macro.
