@@ -3,8 +3,9 @@ use crate::{
         local_db::DirectPointLocalDbChartSource,
         remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
     },
-    ChartProperties, DateValueString, MissingDatePolicy, Named,
+    ChartProperties, MissingDatePolicy, Named,
 };
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
@@ -32,15 +33,19 @@ impl StatementForOne for TotalAddressesStatement {
 }
 
 pub type TotalAddressesRemote =
-    RemoteDatabaseSource<PullOne<TotalAddressesStatement, DateValueString>>;
+    RemoteDatabaseSource<PullOne<TotalAddressesStatement, NaiveDate, String>>;
 
-pub struct TotalAddressesProperties;
+pub struct Properties;
 
-impl Named for TotalAddressesProperties {
-    const NAME: &'static str = "totalAddresses";
+impl Named for Properties {
+    fn name() -> String {
+        "totalAddresses".into()
+    }
 }
 
-impl ChartProperties for TotalAddressesProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }
@@ -49,8 +54,7 @@ impl ChartProperties for TotalAddressesProperties {
     }
 }
 
-pub type TotalAddresses =
-    DirectPointLocalDbChartSource<TotalAddressesRemote, TotalAddressesProperties>;
+pub type TotalAddresses = DirectPointLocalDbChartSource<TotalAddressesRemote, Properties>;
 
 #[cfg(test)]
 mod tests {

@@ -1,6 +1,7 @@
-use crate::config::types::AllChartSettings;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+use crate::config::types::AllChartSettings;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]

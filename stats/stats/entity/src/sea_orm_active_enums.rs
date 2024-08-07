@@ -3,6 +3,18 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "chart_resolution")]
+pub enum ChartResolution {
+    #[sea_orm(string_value = "DAY")]
+    Day,
+    #[sea_orm(string_value = "MONTH")]
+    Month,
+    #[sea_orm(string_value = "WEEK")]
+    Week,
+    #[sea_orm(string_value = "YEAR")]
+    Year,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "chart_type")]
 pub enum ChartType {
     #[sea_orm(string_value = "COUNTER")]

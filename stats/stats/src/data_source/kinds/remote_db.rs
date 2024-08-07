@@ -7,7 +7,7 @@
 //! This source does not have any persistency and is only an adapter for representing
 //! a remote DB as a `DataSource`.
 //!
-//! Since each [`QueryBehaviour::query_data`] performs (likely a heavy) database
+//! Since each [`RemoteQueryBehaviour::query_data`] performs (likely a heavy) database
 //! query, it is undesireable to have this source present in more than one place.
 //! Each (independent) appearance will likely result in requesting the same data
 //! multiple times
@@ -24,32 +24,35 @@ use std::{
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr, Statement};
+use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr, FromQueryResult, Statement};
 
 use crate::{
-    charts::Point,
     data_source::{source::DataSource, types::UpdateContext},
+    types::TimespanValue,
     UpdateError,
 };
 
 /// See [module-level documentation](self)
-pub struct RemoteDatabaseSource<Q: QueryBehaviour>(PhantomData<Q>);
+pub struct RemoteDatabaseSource<Q: RemoteQueryBehaviour>(PhantomData<Q>);
 
-pub trait QueryBehaviour {
+pub trait RemoteQueryBehaviour {
     type Output: Send;
 
+    /// Retrieve chart data from remote storage.
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
     ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }
 
-impl<Q: QueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
+impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
     type MainDependencies = ();
     type ResolutionDependencies = ();
     type Output = Q::Output;
     // No local state => no race conditions expected
-    const MUTEX_ID: Option<&'static str> = None;
+    fn mutex_id() -> Option<String> {
+        None
+    }
 
     async fn init_itself(
         _db: &DatabaseConnection,
@@ -80,28 +83,35 @@ pub trait StatementFromRange {
 /// `S` and sort it by date.
 ///
 /// `P` - Type of point to retrieve within query.
-/// `DateValueString` can be used to avoid parsing the values,
-/// but `DateValueDecimal` or other types can be useful sometimes.
-pub struct PullAllWithAndSort<S: StatementFromRange, P: Point>(PhantomData<(S, P)>);
-
-impl<S, P> QueryBehaviour for PullAllWithAndSort<S, P>
+/// `DateValue<String>` can be used to avoid parsing the values,
+/// but `DateValue<Decimal>` or other types can be useful sometimes.
+pub struct PullAllWithAndSort<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
 where
     S: StatementFromRange,
-    P: Point,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult;
+
+impl<S, Resolution, Value> RemoteQueryBehaviour for PullAllWithAndSort<S, Resolution, Value>
+where
+    S: StatementFromRange,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult,
 {
-    type Output = Vec<P>;
+    type Output = Vec<TimespanValue<Resolution, Value>>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
-    ) -> Result<Vec<P>, UpdateError> {
+    ) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError> {
         let query = S::get_statement(range);
-        let mut data = P::find_by_statement(query)
+        let mut data = TimespanValue::<Resolution, Value>::find_by_statement(query)
             .all(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         // linear time for sorted sequences
-        data.sort_unstable_by(|a, b| a.get_parts().0.cmp(b.get_parts().0));
+        data.sort_unstable_by(|a, b| a.timespan.cmp(&b.timespan));
         // can't use sort_*_by_key: https://github.com/rust-lang/rust/issues/34162
         Ok(data)
     }
@@ -115,23 +125,30 @@ pub trait StatementForOne {
 /// `S`.
 ///
 /// `P` - Type of point to retrieve within query.
-/// `DateValueString` can be used to avoid parsing the values,
-/// but `DateValueDecimal` or other types can be useful sometimes.
-pub struct PullOne<S: StatementForOne, P: Point>(PhantomData<(S, P)>);
-
-impl<S, P> QueryBehaviour for PullOne<S, P>
+/// `DateValue<String>` can be used to avoid parsing the values,
+/// but `DateValue<Decimal>` or other types can be useful sometimes.
+pub struct PullOne<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
 where
     S: StatementForOne,
-    P: Point,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult;
+
+impl<S, Resolution, Value> RemoteQueryBehaviour for PullOne<S, Resolution, Value>
+where
+    S: StatementForOne,
+    Resolution: Ord + Send,
+    Value: Send,
+    TimespanValue<Resolution, Value>: FromQueryResult,
 {
-    type Output = P;
+    type Output = TimespanValue<Resolution, Value>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: Option<Range<DateTimeUtc>>,
-    ) -> Result<P, UpdateError> {
+    ) -> Result<TimespanValue<Resolution, Value>, UpdateError> {
         let query = S::get_statement();
-        let data = P::find_by_statement(query)
+        let data = TimespanValue::<Resolution, Value>::find_by_statement(query)
             .one(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?

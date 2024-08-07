@@ -12,15 +12,13 @@ pub trait Recorder {
     async fn get_records() -> Vec<Self::Data>;
 }
 
-pub struct InMemoryRecorder<Data, InMemoryStorage>(PhantomData<(Data, InMemoryStorage)>)
-where
-    InMemoryStorage: Get<Arc<Mutex<Vec<Data>>>>;
+pub struct InMemoryRecorder<InMemoryStorage>(PhantomData<InMemoryStorage>);
 
 #[async_trait]
-impl<Data, InMemoryStorage> Recorder for InMemoryRecorder<Data, InMemoryStorage>
+impl<InMemoryStorage, Data> Recorder for InMemoryRecorder<InMemoryStorage>
 where
-    Data: Clone + Send,
-    InMemoryStorage: Get<Arc<Mutex<Vec<Data>>>>,
+    Data: Clone + Send + 'static,
+    InMemoryStorage: Get<Value = Arc<Mutex<Vec<Data>>>>,
 {
     type Data = Data;
     async fn record(next: Self::Data) {

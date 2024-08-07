@@ -5,6 +5,7 @@ use crate::blockscout::stats::v1::{self as proto};
 const PRECISE_POINT_1: &str = r#"
 {
     "date": "2024-03-14",
+    "date_to": "2024-03-14",
     "value": "188542399",
     "is_approximate": false
 }
@@ -13,6 +14,7 @@ const PRECISE_POINT_1: &str = r#"
 const PRECISE_POINT_2: &str = r#"
 {
     "date": "2024-03-14",
+    "date_to": "2024-03-14",
     "value": "188542399"
 }
 "#;
@@ -20,6 +22,7 @@ const PRECISE_POINT_2: &str = r#"
 const IMPRECISE_POINT: &str = r#"
 {
     "date": "2024-03-14",
+    "date_to": "2024-03-14",
     "value": "188542399",
     "is_approximate": true
 }
@@ -38,6 +41,7 @@ fn is_approximate_serialization() {
     // serialize
     let point = proto::Point {
         date: "2024-03-14".to_owned(),
+        date_to: "2024-03-14".to_owned(),
         value: "188542399".to_owned(),
         is_approximate: false,
     };
@@ -48,6 +52,7 @@ fn is_approximate_serialization() {
     );
     let point = proto::Point {
         date: "2024-03-14".to_owned(),
+        date_to: "2024-03-14".to_owned(),
         value: "188542399".to_owned(),
         is_approximate: true,
     };

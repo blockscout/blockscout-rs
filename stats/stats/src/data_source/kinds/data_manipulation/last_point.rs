@@ -9,28 +9,30 @@ use chrono::{DateTime, Utc};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
-    charts::{
-        db_interaction::types::{DateValue, ZeroDateValue},
-        ChartProperties,
-    },
+    charts::ChartProperties,
     data_source::{source::DataSource, UpdateContext},
+    types::{Timespan, TimespanValue, ZeroTimespanValue},
     utils::day_start,
     UpdateError,
 };
 
-pub struct LastPoint<D>(PhantomData<D>)
+pub struct LastPoint<DS>(PhantomData<DS>)
 where
-    D: DataSource;
+    DS: DataSource;
 
-impl<D, DV> DataSource for LastPoint<D>
+impl<DS, Resolution, Value> DataSource for LastPoint<DS>
 where
-    D: DataSource<Output = Vec<DV>> + ChartProperties,
-    DV: DateValue + ZeroDateValue + Send,
+    Resolution: Timespan + Ord + Send,
+    Value: Send,
+    DS: DataSource<Output = Vec<TimespanValue<Resolution, Value>>> + ChartProperties,
+    TimespanValue<Resolution, Value>: ZeroTimespanValue<Resolution>,
 {
-    type MainDependencies = D;
+    type MainDependencies = DS;
     type ResolutionDependencies = ();
-    type Output = DV;
-    const MUTEX_ID: Option<&'static str> = None;
+    type Output = TimespanValue<Resolution, Value>;
+    fn mutex_id() -> Option<String> {
+        None
+    }
 
     async fn init_itself(
         _db: &DatabaseConnection,
@@ -50,9 +52,9 @@ where
         _range: Option<Range<DateTimeUtc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        let data = D::query_data(
+        let data = DS::query_data(
             cx,
-            Some(day_start(cx.time.date_naive())..cx.time),
+            Some(day_start(&cx.time.date_naive())..cx.time),
             dependency_data_fetch_timer,
         )
         .await?;
@@ -63,7 +65,9 @@ where
             // `None` from `query_data` means that there is absolutely no data
             // in the dependency, which in all (current) cases means that
             // the value is 0
-            .unwrap_or(DV::with_zero_value(cx.time.date_naive()));
+            .unwrap_or(TimespanValue::<Resolution, Value>::with_zero_value(
+                Resolution::from_date(cx.time.date_naive()),
+            ));
         Ok(last_point)
     }
 }

@@ -15,8 +15,8 @@ pub fn override_charts(
     target: &mut json::charts::Config,
     source: env::charts::Config,
 ) -> Result<(), anyhow::Error> {
-    override_chart_settings(&mut target.counters, source.counters).context("updating counters")?;
-    override_chart_settings(&mut target.line_charts, source.line_charts)
+    override_charts_settings(&mut target.counters, source.counters).context("updating counters")?;
+    override_charts_settings(&mut target.line_charts, source.line_charts)
         .context("updating line categories")?;
     target.template_values.extend(source.template_values);
     Ok(())
@@ -174,7 +174,7 @@ mod override_field {
     }
 }
 
-fn override_chart_settings(
+fn override_charts_settings(
     target: &mut BTreeMap<String, AllChartSettings>,
     source: BTreeMap<String, ChartSettingsOverwrite>,
 ) -> Result<(), anyhow::Error> {

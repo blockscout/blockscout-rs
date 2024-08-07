@@ -6,4 +6,5 @@
 pub mod delta;
 pub mod last_point;
 pub mod map;
+pub mod resolutions;
 pub mod sum_point;

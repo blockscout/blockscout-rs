@@ -65,6 +65,17 @@ paths:
           in: query
           required: false
           type: string
+        - name: resolution
+          in: query
+          required: false
+          type: string
+          enum:
+            - RESOLUTION_UNSPECIFIED
+            - DAY
+            - WEEK
+            - MONTH
+            - YEAR
+          default: RESOLUTION_UNSPECIFIED
       tags:
         - StatsService
   /health:
@@ -163,6 +174,10 @@ definitions:
         type: string
       units:
         type: string
+      resolutions:
+        type: array
+        items:
+          type: string
   v1LineChartSection:
     type: object
     properties:
@@ -188,8 +203,19 @@ definitions:
     properties:
       date:
         type: string
+      date_to:
+        type: string
       value:
         type: string
       is_approximate:
         type: boolean
     title: All integers are encoded as strings to prevent data loss
+  v1Resolution:
+    type: string
+    enum:
+      - RESOLUTION_UNSPECIFIED
+      - DAY
+      - WEEK
+      - MONTH
+      - YEAR
+    default: RESOLUTION_UNSPECIFIED

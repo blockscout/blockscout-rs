@@ -22,7 +22,7 @@ stop-postgres:
     docker kill {{docker-name}}
 
 test *args:
-    cargo test {{args}} -- --include-ignored
+    cargo test {{args}} -- --include-ignored --nocapture
 
 test-with-db *args:
     # remove db from previous run (if failed)

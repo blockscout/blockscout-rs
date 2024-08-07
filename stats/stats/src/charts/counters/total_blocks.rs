@@ -4,15 +4,16 @@ use crate::{
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{QueryBehaviour, RemoteDatabaseSource},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         types::UpdateContext,
     },
-    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+    types::timespans::DateValue,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
 
@@ -24,8 +25,8 @@ struct TotalBlocksData {
 
 pub struct TotalBlocksQueryBehaviour;
 
-impl QueryBehaviour for TotalBlocksQueryBehaviour {
-    type Output = DateValueString;
+impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
+    type Output = DateValue<String>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
@@ -42,8 +43,8 @@ impl QueryBehaviour for TotalBlocksQueryBehaviour {
             .map_err(UpdateError::BlockscoutDB)?
             .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
 
-        let data = DateValueString {
-            date: data.timestamp.date(),
+        let data = DateValue::<String> {
+            timespan: data.timestamp.date(),
             value: data.number.to_string(),
         };
         Ok(data)
@@ -52,13 +53,17 @@ impl QueryBehaviour for TotalBlocksQueryBehaviour {
 
 pub type TotalBlocksRemote = RemoteDatabaseSource<TotalBlocksQueryBehaviour>;
 
-pub struct TotalBlocksProperties;
+pub struct Properties;
 
-impl Named for TotalBlocksProperties {
-    const NAME: &'static str = "totalBlocks";
+impl Named for Properties {
+    fn name() -> String {
+        "totalBlocks".into()
+    }
 }
 
-impl ChartProperties for TotalBlocksProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }
@@ -67,7 +72,7 @@ impl ChartProperties for TotalBlocksProperties {
     }
 }
 
-pub type TotalBlocks = DirectPointLocalDbChartSource<TotalBlocksRemote, TotalBlocksProperties>;
+pub type TotalBlocks = DirectPointLocalDbChartSource<TotalBlocksRemote, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -117,7 +122,7 @@ mod tests {
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_raw_counters(&db).await.unwrap();
-        assert_eq!("13", data[TotalBlocks::NAME].value);
+        assert_eq!("13", data[&TotalBlocks::name()].value);
     }
 
     #[tokio::test]
@@ -143,7 +148,7 @@ mod tests {
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_raw_counters(&db).await.unwrap();
-        assert_eq!("9", data[TotalBlocks::NAME].value);
+        assert_eq!("9", data[&TotalBlocks::name()].value);
     }
 
     #[tokio::test]
@@ -179,6 +184,6 @@ mod tests {
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_raw_counters(&db).await.unwrap();
-        assert_eq!("13", data[TotalBlocks::NAME].value);
+        assert_eq!("13", data[&TotalBlocks::name()].value);
     }
 }

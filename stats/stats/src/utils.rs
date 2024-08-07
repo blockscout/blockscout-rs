@@ -5,7 +5,7 @@ use std::ops::{Range, RangeInclusive};
 use chrono::{NaiveDate, NaiveTime};
 use sea_orm::{prelude::DateTimeUtc, Value};
 
-pub fn day_start(date: NaiveDate) -> DateTimeUtc {
+pub fn day_start(date: &NaiveDate) -> DateTimeUtc {
     date.and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
         .and_utc()
 }
