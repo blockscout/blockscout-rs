@@ -115,7 +115,7 @@ pub async fn update_sequentially_with_support_table(
     min_blockscout_block: i64,
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<(), UpdateError> {
-    tracing::info!("start sequential update for chart {}", Properties::name());
+    tracing::info!(chart =% Properties::key(), "start sequential update");
     let all_days = match last_accurate_point {
         Some(last_row) => {
             get_unique_ordered_days(cx.blockscout, Some(last_row.timespan), remote_fetch_timer)

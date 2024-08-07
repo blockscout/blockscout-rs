@@ -197,7 +197,7 @@ where
             ChartProps::missing_date_policy(),
         )
         .await?;
-        tracing::info!(last_accurate_point =? last_accurate_point, chart_name = ChartProps::name(), "updating chart values");
+        tracing::info!(last_accurate_point =? last_accurate_point, chart =% ChartProps::key(), "updating chart values");
         Update::update_values(
             cx,
             chart_id,
@@ -206,7 +206,7 @@ where
             dependency_data_fetch_timer,
         )
         .await?;
-        tracing::info!(chart_name = ChartProps::name(), "updating chart metadata");
+        tracing::info!(chart =% ChartProps::key(), "updating chart metadata");
         Update::update_metadata(cx.db, chart_id, cx.time).await?;
         Ok(())
     }
@@ -258,7 +258,7 @@ where
         let _update_timer = metrics::CHART_UPDATE_TIME
             .with_label_values(&[&ChartProps::name()])
             .start_timer();
-        tracing::info!(chart = ChartProps::name(), "started chart update");
+        tracing::info!(chart =% ChartProps::key(), "started chart update");
 
         Self::update_itself_inner(cx, &mut dependency_data_fetch_timer)
             .await
@@ -267,14 +267,14 @@ where
                     .with_label_values(&[&ChartProps::name()])
                     .inc();
                 tracing::error!(
-                    chart = ChartProps::name(),
+                    chart =% ChartProps::key(),
                     "error during updating chart: {}",
                     err
                 );
             })?;
 
         Self::observe_query_time(dependency_data_fetch_timer.total_time());
-        tracing::info!(chart = ChartProps::name(), "successfully updated chart");
+        tracing::info!(chart =% ChartProps::key(), "successfully updated chart");
         Ok(())
     }
 
