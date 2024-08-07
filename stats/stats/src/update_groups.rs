@@ -23,18 +23,15 @@ macro_rules! singleton_groups {
 // Mostly counters because they don't have resolutions
 // Group for chart `Name` is called `NameGroup`
 singleton_groups!(
+    // Active accounts is left without resolutions because the chart is non-trivial
+    // to calculate somewhat-optimally
+    ActiveAccounts,
     AverageBlockTime,
     CompletedTxns,
     TotalAddresses,
     TotalBlocks,
     TotalTokens,
 );
-
-// Active accounts is left without resolutions because the chart is non-trivial
-// to calculate somewhat-optimally
-construct_update_group!(ActiveAccountsGroup {
-    charts: [ActiveAccounts]
-});
 
 construct_update_group!(AverageBlockRewardsGroup {
     charts: [
