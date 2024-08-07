@@ -25,8 +25,7 @@ impl Eq for Year {}
 
 impl PartialOrd for Year {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.number_within_naive_date()
-            .partial_cmp(&other.number_within_naive_date())
+        Some(self.cmp(other))
     }
 }
 
@@ -57,14 +56,12 @@ impl Year {
     }
 
     fn clamp_by_naive_date_range(self) -> Self {
-        if let Some(_) = NaiveDate::from_yo_opt(self.0, 1) {
+        if NaiveDate::from_yo_opt(self.0, 1).is_some() {
             self
+        } else if self.0 > 0 {
+            Self::from_date(NaiveDate::MAX)
         } else {
-            if self.0 > 0 {
-                Self::from_date(NaiveDate::MAX)
-            } else {
-                Self::from_date(NaiveDate::MIN)
-            }
+            Self::from_date(NaiveDate::MIN)
         }
     }
 }
@@ -90,7 +87,7 @@ impl Timespan for Year {
     where
         Self: Sized,
     {
-        let add_years = duration.repeats().try_into().unwrap_or(std::i32::MAX);
+        let add_years = duration.repeats().try_into().unwrap_or(i32::MAX);
         Self(self.number_within_naive_date().saturating_add(add_years)).clamp_by_naive_date_range()
     }
 
@@ -98,7 +95,7 @@ impl Timespan for Year {
     where
         Self: Sized,
     {
-        let sub_years: i32 = duration.repeats().try_into().unwrap_or(std::i32::MAX);
+        let sub_years: i32 = duration.repeats().try_into().unwrap_or(i32::MAX);
         Self(self.number_within_naive_date().saturating_sub(sub_years)).clamp_by_naive_date_range()
     }
 }

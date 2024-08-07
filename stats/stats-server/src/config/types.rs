@@ -206,7 +206,6 @@ impl LineChartCategory {
             resolutions: entry
                 .enabled_resolutions
                 .keys()
-                .into_iter()
                 .map(|r| String::from(*r))
                 .collect_vec(),
         }

@@ -81,7 +81,7 @@ async fn test_lines_ok() {
     ] {
         let line_resolutions = enabled_resolutions
             .get(line_name)
-            .expect(&format!("must return chart info for {}", &line_name));
+            .unwrap_or_else(|| panic!("must return chart info for {}", &line_name));
         assert!(
             line_resolutions.contains(&ResolutionKind::Day.into()),
             "At least day resolution must be enabled for enabled chart"

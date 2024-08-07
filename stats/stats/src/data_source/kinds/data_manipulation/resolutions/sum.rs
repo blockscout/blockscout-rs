@@ -70,13 +70,10 @@ where
             high_res_data,
             |t| LowerRes::from_smaller(t.timespan.clone()),
             |data_for_one_l_res| {
-                let Some(TimespanValue {
+                let TimespanValue {
                     timespan: first_h_res,
                     value: _,
-                }) = data_for_one_l_res.first()
-                else {
-                    return None;
-                };
+                } = data_for_one_l_res.first()?;
                 let current_l_res = LowerRes::from_smaller(first_h_res.clone());
                 let mut total = Value::zero();
                 for TimespanValue {
@@ -100,7 +97,7 @@ where
             },
         )
         .into_iter()
-        .filter_map(|x| x)
+        .flatten()
         .collect())
     }
 }

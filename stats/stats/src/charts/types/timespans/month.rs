@@ -33,8 +33,7 @@ impl Eq for Month {}
 
 impl PartialOrd for Month {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.saturating_first_day()
-            .partial_cmp(&other.saturating_first_day())
+        Some(self.cmp(other))
     }
 }
 

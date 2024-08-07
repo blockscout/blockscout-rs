@@ -49,11 +49,7 @@ impl Eq for Week {}
 
 impl PartialOrd for Week {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        // `None` means `NaiveDate::MIN`'s week
-        // which fits well with `Option`'s "`None` is less than `Some`"
-        // policy
-        self.checked_first_day()
-            .partial_cmp(&other.checked_first_day())
+        Some(self.cmp(other))
     }
 }
 

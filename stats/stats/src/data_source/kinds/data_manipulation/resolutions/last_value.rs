@@ -65,7 +65,7 @@ where
             high_res_data,
             |t| LowerRes::from_smaller(t.timespan.clone()),
             |a| {
-                let last = a.into_iter().rev().next();
+                let last = a.into_iter().next_back();
                 last.map(|p| TimespanValue {
                     timespan: LowerRes::from_smaller(p.timespan),
                     value: p.value,
@@ -73,7 +73,7 @@ where
             },
         )
         .into_iter()
-        .filter_map(|x| x)
+        .flatten()
         .collect())
     }
 }

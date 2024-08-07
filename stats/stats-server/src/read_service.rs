@@ -114,7 +114,8 @@ where
     Ok(serialize_line_points(data))
 }
 
-/// enum dispatch for `get_serialized_line_chart_data``
+/// enum dispatch for `get_serialized_line_chart_data`
+#[allow(clippy::too_many_arguments)]
 async fn get_serialized_line_chart_data_resolution_dispatch(
     db: &DatabaseConnection,
     chart_name: String,

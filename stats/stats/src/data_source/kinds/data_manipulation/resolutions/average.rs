@@ -144,9 +144,7 @@ where
         combined_data,
         |(h_res, _)| LowerRes::from_smaller(h_res.clone()),
         |data_for_one_l_res| {
-            let Some((first_h_res, _)) = data_for_one_l_res.first() else {
-                return None;
-            };
+            let (first_h_res, _) = data_for_one_l_res.first()?;
             let current_l_res = LowerRes::from_smaller(first_h_res.clone());
             let mut weight_times_avg_sum = 0f64;
             let mut total_weight = 0;
@@ -185,7 +183,7 @@ where
             }
         },
     );
-    l_res_averages.into_iter().filter_map(|x| x).collect_vec()
+    l_res_averages.into_iter().flatten().collect_vec()
 }
 
 #[cfg(test)]
