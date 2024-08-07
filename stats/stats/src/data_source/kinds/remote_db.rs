@@ -7,7 +7,7 @@
 //! This source does not have any persistency and is only an adapter for representing
 //! a remote DB as a `DataSource`.
 //!
-//! Since each [`QueryBehaviour::query_data`] performs (likely a heavy) database
+//! Since each [`RemoteQueryBehaviour::query_data`] performs (likely a heavy) database
 //! query, it is undesireable to have this source present in more than one place.
 //! Each (independent) appearance will likely result in requesting the same data
 //! multiple times

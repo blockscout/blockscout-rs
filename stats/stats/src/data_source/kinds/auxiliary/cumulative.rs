@@ -18,7 +18,7 @@ use crate::{
 /// Auxiliary source for cumulative chart.
 ///
 /// Does not really make sense without using previous value, so
-/// use [`super::super::local_db::CumulativeLocalDbChartSource`] instead.
+/// use [`super::super::local_db::DailyCumulativeLocalDbChartSource`] instead.
 pub struct PartialCumulative<Delta: DataSource>(PhantomData<Delta>);
 
 impl<Delta: DataSource> PartialCumulative<Delta> {}
