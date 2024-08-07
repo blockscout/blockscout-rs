@@ -117,11 +117,11 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
     LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
 where
-    MainDep: DataSource,
-    ResolutionDep: DataSource,
-    Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
-    Query: QueryBehaviour,
+    MainDep: DataSource + Sync,
+    ResolutionDep: DataSource + Sync,
+    Create: CreateBehaviour + Sync,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
+    Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
     ChartProps::Resolution: Ord + Clone + Debug,
 {
@@ -181,7 +181,7 @@ where
     fn observe_query_time(time: Duration) {
         if time > Duration::ZERO {
             metrics::CHART_FETCH_NEW_DATA_TIME
-                .with_label_values(&[&Self::name()])
+                .with_label_values(&[&Self::name(), &String::from(Self::resolution())])
                 .observe(time.as_secs_f64());
         }
     }
@@ -198,11 +198,11 @@ fn postgres_timestamps_eq(time_1: DateTime<Utc>, time_2: DateTime<Utc>) -> bool 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> DataSource
     for LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
 where
-    MainDep: DataSource,
-    ResolutionDep: DataSource,
-    Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
-    Query: QueryBehaviour,
+    MainDep: DataSource + Sync,
+    ResolutionDep: DataSource + Sync,
+    Create: CreateBehaviour + Sync,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
+    Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
     ChartProps::Resolution: Ord + Clone + Debug + Send,
 {
@@ -223,7 +223,7 @@ where
 
         let mut dependency_data_fetch_timer = AggregateTimer::new();
         let _update_timer = metrics::CHART_UPDATE_TIME
-            .with_label_values(&[&ChartProps::name()])
+            .with_label_values(&[&ChartProps::name(), &String::from(ChartProps::resolution())])
             .start_timer();
         tracing::info!(chart =% ChartProps::key(), "started chart update");
 
@@ -231,7 +231,10 @@ where
             .await
             .inspect_err(|err| {
                 metrics::UPDATE_ERRORS
-                    .with_label_values(&[&ChartProps::name()])
+                    .with_label_values(&[
+                        &ChartProps::name(),
+                        &String::from(ChartProps::resolution()),
+                    ])
                     .inc();
                 tracing::error!(
                     chart =% ChartProps::key(),
