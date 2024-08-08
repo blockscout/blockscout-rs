@@ -163,6 +163,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Point'
+      info:
+        $ref: '#/definitions/v1LineChartInfo'
   v1LineChartInfo:
     type: object
     properties:

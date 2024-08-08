@@ -47,7 +47,10 @@ message Point {
   bool is_approximate = 3;
 }
 
-message LineChart { repeated Point chart = 1; }
+message LineChart {
+  repeated Point chart = 1;
+  LineChartInfo info = 2;
+}
 
 message GetLineChartsRequest {}
 
