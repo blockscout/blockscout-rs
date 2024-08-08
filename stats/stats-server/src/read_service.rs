@@ -235,17 +235,19 @@ impl StatsService for ReadService {
     ) -> Result<Response<proto_v1::LineChart>, Status> {
         let request = request.into_inner();
         let resolution = convert_resolution(request.resolution());
-        let chart_info = self
-            .charts
-            .charts_info
-            .get(&request.name)
-            .and_then(|e| e.enabled_resolutions.get(&resolution))
+        let chart_name = request.name;
+        let chart_entry = self.charts.charts_info.get(&chart_name).ok_or_else(|| {
+            Status::not_found(format!("chart with name '{}' was not found", chart_name))
+        })?;
+        let resolution_info = chart_entry
+            .enabled_resolutions
+            .get(&resolution)
             .filter(|static_info| static_info.chart_type == ChartType::Line)
             .ok_or_else(|| {
                 Status::not_found(format!(
-                    "line chart {}({}) not found",
-                    request.name,
-                    String::from(resolution)
+                    "resolution '{}' for chart '{}' was not found",
+                    String::from(resolution),
+                    chart_name,
                 ))
             })?;
 
@@ -253,12 +255,12 @@ impl StatsService for ReadService {
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
-        let policy = chart_info.missing_date_policy;
-        let mark_approx = chart_info.approximate_trailing_points;
+        let policy = resolution_info.missing_date_policy;
+        let mark_approx = resolution_info.approximate_trailing_points;
         let interval_limit = Some(self.limits.request_interval_limit);
         let serialized_chart = get_serialized_line_chart_data_resolution_dispatch(
             &self.db,
-            request.name,
+            chart_name.clone(),
             resolution,
             from,
             to,
@@ -270,6 +272,7 @@ impl StatsService for ReadService {
         .map_err(map_read_error)?;
         Ok(Response::new(proto_v1::LineChart {
             chart: serialized_chart,
+            info: Some(chart_entry.build_proto_line_chart_info(chart_name)),
         }))
     }
 

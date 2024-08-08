@@ -22,6 +22,26 @@ pub struct EnabledChartEntry {
     pub enabled_resolutions: HashMap<ResolutionKind, EnabledResolutionEntry>,
 }
 
+impl EnabledChartEntry {
+    pub fn build_proto_line_chart_info(
+        &self,
+        id: String,
+    ) -> stats_proto::blockscout::stats::v1::LineChartInfo {
+        let settings = self.settings.clone();
+        stats_proto::blockscout::stats::v1::LineChartInfo {
+            id,
+            title: settings.title,
+            description: settings.description,
+            units: settings.units,
+            resolutions: self
+                .enabled_resolutions
+                .keys()
+                .map(|r| String::from(*r))
+                .collect_vec(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct EnabledResolutionEntry {
     pub name: String,
