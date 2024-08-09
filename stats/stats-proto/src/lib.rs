@@ -5,6 +5,12 @@ pub mod blockscout {
             include!(concat!(env!("OUT_DIR"), "/blockscout.stats.v1.rs"));
         }
     }
+
+    pub mod health {
+        pub mod v1 {
+            include!(concat!(env!("OUT_DIR"), "/blockscout.health.v1.rs"));
+        }
+    }
 }
 
 #[cfg(test)]

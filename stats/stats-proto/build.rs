@@ -39,8 +39,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
     ]));
     compile(
-        &["proto/stats.proto", "proto/health.proto"],
-        &["proto"],
+        &[
+            "proto/stats.proto",
+            "../../common_http_services/health.proto",
+        ],
+        &["proto", "../../common_http_services/"],
         gens,
     )?;
     Ok(())
