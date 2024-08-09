@@ -69,7 +69,7 @@
         },
         "new_accounts": {
             "title": "New accounts",
-            "description": "New accounts number per day"
+            "description": "New accounts number per period"
         },
         "average_txn_fee": {
             "title": "Average transaction fee",
@@ -91,7 +91,7 @@
         },
         "txns_success_rate": {
             "title": "Transactions success rate",
-            "description": "Successful transactions rate per day"
+            "description": "Successful transactions rate per period"
         },
         "new_blocks": {
             "title": "New blocks",
@@ -104,7 +104,7 @@
         },
         "average_block_rewards": {
             "title": "Average block rewards",
-            "description": "Average amount of distributed reward in tokens per day",
+            "description": "Average amount of distributed reward in tokens per period",
             "units": "{{native_coin_symbol}}"
         },
         "new_native_coin_transfers": {
@@ -119,7 +119,7 @@
         "new_native_coin_holders": {
             "enabled": false,
             "title": "New {{native_coin_symbol}} holders",
-            "description": "New token holders number per day"
+            "description": "New token holders number per period"
         },
         "native_coin_supply": {
             "enabled": false,
