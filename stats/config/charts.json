@@ -65,7 +65,7 @@
         },
         "accounts_growth": {
             "title": "Accounts growth",
-            "description": "Cumulative accounts number per period"
+            "description": "Cumulative accounts number"
         },
         "new_accounts": {
             "title": "New accounts",
@@ -73,17 +73,17 @@
         },
         "average_txn_fee": {
             "title": "Average transaction fee",
-            "description": "The average amount in {{native_coin_symbol}} spent per transaction",
+            "description": "The average amount in {{native_coin_symbol}} spent for transaction per period",
             "units": "{{native_coin_symbol}}"
         },
         "txns_fee": {
             "title": "Transactions fees",
-            "description": "Amount of tokens paid as fees",
+            "description": "Amount of tokens paid as fees per period",
             "units": "{{native_coin_symbol}}"
         },
         "new_txns": {
             "title": "New transactions",
-            "description": "New transactions number"
+            "description": "New transactions number per period"
         },
         "txns_growth": {
             "title": "Transactions growth",
@@ -95,16 +95,16 @@
         },
         "new_blocks": {
             "title": "New blocks",
-            "description": "New blocks number"
+            "description": "New blocks number per period"
         },
         "average_block_size": {
             "title": "Average block size",
-            "description": "Average size of blocks in bytes",
+            "description": "Average size of blocks per period",
             "units": "Bytes"
         },
         "average_block_rewards": {
             "title": "Average block rewards",
-            "description": "Average amount of distributed reward in tokens per period",
+            "description": "Average amount of distributed rewards in tokens per period",
             "units": "{{native_coin_symbol}}"
         },
         "new_native_coin_transfers": {
@@ -114,7 +114,7 @@
         "native_coin_holders_growth": {
             "enabled": false,
             "title": "{{native_coin_symbol}} holders growth",
-            "description": "Cumulative token holders number for the period"
+            "description": "Cumulative number of token holders"
         },
         "new_native_coin_holders": {
             "enabled": false,
@@ -124,37 +124,37 @@
         "native_coin_supply": {
             "enabled": false,
             "title": "{{native_coin_symbol}} circulating supply",
-            "description": "Amount of token circulating supply for the period",
+            "description": "Amount of token circulating supply per period",
             "units": "{{native_coin_symbol}}"
         },
         "average_gas_limit": {
             "title": "Average gas limit",
-            "description": "Average gas limit per block for the period"
+            "description": "Average block gas limit per period"
         },
         "gas_used_growth": {
             "title": "Gas used growth",
-            "description": "Cumulative gas used for the period"
+            "description": "Cumulative gas used"
         },
         "average_gas_price": {
             "title": "Average gas price",
-            "description": "Average gas price for the period (Gwei)",
+            "description": "Average gas price per period",
             "units": "Gwei"
         },
         "new_verified_contracts": {
             "title": "New verified contracts",
-            "description": "New verified contracts number for the period"
+            "description": "New verified contracts number per period"
         },
         "verified_contracts_growth": {
             "title": "Verified contracts growth",
-            "description": "Cumulative number verified contracts for the period"
+            "description": "Cumulative number of verified contracts"
         },
         "new_contracts": {
             "title": "New contracts",
-            "description": "New contracts number for the period"
+            "description": "New contracts number per period"
         },
         "contracts_growth": {
             "title": "Contracts growth",
-            "description": "Cumulative number of contracts for the period"
+            "description": "Cumulative number of contracts"
         }
     }
 }
