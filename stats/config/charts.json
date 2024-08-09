@@ -108,8 +108,8 @@
             "units": "{{native_coin_symbol}}"
         },
         "new_native_coin_transfers": {
-            "title": "New {{native_coin_symbol}} transfers",
-            "description": "New token transfers number for the period"
+            "title": "Number of {{native_coin_symbol}} transfers",
+            "description": "Token transfers performed during the period"
         },
         "native_coin_holders_growth": {
             "enabled": false,
