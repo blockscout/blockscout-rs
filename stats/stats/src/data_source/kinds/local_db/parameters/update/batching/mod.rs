@@ -92,10 +92,12 @@ where
                 chart_id,
                 min_blockscout_block,
                 previous_step_last_point,
-                range,
+                range.clone(),
                 dependency_data_fetch_timer,
             )
             .await?;
+            // for query in `get_previous_step_last_point` to work correctly
+            Self::update_metadata(cx.db, chart_id, range.end).await?;
             let elapsed: std::time::Duration = now.elapsed();
             tracing::info!(found =? found, elapsed =? elapsed, "{}/{} step of batch done", i + 1, n);
         }
@@ -270,12 +272,13 @@ mod tests {
         use std::{
             ops::Deref,
             str::FromStr,
-            sync::{Arc, Mutex, OnceLock},
+            sync::{Arc, OnceLock},
         };
 
         use chrono::{DateTime, Days, Utc};
         use entity::sea_orm_active_enums::ChartType;
         use pretty_assertions::assert_eq;
+        use tokio::sync::Mutex;
 
         use crate::{
             data_source::{
@@ -305,13 +308,14 @@ mod tests {
         type VecStringStepInput = StepInput<Vec<DateValueString>, ()>;
         type SharedInputsStorage = Arc<Mutex<Vec<VecStringStepInput>>>;
 
+        // `OnceLock` in order to return the same instance each time
         static INPUTS: OnceLock<SharedInputsStorage> = OnceLock::new();
 
-        gettable_const!(ThisInputsStorage: SharedInputsStorage = INPUTS.get_or_init(|| Arc::new(Mutex::new(vec![]))).clone());
+        gettable_const!(ThisInputs: SharedInputsStorage = INPUTS.get_or_init(|| Arc::new(Mutex::new(vec![]))).clone());
         gettable_const!(Batch1Day: chrono::Duration = chrono::Duration::days(1));
 
         type ThisRecordingStep =
-            RecordingPassStep<InMemoryRecorder<VecStringStepInput, ThisInputsStorage>>;
+            RecordingPassStep<InMemoryRecorder<VecStringStepInput, ThisInputs>>;
         struct ThisTestChartProps;
 
         impl Named for ThisTestChartProps {
@@ -361,18 +365,18 @@ mod tests {
             result
         }
 
-        fn clear_inputs(storage: SharedInputsStorage) {
-            storage.lock().unwrap().clear();
+        async fn clear_inputs(storage: SharedInputsStorage) {
+            storage.lock().await.clear();
         }
 
-        fn verify_inputs(
+        async fn verify_inputs(
             storage: SharedInputsStorage,
             expected_update_time: Option<DateTime<Utc>>,
         ) {
             let mut prev_input: Option<&StepInput<Vec<DateValueString>, ()>> = None;
             let expected_update_time = expected_update_time
                 .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
-            for input in storage.lock().unwrap().deref() {
+            for input in storage.lock().await.deref() {
                 assert_eq!(input.chart_id, 3);
                 assert_eq!(input.update_time, expected_update_time);
                 assert_eq!(input.min_blockscout_block, 0);
@@ -416,8 +420,8 @@ mod tests {
                 expected_data.clone(),
             )
             .await;
-            verify_inputs(ThisInputsStorage::get(), None);
-            clear_inputs(ThisInputsStorage::get());
+            verify_inputs(ThisInputs::get(), None).await;
+            clear_inputs(ThisInputs::get()).await;
 
             // force update should work when existing data is present
             let later_time = DateTime::<Utc>::from_str("2023-03-01T12:00:01Z").unwrap();
@@ -428,7 +432,7 @@ mod tests {
                 Some(later_time),
             )
             .await;
-            verify_inputs(ThisInputsStorage::get(), Some(later_time));
+            verify_inputs(ThisInputs::get(), Some(later_time)).await;
         }
     }
 }

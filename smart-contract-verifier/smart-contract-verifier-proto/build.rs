@@ -51,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     compile(
         &[
             "proto/v2/smart-contract-verifier.proto",
+            "proto/v2/zksync-solidity.proto",
             "proto/v2/health.proto",
         ],
         &["proto"],

@@ -8,4 +8,6 @@ members = [
 ]
 
 [workspace.dependencies]
-blockscout-service-launcher = "0.10.0"
+blockscout-display-bytes = "1.1.0"
+blockscout-service-launcher = "0.12.0"
+verification-common = { git = "https://github.com/blockscout/blockscout-rs/", rev = "bd6352d" }

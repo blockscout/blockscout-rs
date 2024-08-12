@@ -2,46 +2,21 @@ use crate::{
     batch_verifier::{
         artifacts::{cbor_auxdata, CodeArtifacts},
         compilation::{self, CompilationResult},
-        errors::{VerificationError, VerificationErrorKind},
+        errors::{BatchError, VerificationError, VerificationErrorKind},
         transformations,
     },
-    compiler::{self, CompilerInput},
-    Compilers, Contract, MatchType, SolidityCompiler, Version,
+    compiler::CompilerInput,
+    Compilers, Contract, DetailedVersion, MatchType, SolidityCompiler,
 };
 use std::collections::BTreeMap;
-use thiserror::Error;
 
-#[derive(Error, Debug)]
-pub enum BatchError {
-    #[error("Compiler version not found: {0}")]
-    VersionNotFound(Version),
-    #[error("Compilation error: {0:?}")]
-    Compilation(Vec<String>),
-    #[error("{0}")]
-    Internal(anyhow::Error),
-}
-
-impl From<compiler::Error> for BatchError {
-    fn from(error: compiler::Error) -> Self {
-        match error {
-            compiler::Error::VersionNotFound(version) => BatchError::VersionNotFound(version),
-            compiler::Error::Compilation(details) => BatchError::Compilation(details),
-            err => BatchError::Internal(anyhow::anyhow!(err)),
-        }
-    }
-}
+pub type VerificationResult = crate::batch_verifier::VerificationResult<BatchSuccess>;
 
 #[derive(Clone, Debug)]
 pub struct Match {
     pub match_type: MatchType,
     pub values: serde_json::Value,
     pub transformations: serde_json::Value,
-}
-
-#[derive(Debug)]
-pub enum VerificationResult {
-    Success(BatchSuccess),
-    Failure(Vec<VerificationError>),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -64,7 +39,7 @@ pub struct BatchSuccess {
 
 pub async fn verify_solidity(
     compilers: &Compilers<SolidityCompiler>,
-    compiler_version: Version,
+    compiler_version: DetailedVersion,
     contracts: Vec<Contract>,
     compiler_input: &foundry_compilers::CompilerInput,
 ) -> Result<Vec<VerificationResult>, BatchError> {

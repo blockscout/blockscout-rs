@@ -1,5 +1,5 @@
 use super::solc_cli;
-use crate::compiler::{self, EvmCompiler, Version};
+use crate::compiler::{self, DetailedVersion, EvmCompiler};
 use ethers_solc::{error::SolcError, CompilerOutput, Solc};
 use foundry_compilers::artifacts::output_selection::OutputSelection;
 use std::path::Path;
@@ -24,7 +24,7 @@ impl compiler::CompilerInput for foundry_compilers::CompilerInput {
         self
     }
 
-    fn normalize_output_selection(&mut self, _version: &Version) {
+    fn normalize_output_selection(&mut self, _version: &DetailedVersion) {
         self.settings.output_selection = OutputSelection::complete_output_selection();
     }
 }
@@ -36,7 +36,7 @@ impl EvmCompiler for SolidityCompiler {
     async fn compile(
         &self,
         path: &Path,
-        ver: &Version,
+        ver: &DetailedVersion,
         input: &Self::CompilerInput,
     ) -> Result<(serde_json::Value, CompilerOutput), SolcError> {
         if ver.version() < &semver::Version::new(0, 4, 11) {

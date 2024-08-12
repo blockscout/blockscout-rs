@@ -1,11 +1,12 @@
 use crate::{
     charts::{chart::ChartMetadata, db_interaction::types::ZeroDateValue},
     missing_date::{fill_and_filter_chart, fit_into_range},
+    utils::exclusive_datetime_range_to_inclusive,
     ChartProperties, DateValueString, ExtendedDateValue, MissingDatePolicy, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
-use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Utc};
 use entity::{chart_data, charts};
 use sea_orm::{
     sea_query::{self, Expr},
@@ -145,6 +146,8 @@ fn mark_approximate(
         .collect()
 }
 
+/// Note: timestamp has microsecond precision
+/// (postgres default timestamp)
 pub async fn get_chart_metadata(
     db: &DatabaseConnection,
     name: &str,
@@ -248,7 +251,12 @@ pub async fn get_line_chart_data(
     // may contain points outside the range, need to figure it out
     let db_data = get_raw_line_chart_data(db, chart.id, from, to).await?;
 
-    let last_updated_at = chart.last_updated_at.map(|t| t.date_naive());
+    let last_updated_at = chart.last_updated_at.map(|t| {
+        // last_updated_at timestamp is not included in the range
+        let inclusive_last_updated_at_end =
+            exclusive_datetime_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t.to_utc());
+        inclusive_last_updated_at_end.end().date_naive()
+    });
     if last_updated_at.is_none() && !db_data.is_empty() {
         tracing::warn!(
             chart_name = chart.name,

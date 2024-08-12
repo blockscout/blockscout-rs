@@ -123,7 +123,7 @@ mod tests {
         CompilerInput, EvmVersion,
     };
     use pretty_assertions::assert_eq;
-    use smart_contract_verifier::{vyper, Version};
+    use smart_contract_verifier::{vyper, DetailedVersion};
     use std::{collections::BTreeMap, str::FromStr};
 
     #[test]
@@ -150,7 +150,7 @@ mod tests {
                 settings: compiler_settings.clone(),
             },
             compiler_output: Default::default(),
-            compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
+            compiler_version: DetailedVersion::from_str("v0.8.17+commit.8df45f5f").unwrap(),
             file_path: "file_name".to_string(),
             contract_name: "contract_name".to_string(),
             abi: Some(serde_json::Value::Object(Default::default())),
@@ -206,7 +206,7 @@ mod tests {
                 settings: compiler_settings.clone(),
             },
             compiler_output: Default::default(),
-            compiler_version: Version::from_str("v0.3.9+commit.66b96705").unwrap(),
+            compiler_version: DetailedVersion::from_str("v0.3.9+commit.66b96705").unwrap(),
             file_path: "file_name".to_string(),
             contract_name: "contract_name".to_string(),
             abi: Some(serde_json::Value::Object(Default::default())),

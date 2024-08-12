@@ -6,7 +6,7 @@ use foundry_compilers::CompilerInput;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{
     solidity::standard_json::{StandardJsonContent, VerificationRequest},
-    Version,
+    DetailedVersion,
 };
 use std::{ops::Deref, str::FromStr};
 
@@ -53,7 +53,7 @@ impl TryFrom<VerifySolidityStandardJsonRequestWrapper> for VerificationRequest {
             BytecodeType::CreationInput => (Some(bytecode), bytes::Bytes::new()),
             BytecodeType::DeployedBytecode => (None, bytecode),
         };
-        let compiler_version = Version::from_str(&request.compiler_version)
+        let compiler_version = DetailedVersion::from_str(&request.compiler_version)
             .map_err(|err| anyhow!("Invalid compiler version: {}", err))?;
 
         let input: CompilerInput = serde_json::from_str(&request.input)?;
@@ -99,7 +99,7 @@ mod tests {
         let mut expected = VerificationRequest {
             creation_bytecode: Some(DisplayBytes::from_str("0x1234").unwrap().0),
             deployed_bytecode: DisplayBytes::from_str("").unwrap().0,
-            compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
+            compiler_version: DetailedVersion::from_str("v0.8.17+commit.8df45f5f").unwrap(),
             content: StandardJsonContent { input },
             chain_id: Some("1".into()),
         };

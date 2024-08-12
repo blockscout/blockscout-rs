@@ -5,7 +5,7 @@ use crate::conversion::{
 use async_trait::async_trait;
 use bens_logic::{
     protocols::ProtocolError,
-    subgraphs_reader::{LookupOutput, SubgraphReadError, SubgraphReader},
+    subgraph::{LookupOutput, SubgraphReadError, SubgraphReader},
 };
 use bens_proto::blockscout::bens::v1::{domains_extractor_server::DomainsExtractor, *};
 use std::sync::Arc;
@@ -187,7 +187,7 @@ fn map_subgraph_error(err: SubgraphReadError) -> tonic::Status {
 
 fn map_protocol_error(err: ProtocolError) -> tonic::Status {
     match err {
-        ProtocolError::InvalidName(_) => tonic::Status::invalid_argument(err.to_string()),
+        ProtocolError::InvalidName { .. } => tonic::Status::invalid_argument(err.to_string()),
         ProtocolError::ProtocolNotFound(_) => tonic::Status::not_found(err.to_string()),
         ProtocolError::NetworkNotFound(_) => tonic::Status::not_found(err.to_string()),
         ProtocolError::Internal(_) => {

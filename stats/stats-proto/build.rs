@@ -14,9 +14,9 @@ fn compile(
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger")
         .protoc_arg("--openapiv2_opt")
-        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=stats")
+        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=stats,json_names_for_fields=false")
         .bytes(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde]")
+        .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
         .field_attribute(
             ".blockscout.stats.v1.HealthCheckRequest.service",
             "#[serde(default)]"
