@@ -12,6 +12,8 @@ use crate::{
 pub const WEEK_START: Weekday = Weekday::Mon;
 
 /// Week starting from Monday.
+/// Mostly a wrapper around `NaiveWeek` but with additional useful
+/// functionality
 pub struct Week(NaiveWeek);
 
 impl std::fmt::Debug for Week {
@@ -126,16 +128,12 @@ impl Week {
 
     /// `None` - out of range
     pub fn checked_days(&self) -> Option<RangeInclusive<NaiveDate>> {
-        Some(self.checked_first_day()?..=self.checked_last_day()?)
+        self.0.checked_days()
     }
 
     /// `None` - out of range (week of `NaiveDate::MIN`)
     pub fn checked_first_day(&self) -> Option<NaiveDate> {
-        // Current interface of `NaiveWeek` does not provide any way
-        // of idiomatic overflow handling
-        // todo: change after https://github.com/chronotope/chrono/pull/1600
-        // is released
-        std::panic::catch_unwind(|| self.0.first_day()).ok()
+        self.0.checked_first_day()
     }
 
     /// First day of the week or `NaiveDate::MIN`
@@ -147,7 +145,7 @@ impl Week {
     pub fn checked_last_day(&self) -> Option<NaiveDate> {
         // Current interface of `NaiveWeek` does not provide any way
         // of idiomatic overflow handling
-        std::panic::catch_unwind(|| self.0.last_day()).ok()
+        self.0.checked_last_day()
     }
 
     /// Last day of the week or `NaiveDate::MAX`

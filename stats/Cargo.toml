@@ -10,3 +10,9 @@ members = [
 
 [workspace.dependencies]
 blockscout-service-launcher = { version = "0.12.1" }
+
+
+# todo: update version after https://github.com/chronotope/chrono/pull/1600
+# and remove patch
+[patch.crates-io]
+chrono = { git = "https://github.com/bragov4ik/chrono", branch = "v0.4.38-naive-week-checked-patch" }
