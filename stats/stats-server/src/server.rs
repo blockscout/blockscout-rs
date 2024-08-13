@@ -11,11 +11,12 @@ use crate::{
 
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
-use stats_proto::blockscout::stats::v1::{
-    health_actix::route_health,
-    health_server::HealthServer,
-    stats_service_actix::route_stats_service,
-    stats_service_server::{StatsService, StatsServiceServer},
+use stats_proto::{
+    blockscout::stats::v1::{
+        stats_service_actix::route_stats_service,
+        stats_service_server::{StatsService, StatsServiceServer},
+    },
+    grpc::health::v1::{health_actix::route_health, health_server::HealthServer},
 };
 
 const SERVICE_NAME: &str = "stats";

@@ -788,6 +788,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "blockscout-health-endpoint"
+version = "0.1.0"
+dependencies = [
+ "prost-build",
+]
+
+[[package]]
 name = "blockscout-metrics-tools"
 version = "0.1.0"
 source = "git+https://github.com/blockscout/blockscout-rs?rev=980634e#980634e7adb53eb1de2c27edf13016631957cb89"
@@ -4108,6 +4115,7 @@ dependencies = [
  "actix-prost-macros",
  "actix-web",
  "async-trait",
+ "blockscout-health-endpoint",
  "prost 0.11.9",
  "prost-build",
  "serde",
