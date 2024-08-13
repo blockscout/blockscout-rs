@@ -31,6 +31,10 @@ impl<S: StatsService> launcher::HttpRouter for HttpRouter<S> {
         service_config
             .configure(|config| route_health(config, self.health.clone()))
             .configure(|config| route_stats_service(config, self.stats.clone()));
+        blockscout_endpoint_swagger::register_route(
+            service_config,
+            std::path::PathBuf::from("../stats-proto/swagger/stats.swagger.yaml"),
+        );
     }
 }
 

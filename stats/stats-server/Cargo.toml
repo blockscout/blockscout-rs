@@ -24,6 +24,7 @@ sea-orm = { version = "0.12", features = [
 ] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 blockscout-service-launcher = { workspace = true, features = [ "database-0_12" ] }
+blockscout-endpoint-swagger = { path = "../../libs/endpoints/swagger" }
 cron = "0.12"
 convert_case = "0.6.0"
 itertools = "0.11.0"
@@ -36,3 +37,4 @@ paste = "1.0"
 stats = { path = "../stats", features = ["test-utils"] }
 blockscout-service-launcher = { workspace = true, features = [ "database-0_12", "test-server" ] }
 pretty_assertions = "1.3"
+reqwest = "0.12"
