@@ -190,13 +190,13 @@ pub trait ChartProperties: Sync + Named {
 }
 
 #[macro_export]
-macro_rules! delegated_properties_with_resolutions {
+macro_rules! define_and_impl_resolution_properties {
     (
-        delegate: {
+        define_and_impl: {
             $($type_name:ident : $res:ty),+
             $(,)?
-        }
-        ..$source_type:ty
+        },
+        base_impl: $source_type:ty $(,)?
     ) => {
         $(
         pub struct $type_name;

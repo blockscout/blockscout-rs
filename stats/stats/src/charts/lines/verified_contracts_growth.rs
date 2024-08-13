@@ -7,7 +7,7 @@ use crate::{
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
         },
     },
-    delegated_properties_with_resolutions,
+    define_and_impl_resolution_properties,
     lines::new_verified_contracts::NewVerifiedContractsInt,
     types::timespans::{Month, Week, Year},
     MissingDatePolicy, Named,
@@ -35,13 +35,13 @@ impl ChartProperties for Properties {
     }
 }
 
-delegated_properties_with_resolutions!(
-    delegate: {
+define_and_impl_resolution_properties!(
+    define_and_impl: {
         WeeklyProperties: Week,
         MonthlyProperties: Month,
         YearlyProperties: Year,
-    }
-    ..Properties
+    },
+    base_impl: Properties
 );
 
 pub type VerifiedContractsGrowth =

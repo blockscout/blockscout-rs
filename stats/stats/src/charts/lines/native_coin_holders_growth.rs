@@ -18,7 +18,7 @@ use crate::{
         },
         UpdateContext,
     },
-    delegated_properties_with_resolutions,
+    define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
@@ -373,13 +373,13 @@ where
     Ok(days)
 }
 
-delegated_properties_with_resolutions!(
-    delegate: {
+define_and_impl_resolution_properties!(
+    define_and_impl: {
         WeeklyProperties: Week,
         MonthlyProperties: Month,
         YearlyProperties: Year,
-    }
-    ..Properties
+    },
+    base_impl: Properties
 );
 
 pub type NativeCoinHoldersGrowth =

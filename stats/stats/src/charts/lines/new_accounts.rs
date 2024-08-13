@@ -18,7 +18,7 @@ use crate::{
         },
         UpdateContext,
     },
-    delegated_properties_with_resolutions,
+    define_and_impl_resolution_properties,
     missing_date::trim_out_of_range_sorted,
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
@@ -111,13 +111,13 @@ impl ChartProperties for Properties {
     }
 }
 
-delegated_properties_with_resolutions!(
-    delegate: {
+define_and_impl_resolution_properties!(
+    define_and_impl: {
         WeeklyProperties: Week,
         MonthlyProperties: Month,
         YearlyProperties: Year,
-    }
-    ..Properties
+    },
+    base_impl: Properties
 );
 
 pub type NewAccounts = DirectVecLocalDbChartSource<NewAccountsRemote, BatchMaxDays, Properties>;

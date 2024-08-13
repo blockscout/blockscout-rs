@@ -13,7 +13,7 @@ use crate::{
             DirectVecLocalDbChartSource,
         },
     },
-    delegated_properties_with_resolutions,
+    define_and_impl_resolution_properties,
     lines::native_coin_holders_growth::NativeCoinHoldersGrowthInt,
     types::timespans::{Month, Week, Year},
     Named,
@@ -38,13 +38,13 @@ impl ChartProperties for Properties {
     }
 }
 
-delegated_properties_with_resolutions!(
-    delegate: {
+define_and_impl_resolution_properties!(
+    define_and_impl: {
         WeeklyProperties: Week,
         MonthlyProperties: Month,
         YearlyProperties: Year,
-    }
-    ..Properties
+    },
+    base_impl: Properties
 );
 
 pub type NewNativeCoinHolders = DirectVecLocalDbChartSource<

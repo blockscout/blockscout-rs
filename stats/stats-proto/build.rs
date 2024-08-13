@@ -23,7 +23,7 @@ fn compile(
         )
         .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(skip_serializing_if = \"std::ops::Not::not\")]")
         .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(default)]")
-        .field_attribute(".blockscout.stats.v1.GetLineChartRequest.resolution", "#[serde(default = \"default_resolution_i32\")]");
+        .field_attribute(".blockscout.stats.v1.GetLineChartRequest.resolution", "#[serde(default)]");
 
     config.compile_protos(protos, includes)?;
     Ok(())

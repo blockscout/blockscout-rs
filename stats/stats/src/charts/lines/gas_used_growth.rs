@@ -12,7 +12,7 @@ use crate::{
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    delegated_properties_with_resolutions,
+    define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
     utils::sql_with_range_filter_opt,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
@@ -87,13 +87,13 @@ impl ChartProperties for Properties {
     }
 }
 
-delegated_properties_with_resolutions!(
-    delegate: {
+define_and_impl_resolution_properties!(
+    define_and_impl: {
         WeeklyProperties: Week,
         MonthlyProperties: Month,
         YearlyProperties: Year,
-    }
-    ..Properties
+    },
+    base_impl: Properties
 );
 
 pub type GasUsedGrowth = DailyCumulativeLocalDbChartSource<NewGasUsedRemote, Properties>;

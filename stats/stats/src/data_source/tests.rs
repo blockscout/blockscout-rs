@@ -26,7 +26,7 @@ use super::{
 use crate::{
     construct_update_group,
     data_source::kinds::local_db::parameters::update::batching::parameters::PassVecStep,
-    delegated_properties_with_resolutions,
+    define_and_impl_resolution_properties,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
@@ -122,13 +122,13 @@ impl ChartProperties for ContractsGrowthProperties {
 }
 
 // We can use convenient common implementation to get growth chart
-delegated_properties_with_resolutions!(
-    delegate: {
+define_and_impl_resolution_properties!(
+    define_and_impl: {
         ContractsGrowthWeeklyProperties:  Week,
         ContractsGrowthMonthlyProperties: Month,
         ContractsGrowthYearlyProperties: Year,
-    }
-    ..ContractsGrowthProperties
+    },
+    base_impl: ContractsGrowthProperties
 );
 
 pub type ContractsGrowth =

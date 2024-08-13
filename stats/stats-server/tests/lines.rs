@@ -105,5 +105,8 @@ async fn test_lines_ok() {
                 "chart '{line_name}' '{resolution}' is empty"
             );
         }
+        // should work even without `resolution` parameter
+        let _chart: serde_json::Value =
+            send_get_request(&base, &format!("/api/v1/lines/{line_name}")).await;
     }
 }

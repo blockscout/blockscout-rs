@@ -1,12 +1,4 @@
-use crate::{
-    construct_update_group,
-    counters::{
-        AverageBlockTime, CompletedTxns, LastNewContracts, LastNewVerifiedContracts, TotalAccounts,
-        TotalAddresses, TotalBlocks, TotalContracts, TotalNativeCoinHolders,
-        TotalNativeCoinTransfers, TotalTokens, TotalTxns, TotalVerifiedContracts,
-    },
-    lines::*,
-};
+use crate::{construct_update_group, counters::*, lines::*};
 
 macro_rules! singleton_groups {
     ($($chart: ident),+ $(,)?) => {
