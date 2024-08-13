@@ -1,0 +1,14 @@
+[package]
+name = "blockscout-health-endpoint"
+version = "0.1.0"
+description = "Configure health endpoint in prost, and actix-prost"
+license = "MIT"
+repository = "https://github.com/blockscout/blockscout-rs"
+keywords = ["blockscout", "service", "http", "microservices", "health", "endpoint"]
+categories = ["web-programming::http-server"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+prost-build = "0.11"
