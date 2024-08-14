@@ -4,7 +4,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
 };
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 
 use sea_orm::DatabaseConnection;
 
@@ -24,7 +24,7 @@ pub struct EigenDA {
     provider: EthProvider,
 
     last_known_block: AtomicU64,
-    unprocessed_gaps: RwLock<Vec<Gap>>,
+    unprocessed_gaps: Mutex<Vec<Gap>>,
 }
 
 impl EigenDA {
@@ -46,7 +46,7 @@ impl EigenDA {
             client,
             provider,
             last_known_block: AtomicU64::new(start_from.saturating_sub(1)),
-            unprocessed_gaps: RwLock::new(gaps),
+            unprocessed_gaps: Mutex::new(gaps),
         })
     }
 
@@ -150,7 +150,7 @@ impl DA for EigenDA {
     /// Returns the earliest unprocessed batch or multiple batches
     /// if there are many in the same block
     async fn unprocessed_jobs(&self) -> Result<Vec<Job>> {
-        let mut unprocessed_gaps = self.unprocessed_gaps.write().await;
+        let mut unprocessed_gaps = self.unprocessed_gaps.lock().await;
         tracing::info!("catching up gaps: {:?}", unprocessed_gaps);
 
         let mut jobs = vec![];

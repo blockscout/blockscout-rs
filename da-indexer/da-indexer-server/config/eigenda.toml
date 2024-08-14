@@ -39,5 +39,5 @@ save_batch_size = 20
 pruning_block_threshold = 1000 
 
 [indexer.da.rpc]
-url = "https://holesky.drpc.org"
-batch_size = 100
+url = "https://ethereum-holesky-rpc.publicnode.com"
+batch_size = 1000

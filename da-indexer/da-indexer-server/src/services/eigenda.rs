@@ -52,7 +52,7 @@ impl EigenDa for EigenDaService {
             batch_id: blob.batch_id as u64,
             blob_index: blob.blob_index as u32,
             l1_confirmation_block: blob.l1_block as u64,
-            l1_confirmation_tx_hash: hex::encode(blob.l1_tx_hash),
+            l1_confirmation_tx_hash: format!("0x{}", hex::encode(blob.l1_tx_hash)),
             size: blob.data.len() as u64,
             data,
         }))

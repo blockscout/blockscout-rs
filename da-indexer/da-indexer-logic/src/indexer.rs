@@ -7,7 +7,7 @@ use futures::{
 };
 use sea_orm::DatabaseConnection;
 use std::{collections::HashSet, sync::Arc, time::Duration};
-use tokio::{sync::RwLock, time::sleep};
+use tokio::{sync::Mutex, time::sleep};
 use tracing::instrument;
 
 use crate::{
@@ -32,7 +32,7 @@ pub struct Indexer {
     da: Box<dyn DA + Send + Sync>,
     settings: IndexerSettings,
 
-    failed_jobs: RwLock<HashSet<Job>>,
+    failed_jobs: Mutex<HashSet<Job>>,
 }
 
 impl Indexer {
@@ -48,7 +48,7 @@ impl Indexer {
         Ok(Self {
             da,
             settings,
-            failed_jobs: RwLock::new(HashSet::new()),
+            failed_jobs: Mutex::new(HashSet::new()),
         })
     }
 
@@ -81,7 +81,7 @@ impl Indexer {
                 }
                 None => {
                     tracing::error!(error = ?err, job = ?job, "failed to process job, skipping for now, will retry later");
-                    self.failed_jobs.write().await.insert(job.clone());
+                    self.failed_jobs.lock().await.insert(job.clone());
                     break;
                 }
             };
@@ -124,7 +124,7 @@ impl Indexer {
             // we can safely drain the failed blocks here
             // if the block fails again, it will be re-added
             // if the indexer will be restarted, catch_up will take care of it
-            let iter = self.failed_jobs.write().await.drain().collect::<Vec<_>>();
+            let iter = self.failed_jobs.lock().await.drain().collect::<Vec<_>>();
             tracing::info!("retrying failed jobs: {:?}", iter);
             Ok(iter)
         })

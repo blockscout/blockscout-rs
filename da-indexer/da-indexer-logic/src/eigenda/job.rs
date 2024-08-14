@@ -53,7 +53,13 @@ impl TryFrom<Log> for EigenDAJob {
             .as_bytes()
             .to_vec();
 
-        let batch_id = u64::from_be_bytes((&log.data.to_vec()[24..32]).try_into()?);
+        let batch_id = u64::from_be_bytes(
+            (log.data
+                .to_vec()
+                .get(24..32)
+                .ok_or(anyhow!("unexpected data length"))?)
+            .try_into()?,
+        );
 
         let tx_hash = log
             .transaction_hash

@@ -103,7 +103,7 @@ impl DA for CelestiaDA {
         let height = self.client.header_local_head().await?.header.height.value();
         tracing::info!(height, "latest block");
 
-        let from = self.last_known_height.swap(height, Ordering::SeqCst) + 1;
+        let from = self.last_known_height.swap(height, Ordering::AcqRel) + 1;
         Ok((from..=height)
             .map(|height| Job::Celestia(CelestiaJob { height }))
             .collect())
@@ -119,7 +119,7 @@ impl DA for CelestiaDA {
             blocks::upsert(self.db.as_ref(), 0, &[], 0, 0).await?;
         }
 
-        let last_known_height = self.last_known_height.load(Ordering::SeqCst);
+        let last_known_height = self.last_known_height.load(Ordering::Acquire);
         let gaps = blocks::find_gaps(&self.db, last_known_height).await?;
 
         tracing::info!("catch up gaps: [{:?}]", gaps);
