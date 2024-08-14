@@ -7,6 +7,7 @@ option go_package = "github.com/blockscout/blockscout-rs/da-indexer";
 
 service CelestiaService {
   rpc GetBlob(GetCelestiaBlobRequest) returns (CelestiaBlob) {}
+  rpc GetL2BatchMetadata(CelestiaBlobId) returns (CelestiaL2BatchMetadata) {}
 }
 
 service EigenDaService {
@@ -26,6 +27,24 @@ message CelestiaBlob {
   uint64 timestamp = 4;
   uint64 size = 5;
   optional string data = 6;
+}
+
+message CelestiaBlobId {
+  uint64 height = 1;
+  string namespace = 2;
+  string commitment = 3;
+}
+
+message CelestiaL2BatchMetadata {
+  uint32 chain_id = 1;
+  string l2_batch_id = 2;
+  uint64 l2_start_block = 3;
+  uint64 l2_end_block = 4;
+  uint32 l2_batch_tx_count = 5;
+  string l2_blockscout_url = 8;
+  string l1_tx_hash = 6;
+  uint64 l1_tx_timestamp = 7;
+  repeated CelestiaBlobId related_blobs = 9;
 }
 
 message GetEigenDaBlobRequest {
