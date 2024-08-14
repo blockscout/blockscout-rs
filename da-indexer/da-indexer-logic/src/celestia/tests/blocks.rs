@@ -4,7 +4,7 @@ use crate::celestia::{repository::blocks, tests::init_db};
 
 #[tokio::test]
 async fn upsert_test() {
-    let db = init_db("blocks_db_upsert").await;
+    let db = init_db("celestia_blocks_upsert_test").await;
 
     for height in 1..=5 {
         let hash = [height as u8; 32];
@@ -19,29 +19,29 @@ async fn upsert_test() {
 
 #[tokio::test]
 async fn find_gaps_test() {
-    let db = init_db("blocks_db_find_gaps").await;
+    let db = init_db("celestia_blocks_find_gaps_test").await;
 
     let heights = vec![0, 7, 12, 13, 14, 15, 17, 94, 156, 157];
     insert_heights(&db.client(), heights).await;
 
     let gaps = blocks::find_gaps(&db.client(), 200).await.unwrap();
-    assert!(gaps[0].gap_start == 1 && gaps[0].gap_end == 6);
-    assert!(gaps[1].gap_start == 8 && gaps[1].gap_end == 11);
-    assert!(gaps[2].gap_start == 16 && gaps[2].gap_end == 16);
-    assert!(gaps[3].gap_start == 18 && gaps[3].gap_end == 93);
-    assert!(gaps[4].gap_start == 95 && gaps[4].gap_end == 155);
-    assert!(gaps[5].gap_start == 158 && gaps[5].gap_end == 200);
+    assert!(gaps[0].start == 1 && gaps[0].end == 6);
+    assert!(gaps[1].start == 8 && gaps[1].end == 11);
+    assert!(gaps[2].start == 16 && gaps[2].end == 16);
+    assert!(gaps[3].start == 18 && gaps[3].end == 93);
+    assert!(gaps[4].start == 95 && gaps[4].end == 155);
+    assert!(gaps[5].start == 158 && gaps[5].end == 200);
 }
 
 #[tokio::test]
 async fn find_gaps_empty_database_test() {
-    let db = init_db("blocks_db_find_gaps_empty").await;
+    let db = init_db("celestia_blocks_find_gaps_empty_database_test").await;
 
     let heights = vec![0];
     insert_heights(&db.client(), heights).await;
 
     let gaps = blocks::find_gaps(&db.client(), 200).await.unwrap();
-    assert!(gaps[0].gap_start == 1 && gaps[0].gap_end == 200);
+    assert!(gaps[0].start == 1 && gaps[0].end == 200);
 }
 
 async fn insert_heights(db: &DatabaseConnection, heights: Vec<u64>) {

@@ -3,26 +3,19 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "celestia_blocks")]
+#[sea_orm(table_name = "eigenda_batches")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub height: i64,
+    pub batch_id: i64,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
-    pub hash: Vec<u8>,
+    pub batch_header_hash: Vec<u8>,
     pub blobs_count: i32,
-    pub timestamp: i64,
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
+    pub l1_tx_hash: Vec<u8>,
+    pub l1_block: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(has_many = "super::celestia_blobs::Entity")]
-    CelestiaBlobs,
-}
-
-impl Related<super::celestia_blobs::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::CelestiaBlobs.def()
-    }
-}
+pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}
