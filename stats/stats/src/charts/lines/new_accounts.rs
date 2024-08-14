@@ -1,29 +1,31 @@
 use std::ops::Range;
 
 use crate::{
-    charts::db_interaction::types::DateValueInt,
+    charts::types::timespans::DateValue,
     data_source::{
         kinds::{
-            data_manipulation::map::MapParseTo,
-            local_db::{
-                parameters::{
-                    update::batching::{
-                        parameters::{BatchMax, PassVecStep},
-                        BatchUpdate,
-                    },
-                    DefaultCreate, DefaultQueryVec,
-                },
-                LocalDbChartSource,
+            data_manipulation::{
+                map::{MapParseTo, MapToString},
+                resolutions::sum::SumLowerResolution,
             },
-            remote_db::{QueryBehaviour, RemoteDatabaseSource, StatementFromRange},
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Weeks, Batch30Years, Batch36Months, BatchMaxDays,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
         UpdateContext,
     },
+    define_and_impl_resolution_properties,
     missing_date::trim_out_of_range_sorted,
+    types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, Named, UpdateError,
+    ChartProperties, Named, UpdateError,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
@@ -64,20 +66,20 @@ impl StatementFromRange for NewAccountsStatement {
 
 pub struct NewAccountsQueryBehaviour;
 
-impl QueryBehaviour for NewAccountsQueryBehaviour {
-    type Output = Vec<DateValueString>;
+impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
+    type Output = Vec<DateValue<String>>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
-    ) -> Result<Vec<DateValueString>, UpdateError> {
+    ) -> Result<Vec<DateValue<String>>, UpdateError> {
         let query = NewAccountsStatement::get_statement(range.clone());
-        let mut data = DateValueString::find_by_statement(query)
+        let mut data = DateValue::<String>::find_by_statement(query)
             .all(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         // make sure that it's sorted
-        data.sort_by_key(|d| d.date);
+        data.sort_by_key(|d| d.timespan);
         if let Some(range) = range {
             let range = range.start.date_naive()..=range.end.date_naive();
             trim_out_of_range_sorted(&mut data, range);
@@ -96,33 +98,46 @@ pub type NewAccountsRemote = RemoteDatabaseSource<NewAccountsQueryBehaviour>;
 pub struct Properties;
 
 impl Named for Properties {
-    const NAME: &'static str = "newAccounts";
+    fn name() -> String {
+        "newAccounts".into()
+    }
 }
 
 impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-pub type NewAccounts = LocalDbChartSource<
-    NewAccountsRemote,
-    (),
-    DefaultCreate<Properties>,
-    BatchUpdate<
-        NewAccountsRemote,
-        (),
-        PassVecStep,
-        // see `NewAccountsRemote` docs
-        BatchMax,
-        DefaultQueryVec<Properties>,
-        Properties,
-    >,
-    DefaultQueryVec<Properties>,
-    Properties,
->;
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
 
-pub type NewAccountsInt = MapParseTo<NewAccounts, DateValueInt>;
+pub type NewAccounts = DirectVecLocalDbChartSource<NewAccountsRemote, BatchMaxDays, Properties>;
+pub type NewAccountsInt = MapParseTo<NewAccounts, i64>;
+pub type NewAccountsWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewAccountsInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewAccountsMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewAccountsInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewAccountsMonthlyInt = MapParseTo<NewAccountsMonthly, i64>;
+pub type NewAccountsYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewAccountsMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -140,6 +155,36 @@ mod tests {
                 ("2022-11-11", "4"),
                 ("2023-03-01", "1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_accounts_weekly() {
+        simple_test_chart::<NewAccountsWeekly>(
+            "update_new_accounts_weekly",
+            vec![("2022-11-07", "8"), ("2023-02-27", "1")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_accounts_monthly() {
+        simple_test_chart::<NewAccountsMonthly>(
+            "update_new_accounts_monthly",
+            vec![("2022-11-01", "8"), ("2023-03-01", "1")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_accounts_yearly() {
+        simple_test_chart::<NewAccountsYearly>(
+            "update_new_accounts_yearly",
+            vec![("2022-01-01", "8"), ("2023-01-01", "1")],
         )
         .await;
     }

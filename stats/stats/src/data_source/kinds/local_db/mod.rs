@@ -9,7 +9,7 @@
 //! Charts are intended to be such persisted sources,
 //! because their data is directly retreived from the database (on requests).
 
-use std::{marker::PhantomData, ops::Range, time::Duration};
+use std::{fmt::Debug, marker::PhantomData, ops::Range, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, SubsecRound, Utc};
@@ -59,27 +59,9 @@ where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep>,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties;
-
-/// Chart with default create/query and batch update with configurable step logic
-pub type BatchLocalDbChartSourceWithDefaultParams<MainDep, ResolutionDep, BatchStep, ChartProps> =
-    LocalDbChartSource<
-        MainDep,
-        ResolutionDep,
-        DefaultCreate<ChartProps>,
-        BatchUpdate<
-            MainDep,
-            ResolutionDep,
-            BatchStep,
-            Batch30Days,
-            DefaultQueryVec<ChartProps>,
-            ChartProps,
-        >,
-        DefaultQueryVec<ChartProps>,
-        ChartProps,
-    >;
 
 // not in `data_manipulation` because it requires retrieving latest (self) value before
 // next batch
@@ -94,7 +76,7 @@ pub type BatchLocalDbChartSourceWithDefaultParams<MainDep, ResolutionDep, BatchS
 /// [see "Dependency requirements" here](crate::data_source::kinds)
 ///
 /// The opposite logic to [`Delta`](`crate::data_source::kinds::data_manipulation::delta::Delta`)
-pub type CumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
+pub type DailyCumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
     PartialCumulative<DeltaDep>,
     (),
     DefaultCreate<C>,
@@ -112,11 +94,11 @@ pub type CumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
 
 /// Chart that stores vector data received from provided dependency (without
 /// any manipulations)
-pub type DirectVecLocalDbChartSource<Dependency, C> = LocalDbChartSource<
+pub type DirectVecLocalDbChartSource<Dependency, BatchSizeUpperBound, C> = LocalDbChartSource<
     Dependency,
     (),
     DefaultCreate<C>,
-    BatchUpdate<Dependency, (), PassVecStep, Batch30Days, DefaultQueryVec<C>, C>,
+    BatchUpdate<Dependency, (), PassVecStep, BatchSizeUpperBound, DefaultQueryVec<C>, C>,
     DefaultQueryVec<C>,
     C,
 >;
@@ -135,20 +117,21 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
     LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
 where
-    MainDep: DataSource,
-    ResolutionDep: DataSource,
-    Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep>,
-    Query: QueryBehaviour,
+    MainDep: DataSource + Sync,
+    ResolutionDep: DataSource + Sync,
+    Create: CreateBehaviour + Sync,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
+    Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
+    ChartProps::Resolution: Ord + Clone + Debug,
 {
     /// Performs common checks and prepares values useful for further
     /// update. Then proceeds to update according to parameters.
-    async fn update_itself(
+    async fn update_itself_inner(
         cx: &UpdateContext<'_>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
-        let metadata = get_chart_metadata(cx.db, ChartProps::NAME).await?;
+        let metadata = get_chart_metadata(cx.db, &ChartProps::key()).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
             if postgres_timestamps_eq(cx.time, last_updated_at) {
                 // no need to perform update.
@@ -172,16 +155,16 @@ where
         let min_blockscout_block = get_min_block_blockscout(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let offset = Some(ChartProps::approximate_trailing_points());
-        let last_accurate_point = last_accurate_point::<ChartProps>(
+        let last_accurate_point = last_accurate_point::<ChartProps, Query>(
             chart_id,
             min_blockscout_block,
             cx.db,
             cx.force_full,
-            offset,
+            ChartProps::approximate_trailing_points(),
+            ChartProps::missing_date_policy(),
         )
         .await?;
-        tracing::info!(last_accurate_point =? last_accurate_point, chart_name = ChartProps::NAME, "updating chart values");
+        tracing::info!(last_accurate_point =? last_accurate_point, chart =% ChartProps::key(), "updating chart values");
         Update::update_values(
             cx,
             chart_id,
@@ -190,7 +173,7 @@ where
             dependency_data_fetch_timer,
         )
         .await?;
-        tracing::info!(chart_name = ChartProps::NAME, "updating chart metadata");
+        tracing::info!(chart =% ChartProps::key(), "updating chart metadata");
         Update::update_metadata(cx.db, chart_id, cx.time).await?;
         Ok(())
     }
@@ -198,7 +181,7 @@ where
     fn observe_query_time(time: Duration) {
         if time > Duration::ZERO {
             metrics::CHART_FETCH_NEW_DATA_TIME
-                .with_label_values(&[Self::NAME])
+                .with_label_values(&[&ChartProps::key().to_string()])
                 .observe(time.as_secs_f64());
         }
     }
@@ -215,18 +198,21 @@ fn postgres_timestamps_eq(time_1: DateTime<Utc>, time_2: DateTime<Utc>) -> bool 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> DataSource
     for LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
 where
-    MainDep: DataSource,
-    ResolutionDep: DataSource,
-    Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep>,
-    Query: QueryBehaviour,
+    MainDep: DataSource + Sync,
+    ResolutionDep: DataSource + Sync,
+    Create: CreateBehaviour + Sync,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
+    Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
+    ChartProps::Resolution: Ord + Clone + Debug + Send,
 {
     type MainDependencies = MainDep;
     type ResolutionDependencies = ResolutionDep;
     type Output = Query::Output;
 
-    const MUTEX_ID: Option<&'static str> = Some(ChartProps::NAME);
+    fn mutex_id() -> Option<String> {
+        Some(ChartProps::key().into())
+    }
 
     async fn init_itself(db: &DatabaseConnection, init_time: &DateTime<Utc>) -> Result<(), DbErr> {
         Create::create(db, init_time).await
@@ -237,25 +223,25 @@ where
 
         let mut dependency_data_fetch_timer = AggregateTimer::new();
         let _update_timer = metrics::CHART_UPDATE_TIME
-            .with_label_values(&[ChartProps::NAME])
+            .with_label_values(&[&ChartProps::key().to_string()])
             .start_timer();
-        tracing::info!(chart = ChartProps::NAME, "started chart update");
+        tracing::info!(chart =% ChartProps::key(), "started chart update");
 
-        Self::update_itself(cx, &mut dependency_data_fetch_timer)
+        Self::update_itself_inner(cx, &mut dependency_data_fetch_timer)
             .await
             .inspect_err(|err| {
                 metrics::UPDATE_ERRORS
-                    .with_label_values(&[ChartProps::NAME])
+                    .with_label_values(&[&ChartProps::key().to_string()])
                     .inc();
                 tracing::error!(
-                    chart = ChartProps::NAME,
+                    chart =% ChartProps::key(),
                     "error during updating chart: {}",
                     err
                 );
             })?;
 
         Self::observe_query_time(dependency_data_fetch_timer.total_time());
-        tracing::info!(chart = ChartProps::NAME, "successfully updated chart");
+        tracing::info!(chart =% ChartProps::key(), "successfully updated chart");
         Ok(())
     }
 
@@ -277,11 +263,13 @@ where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep>,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties + Named,
 {
-    const NAME: &'static str = ChartProps::NAME;
+    fn name() -> String {
+        ChartProps::name()
+    }
 }
 
 #[portrait::fill(portrait::delegate(ChartProps))]
@@ -291,7 +279,7 @@ where
     MainDep: DataSource + Sync,
     ResolutionDep: DataSource + Sync,
     Create: CreateBehaviour + Sync,
-    Update: UpdateBehaviour<MainDep, ResolutionDep> + Sync,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
     Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
 {
@@ -308,7 +296,7 @@ mod tests {
         };
 
         use blockscout_metrics_tools::AggregateTimer;
-        use chrono::{DateTime, Days, TimeDelta, Utc};
+        use chrono::{DateTime, Days, NaiveDate, TimeDelta, Utc};
         use entity::sea_orm_active_enums::ChartType;
         use tokio::sync::Mutex;
 
@@ -326,8 +314,9 @@ mod tests {
             },
             gettable_const,
             tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+            types::{timespans::DateValue, TimespanValue},
             update_group::{SyncUpdateGroup, UpdateGroup},
-            ChartProperties, DateValueString, Named, UpdateError,
+            ChartProperties, Named, UpdateError,
         };
 
         type WasTriggeredStorage = Arc<Mutex<bool>>;
@@ -354,22 +343,23 @@ mod tests {
             }
         }
 
-        impl<M, R> UpdateBehaviour<M, R> for UpdateSingleTriggerAsserter
+        impl<M, R, Resolution> UpdateBehaviour<M, R, Resolution> for UpdateSingleTriggerAsserter
         where
             M: DataSource,
             R: DataSource,
+            Resolution: Send,
         {
             async fn update_values(
                 cx: &UpdateContext<'_>,
                 chart_id: i32,
-                _last_accurate_point: Option<DateValueString>,
+                _last_accurate_point: Option<TimespanValue<Resolution, String>>,
                 min_blockscout_block: i64,
                 _dependency_data_fetch_timer: &mut AggregateTimer,
             ) -> Result<(), UpdateError> {
                 Self::record_trigger().await;
                 // insert smth for dependency to work well
-                let data = DateValueString {
-                    date: cx.time.date_naive(),
+                let data = DateValue::<String> {
+                    timespan: cx.time.date_naive(),
                     value: "0".to_owned(),
                 };
                 let value = data.active_model(chart_id, Some(min_blockscout_block));
@@ -383,10 +373,14 @@ mod tests {
         struct TestedChartProps;
 
         impl Named for TestedChartProps {
-            const NAME: &'static str = "double_update_tested_chart";
+            fn name() -> String {
+                "double_update_tested_chart".into()
+            }
         }
 
         impl ChartProperties for TestedChartProps {
+            type Resolution = NaiveDate;
+
             fn chart_type() -> ChartType {
                 ChartType::Counter
             }
@@ -404,10 +398,14 @@ mod tests {
         struct ChartDependedOnTestedProps;
 
         impl Named for ChartDependedOnTestedProps {
-            const NAME: &'static str = "double_update_dependant_chart";
+            fn name() -> String {
+                "double_update_dependant_chart".into()
+            }
         }
 
         impl ChartProperties for ChartDependedOnTestedProps {
+            type Resolution = NaiveDate;
+
             fn chart_type() -> ChartType {
                 ChartType::Counter
             }
@@ -429,7 +427,7 @@ mod tests {
             let current_date = current_time.date_naive();
             fill_mock_blockscout_data(&blockscout, current_date).await;
             let enabled = HashSet::from(
-                [TestedChartProps::NAME, ChartDependedOnTestedProps::NAME].map(|l| l.to_owned()),
+                [TestedChartProps::key(), ChartDependedOnTestedProps::key()].map(|l| l.to_owned()),
             );
             let mutexes = TestUpdateGroup
                 .list_dependency_mutex_ids()

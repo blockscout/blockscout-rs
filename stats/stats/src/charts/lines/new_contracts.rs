@@ -1,15 +1,26 @@
 use std::ops::Range;
 
 use crate::{
-    charts::db_interaction::types::DateValueInt,
     data_source::kinds::{
-        data_manipulation::map::MapParseTo,
-        local_db::DirectVecLocalDbChartSource,
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            resolutions::sum::SumLowerResolution,
+        },
+        local_db::{
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, Named,
+    ChartProperties, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::DateTimeUtc, DbBackend, Statement};
 
@@ -57,26 +68,55 @@ impl StatementFromRange for NewContractsStatement {
 }
 
 pub type NewContractsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewContractsStatement, DateValueString>>;
+    RemoteDatabaseSource<PullAllWithAndSort<NewContractsStatement, NaiveDate, String>>;
 
-pub struct NewContractsProperties;
+pub struct Properties;
 
-impl Named for NewContractsProperties {
-    const NAME: &'static str = "newContracts";
+impl Named for Properties {
+    fn name() -> String {
+        "newContracts".into()
+    }
 }
 
-impl ChartProperties for NewContractsProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-pub type NewContracts = DirectVecLocalDbChartSource<NewContractsRemote, NewContractsProperties>;
-pub type NewContractsInt = MapParseTo<NewContracts, DateValueInt>;
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type NewContracts = DirectVecLocalDbChartSource<NewContractsRemote, Batch30Days, Properties>;
+pub type NewContractsInt = MapParseTo<NewContracts, i64>;
+pub type NewContractsWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewContractsInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewContractsMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewContractsInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewContractsMonthlyInt = MapParseTo<NewContractsMonthly, i64>;
+pub type NewContractsYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewContractsMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::NewContracts;
+    use super::*;
     use crate::tests::{
         point_construction::{d, dt},
         simple_test::{ranged_test_chart, simple_test_chart},
@@ -96,6 +136,46 @@ mod tests {
                 ("2023-01-01", "1"),
                 ("2023-02-01", "1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_contracts_weekly() {
+        simple_test_chart::<NewContractsWeekly>(
+            "update_new_contracts_weekly",
+            vec![
+                ("2022-11-07", "19"),
+                ("2022-11-28", "2"),
+                ("2022-12-26", "1"),
+                ("2023-01-30", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_contracts_monthly() {
+        simple_test_chart::<NewContractsMonthly>(
+            "update_new_contracts_monthly",
+            vec![
+                ("2022-11-01", "19"),
+                ("2022-12-01", "2"),
+                ("2023-01-01", "1"),
+                ("2023-02-01", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_contracts_yearly() {
+        simple_test_chart::<NewContractsYearly>(
+            "update_new_contracts_yearly",
+            vec![("2022-01-01", "21"), ("2023-01-01", "2")],
         )
         .await;
     }

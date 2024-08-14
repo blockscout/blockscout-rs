@@ -4,13 +4,13 @@
 //! [`trait@ChartProperties`], and is stored in local database (e.g.
 //! [`LocalDbChartSource`](crate::data_source::kinds::local_db))
 
-use crate::{DateValueString, ReadError};
-use chrono::{DateTime, Duration, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, FromQueryResult};
-use thiserror::Error;
+use std::fmt::Display;
 
-use super::db_interaction::types::DateValue;
+use crate::{types::Timespan, ReadError};
+use chrono::{DateTime, Duration, Utc};
+use entity::sea_orm_active_enums::{ChartResolution, ChartType};
+use sea_orm::prelude::*;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
@@ -19,7 +19,7 @@ pub enum UpdateError {
     #[error("stats database error: {0}")]
     StatsDB(DbErr),
     #[error("chart {0} not found")]
-    ChartNotFound(String),
+    ChartNotFound(ChartKey),
     #[error("date interval limit ({limit}) is exceeded; choose smaller time interval.")]
     IntervalLimitExceeded { limit: Duration },
     #[error("internal error: {0}")]
@@ -46,32 +46,117 @@ pub struct ChartMetadata {
     pub last_updated_at: Option<DateTime<Utc>>,
 }
 
-/// Type of the point stored in the chart.
-/// [`DateValueString`] can be used to avoid parsing the values,
-/// but [`crate::charts::db_interaction::types::DateValueDecimal`]
-/// or other types can be useful sometimes
-/// (e.g. for cumulative chart).
-pub trait Point: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync {}
-
-impl<T: FromQueryResult + DateValue + Into<DateValueString> + Send + Sync> Point for T {}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MissingDatePolicy {
     FillZero,
     FillPrevious,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ResolutionKind {
+    Day,
+    Week,
+    Month,
+    Year,
+}
+
+impl From<ChartResolution> for ResolutionKind {
+    fn from(value: ChartResolution) -> Self {
+        match value {
+            ChartResolution::Day => ResolutionKind::Day,
+            ChartResolution::Week => ResolutionKind::Week,
+            ChartResolution::Month => ResolutionKind::Month,
+            ChartResolution::Year => ResolutionKind::Year,
+        }
+    }
+}
+
+impl From<ResolutionKind> for ChartResolution {
+    fn from(value: ResolutionKind) -> Self {
+        match value {
+            ResolutionKind::Day => ChartResolution::Day,
+            ResolutionKind::Week => ChartResolution::Week,
+            ResolutionKind::Month => ChartResolution::Month,
+            ResolutionKind::Year => ChartResolution::Year,
+        }
+    }
+}
+
+impl From<ResolutionKind> for String {
+    fn from(value: ResolutionKind) -> Self {
+        match value {
+            ResolutionKind::Day => "DAY",
+            ResolutionKind::Week => "WEEK",
+            ResolutionKind::Month => "MONTH",
+            ResolutionKind::Year => "YEAR",
+        }
+        .into()
+    }
+}
+
 pub trait Named {
-    /// Must be unique
-    const NAME: &'static str;
+    /// Name of this data source that represents its contents
+    fn name() -> String;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ChartKey {
+    name: String,
+    resolution: ResolutionKind,
+}
+
+impl ChartKey {
+    pub fn new(name: String, resolution: ResolutionKind) -> Self {
+        Self { name, resolution }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn resolution(&self) -> &ResolutionKind {
+        &self.resolution
+    }
+
+    pub fn as_string(&self) -> String {
+        let resolution_string: String = self.resolution.into();
+        format!("{}_{}", self.name, resolution_string)
+    }
+}
+
+impl From<ChartKey> for String {
+    fn from(value: ChartKey) -> Self {
+        value.as_string()
+    }
+}
+
+impl Display for ChartKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_string())
+    }
 }
 
 #[portrait::make(import(
-    crate::charts::chart::MissingDatePolicy,
+    crate::charts::chart::{MissingDatePolicy, ResolutionKind, ChartKey},
     entity::sea_orm_active_enums::ChartType,
 ))]
 pub trait ChartProperties: Sync + Named {
+    /// Combination name + resolution must be unique for each chart
+    type Resolution: Timespan;
+
     fn chart_type() -> ChartType;
+    fn resolution() -> ResolutionKind {
+        Self::Resolution::enum_variant()
+    }
+
+    /// Expected but not guaranteed to be unique for each chart
+    fn key() -> ChartKey {
+        ChartKey {
+            name: Self::name(),
+            resolution: Self::resolution(),
+        }
+    }
+
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero
     }
@@ -104,13 +189,52 @@ pub trait ChartProperties: Sync + Named {
     }
 }
 
+#[macro_export]
+macro_rules! define_and_impl_resolution_properties {
+    (
+        define_and_impl: {
+            $($type_name:ident : $res:ty),+
+            $(,)?
+        },
+        base_impl: $source_type:ty $(,)?
+    ) => {
+        $(
+        pub struct $type_name;
+
+        impl $crate::charts::Named for $type_name {
+            fn name() -> ::std::string::String {
+                <$source_type as $crate::charts::Named>::name()
+            }
+        }
+
+        #[portrait::fill(portrait::delegate($source_type))]
+        impl $crate::charts::ChartProperties for $type_name {
+            type Resolution = $res;
+
+            fn resolution() -> $crate::charts::ResolutionKind {
+                use $crate::types::Timespan;
+
+                <Self as $crate::charts::ChartProperties>::Resolution::enum_variant()
+            }
+
+            fn key() -> $crate::charts::ChartKey {
+                $crate::charts::ChartKey::new(Self::name(), Self::resolution())
+            }
+        }
+        )+
+    };
+}
+
 /// Dynamic version of trait `ChartProperties`.
 ///
 /// Helpful when need a unified type for different charts
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChartPropertiesObject {
+    /// unique identifier of the chart
+    pub key: ChartKey,
     pub name: String,
     pub chart_type: ChartType,
+    pub resolution: ResolutionKind,
     pub missing_date_policy: MissingDatePolicy,
     pub approximate_trailing_points: u64,
 }
@@ -118,8 +242,10 @@ pub struct ChartPropertiesObject {
 impl ChartPropertiesObject {
     pub fn construct_from_chart<T: ChartProperties>() -> Self {
         Self {
-            name: T::NAME.to_owned(),
+            key: T::key(),
+            name: T::name(),
             chart_type: T::chart_type(),
+            resolution: T::resolution(),
             missing_date_policy: T::missing_date_policy(),
             approximate_trailing_points: T::approximate_trailing_points(),
         }

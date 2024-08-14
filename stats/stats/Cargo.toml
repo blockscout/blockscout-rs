@@ -38,6 +38,11 @@ blockscout-service-launcher = { version = "0.12.1", features = [ "database-0_12"
 pretty_assertions = "1.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 blockscout-service-launcher = { version = "0.12.1", features = [ "database-0_12", "test-database" ] }
+sea-orm = { version = "0.12", features = [
+    "sqlx-postgres",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+] }
 rust_decimal = "1.27"
 rust_decimal_macros = "1.27"
 

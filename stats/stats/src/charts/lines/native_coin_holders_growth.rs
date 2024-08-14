@@ -1,22 +1,26 @@
 use std::collections::{BTreeMap, HashSet};
 
 use crate::{
-    charts::db_interaction::{
-        types::DateValueInt,
-        write::{create_chart, insert_data_many},
-    },
+    charts::db_interaction::write::{create_chart, insert_data_many},
     data_source::{
         kinds::{
-            data_manipulation::map::MapParseTo,
+            data_manipulation::{
+                map::MapParseTo, resolutions::last_value::LastValueLowerResolution,
+            },
             local_db::{
                 parameter_traits::{CreateBehaviour, UpdateBehaviour},
-                parameters::DefaultQueryVec,
-                LocalDbChartSource,
+                parameters::{
+                    update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
+                    DefaultQueryVec,
+                },
+                DirectVecLocalDbChartSource, LocalDbChartSource,
             },
         },
         UpdateContext,
     },
-    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+    define_and_impl_resolution_properties,
+    types::timespans::{DateValue, Month, Week, Year},
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::address_coin_balances_daily;
@@ -47,13 +51,17 @@ mod db_address_balances {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
-pub struct NativeCoinHoldersGrowthProperties;
+pub struct Properties;
 
-impl Named for NativeCoinHoldersGrowthProperties {
-    const NAME: &'static str = "nativeCoinHoldersGrowth";
+impl Named for Properties {
+    fn name() -> String {
+        "nativeCoinHoldersGrowth".into()
+    }
 }
 
-impl ChartProperties for NativeCoinHoldersGrowthProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -74,23 +82,17 @@ impl CreateBehaviour for Create {
         init_time: &chrono::DateTime<Utc>,
     ) -> Result<(), DbErr> {
         create_support_table(db).await?;
-        create_chart(
-            db,
-            NativeCoinHoldersGrowthProperties::NAME.into(),
-            NativeCoinHoldersGrowthProperties::chart_type(),
-            init_time,
-        )
-        .await
+        create_chart(db, Properties::key(), Properties::chart_type(), init_time).await
     }
 }
 
 pub struct Update;
 
-impl UpdateBehaviour<(), ()> for Update {
+impl UpdateBehaviour<(), (), NaiveDate> for Update {
     async fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
-        last_accurate_point: Option<DateValueString>,
+        last_accurate_point: Option<DateValue<String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
@@ -109,17 +111,14 @@ impl UpdateBehaviour<(), ()> for Update {
 pub async fn update_sequentially_with_support_table(
     cx: &UpdateContext<'_>,
     chart_id: i32,
-    last_accurate_point: Option<DateValueString>,
+    last_accurate_point: Option<DateValue<String>>,
     min_blockscout_block: i64,
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<(), UpdateError> {
-    tracing::info!(
-        "start sequential update for chart {}",
-        NativeCoinHoldersGrowthProperties::NAME
-    );
+    tracing::info!(chart =% Properties::key(), "start sequential update");
     let all_days = match last_accurate_point {
         Some(last_row) => {
-            get_unique_ordered_days(cx.blockscout, Some(last_row.date), remote_fetch_timer)
+            get_unique_ordered_days(cx.blockscout, Some(last_row.timespan), remote_fetch_timer)
                 .await
                 .map_err(UpdateError::BlockscoutDB)?
         }
@@ -133,7 +132,7 @@ pub async fn update_sequentially_with_support_table(
         }
     };
 
-    for days in all_days.chunks(NativeCoinHoldersGrowthProperties::step_duration_days()) {
+    for days in all_days.chunks(Properties::step_duration_days()) {
         let first = days.first();
         let last = days.last();
         tracing::info!(
@@ -164,7 +163,7 @@ async fn calculate_days_using_support_table<C1, C2>(
     db: &C1,
     blockscout: &C2,
     days: impl IntoIterator<Item = NaiveDate>,
-) -> Result<Vec<DateValueString>, UpdateError>
+) -> Result<Vec<DateValue<String>>, UpdateError>
 where
     C1: ConnectionTrait,
     C2: ConnectionTrait,
@@ -197,8 +196,8 @@ where
         let new_count = count_current_holders(db)
             .await
             .map_err(|e| UpdateError::Internal(format!("cannot count holders: {e}")))?;
-        result.push(DateValueString {
-            date,
+        result.push(DateValue::<String> {
+            timespan: date,
             value: new_count.to_string(),
         });
     }
@@ -216,7 +215,7 @@ where
     let all_holders = {
         // use BTreeMap to prevent address duplicates due to several queries
         let mut all_rows: BTreeMap<Vec<u8>, address_coin_balances_daily::Model> = BTreeMap::new();
-        let limit = NativeCoinHoldersGrowthProperties::max_rows_fetch_per_iteration();
+        let limit = Properties::max_rows_fetch_per_iteration();
         let mut offset = 0;
         loop {
             let rows = address_coin_balances_daily::Entity::find()
@@ -265,7 +264,7 @@ async fn create_support_table(db: &DatabaseConnection) -> Result<(), sea_orm::Db
                     balance NUMERIC(100,0) NOT NULL
                 )
                 "#,
-            NativeCoinHoldersGrowthProperties::support_table_name()
+            Properties::support_table_name()
         ),
     );
     db.execute(statement).await?;
@@ -275,10 +274,7 @@ async fn create_support_table(db: &DatabaseConnection) -> Result<(), sea_orm::Db
 async fn clear_support_table(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
     let statement = Statement::from_string(
         sea_orm::DatabaseBackend::Postgres,
-        format!(
-            "DELETE FROM {}",
-            NativeCoinHoldersGrowthProperties::support_table_name()
-        ),
+        format!("DELETE FROM {}", Properties::support_table_name()),
     );
     db.execute(statement).await?;
     Ok(())
@@ -289,10 +285,7 @@ where
     C: ConnectionTrait,
 {
     let count = db_address_balances::Entity::find()
-        .filter(
-            db_address_balances::Column::Balance
-                .gte(NativeCoinHoldersGrowthProperties::min_balance_for_holders()),
-        )
+        .filter(db_address_balances::Column::Balance.gte(Properties::min_balance_for_holders()))
         .count(db)
         .await?;
     Ok(count)
@@ -306,7 +299,7 @@ where
     C: ConnectionTrait,
 {
     let mut data = holders.into_iter().peekable();
-    let take = NativeCoinHoldersGrowthProperties::max_rows_insert_per_iteration();
+    let take = Properties::max_rows_insert_per_iteration();
     while data.peek().is_some() {
         let chunk: Vec<_> = data.by_ref().take(take).collect();
         db_address_balances::Entity::insert_many(chunk)
@@ -321,7 +314,7 @@ where
     Ok(())
 }
 
-impl NativeCoinHoldersGrowthProperties {
+impl Properties {
     fn support_table_name() -> String {
         db_address_balances::Entity.table_name().to_string()
     }
@@ -380,16 +373,33 @@ where
     Ok(days)
 }
 
-pub type NativeCoinHoldersGrowth = LocalDbChartSource<
-    (),
-    (),
-    Create,
-    Update,
-    DefaultQueryVec<NativeCoinHoldersGrowthProperties>,
-    NativeCoinHoldersGrowthProperties,
->;
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
 
-pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, DateValueInt>;
+pub type NativeCoinHoldersGrowth =
+    LocalDbChartSource<(), (), Create, Update, DefaultQueryVec<Properties>, Properties>;
+pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, i64>;
+pub type NativeCoinHoldersGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinHoldersGrowth, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NativeCoinHoldersGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinHoldersGrowth, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NativeCoinHoldersGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinHoldersGrowthMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -407,6 +417,36 @@ mod tests {
                 ("2022-11-10", "8"),
                 ("2022-11-11", "7"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_holders_growth_weekly() {
+        simple_test_chart::<NativeCoinHoldersGrowthWeekly>(
+            "update_native_coin_holders_growth_weekly",
+            vec![("2022-11-07", "7")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_holders_growth_monthly() {
+        simple_test_chart::<NativeCoinHoldersGrowthMonthly>(
+            "update_native_coin_holders_growth_monthly",
+            vec![("2022-11-01", "7")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_holders_growth_yearly() {
+        simple_test_chart::<NativeCoinHoldersGrowthYearly>(
+            "update_native_coin_holders_growth_yearly",
+            vec![("2022-01-01", "7")],
         )
         .await;
     }

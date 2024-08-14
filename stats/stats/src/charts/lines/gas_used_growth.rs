@@ -1,16 +1,24 @@
 use std::ops::Range;
 
 use crate::{
-    charts::db_interaction::types::DateValueDecimal,
     data_source::kinds::{
-        data_manipulation::map::{Map, MapFunction},
-        local_db::CumulativeLocalDbChartSource,
+        data_manipulation::{
+            map::{Map, MapFunction},
+            resolutions::last_value::LastValueLowerResolution,
+        },
+        local_db::{
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    define_and_impl_resolution_properties,
+    types::timespans::{DateValue, Month, Week, Year},
     utils::sql_with_range_filter_opt,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -39,13 +47,13 @@ impl StatementFromRange for GasUsedPartialStatement {
 }
 
 pub type GasUsedPartialRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, DateValueDecimal>>;
+    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, NaiveDate, Decimal>>;
 
 pub struct IncrementsFromPartialSum;
 
-impl MapFunction<Vec<DateValueDecimal>> for IncrementsFromPartialSum {
-    type Output = Vec<DateValueDecimal>;
-    fn function(inner_data: Vec<DateValueDecimal>) -> Result<Self::Output, UpdateError> {
+impl MapFunction<Vec<DateValue<Decimal>>> for IncrementsFromPartialSum {
+    type Output = Vec<DateValue<Decimal>>;
+    fn function(inner_data: Vec<DateValue<Decimal>>) -> Result<Self::Output, UpdateError> {
         Ok(inner_data
             .into_iter()
             .scan(Decimal::ZERO, |state, mut next| {
@@ -60,13 +68,17 @@ impl MapFunction<Vec<DateValueDecimal>> for IncrementsFromPartialSum {
 
 pub type NewGasUsedRemote = Map<GasUsedPartialRemote, IncrementsFromPartialSum>;
 
-pub struct GasUsedGrowthProperties;
+pub struct Properties;
 
-impl Named for GasUsedGrowthProperties {
-    const NAME: &'static str = "gasUsedGrowth";
+impl Named for Properties {
+    fn name() -> String {
+        "gasUsedGrowth".into()
+    }
 }
 
-impl ChartProperties for GasUsedGrowthProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -75,11 +87,35 @@ impl ChartProperties for GasUsedGrowthProperties {
     }
 }
 
-pub type GasUsedGrowth = CumulativeLocalDbChartSource<NewGasUsedRemote, GasUsedGrowthProperties>;
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type GasUsedGrowth = DailyCumulativeLocalDbChartSource<NewGasUsedRemote, Properties>;
+pub type GasUsedGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<GasUsedGrowth, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type GasUsedGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<GasUsedGrowth, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type GasUsedGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<GasUsedGrowthMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::GasUsedGrowth;
+    use super::*;
     use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
 
     #[tokio::test]
@@ -97,6 +133,48 @@ mod tests {
                 ("2023-02-01", "389580"),
                 ("2023-03-01", "403140"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_gas_used_growth_weekly() {
+        simple_test_chart::<GasUsedGrowthWeekly>(
+            "update_gas_used_growth_weekly",
+            vec![
+                ("2022-11-07", "250680"),
+                ("2022-11-28", "288350"),
+                ("2022-12-26", "334650"),
+                ("2023-01-30", "389580"),
+                ("2023-02-27", "403140"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_gas_used_growth_monthly() {
+        simple_test_chart::<GasUsedGrowthMonthly>(
+            "update_gas_used_growth_monthly",
+            vec![
+                ("2022-11-01", "250680"),
+                ("2022-12-01", "288350"),
+                ("2023-01-01", "334650"),
+                ("2023-02-01", "389580"),
+                ("2023-03-01", "403140"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_gas_used_growth_yearly() {
+        simple_test_chart::<GasUsedGrowthYearly>(
+            "update_gas_used_growth_yearly",
+            vec![("2022-01-01", "288350"), ("2023-01-01", "403140")],
         )
         .await;
     }

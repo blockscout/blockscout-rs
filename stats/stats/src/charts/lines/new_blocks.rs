@@ -2,12 +2,25 @@ use std::ops::Range;
 
 use crate::{
     data_source::kinds::{
-        local_db::DirectVecLocalDbChartSource,
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            resolutions::sum::SumLowerResolution,
+        },
+        local_db::{
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, Named,
+    ChartProperties, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -35,21 +48,51 @@ impl StatementFromRange for NewBlocksStatement {
 }
 
 pub type NewBlocksRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, DateValueString>>;
+    RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, NaiveDate, String>>;
 
-pub struct NewBlocksProperties;
+pub struct Properties;
 
-impl Named for NewBlocksProperties {
-    const NAME: &'static str = "newBlocks";
+impl Named for Properties {
+    fn name() -> String {
+        "newBlocks".into()
+    }
 }
 
-impl ChartProperties for NewBlocksProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-pub type NewBlocks = DirectVecLocalDbChartSource<NewBlocksRemote, NewBlocksProperties>;
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type NewBlocks = DirectVecLocalDbChartSource<NewBlocksRemote, Batch30Days, Properties>;
+pub type NewBlocksInt = MapParseTo<NewBlocks, i64>;
+pub type NewBlocksWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewBlocksInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewBlocksMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewBlocksInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewBlocksMonthlyInt = MapParseTo<NewBlocksMonthly, i64>;
+pub type NewBlocksYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewBlocksMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -58,11 +101,15 @@ mod tests {
         charts::db_interaction::read::get_min_block_blockscout,
         data_source::{DataSource, UpdateContext},
         get_line_chart_data,
-        tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-        ExtendedDateValue, Named,
+        tests::{
+            init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data,
+            point_construction::dt, simple_test::simple_test_chart,
+        },
+        types::ExtendedTimespanValue,
     };
+
     use chrono::{NaiveDate, Utc};
-    use entity::chart_data;
+    use entity::{chart_data, charts};
     use pretty_assertions::assert_eq;
     use sea_orm::{DatabaseConnection, EntityTrait, Set};
     use std::str::FromStr;
@@ -101,8 +148,18 @@ mod tests {
         .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
+        // set corresponding `last_updated_at` for successful partial update
+        charts::Entity::update(charts::ActiveModel {
+            id: Set(1),
+            last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
+            ..Default::default()
+        })
+        .exec(&db as &DatabaseConnection)
+        .await
+        .unwrap();
 
-        // Note that update is not full, therefore there is no entry with date `2022-11-09`
+        // Note that update is not full, therefore there is no entry with date `2022-11-09` and
+        // wrong value is kept
         let mut cx = UpdateContext {
             db: &db,
             blockscout: &blockscout,
@@ -110,9 +167,9 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            NewBlocks::NAME,
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -123,18 +180,18 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-10").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-11").unwrap(),
-                value: "4".into(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-11").unwrap(),
+                value: "100".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-12").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
             },
@@ -146,9 +203,9 @@ mod tests {
         // need to update time so that the update is not ignored as the same one
         cx.time = chrono::DateTime::<Utc>::from_str("2022-11-12T13:00:00Z").unwrap();
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            NewBlocks::NAME,
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -159,23 +216,23 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-09").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-10").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-11").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-12").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
             },
@@ -203,9 +260,9 @@ mod tests {
             force_full: true,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            NewBlocks::NAME,
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -216,23 +273,23 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-09").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-10").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "3".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-11").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-12").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: false,
             },
@@ -254,7 +311,7 @@ mod tests {
             .unwrap();
 
         let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
-        // set wrong values and check, that they wasn't rewritten
+        // set wrong values and check, that they weren't rewritten
         // except the last one
         chart_data::Entity::insert_many([
             chart_data::ActiveModel {
@@ -289,6 +346,15 @@ mod tests {
         .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
+        // set corresponding `last_updated_at` for successful partial update
+        charts::Entity::update(charts::ActiveModel {
+            id: Set(1),
+            last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
+            ..Default::default()
+        })
+        .exec(&db as &DatabaseConnection)
+        .await
+        .unwrap();
 
         let cx = UpdateContext {
             db: &db,
@@ -297,9 +363,9 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data(
+        let data = get_line_chart_data::<NaiveDate>(
             &db,
-            NewBlocks::NAME,
+            &NewBlocks::name(),
             None,
             None,
             None,
@@ -310,27 +376,88 @@ mod tests {
         .await
         .unwrap();
         let expected = vec![
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-09").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-09").unwrap(),
                 value: "2".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-10").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-10").unwrap(),
                 value: "4".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-11").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-11").unwrap(),
                 value: "5".into(),
                 is_approximate: false,
             },
-            ExtendedDateValue {
-                date: NaiveDate::from_str("2022-11-12").unwrap(),
+            ExtendedTimespanValue {
+                timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
                 is_approximate: true,
             },
         ];
         assert_eq!(expected, data);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_blocks() {
+        simple_test_chart::<NewBlocks>(
+            "update_new_blocks",
+            vec![
+                ("2022-11-09", "1"),
+                ("2022-11-10", "3"),
+                ("2022-11-11", "4"),
+                ("2022-11-12", "1"),
+                ("2022-12-01", "1"),
+                ("2023-01-01", "1"),
+                ("2023-02-01", "1"),
+                ("2023-03-01", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_blocks_weekly() {
+        simple_test_chart::<NewBlocksWeekly>(
+            "update_new_blocks_weekly",
+            vec![
+                ("2022-11-07", "9"),
+                ("2022-11-28", "1"),
+                ("2022-12-26", "1"),
+                ("2023-01-30", "1"),
+                ("2023-02-27", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_blocks_monthly() {
+        simple_test_chart::<NewBlocksMonthly>(
+            "update_new_blocks_monthly",
+            vec![
+                ("2022-11-01", "9"),
+                ("2022-12-01", "1"),
+                ("2023-01-01", "1"),
+                ("2023-02-01", "1"),
+                ("2023-03-01", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_blocks_yearly() {
+        simple_test_chart::<NewBlocksYearly>(
+            "update_new_blocks_yearly",
+            vec![("2022-01-01", "10"), ("2023-01-01", "3")],
+        )
+        .await;
     }
 }

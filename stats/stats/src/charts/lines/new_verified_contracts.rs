@@ -1,15 +1,26 @@
 use std::ops::Range;
 
 use crate::{
-    charts::db_interaction::types::DateValueInt,
     data_source::kinds::{
-        data_manipulation::map::MapParseTo,
-        local_db::DirectVecLocalDbChartSource,
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            resolutions::sum::SumLowerResolution,
+        },
+        local_db::{
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, Named,
+    ChartProperties, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -35,28 +46,56 @@ impl StatementFromRange for NewVerifiedContractsStatement {
 }
 
 pub type NewVerifiedContractsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewVerifiedContractsStatement, DateValueString>>;
+    RemoteDatabaseSource<PullAllWithAndSort<NewVerifiedContractsStatement, NaiveDate, String>>;
 
-pub struct NewVerifiedContractsProperties;
+pub struct Properties;
 
-impl Named for NewVerifiedContractsProperties {
-    const NAME: &'static str = "newVerifiedContracts";
+impl Named for Properties {
+    fn name() -> String {
+        "newVerifiedContracts".into()
+    }
 }
 
-impl ChartProperties for NewVerifiedContractsProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-pub type NewVerifiedContracts =
-    DirectVecLocalDbChartSource<NewVerifiedContractsRemote, NewVerifiedContractsProperties>;
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
 
-pub type NewVerifiedContractsInt = MapParseTo<NewVerifiedContracts, DateValueInt>;
+pub type NewVerifiedContracts =
+    DirectVecLocalDbChartSource<NewVerifiedContractsRemote, Batch30Days, Properties>;
+pub type NewVerifiedContractsInt = MapParseTo<NewVerifiedContracts, i64>;
+pub type NewVerifiedContractsWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewVerifiedContractsInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewVerifiedContractsMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewVerifiedContractsInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewVerifiedContractsMonthlyInt = MapParseTo<NewVerifiedContractsMonthly, i64>;
+pub type NewVerifiedContractsYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewVerifiedContractsMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::NewVerifiedContracts;
+    use super::*;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
@@ -69,6 +108,36 @@ mod tests {
                 ("2022-11-15", "1"),
                 ("2022-11-16", "1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_verified_contracts_weekly() {
+        simple_test_chart::<NewVerifiedContractsWeekly>(
+            "update_new_verified_contracts_weekly",
+            vec![("2022-11-14", "3")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_verified_contracts_monthly() {
+        simple_test_chart::<NewVerifiedContractsMonthly>(
+            "update_new_verified_contracts_monthly",
+            vec![("2022-11-01", "3")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_verified_contracts_yearly() {
+        simple_test_chart::<NewVerifiedContractsYearly>(
+            "update_new_verified_contracts_yearly",
+            vec![("2022-01-01", "3")],
         )
         .await;
     }

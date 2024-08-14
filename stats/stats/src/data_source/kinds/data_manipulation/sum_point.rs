@@ -13,9 +13,9 @@ use rust_decimal::prelude::Zero;
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
-    charts::db_interaction::types::DateValue,
     data_processing::sum,
     data_source::{source::DataSource, UpdateContext},
+    types::{Timespan, TimespanValue},
     UpdateError,
 };
 
@@ -26,20 +26,22 @@ use crate::{
 /// [see "Dependency requirements" here](crate::data_source::kinds)
 ///
 /// See [module-level documentation](self) for more details.
-pub struct Sum<D>(PhantomData<D>)
+pub struct Sum<DS>(PhantomData<DS>)
 where
-    D: DataSource;
+    DS: DataSource;
 
-impl<D, DV> DataSource for Sum<D>
+impl<DS, Resolution, Value> DataSource for Sum<DS>
 where
-    D: DataSource<Output = Vec<DV>>,
-    DV: DateValue + Send,
-    DV::Value: AddAssign + Clone + Zero,
+    Resolution: Timespan + Ord + Clone + Send,
+    Value: AddAssign + Clone + Zero + Send,
+    DS: DataSource<Output = Vec<TimespanValue<Resolution, Value>>>,
 {
-    type MainDependencies = D;
+    type MainDependencies = DS;
     type ResolutionDependencies = ();
-    type Output = DV;
-    const MUTEX_ID: Option<&'static str> = None;
+    type Output = TimespanValue<Resolution, Value>;
+    fn mutex_id() -> Option<String> {
+        None
+    }
 
     async fn init_itself(
         _db: &DatabaseConnection,
@@ -61,9 +63,9 @@ where
     ) -> Result<Self::Output, UpdateError> {
         // it's possible to not request full data range and use last accurate point;
         // can be updated to work similarly to cumulative
-        let full_data = D::query_data(cx, None, dependency_data_fetch_timer).await?;
+        let full_data = DS::query_data(cx, None, dependency_data_fetch_timer).await?;
         tracing::debug!(points_len = full_data.len(), "calculating sum");
-        let zero = <DV as DateValue>::Value::zero();
-        sum::<DV>(&full_data, zero)
+        let zero = Value::zero();
+        sum::<Resolution, Value>(&full_data, zero)
     }
 }

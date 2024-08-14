@@ -3,10 +3,14 @@ use std::future::Future;
 use chrono::{DateTime, Utc};
 use sea_orm::DatabaseConnection;
 
-use crate::{DateValueString, UpdateError};
+use crate::{
+    types::{Timespan, TimespanValue},
+    UpdateError,
+};
 
-pub trait BatchStepBehaviour<MainInput, ResolutionInput>
+pub trait BatchStepBehaviour<Resolution, MainInput, ResolutionInput>
 where
+    Resolution: Timespan,
     MainInput: Send,
     ResolutionInput: Send,
 {
@@ -18,7 +22,7 @@ where
         chart_id: i32,
         update_time: DateTime<Utc>,
         min_blockscout_block: i64,
-        last_accurate_point: DateValueString,
+        last_accurate_point: TimespanValue<Resolution, String>,
         main_data: MainInput,
         resolution_data: ResolutionInput,
     ) -> impl Future<Output = Result<usize, UpdateError>> + std::marker::Send;

@@ -3,9 +3,12 @@ use blockscout_service_launcher::{
     test_server::{get_test_server_settings, init_server, send_get_request},
 };
 use chrono::NaiveDate;
-use stats::tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
+use stats::{
+    tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+    ResolutionKind,
+};
 use stats_server::{stats, Settings};
-use std::{path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 #[tokio::test]
 #[ignore = "needs database"]
@@ -45,6 +48,13 @@ async fn test_lines_ok() {
     ];
     assert_eq!(sections, expected_sections, "wrong sections response");
 
+    let enabled_resolutions: HashMap<String, Vec<String>> = line_charts
+        .sections
+        .iter()
+        .flat_map(|sec| sec.charts.clone())
+        .map(|l| (l.id, l.resolutions))
+        .collect();
+
     for line_name in [
         "accountsGrowth",
         "activeAccounts",
@@ -69,16 +79,34 @@ async fn test_lines_ok() {
         "verifiedContractsGrowth",
         "contractsGrowth",
     ] {
-        let chart: serde_json::Value =
-            send_get_request(&base, &format!("/api/v1/lines/{line_name}")).await;
-        let chart = chart
-            .as_object()
-            .expect("response has to be json object")
-            .get("chart")
-            .expect("response doesn't have 'chart' field")
-            .as_array()
-            .expect("'chart' field has to be json array");
+        let line_resolutions = enabled_resolutions
+            .get(line_name)
+            .unwrap_or_else(|| panic!("must return chart info for {}", &line_name));
+        assert!(
+            line_resolutions.contains(&ResolutionKind::Day.into()),
+            "At least day resolution must be enabled for enabled chart"
+        );
+        for resolution in line_resolutions {
+            let chart: serde_json::Value = send_get_request(
+                &base,
+                &format!("/api/v1/lines/{line_name}?resolution={resolution}"),
+            )
+            .await;
+            let chart = chart
+                .as_object()
+                .expect("response has to be json object")
+                .get("chart")
+                .expect("response doesn't have 'chart' field")
+                .as_array()
+                .expect("'chart' field has to be json array");
 
-        assert!(!chart.is_empty(), "chart '{line_name}' is empty");
+            assert!(
+                !chart.is_empty(),
+                "chart '{line_name}' '{resolution}' is empty"
+            );
+        }
+        // should work even without `resolution` parameter
+        let _chart: serde_json::Value =
+            send_get_request(&base, &format!("/api/v1/lines/{line_name}")).await;
     }
 }

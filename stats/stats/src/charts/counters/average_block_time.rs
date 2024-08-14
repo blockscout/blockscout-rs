@@ -1,5 +1,4 @@
 use crate::{
-    charts::db_interaction::types::DateValueDouble,
     data_source::kinds::{
         data_manipulation::map::MapToString,
         local_db::DirectPointLocalDbChartSource,
@@ -8,6 +7,7 @@ use crate::{
     ChartProperties, MissingDatePolicy, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
@@ -38,17 +38,21 @@ impl StatementForOne for AverageBlockTimeStatement {
 }
 
 pub type AverageBlockTimeRemote =
-    RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, DateValueDouble>>;
+    RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, NaiveDate, f64>>;
 
 pub type AverageBlockTimeRemoteString = MapToString<AverageBlockTimeRemote>;
 
-pub struct AverageBlockTimeProperties;
+pub struct Properties;
 
-impl Named for AverageBlockTimeProperties {
-    const NAME: &'static str = "averageBlockTime";
+impl Named for Properties {
+    fn name() -> String {
+        "averageBlockTime".into()
+    }
 }
 
-impl ChartProperties for AverageBlockTimeProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }
@@ -57,8 +61,7 @@ impl ChartProperties for AverageBlockTimeProperties {
     }
 }
 
-pub type AverageBlockTime =
-    DirectPointLocalDbChartSource<AverageBlockTimeRemoteString, AverageBlockTimeProperties>;
+pub type AverageBlockTime = DirectPointLocalDbChartSource<AverageBlockTimeRemoteString, Properties>;
 
 #[cfg(test)]
 mod tests {

@@ -22,17 +22,27 @@ message Counter {
 
 message Counters { repeated Counter counters = 1; }
 
+enum Resolution {
+  RESOLUTION_UNSPECIFIED = 0;
+  DAY = 1;
+  WEEK = 2;
+  MONTH = 3;
+  YEAR = 4;
+}
+
 message GetLineChartRequest {
   string name = 1;
   // Default is first data point
   optional string from = 2;
   // Default is last data point
   optional string to = 3;
+  Resolution resolution = 4;
 }
 
 // All integers are encoded as strings to prevent data loss
 message Point {
   string date = 1;
+  string date_to = 4;
   string value = 2;
   bool is_approximate = 3;
 }
@@ -41,11 +51,15 @@ message LineChart { repeated Point chart = 1; }
 
 message GetLineChartsRequest {}
 
+// todo: replace LineChartInfo::resolutions with enum when supported
+// (probably this https://github.com/blockscout/actix-prost/pull/24/files)
+
 message LineChartInfo {
   string id = 1;
   string title = 2;
   string description = 3;
   optional string units = 4;
+  repeated string resolutions = 5;
 }
 
 message LineChartSection {

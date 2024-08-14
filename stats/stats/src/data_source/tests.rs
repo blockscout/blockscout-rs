@@ -1,30 +1,37 @@
 use std::{collections::HashSet, ops::Range, str::FromStr, sync::Arc};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 use tokio::sync::Mutex;
 
 use super::{
     kinds::{
-        data_manipulation::map::MapParseTo,
+        data_manipulation::{map::MapParseTo, resolutions::last_value::LastValueLowerResolution},
         local_db::{
-            parameters::update::batching::parameter_traits::BatchStepBehaviour,
-            BatchLocalDbChartSourceWithDefaultParams, CumulativeLocalDbChartSource,
-            DirectVecLocalDbChartSource,
+            parameters::{
+                update::batching::{
+                    parameter_traits::BatchStepBehaviour,
+                    parameters::{Batch30Days, Batch30Weeks, Batch30Years, Batch36Months},
+                    BatchUpdate,
+                },
+                DefaultCreate, DefaultQueryVec,
+            },
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource, LocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     types::UpdateParameters,
 };
 use crate::{
-    charts::db_interaction::types::DateValueInt,
     construct_update_group,
     data_source::kinds::local_db::parameters::update::batching::parameters::PassVecStep,
+    define_and_impl_resolution_properties,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+    types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 pub struct NewContractsQuery;
@@ -71,15 +78,19 @@ impl StatementFromRange for NewContractsQuery {
 }
 
 pub type NewContractsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewContractsQuery, DateValueString>>;
+    RemoteDatabaseSource<PullAllWithAndSort<NewContractsQuery, NaiveDate, String>>;
 
 pub struct NewContractsChartProperties;
 
 impl Named for NewContractsChartProperties {
-    const NAME: &'static str = "newContracts";
+    fn name() -> String {
+        "newContracts".into()
+    }
 }
 
 impl ChartProperties for NewContractsChartProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -87,17 +98,21 @@ impl ChartProperties for NewContractsChartProperties {
 
 // Directly uses results of SQL query (from `NewContractsRemote`)
 pub type NewContracts =
-    DirectVecLocalDbChartSource<NewContractsRemote, NewContractsChartProperties>;
+    DirectVecLocalDbChartSource<NewContractsRemote, Batch30Days, NewContractsChartProperties>;
 
-pub type NewContractsInt = MapParseTo<NewContracts, DateValueInt>;
+pub type NewContractsInt = MapParseTo<NewContracts, i64>;
 
 pub struct ContractsGrowthProperties;
 
 impl Named for ContractsGrowthProperties {
-    const NAME: &'static str = "contractsGrowth";
+    fn name() -> String {
+        "contractsGrowth".into()
+    }
 }
 
 impl ChartProperties for ContractsGrowthProperties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
@@ -107,23 +122,50 @@ impl ChartProperties for ContractsGrowthProperties {
 }
 
 // We can use convenient common implementation to get growth chart
-pub type ContractsGrowth = CumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        ContractsGrowthWeeklyProperties:  Week,
+        ContractsGrowthMonthlyProperties: Month,
+        ContractsGrowthYearlyProperties: Year,
+    },
+    base_impl: ContractsGrowthProperties
+);
 
-// Alternatively, if we wanted to preform some custom logic on each batch step, we can do
+pub type ContractsGrowth =
+    DailyCumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
+pub type ContractsGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<ContractsGrowth, Week>,
+    Batch30Weeks,
+    ContractsGrowthWeeklyProperties,
+>;
+pub type ContractsGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<ContractsGrowth, Month>,
+    Batch36Months,
+    ContractsGrowthMonthlyProperties,
+>;
+pub type ContractsGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<ContractsGrowth, Year>,
+    Batch30Years,
+    ContractsGrowthYearlyProperties,
+>;
+
+// Alternatively, if we wanted to preform some custom logic on each batch step, we could do
 #[allow(unused)]
 struct ContractsGrowthCustomBatchStepBehaviour;
 
-impl BatchStepBehaviour<Vec<DateValueString>, ()> for ContractsGrowthCustomBatchStepBehaviour {
+impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
+    for ContractsGrowthCustomBatchStepBehaviour
+{
     async fn batch_update_values_step_with(
         _db: &DatabaseConnection,
         _chart_id: i32,
         _update_time: DateTime<Utc>,
         _min_blockscout_block: i64,
-        _last_accurate_point: DateValueString,
-        _main_data: Vec<DateValueString>,
+        _last_accurate_point: DateValue<String>,
+        _main_data: Vec<DateValue<String>>,
         _resolution_data: (),
     ) -> Result<usize, UpdateError> {
-        // do something
+        // do something (just an example, not intended for running)
         todo!();
         // save data
         #[allow(unreachable_code)]
@@ -141,16 +183,31 @@ impl BatchStepBehaviour<Vec<DateValueString>, ()> for ContractsGrowthCustomBatch
 }
 
 #[allow(unused)]
-type AlternativeContractsGrowth = BatchLocalDbChartSourceWithDefaultParams<
+type AlternativeContractsGrowth = LocalDbChartSource<
     NewContracts,
     (),
-    ContractsGrowthCustomBatchStepBehaviour,
+    DefaultCreate<ContractsGrowthProperties>,
+    BatchUpdate<
+        NewContracts,
+        (),
+        ContractsGrowthCustomBatchStepBehaviour,
+        Batch30Days,
+        DefaultQueryVec<ContractsGrowthProperties>,
+        ContractsGrowthProperties,
+    >,
+    DefaultQueryVec<ContractsGrowthProperties>,
     ContractsGrowthProperties,
 >;
 
 // Put the data sources into the group
 construct_update_group!(ExampleUpdateGroup {
-    charts: [NewContracts, ContractsGrowth],
+    charts: [
+        NewContracts,
+        ContractsGrowth,
+        ContractsGrowthWeekly,
+        ContractsGrowthMonthly,
+        ContractsGrowthYearly,
+    ],
 });
 
 #[tokio::test]
@@ -163,8 +220,8 @@ async fn update_examples() {
     fill_mock_blockscout_data(&blockscout, current_date).await;
     let enabled = HashSet::from(
         [
-            NewContractsChartProperties::NAME,
-            ContractsGrowthProperties::NAME,
+            NewContractsChartProperties::key(),
+            ContractsGrowthProperties::key(),
         ]
         .map(|l| l.to_owned()),
     );

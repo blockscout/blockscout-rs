@@ -37,7 +37,9 @@ where
     type MainDependencies = D;
     type ResolutionDependencies = ();
     type Output = F::Output;
-    const MUTEX_ID: Option<&'static str> = None;
+    fn mutex_id() -> Option<String> {
+        None
+    }
 
     async fn init_itself(
         _db: &DatabaseConnection,

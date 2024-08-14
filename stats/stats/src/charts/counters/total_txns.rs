@@ -6,15 +6,21 @@ use crate::{
     lines::NewTxnsInt,
     ChartProperties, MissingDatePolicy, Named,
 };
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
-pub struct TotalTxnsProperties;
+pub struct Properties;
 
-impl Named for TotalTxnsProperties {
-    const NAME: &'static str = "totalTxns";
+impl Named for Properties {
+    fn name() -> String {
+        "totalTxns".into()
+    }
 }
 
-impl ChartProperties for TotalTxnsProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }
@@ -23,8 +29,7 @@ impl ChartProperties for TotalTxnsProperties {
     }
 }
 
-pub type TotalTxns =
-    DirectPointLocalDbChartSource<MapToString<Sum<NewTxnsInt>>, TotalTxnsProperties>;
+pub type TotalTxns = DirectPointLocalDbChartSource<MapToString<Sum<NewTxnsInt>>, Properties>;
 
 #[cfg(test)]
 mod tests {

@@ -1,50 +1,58 @@
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use crate::{
-    charts::db_interaction::types::DateValue,
-    data_source::kinds::data_manipulation::map::MapFunction, DateValueString, UpdateError,
+    data_source::kinds::data_manipulation::map::MapFunction, types::TimespanValue, UpdateError,
 };
 
 use super::Map;
 
-pub struct ParseToFunction<D: DateValue>(PhantomData<D>);
+pub struct ParseToFunction<Value>(PhantomData<Value>);
 
-impl<D> MapFunction<Vec<DateValueString>> for ParseToFunction<D>
+impl<Resolution, Value> MapFunction<Vec<TimespanValue<Resolution, String>>>
+    for ParseToFunction<Value>
 where
-    D: DateValue + Send,
-    D::Value: FromStr,
-    <D::Value as FromStr>::Err: Display,
+    Resolution: Send,
+    Value: FromStr + Send,
+    <Value as FromStr>::Err: Display,
 {
-    type Output = Vec<D>;
+    type Output = Vec<TimespanValue<Resolution, Value>>;
 
-    fn function(inner_data: Vec<DateValueString>) -> Result<Vec<D>, UpdateError> {
+    fn function(
+        inner_data: Vec<TimespanValue<Resolution, String>>,
+    ) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError> {
         inner_data
             .into_iter()
             .map(|p| {
-                let (date, val_str) = p.into_parts();
-                let val_parsed = val_str.parse::<D::Value>().map_err(|e| {
+                let val_parsed = p.value.parse::<Value>().map_err(|e| {
                     UpdateError::Internal(format!("failed to parse values of dependency: {e}"))
                 })?;
-                Ok(D::from_parts(date, val_parsed))
+                Ok(TimespanValue {
+                    timespan: p.timespan,
+                    value: val_parsed,
+                })
             })
-            .collect::<Result<Vec<D>, UpdateError>>()
+            .collect::<Result<Vec<_>, UpdateError>>()
     }
 }
 
-impl<D> MapFunction<DateValueString> for ParseToFunction<D>
+impl<Resolution, Value> MapFunction<TimespanValue<Resolution, String>> for ParseToFunction<Value>
 where
-    D: DateValue + Send,
-    D::Value: FromStr,
-    <D::Value as FromStr>::Err: Display,
+    Resolution: Send,
+    Value: FromStr + Send,
+    <Value as FromStr>::Err: Display,
 {
-    type Output = D;
+    type Output = TimespanValue<Resolution, Value>;
 
-    fn function(inner_data: DateValueString) -> Result<Self::Output, UpdateError> {
-        let (date, val_str) = inner_data.into_parts();
-        let val_parsed = val_str.parse::<D::Value>().map_err(|e| {
+    fn function(
+        inner_data: TimespanValue<Resolution, String>,
+    ) -> Result<Self::Output, UpdateError> {
+        let val_parsed = inner_data.value.parse::<Value>().map_err(|e| {
             UpdateError::Internal(format!("failed to parse values of dependency: {e}"))
         })?;
-        Ok(D::from_parts(date, val_parsed))
+        Ok(TimespanValue {
+            timespan: inner_data.timespan,
+            value: val_parsed,
+        })
     }
 }
 

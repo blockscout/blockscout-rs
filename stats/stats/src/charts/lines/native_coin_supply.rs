@@ -1,12 +1,18 @@
 use std::ops::Range;
 
 use crate::{
-    charts::db_interaction::types::DateValueDouble,
     data_source::kinds::{
-        data_manipulation::map::MapToString,
-        local_db::DirectVecLocalDbChartSource,
+        data_manipulation::{map::MapToString, resolutions::last_value::LastValueLowerResolution},
+        local_db::{
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
     ChartProperties, Named,
 };
 
@@ -78,24 +84,52 @@ impl StatementFromRange for NativeCoinSupplyStatement {
 
 // query returns float value
 pub type NativeCoinSupplyRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, DateValueDouble>>;
+    RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, f64>>;
 
 pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
 
-pub struct NativeCoinSupplyProperties;
+pub struct Properties;
 
-impl Named for NativeCoinSupplyProperties {
-    const NAME: &'static str = "nativeCoinSupply";
+impl Named for Properties {
+    fn name() -> String {
+        "nativeCoinSupply".into()
+    }
 }
 
-impl ChartProperties for NativeCoinSupplyProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
 pub type NativeCoinSupply =
-    DirectVecLocalDbChartSource<NativeCoinSupplyRemoteString, NativeCoinSupplyProperties>;
+    DirectVecLocalDbChartSource<NativeCoinSupplyRemoteString, Batch30Days, Properties>;
+pub type NativeCoinSupplyWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinSupply, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NativeCoinSupplyMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinSupply, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NativeCoinSupplyYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<NativeCoinSupplyMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -112,6 +146,36 @@ mod tests {
                 ("2022-11-10", "6000"),
                 ("2022-11-11", "5000"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_supply_weekly() {
+        simple_test_chart::<NativeCoinSupplyWeekly>(
+            "update_native_coin_supply_weekly",
+            vec![("2022-11-07", "5000")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_supply_monthly() {
+        simple_test_chart::<NativeCoinSupplyMonthly>(
+            "update_native_coin_supply_monthly",
+            vec![("2022-11-01", "5000")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coin_supply_yearly() {
+        simple_test_chart::<NativeCoinSupplyYearly>(
+            "update_native_coin_supply_yearly",
+            vec![("2022-01-01", "5000")],
         )
         .await;
     }

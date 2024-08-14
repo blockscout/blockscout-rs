@@ -1,23 +1,8 @@
 use std::collections::BTreeMap;
 
-use crate::config::{
-    json,
-    types::{AllChartSettings, EnabledChartSettings, LineChartInfo},
-};
+use crate::config::{json, types::AllChartSettings};
 use convert_case::{Case, Casing};
 use serde::Deserialize;
-use stats_proto::blockscout::stats::v1 as proto;
-
-impl From<LineChartInfo<EnabledChartSettings>> for proto::LineChartInfo {
-    fn from(value: LineChartInfo<EnabledChartSettings>) -> Self {
-        Self {
-            id: value.id,
-            title: value.settings.title,
-            description: value.settings.description,
-            units: value.settings.units,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config<ChartSettings> {

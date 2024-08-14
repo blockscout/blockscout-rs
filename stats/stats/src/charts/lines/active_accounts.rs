@@ -4,13 +4,16 @@ use std::ops::Range;
 
 use crate::{
     data_source::kinds::{
-        local_db::DirectVecLocalDbChartSource,
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     utils::sql_with_range_filter_opt,
-    ChartProperties, DateValueString, Named,
+    ChartProperties, Named,
 };
 
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
@@ -39,22 +42,26 @@ impl StatementFromRange for ActiveAccountsStatement {
 }
 
 pub type ActiveAccountsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<ActiveAccountsStatement, DateValueString>>;
+    RemoteDatabaseSource<PullAllWithAndSort<ActiveAccountsStatement, NaiveDate, String>>;
 
-pub struct ActiveAccountsProperties;
+pub struct Properties;
 
-impl Named for ActiveAccountsProperties {
-    const NAME: &'static str = "activeAccounts";
+impl Named for Properties {
+    fn name() -> String {
+        "activeAccounts".into()
+    }
 }
 
-impl ChartProperties for ActiveAccountsProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
 pub type ActiveAccounts =
-    DirectVecLocalDbChartSource<ActiveAccountsRemote, ActiveAccountsProperties>;
+    DirectVecLocalDbChartSource<ActiveAccountsRemote, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {

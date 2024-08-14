@@ -4,20 +4,23 @@ use crate::{
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{QueryBehaviour, RemoteDatabaseSource},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         UpdateContext,
     },
-    ChartProperties, DateValueString, MissingDatePolicy, Named, UpdateError,
+    types::timespans::DateValue,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
+
 use blockscout_db::entity::addresses;
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::prelude::*;
 
 pub struct TotalContractsQueryBehaviour;
 
-impl QueryBehaviour for TotalContractsQueryBehaviour {
-    type Output = DateValueString;
+impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
+    type Output = DateValue<String>;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
@@ -29,9 +32,9 @@ impl QueryBehaviour for TotalContractsQueryBehaviour {
             .count(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
-        let date = cx.time.date_naive();
-        Ok(DateValueString {
-            date,
+        let timespan = cx.time.date_naive();
+        Ok(DateValue::<String> {
+            timespan,
             value: value.to_string(),
         })
     }
@@ -39,13 +42,17 @@ impl QueryBehaviour for TotalContractsQueryBehaviour {
 
 pub type TotalContractsRemote = RemoteDatabaseSource<TotalContractsQueryBehaviour>;
 
-pub struct TotalContractsProperties;
+pub struct Properties;
 
-impl Named for TotalContractsProperties {
-    const NAME: &'static str = "totalContracts";
+impl Named for Properties {
+    fn name() -> String {
+        "totalContracts".into()
+    }
 }
 
-impl ChartProperties for TotalContractsProperties {
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
     fn chart_type() -> ChartType {
         ChartType::Counter
     }
@@ -57,8 +64,7 @@ impl ChartProperties for TotalContractsProperties {
 // todo: reconsider once #845 is solved
 // https://github.com/blockscout/blockscout-rs/issues/845
 // i.e. set dependency to LastPointChart<ContractsGrowth>
-pub type TotalContracts =
-    DirectPointLocalDbChartSource<TotalContractsRemote, TotalContractsProperties>;
+pub type TotalContracts = DirectPointLocalDbChartSource<TotalContractsRemote, Properties>;
 
 #[cfg(test)]
 mod tests {
