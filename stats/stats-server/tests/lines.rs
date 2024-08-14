@@ -92,7 +92,7 @@ async fn test_lines_ok() {
                 &format!("/api/v1/lines/{line_name}?resolution={resolution}"),
             )
             .await;
-            let chart = chart
+            let chart_data = chart
                 .as_object()
                 .expect("response has to be json object")
                 .get("chart")
@@ -101,9 +101,19 @@ async fn test_lines_ok() {
                 .expect("'chart' field has to be json array");
 
             assert!(
-                !chart.is_empty(),
+                !chart_data.is_empty(),
                 "chart '{line_name}' '{resolution}' is empty"
             );
+
+            let info = chart
+                .get("info")
+                .expect("response doesn't have 'info' field");
+            let info: stats_proto::blockscout::stats::v1::LineChartInfo =
+                serde_json::from_value(info.clone()).expect("must return valid chart info");
+            assert_eq!(
+                info.id, line_name,
+                "returned chart id (left) doesn't match requested (right)",
+            )
         }
         // should work even without `resolution` parameter
         let _chart: serde_json::Value =

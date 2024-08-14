@@ -3,7 +3,6 @@
 use std::collections::{BTreeMap, HashSet};
 
 use cron::Schedule;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::ResolutionKind;
@@ -193,24 +192,6 @@ pub struct LineChartCategory {
 }
 
 impl LineChartCategory {
-    fn build_proto_line_chart_info(
-        id: String,
-        entry: &EnabledChartEntry,
-    ) -> proto_v1::LineChartInfo {
-        let settings = entry.settings.clone();
-        proto_v1::LineChartInfo {
-            id,
-            title: settings.title,
-            description: settings.description,
-            units: settings.units,
-            resolutions: entry
-                .enabled_resolutions
-                .keys()
-                .map(|r| String::from(*r))
-                .collect_vec(),
-        }
-    }
-
     /// Add settings to the charts within category.
     ///
     /// If the settings are not present - remove the chart (i.e. remove disabled
@@ -222,10 +203,7 @@ impl LineChartCategory {
         let charts: Vec<_> = self
             .charts_order
             .into_iter()
-            .flat_map(|c: String| {
-                info.get(&c)
-                    .map(|e| Self::build_proto_line_chart_info(c, e))
-            })
+            .flat_map(|c: String| info.get(&c).map(|e| e.build_proto_line_chart_info(c)))
             .collect();
         proto_v1::LineChartSection {
             id: self.id,
