@@ -1,7 +1,7 @@
 DA Indexer Service
 ===
 
-The DA Indexer service collects blobs from different DA solutions (currently only Celestia and EigenDA) and provides a convenient API for fetching blob data.
+The DA Indexer service collects blobs from different DA solutions (currently only Celestia and EigenDA) and provides a convenient API for fetching blob data. In addition to indexing blobs, this service can be configured to fetch L2 batch metadata corresponding to a specific blob (currently only available for Celestia).
 
 ## Celestia
 The Celestia indexer runs on top of the [Celestia light node](https://docs.celestia.org/nodes/light-node). It is worth noting that the indexer collects only blobs and some block metadata, it does not collect full blocks, transactions, etc.
@@ -23,6 +23,7 @@ The EigenDA indexer runs on top of the EigenDA disperser. It is worth mentioning
 | DA_INDEXER__INDEXER__RETRY_INTERVAL                     | The delay between attempts to reprocess failed jobs    | 180 seconds                      |
 | DA_INDEXER__INDEXER__CATCHUP_INTERVAL                   | The delay between attempts to process missing jobs     | 0 seconds                        |
 | DA_INDEXER__DA__TYPE                                    | "Celestia" or "EigenDA"                                |                                  |
+| DA_INDEXER__L2_ROUTER__ROUTES_PATH                      | Path to the routes config file                         |                                  |
 
 
 ### Celestia
@@ -44,6 +45,21 @@ The EigenDA indexer runs on top of the EigenDA disperser. It is worth mentioning
 | DA_INDEXER__INDEXER__DA__SAVE_BATCH_SIZE                | The number of blobs to save per db transaction         |                                  |
 | DA_INDEXER__INDEXER__DA__PRUNING_BLOCK_THRESHOLD        | The threshold above which blobs might be unavailable   |                                  |
 
+### L2 Batch Metadata
+To fetch L2 batch metadata, the service must be aware of the L2s that use Celestia as a DA layer and the namespaces they utilize. This information is configured in a separate file, with its path specified in the `DA_INDEXER__L2_ROUTER__ROUTES_PATH` environment variable. Indexer and database configuration are optional if the `DA_INDEXER__L2_ROUTER__ROUTES_PATH` environment variable is set. An example of the routes config is shown below:
+```toml
+[routes.0x00000000000000000000000000000000000000000008e5f679bf7116cb]
+chain_type = "Optimism"
+chain_id = 123420111
+l2_api_url = "https://opcelestia-raspberry.gelatoscout.com/"
+l2_blockscout_url = "https://opcelestia-raspberry.gelatoscout.com/"
+
+[routes.0x00000000000000000000000000000000000000ca1de12a1f4dbe943b6b]
+chain_type = "Arbitrum"
+chain_id = 123
+l2_api_url = "http://localhost:3001"
+l2_blockscout_url = "http://arbitrum.blockscout.com"
+```
 
 ## Dev
 
