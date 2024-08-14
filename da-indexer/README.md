@@ -49,16 +49,17 @@ The EigenDA indexer runs on top of the EigenDA disperser. It is worth mentioning
 To fetch L2 batch metadata, the service must be aware of the L2s that use Celestia as a DA layer and the namespaces they utilize. This information is configured in a separate file, with its path specified in the `DA_INDEXER__L2_ROUTER__ROUTES_PATH` environment variable. Indexer and database configuration are optional if the `DA_INDEXER__L2_ROUTER__ROUTES_PATH` environment variable is set. An example of the routes config is shown below:
 ```toml
 [routes.0x00000000000000000000000000000000000000000008e5f679bf7116cb]
-chain_type = "Optimism"
-chain_id = 123420111
+l2_chain_type = "Optimism"
+l2_chain_id = 123420111
 l2_api_url = "https://opcelestia-raspberry.gelatoscout.com/"
 l2_blockscout_url = "https://opcelestia-raspberry.gelatoscout.com/"
 
 [routes.0x00000000000000000000000000000000000000ca1de12a1f4dbe943b6b]
-chain_type = "Arbitrum"
-chain_id = 123
+l2_chain_type = "Arbitrum"
+l2_chain_id = 123
 l2_api_url = "http://localhost:3001"
 l2_blockscout_url = "http://arbitrum.blockscout.com"
+l1_chain_id = 456 # optional
 ```
 
 ## Dev

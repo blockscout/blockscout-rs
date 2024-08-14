@@ -49,7 +49,7 @@ impl L2Router {
         }
         let config = config.unwrap();
 
-        match config.chain_type {
+        match config.l2_chain_type {
             L2Type::Optimism => optimism::get_l2_batch(config, height, commitment).await,
             L2Type::Arbitrum => arbitrum::get_l2_batch(config, height, commitment).await,
         }

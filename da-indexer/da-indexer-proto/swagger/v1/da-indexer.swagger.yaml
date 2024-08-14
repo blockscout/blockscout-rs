@@ -177,7 +177,7 @@ definitions:
   v1CelestiaL2BatchMetadata:
     type: object
     properties:
-      chainId:
+      l2ChainId:
         type: integer
         format: int64
       l2BatchId:
@@ -198,6 +198,9 @@ definitions:
       l1TxTimestamp:
         type: string
         format: uint64
+      l1ChainId:
+        type: integer
+        format: int64
       relatedBlobs:
         type: array
         items:

@@ -36,15 +36,16 @@ message CelestiaBlobId {
 }
 
 message CelestiaL2BatchMetadata {
-  uint32 chain_id = 1;
+  uint32 l2_chain_id = 1;
   string l2_batch_id = 2;
   uint64 l2_start_block = 3;
   uint64 l2_end_block = 4;
   uint32 l2_batch_tx_count = 5;
-  string l2_blockscout_url = 8;
-  string l1_tx_hash = 6;
-  uint64 l1_tx_timestamp = 7;
-  repeated CelestiaBlobId related_blobs = 9;
+  string l2_blockscout_url = 6;
+  string l1_tx_hash = 7;
+  uint64 l1_tx_timestamp = 8;
+  optional uint32 l1_chain_id = 9;
+  repeated CelestiaBlobId related_blobs = 10;
 }
 
 message GetEigenDaBlobRequest {
