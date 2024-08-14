@@ -19,7 +19,7 @@ use lazy_static::lazy_static;
 use std::ops::Div;
 
 lazy_static! {
-    static ref ENTRYPOINT: ethers::types::Address = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
+    static ref ENTRYPOINT: ethers::types::Address = "0x2843C269D2a64eCfA63548E8B3Fc0FD23B7F70cb"
         .parse()
         .unwrap();
 }
