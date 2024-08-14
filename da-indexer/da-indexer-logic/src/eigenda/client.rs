@@ -77,10 +77,10 @@ impl Client {
         blob_index: u32,
     ) -> Result<Vec<u8>, Status> {
         tracing::debug!(batch_id, blob_index, "fetching blob");
-        let retrieve_request = tonic::Request::new(RetrieveBlobRequest {
-            batch_header_hash: batch_header_hash.clone(),
+        let retrieve_request = RetrieveBlobRequest {
+            batch_header_hash,
             blob_index,
-        });
+        };
         let mut client = self.client.clone();
         client
             .retrieve_blob(retrieve_request)
