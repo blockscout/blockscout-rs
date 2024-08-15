@@ -260,6 +260,42 @@ impl RuntimeSetup {
     /// Check if some dependencies are not present in their respective groups
     /// and make corresponding warn
     fn warn_non_member_charts(groups: &BTreeMap<String, ArcUpdateGroup>) {
+        // it's ok for `newBlocks` to be missed here, because
+        // `newBlocks_*` have their own group `NewBlocksGroup`
+        let missing_members_allowed: HashMap<String, HashSet<String>> = [
+            (
+                "AverageBlockRewardsGroup",
+                vec!["newBlocks_MONTH", "newBlocks_DAY"],
+            ),
+            (
+                "AverageBlockSizeGroup",
+                vec!["newBlocks_MONTH", "newBlocks_DAY"],
+            ),
+            (
+                "AverageGasLimitGroup",
+                vec!["newBlocks_DAY", "newBlocks_MONTH"],
+            ),
+            (
+                "AverageGasPriceGroup",
+                vec!["newBlocks_DAY", "newBlocks_MONTH"],
+            ),
+            (
+                "AverageTxnFeeGroup",
+                vec!["newBlocks_MONTH", "newBlocks_DAY"],
+            ),
+            (
+                "TxnsSuccessRateGroup",
+                vec!["newBlocks_DAY", "newBlocks_MONTH"],
+            ),
+        ]
+        .map(|(group_name, allowed_missing)| {
+            (
+                group_name.to_owned(),
+                allowed_missing.into_iter().map(|s| s.to_string()).collect(),
+            )
+        })
+        .into();
+
         for (name, group) in groups {
             let sync_dependencies: HashSet<String> = group
                 .list_dependency_mutex_ids()
@@ -273,7 +309,13 @@ impl RuntimeSetup {
                 .into_iter()
                 .map(|c| c.key.as_string())
                 .collect();
-            let missing_members = sync_dependencies.difference(&members).collect_vec();
+            let missing_members: HashSet<String> =
+                sync_dependencies.difference(&members).cloned().collect();
+            let empty_set = HashSet::new();
+            let group_missing_allowed = missing_members_allowed.get(name).unwrap_or(&empty_set);
+            let missing_members = missing_members
+                .difference(&group_missing_allowed)
+                .collect_vec();
             if !missing_members.is_empty() {
                 tracing::warn!(
                     update_group = name,
