@@ -23,27 +23,26 @@ impl<S: Subscriber + for<'lookup> LookupSpan<'lookup>> Layer<S> for RequestIdSto
 
         let request_id = if let Some(parent_span) = span.parent() {
             let request_id = parent_span.extensions().get::<RequestId>().cloned();
-
-            let mut extensions = span.extensions_mut();
-            if extensions
-                .get_mut::<FormattedFields<JsonFields>>()
-                .is_none()
-            {
-                let mut fields = FormattedFields::<JsonFields>::new(String::new());
-                if JsonFields::new()
-                    .format_fields(fields.as_writer(), attrs)
-                    .is_ok()
-                {
-                    extensions.insert(fields);
-                } else {
-                    eprintln!(
-                        "[tracing-subscriber] Unable to format the following event, ignoring: {:?}",
-                        attrs
-                    );
-                }
-            }
-            let data = extensions.get_mut::<FormattedFields<JsonFields>>().unwrap();
             if let Some(request_id) = request_id {
+                let mut extensions = span.extensions_mut();
+                if extensions
+                    .get_mut::<FormattedFields<JsonFields>>()
+                    .is_none()
+                {
+                    let mut fields = FormattedFields::<JsonFields>::new(String::new());
+                    if JsonFields::new()
+                        .format_fields(fields.as_writer(), attrs)
+                        .is_ok()
+                    {
+                        extensions.insert(fields);
+                    } else {
+                        eprintln!(
+                            "[tracing-subscriber] Unable to format the following event, ignoring: {:?}",
+                            attrs
+                        );
+                    }
+                }
+                let data = extensions.get_mut::<FormattedFields<JsonFields>>().unwrap();
                 match serde_json::from_str::<serde_json::Value>(data) {
                     Ok(serde_json::Value::Object(mut fields))
                         if !fields.contains_key("request_id") =>
@@ -99,9 +98,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use regex::Regex;
     use tracing::subscriber::with_default;
-    use tracing_subscriber::{
-        fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt, Layer,
-    };
+    use tracing_subscriber::{fmt::format::FmtSpan, layer::SubscriberExt, Layer};
 
     // https://github.com/tokio-rs/tracing/blob/527b4f66a604e7a6baa6aa7536428e3a303ba3c8/tracing-subscriber/src/fmt/format/json.rs#L522
     struct MockTime;
@@ -154,10 +151,12 @@ mod tests {
     }
 
     impl MockMakeWriter {
+        #[allow(unused)]
         pub(crate) fn new(buf: Arc<Mutex<Vec<u8>>>) -> Self {
             Self { buf }
         }
 
+        #[allow(unused)]
         pub(crate) fn buf(&self) -> MutexGuard<'_, Vec<u8>> {
             self.buf.lock().unwrap()
         }
@@ -218,8 +217,10 @@ mod tests {
         let registry = tracing_subscriber::registry().with(layers);
 
         with_default(registry, || {
-            let span0_with_request_id =
-                tracing::info_span!("span0_with_request_id", request_id = 322);
+            let span0_with_request_id = tracing::info_span!(
+                "span0_with_request_id",
+                request_id = %"02f09a3f-1624-3b1d-8409-44eff7708208"
+            );
             let _e0 = span0_with_request_id.enter();
             let span1 = tracing::info_span!("span1", x = 42);
             let _e = span1.enter();
@@ -233,12 +234,12 @@ mod tests {
                     "message":"enter",
                     "target":"blockscout_service_launcher::tracing::request_id_layer::tests",
                     "span":{
-                        "request_id":322,
+                        "request_id":"02f09a3f-1624-3b1d-8409-44eff7708208",
                         "name":"span0_with_request_id"
                     },
                     "spans":[
                         {
-                            "request_id":322,
+                            "request_id":"02f09a3f-1624-3b1d-8409-44eff7708208",
                             "name":"span0_with_request_id"
                         }
                     ]
@@ -250,17 +251,17 @@ mod tests {
                     "message":"enter",
                     "target":"blockscout_service_launcher::tracing::request_id_layer::tests",
                     "span":{
-                        "request_id":322,
+                        "request_id":"02f09a3f-1624-3b1d-8409-44eff7708208",
                         "x":42,
                         "name":"span1"
                     },
                     "spans":[
                         {
-                            "request_id":322,
+                            "request_id":"02f09a3f-1624-3b1d-8409-44eff7708208",
                             "name":"span0_with_request_id"
                         },
                         {
-                            "request_id":322,
+                            "request_id":"02f09a3f-1624-3b1d-8409-44eff7708208",
                             "x":42,
                             "name":"span1"
                         }
