@@ -267,9 +267,12 @@ impl RuntimeSetup {
                 .map(|s| s.to_owned())
                 .collect();
             // we rely on the fact that:
-            // chart names == their mutex ids
-            let members: HashSet<String> =
-                group.list_charts().into_iter().map(|c| c.name).collect();
+            // chart key == their mutex ids
+            let members: HashSet<String> = group
+                .list_charts()
+                .into_iter()
+                .map(|c| c.key.as_string())
+                .collect();
             let missing_members = sync_dependencies.difference(&members).collect_vec();
             if !missing_members.is_empty() {
                 tracing::warn!(
