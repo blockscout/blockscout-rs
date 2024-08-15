@@ -49,6 +49,7 @@ sea-orm-migration-0_12 = { package = "sea-orm-migration", version = "0.12.2", op
 [dev-dependencies]
 pretty_assertions = "1.4.0"
 tempfile = "3.10.1"
+regex = { version = "1", features = ["std"], default-features = false }
 
 
 [features]
