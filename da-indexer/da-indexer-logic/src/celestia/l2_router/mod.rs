@@ -42,12 +42,14 @@ impl L2Router {
         commitment: &[u8],
     ) -> Result<Option<L2BatchMetadata>> {
         let namespace = Bytes::from(namespace.to_vec()).to_string();
-        let config = self.routes.get(&namespace);
-        if config.is_none() {
-            tracing::debug!("unknown namespace: {}", &namespace);
-            return Ok(None);
-        }
-        let config = config.unwrap();
+        let config = {
+            let config = self.routes.get(&namespace);
+            if config.is_none() {
+                tracing::debug!("unknown namespace: {}", &namespace);
+                return Ok(None);
+            }
+            config.unwrap()
+        };
 
         match config.l2_chain_type {
             L2Type::Optimism => optimism::get_l2_batch(config, height, commitment).await,

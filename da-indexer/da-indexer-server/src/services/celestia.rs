@@ -71,24 +71,22 @@ impl Celestia for CelestiaService {
         let commitment = bytes_from_hex_or_base64(&inner.commitment, "commitment")?;
         let namespace = bytes_from_hex_or_base64(&inner.namespace, "namespace")?;
 
-        let l2_batch_metadata = l2_router
+        let mut l2_batch_metadata = l2_router
             .get_l2_batch_metadata(height, &namespace, &commitment)
             .await
             .map_err(|err| {
                 tracing::error!(height, namespace = hex::encode(&namespace), commitment = hex::encode(&commitment), error = ?err, "failed to query l2 batch metadata");
                 Status::internal("failed to query l2 batch metadata")
             })?
-            .ok_or_else(|| {
-                Status::not_found("l2 batch metadata not found")
-            })?;
+            .ok_or(Status::not_found("l2 batch metadata not found"))?;
 
         let related_blobs = l2_batch_metadata
             .related_blobs
-            .iter()
+            .drain(..)
             .map(|blob| CelestiaBlobId {
                 height: blob.height,
-                namespace: blob.namespace.clone(),
-                commitment: blob.commitment.clone(),
+                namespace: blob.namespace,
+                commitment: blob.commitment,
             })
             .collect();
 

@@ -60,6 +60,7 @@ l2_chain_id = 123
 l2_api_url = "http://localhost:3001"
 l2_blockscout_url = "http://arbitrum.blockscout.com"
 l1_chain_id = 456 # optional
+request_timeout = 30 # optional
 ```
 
 ## Dev

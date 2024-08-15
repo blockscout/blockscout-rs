@@ -1,10 +1,8 @@
-use std::time::Duration;
-
 use super::types::{L2BatchMetadata, L2Config};
 use anyhow::Result;
 use blockscout_display_bytes::Bytes;
 use chrono::DateTime;
-use reqwest::{Client, Url};
+use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -32,14 +30,22 @@ pub async fn get_l2_batch(
         "{}/api/v2/arbitrum/batches/da/celestia/{}/{}",
         config.l2_api_url, height, commitment,
     );
-    let timeout = Duration::from_secs(5);
-    let response: L2BatchArbitrum = Client::new()
+
+    let response = Client::new()
         .get(&query)
-        .timeout(timeout)
+        .timeout(config.request_timeout)
         .send()
-        .await?
-        .json()
         .await?;
+
+    if response.status() == StatusCode::NOT_FOUND {
+        tracing::debug!(
+            height,
+            commitment = hex::encode(&commitment),
+            "l2 batch metadata not found"
+        );
+        return Ok(None);
+    }
+    let response: L2BatchArbitrum = response.json().await?;
 
     Ok(Some(L2BatchMetadata {
         chain_type: super::types::L2Type::Arbitrum,
@@ -51,7 +57,7 @@ pub async fn get_l2_batch(
         l2_blockscout_url: Url::parse(&config.l2_blockscout_url)?
             .join(&format!("batches/{}", response.number))?
             .to_string(),
-        l1_tx_hash: response.commitment_transaction.hash.clone(),
+        l1_tx_hash: response.commitment_transaction.hash,
         l1_tx_timestamp: DateTime::parse_from_rfc3339(&response.commitment_transaction.timestamp)?
             .timestamp() as u64,
         l1_chain_id: config.l1_chain_id,

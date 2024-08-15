@@ -1,7 +1,5 @@
-use std::time::Duration;
-
 use super::{types::L2BatchMetadata, L2Config};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use blockscout_display_bytes::Bytes;
 use chrono::DateTime;
 use reqwest::{Client, StatusCode, Url};
@@ -38,8 +36,13 @@ pub async fn get_l2_batch(
         "{}/api/v2/optimism/batches/da/celestia/{}/{}",
         config.l2_api_url, height, commitment,
     );
-    let timeout = Duration::from_secs(5);
-    let response = Client::new().get(&query).timeout(timeout).send().await?;
+
+    let response = Client::new()
+        .get(&query)
+        .timeout(config.request_timeout)
+        .send()
+        .await?;
+
     if response.status() == StatusCode::NOT_FOUND {
         tracing::debug!(
             height,
@@ -48,16 +51,24 @@ pub async fn get_l2_batch(
         );
         return Ok(None);
     }
-    let response: L2BatchOptimism = response.json().await?;
+    let mut response: L2BatchOptimism = response.json().await?;
+
+    let l1_tx_hash = response
+        .blobs
+        .iter()
+        .find(|blob| blob.commitment == commitment)
+        .ok_or(anyhow!("l1 transaction hash not found"))?
+        .l1_transaction_hash
+        .clone();
 
     let related_blobs = response
         .blobs
-        .iter()
+        .drain(..)
         .filter(|blob| blob.commitment != commitment)
         .map(|blob| super::types::CelestiaBlobId {
             height: blob.height,
-            namespace: blob.namespace.clone(),
-            commitment: blob.commitment.clone(),
+            namespace: blob.namespace,
+            commitment: blob.commitment,
         })
         .collect();
 
@@ -71,7 +82,7 @@ pub async fn get_l2_batch(
         l2_blockscout_url: Url::parse(&config.l2_blockscout_url)?
             .join(&format!("batches/{}", response.internal_id))?
             .to_string(),
-        l1_tx_hash: response.l1_tx_hashes[0].clone(),
+        l1_tx_hash,
         l1_tx_timestamp: DateTime::parse_from_rfc3339(&response.l1_timestamp)?.timestamp() as u64,
         l1_chain_id: config.l1_chain_id,
         related_blobs,
