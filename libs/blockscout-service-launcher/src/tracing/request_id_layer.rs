@@ -1,7 +1,7 @@
 use std::{fmt::Debug, str::FromStr};
 use tracing::{field::Field, span::Attributes, Id, Subscriber};
 use tracing_subscriber::{
-    fmt::{format::JsonFields, FormattedFields},
+    fmt::{format::JsonFields, FormatFields, FormattedFields},
     layer::Context,
     registry::LookupSpan,
     Layer,
@@ -29,7 +29,18 @@ impl<S: Subscriber + for<'lookup> LookupSpan<'lookup>> Layer<S> for RequestIdSto
                 .get_mut::<FormattedFields<JsonFields>>()
                 .is_none()
             {
-                extensions.insert(FormattedFields::<JsonFields>::new("{}".to_string()));
+                let mut fields = FormattedFields::<JsonFields>::new(String::new());
+                if JsonFields::new()
+                    .format_fields(fields.as_writer(), attrs)
+                    .is_ok()
+                {
+                    extensions.insert(fields);
+                } else {
+                    eprintln!(
+                        "[tracing-subscriber] Unable to format the following event, ignoring: {:?}",
+                        attrs
+                    );
+                }
             }
             let data = extensions.get_mut::<FormattedFields<JsonFields>>().unwrap();
             if let Some(request_id) = request_id {
