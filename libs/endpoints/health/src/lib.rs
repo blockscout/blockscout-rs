@@ -21,7 +21,7 @@
 //!
 //! 3. To enable swagger generation, add the following in `api_config_http.yaml`'s
 //!     http rules:
-//!     ```
+//!     ```custom,{class=language-yaml}
 //!         - selector: grpc.health.v1.Health.Check
 //!           get: /health
 //!     ```
