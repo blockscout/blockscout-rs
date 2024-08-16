@@ -186,13 +186,14 @@ mod tests {
     }
 
     fn parse_json(s: &str) -> serde_json::Value {
-        serde_json::from_str::<serde_json::Value>(&s).expect(&format!("failed to parse '{}'", s))
+        serde_json::from_str::<serde_json::Value>(s)
+            .unwrap_or_else(|_| panic!("failed to parse '{}'", s))
     }
 
     fn parse_captured_logs(logs: String) -> Vec<serde_json::Value> {
         logs.split('\n')
             .filter(|l| !l.is_empty())
-            .map(|l| parse_json(l))
+            .map(parse_json)
             .collect()
     }
 
