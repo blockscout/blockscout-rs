@@ -27,6 +27,7 @@ pub trait CallTracer {
     async fn common_trace_transaction(
         &self,
         tx_hash: TxHash,
+        variant: NodeClient,
     ) -> Result<Vec<CommonCallTrace>, ProviderError>;
 }
 
@@ -35,10 +36,9 @@ impl<T: JsonRpcClient> CallTracer for Provider<T> {
     async fn common_trace_transaction(
         &self,
         tx_hash: TxHash,
+        variant: NodeClient,
     ) -> Result<Vec<CommonCallTrace>, ProviderError> {
-        let client = self.node_client().await?;
-
-        match client {
+        match variant {
             NodeClient::Geth => {
                 let geth_trace = self
                     .debug_trace_transaction(
@@ -130,6 +130,17 @@ fn flatten_geth_trace(root: CallFrame) -> Vec<CommonCallTrace> {
     }
 
     res
+}
+
+pub fn to_string(node_client: NodeClient) -> String {
+    match node_client {
+        NodeClient::Geth => "geth",
+        NodeClient::Erigon => "erigon",
+        NodeClient::OpenEthereum => "openethereum",
+        NodeClient::Nethermind => "nethermind",
+        NodeClient::Besu => "besu",
+    }
+    .to_string()
 }
 
 #[cfg(test)]
