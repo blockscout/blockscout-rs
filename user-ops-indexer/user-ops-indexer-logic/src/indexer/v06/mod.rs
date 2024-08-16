@@ -151,10 +151,6 @@ fn build_user_op_model(
         .map(|e| e.account)
         .collect();
 
-    let call_gas_limit = user_op.user_op.call_gas_limit.as_u64();
-    let verification_gas_limit = user_op.user_op.verification_gas_limit.as_u64();
-    let pre_verification_gas = user_op.user_op.pre_verification_gas.as_u64();
-
     let factory = extract_address(&user_op.user_op.init_code);
     let paymaster = extract_address(&user_op.user_op.paymaster_and_data);
     let sender = user_op.user_op.sender;
@@ -166,9 +162,9 @@ fn build_user_op_model(
         nonce: H256::from_uint(&user_op.user_op.nonce),
         init_code: none_if_empty(user_op.user_op.init_code),
         call_data: user_op.user_op.call_data,
-        call_gas_limit,
-        verification_gas_limit,
-        pre_verification_gas,
+        call_gas_limit: user_op.user_op.call_gas_limit,
+        verification_gas_limit: user_op.user_op.verification_gas_limit,
+        pre_verification_gas: user_op.user_op.pre_verification_gas,
         max_fee_per_gas: user_op.user_op.max_fee_per_gas,
         max_priority_fee_per_gas: user_op.user_op.max_priority_fee_per_gas,
         paymaster_and_data: none_if_empty(user_op.user_op.paymaster_and_data),
@@ -187,13 +183,13 @@ fn build_user_op_model(
         paymaster,
         status: user_op_event.success,
         revert_reason: revert_event.map(|e| e.revert_reason),
-        gas: call_gas_limit
-            + verification_gas_limit * if paymaster.is_none() { 1 } else { 3 }
-            + pre_verification_gas,
+        gas: user_op.user_op.call_gas_limit
+            + user_op.user_op.verification_gas_limit * if paymaster.is_none() { 1 } else { 3 }
+            + user_op.user_op.pre_verification_gas,
         gas_price: user_op_event
             .actual_gas_cost
             .div(user_op_event.actual_gas_used),
-        gas_used: user_op_event.actual_gas_used.as_u64(),
+        gas_used: user_op_event.actual_gas_used,
         sponsor_type: extract_sponsor_type(sender, paymaster, &tx_deposits),
         user_logs_start_index,
         user_logs_count,

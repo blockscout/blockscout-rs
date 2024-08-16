@@ -5,10 +5,10 @@ use crate::{
 pub use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
 use entity::user_operations::Model;
 use ethers::prelude::{
-    abi::AbiEncode, core::utils::to_checksum, Address, BigEndianHash, Bytes, H128, H256, U256,
+    abi::AbiEncode, core::utils::to_checksum, Address, BigEndianHash, Bytes, H256, U256,
 };
 use num_traits::cast::ToPrimitive;
-use sea_orm::{prelude::BigDecimal, ActiveEnum};
+use sea_orm::ActiveEnum;
 use std::ops::Mul;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -18,9 +18,9 @@ pub struct UserOp {
     pub nonce: H256,
     pub init_code: Option<Bytes>,
     pub call_data: Bytes,
-    pub call_gas_limit: u64,
-    pub verification_gas_limit: u64,
-    pub pre_verification_gas: u64,
+    pub call_gas_limit: U256,
+    pub verification_gas_limit: U256,
+    pub pre_verification_gas: U256,
     pub max_fee_per_gas: U256,
     pub max_priority_fee_per_gas: U256,
     pub paymaster_and_data: Option<Bytes>,
@@ -39,9 +39,9 @@ pub struct UserOp {
     pub paymaster: Option<Address>,
     pub status: bool,
     pub revert_reason: Option<Bytes>,
-    pub gas: u64,
+    pub gas: U256,
     pub gas_price: U256,
-    pub gas_used: u64,
+    pub gas_used: U256,
     pub sponsor_type: SponsorType,
     pub user_logs_start_index: u32,
     pub user_logs_count: u32,
@@ -72,9 +72,9 @@ impl From<UserOp> for Model {
             nonce: v.nonce.as_bytes().to_vec(),
             init_code: v.init_code.clone().map(|a| a.to_vec()),
             call_data: v.call_data.to_vec(),
-            call_gas_limit: BigDecimal::from(v.call_gas_limit),
-            verification_gas_limit: BigDecimal::from(v.verification_gas_limit),
-            pre_verification_gas: BigDecimal::from(v.pre_verification_gas),
+            call_gas_limit: u256_to_decimal(v.call_gas_limit),
+            verification_gas_limit: u256_to_decimal(v.verification_gas_limit),
+            pre_verification_gas: u256_to_decimal(v.pre_verification_gas),
             max_fee_per_gas: u256_to_decimal(v.max_fee_per_gas),
             max_priority_fee_per_gas: u256_to_decimal(v.max_priority_fee_per_gas),
             paymaster_and_data: v.paymaster_and_data.clone().map(|a| a.to_vec()),
@@ -93,9 +93,9 @@ impl From<UserOp> for Model {
             paymaster: v.paymaster.map(|a| a.as_bytes().to_vec()),
             status: v.status,
             revert_reason: v.revert_reason.clone().map(|a| a.to_vec()),
-            gas: BigDecimal::from(v.gas),
+            gas: u256_to_decimal(v.gas),
             gas_price: u256_to_decimal(v.gas_price),
-            gas_used: BigDecimal::from(v.gas_used),
+            gas_used: u256_to_decimal(v.gas_used),
             sponsor_type: v.sponsor_type.clone(),
             user_logs_start_index: v.user_logs_start_index as i32,
             user_logs_count: v.user_logs_count as i32,
@@ -113,9 +113,9 @@ impl From<Model> for UserOp {
             nonce: H256::from_slice(&v.nonce),
             init_code: v.init_code.clone().map(Bytes::from),
             call_data: Bytes::from(v.call_data.clone()),
-            call_gas_limit: v.call_gas_limit.to_u64().unwrap_or(0),
-            verification_gas_limit: v.verification_gas_limit.to_u64().unwrap_or(0),
-            pre_verification_gas: v.pre_verification_gas.to_u64().unwrap_or(0),
+            call_gas_limit: U256::from(v.call_gas_limit.to_u128().unwrap_or(0)),
+            verification_gas_limit: U256::from(v.verification_gas_limit.to_u128().unwrap_or(0)),
+            pre_verification_gas: U256::from(v.pre_verification_gas.to_u128().unwrap_or(0)),
             max_fee_per_gas: U256::from(v.max_fee_per_gas.to_u128().unwrap_or(0)),
             max_priority_fee_per_gas: U256::from(v.max_priority_fee_per_gas.to_u128().unwrap_or(0)),
             paymaster_and_data: v.paymaster_and_data.clone().map(Bytes::from),
@@ -134,9 +134,9 @@ impl From<Model> for UserOp {
             paymaster: v.paymaster.clone().map(|a| Address::from_slice(&a)),
             status: v.status,
             revert_reason: v.revert_reason.clone().map(Bytes::from),
-            gas: v.gas.to_u64().unwrap_or(0),
+            gas: U256::from(v.gas.to_u128().unwrap_or(0)),
             gas_price: U256::from(v.gas_price.to_u128().unwrap_or(0)),
-            gas_used: v.gas_used.to_u64().unwrap_or(0),
+            gas_used: U256::from(v.gas_used.to_u128().unwrap_or(0)),
             sponsor_type: v.sponsor_type.clone(),
             user_logs_start_index: v.user_logs_start_index as u32,
             user_logs_count: v.user_logs_count as u32,
@@ -158,9 +158,9 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
                         nonce: U256::from(v.nonce.as_fixed_bytes()).to_string(),
                         init_code: v.init_code.map_or("0x".to_string(), |b| b.to_string()),
                         call_data: v.call_data.to_string(),
-                        call_gas_limit: v.call_gas_limit,
-                        verification_gas_limit: v.verification_gas_limit,
-                        pre_verification_gas: v.pre_verification_gas,
+                        call_gas_limit: v.call_gas_limit.to_string(),
+                        verification_gas_limit: v.verification_gas_limit.to_string(),
+                        pre_verification_gas: v.pre_verification_gas.to_string(),
                         max_fee_per_gas: v.max_fee_per_gas.to_string(),
                         max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
                         paymaster_and_data: v
@@ -179,14 +179,14 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
                         call_data: v.call_data.to_string(),
                         account_gas_limits: H256::from_slice(
                             [
-                                H128::from_low_u64_be(v.verification_gas_limit).as_bytes(),
-                                H128::from_low_u64_be(v.call_gas_limit).as_bytes(),
+                                &H256::from_uint(&v.verification_gas_limit).as_bytes()[16..],
+                                &H256::from_uint(&v.call_gas_limit).as_bytes()[16..],
                             ]
                             .concat()
                             .as_slice(),
                         )
                         .encode_hex(),
-                        pre_verification_gas: v.pre_verification_gas,
+                        pre_verification_gas: v.pre_verification_gas.to_string(),
                         gas_fees: H256::from_slice(
                             [
                                 &H256::from_uint(&v.max_fee_per_gas).as_bytes()[16..],
@@ -212,9 +212,9 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
             sender: to_checksum(&v.sender, None),
             nonce: v.nonce.encode_hex(),
             call_data: v.call_data.to_string(),
-            call_gas_limit: v.call_gas_limit,
-            verification_gas_limit: v.verification_gas_limit,
-            pre_verification_gas: v.pre_verification_gas,
+            call_gas_limit: v.call_gas_limit.to_string(),
+            verification_gas_limit: v.verification_gas_limit.to_string(),
+            pre_verification_gas: v.pre_verification_gas.to_string(),
             max_fee_per_gas: v.max_fee_per_gas.to_string(),
             max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
             signature: v.signature.to_string(),
@@ -233,9 +233,9 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
             paymaster: v.paymaster.map(|a| to_checksum(&a, None)),
             status: v.status,
             revert_reason: v.revert_reason.map(|b| b.to_string()),
-            gas: v.gas,
+            gas: v.gas.to_string(),
             gas_price: v.gas_price.to_string(),
-            gas_used: v.gas_used,
+            gas_used: v.gas_used.to_string(),
             sponsor_type: v.sponsor_type.to_value().to_string(),
             user_logs_start_index: v.user_logs_start_index,
             user_logs_count: v.user_logs_count,

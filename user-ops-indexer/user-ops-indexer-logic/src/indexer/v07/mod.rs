@@ -14,7 +14,7 @@ use ethers::prelude::{
     abi::{AbiDecode, Address},
     abigen,
     types::{Bytes, Log, TransactionReceipt, H256},
-    BigEndianHash, EthEvent,
+    BigEndianHash, EthEvent, U256,
 };
 use lazy_static::lazy_static;
 use std::ops::Div;
@@ -154,15 +154,12 @@ fn build_user_op_model(
 
     let (verification_gas_limit, call_gas_limit) =
         unpack_uints(&user_op.user_op.account_gas_limits[..]);
-    let verification_gas_limit = verification_gas_limit.as_u64();
-    let call_gas_limit = call_gas_limit.as_u64();
-    let pre_verification_gas = user_op.user_op.pre_verification_gas.as_u64();
+    let pre_verification_gas = user_op.user_op.pre_verification_gas;
     let (paymaster_verification_gas_limit, paymaster_post_op_gas_limit) =
         if user_op.user_op.paymaster_and_data.len() >= 52 {
-            let (a, b) = unpack_uints(&user_op.user_op.paymaster_and_data[20..52]);
-            (a.as_u64(), b.as_u64())
+            unpack_uints(&user_op.user_op.paymaster_and_data[20..52])
         } else {
-            (0, 0)
+            (U256::zero(), U256::zero())
         };
     let gas = call_gas_limit
         + verification_gas_limit
@@ -208,7 +205,7 @@ fn build_user_op_model(
         gas_price: user_op_event
             .actual_gas_cost
             .div(user_op_event.actual_gas_used),
-        gas_used: user_op_event.actual_gas_used.as_u64(),
+        gas_used: user_op_event.actual_gas_used,
         sponsor_type: extract_sponsor_type(sender, paymaster, &tx_deposits),
         user_logs_start_index,
         user_logs_count,
