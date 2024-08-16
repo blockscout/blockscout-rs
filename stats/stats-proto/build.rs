@@ -24,7 +24,7 @@ fn compile(
         .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(skip_serializing_if = \"std::ops::Not::not\")]")
         .field_attribute(".blockscout.stats.v1.Point.is_approximate", "#[serde(default)]")
         .field_attribute(".blockscout.stats.v1.GetLineChartRequest.resolution", "#[serde(default)]");
-    blockscout_health_endpoint::add_to_compile_config(&mut config);
+    blockscout_endpoint_health::add_to_compile_config(&mut config);
 
     config.compile_protos(protos, includes)?;
     Ok(())
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // We need to rebuild proto lib only if any of proto definitions
     // (or corresponding http mapping) has been changed.
     let mut proto_files_folders = ["proto/"].map(PathBuf::from).to_vec();
-    proto_files_folders.extend(blockscout_health_endpoint::includes(swagger_crate_folder));
+    proto_files_folders.extend(blockscout_endpoint_health::includes(swagger_crate_folder));
     let proto_files_folders = vec_path_buf_to_string(proto_files_folders);
 
     for folder in &proto_files_folders {
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut protos = ["proto/stats.proto"].map(PathBuf::from).to_vec();
-    protos.extend(blockscout_health_endpoint::proto_files(
+    protos.extend(blockscout_endpoint_health::proto_files(
         swagger_crate_folder,
     ));
     let protos = vec_path_buf_to_string(protos);

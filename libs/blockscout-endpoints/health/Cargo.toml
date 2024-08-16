@@ -1,5 +1,5 @@
 [package]
-name = "blockscout-health-endpoint"
+name = "blockscout-endpoint-health"
 version = "0.1.0"
 description = "Configuration tools for compiling health endpoint"
 license = "MIT"

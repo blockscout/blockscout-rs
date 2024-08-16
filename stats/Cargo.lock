@@ -788,7 +788,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "blockscout-health-endpoint"
+name = "blockscout-endpoint-health"
 version = "0.1.0"
 dependencies = [
  "prost-build",
@@ -4115,7 +4115,7 @@ dependencies = [
  "actix-prost-macros",
  "actix-web",
  "async-trait",
- "blockscout-health-endpoint",
+ "blockscout-endpoint-health",
  "prost 0.11.9",
  "prost-build",
  "serde",
