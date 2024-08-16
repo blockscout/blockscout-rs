@@ -314,7 +314,7 @@ impl RuntimeSetup {
             let empty_set = HashSet::new();
             let group_missing_allowed = missing_members_allowed.get(name).unwrap_or(&empty_set);
             let missing_members = missing_members
-                .difference(&group_missing_allowed)
+                .difference(group_missing_allowed)
                 .collect_vec();
             if !missing_members.is_empty() {
                 tracing::warn!(
