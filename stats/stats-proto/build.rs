@@ -41,7 +41,7 @@ fn vec_path_buf_to_string(v: Vec<PathBuf>) -> Vec<String> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let swagger_crate_folder = Path::new("../../libs/blockscout-endpoints/health");
+    let swagger_crate_folder = Path::new("../../libs/endpoints/health");
 
     // We need to rebuild proto lib only if any of proto definitions
     // (or corresponding http mapping) has been changed.
