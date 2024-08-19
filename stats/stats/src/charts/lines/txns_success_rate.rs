@@ -24,7 +24,7 @@ use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
-use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
+use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
 pub struct TxnsSuccessRateStatement;
 
@@ -86,18 +86,18 @@ define_and_impl_resolution_properties!(
 pub type TxnsSuccessRate =
     DirectVecLocalDbChartSource<TxnsSuccessRateRemoteString, Batch30Days, Properties>;
 pub type TxnsSuccessRateWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewBlocksInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type TxnsSuccessRateMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewBlocksInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
 pub type TxnsSuccessRateYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<TxnsSuccessRateMonthly, f64>, NewBlocksMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<TxnsSuccessRateMonthly, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,
