@@ -421,7 +421,7 @@ fn mock_token(hash: Vec<u8>) -> tokens::ActiveModel {
 fn mock_block_rewards(
     random_seed: u8,
     block_hash: Vec<u8>,
-    addresses_pool: &Vec<addresses::ActiveModel>,
+    addresses_pool: &[addresses::ActiveModel],
     amount_overwrite: Option<Decimal>,
 ) -> Vec<block_rewards::ActiveModel> {
     // `Vec` because it's possible to have multiple rewards for a single
