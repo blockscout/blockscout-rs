@@ -24,7 +24,7 @@ use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
-use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
+use super::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 
 const ETH: i64 = 1_000_000_000_000_000_000;
 
@@ -85,12 +85,16 @@ define_and_impl_resolution_properties!(
 pub type AverageBlockRewards =
     DirectVecLocalDbChartSource<AverageBlockRewardsRemoteString, Batch30Days, Properties>;
 pub type AverageBlockRewardsWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageBlockRewards, f64>, NewBlocksInt, Week>>,
+    MapToString<
+        AverageLowerResolution<MapParseTo<AverageBlockRewards, f64>, NewBlockRewardsInt, Week>,
+    >,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageBlockRewardsMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageBlockRewards, f64>, NewBlocksInt, Month>>,
+    MapToString<
+        AverageLowerResolution<MapParseTo<AverageBlockRewards, f64>, NewBlockRewardsInt, Month>,
+    >,
     Batch36Months,
     MonthlyProperties,
 >;
@@ -98,7 +102,7 @@ pub type AverageBlockRewardsYearly = DirectVecLocalDbChartSource<
     MapToString<
         AverageLowerResolution<
             MapParseTo<AverageBlockRewardsMonthly, f64>,
-            NewBlocksMonthlyInt,
+            NewBlockRewardsMonthlyInt,
             Year,
         >,
     >,
@@ -136,7 +140,7 @@ mod tests {
         simple_test_chart::<AverageBlockRewardsWeekly>(
             "update_average_block_rewards_weekly",
             vec![
-                ("2022-11-07", "2.5173611111111112"),
+                ("2022-11-07", "2.5"),
                 ("2022-11-28", "2.5"),
                 ("2022-12-26", "3.6666666666666665"),
                 ("2023-01-30", "2.5"),
@@ -152,7 +156,7 @@ mod tests {
         simple_test_chart::<AverageBlockRewardsMonthly>(
             "update_average_block_rewards_monthly",
             vec![
-                ("2022-11-01", "2.5173611111111112"),
+                ("2022-11-01", "2.5"),
                 ("2022-12-01", "2.5"),
                 ("2023-01-01", "3.6666666666666665"),
                 ("2023-02-01", "2.5"),
@@ -167,10 +171,7 @@ mod tests {
     async fn update_average_block_rewards_yearly() {
         simple_test_chart::<AverageBlockRewardsYearly>(
             "update_average_block_rewards_yearly",
-            vec![
-                ("2022-01-01", "2.5151909722222223"),
-                ("2023-01-01", "3.0151515151515151"),
-            ],
+            vec![("2022-01-01", "2.5"), ("2023-01-01", "3.3")],
         )
         .await;
     }
