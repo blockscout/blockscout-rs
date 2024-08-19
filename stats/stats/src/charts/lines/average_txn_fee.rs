@@ -26,7 +26,7 @@ use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
-use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
+use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
 const ETHER: i64 = i64::pow(10, 18);
 
@@ -87,18 +87,18 @@ define_and_impl_resolution_properties!(
 pub type AverageTxnFee =
     DirectVecLocalDbChartSource<AverageTxnFeeRemoteString, Batch30Days, Properties>;
 pub type AverageTxnFeeWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFee, f64>, NewBlocksInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFee, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageTxnFeeMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFee, f64>, NewBlocksInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFee, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
 pub type AverageTxnFeeYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageTxnFeeMonthly, f64>, NewBlocksMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<AverageTxnFeeMonthly, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,

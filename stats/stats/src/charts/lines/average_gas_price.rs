@@ -24,7 +24,7 @@ use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
-use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
+use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
 const GWEI: i64 = 1_000_000_000;
 
@@ -93,18 +93,18 @@ define_and_impl_resolution_properties!(
 pub type AverageGasPrice =
     DirectVecLocalDbChartSource<AverageGasPriceRemoteString, Batch30Days, Properties>;
 pub type AverageGasPriceWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewBlocksInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageGasPriceMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewBlocksInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
 pub type AverageGasPriceYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageGasPriceMonthly, f64>, NewBlocksMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<AverageGasPriceMonthly, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,
