@@ -3,6 +3,7 @@ use blockscout_db::entity::{
     smart_contracts, tokens, transactions,
 };
 use chrono::{NaiveDate, NaiveDateTime};
+use rand::{Rng, SeedableRng};
 use sea_orm::{prelude::Decimal, ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
 
@@ -251,18 +252,10 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
-    let rewards = blocks.iter().enumerate().map(|(i, block)| {
-        mock_block_rewards(
-            accounts
-                .get(i % (accounts.len() / 2))
-                .unwrap()
-                .hash
-                .as_ref()
-                .to_vec(),
-            block.hash.as_ref().to_vec(),
-            Some(Decimal::from(i % 5) * Decimal::try_from(1e18).unwrap()),
-        )
+    let rewards = blocks.iter().enumerate().flat_map(|(i, block)| {
+        mock_block_rewards(i as u8, block.hash.as_ref().to_vec(), &accounts, None)
     });
+
     block_rewards::Entity::insert_many(rewards)
         .exec(blockscout)
         .await
@@ -426,18 +419,36 @@ fn mock_token(hash: Vec<u8>) -> tokens::ActiveModel {
 }
 
 fn mock_block_rewards(
-    address: Vec<u8>,
+    random_seed: u8,
     block_hash: Vec<u8>,
-    reward: Option<Decimal>,
-) -> block_rewards::ActiveModel {
-    block_rewards::ActiveModel {
-        address_hash: Set(address),
-        address_type: Set("".into()),
-        block_hash: Set(block_hash),
-        reward: Set(reward),
-        inserted_at: Set(Default::default()),
-        updated_at: Set(Default::default()),
+    addresses_pool: &Vec<addresses::ActiveModel>,
+    amount_overwrite: Option<Decimal>,
+) -> Vec<block_rewards::ActiveModel> {
+    // `Vec` because it's possible to have multiple rewards for a single
+    // block in some chains.
+    // E.g. in presence of additional rewards
+    let mut rewards = vec![];
+    let seed = [random_seed; 32];
+    let mut rng = rand::prelude::StdRng::from_seed(seed);
+    let n_rewards = rng.gen_range(1..=3);
+    for i in 0..n_rewards {
+        let amount = amount_overwrite
+            .unwrap_or(Decimal::from(rng.gen_range(0..10)) * Decimal::try_from(5e17).unwrap());
+        rewards.push(block_rewards::ActiveModel {
+            address_hash: Set(addresses_pool
+                .get(i % (addresses_pool.len() / 2))
+                .unwrap()
+                .hash
+                .as_ref()
+                .to_vec()),
+            address_type: Set("".into()),
+            block_hash: Set(block_hash.clone()),
+            reward: Set(Some(amount)),
+            inserted_at: Set(Default::default()),
+            updated_at: Set(Default::default()),
+        });
     }
+    rewards
 }
 
 fn mock_smart_contract(
