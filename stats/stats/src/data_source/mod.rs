@@ -58,7 +58,7 @@
 //! [`UpdateContext`]. This way, SQL queries can use this time to get data relevant at this particular
 //! timestamp.
 //!
-//! See (module & struct) documentation for details.
+//! See ([module](crate::update_group) & [struct](crate::update_group::SyncUpdateGroup)) documentation for details.
 
 pub mod kinds;
 pub mod source;

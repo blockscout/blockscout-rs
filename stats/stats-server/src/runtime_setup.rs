@@ -1,3 +1,17 @@
+//! Setting up the runtime according to provided configs.
+//!
+//! ## Adding new charts
+//!
+//! 1. Create charts & update group(-s) (if necessary) according to
+//!     documentation in [`stats::update_group`] (steps 1-2).
+//! 2. If new groups were added:
+//!
+//!     2.1. Add new update groups to [`RuntimeSetup::all_update_groups`] (if any)
+//!
+//!     2.2. Configure the group update schedule in `update_groups.json` config
+//! 3. Add the new charts to `charts.json` and `layout.json` (if needed)
+//!
+
 use crate::config::{
     self,
     types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
