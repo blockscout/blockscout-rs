@@ -384,27 +384,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn average_weekly_works_with_inbalanced_weights_or_averages() {
+    async fn average_weekly_works_with_missing_avg() {
         let _ = tracing_subscriber::fmt::try_init();
 
         gettable_const!(MockDailyAverage: Vec<DateValue<f64>> = vec![
             d_v_double("2022-11-09", 1.0),
             d_v_double("2022-11-10", 1.0),
             d_v_double("2022-11-11", 1.0),
-            d_v_double("2022-11-12", 1.0),
-            d_v_double("2022-12-01", 1.0),
-            d_v_double("2023-01-01", 1.0),
-            d_v_double("2023-02-01", 1.0),
+            // missing average for 2022-11-12 should be treated as 0
         ]);
         gettable_const!(MockWeights: Vec<DateValue<i64>> = vec![
             d_v_int("2022-11-09", 1),
             d_v_int("2022-11-10", 3),
             d_v_int("2022-11-11", 4),
             d_v_int("2022-11-12", 1),
-            d_v_int("2022-12-01", 1),
-            d_v_int("2023-01-01", 1),
-            d_v_int("2023-02-01", 1),
-            d_v_int("2023-03-01", 1),
         ]);
         gettable_const!(Policy: MissingDatePolicy = MissingDatePolicy::FillZero);
 
@@ -427,12 +420,48 @@ mod tests {
             TestedAverageSource::query_data(&context, None, &mut AggregateTimer::new())
                 .await
                 .unwrap(),
-            vec![
-                w_v_double("2022-11-07", 1.0),
-                w_v_double("2022-11-28", 1.0),
-                w_v_double("2022-12-26", 1.0),
-                w_v_double("2023-01-30", 1.0),
-            ]
+            vec![w_v_double("2022-11-07", 0.8888888888888888),]
+        );
+    }
+
+    #[tokio::test]
+    async fn average_weekly_works_with_missing_weight() {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        gettable_const!(MockDailyAverage: Vec<DateValue<f64>> = vec![
+            d_v_double("2022-11-09", 1.0),
+            d_v_double("2022-11-10", 1.0),
+            d_v_double("2022-11-11", 1.0),
+            d_v_double("2022-11-12", 1.0),
+        ]);
+        gettable_const!(MockWeights: Vec<DateValue<i64>> = vec![
+            d_v_int("2022-11-09", 1),
+            d_v_int("2022-11-10", 3),
+            d_v_int("2022-11-11", 4),
+            // missing weight for 2022-11-12 is not valid and will be ignored (with warning produced)
+        ]);
+        gettable_const!(Policy: MissingDatePolicy = MissingDatePolicy::FillZero);
+
+        type PredefinedDailyAverage = PredefinedMockSource<MockDailyAverage, Policy>;
+        type PredefinedWeights = PredefinedMockSource<MockWeights, Policy>;
+
+        type TestedAverageSource =
+            AverageLowerResolution<PredefinedDailyAverage, PredefinedWeights, Week>;
+
+        // db is not used in mock
+        let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+
+        let context = UpdateContext {
+            db: &empty_db,
+            blockscout: &empty_db,
+            time: dt("2023-03-30T09:00:00").and_utc(),
+            force_full: false,
+        };
+        assert_eq!(
+            TestedAverageSource::query_data(&context, None, &mut AggregateTimer::new())
+                .await
+                .unwrap(),
+            vec![w_v_double("2022-11-07", 1.0),]
         );
     }
 }
