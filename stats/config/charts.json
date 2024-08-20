@@ -65,37 +65,37 @@
         },
         "accounts_growth": {
             "title": "Accounts growth",
-            "description": "Cumulative accounts number"
+            "description": "Cumulative number of accounts"
         },
         "new_accounts": {
             "title": "New accounts",
-            "description": "New accounts number per period"
+            "description": "Number of newly added accounts"
         },
         "average_txn_fee": {
             "title": "Average transaction fee",
-            "description": "The average amount in {{native_coin_symbol}} spent for transaction per period",
+            "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction",
             "units": "{{native_coin_symbol}}"
         },
         "txns_fee": {
-            "title": "Transactions fees",
+            "title": "Transaction fees",
             "description": "Amount of tokens paid as fees per period",
             "units": "{{native_coin_symbol}}"
         },
         "new_txns": {
             "title": "New transactions",
-            "description": "New transactions number per period"
+            "description": "Number of new transactions"
         },
         "txns_growth": {
             "title": "Transactions growth",
-            "description": "Cumulative transactions number"
+            "description": "Cumulative number of transactions"
         },
         "txns_success_rate": {
-            "title": "Transactions success rate",
+            "title": "Transaction success rate",
             "description": "Successful transactions rate per period"
         },
         "new_blocks": {
             "title": "New blocks",
-            "description": "New blocks number per period"
+            "description": "Number of new blocks added to the chain"
         },
         "average_block_size": {
             "title": "Average block size",
@@ -109,12 +109,12 @@
         },
         "new_native_coin_transfers": {
             "title": "Number of {{native_coin_symbol}} transfers",
-            "description": "Token transfers performed during the period"
+            "description": "Completed token transfers"
         },
         "native_coin_holders_growth": {
             "enabled": false,
-            "title": "{{native_coin_symbol}} holders growth",
-            "description": "Cumulative number of token holders"
+            "title": "{{native_coin_symbol}} holders",
+            "description": "Number of accounts holding {{native_coin_symbol}}"
         },
         "new_native_coin_holders": {
             "enabled": false,
@@ -124,7 +124,7 @@
         "native_coin_supply": {
             "enabled": false,
             "title": "{{native_coin_symbol}} circulating supply",
-            "description": "Amount of token circulating supply per period",
+            "description": "Amount of publicly available {{native_coin_symbol}}",
             "units": "{{native_coin_symbol}}"
         },
         "average_gas_limit": {
@@ -132,7 +132,7 @@
             "description": "Average block gas limit per period"
         },
         "gas_used_growth": {
-            "title": "Gas used growth",
+            "title": "Total gas usage",
             "description": "Cumulative gas used"
         },
         "average_gas_price": {
@@ -142,7 +142,7 @@
         },
         "new_verified_contracts": {
             "title": "New verified contracts",
-            "description": "New verified contracts number per period"
+            "description": "Number of newly verified contracts"
         },
         "verified_contracts_growth": {
             "title": "Verified contracts growth",
