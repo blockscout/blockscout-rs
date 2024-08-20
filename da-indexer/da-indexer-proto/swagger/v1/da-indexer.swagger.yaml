@@ -3,7 +3,8 @@ info:
   title: v1/da-indexer.proto
   version: version not set
 tags:
-  - name: DaService
+  - name: CelestiaService
+  - name: EigenDaService
   - name: Health
 consumes:
   - application/json
@@ -12,12 +13,12 @@ produces:
 paths:
   /api/v1/celestia/blob:
     get:
-      operationId: DaService_GetCelestiaBlob
+      operationId: CelestiaService_GetBlob
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1Blob'
+            $ref: '#/definitions/v1CelestiaBlob'
         default:
           description: An unexpected error response.
           schema:
@@ -37,7 +38,35 @@ paths:
           required: false
           type: boolean
       tags:
-        - DaService
+        - CelestiaService
+  /api/v1/eigenda/blob:
+    get:
+      operationId: EigenDaService_GetBlob
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1EigenDaBlob'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: batchHeaderHash
+          in: query
+          required: false
+          type: string
+        - name: blobIndex
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: skipData
+          in: query
+          required: false
+          type: boolean
+      tags:
+        - EigenDaService
   /health:
     get:
       summary: |-
@@ -89,7 +118,7 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
-  v1Blob:
+  v1CelestiaBlob:
     type: object
     properties:
       height:
@@ -102,6 +131,27 @@ definitions:
       timestamp:
         type: string
         format: uint64
+      size:
+        type: string
+        format: uint64
+      data:
+        type: string
+  v1EigenDaBlob:
+    type: object
+    properties:
+      batchHeaderHash:
+        type: string
+      batchId:
+        type: string
+        format: uint64
+      blobIndex:
+        type: integer
+        format: int64
+      l1ConfirmationBlock:
+        type: string
+        format: uint64
+      l1ConfirmationTxHash:
+        type: string
       size:
         type: string
         format: uint64

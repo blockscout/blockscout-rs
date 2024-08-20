@@ -1,0 +1,64 @@
+{
+  "protocols": {
+    "ens": {
+      "subgraph_path": "../subgraphs/ens-subgraph",
+      "subgraph_name": "ens-subgraph",
+      "network": "mainnet"
+    },
+    "ens-sepolia": {
+        "subgraph_path": "../subgraphs/ens-subgraph",
+        "subgraph_name": "ens-sepolia-subgraph",
+        "network": "sepolia"
+    },
+    "base-name-service": {
+        "subgraph_path": "../subgraphs/bns-subgraph",
+        "subgraph_name": "base-name-service-subgraph",
+        "network": "base-mainnet"
+    },
+    "genome": {
+        "subgraph_path": "../subgraphs/genome-subgraph",
+        "subgraph_name": "genome-subgraph",
+        "network": "gnosis-mainnet"
+      },
+    "genome-chiado": {
+        "subgraph_path": "../subgraphs/genome-subgraph",
+        "subgraph_name": "genome-chiado-subgraph",
+        "network": "gnosis-chiado"
+      },
+    "rns": {
+      "subgraph_path": "../subgraphs/rns-subgraph",
+      "subgraph_name": "rns-subgraph",
+      "network": "rootstock"
+    },
+    "rns-testnet": {
+        "subgraph_path": "../subgraphs/rns-subgraph",
+        "subgraph_name": "rns-testnet-subgraph",
+        "network": "rootstock-testnet"
+    },
+    "mode": {
+        "subgraph_path": "../subgraphs/mode-subgraph",
+        "subgraph_name": "mode-subgraph",
+        "network": "mode-mainnet"
+    },
+    "mode-sepolia": {
+        "subgraph_path": "../subgraphs/mode-subgraph",
+        "subgraph_name": "mode-sepolia-subgraph",
+        "network": "mode-sepolia"
+    },
+    "lightlink": {
+        "subgraph_path": "../subgraphs/lightlink-subgraph",
+        "subgraph_name": "lightlink-subgraph",
+        "network": "lightlink-phoenix"
+    },
+    "zns": {
+        "subgraph_path": "../subgraphs/zns-subgraph",
+        "subgraph_name": "zns-subgraph",
+        "network": "polygon-mainnet"
+    },
+    "zns-blast": {
+        "subgraph_path": "../subgraphs/zns-subgraph",
+        "subgraph_name": "zns-blast-subgraph",
+        "network": "blast-mainnet"
+    }
+  }
+}

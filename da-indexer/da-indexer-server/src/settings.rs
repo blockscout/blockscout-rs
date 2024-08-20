@@ -3,7 +3,7 @@ use blockscout_service_launcher::{
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
-use da_indexer_logic::celestia::settings::IndexerSettings as CelestiaIndexerSettings;
+use da_indexer_logic::settings::IndexerSettings;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -19,7 +19,7 @@ pub struct Settings {
     pub jaeger: JaegerSettings,
     pub database: DatabaseSettings,
 
-    pub celestia_indexer: CelestiaIndexerSettings,
+    pub indexer: IndexerSettings,
 }
 
 impl ConfigSettings for Settings {
@@ -38,7 +38,7 @@ impl Settings {
                 create_database: Default::default(),
                 run_migrations: Default::default(),
             },
-            celestia_indexer: Default::default(),
+            indexer: Default::default(),
         }
     }
 }

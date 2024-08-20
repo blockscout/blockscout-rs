@@ -2,4 +2,5 @@
 
 pub use super::{
     celestia_blobs::Entity as CelestiaBlobs, celestia_blocks::Entity as CelestiaBlocks,
+    eigenda_batches::Entity as EigendaBatches, eigenda_blobs::Entity as EigendaBlobs,
 };

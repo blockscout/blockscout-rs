@@ -1,24 +1,22 @@
-use super::{
-    fetcher::{FetchError, Fetcher},
-    version::Version,
-};
+use super::fetcher::{FetchError, Fetcher, Version};
 use crate::metrics;
-use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tracing::Instrument;
 
-#[derive(Default)]
-pub struct DownloadCache {
-    cache: parking_lot::Mutex<HashMap<Version, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
+pub struct DownloadCache<T> {
+    cache: parking_lot::Mutex<HashMap<T, Arc<tokio::sync::RwLock<Option<PathBuf>>>>>,
 }
 
-impl DownloadCache {
-    pub fn new() -> Self {
-        DownloadCache {
-            cache: Default::default(),
+impl<T> Default for DownloadCache<T> {
+    fn default() -> Self {
+        Self {
+            cache: parking_lot::Mutex::new(HashMap::new()),
         }
     }
+}
 
-    async fn try_get(&self, ver: &Version) -> Option<PathBuf> {
+impl<Ver: Version> DownloadCache<Ver> {
+    async fn try_get(&self, ver: &Ver) -> Option<PathBuf> {
         let entry = {
             let cache = self.cache.lock();
             cache.get(ver).cloned()
@@ -33,11 +31,11 @@ impl DownloadCache {
     }
 }
 
-impl DownloadCache {
-    pub async fn get<D: Fetcher + ?Sized>(
+impl<Ver: Version> DownloadCache<Ver> {
+    pub async fn get<D: Fetcher<Version = Ver> + ?Sized>(
         &self,
         fetcher: &D,
-        ver: &Version,
+        ver: &Ver,
     ) -> Result<PathBuf, FetchError> {
         metrics::DOWNLOAD_CACHE_TOTAL.inc();
         match self.try_get(ver).await {
@@ -53,10 +51,10 @@ impl DownloadCache {
         }
     }
 
-    async fn fetch<D: Fetcher + ?Sized>(
+    async fn fetch<D: Fetcher<Version = Ver> + ?Sized>(
         &self,
         fetcher: &D,
-        ver: &Version,
+        ver: &Ver,
     ) -> Result<PathBuf, FetchError> {
         let lock = {
             let mut cache = self.cache.lock();
@@ -75,29 +73,13 @@ impl DownloadCache {
     }
 
     pub async fn load_from_dir(&self, dir: &PathBuf) -> std::io::Result<()> {
-        let paths = DownloadCache::read_dir_paths(dir)?;
-        let versions = DownloadCache::filter_versions(paths);
+        let paths = read_dir_paths(dir)?;
+        let versions = filter_versions(paths);
         self.add_versions(versions).await;
         Ok(())
     }
 
-    fn read_dir_paths(dir: &PathBuf) -> std::io::Result<impl Iterator<Item = PathBuf>> {
-        let paths = std::fs::read_dir(dir)?.filter_map(|r| r.ok().map(|e| e.path()));
-        Ok(paths)
-    }
-
-    fn filter_versions(dirs: impl Iterator<Item = PathBuf>) -> HashMap<Version, PathBuf> {
-        dirs.filter_map(|path| {
-            path.file_name()
-                .and_then(|n| n.to_str())
-                .map(String::from)
-                .and_then(|n| Version::from_str(&n).ok())
-                .map(|v| (v, path))
-        })
-        .collect()
-    }
-
-    async fn add_versions(&self, versions: HashMap<Version, PathBuf>) {
+    async fn add_versions(&self, versions: HashMap<Ver, PathBuf>) {
         for (version, path) in versions {
             let solc_path = path.join("solc");
             if solc_path.exists() {
@@ -118,21 +100,37 @@ impl DownloadCache {
     }
 }
 
+fn read_dir_paths(dir: &PathBuf) -> std::io::Result<impl Iterator<Item = PathBuf>> {
+    let paths = std::fs::read_dir(dir)?.filter_map(|r| r.ok().map(|e| e.path()));
+    Ok(paths)
+}
+
+fn filter_versions<Ver: Version>(dirs: impl Iterator<Item = PathBuf>) -> HashMap<Ver, PathBuf> {
+    dirs.filter_map(|path| {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .map(String::from)
+            .and_then(|n| Ver::from_str(&n).ok())
+            .map(|v| (v, path))
+    })
+    .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        super::{list_fetcher::ListFetcher, version::ReleaseVersion},
+        super::{fetcher_list::ListFetcher, version_detailed as evm_version},
         *,
     };
     use crate::consts::DEFAULT_SOLIDITY_COMPILER_LIST;
     use async_trait::async_trait;
     use futures::{executor::block_on, join, pin_mut};
     use pretty_assertions::assert_eq;
-    use std::{collections::HashSet, env::temp_dir, time::Duration};
+    use std::{collections::HashSet, env::temp_dir, str::FromStr, time::Duration};
     use tokio::{spawn, task::yield_now, time::timeout};
 
-    fn new_version(major: u64) -> Version {
-        Version::Release(ReleaseVersion {
+    fn new_version(major: u64) -> evm_version::DetailedVersion {
+        evm_version::DetailedVersion::Release(evm_version::ReleaseVersion {
             version: semver::Version::new(major, 0, 0),
             commit: "00010203".to_string(),
         })
@@ -143,27 +141,29 @@ mod tests {
     fn value_is_cached() {
         #[derive(Default)]
         struct MockFetcher {
-            counter: parking_lot::Mutex<HashMap<Version, u32>>,
+            counter: parking_lot::Mutex<HashMap<evm_version::DetailedVersion, u32>>,
         }
 
         #[async_trait]
         impl Fetcher for MockFetcher {
-            async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
+            type Version = evm_version::DetailedVersion;
+
+            async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
                 *self.counter.lock().entry(ver.clone()).or_default() += 1;
                 Ok(PathBuf::from(ver.to_string()))
             }
 
-            fn all_versions(&self) -> Vec<Version> {
+            fn all_versions(&self) -> Vec<Self::Version> {
                 vec![]
             }
         }
 
         let fetcher = MockFetcher::default();
-        let cache = DownloadCache::new();
+        let cache = DownloadCache::default();
 
         let vers: Vec<_> = (0..3).map(new_version).collect();
 
-        let get_and_check = |ver: &Version| {
+        let get_and_check = |ver: &evm_version::DetailedVersion| {
             let value = block_on(cache.get(&fetcher, ver)).unwrap();
             assert_eq!(value, PathBuf::from(ver.to_string()));
         };
@@ -197,19 +197,21 @@ mod tests {
 
         #[async_trait]
         impl Fetcher for MockBlockingFetcher {
-            async fn fetch(&self, ver: &Version) -> Result<PathBuf, FetchError> {
+            type Version = evm_version::DetailedVersion;
+
+            async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
                 let _guard = self.sync.lock().await;
                 Ok(PathBuf::from(ver.to_string()))
             }
 
-            fn all_versions(&self) -> Vec<Version> {
+            fn all_versions(&self) -> Vec<Self::Version> {
                 vec![]
             }
         }
 
         let sync = Arc::<tokio::sync::Mutex<()>>::default();
         let fetcher = MockBlockingFetcher { sync: sync.clone() };
-        let cache = Arc::new(DownloadCache::new());
+        let cache = Arc::new(DownloadCache::default());
 
         let vers: Vec<_> = (0..3).map(new_version).collect();
 
@@ -258,7 +260,8 @@ mod tests {
 
     #[tokio::test]
     async fn filter_versions() {
-        let versions: HashSet<Version> = vec![1, 2, 3, 4, 5].into_iter().map(new_version).collect();
+        let versions: HashSet<evm_version::DetailedVersion> =
+            vec![1, 2, 3, 4, 5].into_iter().map(new_version).collect();
 
         let paths = versions.iter().map(|v| v.to_string().into()).chain(vec![
             "some_random_dir".into(),
@@ -267,14 +270,14 @@ mod tests {
             "�0.7.0+commit.9e61f92b".into(),
         ]);
 
-        let versions_map = DownloadCache::filter_versions(paths);
+        let versions_map = super::filter_versions(paths);
         let filtered_versions = HashSet::from_iter(versions_map.into_keys());
         assert_eq!(versions, filtered_versions,);
     }
 
     #[tokio::test]
     async fn load_downloaded_compiler() {
-        let ver = Version::from_str("0.7.0+commit.9e61f92b").unwrap();
+        let ver = evm_version::DetailedVersion::from_str("0.7.0+commit.9e61f92b").unwrap();
         let dir = temp_dir();
 
         let url = DEFAULT_SOLIDITY_COMPILER_LIST
@@ -285,7 +288,7 @@ mod tests {
             .expect("Fetch releases");
         fetcher.fetch(&ver).await.expect("download should complete");
 
-        let cache = DownloadCache::new();
+        let cache = DownloadCache::default();
         cache
             .load_from_dir(&dir)
             .await

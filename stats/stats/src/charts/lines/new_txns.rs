@@ -1,103 +1,110 @@
+use std::ops::Range;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::DateValue,
+    data_source::kinds::{
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            resolutions::sum::SumLowerResolution,
+        },
+        local_db::{
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
+        },
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    UpdateError,
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct NewTxns {}
+pub struct NewTxnsStatement;
 
-#[async_trait]
-impl ChartPartialUpdater for NewTxns {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    date(b.timestamp) as date, 
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
-                    b.timestamp != to_timestamp(0) AND
-                    date(b.timestamp) > $1 AND 
-                    b.consensus = true
-                GROUP BY date;
-                "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    date(b.timestamp) as date, 
+impl StatementFromRange for NewTxnsStatement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT
+                    date(b.timestamp) as date,
                     COUNT(*)::TEXT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE
-                    b.timestamp != to_timestamp(0) AND 
-                    b.consensus = true
+                    b.timestamp != to_timestamp(0) AND
+                    b.consensus = true {filter}
                 GROUP BY date;
-                "#,
-                vec![],
-            ),
-        };
-
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+            "#,
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for NewTxns {
-    fn name(&self) -> &str {
-        "newTxns"
-    }
+pub type NewTxnsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewTxnsStatement, NaiveDate, String>>;
 
-    fn chart_type(&self) -> ChartType {
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "newTxns".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewTxns {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type NewTxns = DirectVecLocalDbChartSource<NewTxnsRemote, Batch30Days, Properties>;
+pub type NewTxnsInt = MapParseTo<NewTxns, i64>;
+pub type NewTxnsWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewTxnsInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewTxnsMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewTxnsInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewTxnsMonthlyInt = MapParseTo<NewTxnsMonthly, i64>;
+pub type NewTxnsYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewTxnsMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::NewTxns;
+    use super::*;
     use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns() {
-        let chart = NewTxns::default();
-        simple_test_chart(
+        simple_test_chart::<NewTxns>(
             "update_new_txns",
-            chart,
             vec![
                 ("2022-11-09", "5"),
                 ("2022-11-10", "12"),
@@ -114,39 +121,61 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn ranged_update_new_txns() {
-        let chart = NewTxns::default();
-        ranged_test_chart(
-            "ranged_update_new_txns",
-            chart,
+    async fn update_new_txns_weekly() {
+        simple_test_chart::<NewTxnsWeekly>(
+            "update_new_txns_weekly",
             vec![
-                ("2022-11-08", "0"),
+                ("2022-11-07", "36"),
+                ("2022-11-28", "5"),
+                ("2022-12-26", "1"),
+                ("2023-01-30", "4"),
+                ("2023-02-27", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_txns_monthly() {
+        simple_test_chart::<NewTxnsMonthly>(
+            "update_new_txns_monthly",
+            vec![
+                ("2022-11-01", "36"),
+                ("2022-12-01", "5"),
+                ("2023-01-01", "1"),
+                ("2023-02-01", "4"),
+                ("2023-03-01", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_txns_yearly() {
+        simple_test_chart::<NewTxnsYearly>(
+            "update_new_txns_yearly",
+            vec![("2022-01-01", "41"), ("2023-01-01", "6")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn ranged_update_new_txns() {
+        ranged_test_chart::<NewTxns>(
+            "ranged_update_new_txns",
+            vec![
                 ("2022-11-09", "5"),
                 ("2022-11-10", "12"),
                 ("2022-11-11", "14"),
                 ("2022-11-12", "5"),
-                ("2022-11-13", "0"),
-                ("2022-11-14", "0"),
-                ("2022-11-15", "0"),
-                ("2022-11-16", "0"),
-                ("2022-11-17", "0"),
-                ("2022-11-18", "0"),
-                ("2022-11-19", "0"),
-                ("2022-11-20", "0"),
-                ("2022-11-21", "0"),
-                ("2022-11-22", "0"),
-                ("2022-11-23", "0"),
-                ("2022-11-24", "0"),
-                ("2022-11-25", "0"),
-                ("2022-11-26", "0"),
-                ("2022-11-27", "0"),
-                ("2022-11-28", "0"),
-                ("2022-11-29", "0"),
-                ("2022-11-30", "0"),
                 ("2022-12-01", "5"),
             ],
             "2022-11-08".parse().unwrap(),
             "2022-12-01".parse().unwrap(),
+            None,
         )
         .await;
     }

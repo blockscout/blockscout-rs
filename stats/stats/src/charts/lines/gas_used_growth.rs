@@ -1,123 +1,128 @@
+use std::ops::Range;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::{DateValue, DateValueDecimal},
+    data_source::kinds::{
+        data_manipulation::{
+            map::{Map, MapFunction},
+            resolutions::last_value::LastValueLowerResolution,
+        },
+        local_db::{
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
+        },
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    MissingDatePolicy, UpdateError,
+    define_and_impl_resolution_properties,
+    types::timespans::{DateValue, Month, Week, Year},
+    utils::sql_with_range_filter_opt,
+    ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct GasUsedGrowth {}
+pub struct GasUsedPartialStatement;
 
-#[async_trait]
-impl ChartPartialUpdater for GasUsedGrowth {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let data = match last_updated_row {
-            Some(row) => {
-                let last_value = Decimal::from_str_exact(&row.value).map_err(|e| {
-                    UpdateError::Internal(format!("failed to parse previous value: {e}"))
-                })?;
-                let stmnt = Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    r#"
-                    SELECT 
-                        DATE(blocks.timestamp) as date, 
-                        (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp))) AS value
-                    FROM blocks
-                    WHERE 
-                        blocks.timestamp != to_timestamp(0) AND 
-                        DATE(blocks.timestamp) > $1 AND 
-                        blocks.consensus = true
-                    GROUP BY date(blocks.timestamp)
-                    ORDER BY date;
-                    "#,
-                    vec![row.date.into()],
-                );
-                DateValueDecimal::find_by_statement(stmnt)
-                    .all(blockscout)
-                    .await
-                    .map_err(UpdateError::BlockscoutDB)?
-                    .into_iter()
-                    .map(|mut point| {
-                        point.value += last_value;
-                        point
-                    })
-                    .map(|point| point.into())
-                    .collect()
-            }
-            None => {
-                let stmnt = Statement::from_sql_and_values(
-                    DbBackend::Postgres,
-                    r#"
-                    SELECT 
-                        DATE(blocks.timestamp) as date, 
-                        (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp)))::TEXT AS value
-                    FROM blocks
-                    WHERE 
-                        blocks.timestamp != to_timestamp(0) AND 
-                        blocks.consensus = true
-                    GROUP BY date(blocks.timestamp)
-                    ORDER BY date;
-                    "#,
-                    vec![],
-                );
-                DateValue::find_by_statement(stmnt)
-                    .all(blockscout)
-                    .await
-                    .map_err(UpdateError::BlockscoutDB)?
-            }
-        };
-
-        Ok(data)
+impl StatementFromRange for GasUsedPartialStatement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT 
+                    DATE(blocks.timestamp) as date, 
+                    (sum(sum(blocks.gas_used)) OVER (ORDER BY date(blocks.timestamp))) AS value
+                FROM blocks
+                WHERE 
+                    blocks.timestamp != to_timestamp(0) AND 
+                    blocks.consensus = true {filter}
+                GROUP BY date(blocks.timestamp)
+                ORDER BY date;
+            "#,
+            [],
+            "blocks.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for GasUsedGrowth {
-    fn name(&self) -> &str {
-        "gasUsedGrowth"
+pub type GasUsedPartialRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, NaiveDate, Decimal>>;
+
+pub struct IncrementsFromPartialSum;
+
+impl MapFunction<Vec<DateValue<Decimal>>> for IncrementsFromPartialSum {
+    type Output = Vec<DateValue<Decimal>>;
+    fn function(inner_data: Vec<DateValue<Decimal>>) -> Result<Self::Output, UpdateError> {
+        Ok(inner_data
+            .into_iter()
+            .scan(Decimal::ZERO, |state, mut next| {
+                let next_diff = next.value.saturating_sub(*state);
+                *state = next.value;
+                next.value = next_diff;
+                Some(next)
+            })
+            .collect())
     }
-    fn chart_type(&self) -> ChartType {
+}
+
+pub type NewGasUsedRemote = Map<GasUsedPartialRemote, IncrementsFromPartialSum>;
+
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "gasUsedGrowth".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
-    fn missing_date_policy(&self) -> MissingDatePolicy {
+    fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
 }
 
-#[async_trait]
-impl ChartUpdater for GasUsedGrowth {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type GasUsedGrowth = DailyCumulativeLocalDbChartSource<NewGasUsedRemote, Properties>;
+pub type GasUsedGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<GasUsedGrowth, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type GasUsedGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<GasUsedGrowth, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type GasUsedGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<GasUsedGrowthMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::GasUsedGrowth;
+    use super::*;
     use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_gas_used_growth() {
-        let chart = GasUsedGrowth::default();
-        simple_test_chart(
+        simple_test_chart::<GasUsedGrowth>(
             "update_gas_used_growth",
-            chart,
             vec![
                 ("2022-11-09", "10000"),
                 ("2022-11-10", "91780"),
@@ -134,28 +139,56 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn ranged_update_gas_used_growth() {
-        let chart = GasUsedGrowth::default();
-        let value_2022_11_12 = "250680";
-        ranged_test_chart(
-            "ranged_update_gas_used_growth",
-            chart,
+    async fn update_gas_used_growth_weekly() {
+        simple_test_chart::<GasUsedGrowthWeekly>(
+            "update_gas_used_growth_weekly",
             vec![
-                ("2022-11-20", value_2022_11_12),
-                ("2022-11-21", value_2022_11_12),
-                ("2022-11-22", value_2022_11_12),
-                ("2022-11-23", value_2022_11_12),
-                ("2022-11-24", value_2022_11_12),
-                ("2022-11-25", value_2022_11_12),
-                ("2022-11-26", value_2022_11_12),
-                ("2022-11-27", value_2022_11_12),
-                ("2022-11-28", value_2022_11_12),
-                ("2022-11-29", value_2022_11_12),
-                ("2022-11-30", value_2022_11_12),
-                ("2022-12-01", "288350"),
+                ("2022-11-07", "250680"),
+                ("2022-11-28", "288350"),
+                ("2022-12-26", "334650"),
+                ("2023-01-30", "389580"),
+                ("2023-02-27", "403140"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_gas_used_growth_monthly() {
+        simple_test_chart::<GasUsedGrowthMonthly>(
+            "update_gas_used_growth_monthly",
+            vec![
+                ("2022-11-01", "250680"),
+                ("2022-12-01", "288350"),
+                ("2023-01-01", "334650"),
+                ("2023-02-01", "389580"),
+                ("2023-03-01", "403140"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_gas_used_growth_yearly() {
+        simple_test_chart::<GasUsedGrowthYearly>(
+            "update_gas_used_growth_yearly",
+            vec![("2022-01-01", "288350"), ("2023-01-01", "403140")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn ranged_update_gas_used_growth() {
+        let value_2022_11_12 = "250680";
+        ranged_test_chart::<GasUsedGrowth>(
+            "ranged_update_gas_used_growth",
+            vec![("2022-11-20", value_2022_11_12), ("2022-12-01", "288350")],
             "2022-11-20".parse().unwrap(),
             "2022-12-01".parse().unwrap(),
+            None,
         )
         .await;
     }

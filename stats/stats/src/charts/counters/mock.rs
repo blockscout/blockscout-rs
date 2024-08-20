@@ -1,62 +1,69 @@
+use std::{marker::PhantomData, ops::Range};
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartFullUpdater, ChartUpdater},
-        types::DateValue,
+    data_source::{
+        kinds::{
+            local_db::DirectPointLocalDbChartSource,
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
+        },
+        types::Get,
+        UpdateContext,
     },
-    UpdateError,
+    types::timespans::DateValue,
+    ChartProperties, Named, UpdateError,
 };
-use async_trait::async_trait;
-use chrono::NaiveDate;
+
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
+use sea_orm::prelude::DateTimeUtc;
 
-#[derive(Debug)]
-pub struct MockCounter {
-    name: String,
-    value: String,
-}
+pub struct MockCounterRetrieve<PointDateTime, Value>(PhantomData<(PointDateTime, Value)>)
+where
+    PointDateTime: Get<Value = DateTime<Utc>>,
+    Value: Get<Value = String>;
 
-impl MockCounter {
-    pub fn new(name: String, value: String) -> Self {
-        Self { name, value }
+impl<PointDateTime, Value> RemoteQueryBehaviour for MockCounterRetrieve<PointDateTime, Value>
+where
+    PointDateTime: Get<Value = DateTime<Utc>>,
+    Value: Get<Value = String>,
+{
+    type Output = DateValue<String>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        _range: Option<Range<DateTimeUtc>>,
+    ) -> Result<Self::Output, UpdateError> {
+        if cx.time >= PointDateTime::get() {
+            Ok(DateValue::<String> {
+                timespan: PointDateTime::get().date_naive(),
+                value: Value::get(),
+            })
+        } else {
+            Ok(DateValue::<String> {
+                timespan: cx.time.date_naive(),
+                value: "0".to_string(),
+            })
+        }
     }
 }
 
-#[async_trait]
-impl ChartFullUpdater for MockCounter {
-    async fn get_values(
-        &self,
-        _blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let item = DateValue {
-            date: NaiveDate::parse_from_str("2022-11-12", "%Y-%m-%d").unwrap(),
-            value: self.value.clone(),
-        };
-        Ok(vec![item])
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "mockCounter".into()
     }
 }
 
-#[async_trait]
-impl crate::Chart for MockCounter {
-    fn name(&self) -> &str {
-        &self.name
-    }
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
 
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
 }
 
-#[async_trait]
-impl ChartUpdater for MockCounter {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+pub type MockCounter<PointDateTime, Value> = DirectPointLocalDbChartSource<
+    RemoteDatabaseSource<MockCounterRetrieve<PointDateTime, Value>>,
+    Properties,
+>;

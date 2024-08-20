@@ -1,0 +1,6 @@
+{
+  "packageName": "blockscout-client",
+  "packageVersion": "0.1.0",
+  "supportMiddleware": true,
+  "avoidBoxedModels": true
+}

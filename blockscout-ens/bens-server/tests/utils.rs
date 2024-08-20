@@ -1,5 +1,6 @@
 #![allow(unused_macros, unused_imports)]
 
+use actix_web::web::redirect;
 use anyhow::Context;
 use bens_logic::test_utils::mocked_blockscout_client;
 use bens_server::Settings;
@@ -14,19 +15,42 @@ use url::Url;
 
 macro_rules! data_file_as_json {
     ($name:expr) => {{
-        let context = serde_json::from_str(include_str!("data/context.json"))
-            .expect("failed to parse context");
-        data_file_as_json!($name, context)
+        data_file_as_json!($name, &serde_json::json!({}))
     }};
-    ($name:expr, $context:expr) => {{
-        let content = include_str!(concat!("data/", $name));
-        let context = tera::Context::from_value($context).expect("failed to create context");
-        let rendered = tera::Tera::default()
-            .render_str(content, &context)
-            .expect("failed to render template");
-        let value: serde_json::Value =
-            serde_json::from_str(&rendered).expect("failed to parse content");
-        value
+    ($name:expr, $initial_context:expr) => {{
+        fn merge(a: &mut serde_json::Value, b: &serde_json::Value) {
+            match (a, b) {
+                (&mut serde_json::Value::Object(ref mut a), &serde_json::Value::Object(ref b)) => {
+                    for (k, v) in b {
+                        merge(a.entry(k.clone()).or_insert(serde_json::Value::Null), v);
+                    }
+                }
+                (a, b) => {
+                    *a = b.clone();
+                }
+            }
+        }
+
+        fn render_file_with_context(
+            file_content: &str,
+            context: &serde_json::Value,
+        ) -> serde_json::Value {
+            let tera_context =
+                tera::Context::from_value(context.clone()).expect("failed to create context");
+            let rendered = tera::Tera::default()
+                .render_str(file_content, &tera_context)
+                .expect("failed to render template");
+            let value: serde_json::Value =
+                serde_json::from_str(&rendered).expect("failed to parse content");
+            value
+        }
+
+        // render context file with initial context
+        let mut context_from_file =
+            render_file_with_context(include_str!("data/context.json"), $initial_context);
+        merge(&mut context_from_file, $initial_context);
+        // render data file with whole context
+        render_file_with_context(include_str!(concat!("data/", $name)), &context_from_file)
     }};
 }
 pub(crate) use data_file_as_json;
@@ -58,11 +82,14 @@ pub async fn check_list_result(
     (request, json!(expected))
 }
 
-pub async fn start_server(pool: &PgPool) -> Url {
+pub async fn start_server(pool: &PgPool) -> (Url, Settings) {
     let (settings, base) = prepare(pool).await.unwrap();
-    init_server(|| async { bens_server::run(settings).await }, &base).await;
+    {
+        let settings = settings.clone();
+        init_server(|| async { bens_server::run(settings).await }, &base).await;
+    }
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    base
+    (base, settings)
 }
 
 pub fn build_query(route: &str, query_params: &HashMap<String, String>) -> String {
@@ -76,6 +103,31 @@ pub fn build_query(route: &str, query_params: &HashMap<String, String>) -> Strin
     } else {
         route.to_string()
     }
+}
+
+pub fn settings_context(settings: &Settings) -> Value {
+    let genome_base_url = settings
+        .subgraphs_reader
+        .networks
+        .get(&10200)
+        .expect("network not found")
+        .blockscout
+        .url
+        .clone();
+
+    let ens_base_url = settings
+        .subgraphs_reader
+        .networks
+        .get(&1)
+        .expect("network not found")
+        .blockscout
+        .url
+        .clone();
+
+    json!({
+        "genome_base_url": genome_base_url,
+        "ens_base_url": ens_base_url,
+    })
 }
 
 async fn prepare(pool: &PgPool) -> Result<(Settings, Url), anyhow::Error> {

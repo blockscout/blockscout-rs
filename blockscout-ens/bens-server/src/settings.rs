@@ -1,10 +1,10 @@
+use alloy::primitives::{Address, B256};
 use bens_logic::protocols::{AddressResolveTechnique, ProtocolMeta, Tld};
 use blockscout_service_launcher::{
     database::{DatabaseConnectSettings, DatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
-use ethers::{addressbook::Address, prelude::Bytes};
 use nonempty::NonEmpty;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -56,25 +56,35 @@ impl Default for SubgraphsReaderSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ProtocolSettings {
     pub tld_list: NonEmpty<Tld>,
+    pub network_id: i64,
     pub subgraph_name: String,
     #[serde(default)]
     pub address_resolve_technique: AddressResolveTechnique,
     #[serde(default)]
-    pub empty_label_hash: Option<Bytes>,
+    pub empty_label_hash: Option<B256>,
+    #[serde(default)]
     pub native_token_contract: Option<Address>,
+    #[serde(default)]
+    pub registry_contract: Option<Address>,
     pub meta: ProtocolSettingsMeta,
+    #[serde(default)]
+    pub try_offchain_resolve: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ProtocolSettingsMeta(pub ProtocolMeta);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct NetworkSettings {
     pub blockscout: BlockscoutSettings,
     #[serde(default)]
-    pub use_protocols: NonEmpty<String>,
+    pub use_protocols: Vec<String>,
+    #[serde(default)]
+    pub rpc_url: Option<Url>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

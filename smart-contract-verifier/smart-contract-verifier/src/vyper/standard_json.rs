@@ -1,16 +1,15 @@
 use super::{artifacts::CompilerInput, client::Client, types::Success};
 use crate::{
-    compiler::Version,
+    compiler::DetailedVersion,
     verifier::{ContractVerifier, Error},
 };
 use bytes::Bytes;
-use foundry_compilers::artifacts::output_selection::OutputSelection;
 use std::sync::Arc;
 
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
     pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: Version,
+    pub compiler_version: DetailedVersion,
 
     pub content: StandardJsonContent,
 
@@ -25,14 +24,7 @@ pub struct StandardJsonContent {
 
 impl From<StandardJsonContent> for CompilerInput {
     fn from(content: StandardJsonContent) -> Self {
-        let mut input = content.input;
-
-        // always overwrite output selection as it customizes what compiler outputs and
-        // is not what is returned to the user, but only used internally by our service
-        let output_selection = OutputSelection::default_file_output_selection();
-        input.settings.output_selection = output_selection;
-
-        input
+        content.input
     }
 }
 

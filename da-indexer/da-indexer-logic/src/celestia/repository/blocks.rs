@@ -5,11 +5,7 @@ use sea_orm::{
     QuerySelect, Statement,
 };
 
-#[derive(FromQueryResult, Debug)]
-pub struct Gap {
-    pub gap_start: i64,
-    pub gap_end: i64,
-}
+use crate::common::types::gap::Gap;
 
 pub async fn find_gaps(
     db: &DatabaseConnection,
@@ -18,8 +14,8 @@ pub async fn find_gaps(
     let mut gaps = Gap::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
-            SELECT height + 1 as gap_start, 
-                   next_nr - 1 as gap_end
+            SELECT height + 1 as start, 
+                   next_nr - 1 as end
             FROM (
                 SELECT height, lead(height) OVER (ORDER BY height) as next_nr
                 FROM celestia_blocks WHERE height <= $1
@@ -31,15 +27,12 @@ pub async fn find_gaps(
     .await?;
 
     // if there is no row with height == up_to_height, we will miss the last gap
-    let gaps_end = gaps.last().map(|gap| gap.gap_end).unwrap_or(0) as u64;
+    let gaps_end = gaps.last().map(|gap| gap.end).unwrap_or(0) as u64;
     let max_height = find_max_in_range(db, gaps_end, up_to_height)
         .await?
         .unwrap_or(0) as u64;
     if max_height < up_to_height {
-        gaps.push(Gap {
-            gap_start: (max_height + 1) as i64,
-            gap_end: up_to_height as i64,
-        })
+        gaps.push(Gap::new((max_height + 1) as i64, up_to_height as i64))
     }
 
     Ok(gaps)

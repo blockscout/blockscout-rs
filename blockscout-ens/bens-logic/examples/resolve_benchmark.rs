@@ -3,16 +3,16 @@
 use bens_logic::{
     blockscout::BlockscoutClient,
     protocols::{Network, ProtocolInfo, Tld},
-    subgraphs_reader::{BatchResolveAddressNamesInput, SubgraphReader},
+    subgraph::{BatchResolveAddressNamesInput, SubgraphReader},
 };
 use nonempty::nonempty;
 use sqlx::postgres::PgPoolOptions;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use tracing_subscriber::fmt::format::FmtSpan;
 
-fn addr(a: &str) -> ethers::types::Address {
+fn addr(a: &str) -> alloy::primitives::Address {
     let a = a.trim_start_matches("0x");
-    ethers::types::Address::from_slice(hex::decode(a).unwrap().as_slice())
+    alloy::primitives::Address::from_slice(hex::decode(a).unwrap().as_slice())
 }
 
 #[tokio::main]
@@ -37,14 +37,16 @@ async fn main() -> Result<(), anyhow::Error> {
             1,
             Network {
                 blockscout_client: Arc::new(eth_client),
-                use_protocols: nonempty!["ens".to_string()],
+                use_protocols: vec!["ens".to_string()],
+                rpc_url: None,
             },
         ),
         (
             30,
             Network {
                 blockscout_client: Arc::new(rootstock_client),
-                use_protocols: nonempty!["rns".to_string()],
+                use_protocols: vec!["rns".to_string()],
+                rpc_url: None,
             },
         ),
     ]);

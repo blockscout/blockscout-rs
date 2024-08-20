@@ -1,0 +1,39 @@
+[general]
+
+[store]
+[store.primary]
+connection = "postgresql://graph-node:let-me-in@postgres:5432/graph-node"
+weight = 1
+pool_size = 50
+
+[deployment]
+[[deployment.rule]]
+shard = "primary"
+indexers = ["default"]
+
+[chains]
+ingestor = "block_ingestor_node"
+
+[chains.mainnet]
+provider = [
+    { label = "mainnet", url = "https://ethereum-rpc.publicnode.com", features = [] }
+]
+shard = "primary"
+
+[chains.sepolia]
+provider = [
+    { label = "sepolia", url = "https://sepolia.gateway.tenderly.co", features = [] }
+]
+shard = "primary"
+
+[chains.gnosis-chiado]
+provider = [
+    { label = "gnosis-chiado", url = "https://rpc.eu-central-2.gateway.fm/v4/gnosis/archival/chiado", features = [] }
+]
+shard = "primary"
+
+[chains.mode-sepolia]
+provider = [
+    { label = "mode-sepolia", url = "https://sepolia.mode.network", features = [] }
+]
+shard = "primary"

@@ -1,7 +1,7 @@
 use crate::{
     indexer::{
         common_transport::CommonTransport,
-        rpc_utils::{CallTracer, TraceType},
+        rpc_utils::{to_string, CallTracer, TraceType},
         settings::IndexerSettings,
     },
     repository,
@@ -12,7 +12,7 @@ use ethers::prelude::{
     abi::{AbiEncode, Error},
     parse_log,
     types::{Address, Bytes, Filter, Log, TransactionReceipt},
-    EthEvent, Middleware, Provider, ProviderError, H256,
+    EthEvent, Middleware, NodeClient, Provider, ProviderError, H256,
 };
 use futures::{
     stream,
@@ -122,6 +122,10 @@ impl Indexer {
 
     #[instrument(name = "indexer", skip_all, level = "info", fields(version = L::version()))]
     pub async fn start<L: IndexerLogic>(&self) -> anyhow::Result<()> {
+        tracing::debug!("fetching node client");
+        let variant = self.client.node_client().await.unwrap_or(NodeClient::Geth);
+        tracing::info!(variant = to_string(variant), "fetched node client");
+
         let mut stream_jobs = stream::SelectAll::<BoxStream<Job>>::new();
 
         if self.settings.realtime.enabled {
@@ -209,7 +213,7 @@ impl Indexer {
         stream_txs
             .for_each_concurrent(Some(self.settings.concurrency as usize), |tx| async move {
                 let mut backoff = vec![5, 20, 120].into_iter().map(Duration::from_secs);
-                while let Err(err) = &self.handle_tx::<L>(tx).await {
+                while let Err(err) = &self.handle_tx::<L>(tx, variant).await {
                     match backoff.next() {
                         None => {
                             tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, skipping");
@@ -276,8 +280,12 @@ impl Indexer {
         .flat_map(stream::iter)
     }
 
-    #[instrument(name = "indexer::handle_tx", skip(self), level = "info")]
-    async fn handle_tx<L: IndexerLogic>(&self, tx_hash: H256) -> anyhow::Result<()> {
+    #[instrument(name = "indexer::handle_tx", skip(self, variant), level = "info")]
+    async fn handle_tx<L: IndexerLogic>(
+        &self,
+        tx_hash: H256,
+        variant: NodeClient,
+    ) -> anyhow::Result<()> {
         let tx = self
             .client
             .get_transaction(tx_hash)
@@ -311,7 +319,7 @@ impl Indexer {
                 "tx contains more than one bundle or was sent indirectly, fetching tx trace"
             );
             self.client
-                .common_trace_transaction(tx_hash)
+                .common_trace_transaction(tx_hash, variant)
                 .await?
                 .into_iter()
                 .filter_map(|t| {
@@ -397,7 +405,10 @@ mod tests {
             db.clone(),
             Default::default(),
         );
-        indexer.handle_tx::<v06::IndexerV06>(tx_hash).await.unwrap();
+        indexer
+            .handle_tx::<v06::IndexerV06>(tx_hash, NodeClient::Geth)
+            .await
+            .unwrap();
 
         let op_hash =
             H256::from_str("0x2d5f7a884e9a99cfe2445db2af140a8851fbd860852b668f2f199190f68adf87")
@@ -412,9 +423,9 @@ mod tests {
             nonce: H256::zero(),
             init_code: None,
             call_data: Bytes::from_str("0x70641a22000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001e0049783f008a0085193e00003d00cd54003c71ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000").unwrap(),
-            call_gas_limit: 92599,
-            verification_gas_limit: 87149,
-            pre_verification_gas: 49900,
+            call_gas_limit: U256::from(92599),
+            verification_gas_limit: U256::from(87149),
+            pre_verification_gas: U256::from(49900),
             max_fee_per_gas: U256::from(53825000000u64),
             max_priority_fee_per_gas: U256::from(500000000u64),
             paymaster_and_data: None,
@@ -433,9 +444,9 @@ mod tests {
             paymaster: None,
             status: true,
             revert_reason: None,
-            gas: 229648,
+            gas: U256::from(229648),
             gas_price: U256::from(37400206579u64),
-            gas_used: 165030,
+            gas_used: U256::from(165030),
             sponsor_type: SponsorType::WalletDeposit,
             user_logs_start_index: 268,
             user_logs_count: 1,
@@ -465,7 +476,10 @@ mod tests {
             db.clone(),
             Default::default(),
         );
-        indexer.handle_tx::<v07::IndexerV07>(tx_hash).await.unwrap();
+        indexer
+            .handle_tx::<v07::IndexerV07>(tx_hash, NodeClient::Geth)
+            .await
+            .unwrap();
 
         let op_hash =
             H256::from_str("0x02bfece5db8c1bd400049c14e20ee988e62c057d296e9aefa34bd9b7f146033e")
@@ -480,9 +494,9 @@ mod tests {
             nonce: H256::zero(),
             init_code: Some(Bytes::from_str("0x1f5806eafab78028b6e29ab65208f54cfdd4ce45a1aafc9e0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000244ac27308a000000000000000000000000000000000000000000000000000000000000008000000000000000000000000080ee560d57f4b1d2acfeb2174d09d54879c7408800000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000002200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000598991c9d726cbac7eb023ca974fe6e7e7a57ce80000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000003479096622cf141e3cc93126bbccc3ef10b952c1ef000000000000000000000000000000000000000000000000000000000002a3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000074115cff9c5b847b402c382f066cf275ab6440b75aaa1b881c164e5d43131cfb3895759573bc597baf526002f8d1943f1aaa67dbf7fa99cd30d12a235169eef4f3d5c96fc1619c60bc9d8028dfea0f89c7ec5e3f27000000000000000000000000000000000000000000000000000000000002a300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap()),
             call_data: Bytes::from_str("0x34fcd5be00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000").unwrap(),
-            call_gas_limit: 2000000,
-            verification_gas_limit: 1000000,
-            pre_verification_gas: 500000,
+            call_gas_limit: U256::from(2000000),
+            verification_gas_limit: U256::from(1000000),
+            pre_verification_gas: U256::from(500000),
             max_fee_per_gas: U256::from(1),
             max_priority_fee_per_gas: U256::from(1),
             paymaster_and_data: Some(Bytes::from_str("0x1b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000061a8000000000000000000000000000061a8000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c800000000000000000000000000000000000000000000000000000002540be400").unwrap()),
@@ -501,9 +515,9 @@ mod tests {
             paymaster: Some(Address::from_str("0x1b637a3008dc1f86d92031a97FC4B5aC0803329e").unwrap()),
             status: true,
             revert_reason: None,
-            gas: 4300000,
+            gas: U256::from(4300000),
             gas_price: U256::from(1),
-            gas_used: 1534051,
+            gas_used: U256::from(1534051),
             sponsor_type: SponsorType::PaymasterSponsor,
             user_logs_start_index: 42,
             user_logs_count: 3,

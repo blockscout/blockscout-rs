@@ -6,7 +6,8 @@
     "description": "ens description",
     "tld_list": ["eth"],
     "icon_url": null,
-    "docs_url": null
+    "docs_url": null,
+    "deployment_blockscout_base_url": "{{ens_base_url}}"
   },
   "genome_protocol": {
     "id": "genome",
@@ -15,6 +16,7 @@
     "description": "genome description",
     "tld_list": ["gno"],
     "icon_url": null,
-    "docs_url": null
+    "docs_url": null,
+    "deployment_blockscout_base_url": "{{genome_base_url}}"
   }
 }

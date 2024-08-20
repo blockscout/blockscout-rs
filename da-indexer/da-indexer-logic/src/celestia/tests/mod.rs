@@ -1,5 +1,5 @@
-pub mod blobs_db;
-pub mod blocks_db;
+pub mod blobs;
+pub mod blocks;
 pub mod parser;
 
 use blockscout_service_launcher::test_database::TestDbGuard;

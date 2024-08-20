@@ -1,159 +1,246 @@
 use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use crate::{
-    charts::db_interaction::chart_updaters::ChartUpdater, get_chart_data, get_counters, Chart,
-    MissingDatePolicy,
+    data_source::{
+        source::DataSource,
+        types::{UpdateContext, UpdateParameters},
+    },
+    get_line_chart_data, get_raw_counters,
+    types::Timespan,
+    ChartProperties, MissingDatePolicy,
 };
-use chrono::{DateTime, NaiveDate};
+use blockscout_service_launcher::test_database::TestDbGuard;
+use chrono::{DateTime, NaiveDateTime, Utc};
+use pretty_assertions::assert_eq;
 use sea_orm::DatabaseConnection;
-use std::{assert_eq, str::FromStr};
+use std::{fmt::Debug, str::FromStr};
 
-pub async fn simple_test_chart(
+pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
+    l.into_iter()
+        .map(|t| (t.0.to_string(), t.1.to_string()))
+        .collect()
+}
+
+/// `test_name` must be unique to avoid db clashes
+///
+/// returns db handles to continue testing if needed
+pub async fn simple_test_chart<C>(
     test_name: &str,
-    chart: impl ChartUpdater,
     expected: Vec<(&str, &str)>,
-) {
+) -> (TestDbGuard, TestDbGuard)
+where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
     let _ = tracing_subscriber::fmt::try_init();
+    let expected = map_str_tuple_to_owned(expected);
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    chart.create(&db).await.unwrap();
+    C::init_recursively(&db, &current_time).await.unwrap();
     fill_mock_blockscout_data(&blockscout, current_date).await;
-    let approximate_trailing_points = chart.approximate_trailing_points();
+    let approximate_trailing_points = C::approximate_trailing_points();
 
-    chart
-        .update(&db, &blockscout, current_time, true)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
-        &db,
-        &chart,
-        &expected,
-        None,
-        None,
-        None,
-        approximate_trailing_points,
-    )
-    .await;
+    let mut parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        update_time_override: Some(current_time),
+        force_full: true,
+    };
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &get_chart::<C>(
+            &db,
+            None,
+            None,
+            C::missing_date_policy(),
+            false,
+            approximate_trailing_points,
+        )
+        .await,
+        &expected
+    );
 
-    chart
-        .update(&db, &blockscout, current_time, false)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
-        &db,
-        &chart,
-        &expected,
-        None,
-        None,
-        None,
-        approximate_trailing_points,
-    )
-    .await;
+    parameters.force_full = false;
+    let cx = UpdateContext::from_params_now_or_override(parameters);
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &get_chart::<C>(
+            &db,
+            None,
+            None,
+            C::missing_date_policy(),
+            false,
+            approximate_trailing_points,
+        )
+        .await,
+        &expected
+    );
+    (db, blockscout)
 }
 
-pub async fn ranged_test_chart(
-    test_name: &str,
-    chart: impl ChartUpdater,
-    expected: Vec<(&str, &str)>,
-    from: NaiveDate,
-    to: NaiveDate,
-) {
-    let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
-    let current_date = current_time.date_naive();
-    chart.create(&db).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, current_date).await;
-    let policy = chart.missing_date_policy();
-    let approximate_trailing_points = chart.approximate_trailing_points();
-
-    chart
-        .update(&db, &blockscout, current_time, true)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
-        &db,
-        &chart,
-        &expected,
-        Some(from),
-        Some(to),
-        Some(policy),
-        approximate_trailing_points,
-    )
-    .await;
-
-    chart
-        .update(&db, &blockscout, current_time, false)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
-        &db,
-        &chart,
-        &expected,
-        Some(from),
-        Some(to),
-        Some(policy),
-        approximate_trailing_points,
-    )
-    .await;
-}
-
-async fn get_chart_and_assert_eq(
+/// Expects to have `test_name` db's initialized (e.g. by [`simple_test_chart`]).
+///
+/// Tests that force update with existing data works correctly
+pub async fn dirty_force_update_and_check<C>(
     db: &DatabaseConnection,
-    chart: &impl Chart,
-    expected: &Vec<(&str, &str)>,
-    from: Option<NaiveDate>,
-    to: Option<NaiveDate>,
-    policy: Option<MissingDatePolicy>,
-    approximate_trailing_points: u64,
-) {
-    let data = get_chart_data(
+    blockscout: &DatabaseConnection,
+    expected: Vec<(&str, &str)>,
+    update_time_override: Option<DateTime<Utc>>,
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let _ = tracing_subscriber::fmt::try_init();
+    let expected = map_str_tuple_to_owned(expected);
+    // some later time so that the update is not skipped
+    let current_time =
+        update_time_override.unwrap_or(DateTime::from_str("2023-03-01T12:00:01Z").unwrap());
+    let approximate_trailing_points = C::approximate_trailing_points();
+
+    let parameters = UpdateParameters {
         db,
-        chart.name(),
+        blockscout,
+        update_time_override: Some(current_time),
+        force_full: true,
+    };
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &get_chart::<C>(
+            db,
+            None,
+            None,
+            C::missing_date_policy(),
+            false,
+            approximate_trailing_points,
+        )
+        .await,
+        &expected
+    );
+}
+
+/// `test_name` must be unique to avoid db clashes
+pub async fn ranged_test_chart<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+    from: C::Resolution,
+    to: C::Resolution,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let _ = tracing_subscriber::fmt::try_init();
+    let expected = map_str_tuple_to_owned(expected);
+    let (db, blockscout) = init_db_all(test_name).await;
+    let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+    let current_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
+    let max_date = max_time.date_naive();
+    C::init_recursively(&db, &current_time).await.unwrap();
+    fill_mock_blockscout_data(&blockscout, max_date).await;
+    let policy = C::missing_date_policy();
+    let approximate_trailing_points = C::approximate_trailing_points();
+
+    let mut parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        update_time_override: Some(current_time),
+        force_full: true,
+    };
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &get_chart::<C>(
+            &db,
+            Some(from.clone()),
+            Some(to.clone()),
+            policy,
+            false,
+            approximate_trailing_points,
+        )
+        .await,
+        &expected
+    );
+
+    parameters.force_full = false;
+    let cx = UpdateContext::from_params_now_or_override(parameters);
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &get_chart::<C>(
+            &db,
+            Some(from),
+            Some(to),
+            policy,
+            false,
+            approximate_trailing_points,
+        )
+        .await,
+        &expected
+    );
+}
+
+async fn get_chart<C>(
+    db: &DatabaseConnection,
+    from: Option<C::Resolution>,
+    to: Option<C::Resolution>,
+    policy: MissingDatePolicy,
+    fill_missing_dates: bool,
+    approximate_trailing_points: u64,
+) -> Vec<(String, String)>
+where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let data = get_line_chart_data::<C::Resolution>(
+        db,
+        &C::name(),
         from,
         to,
         None,
         policy,
+        fill_missing_dates,
         approximate_trailing_points,
     )
     .await
     .unwrap();
-    let data: Vec<_> = data
-        .into_iter()
-        .map(|p| (p.date.to_string(), p.value))
-        .collect();
-    let data: Vec<(&str, &str)> = data
-        .iter()
-        .map(|(date, value)| (date.as_str(), value.as_str()))
-        .collect();
-    assert_eq!(expected, &data);
+    data.into_iter()
+        .map(|p| (p.timespan.into_date().to_string(), p.value))
+        .collect()
 }
 
-pub async fn simple_test_counter(test_name: &str, counter: impl ChartUpdater, expected: &str) {
+/// `test_name` must be unique to avoid db clashes
+pub async fn simple_test_counter<C: DataSource + ChartProperties>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
-    let current_date = current_time.date_naive();
+    let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+    let current_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
+    let max_date = max_time.date_naive();
 
-    counter.create(&db).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, current_date).await;
+    C::init_recursively(&db, &current_time).await.unwrap();
+    fill_mock_blockscout_data(&blockscout, max_date).await;
 
-    counter
-        .update(&db, &blockscout, current_time, true)
-        .await
-        .unwrap();
-    get_counter_and_assert_eq(&db, &counter, expected).await;
-
-    counter
-        .update(&db, &blockscout, current_time, false)
-        .await
-        .unwrap();
-    get_counter_and_assert_eq(&db, &counter, expected).await;
+    let mut parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        update_time_override: Some(current_time),
+        force_full: true,
+    };
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(expected, get_counter::<C>(&db).await);
+    parameters.force_full = false;
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(expected, get_counter::<C>(&db).await);
 }
 
-async fn get_counter_and_assert_eq(db: &DatabaseConnection, counter: &impl Chart, expected: &str) {
-    let data = get_counters(db).await.unwrap();
-    let data = &data[counter.name()];
-    let value = &data.value;
-    assert_eq!(expected, value);
+async fn get_counter<C: ChartProperties>(db: &DatabaseConnection) -> String {
+    let data = get_raw_counters(db).await.unwrap();
+    let data = &data[&C::name()];
+    data.value.clone()
 }

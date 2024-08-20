@@ -4,7 +4,7 @@ use foundry_compilers::EvmVersion;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{
     solidity::multi_part::{MultiFileContent, VerificationRequest},
-    Version,
+    DetailedVersion,
 };
 use std::{collections::BTreeMap, ops::Deref, path::PathBuf, str::FromStr};
 
@@ -52,9 +52,10 @@ impl TryFrom<VerifySolidityMultiPartRequestWrapper> for VerificationRequest {
             BytecodeType::DeployedBytecode => (None, bytecode),
         };
 
-        let compiler_version = Version::from_str(&request.compiler_version).map_err(|err| {
-            tonic::Status::invalid_argument(format!("Invalid compiler version: {err}"))
-        })?;
+        let compiler_version =
+            DetailedVersion::from_str(&request.compiler_version).map_err(|err| {
+                tonic::Status::invalid_argument(format!("Invalid compiler version: {err}"))
+            })?;
 
         let sources: BTreeMap<PathBuf, String> = request
             .source_files
@@ -117,7 +118,7 @@ mod tests {
         let mut expected = VerificationRequest {
             creation_bytecode: Some(DisplayBytes::from_str("0x1234").unwrap().0),
             deployed_bytecode: DisplayBytes::from_str("").unwrap().0,
-            compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
+            compiler_version: DetailedVersion::from_str("v0.8.17+commit.8df45f5f").unwrap(),
             content: MultiFileContent {
                 sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
                 evm_version: Some(EvmVersion::London),

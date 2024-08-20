@@ -1,87 +1,76 @@
-use super::NewTxns;
 use crate::{
-    charts::{
-        chart::Chart,
-        create_chart,
-        db_interaction::{
-            chart_updaters::{parse_and_cumsum, ChartDependentUpdater, ChartUpdater},
-            types::DateValue,
+    charts::chart::ChartProperties,
+    data_source::kinds::{
+        data_manipulation::resolutions::last_value::LastValueLowerResolution,
+        local_db::{
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
         },
     },
-    MissingDatePolicy, UpdateError,
+    define_and_impl_resolution_properties,
+    lines::NewTxnsInt,
+    types::timespans::{Month, Week, Year},
+    MissingDatePolicy, Named,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
-use std::sync::Arc;
 
-#[derive(Debug)]
-pub struct TxnsGrowth {
-    parent: Arc<NewTxns>,
-}
+pub struct Properties;
 
-impl TxnsGrowth {
-    pub fn new(parent: Arc<NewTxns>) -> Self {
-        Self { parent }
+impl Named for Properties {
+    fn name() -> String {
+        "txnsGrowth".into()
     }
 }
 
-#[async_trait]
-impl ChartDependentUpdater<NewTxns> for TxnsGrowth {
-    fn parent(&self) -> Arc<NewTxns> {
-        self.parent.clone()
-    }
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
 
-    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        parse_and_cumsum::<i64>(parent_data, self.parent.name())
-    }
-}
-
-#[async_trait]
-impl crate::Chart for TxnsGrowth {
-    fn name(&self) -> &str {
-        "txnsGrowth"
-    }
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
-    fn missing_date_policy(&self) -> MissingDatePolicy {
+    fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
-
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        self.parent.create(db).await?;
-        create_chart(db, self.name().into(), self.chart_type()).await
-    }
 }
 
-#[async_trait]
-impl ChartUpdater for TxnsGrowth {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type TxnsGrowth = DailyCumulativeLocalDbChartSource<NewTxnsInt, Properties>;
+pub type TxnsGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<TxnsGrowth, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type TxnsGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<TxnsGrowth, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type TxnsGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<TxnsGrowthMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::TxnsGrowth;
-    use crate::{lines::NewTxns, tests::simple_test::simple_test_chart};
-    use std::sync::Arc;
+    use super::*;
+    use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_txns_growth() {
-        let chart = TxnsGrowth::new(Arc::new(NewTxns::default()));
-        simple_test_chart(
+        simple_test_chart::<TxnsGrowth>(
             "update_txns_growth",
-            chart,
             vec![
                 ("2022-11-09", "5"),
                 ("2022-11-10", "17"),
@@ -92,6 +81,48 @@ mod tests {
                 ("2023-02-01", "46"),
                 ("2023-03-01", "47"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_txns_growth_weekly() {
+        simple_test_chart::<TxnsGrowthWeekly>(
+            "update_txns_growth_weekly",
+            vec![
+                ("2022-11-07", "36"),
+                ("2022-11-28", "41"),
+                ("2022-12-26", "42"),
+                ("2023-01-30", "46"),
+                ("2023-02-27", "47"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_txns_growth_monthly() {
+        simple_test_chart::<TxnsGrowthMonthly>(
+            "update_txns_growth_monthly",
+            vec![
+                ("2022-11-01", "36"),
+                ("2022-12-01", "41"),
+                ("2023-01-01", "42"),
+                ("2023-02-01", "46"),
+                ("2023-03-01", "47"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_txns_growth_yearly() {
+        simple_test_chart::<TxnsGrowthYearly>(
+            "update_txns_growth_yearly",
+            vec![("2022-01-01", "41"), ("2023-01-01", "47")],
         )
         .await;
     }

@@ -1,101 +1,112 @@
+use std::ops::Range;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::DateValue,
+    data_source::kinds::{
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            resolutions::average::AverageLowerResolution,
+        },
+        local_db::{
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
+        },
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    UpdateError,
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct AverageGasLimit {}
+use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
-#[async_trait]
-impl ChartPartialUpdater for AverageGasLimit {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
+pub struct AverageGasLimitStatement;
+
+impl StatementFromRange for AverageGasLimitStatement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT
                     DATE(blocks.timestamp) as date,
                     ROUND(AVG(blocks.gas_limit))::TEXT as value
                 FROM blocks
                 WHERE
                     blocks.timestamp != to_timestamp(0) AND
-                    DATE(blocks.timestamp) > $1 AND
-                    blocks.consensus = true
+                    blocks.consensus = true {filter}
                 GROUP BY date
-                "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(blocks.timestamp) as date,
-                    ROUND(AVG(blocks.gas_limit))::TEXT as value
-                FROM blocks 
-                WHERE 
-                    blocks.timestamp != to_timestamp(0) AND
-                    blocks.consensus = true
-                GROUP BY date
-                "#,
-                vec![],
-            ),
-        };
-
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+            "#,
+            [],
+            "blocks.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for AverageGasLimit {
-    fn name(&self) -> &str {
-        "averageGasLimit"
-    }
+pub type AverageGasLimitRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<AverageGasLimitStatement, NaiveDate, String>>;
 
-    fn chart_type(&self) -> ChartType {
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "averageGasLimit".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for AverageGasLimit {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type AverageGasLimit =
+    DirectVecLocalDbChartSource<AverageGasLimitRemote, Batch30Days, Properties>;
+pub type AverageGasLimitWeekly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimit, f64>, NewBlocksInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type AverageGasLimitMonthly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimit, f64>, NewBlocksInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type AverageGasLimitYearly = DirectVecLocalDbChartSource<
+    MapToString<
+        AverageLowerResolution<MapParseTo<AverageGasLimitMonthly, f64>, NewBlocksMonthlyInt, Year>,
+    >,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::AverageGasLimit;
+    use super::*;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_average_gas_limit() {
-        let chart = AverageGasLimit::default();
-        simple_test_chart(
+        simple_test_chart::<AverageGasLimit>(
             "update_average_gas_limit",
-            chart,
             vec![
                 ("2022-11-09", "12500000"),
                 ("2022-11-10", "12500000"),
@@ -106,6 +117,48 @@ mod tests {
                 ("2023-02-01", "30000000"),
                 ("2023-03-01", "30000000"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_gas_limit_weekly() {
+        simple_test_chart::<AverageGasLimitWeekly>(
+            "update_average_gas_limit_weekly",
+            vec![
+                ("2022-11-07", "22222222.222222224"),
+                ("2022-11-28", "30000000"),
+                ("2022-12-26", "30000000"),
+                ("2023-01-30", "30000000"),
+                ("2023-02-27", "30000000"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_gas_limit_monthly() {
+        simple_test_chart::<AverageGasLimitMonthly>(
+            "update_average_gas_limit_monthly",
+            vec![
+                ("2022-11-01", "22222222.222222224"),
+                ("2022-12-01", "30000000"),
+                ("2023-01-01", "30000000"),
+                ("2023-02-01", "30000000"),
+                ("2023-03-01", "30000000"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_gas_limit_yearly() {
+        simple_test_chart::<AverageGasLimitYearly>(
+            "update_average_gas_limit_yearly",
+            vec![("2022-01-01", "23000000"), ("2023-01-01", "30000000")],
         )
         .await;
     }

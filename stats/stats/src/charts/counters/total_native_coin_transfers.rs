@@ -1,71 +1,36 @@
 use crate::{
-    charts::{
-        create_chart,
-        db_interaction::{
-            chart_updaters::{parse_and_sum, ChartDependentUpdater, ChartUpdater},
-            types::DateValue,
-        },
+    data_source::kinds::{
+        data_manipulation::{map::MapToString, sum_point::Sum},
+        local_db::DirectPointLocalDbChartSource,
     },
-    lines::NewNativeCoinTransfers,
-    Chart, UpdateError,
+    lines::NewNativeCoinTransfersInt,
+    ChartProperties, MissingDatePolicy, Named,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
-use std::sync::Arc;
 
-#[derive(Default)]
-pub struct TotalNativeCoinTransfers {
-    parent: Arc<NewNativeCoinTransfers>,
-}
+pub struct Properties;
 
-impl TotalNativeCoinTransfers {
-    pub fn new(parent: Arc<NewNativeCoinTransfers>) -> Self {
-        Self { parent }
+impl Named for Properties {
+    fn name() -> String {
+        "totalNativeCoinTransfers".into()
     }
 }
 
-#[async_trait]
-impl ChartDependentUpdater<NewNativeCoinTransfers> for TotalNativeCoinTransfers {
-    fn parent(&self) -> Arc<NewNativeCoinTransfers> {
-        self.parent.clone()
-    }
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
 
-    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        let sum = parse_and_sum::<i64>(parent_data, self.name(), self.parent.name())?;
-        Ok(sum.into_iter().collect())
-    }
-}
-
-#[async_trait]
-impl crate::Chart for TotalNativeCoinTransfers {
-    fn name(&self) -> &str {
-        "totalNativeCoinTransfers"
-    }
-
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
-
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        self.parent.create(db).await?;
-        create_chart(db, self.name().into(), self.chart_type()).await
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 }
 
-#[async_trait]
-impl ChartUpdater for TotalNativeCoinTransfers {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+pub type TotalNativeCoinTransfers =
+    DirectPointLocalDbChartSource<MapToString<Sum<NewNativeCoinTransfersInt>>, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -75,7 +40,11 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_native_coin_transfers() {
-        let counter = TotalNativeCoinTransfers::default();
-        simple_test_counter("update_total_native_coin_transfers", counter, "17").await;
+        simple_test_counter::<TotalNativeCoinTransfers>(
+            "update_total_native_coin_transfers",
+            "17",
+            None,
+        )
+        .await;
     }
 }

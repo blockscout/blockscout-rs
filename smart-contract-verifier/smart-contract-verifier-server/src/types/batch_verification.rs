@@ -1,4 +1,4 @@
-use smart_contract_verifier::{solidity, BatchError, BatchVerificationResult, Version};
+use smart_contract_verifier::{solidity, BatchError, BatchVerificationResult, DetailedVersion};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::{
     v2 as proto,
     v2::{BatchVerifyResponse, CompilationFailure},
@@ -26,8 +26,8 @@ pub fn from_proto_contracts_to_inner(
     Ok(inner_contracts)
 }
 
-pub fn from_proto_compiler_version_to_inner(proto: &str) -> Result<Version, Status> {
-    Version::from_str(proto)
+pub fn from_proto_compiler_version_to_inner(proto: &str) -> Result<DetailedVersion, Status> {
+    DetailedVersion::from_str(proto)
         .map_err(|err| Status::invalid_argument(format!("Invalid compiler version: {}", err)))
 }
 

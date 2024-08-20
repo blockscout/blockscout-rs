@@ -4,7 +4,7 @@ use foundry_compilers::EvmVersion;
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier::{
     vyper::multi_part::{MultiFileContent, VerificationRequest},
-    Version,
+    DetailedVersion,
 };
 use std::{collections::BTreeMap, ops::Deref, path::PathBuf, str::FromStr};
 
@@ -51,9 +51,10 @@ impl TryFrom<VerifyVyperMultiPartRequestWrapper> for VerificationRequest {
             BytecodeType::CreationInput => (Some(bytecode), bytes::Bytes::new()),
             BytecodeType::DeployedBytecode => (None, bytecode),
         };
-        let compiler_version = Version::from_str(&request.compiler_version).map_err(|err| {
-            tonic::Status::invalid_argument(format!("Invalid compiler version: {err}"))
-        })?;
+        let compiler_version =
+            DetailedVersion::from_str(&request.compiler_version).map_err(|err| {
+                tonic::Status::invalid_argument(format!("Invalid compiler version: {err}"))
+            })?;
 
         let sources: BTreeMap<PathBuf, String> = request
             .source_files
@@ -122,7 +123,7 @@ mod tests {
         let expected = VerificationRequest {
             creation_bytecode: Some(DisplayBytes::from_str("0x1234").unwrap().0),
             deployed_bytecode: DisplayBytes::from_str("").unwrap().0,
-            compiler_version: Version::from_str("0.3.7+commit.6020b8bb").unwrap(),
+            compiler_version: DetailedVersion::from_str("0.3.7+commit.6020b8bb").unwrap(),
             content: MultiFileContent {
                 sources: BTreeMap::from([("source_path".into(), "source_content".into())]),
                 interfaces: BTreeMap::from([("interface_path".into(), "interface_content".into())]),

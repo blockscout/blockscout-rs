@@ -1,47 +1,37 @@
+use std::ops::Range;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::DateValue,
+    data_source::kinds::{
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            resolutions::sum::SumLowerResolution,
+        },
+        local_db::{
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
+        },
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    UpdateError,
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct NewNativeCoinTransfers {}
+pub struct NewNativeCoinTransfersStatement;
 
-#[async_trait]
-impl ChartPartialUpdater for NewNativeCoinTransfers {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(b.timestamp) as date,
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    b.timestamp != to_timestamp(0) AND
-                    DATE(b.timestamp) > $1 AND
-                    b.consensus = true AND
-                    LENGTH(t.input) = 0 AND
-                    t.value >= 0
-                GROUP BY date
-                "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
+impl StatementFromRange for NewNativeCoinTransfersStatement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT
                     DATE(b.timestamp) as date,
                     COUNT(*)::TEXT as value
                 FROM transactions t
@@ -50,58 +40,74 @@ impl ChartPartialUpdater for NewNativeCoinTransfers {
                     b.timestamp != to_timestamp(0) AND
                     b.consensus = true AND
                     LENGTH(t.input) = 0 AND
-                    t.value >= 0
+                    t.value >= 0 {filter}
                 GROUP BY date
-                "#,
-                vec![],
-            ),
-        };
-
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+            "#,
+            [],
+            "b.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for NewNativeCoinTransfers {
-    fn name(&self) -> &str {
-        "newNativeCoinTransfers"
-    }
+pub type NewNativeCoinTransfersRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<NewNativeCoinTransfersStatement, NaiveDate, String>>;
 
-    fn chart_type(&self) -> ChartType {
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "newNativeCoinTransfers".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewNativeCoinTransfers {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type NewNativeCoinTransfers =
+    DirectVecLocalDbChartSource<NewNativeCoinTransfersRemote, Batch30Days, Properties>;
+pub type NewNativeCoinTransfersInt = MapParseTo<NewNativeCoinTransfers, i64>;
+pub type NewNativeCoinTransfersWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewNativeCoinTransfersInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewNativeCoinTransfersMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewNativeCoinTransfersInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewNativeCoinTransfersMonthlyInt = MapParseTo<NewNativeCoinTransfersMonthly, i64>;
+pub type NewNativeCoinTransfersYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewNativeCoinTransfersMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::NewNativeCoinTransfers;
+    use super::*;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_native_coins_transfers() {
-        let chart = NewNativeCoinTransfers::default();
-        simple_test_chart(
+        simple_test_chart::<NewNativeCoinTransfers>(
             "update_native_coins_transfers",
-            chart,
             vec![
                 ("2022-11-09", "2"),
                 ("2022-11-10", "4"),
@@ -111,6 +117,46 @@ mod tests {
                 ("2023-02-01", "2"),
                 ("2023-03-01", "1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coins_transfers_weekly() {
+        simple_test_chart::<NewNativeCoinTransfersWeekly>(
+            "update_native_coins_transfers_weekly",
+            vec![
+                ("2022-11-07", "12"),
+                ("2022-11-28", "2"),
+                ("2023-01-30", "2"),
+                ("2023-02-27", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coins_transfers_monthly() {
+        simple_test_chart::<NewNativeCoinTransfersMonthly>(
+            "update_native_coins_transfers_monthly",
+            vec![
+                ("2022-11-01", "12"),
+                ("2022-12-01", "2"),
+                ("2023-02-01", "2"),
+                ("2023-03-01", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_native_coins_transfers_yearly() {
+        simple_test_chart::<NewNativeCoinTransfersYearly>(
+            "update_native_coins_transfers_yearly",
+            vec![("2022-01-01", "14"), ("2023-01-01", "3")],
         )
         .await;
     }

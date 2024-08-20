@@ -1,89 +1,67 @@
+//! Active accounts on each day.
+
+use std::ops::Range;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::DateValue,
+    data_source::kinds::{
+        local_db::{
+            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+        },
+        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
-    UpdateError,
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{prelude::*, DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct ActiveAccounts {}
+pub struct ActiveAccountsStatement;
 
-#[async_trait]
-impl ChartPartialUpdater for ActiveAccounts {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(blocks.timestamp) as date, 
+impl StatementFromRange for ActiveAccountsStatement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT
+                    DATE(blocks.timestamp) as date,
                     COUNT(DISTINCT from_address_hash)::TEXT as value
-                FROM transactions 
+                FROM transactions
                 JOIN blocks on transactions.block_hash = blocks.hash
-                WHERE 
+                WHERE
                     blocks.timestamp != to_timestamp(0) AND
-                    date(blocks.timestamp) > $1 AND
-                    blocks.consensus = true
+                    blocks.consensus = true {filter}
                 GROUP BY date(blocks.timestamp);
-                "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(blocks.timestamp) as date, 
-                    COUNT(DISTINCT from_address_hash)::TEXT as value
-                FROM transactions 
-                JOIN blocks on transactions.block_hash = blocks.hash
-                WHERE 
-                    blocks.timestamp != to_timestamp(0) AND
-                    blocks.consensus = true
-                GROUP BY date(blocks.timestamp);
-                "#,
-                vec![],
-            ),
-        };
-
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+            "#,
+            [],
+            "blocks.timestamp",
+            range
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for ActiveAccounts {
-    fn name(&self) -> &str {
-        "activeAccounts"
+pub type ActiveAccountsRemote =
+    RemoteDatabaseSource<PullAllWithAndSort<ActiveAccountsStatement, NaiveDate, String>>;
+
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "activeAccounts".into()
     }
-    fn chart_type(&self) -> ChartType {
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for ActiveAccounts {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+pub type ActiveAccounts =
+    DirectVecLocalDbChartSource<ActiveAccountsRemote, Batch30Days, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -94,10 +72,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_accounts() {
-        let chart = ActiveAccounts::default();
-        simple_test_chart(
+        simple_test_chart::<ActiveAccounts>(
             "update_active_accounts",
-            chart,
             vec![
                 ("2022-11-09", "1"),
                 ("2022-11-10", "3"),

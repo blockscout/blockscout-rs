@@ -1,84 +1,66 @@
-use super::NewAccounts;
+//! Cumulative total number of accounts in the network.
+
+use super::new_accounts::NewAccountsInt;
 use crate::{
-    charts::{
-        cache::Cache,
-        db_interaction::{
-            chart_updaters::{ChartFullUpdater, ChartUpdater},
-            types::{DateValue, DateValueInt},
+    data_source::kinds::{
+        data_manipulation::resolutions::last_value::LastValueLowerResolution,
+        local_db::{
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
         },
     },
-    MissingDatePolicy, UpdateError,
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
+    ChartProperties, MissingDatePolicy, Named,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
-use tokio::sync::Mutex;
 
-pub struct AccountsGrowth {
-    cache: Mutex<Cache<Vec<DateValueInt>>>,
-}
+pub struct Properties;
 
-impl AccountsGrowth {
-    pub fn new(cache: Cache<Vec<DateValueInt>>) -> Self {
-        Self {
-            cache: Mutex::new(cache),
-        }
-    }
-
-    pub fn sum_new<I: IntoIterator<Item = DateValueInt>>(
-        values: I,
-    ) -> impl IntoIterator<Item = DateValue> {
-        values
-            .into_iter()
-            .scan(0i64, |acc, mut value| {
-                *acc += value.value;
-                value.value = *acc;
-                Some(value)
-            })
-            .map(DateValue::from)
+impl Named for Properties {
+    fn name() -> String {
+        "accountsGrowth".into()
     }
 }
 
-#[async_trait]
-impl ChartFullUpdater for AccountsGrowth {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let mut cache = self.cache.lock().await;
-        let data = cache
-            .get_or_update(async move { NewAccounts::read_values(blockscout).await })
-            .await?;
-        Ok(Self::sum_new(data).into_iter().collect())
-    }
-}
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
 
-#[async_trait]
-impl crate::Chart for AccountsGrowth {
-    fn name(&self) -> &str {
-        "accountsGrowth"
-    }
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
-    fn missing_date_policy(&self) -> MissingDatePolicy {
+    fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
 }
 
-#[async_trait]
-impl ChartUpdater for AccountsGrowth {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type AccountsGrowth = DailyCumulativeLocalDbChartSource<NewAccountsInt, Properties>;
+pub type AccountsGrowthWeekly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<AccountsGrowth, Week>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type AccountsGrowthMonthly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<AccountsGrowth, Month>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type AccountsGrowthYearly = DirectVecLocalDbChartSource<
+    LastValueLowerResolution<AccountsGrowthMonthly, Year>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -88,16 +70,44 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_accounts_growth() {
-        let chart = AccountsGrowth::new(Cache::default());
-        simple_test_chart(
+        simple_test_chart::<AccountsGrowth>(
             "update_accounts_growth",
-            chart,
             vec![
                 ("2022-11-09", "1"),
                 ("2022-11-10", "4"),
                 ("2022-11-11", "8"),
                 ("2023-03-01", "9"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_accounts_growth_weekly() {
+        simple_test_chart::<AccountsGrowthWeekly>(
+            "update_accounts_growth_weekly",
+            vec![("2022-11-07", "8"), ("2023-02-27", "9")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_accounts_growth_monthly() {
+        simple_test_chart::<AccountsGrowthMonthly>(
+            "update_accounts_growth_monthly",
+            vec![("2022-11-01", "8"), ("2023-03-01", "9")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_accounts_growth_yearly() {
+        simple_test_chart::<AccountsGrowthYearly>(
+            "update_accounts_growth_yearly",
+            vec![("2022-01-01", "8"), ("2023-01-01", "9")],
         )
         .await;
     }

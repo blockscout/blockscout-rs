@@ -224,6 +224,7 @@ mod contract_verification_failure {
     #[derive(Clone, Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct ContractVerificationFailure {
+        #[allow(unused)]
         pub failure: ContractVerificationFailureInternal,
     }
 
