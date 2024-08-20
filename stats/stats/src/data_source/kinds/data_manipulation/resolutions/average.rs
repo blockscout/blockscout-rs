@@ -164,13 +164,13 @@ where
                     EitherOrBoth::Left(v) => tracing::warn!(
                         value = v,
                         timespan =? h_res,
-                        "average value for higher res timespan is present while weight is not",
+                        "average value for higher res timespan is present while weight is not (weight is zero).\
+                         this is very likely incorrect, please investigate.",
                     ),
-                    EitherOrBoth::Right(v) => tracing::warn!(
-                        value = v,
-                        timespan =? h_res,
-                        "weight for higher res timespan is present while average value is not",
-                    ),
+                    EitherOrBoth::Right(weight) => {
+                        // `avg` is zero, completely possible
+                        total_weight += weight
+                    }
                 }
             }
             if total_weight != 0 {
