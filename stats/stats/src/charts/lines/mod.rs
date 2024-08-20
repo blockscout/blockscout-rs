@@ -10,6 +10,7 @@ mod gas_used_growth;
 mod native_coin_holders_growth;
 mod native_coin_supply;
 mod new_accounts;
+mod new_block_rewards;
 mod new_blocks;
 mod new_contracts;
 mod new_native_coin_holders;
@@ -58,6 +59,7 @@ pub use native_coin_supply::{
     NativeCoinSupply, NativeCoinSupplyMonthly, NativeCoinSupplyWeekly, NativeCoinSupplyYearly,
 };
 pub use new_accounts::{NewAccounts, NewAccountsMonthly, NewAccountsWeekly, NewAccountsYearly};
+pub use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub use new_blocks::{NewBlocks, NewBlocksMonthly, NewBlocksWeekly, NewBlocksYearly};
 pub use new_contracts::{
     NewContracts, NewContractsMonthly, NewContractsWeekly, NewContractsYearly,

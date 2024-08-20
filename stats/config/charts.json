@@ -93,6 +93,11 @@
             "title": "Transactions success rate",
             "description": "Successful transactions rate per day"
         },
+        "new_block_rewards": {
+            "enabled": false,
+            "title": "New block rewards",
+            "description": "New block rewards number"
+        },
         "new_blocks": {
             "title": "New blocks",
             "description": "New blocks number"
