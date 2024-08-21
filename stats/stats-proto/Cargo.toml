@@ -20,3 +20,4 @@ serde_json = "1.0"
 actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
 tonic-build = "0.8"
 prost-build = "0.11"
+blockscout-endpoint-health = { path = "../../libs/endpoints/health" }

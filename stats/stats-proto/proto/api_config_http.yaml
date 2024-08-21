@@ -10,5 +10,5 @@ http:
     - selector: blockscout.stats.v1.StatsService.GetLineChart
       get: /api/v1/lines/{name}
 
-    - selector: blockscout.stats.v1.Health.Check
+    - selector: grpc.health.v1.Health.Check
       get: /health
