@@ -282,7 +282,7 @@ impl RuntimeSetup {
         // for this
         let missing_members_allowed: HashMap<String, HashSet<String>> = [
             // no `MONTH` because the month one is not stored in DB
-            // (== not a chart (== doesn't have mutex))
+            // (in other words, not a chart (in other words, doesn't have mutex))
             ("AverageBlockRewardsGroup", vec!["newBlockRewards_DAY"]),
             (
                 "AverageBlockSizeGroup",
