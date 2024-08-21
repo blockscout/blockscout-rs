@@ -274,6 +274,36 @@ impl RuntimeSetup {
     /// Check if some dependencies are not present in their respective groups
     /// and make corresponding warn
     fn warn_non_member_charts(groups: &BTreeMap<String, ArcUpdateGroup>) {
+        // Average charts have their 'weight' dependencies absent from
+        // the group because it doesn't make sense to update the weights
+        // if all averages are disabled (for some reason).
+        //
+        // The weights themselves (e.g. `newBlocks`) have their own groups
+        // for this
+        let missing_members_allowed: HashMap<String, HashSet<String>> = [
+            // no `MONTH` because the month one is not stored in DB
+            // (== not a chart (== doesn't have mutex))
+            ("AverageBlockRewardsGroup", vec!["newBlockRewards_DAY"]),
+            (
+                "AverageBlockSizeGroup",
+                vec!["newBlocks_MONTH", "newBlocks_DAY"],
+            ),
+            (
+                "AverageGasLimitGroup",
+                vec!["newBlocks_DAY", "newBlocks_MONTH"],
+            ),
+            ("AverageGasPriceGroup", vec!["newTxns_DAY", "newTxns_MONTH"]),
+            ("AverageTxnFeeGroup", vec!["newTxns_DAY", "newTxns_MONTH"]),
+            ("TxnsSuccessRateGroup", vec!["newTxns_DAY", "newTxns_MONTH"]),
+        ]
+        .map(|(group_name, allowed_missing)| {
+            (
+                group_name.to_owned(),
+                allowed_missing.into_iter().map(|s| s.to_string()).collect(),
+            )
+        })
+        .into();
+
         for (name, group) in groups {
             let sync_dependencies: HashSet<String> = group
                 .list_dependency_mutex_ids()
@@ -281,10 +311,19 @@ impl RuntimeSetup {
                 .map(|s| s.to_owned())
                 .collect();
             // we rely on the fact that:
-            // chart names == their mutex ids
-            let members: HashSet<String> =
-                group.list_charts().into_iter().map(|c| c.name).collect();
-            let missing_members = sync_dependencies.difference(&members).collect_vec();
+            // chart key == their mutex ids
+            let members: HashSet<String> = group
+                .list_charts()
+                .into_iter()
+                .map(|c| c.key.as_string())
+                .collect();
+            let missing_members: HashSet<String> =
+                sync_dependencies.difference(&members).cloned().collect();
+            let empty_set = HashSet::new();
+            let group_missing_allowed = missing_members_allowed.get(name).unwrap_or(&empty_set);
+            let missing_members = missing_members
+                .difference(group_missing_allowed)
+                .collect_vec();
             if !missing_members.is_empty() {
                 tracing::warn!(
                     update_group = name,
