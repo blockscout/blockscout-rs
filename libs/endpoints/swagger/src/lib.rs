@@ -1,11 +1,7 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use actix_files::NamedFile;
 use actix_web::{web::get, HttpRequest, Result};
-use prost_build::Config;
 
 async fn serve_swagger_from(path: Arc<PathBuf>, _req: HttpRequest) -> Result<NamedFile> {
     Ok(NamedFile::open(path.as_ref())?)
