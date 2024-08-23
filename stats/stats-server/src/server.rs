@@ -9,6 +9,7 @@ use crate::{
     update_service::UpdateService,
 };
 
+use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
 use stats_proto::blockscout::stats::v1::{
@@ -28,13 +29,11 @@ struct HttpRouter<S: StatsService> {
 
 impl<S: StatsService> launcher::HttpRouter for HttpRouter<S> {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
+        let swagger_file = std::path::PathBuf::from("../stats-proto/swagger/stats.swagger.yaml");
         service_config
             .configure(|config| route_health(config, self.health.clone()))
-            .configure(|config| route_stats_service(config, self.stats.clone()));
-        blockscout_endpoint_swagger::register_route(
-            service_config,
-            std::path::PathBuf::from("../stats-proto/swagger/stats.swagger.yaml"),
-        );
+            .configure(|config| route_stats_service(config, self.stats.clone()))
+            .configure(|config| route_swagger(config, swagger_file, "/api/v1/docs/swagger.yaml"));
     }
 }
 
