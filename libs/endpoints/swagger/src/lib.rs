@@ -7,13 +7,14 @@ async fn serve_swagger_from(path: Arc<PathBuf>, _req: HttpRequest) -> Result<Nam
     Ok(NamedFile::open(path.as_ref())?)
 }
 
-pub fn register_route(
+pub fn route_swagger(
     service_config: &mut actix_web::web::ServiceConfig,
     swagger_file_path: PathBuf,
+    route: &str,
 ) {
     let path = Arc::new(swagger_file_path);
     let serve_swagger = move |req: HttpRequest| serve_swagger_from(path.clone(), req);
     service_config.configure(|config| {
-        config.route("/api/v1/docs/swagger.yaml", get().to(serve_swagger));
+        config.route(route, get().to(serve_swagger));
     });
 }
