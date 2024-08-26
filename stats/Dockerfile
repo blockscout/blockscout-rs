@@ -34,4 +34,7 @@ COPY ./config/charts.json ./config/charts.json
 COPY ./config/layout.json ./config/layout.json
 COPY ./config/update_groups.json ./config/update_groups.json
 
+ENV STATS__SWAGGER_FILE=/app/static/stats.swagger.yaml
+COPY ./stats-proto/swagger/stats.swagger.yaml $STATS__SWAGGER_FILE
+
 CMD ["./stats-server"]
