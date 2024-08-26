@@ -9,6 +9,7 @@ use crate::{
     update_service::UpdateService,
 };
 
+use anyhow::Context;
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
@@ -71,11 +72,11 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         settings.run_migrations,
     )
     .await?;
-    let db = Arc::new(Database::connect(opt).await?);
+    let db = Arc::new(Database::connect(opt).await.context("stats DB")?);
 
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    let blockscout = Arc::new(Database::connect(opt).await?);
+    let blockscout = Arc::new(Database::connect(opt).await.context("blockscout DB")?);
 
     let charts = Arc::new(RuntimeSetup::new(
         charts_config,
