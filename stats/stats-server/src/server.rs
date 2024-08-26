@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     config::{read_charts_config, read_layout_config, read_update_groups_config},
@@ -25,15 +25,23 @@ const SERVICE_NAME: &str = "stats";
 struct HttpRouter<S: StatsService> {
     stats: Arc<S>,
     health: Arc<HealthService>,
+    swagger_path: PathBuf,
 }
 
 impl<S: StatsService> launcher::HttpRouter for HttpRouter<S> {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
-        let swagger_file = std::path::PathBuf::from("../stats-proto/swagger/stats.swagger.yaml");
         service_config
             .configure(|config| route_health(config, self.health.clone()))
             .configure(|config| route_stats_service(config, self.stats.clone()))
-            .configure(|config| route_swagger(config, swagger_file, "/api/v1/docs/swagger.yaml"));
+            .configure(|config| {
+                route_swagger(
+                    config,
+                    self.swagger_path.clone(),
+                    // it's ok to not have this endpoint in swagger, as it is
+                    // the swagger itself
+                    "/api/v1/docs/swagger.yaml",
+                )
+            });
     }
 }
 
@@ -103,6 +111,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let http_router = HttpRouter {
         stats: read_service,
         health: health.clone(),
+        swagger_path: settings.swagger_file,
     };
 
     let launch_settings = LaunchSettings {
