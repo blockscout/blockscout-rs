@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
     config::{read_charts_config, read_layout_config, read_update_groups_config},
@@ -76,6 +76,12 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
 
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
+    // we'd like to have each batch to resolve in under 1 hour
+    // as it seems to be the middleground between too many steps & occupying DB for too long
+    opt.sqlx_slow_statements_logging_settings(
+        tracing::log::LevelFilter::Warn,
+        Duration::from_secs(3600),
+    );
     let blockscout = Arc::new(Database::connect(opt).await.context("blockscout DB")?);
 
     let charts = Arc::new(RuntimeSetup::new(
