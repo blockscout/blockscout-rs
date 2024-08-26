@@ -9,6 +9,7 @@ message ConvertOptions {
   string type = 1;
   string override = 2;
   bool required = 3;
+  repeated string attributes = 4;
 }
 
 message ExtraFieldOptions {
