@@ -180,6 +180,30 @@ pub async fn get_chart_metadata(
     })
 }
 
+/// Returns tuple with:
+/// - latest resolution that has relevant data
+/// - does # of approximate points needs to be decreased by 1
+fn relevant_data_until<R: Timespan>(
+    last_updated_at: Option<DateTime<chrono::FixedOffset>>,
+) -> (Option<R>, bool) {
+    if let Some(t) = last_updated_at {
+        let t = t.to_utc();
+        let last_updated_at_timespan_border =
+            R::from_date(t.date_naive()).saturating_start_timestamp() == t;
+        // last_updated_at timestamp is not included in the range
+        let inclusive_last_updated_at_end =
+            exclusive_datetime_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t);
+        (
+            Some(R::from_date(
+                inclusive_last_updated_at_end.end().date_naive(),
+            )),
+            last_updated_at_timespan_border,
+        )
+    } else {
+        (None, false)
+    }
+}
+
 /// Get data points for the chart `name`.
 ///
 /// `approximate_trailing_points` - number of trailing points to mark as approximate.
@@ -297,13 +321,8 @@ where
     let db_data =
         get_raw_line_chart_data::<Resolution>(db, chart.id, from.clone(), to.clone()).await?;
 
-    let last_updated_at = chart.last_updated_at.map(|t| {
-        // last_updated_at timestamp is not included in the range
-        let inclusive_last_updated_at_end =
-            exclusive_datetime_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t.to_utc());
-        Resolution::from_date(inclusive_last_updated_at_end.end().date_naive())
-    });
-    if last_updated_at.is_none() && !db_data.is_empty() {
+    let (relevant_until, decrement_approx_points) = relevant_data_until(chart.last_updated_at);
+    if relevant_until.is_none() && !db_data.is_empty() {
         tracing::warn!(
             chart_name = chart.name,
             db_data_len = db_data.len(),
@@ -315,8 +334,8 @@ where
     // However, if some points are omitted, they should be filled according
     // to policy.
     // This fill makes sense up to the latest update.
-    let to = match (to.clone(), last_updated_at.clone()) {
-        (Some(to), Some(last_updated_at)) => Some(to.min(last_updated_at)),
+    let to = match (to.clone(), relevant_until.clone()) {
+        (Some(to), Some(relevant_until)) => Some(to.min(relevant_until)),
         (None, Some(d)) | (Some(d), None) => Some(d),
         (None, None) => None,
     };
@@ -328,9 +347,13 @@ where
     } else {
         data_in_range
     };
+    let mut approximate_trailing_points = approximate_trailing_points;
+    if decrement_approx_points {
+        approximate_trailing_points = approximate_trailing_points.saturating_sub(1)
+    }
     let data = mark_approximate(
         data_unmarked,
-        last_updated_at.unwrap_or(Resolution::from_date(NaiveDate::MAX)),
+        relevant_until.unwrap_or(Resolution::from_date(NaiveDate::MAX)),
         approximate_trailing_points,
     );
     Ok(data)
