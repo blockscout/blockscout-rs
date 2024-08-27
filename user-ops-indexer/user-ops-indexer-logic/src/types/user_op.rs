@@ -4,8 +4,9 @@ use crate::{
 };
 pub use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
 use entity::user_operations::Model;
-use ethers::prelude::{
-    abi::AbiEncode, core::utils::to_checksum, Address, BigEndianHash, Bytes, H256, U256,
+use ethers::{
+    prelude::{abi::AbiEncode, Address, BigEndianHash, Bytes, H256, U256},
+    utils::to_checksum,
 };
 use num_traits::cast::ToPrimitive;
 use sea_orm::ActiveEnum;
