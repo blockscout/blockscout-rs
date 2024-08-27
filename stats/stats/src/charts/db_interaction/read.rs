@@ -547,7 +547,7 @@ mod tests {
         charts::ResolutionKind,
         counters::TotalBlocks,
         data_source::kinds::local_db::parameters::DefaultQueryVec,
-        lines::{TxnsGrowth, TxnsGrowthMonthly},
+        lines::{ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
             init_db::init_db,
             point_construction::{d, month_of},
@@ -637,6 +637,41 @@ mod tests {
             mock_chart_data(5, "2022-08-17", 12),
             mock_chart_data(5, "2022-09-19", 100),
             mock_chart_data(5, "2022-10-29", 1000),
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
+    /// Depicts a chart during the process of reupdate
+    async fn insert_mock_data_reupdate(db: &DatabaseConnection) {
+        charts::Entity::insert_many([charts::ActiveModel {
+            name: Set(ActiveAccounts::name().to_string()),
+            resolution: Set(ChartResolution::Day),
+            chart_type: Set(ChartType::Line),
+            last_updated_at: Set(Some(
+                DateTime::parse_from_rfc3339("2022-06-30T00:00:00+00:00").unwrap(),
+            )),
+            ..Default::default()
+        }])
+        .exec(db)
+        .await
+        .unwrap();
+        chart_data::Entity::insert_many([
+            mock_chart_data(1, "2022-06-19", 74),
+            mock_chart_data(1, "2022-06-20", 103),
+            mock_chart_data(1, "2022-06-21", 199),
+            mock_chart_data(1, "2022-06-22", 94),
+            mock_chart_data(1, "2022-06-23", 123),
+            mock_chart_data(1, "2022-06-24", 277),
+            mock_chart_data(1, "2022-06-25", 34),
+            mock_chart_data(1, "2022-06-26", 51),
+            mock_chart_data(1, "2022-06-27", 81),
+            mock_chart_data(1, "2022-06-28", 57),
+            mock_chart_data(1, "2022-06-29", 1676),
+            mock_chart_data(1, "2022-06-30", 1636),
+            mock_chart_data(1, "2022-07-01", 99),
+            mock_chart_data(1, "2022-07-02", 1585),
         ])
         .exec(db)
         .await
@@ -1068,6 +1103,33 @@ mod tests {
                 timespan: month_of("2022-11-01"),
                 value: "0".into(),
             }),
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn last_accurate_point_reupdate_works() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let db = init_db("last_accurate_point_2_works").await;
+        insert_mock_data_reupdate(&db).await;
+
+        // No missing points
+        assert!(chart_id_matches_key(&db, 1, "activeAccounts", ResolutionKind::Day).await);
+        assert_eq!(
+            last_accurate_point::<ActiveAccounts, DefaultQueryVec<ActiveAccounts>>(
+                1,
+                1,
+                &db,
+                false,
+                1,
+                MissingDatePolicy::FillZero
+            )
+            .await
+            .unwrap(),
+            Some(DateValue::<String> {
+                timespan: d("2022-06-29"),
+                value: "1676".to_string()
+            })
         );
     }
 }
