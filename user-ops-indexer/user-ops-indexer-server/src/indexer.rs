@@ -1,5 +1,5 @@
 use crate::settings::Settings;
-use ethers::prelude::Provider;
+use ethers::{prelude::Provider, utils::to_checksum};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::time::sleep;
@@ -14,9 +14,12 @@ pub async fn run(
     let db_connection = Arc::new(db_connection);
 
     if settings.indexer.entrypoints.v06 {
-        start_indexer_with_retries::<v06::IndexerV06>(
+        start_indexer_with_retries(
             db_connection.clone(),
             settings.indexer.clone(),
+            v06::IndexerV06 {
+                entry_point: settings.indexer.entrypoints.v06_entry_point,
+            },
         )
         .await?;
     } else {
@@ -24,9 +27,12 @@ pub async fn run(
     }
 
     if settings.indexer.entrypoints.v07 {
-        start_indexer_with_retries::<v07::IndexerV07>(
+        start_indexer_with_retries(
             db_connection.clone(),
             settings.indexer.clone(),
+            v07::IndexerV07 {
+                entry_point: settings.indexer.entrypoints.v07_entry_point,
+            },
         )
         .await?;
     } else {
@@ -36,23 +42,33 @@ pub async fn run(
     Ok(())
 }
 
-async fn start_indexer_with_retries<L: IndexerLogic>(
+async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'static>(
     db_connection: Arc<DatabaseConnection>,
     settings: IndexerSettings,
+    logic: L,
 ) -> anyhow::Result<()> {
-    tracing::info!(version = L::version(), "connecting to rpc");
+    tracing::info!(
+        version = L::version(),
+        entry_point = to_checksum(&logic.entry_point(), None),
+        "connecting to rpc"
+    );
 
     // If the first connect fails, the function will return an error immediately.
     // All subsequent reconnects are done inside tokio task and will not propagate to above.
     let transport = CommonTransport::new(settings.rpc_url.clone()).await?;
     let client = Provider::new(transport);
-    let mut indexer = Indexer::new(client, db_connection.clone(), settings.clone());
+    let mut indexer = Indexer::new(
+        client,
+        db_connection.clone(),
+        settings.clone(),
+        logic.clone(),
+    );
 
     let delay = settings.restart_delay;
 
     tokio::spawn(async move {
         loop {
-            match indexer.start::<L>().await {
+            match indexer.start().await {
                 Err(err) => {
                     tracing::error!(error = ?err, version = L::version(), ?delay, "indexer startup failed, retrying");
                 }
@@ -90,7 +106,12 @@ async fn start_indexer_with_retries<L: IndexerLogic>(
                     }
                 };
                 let client = Provider::new(transport);
-                indexer = Indexer::new(client, db_connection.clone(), settings.clone());
+                indexer = Indexer::new(
+                    client,
+                    db_connection.clone(),
+                    settings.clone(),
+                    logic.clone(),
+                );
                 break;
             }
         }
