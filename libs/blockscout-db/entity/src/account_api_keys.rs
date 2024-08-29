@@ -3,14 +3,12 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "administrators")]
+#[sea_orm(table_name = "account_api_keys")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i64,
-    #[sea_orm(unique)]
-    pub role: String,
-    #[sea_orm(unique)]
-    pub user_id: i64,
+    pub identity_id: i64,
+    pub name: String,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub value: Uuid,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
 }
@@ -18,18 +16,18 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::users::Entity",
-        from = "Column::UserId",
-        to = "super::users::Column::Id",
+        belongs_to = "super::account_identities::Entity",
+        from = "Column::IdentityId",
+        to = "super::account_identities::Column::Id",
         on_update = "NoAction",
         on_delete = "Cascade"
     )]
-    Users,
+    AccountIdentities,
 }
 
-impl Related<super::users::Entity> for Entity {
+impl Related<super::account_identities::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Users.def()
+        Relation::AccountIdentities.def()
     }
 }
 

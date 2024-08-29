@@ -3,15 +3,13 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "smart_contracts_additional_sources")]
+#[sea_orm(table_name = "proxy_smart_contract_verification_statuses")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: i64,
-    pub file_name: String,
-    #[sea_orm(column_type = "Text")]
-    pub contract_source_code: String,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub address_hash: Vec<u8>,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub uid: String,
+    pub status: i16,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub contract_address_hash: Option<Vec<u8>>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
 }
@@ -20,7 +18,7 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(
         belongs_to = "super::smart_contracts::Entity",
-        from = "Column::AddressHash",
+        from = "Column::ContractAddressHash",
         to = "super::smart_contracts::Column::AddressHash",
         on_update = "NoAction",
         on_delete = "Cascade"

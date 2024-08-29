@@ -3,17 +3,12 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "decompiled_smart_contracts")]
+#[sea_orm(table_name = "missing_block_ranges")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-    pub decompiler_version: String,
-    #[sea_orm(column_type = "Text")]
-    pub decompiled_source_code: String,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub address_hash: Vec<u8>,
-    pub inserted_at: DateTime,
-    pub updated_at: DateTime,
+    pub from_number: Option<i32>,
+    pub to_number: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -3,18 +3,17 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "address_names")]
+#[sea_orm(table_name = "address_contract_code_fetch_attempts")]
 pub struct Model {
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", unique)]
+    #[sea_orm(
+        primary_key,
+        auto_increment = false,
+        column_type = "VarBinary(StringLen::None)"
+    )]
     pub address_hash: Vec<u8>,
-    pub name: String,
-    pub primary: bool,
+    pub retries_number: Option<i16>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(column_type = "JsonBinary", nullable)]
-    pub metadata: Option<Json>,
-    #[sea_orm(primary_key)]
-    pub id: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

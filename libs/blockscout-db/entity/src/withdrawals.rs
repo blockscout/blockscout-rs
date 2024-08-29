@@ -3,17 +3,19 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "pending_block_operations")]
+#[sea_orm(table_name = "withdrawals")]
 pub struct Model {
-    #[sea_orm(
-        primary_key,
-        auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
-    )]
-    pub block_hash: Vec<u8>,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub index: i32,
+    pub validator_index: i32,
+    #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
+    pub amount: Decimal,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
-    pub block_number: Option<i32>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    pub address_hash: Vec<u8>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    pub block_hash: Vec<u8>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
