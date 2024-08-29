@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   db-init:
-    image: postgres:15
+    image: postgres:16
     volumes:
       - ./data/blockscout-db:/var/lib/postgresql/data
     entrypoint:
@@ -15,7 +15,7 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
-    image: postgres:15
+    image: postgres:16
     user: 2000:2000
     shm_size: 256m
     restart: always
@@ -40,7 +40,7 @@ services:
   backend:
     depends_on:
       - db
-    image: blockscout/blockscout:6.4.0
+    image: blockscout/blockscout:6.8.0
     links:
       - db:database
     # extra_hosts:
@@ -58,15 +58,10 @@ services:
       PORT: 4000
     ports:
       - 80:4000
-    command:
-      [
-        "/bin/sh",
-        "-c",
-        "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start"
-      ]
+    command: [ "/bin/sh", "-c", "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start" ]
 
   stats-db-init:
-    image: postgres:15
+    image: postgres:16
     volumes:
       - ./data/stats-db:/var/lib/postgresql/data
     entrypoint:
@@ -79,7 +74,7 @@ services:
     depends_on:
       stats-db-init:
         condition: service_completed_successfully
-    image: postgres:15
+    image: postgres:16
     user: 2000:2000
     shm_size: 256m
     restart: always
