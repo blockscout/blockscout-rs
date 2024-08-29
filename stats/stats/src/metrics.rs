@@ -26,6 +26,7 @@ lazy_static! {
 
 pub fn initialize_metrics<'a>(enabled_chart_keys: impl IntoIterator<Item = &'a str>) {
     for chart_id in enabled_chart_keys {
-        UPDATE_ERRORS.with_label_values(&[chart_id]);
+        UPDATE_ERRORS.with_label_values(&[chart_id]).reset();
+        // making zero observation for histograms doesn't make sense
     }
 }
