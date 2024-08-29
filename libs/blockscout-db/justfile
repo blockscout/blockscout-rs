@@ -27,8 +27,13 @@ generate-entities database_url="postgres://postgres:admin@localhost:5432/blocksc
     DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
     cargo fmt --all -- --config imports_granularity=Crate
 
+generate-entities-from-blockscout database_url="postgres://postgres:admin@localhost:5432/blockscout":
+    docker run --network=host -e 'DATABASE_URL={{database_url}}' -e 'ECTO_USE_SSL=false' --entrypoint "/bin/sh" --rm blockscout/blockscout:6.8.0 -c 'bin/blockscout eval "Elixir.Explorer.ReleaseTasks.create_and_migrate()"'
+    DATABASE_URL={{database_url}} sea-orm-cli generate entity --lib -o entity/src
+    cargo fmt --all -- --config imports_granularity=Crate
+
 generate-migration database_url="postgres://postgres:admin@localhost:5432/blockscout?ssl=false" migration_file="migration/src/migration.sql":
-    docker run --network=host -e 'DATABASE_URL={{database_url}}' --entrypoint "/bin/sh" --rm blockscout/blockscout:4.1.8 -c 'bin/blockscout eval "Elixir.Explorer.ReleaseTasks.create_and_migrate()"'
+    docker run --network=host -e 'DATABASE_URL={{database_url}}' -e 'ECTO_USE_SSL=false' --entrypoint "/bin/sh" --rm blockscout/blockscout:6.8.0 -c 'bin/blockscout eval "Elixir.Explorer.ReleaseTasks.create_and_migrate()"'
     docker exec blockscout-postgres pg_dump -s --inserts -h localhost -U postgres blockscout > {{migration_file}}
     # remove unwanted config
-    sed -i '/SELECT pg_catalog.set_config/d' {{migration_file}}
+    sed -e '/SELECT pg_catalog.set_config/d' {{migration_file}}
