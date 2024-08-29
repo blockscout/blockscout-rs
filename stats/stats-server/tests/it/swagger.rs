@@ -3,24 +3,13 @@ use blockscout_service_launcher::{
     test_server::{get_test_server_settings, init_server},
 };
 use pretty_assertions::assert_eq;
-use reqwest::{RequestBuilder, Response};
+
 use stats::tests::init_db::init_db_all;
 use stats_server::{stats, Settings};
+
 use std::{path::PathBuf, str::FromStr};
 
-async fn send_arbitrary_request(request: RequestBuilder) -> Response {
-    let response = request
-        .send()
-        .await
-        .unwrap_or_else(|_| panic!("Failed to send request"));
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let message = response.text().await.expect("Read body as text");
-        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
-    }
-    response
-}
+use crate::common::send_arbitrary_request;
 
 #[tokio::test]
 #[ignore = "needs database"]
