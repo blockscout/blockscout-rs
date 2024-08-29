@@ -13,6 +13,7 @@ use anyhow::Context;
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
+use stats::metrics;
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
     health_server::HealthServer,
@@ -110,6 +111,10 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             )
             .await;
     });
+
+    if settings.metrics.enabled {
+        metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
+    }
 
     let read_service = Arc::new(ReadService::new(db, charts, settings.limits.into()).await?);
     let health = Arc::new(HealthService::default());
