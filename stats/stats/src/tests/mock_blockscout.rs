@@ -1,6 +1,6 @@
 use blockscout_db::entity::{
     address_coin_balances_daily, addresses, block_rewards, blocks, internal_transactions,
-    smart_contracts, tokens, transactions,
+    migrations_status, smart_contracts, tokens, transactions,
 };
 use chrono::{NaiveDate, NaiveDateTime};
 use rand::{Rng, SeedableRng};
@@ -260,6 +260,19 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .exec(blockscout)
         .await
         .unwrap();
+
+    let migrations = vec![
+        ("denormalization", Some(true)),
+        ("ctb_token_type", Some(false)),
+        ("tb_token_type", None),
+    ]
+    .into_iter()
+    .map(|(name, status)| mock_migration(name, status));
+
+    migrations_status::Entity::insert_many(migrations)
+        .exec(blockscout)
+        .await
+        .unwrap();
 }
 
 fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
@@ -491,5 +504,17 @@ fn mock_internal_transaction(
         block_hash: Set(tx.block_hash.as_ref().clone().unwrap()),
         block_index: Set((*tx.index.as_ref()).unwrap()),
         ..Default::default()
+    }
+}
+
+fn mock_migration(name: &str, completed: Option<bool>) -> migrations_status::ActiveModel {
+    let status = completed
+        .map(|done| if done { "completed" } else { "started" })
+        .map(|s| s.to_string());
+    migrations_status::ActiveModel {
+        migration_name: Set(name.to_string()),
+        status: Set(status),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
     }
 }
