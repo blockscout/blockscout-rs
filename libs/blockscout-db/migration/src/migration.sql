@@ -568,6 +568,19 @@ ALTER TABLE public.market_history_id_seq OWNER TO postgres;
 
 ALTER SEQUENCE public.market_history_id_seq OWNED BY public.market_history.id;
 
+--
+-- Name: migrations_status; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.migrations_status (
+    migration_name character varying(255) NOT NULL,
+    status character varying(255),
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+ALTER TABLE public.migrations_status OWNER TO postgres;
 
 --
 -- Name: pending_block_operations; Type: TABLE; Schema: public; Owner: postgres
@@ -1184,6 +1197,12 @@ ALTER TABLE ONLY public.logs
 ALTER TABLE ONLY public.market_history
     ADD CONSTRAINT market_history_pkey PRIMARY KEY (id);
 
+--
+-- Name: migrations_status migrations_status_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.migrations_status
+    ADD CONSTRAINT migrations_status_pkey PRIMARY KEY (migration_name);
 
 --
 -- Name: emission_rewards no_overlapping_ranges; Type: CONSTRAINT; Schema: public; Owner: postgres
