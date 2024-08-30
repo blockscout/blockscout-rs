@@ -21,6 +21,7 @@ pub mod internal_transactions;
 pub mod last_fetched_counters;
 pub mod logs;
 pub mod market_history;
+pub mod migrations_status;
 pub mod pending_block_operations;
 pub mod schema_migrations;
 pub mod smart_contracts;
