@@ -89,7 +89,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
         tests::{
             init_db::init_db_all,
             mock_blockscout::fill_mock_blockscout_data,
@@ -139,6 +139,7 @@ mod tests {
         let parameters = UpdateParameters {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
             force_full: false,
         };

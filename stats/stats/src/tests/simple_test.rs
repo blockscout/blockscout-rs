@@ -2,7 +2,7 @@ use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use crate::{
     data_source::{
         source::DataSource,
-        types::{UpdateContext, UpdateParameters},
+        types::{BlockscoutMigrations, UpdateContext, UpdateParameters},
     },
     get_line_chart_data, get_raw_counters,
     types::Timespan,
@@ -43,6 +43,7 @@ where
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -101,6 +102,7 @@ pub async fn dirty_force_update_and_check<C>(
     let parameters = UpdateParameters {
         db,
         blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -145,6 +147,7 @@ pub async fn ranged_test_chart<C>(
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -227,6 +230,7 @@ pub async fn simple_test_counter<C: DataSource + ChartProperties>(
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: Some(current_time),
         force_full: true,
     };

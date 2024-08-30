@@ -3,16 +3,19 @@ use blockscout_service_launcher::{
     test_server::{get_test_server_settings, init_server, send_get_request},
 };
 use chrono::NaiveDate;
+
 use stats::{
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     ResolutionKind,
 };
 use stats_server::{stats, Settings};
+
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 #[tokio::test]
 #[ignore = "needs database"]
 async fn test_lines_ok() {
+    let _ = tracing_subscriber::fmt::try_init();
     let (stats_db, blockscout_db) = init_db_all("test_lines_ok").await;
     fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap()).await;
 

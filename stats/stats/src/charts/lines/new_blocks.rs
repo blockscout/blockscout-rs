@@ -99,7 +99,7 @@ mod tests {
     use super::*;
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
-        data_source::{DataSource, UpdateContext},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
         get_line_chart_data,
         tests::{
             init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data,
@@ -163,6 +163,7 @@ mod tests {
         let mut cx = UpdateContext {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: current_time,
             force_full: false,
         };
@@ -256,6 +257,7 @@ mod tests {
         let cx = UpdateContext {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: current_time,
             force_full: true,
         };
@@ -359,6 +361,7 @@ mod tests {
         let cx = UpdateContext {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: current_time,
             force_full: false,
         };

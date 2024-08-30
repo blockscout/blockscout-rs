@@ -25,7 +25,10 @@ use super::{
 };
 use crate::{
     construct_update_group,
-    data_source::kinds::local_db::parameters::update::batching::parameters::PassVecStep,
+    data_source::{
+        kinds::local_db::parameters::update::batching::parameters::PassVecStep,
+        types::BlockscoutMigrations,
+    },
     define_and_impl_resolution_properties,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     types::timespans::{DateValue, Month, Week, Year},
@@ -244,6 +247,7 @@ async fn update_examples() {
     let parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: None,
         force_full: true,
     };

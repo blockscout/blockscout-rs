@@ -2,7 +2,7 @@ use crate::runtime_setup::{RuntimeSetup, UpdateGroupEntry};
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
-use stats::data_source::types::UpdateParameters;
+use stats::data_source::types::{BlockscoutMigrations, UpdateParameters};
 use std::sync::Arc;
 
 pub struct UpdateService {
@@ -84,13 +84,22 @@ impl UpdateService {
             force_update = force_full,
             "updating group of charts"
         );
+        let Ok(active_migrations) = BlockscoutMigrations::query_from_db(&self.blockscout)
+            .await
+            .inspect_err(|err| {
+                tracing::error!("error during blockscout migrations detection: {:?}", err)
+            })
+        else {
+            return;
+        };
+        let update_parameters = UpdateParameters {
+            db: &self.db,
+            blockscout: &self.blockscout,
+            blockscout_applied_migrations: active_migrations,
+            update_time_override: None,
+            force_full,
+        };
         let result = {
-            let update_parameters = UpdateParameters {
-                db: &self.db,
-                blockscout: &self.blockscout,
-                update_time_override: None,
-                force_full,
-            };
             group_entry
                 .group
                 .update_charts_with_mutexes(update_parameters, &group_entry.enabled_members)
