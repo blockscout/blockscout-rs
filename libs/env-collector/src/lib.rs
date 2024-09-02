@@ -299,21 +299,26 @@ where
 {
     let mut json = serde_json::to_value(settings).expect("structure should be serializable");
     json.dot_remove(path).expect("value path not found");
+
     let settings_with_default_value = serde_json::from_value::<S>(json).ok()?;
-    let json = serde_json::to_value(&settings_with_default_value)
+    let json: serde_json::Value = serde_json::to_value(&settings_with_default_value)
         .expect("structure should be serializable");
-    json.dot_get(path).expect("value path not found")
+    let default_value: serde_json::Value = json
+        .dot_get(path)
+        .expect("value path not found")
+        .unwrap_or_default();
+    Some(default_value)
 }
 
 fn try_get_description(_key: &str, value: &str, default: &Option<serde_json::Value>) -> String {
     if value.is_empty() {
         return Default::default();
     }
+    let default_str = default.as_ref().map(|v| v.to_string()).unwrap_or_default();
 
-    if let Some(default) = default {
-        if *default == value {
-            return Default::default();
-        }
+    // If the value is the same as the default value, we don't need to show it in the description
+    if default_str == value {
+        return Default::default();
     }
 
     format!("e.g. `{}`", value)
@@ -482,10 +487,11 @@ mod tests {
             var("TEST_SERVICE__TEST2", Some("1000"), false, "e.g. `123`"),
             var(
                 "TEST_SERVICE__TEST3_SET",
-                Some("false"),
+                Some("null"),
                 false,
                 "e.g. `false`",
             ),
+            var("TEST_SERVICE__TEST4_NOT_SET", Some("null"), false, ""),
             var(
                 "TEST_SERVICE__DATABASE__CONNECT__URL",
                 None,
@@ -505,8 +511,8 @@ mod tests {
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       |                  | `false`       |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       |                  | `false`       |
 | `TEST_SERVICE__TEST2`                     | false       | e.g. `123`       | `1000`        |
-| `TEST_SERVICE__TEST3_SET`                 | false       | e.g. `false`     | null          |
-| `TEST_SERVICE__TEST4_NOT_SET`             | false       |                  | null          |
+| `TEST_SERVICE__TEST3_SET`                 | false       | e.g. `false`     | `null`        |
+| `TEST_SERVICE__TEST4_NOT_SET`             | false       |                  | `null`        |
 | `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `test-url`  |               |
 [anchor]: <> (anchors.envs.end)
 "#
@@ -599,6 +605,8 @@ mod tests {
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | | | `false` |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS` | | | `false` |
 | `TEST_SERVICE__TEST2` | | e.g. `123` | `1000` |
+| `TEST_SERVICE__TEST3_SET` | | e.g. `false` | `null` |
+| `TEST_SERVICE__TEST4_NOT_SET` | | | `null` |
 
 [anchor]: <> (anchors.envs.end)
 "#
