@@ -18,12 +18,14 @@ pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(
     markdown_path: &str,
     config_path: &str,
     skip_vars: &[&str],
+    anchor_postfix: Option<&str>,
 ) {
     let collector = EnvCollector::<S>::new(
         service_name.to_string(),
         markdown_path.into(),
         config_path.into(),
         skip_vars.iter().map(|s| s.to_string()).collect(),
+        anchor_postfix.map(|s| s.to_string()),
     );
     let validate_only = std::env::var(VALIDATE_ONLY_ENV)
         .unwrap_or_default()
@@ -59,6 +61,7 @@ pub struct EnvCollector<S> {
     markdown_path: PathBuf,
     config_path: PathBuf,
     skip_vars: Vec<String>,
+    anchor_postfix: Option<String>,
 
     settings: PhantomData<S>,
 }
@@ -72,12 +75,14 @@ where
         markdown_path: PathBuf,
         config_path: PathBuf,
         skip_vars: Vec<String>,
+        anchor_postfix: Option<String>,
     ) -> Self {
         Self {
             service_name,
             markdown_path,
             config_path,
             skip_vars,
+            anchor_postfix,
             settings: Default::default(),
         }
     }
@@ -88,6 +93,7 @@ where
             self.markdown_path.as_path(),
             self.config_path.as_path(),
             self.skip_vars.clone(),
+            self.anchor_postfix.clone(),
         )
     }
 
@@ -97,6 +103,7 @@ where
             self.markdown_path.as_path(),
             self.config_path.as_path(),
             self.skip_vars.clone(),
+            self.anchor_postfix.clone(),
         )
     }
 }
@@ -166,13 +173,18 @@ impl Envs {
         Ok(from_config)
     }
 
-    pub fn from_markdown(markdown_content: &str) -> Result<Self, anyhow::Error> {
+    pub fn from_markdown(
+        markdown_content: &str,
+        anchor_postfix: Option<String>,
+    ) -> Result<Self, anyhow::Error> {
+        let start_anchor = push_postfix_to_anchor(ANCHOR_START, anchor_postfix.clone());
         let line_start = markdown_content
-            .find(ANCHOR_START)
+            .find(&start_anchor)
             .context("anchors.envs.start not found")?
-            + ANCHOR_START.len();
+            + start_anchor.len();
+        let end_anchor = push_postfix_to_anchor(ANCHOR_END, anchor_postfix);
         let line_end = markdown_content
-            .find(ANCHOR_END)
+            .find(&end_anchor)
             .context("anchors.envs.end not found")?
             - 1;
         let table_content = &markdown_content[line_start..=line_end];
@@ -221,6 +233,7 @@ fn find_missing_variables_in_markdown<S>(
     markdown_path: &Path,
     config_path: &Path,
     skip_vars: Vec<String>,
+    anchor_postfix: Option<String>,
 ) -> Result<Vec<EnvVariable>, anyhow::Error>
 where
     S: Serialize + DeserializeOwned,
@@ -236,6 +249,7 @@ where
         std::fs::read_to_string(markdown_path)
             .context("failed to read markdown file")?
             .as_str(),
+        anchor_postfix,
     )?;
 
     let missing = example
@@ -258,6 +272,7 @@ fn update_markdown_file<S>(
     markdown_path: &Path,
     config_path: &Path,
     skip_vars: Vec<String>,
+    anchor_postfix: Option<String>,
 ) -> Result<(), anyhow::Error>
 where
     S: Serialize + DeserializeOwned,
@@ -273,6 +288,7 @@ where
         std::fs::read_to_string(markdown_path)
             .context("failed to read markdown file")?
             .as_str(),
+        anchor_postfix.clone(),
     )?;
     markdown_config.update_no_override(from_config);
     let table = serialize_env_vars_to_md_table(markdown_config);
@@ -281,11 +297,16 @@ where
     let lines = content.lines().collect::<Vec<&str>>();
     let line_start = lines
         .iter()
-        .position(|line| line.contains(ANCHOR_START))
+        .position(|line| {
+            line.contains(&push_postfix_to_anchor(
+                ANCHOR_START,
+                anchor_postfix.clone(),
+            ))
+        })
         .context("anchors.envs.start not found in markdown")?;
     let line_end = lines
         .iter()
-        .position(|line| line.contains(ANCHOR_END))
+        .position(|line| line.contains(&push_postfix_to_anchor(ANCHOR_END, anchor_postfix.clone())))
         .context("anchors.envs.end not found in markdown")?;
 
     let new_content = [&lines[..=line_start], &[&table], &lines[line_end..]].concat();
@@ -356,6 +377,14 @@ fn serialize_env_vars_to_md_table(vars: Envs) -> String {
         ));
     }
     result
+}
+
+fn push_postfix_to_anchor(anchor: &str, postfix: Option<String>) -> String {
+    if let Some(postfix) = postfix {
+        format!("{anchor}.{postfix}")
+    } else {
+        anchor.to_string()
+    }
 }
 
 fn regex_md_table_row() -> &'static str {
@@ -503,7 +532,11 @@ mod tests {
 
     fn default_markdown_content() -> &'static str {
         r#"
-[anchor]: <> (anchors.envs.start)
+
+[anchor]: <> (anchors.envs.start.irrelevant_postfix)
+[anchor]: <> (anchors.envs.end.irrelevant_postfix)
+
+[anchor]: <> (anchors.envs.start.cool_postfix)
 
 | Variable                                  | Required    | Description      | Default Value |
 |-------------------------------------------|-------------|------------------|---------------|
@@ -514,7 +547,7 @@ mod tests {
 | `TEST_SERVICE__TEST3_SET`                 | false       | e.g. `false`     | `null`        |
 | `TEST_SERVICE__TEST4_NOT_SET`             | false       |                  | `null`        |
 | `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `test-url`  |               |
-[anchor]: <> (anchors.envs.end)
+[anchor]: <> (anchors.envs.end.cool_postfix)
 "#
     }
 
@@ -547,7 +580,7 @@ mod tests {
     #[test]
     fn from_markdown_works() {
         let markdown = default_markdown_content();
-        let vars = Envs::from_markdown(markdown).unwrap();
+        let vars = Envs::from_markdown(markdown, Some("cool_postfix".to_string())).unwrap();
         let expected = default_envs();
         assert_eq!(vars, expected);
     }
@@ -574,6 +607,7 @@ mod tests {
             markdown.path().to_path_buf(),
             config.path().to_path_buf(),
             vec![],
+            None,
         );
 
         let missing = collector.find_missing().unwrap();
