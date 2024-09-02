@@ -6,7 +6,6 @@ use serde_json::Value;
 use std::{
     collections::BTreeMap,
     marker::PhantomData,
-    ops::Not,
     path::{Path, PathBuf},
 };
 
@@ -102,7 +101,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq)]
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct EnvVariable {
     pub key: String,
     pub description: String,
@@ -110,11 +109,9 @@ pub struct EnvVariable {
     pub default_value: Option<String>,
 }
 
-impl PartialEq<Self> for EnvVariable {
-    fn eq(&self, other: &Self) -> bool {
-        self.key == other.key
-            && self.required == other.required
-            && self.default_value == other.default_value
+impl EnvVariable {
+    pub fn eq_with_ignores(&self, other: &Self) -> bool {
+        self.key == other.key && self.required == other.required
     }
 }
 
@@ -149,14 +146,16 @@ impl Envs {
             .into_iter()
             .filter(|(key, _)| !skip_vars.iter().any(|s| key.starts_with(s)))
             .map(|(key, value)| {
-                let required =
-                    var_is_required(&settings, &from_key_to_json_path(&key, service_prefix));
-                let default_value = required.not().then_some(value);
+                let default_value =
+                    default_of_var(&settings, &from_key_to_json_path(&key, service_prefix));
+                let required = default_value.is_none();
+                let description = try_get_description(&key, &value, &default_value);
+                let default_value = default_value.map(|v| v.to_string());
                 let var = EnvVariable {
                     key: key.clone(),
                     required,
                     default_value,
-                    description: Default::default(),
+                    description,
                 };
 
                 (key, var)
@@ -244,7 +243,9 @@ where
         .iter()
         .filter(|(key, value)| {
             let maybe_markdown_var = markdown.vars.get(*key);
-            maybe_markdown_var.map(|var| var != *value).unwrap_or(true)
+            maybe_markdown_var
+                .map(|var| !var.eq_with_ignores(value))
+                .unwrap_or(true)
         })
         .map(|(_, value)| value.clone())
         .collect();
@@ -292,14 +293,30 @@ where
     Ok(())
 }
 
-fn var_is_required<S>(settings: &S, path: &str) -> bool
+fn default_of_var<S>(settings: &S, path: &str) -> Option<serde_json::Value>
 where
     S: Serialize + DeserializeOwned,
 {
-    let mut json = serde_json::to_value(settings).unwrap();
-    json.dot_remove(path).unwrap();
-    let result = serde_json::from_value::<S>(json);
-    result.is_err()
+    let mut json = serde_json::to_value(settings).expect("structure should be serializable");
+    json.dot_remove(path).expect("value path not found");
+    let settings_with_default_value = serde_json::from_value::<S>(json).ok()?;
+    let json = serde_json::to_value(&settings_with_default_value)
+        .expect("structure should be serializable");
+    json.dot_get(path).expect("value path not found")
+}
+
+fn try_get_description(_key: &str, value: &str, default: &Option<serde_json::Value>) -> String {
+    if value.is_empty() {
+        return Default::default();
+    }
+
+    if let Some(default) = default {
+        if *default == value {
+            return Default::default();
+        }
+    }
+
+    format!("e.g. `{}`", value)
 }
 
 fn from_key_to_json_path(key: &str, service_prefix: &str) -> String {
@@ -389,19 +406,28 @@ mod tests {
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
     struct TestSettings {
         pub test: String,
-        #[serde(default)]
+        #[serde(default = "default_test2")]
         pub test2: i32,
         pub database: DatabaseSettings,
     }
 
-    fn var(key: &str, val: Option<&str>, required: bool) -> (String, EnvVariable) {
+    fn default_test2() -> i32 {
+        1000
+    }
+
+    fn var(
+        key: &str,
+        val: Option<&str>,
+        required: bool,
+        description: &str,
+    ) -> (String, EnvVariable) {
         (
             key.into(),
             EnvVariable {
                 key: key.to_string(),
                 default_value: val.map(str::to_string),
                 required,
-                description: "".to_string(),
+                description: description.into(),
             },
         )
     }
@@ -436,19 +462,26 @@ mod tests {
 
     fn default_envs() -> Envs {
         Envs::from(BTreeMap::from_iter(vec![
-            var("TEST_SERVICE__TEST", None, true),
+            var("TEST_SERVICE__TEST", None, true, "e.g. `value`"),
             var(
                 "TEST_SERVICE__DATABASE__CREATE_DATABASE",
                 Some("false"),
                 false,
+                "",
             ),
             var(
                 "TEST_SERVICE__DATABASE__RUN_MIGRATIONS",
                 Some("false"),
                 false,
+                "",
             ),
-            var("TEST_SERVICE__TEST2", Some("123"), false),
-            var("TEST_SERVICE__DATABASE__CONNECT__URL", None, true),
+            var("TEST_SERVICE__TEST2", Some("1000"), false, "e.g. `123`"),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT__URL",
+                None,
+                true,
+                "e.g. `test-url`",
+            ),
         ]))
     }
 
@@ -458,11 +491,11 @@ mod tests {
 
 | Variable                                  | Required    | Description | Default Value |
 |-------------------------------------------|-------------|-------------|---------------|
-| `TEST_SERVICE__TEST`                      | true        |             |               |
+| `TEST_SERVICE__TEST`                      | true        | e.g. `value` |               |
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       |             | `false`       |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       |             | `false`       |
-| `TEST_SERVICE__TEST2`                     | false       |             | `123`         |
-| `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        |             |               |
+| `TEST_SERVICE__TEST2`                     | false       | e.g. `123`   | `1000`        |
+| `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `test-url`  |               |
 [anchor]: <> (anchors.envs.end)
 "#
     }
@@ -548,12 +581,12 @@ mod tests {
 | Variable | Required | Description | Default value |
 | --- | --- | --- | --- |
 | `SOME_EXTRA_VARS2` | true | | `example_value2` |
-| `TEST_SERVICE__DATABASE__CONNECT__URL` | true | | |
-| `TEST_SERVICE__TEST` | true | | |
+| `TEST_SERVICE__DATABASE__CONNECT__URL` | true | e.g. `test-url` | |
+| `TEST_SERVICE__TEST` | true | e.g. `value` | |
 | `SOME_EXTRA_VARS` | | comment should be saved. `kek` | `example_value` |
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | | | `false` |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS` | | | `false` |
-| `TEST_SERVICE__TEST2` | | | `123` |
+| `TEST_SERVICE__TEST2` | | e.g. `123` | `1000` |
 
 [anchor]: <> (anchors.envs.end)
 "#
