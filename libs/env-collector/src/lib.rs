@@ -408,6 +408,8 @@ mod tests {
         pub test: String,
         #[serde(default = "default_test2")]
         pub test2: i32,
+        pub test3_set: Option<bool>,
+        pub test4_not_set: Option<bool>,
         pub database: DatabaseSettings,
     }
 
@@ -441,6 +443,7 @@ mod tests {
     fn default_config_example_file_toml() -> tempfile::NamedTempFile {
         let content = r#"test = "value"
         test2 = 123
+        test3_set = false
         [database.connect]
         url = "test-url"
         "#;
@@ -451,6 +454,7 @@ mod tests {
         let content = r#"{
             "test": "value",
             "test2": 123,
+            "test3_set": false,
             "database": {
                 "connect": {
                     "url": "test-url"
@@ -477,6 +481,12 @@ mod tests {
             ),
             var("TEST_SERVICE__TEST2", Some("1000"), false, "e.g. `123`"),
             var(
+                "TEST_SERVICE__TEST3_SET",
+                Some("false"),
+                false,
+                "e.g. `false`",
+            ),
+            var(
                 "TEST_SERVICE__DATABASE__CONNECT__URL",
                 None,
                 true,
@@ -489,12 +499,14 @@ mod tests {
         r#"
 [anchor]: <> (anchors.envs.start)
 
-| Variable                                  | Required    | Description | Default Value |
-|-------------------------------------------|-------------|-------------|---------------|
-| `TEST_SERVICE__TEST`                      | true        | e.g. `value` |               |
-| `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       |             | `false`       |
-| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       |             | `false`       |
-| `TEST_SERVICE__TEST2`                     | false       | e.g. `123`   | `1000`        |
+| Variable                                  | Required    | Description      | Default Value |
+|-------------------------------------------|-------------|------------------|---------------|
+| `TEST_SERVICE__TEST`                      | true        | e.g. `value`     |               |
+| `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       |                  | `false`       |
+| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       |                  | `false`       |
+| `TEST_SERVICE__TEST2`                     | false       | e.g. `123`       | `1000`        |
+| `TEST_SERVICE__TEST3_SET`                 | false       | e.g. `false`     | null          |
+| `TEST_SERVICE__TEST4_NOT_SET`             | false       |                  | null          |
 | `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `test-url`  |               |
 [anchor]: <> (anchors.envs.end)
 "#
