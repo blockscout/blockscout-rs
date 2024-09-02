@@ -1,5 +1,5 @@
 use anyhow::Context;
-use config::{Config, File, FileFormat};
+use config::{Config, File};
 use json_dotpath::DotPaths;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
@@ -12,6 +12,7 @@ use std::{
 
 const ANCHOR_START: &str = "anchors.envs.start";
 const ANCHOR_END: &str = "anchors.envs.end";
+const VALIDATE_ONLY_ENV: &str = "VALIDATE_ONLY";
 
 pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(
     service_name: &str,
@@ -25,7 +26,7 @@ pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(
         config_path.into(),
         skip_vars.iter().map(|s| s.to_string()).collect(),
     );
-    let validate_only = std::env::var("VALIDATE_ONLY")
+    let validate_only = std::env::var(VALIDATE_ONLY_ENV)
         .unwrap_or_default()
         .to_lowercase()
         .eq("true");
@@ -129,19 +130,16 @@ impl From<BTreeMap<String, EnvVariable>> for Envs {
 }
 
 impl Envs {
-    pub fn from_example_toml<S>(
+    pub fn from_example<S>(
         service_prefix: &str,
-        example_toml_config_content: &str,
+        example_config_path: &str,
         skip_vars: Vec<String>,
     ) -> Result<Self, anyhow::Error>
     where
         S: Serialize + DeserializeOwned,
     {
         let settings: S = Config::builder()
-            .add_source(File::from_str(
-                example_toml_config_content,
-                FileFormat::Toml,
-            ))
+            .add_source(File::with_name(example_config_path))
             .build()
             .context("failed to build config")?
             .try_deserialize()
@@ -228,11 +226,11 @@ fn find_missing_variables_in_markdown<S>(
 where
     S: Serialize + DeserializeOwned,
 {
-    let example = Envs::from_example_toml::<S>(
+    let example = Envs::from_example::<S>(
         service_name,
-        std::fs::read_to_string(config_path)
-            .context("failed to read example file")?
-            .as_str(),
+        config_path
+            .to_str()
+            .expect("config path is not valid utf-8"),
         skip_vars,
     )?;
     let markdown: Envs = Envs::from_markdown(
@@ -263,11 +261,11 @@ fn update_markdown_file<S>(
 where
     S: Serialize + DeserializeOwned,
 {
-    let from_config = Envs::from_example_toml::<S>(
+    let from_config = Envs::from_example::<S>(
         service_name,
-        std::fs::read_to_string(config_path)
-            .context("failed to read config file")?
-            .as_str(),
+        config_path
+            .to_str()
+            .expect("config path is not valid utf-8"),
         skip_vars,
     )?;
     let mut markdown_config = Envs::from_markdown(
@@ -408,12 +406,32 @@ mod tests {
         )
     }
 
-    fn default_example() -> &'static str {
-        r#"test = "value"
-test2 = 123
-[database.connect]
-url = "test-url"
-"#
+    fn tempfile_with_content(content: &str, format: &str) -> tempfile::NamedTempFile {
+        let mut file = tempfile::Builder::new().suffix(format).tempfile().unwrap();
+        writeln!(file, "{}", content).unwrap();
+        file
+    }
+
+    fn default_config_example_file_toml() -> tempfile::NamedTempFile {
+        let content = r#"test = "value"
+        test2 = 123
+        [database.connect]
+        url = "test-url"
+        "#;
+        tempfile_with_content(content, ".toml")
+    }
+
+    fn default_config_example_file_json() -> tempfile::NamedTempFile {
+        let content = r#"{
+            "test": "value",
+            "test2": 123,
+            "database": {
+                "connect": {
+                    "url": "test-url"
+                }
+            }
+        }"#;
+        tempfile_with_content(content, ".json")
     }
 
     fn default_envs() -> Envs {
@@ -434,7 +452,7 @@ url = "test-url"
         ]))
     }
 
-    fn default_markdown() -> &'static str {
+    fn default_markdown_content() -> &'static str {
         r#"
 [anchor]: <> (anchors.envs.start)
 
@@ -450,17 +468,34 @@ url = "test-url"
     }
 
     #[test]
-    fn from_example_works() {
-        let vars =
-            Envs::from_example_toml::<TestSettings>("TEST_SERVICE", default_example(), vec![])
-                .unwrap();
+    fn from_toml_example_works() {
+        let example_file = default_config_example_file_toml();
+        let vars = Envs::from_example::<TestSettings>(
+            "TEST_SERVICE",
+            example_file.path().to_str().unwrap(),
+            vec![],
+        )
+        .unwrap();
+        let expected = default_envs();
+        assert_eq!(vars, expected);
+    }
+
+    #[test]
+    fn from_json_example_works() {
+        let example_file = default_config_example_file_json();
+        let vars = Envs::from_example::<TestSettings>(
+            "TEST_SERVICE",
+            example_file.path().to_str().unwrap(),
+            vec![],
+        )
+        .unwrap();
         let expected = default_envs();
         assert_eq!(vars, expected);
     }
 
     #[test]
     fn from_markdown_works() {
-        let markdown = default_markdown();
+        let markdown = default_markdown_content();
         let vars = Envs::from_markdown(markdown).unwrap();
         let expected = default_envs();
         assert_eq!(vars, expected);
@@ -481,8 +516,7 @@ url = "test-url"
         )
         .unwrap();
 
-        let mut config = tempfile::NamedTempFile::new().unwrap();
-        writeln!(config, "{}", default_example()).unwrap();
+        let config = default_config_example_file_toml();
 
         let collector = EnvCollector::<TestSettings>::new(
             "TEST_SERVICE".to_string(),
