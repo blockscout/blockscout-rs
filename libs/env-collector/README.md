@@ -39,7 +39,7 @@ This is a simple tool to collect possible environment variables from `Settings` 
 
 4. (Optional) In your `justfile` add new command to run `check-envs.rs`:
 
-    ```toml
+    ```just
     # justfile
     check-envs:
         cargo run --bin check-envs
