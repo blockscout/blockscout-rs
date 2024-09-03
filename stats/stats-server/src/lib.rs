@@ -7,6 +7,7 @@ mod server;
 mod settings;
 mod update_service;
 
+pub use config::env as config_env;
 pub use read_service::ReadService;
 pub use runtime_setup::RuntimeSetup;
 pub use server::stats;
