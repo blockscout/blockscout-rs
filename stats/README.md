@@ -62,22 +62,27 @@ Charts dependant on each other are combined in update groups. Charts within one 
 
 Some variables are hidden in a disclosure widget below the table.
 
+<!--
+There are zero-width spaces added here and there to prevent too wide tables
+by enabling word wrapping
+-->
+
 [anchor]: <> (anchors.envs.start.service)
 
-| Variable | Required | Description | Default value |
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS__BLOCKSCOUT_DB_URL` | | | `""` |
-| `STATS__CHARTS_CONFIG` | | | `"config/charts.json"` |
-| `STATS__CONCURRENT_START_UPDATES` | | | `3` |
-| `STATS__CREATE_DATABASE` | | | `false` |
-| `STATS__DB_URL` | | | `""` |
-| `STATS__DEFAULT_SCHEDULE` | | | `"0 0 1 * * * *"` |
-| `STATS__FORCE_UPDATE_ON_START` | | | `false` |
-| `STATS__LAYOUT_CONFIG` | | | `"config/layout.json"` |
-| `STATS__LIMITS__REQUEST_INTERVAL_LIMIT_DAYS` | | | `182500` |
-| `STATS__RUN_MIGRATIONS` | | | `false` |
-| `STATS__SWAGGER_FILE` | | | `"../stats-proto/swagger/stats.swagger.yaml"` |
-| `STATS__UPDATE_GROUPS_CONFIG` | | | `"config/update_groups.json"` |
+| `STATS__DB_URL` | | Postgres URL to stats db | `""` |
+| `STATS__BLOCKSCOUT_DB_URL` | | Postgres URL to blockscout db | `""` |
+| `STATS__CREATE_DATABASE` | | Create database on start | `false` |
+| `STATS__RUN_MIGRATIONS` | | Run migrations on start | `false` |
+| `STATS__CHARTS_CONFIG` | | Path to config file for charts | `"config/charts.json"` |
+| `STATS__LAYOUT_CONFIG` | | Path to config file for chart layout | `"config/layout.json"` |
+| `STATS__UPDATE_GROUPS_CONFIG` | | Path to config file for update groups | `"config/​update_groups.json"` |
+| `STATS__SWAGGER_FILE` | | Path of the swagger file to serve in the swagger endpoint | `"../stats-proto/​swagger/stats.​swagger.yaml"` |
+| `STATS__FORCE_UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
+| `STATS__CONCURRENT_START_UPDATES` | | Amount of concurrent charts update on start | `3` |
+| `STATS__DEFAULT_SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
+| `STATS__LIMITS__REQUEST_​INTERVAL_LIMIT_DAYS` | | Maximum allowed number of requested points  | `182500` | <-- TODO: change
 
 [anchor]: <> (anchors.envs.end.service)
 
@@ -138,18 +143,6 @@ Some variables are hidden in a disclosure widget below the table.
 
 </p>
 </details>
-
-| Variable                        | Description                                          | Default value               |
-| ------------------------------- | ---------------------------------------------------- | --------------------------- |
-| STATS__DB_URL                   | Postgres URL to stats db                             | ''                          |
-| STATS__BLOCKSCOUT_DB_URL        | Postgres URL to blockscout db                        | ''                          |
-| STATS__CREATE_DATABASE          | Boolean. Creates database on start                   | false                       |
-| STATS__RUN_MIGRATIONS           | Boolean. Runs migrations on start                    | false                       |
-| STATS__CHARTS_CONFIG            | Path to `charts.json` config file                    | ./config/charts.json        |
-| STATS__LAYOUT_CONFIG            | Path to `layout.json` config file                    | ./config/layout.json        |
-| STATS__UPDATE_GROUPS_CONFIG     | Path to `update_groups.json` config file             | ./config/update_groups.json |
-| STATS__FORCE_UPDATE_ON_START    | Boolean. Fully recalculates all charts on start      | false                       |
-| STATS__CONCURRENT_START_UPDATES | Integer. Amount of concurrent charts update on start | 3                           |
 
 #### Charts
 
