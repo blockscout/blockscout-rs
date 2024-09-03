@@ -418,7 +418,7 @@ fn _flat_json(json: &Value, prefix: &str, env_vars: &mut BTreeMap<String, String
         _ => {
             let env_var_name = prefix.to_uppercase();
             let env_var_value = match json {
-                Value::String(s) => s.to_string(),
+                Value::String(s) => format!("\"{}\"", s.to_string()),
                 Value::Number(n) => n.to_string(),
                 Value::Bool(b) => b.to_string(),
                 Value::Null => "null".to_string(),
@@ -506,7 +506,7 @@ mod tests {
 
     fn default_envs() -> Envs {
         Envs::from(BTreeMap::from_iter(vec![
-            var("TEST_SERVICE__TEST", None, true, "e.g. `value`"),
+            var("TEST_SERVICE__TEST", None, true, "e.g. `\"value\"`"),
             var(
                 "TEST_SERVICE__DATABASE__CREATE_DATABASE",
                 Some("false"),
@@ -529,7 +529,7 @@ mod tests {
             var("TEST_SERVICE__TEST4_NOT_SET", Some("null"), false, ""),
             var(
                 "TEST_SERVICE__STRING_WITH_DEFAULT",
-                Some("kekek"),
+                Some("\"kekek\""),
                 false,
                 "",
             ),
@@ -537,7 +537,7 @@ mod tests {
                 "TEST_SERVICE__DATABASE__CONNECT__URL",
                 None,
                 true,
-                "e.g. `test-url`",
+                "e.g. `\"test-url\"`",
             ),
         ]))
     }
@@ -552,14 +552,14 @@ mod tests {
 
 | Variable                                  | Required    | Description      | Default Value |
 |-------------------------------------------|-------------|------------------|---------------|
-| `TEST_SERVICE__TEST`                      | true        | e.g. `value`     |               |
+| `TEST_SERVICE__TEST`                      | true        | e.g. `"value"`   |               |
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       |                  | `false`       |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       |                  | `false`       |
 | `TEST_SERVICE__TEST2`                     | false       | e.g. `123`       | `1000`        |
 | `TEST_SERVICE__TEST3_SET`                 | false       | e.g. `false`     | `null`        |
 | `TEST_SERVICE__TEST4_NOT_SET`             | false       |                  | `null`        |
-| `TEST_SERVICE__STRING_WITH_DEFAULT`       | false       |                  | `kekek`       |
-| `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `test-url`  |               |
+| `TEST_SERVICE__STRING_WITH_DEFAULT`       | false       |                  | `"kekek"`     |
+| `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `"test-url"`|               |
 [anchor]: <> (anchors.envs.end.cool_postfix)
 "#
     }
@@ -646,15 +646,15 @@ mod tests {
 | Variable | Required | Description | Default value |
 | --- | --- | --- | --- |
 | `SOME_EXTRA_VARS2` | true | | `example_value2` |
-| `TEST_SERVICE__DATABASE__CONNECT__URL` | true | e.g. `test-url` | |
-| `TEST_SERVICE__TEST` | true | e.g. `value` | |
+| `TEST_SERVICE__DATABASE__CONNECT__URL` | true | e.g. `"test-url"` | |
+| `TEST_SERVICE__TEST` | true | e.g. `"value"` | |
 | `SOME_EXTRA_VARS` | | comment should be saved. `kek` | `example_value` |
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | | | `false` |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS` | | | `false` |
+| `TEST_SERVICE__STRING_WITH_DEFAULT` | | | `"kekek"` |
 | `TEST_SERVICE__TEST2` | | e.g. `123` | `1000` |
 | `TEST_SERVICE__TEST3_SET` | | e.g. `false` | `null` |
 | `TEST_SERVICE__TEST4_NOT_SET` | | | `null` |
-| `TEST_SERVICE__STRING_WITH_DEFAULT` | | | `kekek` |
 
 [anchor]: <> (anchors.envs.end)
 "#
