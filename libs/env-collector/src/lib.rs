@@ -17,14 +17,14 @@ pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(
     service_name: &str,
     markdown_path: &str,
     config_path: &str,
-    skip_vars: &[&str],
+    vars_filter: PrefixFilter,
     anchor_postfix: Option<&str>,
 ) {
     let collector = EnvCollector::<S>::new(
         service_name.to_string(),
         markdown_path.into(),
         config_path.into(),
-        skip_vars.iter().map(|s| s.to_string()).collect(),
+        vars_filter,
         anchor_postfix.map(|s| s.to_string()),
     );
     let validate_only = std::env::var(VALIDATE_ONLY_ENV)
@@ -60,7 +60,7 @@ pub struct EnvCollector<S> {
     service_name: String,
     markdown_path: PathBuf,
     config_path: PathBuf,
-    skip_vars: Vec<String>,
+    vars_filter: PrefixFilter,
     anchor_postfix: Option<String>,
 
     settings: PhantomData<S>,
@@ -74,14 +74,14 @@ where
         service_name: String,
         markdown_path: PathBuf,
         config_path: PathBuf,
-        skip_vars: Vec<String>,
+        vars_filter: PrefixFilter,
         anchor_postfix: Option<String>,
     ) -> Self {
         Self {
             service_name,
             markdown_path,
             config_path,
-            skip_vars,
+            vars_filter,
             anchor_postfix,
             settings: Default::default(),
         }
@@ -92,7 +92,7 @@ where
             &self.service_name,
             self.markdown_path.as_path(),
             self.config_path.as_path(),
-            self.skip_vars.clone(),
+            self.vars_filter.clone(),
             self.anchor_postfix.clone(),
         )
     }
@@ -102,12 +102,13 @@ where
             &self.service_name,
             self.markdown_path.as_path(),
             self.config_path.as_path(),
-            self.skip_vars.clone(),
+            self.vars_filter.clone(),
             self.anchor_postfix.clone(),
         )
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum PrefixFilter {
     Whitelist(Vec<String>),
     Blacklist(Vec<String>),
@@ -120,8 +121,8 @@ impl PrefixFilter {
         Self::Whitelist(list)
     }
 
-    pub fn blacklist(skip_vars: &[&str]) -> Self {
-        let list = skip_vars.iter().map(|s| s.to_string()).collect();
+    pub fn blacklist(vars_filter: &[&str]) -> Self {
+        let list = vars_filter.iter().map(|s| s.to_string()).collect();
         Self::Blacklist(list)
     }
 
@@ -168,7 +169,7 @@ impl Envs {
     pub fn from_example<S>(
         service_prefix: &str,
         example_config_path: &str,
-        skip_vars: Vec<String>,
+        vars_filter: PrefixFilter,
     ) -> Result<Self, anyhow::Error>
     where
         S: Serialize + DeserializeOwned,
@@ -182,7 +183,7 @@ impl Envs {
         let json = serde_json::to_value(&settings).context("failed to convert config to json")?;
         let from_config: Envs = flatten_json(&json, service_prefix)
             .into_iter()
-            .filter(|(key, _)| !skip_vars.iter().any(|s| key.starts_with(s)))
+            .filter(|(key, _)| vars_filter.filter(&key))
             .map(|(key, value)| {
                 let default_value =
                     default_of_var(&settings, &from_key_to_json_path(&key, service_prefix));
@@ -263,7 +264,7 @@ fn find_missing_variables_in_markdown<S>(
     service_name: &str,
     markdown_path: &Path,
     config_path: &Path,
-    skip_vars: Vec<String>,
+    vars_filter: PrefixFilter,
     anchor_postfix: Option<String>,
 ) -> Result<Vec<EnvVariable>, anyhow::Error>
 where
@@ -274,7 +275,7 @@ where
         config_path
             .to_str()
             .expect("config path is not valid utf-8"),
-        skip_vars,
+        vars_filter,
     )?;
     let markdown: Envs = Envs::from_markdown(
         std::fs::read_to_string(markdown_path)
@@ -302,7 +303,7 @@ fn update_markdown_file<S>(
     service_name: &str,
     markdown_path: &Path,
     config_path: &Path,
-    skip_vars: Vec<String>,
+    vars_filter: PrefixFilter,
     anchor_postfix: Option<String>,
 ) -> Result<(), anyhow::Error>
 where
@@ -313,7 +314,7 @@ where
         config_path
             .to_str()
             .expect("config path is not valid utf-8"),
-        skip_vars,
+        vars_filter,
     )?;
     let mut markdown_config = Envs::from_markdown(
         std::fs::read_to_string(markdown_path)
@@ -623,7 +624,7 @@ mod tests {
         let vars = Envs::from_example::<TestSettings>(
             "TEST_SERVICE",
             example_file.path().to_str().unwrap(),
-            vec![],
+            PrefixFilter::Empty,
         )
         .unwrap();
         let expected = default_envs();
@@ -636,7 +637,7 @@ mod tests {
         let vars = Envs::from_example::<TestSettings>(
             "TEST_SERVICE",
             example_file.path().to_str().unwrap(),
-            vec![],
+            PrefixFilter::Empty,
         )
         .unwrap();
         let expected = default_envs();
@@ -672,7 +673,7 @@ mod tests {
             "TEST_SERVICE".to_string(),
             markdown.path().to_path_buf(),
             config.path().to_path_buf(),
-            vec![],
+            PrefixFilter::Empty,
             None,
         );
 
