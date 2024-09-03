@@ -148,9 +148,17 @@ pub struct EnvVariable {
     pub default_value: Option<String>,
 }
 
+fn filter_non_ascii(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii()).collect()
+}
+
 impl EnvVariable {
+    fn strings_equal_in_ascii(lhs: &str, rhs: &str) -> bool {
+        filter_non_ascii(lhs) == filter_non_ascii(rhs)
+    }
+
     pub fn eq_with_ignores(&self, other: &Self) -> bool {
-        self.key == other.key && self.required == other.required
+        Self::strings_equal_in_ascii(&self.key, &other.key) && self.required == other.required
     }
 }
 
@@ -226,6 +234,7 @@ impl Envs {
             .captures_iter(table_content)
             .map(|c| c.extract())
             .map(|(_, [key, required, description, default_value])| {
+                let key = filter_non_ascii(key);
                 let required = required.trim().eq("true");
                 let default_value = if default_value.trim().is_empty() {
                     None
@@ -233,13 +242,13 @@ impl Envs {
                     Some(default_value.to_string())
                 };
                 let var = EnvVariable {
-                    key: key.to_string(),
+                    key: key.clone(),
                     default_value,
                     required,
                     description: description.trim().to_string(),
                 };
 
-                (key.to_string(), var)
+                (key, var)
             })
             .collect::<BTreeMap<_, _>>()
             .into();
@@ -498,6 +507,8 @@ mod tests {
         pub test2: i32,
         pub test3_set: Option<bool>,
         pub test4_not_set: Option<bool>,
+        #[serde(default)]
+        pub test5_with_unicode: bool,
         #[serde(default = "very_cool_string")]
         pub string_with_default: String,
         pub database: DatabaseSettings,
@@ -581,6 +592,7 @@ mod tests {
                 "e.g. `false`",
             ),
             var("TEST_SERVICE__TEST4_NOT_SET", Some("null"), false, ""),
+            var("TEST_SERVICE__TEST5_WITH_UNICODE", Some("false"), false, ""),
             var(
                 "TEST_SERVICE__STRING_WITH_DEFAULT",
                 Some("\"kekek\""),
@@ -612,6 +624,7 @@ mod tests {
 | `TEST_SERVICE__TEST2`                     | false       | e.g. `123`       | `1000`        |
 | `TEST_SERVICE__TEST3_SET`                 | false       | e.g. `false`     | `null`        |
 | `TEST_SERVICE__TEST4_NOT_SET`             | false       |                  | `null`        |
+| `TEST_SERVICE__TEST5_WITH_UNICODE`        | false       |                  | `false`       |
 | `TEST_SERVICE__STRING_WITH_DEFAULT`       | false       |                  | `"kekek"`     |
 | `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `"test-url"`|               |
 [anchor]: <> (anchors.envs.end.cool_postfix)
@@ -661,6 +674,7 @@ mod tests {
 [anchor]: <> (anchors.envs.start)
 |`SOME_EXTRA_VARS`| | comment should be saved. `kek` |`example_value` |
 |`SOME_EXTRA_VARS2`| true |        |`example_value2` |
+| `TEST_SERVICE__TEST5_WITH_UNICODE♡♡♡` | | the variable should be matched with `TEST_SERVICE__TEST5_WITH_UNICODE` and the unicode must be saved | `false` |
 
 [anchor]: <> (anchors.envs.end)
 "#
@@ -683,6 +697,7 @@ mod tests {
             default_envs()
                 .vars
                 .values()
+                .filter(|var| var.key != "TEST_SERVICE__TEST5_WITH_UNICODE")
                 .map(Clone::clone)
                 .collect::<Vec<EnvVariable>>()
         );
@@ -709,6 +724,7 @@ mod tests {
 | `TEST_SERVICE__TEST2` | | e.g. `123` | `1000` |
 | `TEST_SERVICE__TEST3_SET` | | e.g. `false` | `null` |
 | `TEST_SERVICE__TEST4_NOT_SET` | | | `null` |
+| `TEST_SERVICE__TEST5_WITH_UNICODE♡♡♡` | | the variable should be matched with `TEST_SERVICE__TEST5_WITH_UNICODE` and the unicode must be saved | `false` |
 
 [anchor]: <> (anchors.envs.end)
 "#
