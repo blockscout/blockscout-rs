@@ -444,11 +444,17 @@ mod tests {
         pub test2: i32,
         pub test3_set: Option<bool>,
         pub test4_not_set: Option<bool>,
+        #[serde(default = "very_cool_string")]
+        pub string_with_default: String,
         pub database: DatabaseSettings,
     }
 
     fn default_test2() -> i32 {
         1000
+    }
+
+    fn very_cool_string() -> String {
+        "kekek".into()
     }
 
     fn var(
@@ -522,6 +528,12 @@ mod tests {
             ),
             var("TEST_SERVICE__TEST4_NOT_SET", Some("null"), false, ""),
             var(
+                "TEST_SERVICE__STRING_WITH_DEFAULT",
+                Some("kekek"),
+                false,
+                "",
+            ),
+            var(
                 "TEST_SERVICE__DATABASE__CONNECT__URL",
                 None,
                 true,
@@ -546,6 +558,7 @@ mod tests {
 | `TEST_SERVICE__TEST2`                     | false       | e.g. `123`       | `1000`        |
 | `TEST_SERVICE__TEST3_SET`                 | false       | e.g. `false`     | `null`        |
 | `TEST_SERVICE__TEST4_NOT_SET`             | false       |                  | `null`        |
+| `TEST_SERVICE__STRING_WITH_DEFAULT`       | false       |                  | `kekek`       |
 | `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `test-url`  |               |
 [anchor]: <> (anchors.envs.end.cool_postfix)
 "#
@@ -641,6 +654,7 @@ mod tests {
 | `TEST_SERVICE__TEST2` | | e.g. `123` | `1000` |
 | `TEST_SERVICE__TEST3_SET` | | e.g. `false` | `null` |
 | `TEST_SERVICE__TEST4_NOT_SET` | | | `null` |
+| `TEST_SERVICE__STRING_WITH_DEFAULT` | | | `kekek` |
 
 [anchor]: <> (anchors.envs.end)
 "#
