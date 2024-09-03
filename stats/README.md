@@ -91,20 +91,20 @@ by enabling word wrapping
 
 [anchor]: <> (anchors.envs.start.server)
 
-| Variable | Required | Description | Default value |
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS__SERVER__GRPC__ADDR` | | | `"0.0.0.0:8051"` |
-| `STATS__SERVER__GRPC__ENABLED` | | | `false` |
-| `STATS__SERVER__HTTP__ADDR` | | | `"0.0.0.0:8050"` |
-| `STATS__SERVER__HTTP__CORS__ALLOWED_CREDENTIALS` | | | `true` |
-| `STATS__SERVER__HTTP__CORS__ALLOWED_METHODS` | | | `"PUT, GET, POST, OPTIONS, DELETE, PATCH"` |
-| `STATS__SERVER__HTTP__CORS__ALLOWED_ORIGIN` | | | `""` |
-| `STATS__SERVER__HTTP__CORS__BLOCK_ON_ORIGIN_MISMATCH` | | | `false` |
-| `STATS__SERVER__HTTP__CORS__ENABLED` | | | `false` |
-| `STATS__SERVER__HTTP__CORS__MAX_AGE` | | | `3600` |
-| `STATS__SERVER__HTTP__CORS__SEND_WILDCARD` | | | `false` |
-| `STATS__SERVER__HTTP__ENABLED` | | | `true` |
-| `STATS__SERVER__HTTP__MAX_BODY_SIZE` | | | `2097152` |
+| `STATS__SERVER__​GRPC__ADDR` | | | `"0.0.0.0:8051"` |
+| `STATS__SERVER__​GRPC__ENABLED` | | | `false` |
+| `STATS__SERVER__​HTTP__ADDR` | | | `"0.0.0.0:8050"` |
+| `STATS__SERVER__​HTTP__CORS__​ALLOWED_CREDENTIALS` | | | `true` |
+| `STATS__SERVER__​HTTP__CORS__​ALLOWED_METHODS` | | | `"PUT, GET, POST, OPTIONS, DELETE, PATCH"` |
+| `STATS__SERVER__​HTTP__CORS__​ALLOWED_ORIGIN` | | | `""` |
+| `STATS__SERVER__​HTTP__CORS__​BLOCK_ON_ORIGIN_MISMATCH` | | | `false` |
+| `STATS__SERVER__​HTTP__CORS__​ENABLED` | | | `false` |
+| `STATS__SERVER__​HTTP__CORS__​MAX_AGE` | | | `3600` |
+| `STATS__SERVER__​HTTP__CORS__​SEND_WILDCARD` | | | `false` |
+| `STATS__SERVER__​HTTP__ENABLED` | | | `true` |
+| `STATS__SERVER__​HTTP__MAX_BODY_SIZE` | | | `2097152` |
 
 [anchor]: <> (anchors.envs.end.server)
 
@@ -116,7 +116,7 @@ by enabling word wrapping
 
 [anchor]: <> (anchors.envs.start.tracing)
 
-| Variable | Required | Description | Default value |
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
 | `STATS__JAEGER__AGENT_ENDPOINT` | | | `"127.0.0.1:6831"` |
 | `STATS__JAEGER__ENABLED` | | | `false` |
@@ -133,7 +133,7 @@ by enabling word wrapping
 
 [anchor]: <> (anchors.envs.start.metrics)
 
-| Variable | Required | Description | Default value |
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
 | `STATS__METRICS__ADDR` | | | `"0.0.0.0:6060"` |
 | `STATS__METRICS__ENABLED` | | | `false` |
@@ -148,25 +148,25 @@ by enabling word wrapping
 
 [anchor]: <> (anchors.envs.start.charts)
 
-| Variable | Required | Description | Default value |
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__DESCRIPTION` | | e.g. `"Some description"` | `null` |
-| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__ENABLED` | | e.g. `true` | `null` |
-| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__RESOLUTIONS__DAY` | | | `null` |
-| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__RESOLUTIONS__MONTH` | | | `null` |
-| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__RESOLUTIONS__WEEK` | | | `null` |
-| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__RESOLUTIONS__YEAR` | | e.g. `false` | `null` |
-| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__TITLE` | | e.g. `"Some title with {{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__UNITS` | | | `null` |
-| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__DESCRIPTION` | | e.g. `"Some description with {{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__ENABLED` | | e.g. `true` | `null` |
-| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__DAY` | | | `null` |
-| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__MONTH` | | | `null` |
-| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__WEEK` | | | `null` |
-| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__YEAR` | | | `null` |
-| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__TITLE` | | e.g. `"Some line chart title"` | `null` |
-| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__UNITS` | | e.g. `"{{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__TEMPLATE_VALUES__<VARIABLE_NAME>` | | e.g. `"some_value"` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​DESCRIPTION` | | e.g. `"Some description"` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​ENABLED` | | e.g. `true` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__DAY` | | | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__MONTH` | | | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__WEEK` | | | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__YEAR` | | e.g. `false` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​TITLE` | | e.g. `"Some title with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​UNITS` | | | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​DESCRIPTION` | | e.g. `"Some description with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​ENABLED` | | e.g. `true` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__DAY` | | | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__MONTH` | | | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__WEEK` | | | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__YEAR` | | | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​TITLE` | | e.g. `"Some line chart title"` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​UNITS` | | e.g. `"{{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__​TEMPLATE_VALUES__​<VARIABLE_NAME>` | | e.g. `"some_value"` | `null` |
 
 [anchor]: <> (anchors.envs.end.charts)
 
@@ -174,12 +174,12 @@ by enabling word wrapping
 
 [anchor]: <> (anchors.envs.start.layout)
 
-| Variable | Required | Description | Default value |
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_LAYOUT__COUNTERS_ORDER__<COUNTER_NAME>` | | e.g. `3` | `null` |
-| `STATS_LAYOUT__LINE_CHART_CATEGORIES__<CATEGORY_NAME>__CHARTS_ORDER__<LINE_CHART_NAME>` | | e.g. `1` | `null` |
-| `STATS_LAYOUT__LINE_CHART_CATEGORIES__<CATEGORY_NAME>__ORDER` | | | `null` |
-| `STATS_LAYOUT__LINE_CHART_CATEGORIES__<CATEGORY_NAME>__TITLE` | | e.g. `"Accounts"` | `null` |
+| `STATS_LAYOUT__​COUNTERS_ORDER__​<COUNTER_NAME>` | | e.g. `3` | `null` |
+| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__​CHARTS_ORDER__​<LINE_CHART_NAME>` | | e.g. `1` | `null` |
+| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__ORDER` | | | `null` |
+| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__TITLE` | | e.g. `"Accounts"` | `null` |
 
 [anchor]: <> (anchors.envs.end.layout)
 
@@ -187,9 +187,9 @@ by enabling word wrapping
 
 [anchor]: <> (anchors.envs.start.groups)
 
-| Variable | Required | Description | Default value |
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_UPDATE_GROUPS__SCHEDULES__<UPDATE_GROUP_NAME>` | | e.g. `"0 0 */3 * * * *"` | `null` |
+| `STATS_UPDATE_GROUPS__​SCHEDULES__<UPDATE_GROUP_NAME>` | | e.g. `"0 0 */3 * * * *"` | `null` |
 
 [anchor]: <> (anchors.envs.end.groups)
 

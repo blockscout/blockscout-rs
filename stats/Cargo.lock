@@ -1413,10 +1413,11 @@ dependencies = [
 [[package]]
 name = "env-collector"
 version = "0.1.1"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=70e3ac8d#70e3ac8d03fcc063c62f03d5d141ff2225d1c12a"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=c344fb22#c344fb22aaa22b57c7a627cea17ad0e3d698681d"
 dependencies = [
  "anyhow",
  "config 0.14.0",
+ "itertools 0.13.0",
  "json_dotpath",
  "regex",
  "serde",
@@ -2199,6 +2200,15 @@ name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
 ]
@@ -4466,7 +4476,7 @@ dependencies = [
  "chrono",
  "entity",
  "futures",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "lazy_static",
  "migration",
  "paste",
@@ -4518,7 +4528,7 @@ dependencies = [
  "convert_case 0.6.0",
  "cron",
  "futures",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "liquid-json",
  "paste",
  "pretty_assertions",
