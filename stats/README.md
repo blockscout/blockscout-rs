@@ -63,12 +63,44 @@ Charts dependant on each other are combined in update groups. Charts within one 
 Some variables are hidden in a disclosure widget below the table.
 
 [anchor]: <> (anchors.envs.start.service)
+
+| Variable | Required | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS__BLOCKSCOUT_DB_URL` | | | `""` |
+| `STATS__CHARTS_CONFIG` | | | `"config/charts.json"` |
+| `STATS__CONCURRENT_START_UPDATES` | | | `3` |
+| `STATS__CREATE_DATABASE` | | | `false` |
+| `STATS__DB_URL` | | | `""` |
+| `STATS__DEFAULT_SCHEDULE` | | | `"0 0 1 * * * *"` |
+| `STATS__FORCE_UPDATE_ON_START` | | | `false` |
+| `STATS__LAYOUT_CONFIG` | | | `"config/layout.json"` |
+| `STATS__LIMITS__REQUEST_INTERVAL_LIMIT_DAYS` | | | `182500` |
+| `STATS__RUN_MIGRATIONS` | | | `false` |
+| `STATS__SWAGGER_FILE` | | | `"../stats-proto/swagger/stats.swagger.yaml"` |
+| `STATS__UPDATE_GROUPS_CONFIG` | | | `"config/update_groups.json"` |
+
 [anchor]: <> (anchors.envs.end.service)
 
 <details><summary>Server settings</summary>
 <p>
 
 [anchor]: <> (anchors.envs.start.server)
+
+| Variable | Required | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS__SERVER__GRPC__ADDR` | | | `"0.0.0.0:8051"` |
+| `STATS__SERVER__GRPC__ENABLED` | | | `false` |
+| `STATS__SERVER__HTTP__ADDR` | | | `"0.0.0.0:8050"` |
+| `STATS__SERVER__HTTP__CORS__ALLOWED_CREDENTIALS` | | | `true` |
+| `STATS__SERVER__HTTP__CORS__ALLOWED_METHODS` | | | `"PUT, GET, POST, OPTIONS, DELETE, PATCH"` |
+| `STATS__SERVER__HTTP__CORS__ALLOWED_ORIGIN` | | | `""` |
+| `STATS__SERVER__HTTP__CORS__BLOCK_ON_ORIGIN_MISMATCH` | | | `false` |
+| `STATS__SERVER__HTTP__CORS__ENABLED` | | | `false` |
+| `STATS__SERVER__HTTP__CORS__MAX_AGE` | | | `3600` |
+| `STATS__SERVER__HTTP__CORS__SEND_WILDCARD` | | | `false` |
+| `STATS__SERVER__HTTP__ENABLED` | | | `true` |
+| `STATS__SERVER__HTTP__MAX_BODY_SIZE` | | | `2097152` |
+
 [anchor]: <> (anchors.envs.end.server)
 
 </p>
@@ -78,6 +110,14 @@ Some variables are hidden in a disclosure widget below the table.
 <p>
 
 [anchor]: <> (anchors.envs.start.tracing)
+
+| Variable | Required | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS__JAEGER__AGENT_ENDPOINT` | | | `"127.0.0.1:6831"` |
+| `STATS__JAEGER__ENABLED` | | | `false` |
+| `STATS__TRACING__ENABLED` | | | `true` |
+| `STATS__TRACING__FORMAT` | | | `"default"` |
+
 [anchor]: <> (anchors.envs.end.tracing)
 
 </p>
@@ -87,6 +127,13 @@ Some variables are hidden in a disclosure widget below the table.
 <p>
 
 [anchor]: <> (anchors.envs.start.metrics)
+
+| Variable | Required | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS__METRICS__ADDR` | | | `"0.0.0.0:6060"` |
+| `STATS__METRICS__ENABLED` | | | `false` |
+| `STATS__METRICS__ROUTE` | | | `"/metrics"` |
+
 [anchor]: <> (anchors.envs.end.metrics)
 
 </p>
@@ -107,6 +154,27 @@ Some variables are hidden in a disclosure widget below the table.
 #### Charts
 
 [anchor]: <> (anchors.envs.start.charts)
+
+| Variable | Required | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__DESCRIPTION` | | e.g. `"Some description"` | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__ENABLED` | | e.g. `true` | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__RESOLUTIONS__DAY` | | | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__RESOLUTIONS__MONTH` | | | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__RESOLUTIONS__WEEK` | | | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__RESOLUTIONS__YEAR` | | e.g. `false` | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__TITLE` | | e.g. `"Some title with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__UNITS` | | | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__DESCRIPTION` | | e.g. `"Some description with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__ENABLED` | | e.g. `true` | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__DAY` | | | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__MONTH` | | | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__WEEK` | | | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__YEAR` | | | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__TITLE` | | e.g. `"Some line chart title"` | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__UNITS` | | e.g. `"{{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__TEMPLATE_VALUES__<VARIABLE_NAME>` | | e.g. `"some_value"` | `null` |
+
 [anchor]: <> (anchors.envs.end.charts)
 
 #### Layout
