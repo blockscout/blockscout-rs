@@ -108,6 +108,37 @@ where
     }
 }
 
+pub enum PrefixFilter {
+    Whitelist(Vec<String>),
+    Blacklist(Vec<String>),
+    Empty,
+}
+
+impl PrefixFilter {
+    pub fn whitelist(allow_only: &[&str]) -> Self {
+        let list = allow_only.iter().map(|s| s.to_string()).collect();
+        Self::Whitelist(list)
+    }
+
+    pub fn blacklist(skip_vars: &[&str]) -> Self {
+        let list = skip_vars.iter().map(|s| s.to_string()).collect();
+        Self::Blacklist(list)
+    }
+
+    pub fn filter(&self, string: &str) -> bool {
+        let list = match self {
+            PrefixFilter::Whitelist(list) | PrefixFilter::Blacklist(list) => list,
+            PrefixFilter::Empty => &vec![],
+        };
+        let input_matches_some_prefix = list.iter().any(|prefix| string.starts_with(prefix));
+        match self {
+            PrefixFilter::Whitelist(_) => input_matches_some_prefix,
+            PrefixFilter::Blacklist(_) => !input_matches_some_prefix,
+            PrefixFilter::Empty => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct EnvVariable {
     pub key: String,
@@ -436,6 +467,28 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serde::Deserialize;
     use std::io::Write;
+
+    #[test]
+    fn filter_works() {
+        let list = vec!["LOL", "KEK__"];
+        let blacklist = PrefixFilter::blacklist(&list);
+        assert!(!blacklist.filter("LOL"));
+        assert!(!blacklist.filter("LOL_KEK"));
+        assert!(blacklist.filter("KEK"));
+        assert!(blacklist.filter("KEK_"));
+        assert!(!blacklist.filter("KEK__"));
+        assert!(!blacklist.filter("KEK__KKEKEKEKEK"));
+        assert!(blacklist.filter("hesoyam"));
+
+        let whitelist = PrefixFilter::whitelist(&list);
+        assert!(whitelist.filter("LOL"));
+        assert!(whitelist.filter("LOL_KEK"));
+        assert!(!whitelist.filter("KEK"));
+        assert!(!whitelist.filter("KEK_"));
+        assert!(whitelist.filter("KEK__"));
+        assert!(whitelist.filter("KEK__KKEKEKEKEK"));
+        assert!(!whitelist.filter("hesoyam"));
+    }
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
     struct TestSettings {
