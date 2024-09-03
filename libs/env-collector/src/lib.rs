@@ -1,5 +1,6 @@
 use anyhow::Context;
 use config::{Config, File};
+use itertools::{Either, Itertools};
 use json_dotpath::DotPaths;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
@@ -146,6 +147,7 @@ pub struct EnvVariable {
     pub description: String,
     pub required: bool,
     pub default_value: Option<String>,
+    pub table_index: Option<usize>,
 }
 
 fn filter_non_ascii(s: &str) -> String {
@@ -164,7 +166,7 @@ impl EnvVariable {
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 struct Envs {
-    vars: BTreeMap<String, EnvVariable>,
+    pub vars: BTreeMap<String, EnvVariable>,
 }
 
 impl From<BTreeMap<String, EnvVariable>> for Envs {
@@ -203,6 +205,8 @@ impl Envs {
                     required,
                     default_value,
                     description,
+                    // No order in json
+                    table_index: None,
                 };
 
                 (key, var)
@@ -233,23 +237,27 @@ impl Envs {
         let result = re
             .captures_iter(table_content)
             .map(|c| c.extract())
-            .map(|(_, [key, required, description, default_value])| {
-                let key = filter_non_ascii(key);
-                let required = required.trim().eq("true");
-                let default_value = if default_value.trim().is_empty() {
-                    None
-                } else {
-                    Some(default_value.to_string())
-                };
-                let var = EnvVariable {
-                    key: key.clone(),
-                    default_value,
-                    required,
-                    description: description.trim().to_string(),
-                };
+            .enumerate()
+            .map(
+                |(index, (_, [key, required, description, default_value]))| {
+                    let key = filter_non_ascii(key);
+                    let required = required.trim().eq("true");
+                    let default_value = if default_value.trim().is_empty() {
+                        None
+                    } else {
+                        Some(default_value.to_string())
+                    };
+                    let var = EnvVariable {
+                        key: key.clone(),
+                        default_value,
+                        required,
+                        description: description.trim().to_string(),
+                        table_index: Some(index),
+                    };
 
-                (key, var)
-            })
+                    (key, var)
+                },
+            )
             .collect::<BTreeMap<_, _>>()
             .into();
 
@@ -262,10 +270,31 @@ impl Envs {
         }
     }
 
-    pub fn sorted_with_required(&self) -> impl IntoIterator<Item = (&String, &EnvVariable)> {
-        let mut vars = self.vars.iter().collect::<Vec<_>>();
-        vars.sort_by_key(|(k, v)| (!v.required, *k));
-        vars
+    /// Preserve order of variables with `table_index`, sort others alphabetically
+    /// according to their key (required go first).
+    pub fn sorted_with_required(&self) -> Vec<EnvVariable> {
+        let mut result = Vec::with_capacity(self.vars.len());
+        let (mut vars_with_index, mut vars_no_index): (BTreeMap<_, _>, BTreeMap<_, _>) =
+            self.vars.iter().partition_map(|(key, var)| {
+                if let Some(i) = var.table_index {
+                    Either::Left((i, var))
+                } else {
+                    Either::Right(((!var.required, key), var))
+                }
+            });
+        loop {
+            let i = result.len();
+            if let Some(var) = vars_with_index.remove(&i) {
+                result.push(var.clone());
+            } else if let Some((_, var)) = vars_no_index.pop_first() {
+                result.push(var.clone());
+            } else if let Some((_, var)) = vars_with_index.pop_first() {
+                result.push(var.clone());
+            } else {
+                break;
+            }
+        }
+        result
     }
 }
 
@@ -400,7 +429,7 @@ fn serialize_env_vars_to_md_table(vars: Envs) -> String {
 "#
     .to_string();
 
-    for (key, env) in vars.sorted_with_required() {
+    for env in vars.sorted_with_required() {
         let required = if env.required { " true " } else { " " };
         let description = if env.description.is_empty() {
             " ".to_string()
@@ -414,7 +443,7 @@ fn serialize_env_vars_to_md_table(vars: Envs) -> String {
             .unwrap_or(" ".to_string());
         result.push_str(&format!(
             "| `{}` |{}|{}|{}|\n",
-            key, required, description, default_value,
+            env.key, required, description, default_value,
         ));
     }
     result
@@ -535,6 +564,7 @@ mod tests {
                 default_value: val.map(str::to_string),
                 required,
                 description: description.into(),
+                table_index: None,
             },
         )
     }
@@ -660,7 +690,11 @@ mod tests {
     #[test]
     fn from_markdown_works() {
         let markdown = default_markdown_content();
-        let vars = Envs::from_markdown(markdown, Some("cool_postfix".to_string())).unwrap();
+        let mut vars = Envs::from_markdown(markdown, Some("cool_postfix".to_string())).unwrap();
+        // purge indices for correct comparison
+        for (_, var) in vars.vars.iter_mut() {
+            var.table_index = None;
+        }
         let expected = default_envs();
         assert_eq!(vars, expected);
     }
@@ -672,9 +706,9 @@ mod tests {
             markdown,
             r#"
 [anchor]: <> (anchors.envs.start)
+| `TEST_SERVICE__TEST5_WITH_UNICODE♡♡♡` | | the variable should be matched with `TEST_SERVICE__TEST5_WITH_UNICODE` and the unicode must be saved | `false` |
 |`SOME_EXTRA_VARS`| | comment should be saved. `kek` |`example_value` |
 |`SOME_EXTRA_VARS2`| true |        |`example_value2` |
-| `TEST_SERVICE__TEST5_WITH_UNICODE♡♡♡` | | the variable should be matched with `TEST_SERVICE__TEST5_WITH_UNICODE` and the unicode must be saved | `false` |
 
 [anchor]: <> (anchors.envs.end)
 "#
@@ -714,17 +748,17 @@ mod tests {
 
 | Variable | Required | Description | Default value |
 | --- | --- | --- | --- |
+| `TEST_SERVICE__TEST5_WITH_UNICODE♡♡♡` | | the variable should be matched with `TEST_SERVICE__TEST5_WITH_UNICODE` and the unicode must be saved | `false` |
+| `SOME_EXTRA_VARS` | | comment should be saved. `kek` | `example_value` |
 | `SOME_EXTRA_VARS2` | true | | `example_value2` |
 | `TEST_SERVICE__DATABASE__CONNECT__URL` | true | e.g. `"test-url"` | |
 | `TEST_SERVICE__TEST` | true | e.g. `"value"` | |
-| `SOME_EXTRA_VARS` | | comment should be saved. `kek` | `example_value` |
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | | | `false` |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS` | | | `false` |
 | `TEST_SERVICE__STRING_WITH_DEFAULT` | | | `"kekek"` |
 | `TEST_SERVICE__TEST2` | | e.g. `123` | `1000` |
 | `TEST_SERVICE__TEST3_SET` | | e.g. `false` | `null` |
 | `TEST_SERVICE__TEST4_NOT_SET` | | | `null` |
-| `TEST_SERVICE__TEST5_WITH_UNICODE♡♡♡` | | the variable should be matched with `TEST_SERVICE__TEST5_WITH_UNICODE` and the unicode must be saved | `false` |
 
 [anchor]: <> (anchors.envs.end)
 "#

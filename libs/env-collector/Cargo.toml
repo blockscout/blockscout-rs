@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.86"
 config = "0.14.0"
+itertools = "0.13.0"
 json_dotpath = "1.1.0"
 regex = "1.10.4"
 serde = { version = "1.0.203", features = ["derive"] }
