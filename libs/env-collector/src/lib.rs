@@ -240,7 +240,7 @@ impl Envs {
             .enumerate()
             .map(
                 |(index, (_, [key, required, description, default_value]))| {
-                    let key = filter_non_ascii(key);
+                    let id = filter_non_ascii(key);
                     let required = required.trim().eq("true");
                     let default_value = if default_value.trim().is_empty() {
                         None
@@ -248,14 +248,14 @@ impl Envs {
                         Some(default_value.to_string())
                     };
                     let var = EnvVariable {
-                        key: key.clone(),
+                        key: key.to_string(),
                         default_value,
                         required,
                         description: description.trim().to_string(),
                         table_index: Some(index),
                     };
 
-                    (key, var)
+                    (id, var)
                 },
             )
             .collect::<BTreeMap<_, _>>()
@@ -265,21 +265,21 @@ impl Envs {
     }
 
     pub fn update_no_override(&mut self, other: Envs) {
-        for (key, value) in other.vars {
-            self.vars.entry(key).or_insert(value);
+        for (id, value) in other.vars {
+            self.vars.entry(id).or_insert(value);
         }
     }
 
     /// Preserve order of variables with `table_index`, sort others alphabetically
-    /// according to their key (required go first).
+    /// according to their id (~key) (required go first).
     pub fn sorted_with_required(&self) -> Vec<EnvVariable> {
         let mut result = Vec::with_capacity(self.vars.len());
         let (mut vars_with_index, mut vars_no_index): (BTreeMap<_, _>, BTreeMap<_, _>) =
-            self.vars.iter().partition_map(|(key, var)| {
+            self.vars.iter().partition_map(|(id, var)| {
                 if let Some(i) = var.table_index {
                     Either::Left((i, var))
                 } else {
-                    Either::Right(((!var.required, key), var))
+                    Either::Right(((!var.required, id), var))
                 }
             });
         loop {
@@ -325,8 +325,8 @@ where
     let missing = example
         .vars
         .iter()
-        .filter(|(key, value)| {
-            let maybe_markdown_var = markdown.vars.get(*key);
+        .filter(|(id, value)| {
+            let maybe_markdown_var = markdown.vars.get(*id);
             maybe_markdown_var
                 .map(|var| !var.eq_with_ignores(value))
                 .unwrap_or(true)
