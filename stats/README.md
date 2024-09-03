@@ -33,7 +33,64 @@ stats-server
 
 ## Config
 
+The microservice can be controlled using configuration files and environmental variables. Envs have a priority over files.
+
+### Config files
+
+Blockscout provides a collection of predefined charts to visualize statistics. You can enable or disable these charts by modifying the `charts.json` file. Layout of the charts (which is returned by the server) is configurable in `layout.json`. Schedule of updated charts for each group is set up in `update_groups.json`.
+
+The default configurations can be found [here](./config/). You can use these files as a base for customization.
+
+If non-default config files are used, respective environment variables (e.g. `STATS__CHARTS_CONFIG`) should be set to the new files.
+
+#### Charts parameters
+
+To disable unnecessary charts, open the `charts.json` file and set `enabled: false` for them. Other parameters can also be set/modified there.
+
+#### Layout configuration
+
+Categories for line charts, category metadata, and chart order within category are set in `layout.json`.
+
+#### Update groups config
+
+Charts dependant on each other are combined in update groups. Charts within one update group are updated **together** according to their dependency relations. Updates are scheduled for each such group in `update_groups.json` file.
+
+
 ### Env
+
+#### Service settings
+
+Some variables are hidden in a disclosure widget below the table.
+
+[anchor]: <> (anchors.envs.start.service)
+[anchor]: <> (anchors.envs.end.service)
+
+<details><summary>Server settings</summary>
+<p>
+
+[anchor]: <> (anchors.envs.start.server)
+[anchor]: <> (anchors.envs.end.server)
+
+</p>
+</details>
+
+<details><summary>Tracing settings</summary>
+<p>
+
+[anchor]: <> (anchors.envs.start.tracing)
+[anchor]: <> (anchors.envs.end.tracing)
+
+</p>
+</details>
+
+<details><summary>Metrics settings</summary>
+<p>
+
+[anchor]: <> (anchors.envs.start.metrics)
+[anchor]: <> (anchors.envs.end.metrics)
+
+</p>
+</details>
 
 | Variable                        | Description                                          | Default value               |
 | ------------------------------- | ---------------------------------------------------- | --------------------------- |
@@ -47,25 +104,33 @@ stats-server
 | STATS__FORCE_UPDATE_ON_START    | Boolean. Fully recalculates all charts on start      | false                       |
 | STATS__CONCURRENT_START_UPDATES | Integer. Amount of concurrent charts update on start | 3                           |
 
-### Config
+#### Charts
 
-Blockscout provides a collection of predefined charts to visualize statistics. You can enable or disable these charts by modifying the `charts.json` file. Layout of the charts (which is returned by the server) is configurable in `layout.json`. Schedule of updated charts for each group is set up in `update_groups.json`. 
+[anchor]: <> (anchors.envs.start.charts)
+[anchor]: <> (anchors.envs.end.charts)
 
-The default configurations can be found [here](./config/). You can use these files as a base for customization.
+#### Layout
 
-If non-default config files are used, respective environment variables (e.g. `STATS__CHARTS_CONFIG`) should be set to the new files.
+[anchor]: <> (anchors.envs.start.layout)
 
-#### Charts parameters
+| Variable | Required | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS_LAYOUT__COUNTERS_ORDER__<COUNTER_NAME>` | | e.g. `3` | `null` |
+| `STATS_LAYOUT__LINE_CHART_CATEGORIES__<CATEGORY_NAME>__CHARTS_ORDER__<LINE_CHART_NAME>` | | e.g. `1` | `null` |
+| `STATS_LAYOUT__LINE_CHART_CATEGORIES__<CATEGORY_NAME>__ORDER` | | | `null` |
+| `STATS_LAYOUT__LINE_CHART_CATEGORIES__<CATEGORY_NAME>__TITLE` | | e.g. `"Accounts"` | `null` |
 
-To disable unnecessary charts, open the `charts.json` file and set `enabled: false` for them. Other parameters can also be set/modified there. 
+[anchor]: <> (anchors.envs.end.layout)
 
-#### Layout configuration
+#### Update groups
 
-Categories for line charts, category metadata, and chart order within category are set in `layout.json`.
+[anchor]: <> (anchors.envs.start.groups)
 
-#### Update groups config
+| Variable | Required | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS_UPDATE_GROUPS__SCHEDULES__<UPDATE_GROUP_NAME>` | | e.g. `"0 0 */3 * * * *"` | `null` |
 
-Charts dependant on each other are combined in update groups. Charts within one update group are updated **together** according to their dependency relations. Updates are scheduled for each such group in `update_groups.json` file.
+[anchor]: <> (anchors.envs.end.groups)
 
 ## For development
 

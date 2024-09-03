@@ -15,7 +15,7 @@ This "migration" assists with updating the config correspondingly.
 ## Changes
 
 - `charts.json` now does not contain update scheduling information and layout information (line chart categories). 
-- Scheduling is configured per update group in a separate (`update_schedule.json`) file.
+- Scheduling is configured per update group in a separate (`update_group.json`) file.
 This file reflects update groups constructed within rust code.
     - In other words, the 'update groups' are collections of charts that are updated simultaneously (i.e. with the same schedule + according to dependencies between them)
 - Layout is configured in `layout.json` file.
