@@ -423,8 +423,11 @@ fn from_key_to_json_path(key: &str, service_prefix: &str) -> String {
 }
 
 fn serialize_env_vars_to_md_table(vars: Envs) -> String {
+    // zero-width spaces in "Required" so that
+    // the word can be broken down and
+    // its colum doesn't take unnecessary space
     let mut result = r#"
-| Variable | Required | Description | Default value |
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
 "#
     .to_string();
@@ -746,7 +749,7 @@ mod tests {
             r#"
 [anchor]: <> (anchors.envs.start)
 
-| Variable | Required | Description | Default value |
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
 | `TEST_SERVICE__TEST5_WITH_UNICODE♡♡♡` | | the variable should be matched with `TEST_SERVICE__TEST5_WITH_UNICODE` and the unicode must be saved | `false` |
 | `SOME_EXTRA_VARS` | | comment should be saved. `kek` | `example_value` |
