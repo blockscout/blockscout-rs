@@ -199,7 +199,7 @@ impl Envs {
                     default_of_var(&settings, &from_key_to_json_path(&key, service_prefix));
                 let required = default_value.is_none();
                 let description = try_get_description(&key, &value, &default_value);
-                let default_value = default_value.map(|v| v.to_string());
+                let default_value = default_value.map(|v| format!("`{}`", v));
                 let var = EnvVariable {
                     key: key.clone(),
                     required,
@@ -245,7 +245,7 @@ impl Envs {
                     let default_value = if default_value.trim().is_empty() {
                         None
                     } else {
-                        Some(default_value.to_string())
+                        Some(default_value.trim().to_string())
                     };
                     let var = EnvVariable {
                         key: key.to_string(),
@@ -442,7 +442,7 @@ fn serialize_env_vars_to_md_table(vars: Envs) -> String {
         let default_value = env
             .default_value
             .as_ref()
-            .map(|v| format!(" `{v}` "))
+            .map(|v| format!(" {v} "))
             .unwrap_or(" ".to_string());
         result.push_str(&format!(
             "| `{}` |{}|{}|{}|\n",
@@ -465,7 +465,7 @@ fn regex_md_table_row() -> &'static str {
         r"\|\s*`([^|`]*)`\s*",
         r"\|\s*([^|]*)\s*",
         r"\|\s*([^|]*)\s*",
-        r"\|\s*`?([^|`]*)`?\s*",
+        r"\|\s*([^|]*)\s*",
         r#"\|"#
     )
 }
@@ -607,28 +607,33 @@ mod tests {
             var("TEST_SERVICE__TEST", None, true, "e.g. `\"value\"`"),
             var(
                 "TEST_SERVICE__DATABASE__CREATE_DATABASE",
-                Some("false"),
+                Some("`false`"),
                 false,
                 "",
             ),
             var(
                 "TEST_SERVICE__DATABASE__RUN_MIGRATIONS",
-                Some("false"),
+                Some("`false`"),
                 false,
                 "",
             ),
-            var("TEST_SERVICE__TEST2", Some("1000"), false, "e.g. `123`"),
+            var("TEST_SERVICE__TEST2", Some("`1000`"), false, "e.g. `123`"),
             var(
                 "TEST_SERVICE__TEST3_SET",
-                Some("null"),
+                Some("`null`"),
                 false,
                 "e.g. `false`",
             ),
-            var("TEST_SERVICE__TEST4_NOT_SET", Some("null"), false, ""),
-            var("TEST_SERVICE__TEST5_WITH_UNICODE", Some("false"), false, ""),
+            var("TEST_SERVICE__TEST4_NOT_SET", Some("`null`"), false, ""),
+            var(
+                "TEST_SERVICE__TEST5_WITH_UNICODE",
+                Some("`false`"),
+                false,
+                "",
+            ),
             var(
                 "TEST_SERVICE__STRING_WITH_DEFAULT",
-                Some("\"kekek\""),
+                Some("`\"kekek\"`"),
                 false,
                 "",
             ),
