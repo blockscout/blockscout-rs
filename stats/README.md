@@ -93,18 +93,18 @@ by enabling word wrapping
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS__SERVER__​GRPC__ADDR` | | | `"0.0.0.0:8051"` |
-| `STATS__SERVER__​GRPC__ENABLED` | | | `false` |
-| `STATS__SERVER__​HTTP__ADDR` | | | `"0.0.0.0:8050"` |
-| `STATS__SERVER__​HTTP__CORS__​ALLOWED_CREDENTIALS` | | | `true` |
-| `STATS__SERVER__​HTTP__CORS__​ALLOWED_METHODS` | | | `"PUT, GET, POST, OPTIONS, DELETE, PATCH"` |
-| `STATS__SERVER__​HTTP__CORS__​ALLOWED_ORIGIN` | | | `""` |
-| `STATS__SERVER__​HTTP__CORS__​BLOCK_ON_ORIGIN_MISMATCH` | | | `false` |
-| `STATS__SERVER__​HTTP__CORS__​ENABLED` | | | `false` |
-| `STATS__SERVER__​HTTP__CORS__​MAX_AGE` | | | `3600` |
-| `STATS__SERVER__​HTTP__CORS__​SEND_WILDCARD` | | | `false` |
-| `STATS__SERVER__​HTTP__ENABLED` | | | `true` |
-| `STATS__SERVER__​HTTP__MAX_BODY_SIZE` | | | `2097152` |
+| `STATS__SERVER__​GRPC__ADDR` | | Address for the gRPC server to listen on | `"0.0.0.0:8051"` |
+| `STATS__SERVER__​GRPC__ENABLED` | | Enable the gRPC server | `false` |
+| `STATS__SERVER__​HTTP__ADDR` | | Address for the HTTP server to listen on | `"0.0.0.0:8050"` |
+| `STATS__SERVER__​HTTP__CORS__​ALLOWED_CREDENTIALS` | | Allow credentials in CORS requests | `true` |
+| `STATS__SERVER__​HTTP__CORS__​ALLOWED_METHODS` | | List of allowed HTTP methods for CORS | `"PUT, GET, POST, OPTIONS, DELETE, PATCH"` |
+| `STATS__SERVER__​HTTP__CORS__​ALLOWED_ORIGIN` | | Allowed origin for CORS requests | `""` |
+| `STATS__SERVER__​HTTP__CORS__​BLOCK_ON_ORIGIN_MISMATCH` | | Block requests if origin does not match | `false` |
+| `STATS__SERVER__​HTTP__CORS__​ENABLED` | | Enable CORS | `false` |
+| `STATS__SERVER__​HTTP__CORS__​MAX_AGE` | | Max age for CORS preflight request caching (in seconds) | `3600` |
+| `STATS__SERVER__​HTTP__CORS__​SEND_WILDCARD` | | Send wildcard for allowed origins in CORS | `false` |
+| `STATS__SERVER__​HTTP__ENABLED` | | Enable the HTTP server | `true` |
+| `STATS__SERVER__​HTTP__MAX_BODY_SIZE` | | Maximum allowed size for HTTP request bodies (in bytes) | `2097152` |
 
 [anchor]: <> (anchors.envs.end.server)
 
@@ -118,10 +118,10 @@ by enabling word wrapping
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS__JAEGER__AGENT_ENDPOINT` | | | `"127.0.0.1:6831"` |
-| `STATS__JAEGER__ENABLED` | | | `false` |
-| `STATS__TRACING__ENABLED` | | | `true` |
-| `STATS__TRACING__FORMAT` | | | `"default"` |
+| `STATS__JAEGER__AGENT_ENDPOINT` | | Jaeger agent endpoint for tracing | `"127.0.0.1:6831"` |
+| `STATS__JAEGER__ENABLED` | | Enable Jaeger tracing | `false` |
+| `STATS__TRACING__ENABLED` | | Enable tracing | `true` |
+| `STATS__TRACING__FORMAT` | | Tracing format to use, either 'default' or 'json' | `"default"` |
 
 [anchor]: <> (anchors.envs.end.tracing)
 
@@ -135,9 +135,9 @@ by enabling word wrapping
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS__METRICS__ADDR` | | | `"0.0.0.0:6060"` |
-| `STATS__METRICS__ENABLED` | | | `false` |
-| `STATS__METRICS__ROUTE` | | | `"/metrics"` |
+| `STATS__METRICS__ADDR` | | Address for the metrics server to listen on | `"0.0.0.0:6060"` |
+| `STATS__METRICS__ENABLED` | | Enable the metrics server | `false` |
+| `STATS__METRICS__ROUTE` | | Route for exposing metrics | `"/metrics"` |
 
 [anchor]: <> (anchors.envs.end.metrics)
 
@@ -150,23 +150,25 @@ by enabling word wrapping
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​DESCRIPTION` | | e.g. `"Some description"` | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​ENABLED` | | e.g. `true` | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__DAY` | | | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__MONTH` | | | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__WEEK` | | | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__YEAR` | | e.g. `false` | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​TITLE` | | e.g. `"Some title with {{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​UNITS` | | | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​DESCRIPTION` | | e.g. `"Some description with {{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​ENABLED` | | e.g. `true` | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__DAY` | | | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__MONTH` | | | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__WEEK` | | | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__YEAR` | | | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​TITLE` | | e.g. `"Some line chart title"` | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​UNITS` | | e.g. `"{{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__​TEMPLATE_VALUES__​<VARIABLE_NAME>` | | e.g. `"some_value"` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​DESCRIPTION` | | Counter `<COUNTER_NAME>` description, e.g. `"Some description"` |
+ `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​ENABLED` | | Enable counter `<COUNTER_NAME>`, e.g. `true` |
+ `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__DAY` | | remove | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__MONTH` | | remove | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__WEEK` | | remove | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__YEAR` | | remove | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​TITLE` | | Displayed name of `<COUNTER_NAME>`, e.g. `"Some title with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​UNITS` | | Measurement units for the counter, e.g. `"Bytes"` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​DESCRIPTION` | | Line chart `<LINE_CHART_NAME>` description, e.g. `"Some description with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​ENABLED` | | Enable `<LINE_CHART_NAME>`, e.g. `true` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__DAY` | | Enable daily data for the chart, e.g. `true` | `true` if the resolution is defined |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__WEEK` | | Enable weekly data | `true` if defined |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__MONTH` | | Enable monthly data | `true` if defined |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__YEAR` | | Enable yearly data | `true` if defined |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​TITLE` | | Displayed name of `<LINE_CHART_NAME>`, e.g. `"Some line chart title"` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​UNITS` | | Measurement units, e.g. `"{{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__​TEMPLATE_VALUES__​<VARIABLE_NAME>` | | Value to substitute instead of `{{<variable_name>}}`, e.g. `"some_value"` | `null` |
 
 [anchor]: <> (anchors.envs.end.charts)
 
@@ -176,10 +178,10 @@ by enabling word wrapping
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_LAYOUT__​COUNTERS_ORDER__​<COUNTER_NAME>` | | e.g. `3` | `null` |
-| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__​CHARTS_ORDER__​<LINE_CHART_NAME>` | | e.g. `1` | `null` |
-| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__ORDER` | | | `null` |
-| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__TITLE` | | e.g. `"Accounts"` | `null` |
+| `STATS_LAYOUT__​COUNTERS_ORDER__​<COUNTER_NAME>` | | Override position of `<COUNTER_NAME>` in the layout; `0` will place it first and `N` will place it Nth in the layout | `null` |
+| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__ORDER` | | Override position of `<CATEGORY_NAME>` in the layout | `null` |
+| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__​CHARTS_ORDER__​<LINE_CHART_NAME>` | | Override position of `<LINE_CHART_NAME>` within its category | `null` |
+| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__TITLE` | | Displayed name of the category, e.g. `"Accounts"` | `null` |
 
 [anchor]: <> (anchors.envs.end.layout)
 
@@ -189,7 +191,7 @@ by enabling word wrapping
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_UPDATE_GROUPS__​SCHEDULES__<UPDATE_GROUP_NAME>` | | e.g. `"0 0 */3 * * * *"` | `null` |
+| `STATS_UPDATE_GROUPS__​SCHEDULES__<UPDATE_GROUP_NAME>` | | Override update schedule of the group, e.g. `"0 0 */3 * * * *"` for update each 3 hours | `null` |
 
 [anchor]: <> (anchors.envs.end.groups)
 
