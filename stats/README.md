@@ -150,10 +150,8 @@ by enabling word wrapping
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​DESCRIPTION` | | Counter `<COUNTER_NAME>` description, e.g. `"Some description"` |
- `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​ENABLED` | | Enable counter `<COUNTER_NAME>`, e.g. `true` |
- `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​DESCRIPTION` | | Counter `<COUNTER_NAME>` description, e.g. `"Some description"` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​ENABLED` | | Enable counter `<COUNTER_NAME>`, e.g. `true` | `null` |
 | `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​TITLE` | | Displayed name of `<COUNTER_NAME>`, e.g. `"Some title with {{<variable_name>}}"` | `null` |
 | `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​UNITS` | | Measurement units for the counter, e.g. `"Bytes"` | `null` |
 | `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​DESCRIPTION` | | Line chart `<LINE_CHART_NAME>` description, e.g. `"Some description with {{<variable_name>}}"` | `null` |
