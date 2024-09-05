@@ -72,16 +72,16 @@ by enabling word wrapping
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
 | `STATS__DB_URL` | | Postgres URL to stats db | `""` |
-| `STATS__BLOCKSCOUT_DB_URL` | | Postgres URL to blockscout db | `""` |
+| `STATS__​BLOCKSCOUT_DB_URL` | | Postgres URL to blockscout db | `""` |
 | `STATS__CREATE_DATABASE` | | Create database on start | `false` |
 | `STATS__RUN_MIGRATIONS` | | Run migrations on start | `false` |
 | `STATS__CHARTS_CONFIG` | | Path to config file for charts | `"config/charts.json"` |
 | `STATS__LAYOUT_CONFIG` | | Path to config file for chart layout | `"config/layout.json"` |
-| `STATS__UPDATE_GROUPS_CONFIG` | | Path to config file for update groups | `"config/​update_groups.json"` |
+| `STATS__UPDATE_​GROUPS_CONFIG` | | Path to config file for update groups | `"config/​update_groups.json"` |
 | `STATS__SWAGGER_FILE` | | Path of the swagger file to serve in the swagger endpoint | `"../stats-proto/​swagger/stats.​swagger.yaml"` |
-| `STATS__FORCE_UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
-| `STATS__CONCURRENT_START_UPDATES` | | Amount of concurrent charts update on start | `3` |
-| `STATS__DEFAULT_SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
+| `STATS__FORCE_​UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
+| `STATS__CONCURRENT_​START_UPDATES` | | Amount of concurrent charts update on start | `3` |
+| `STATS__​DEFAULT_​SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
 | `STATS__LIMITS__REQUEST_​INTERVAL_LIMIT_DAYS` | | Maximum allowed number of requested points  | `182500` | <-- TODO: change
 
 [anchor]: <> (anchors.envs.end.service)
@@ -154,10 +154,6 @@ by enabling word wrapping
  `null` |
 | `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​ENABLED` | | Enable counter `<COUNTER_NAME>`, e.g. `true` |
  `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__DAY` | | remove | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__MONTH` | | remove | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__WEEK` | | remove | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​RESOLUTIONS__YEAR` | | remove | `null` |
 | `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​TITLE` | | Displayed name of `<COUNTER_NAME>`, e.g. `"Some title with {{<variable_name>}}"` | `null` |
 | `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​UNITS` | | Measurement units for the counter, e.g. `"Bytes"` | `null` |
 | `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​DESCRIPTION` | | Line chart `<LINE_CHART_NAME>` description, e.g. `"Some description with {{<variable_name>}}"` | `null` |

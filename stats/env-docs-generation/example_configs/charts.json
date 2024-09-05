@@ -6,10 +6,7 @@
         "<counter_name>": {
             "enabled": true,
             "title": "Some title with {{<variable_name>}}",
-            "description": "Some description",
-            "resolutions": {
-                "year": false
-            }
+            "description": "Some description"
         }
     },
     "line_charts": {

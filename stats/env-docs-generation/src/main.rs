@@ -40,7 +40,9 @@ fn main() {
         "STATS_CHARTS",
         "README.md",
         "env-docs-generation/example_configs/charts.json",
-        PrefixFilter::Empty,
+        // setting counter's resolutions will be rejected at
+        // the launch anyway because it doesn't make sense
+        PrefixFilter::blacklist(&["STATS_CHARTS__COUNTERS__<COUNTER_NAME>__RESOLUTIONS"]),
         Some("charts"),
     );
 
