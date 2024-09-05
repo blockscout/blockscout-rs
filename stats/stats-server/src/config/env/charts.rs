@@ -5,6 +5,14 @@ use crate::config::types::{AllChartSettings, ResolutionsSettings};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
+pub struct Config {
+    pub counters: BTreeMap<String, ChartSettingsOverwrite>,
+    pub line_charts: BTreeMap<String, ChartSettingsOverwrite>,
+    pub template_values: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct ResolutionsEnabledOverwrite {
     day: Option<bool>,
     week: Option<bool>,
@@ -104,14 +112,6 @@ impl TryFrom<ChartSettingsOverwrite> for AllChartSettings {
             }
         }
     }
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default, deny_unknown_fields)]
-pub struct Config {
-    pub counters: BTreeMap<String, ChartSettingsOverwrite>,
-    pub line_charts: BTreeMap<String, ChartSettingsOverwrite>,
-    pub template_values: BTreeMap<String, serde_json::Value>,
 }
 
 #[cfg(test)]
