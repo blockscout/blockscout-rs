@@ -24,7 +24,8 @@ This is a simple tool to collect possible environment variables from `Settings` 
             "<SERVICE_NAME_PREFIX>",
             "README.md",
             "<PATH TO .TOML/.JSON EXAMPLE CONFIG>",
-            &["<ENV_PREFIX_TO_IGNORE>"],
+            &[PrefixFilter::blacklist("<ENV_PREFIX_TO_IGNORE>")],
+            Some("some_postfix"),
         );
     }
     ```
@@ -33,8 +34,8 @@ This is a simple tool to collect possible environment variables from `Settings` 
     ```markdown
     ## Envs
 
-    [anchor]: <> (anchors.envs.start)
-    [anchor]: <> (anchors.envs.end)
+    [anchor]: <> (anchors.envs.start.some_postfix)
+    [anchor]: <> (anchors.envs.end.some_postfix)
     ```
 
 4. (Optional) In your `justfile` add new command to run `check-envs.rs`:
