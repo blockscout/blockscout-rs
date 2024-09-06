@@ -1,6 +1,6 @@
 use blockscout_db::entity::migrations_status;
 use chrono::Utc;
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, QueryOrder};
+use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement};
 use tracing::warn;
 
 #[derive(Clone)]
@@ -46,19 +46,16 @@ pub struct BlockscoutMigrations {
 impl BlockscoutMigrations {
     pub async fn query_from_db(blockscout: &DatabaseConnection) -> Result<Self, DbErr> {
         let mut result = Self::empty();
-        let query_result = migrations_status::Entity::find()
+        if !Self::migrations_table_exists_and_available(blockscout).await? {
+            warn!("No `migrations_status` table in blockscout DB was found. It's possible in pre v6.0.0 blockscout, but otherwise is a bug. \
+                Check permissions if the table actually exists. The service should work fine, but some optimizations won't be applied and \
+                support for older versions is likely to be dropped in the future.");
+            return Ok(Self::empty());
+        }
+        let migrations = migrations_status::Entity::find()
             .order_by_asc(migrations_status::Column::UpdatedAt)
             .all(blockscout)
-            .await;
-        let migrations = match query_result {
-            Ok(m) => m,
-            // fallback if the version is too old
-            Err(e) if Self::is_undefined_table_error(&e) => {
-                warn!("No `migrations_status` table in blockscout DB was found. It's possible in pre v6.0.0 blockscout, but otherwise is a bug");
-                vec![]
-            }
-            Err(e) => return Err(e),
-        };
+            .await?;
         for migrations_status::Model {
             migration_name,
             status,
@@ -79,19 +76,30 @@ impl BlockscoutMigrations {
         Ok(result)
     }
 
-    fn is_undefined_table_error(err: &DbErr) -> bool {
-        if let DbErr::Query(sea_orm::RuntimeErr::SqlxError(sqlx_err)) = err {
-            let postgres_error_code = sqlx_err.as_database_error().and_then(|e| e.code());
-            // `undefined_table`
-            // source: https://www.postgresql.org/docs/current/errcodes-appendix.html
-            if let Some("42P01") = postgres_error_code.as_deref() {
-                true
-            } else {
-                false
-            }
-        } else {
-            return false;
+    async fn migrations_table_exists_and_available(
+        blockscout: &DatabaseConnection,
+    ) -> Result<bool, DbErr> {
+        #[derive(FromQueryResult, Debug)]
+        struct AvailableTable {
+            #[allow(unused)]
+            table_schema: String,
+            #[allow(unused)]
+            table_name: String,
         }
+
+        let migrations_table_entry = AvailableTable::find_by_statement(Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            "
+            SELECT table_schema, table_name
+            FROM information_schema.tables
+            WHERE table_schema='public'
+            AND table_name='migrations_status'
+            ;",
+        ))
+        .one(blockscout)
+        .await?;
+
+        Ok(migrations_table_entry.is_some())
     }
 
     fn set(&mut self, migration_name: &str, value: bool) {
