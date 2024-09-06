@@ -314,6 +314,39 @@ pub async fn simple_test_counter<C: DataSource + ChartProperties>(
     expected: &str,
     update_time: Option<NaiveDateTime>,
 ) {
+    simple_test_counter_inner::<C>(
+        test_name,
+        expected,
+        update_time,
+        BlockscoutMigrations::latest(),
+    )
+    .await
+}
+
+/// tests all statement kinds for different migrations combinations.
+/// NOTE: everything is tested with only one version of DB (probably latest),
+/// so statements incompatible with the current mock DB setup are going to break.
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
+pub async fn simple_test_counter_with_migration_variants<C: DataSource + ChartProperties>(
+    test_name_base: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) {
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations).await
+    }
+}
+
+async fn simple_test_counter_inner<C: DataSource + ChartProperties>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+    migrations: BlockscoutMigrations,
+) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
@@ -326,7 +359,7 @@ pub async fn simple_test_counter<C: DataSource + ChartProperties>(
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
-        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,
     };
