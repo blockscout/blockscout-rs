@@ -20,6 +20,11 @@ pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
         .collect()
 }
 
+const MIGRATIONS_VARIANTS: [BlockscoutMigrations; 2] = [
+    BlockscoutMigrations::empty(),
+    BlockscoutMigrations::latest(),
+];
+
 /// `test_name` must be unique to avoid db clashes
 ///
 /// returns db handles to continue testing if needed
@@ -34,8 +39,13 @@ where
     simple_test_chart_inner::<C>(test_name, expected, BlockscoutMigrations::latest()).await
 }
 
-/// - `_N` will be added to `test_name_base` for each variant
+/// tests all statement kinds for different migrations combinations.
+/// NOTE: everything is tested with only one version of DB (probably latest),
+/// so statements incompatible with the current mock DB setup are going to break.
+///
 /// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
 pub async fn simple_test_chart_with_migration_variants<C>(
     test_name_base: &str,
     expected: Vec<(&str, &str)>,
@@ -43,13 +53,7 @@ pub async fn simple_test_chart_with_migration_variants<C>(
     C: DataSource + ChartProperties,
     C::Resolution: Ord + Clone + Debug,
 {
-    for (i, migrations) in [
-        BlockscoutMigrations::empty(),
-        BlockscoutMigrations::latest(),
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
         simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations).await;
     }
@@ -155,13 +159,72 @@ pub async fn dirty_force_update_and_check<C>(
     );
 }
 
-/// `test_name` must be unique to avoid db clashes
+/// tests only case with all migrations applied, to
+/// test statements for different migrations combinations
+/// use [`ranged_test_chart_with_migration_variants`]
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
 pub async fn ranged_test_chart<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
     from: C::Resolution,
     to: C::Resolution,
     update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    ranged_test_chart_inner::<C>(
+        test_name,
+        expected,
+        from,
+        to,
+        update_time,
+        BlockscoutMigrations::latest(),
+    )
+    .await
+}
+
+/// tests all statement kinds for different migrations combinations.
+/// NOTE: everything is tested with only one version of DB (probably latest),
+/// so statements incompatible with the current mock DB setup are going to break.
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
+pub async fn ranged_test_chart_with_migration_variants<C>(
+    test_name_base: &str,
+    expected: Vec<(&str, &str)>,
+    from: C::Resolution,
+    to: C::Resolution,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        ranged_test_chart_inner::<C>(
+            &test_name,
+            expected.clone(),
+            from.clone(),
+            to.clone(),
+            update_time,
+            migrations,
+        )
+        .await;
+    }
+}
+
+async fn ranged_test_chart_inner<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+    from: C::Resolution,
+    to: C::Resolution,
+    update_time: Option<NaiveDateTime>,
+    migrations: BlockscoutMigrations,
 ) where
     C: DataSource + ChartProperties,
     C::Resolution: Ord + Clone + Debug,
@@ -180,7 +243,7 @@ pub async fn ranged_test_chart<C>(
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
-        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,
     };
