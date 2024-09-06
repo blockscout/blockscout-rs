@@ -31,6 +31,39 @@ where
     C: DataSource + ChartProperties,
     C::Resolution: Ord + Clone + Debug,
 {
+    simple_test_chart_inner::<C>(test_name, expected, BlockscoutMigrations::latest()).await
+}
+
+/// - `_N` will be added to `test_name_base` for each variant
+/// - db is going to be initialized separately for each variant
+pub async fn simple_test_chart_with_migration_variants<C>(
+    test_name_base: &str,
+    expected: Vec<(&str, &str)>,
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    for (i, migrations) in [
+        BlockscoutMigrations::empty(),
+        BlockscoutMigrations::latest(),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let test_name = format!("{test_name_base}_{i}");
+        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations).await;
+    }
+}
+
+async fn simple_test_chart_inner<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+    migrations: BlockscoutMigrations,
+) -> (TestDbGuard, TestDbGuard)
+where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
     let (db, blockscout) = init_db_all(test_name).await;
@@ -43,7 +76,7 @@ where
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
-        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,
     };
