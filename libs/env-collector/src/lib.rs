@@ -193,7 +193,7 @@ impl Envs {
         let json = serde_json::to_value(&settings).context("failed to convert config to json")?;
         let from_config: Envs = flatten_json(&json, service_prefix)
             .into_iter()
-            .filter(|(key, _)| vars_filter.filter(&key))
+            .filter(|(key, _)| vars_filter.filter(key))
             .map(|(key, value)| {
                 let default_value =
                     default_of_var(&settings, &from_key_to_json_path(&key, service_prefix));
@@ -491,7 +491,7 @@ fn _flat_json(json: &Value, prefix: &str, env_vars: &mut BTreeMap<String, String
         _ => {
             let env_var_name = prefix.to_uppercase();
             let env_var_value = match json {
-                Value::String(s) => format!("\"{}\"", s.to_string()),
+                Value::String(s) => format!("\"{}\"", s),
                 Value::Number(n) => n.to_string(),
                 Value::Bool(b) => b.to_string(),
                 Value::Null => "null".to_string(),
