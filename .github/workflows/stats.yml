@@ -56,6 +56,11 @@ jobs:
         run: cargo test --locked --workspace --all-features --doc
         if: success() || failure()
 
+      - name: ENVs in documentation
+        run: cargo run --bin check-envs
+        env:
+          VALIDATE_ONLY: true
+
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
         if: success() || failure()
