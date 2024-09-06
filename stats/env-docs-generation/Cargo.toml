@@ -5,5 +5,4 @@ edition = "2021"
 
 [dependencies]
 stats-server = { path = "../stats-server" }
-# env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "c344fb22" }
-env-collector = { path = "../../../blockscout-second-rs/libs/env-collector" }
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "20b179a" }

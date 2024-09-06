@@ -1413,6 +1413,7 @@ dependencies = [
 [[package]]
 name = "env-collector"
 version = "0.1.1"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=20b179a#20b179a444f1c6c26ad3d17aa97908ca16aeaf72"
 dependencies = [
  "anyhow",
  "config 0.14.0",
