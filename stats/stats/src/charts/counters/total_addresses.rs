@@ -1,7 +1,10 @@
 use crate::{
-    data_source::kinds::{
-        local_db::DirectPointLocalDbChartSource,
-        remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
+    data_source::{
+        kinds::{
+            local_db::DirectPointLocalDbChartSource,
+            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
+        },
+        types::BlockscoutMigrations,
     },
     ChartProperties, MissingDatePolicy, Named,
 };
@@ -12,7 +15,7 @@ use sea_orm::{DbBackend, Statement};
 pub struct TotalAddressesStatement;
 
 impl StatementForOne for TotalAddressesStatement {
-    fn get_statement() -> Statement {
+    fn get_statement(_: &BlockscoutMigrations) -> Statement {
         Statement::from_string(
             DbBackend::Postgres,
             r#"

@@ -27,7 +27,10 @@ use chrono::{DateTime, Utc};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr, FromQueryResult, Statement};
 
 use crate::{
-    data_source::{source::DataSource, types::UpdateContext},
+    data_source::{
+        source::DataSource,
+        types::{BlockscoutMigrations, UpdateContext},
+    },
     types::TimespanValue,
     UpdateError,
 };
@@ -76,7 +79,11 @@ impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
 }
 
 pub trait StatementFromRange {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement;
+    /// `completed_migrations` can be used for selecting more optimal query
+    fn get_statement(
+        range: Option<Range<DateTimeUtc>>,
+        completed_migrations: &BlockscoutMigrations,
+    ) -> Statement;
 }
 
 /// Pull data from remote (blockscout) db according to statement
@@ -105,7 +112,7 @@ where
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
     ) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError> {
-        let query = S::get_statement(range);
+        let query = S::get_statement(range, &cx.blockscout_applied_migrations);
         let mut data = TimespanValue::<Resolution, Value>::find_by_statement(query)
             .all(cx.blockscout)
             .await
@@ -118,7 +125,7 @@ where
 }
 
 pub trait StatementForOne {
-    fn get_statement() -> Statement;
+    fn get_statement(completed_migrations: &BlockscoutMigrations) -> Statement;
 }
 
 /// Get a single record from remote (blockscout) DB using statement
@@ -147,7 +154,7 @@ where
         cx: &UpdateContext<'_>,
         _range: Option<Range<DateTimeUtc>>,
     ) -> Result<TimespanValue<Resolution, Value>, UpdateError> {
-        let query = S::get_statement();
+        let query = S::get_statement(&cx.blockscout_applied_migrations);
         let data = TimespanValue::<Resolution, Value>::find_by_statement(query)
             .one(cx.blockscout)
             .await

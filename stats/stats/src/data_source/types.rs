@@ -110,14 +110,14 @@ impl BlockscoutMigrations {
         }
     }
 
-    fn empty() -> Self {
+    pub const fn empty() -> Self {
         BlockscoutMigrations {
             denormalization: false,
         }
     }
 
     /// All known migrations are applied
-    pub fn latest() -> Self {
+    pub const fn latest() -> Self {
         BlockscoutMigrations {
             denormalization: true,
         }

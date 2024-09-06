@@ -1,18 +1,21 @@
 use std::ops::Range;
 
 use crate::{
-    data_source::kinds::{
-        data_manipulation::{
-            map::{MapParseTo, MapToString},
-            resolutions::average::AverageLowerResolution,
-        },
-        local_db::{
-            parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString},
+                resolutions::average::AverageLowerResolution,
             },
-            DirectVecLocalDbChartSource,
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -29,27 +32,52 @@ use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 pub struct TxnsSuccessRateStatement;
 
 impl StatementFromRange for TxnsSuccessRateStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
-                SELECT
-                    DATE(b.timestamp) as date,
-                    COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
-                        / COUNT(*)::FLOAT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    b.timestamp != to_timestamp(0) AND
-                    b.consensus = true AND
-                    t.block_hash IS NOT NULL AND
-                    (t.error IS NULL OR t.error::text != 'dropped/replaced') {filter}
-                GROUP BY DATE(b.timestamp)
+    fn get_statement(
+        range: Option<Range<DateTimeUtc>>,
+        completed_migrations: &BlockscoutMigrations,
+    ) -> Statement {
+        if completed_migrations.denormalization {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        DATE(t.block_timestamp) as date,
+                        COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
+                            / COUNT(*)::FLOAT as value
+                    FROM transactions t
+                    WHERE
+                        t.block_timestamp != to_timestamp(0) AND
+                        t.block_consensus = true AND
+                        t.block_hash IS NOT NULL AND
+                        (t.error IS NULL OR t.error::text != 'dropped/replaced') {filter}
+                    GROUP BY DATE(t.block_timestamp)
                 "#,
-            [],
-            "b.timestamp",
-            range
-        )
+                [],
+                "t.block_timestamp",
+                range
+            )
+        } else {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        DATE(b.timestamp) as date,
+                        COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
+                            / COUNT(*)::FLOAT as value
+                    FROM transactions t
+                    JOIN blocks       b ON t.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true AND
+                        t.block_hash IS NOT NULL AND
+                        (t.error IS NULL OR t.error::text != 'dropped/replaced') {filter}
+                    GROUP BY DATE(b.timestamp)
+                "#,
+                [],
+                "b.timestamp",
+                range
+            )
+        }
     }
 }
 
@@ -106,12 +134,12 @@ pub type TxnsSuccessRateYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::simple_test::simple_test_chart_with_migration_variants;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_txns_success_rate() {
-        simple_test_chart::<TxnsSuccessRate>(
+        simple_test_chart_with_migration_variants::<TxnsSuccessRate>(
             "update_txns_success_rate",
             vec![
                 ("2022-11-09", "1"),
@@ -129,7 +157,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_txns_success_rate_weekly() {
-        simple_test_chart::<TxnsSuccessRateWeekly>(
+        simple_test_chart_with_migration_variants::<TxnsSuccessRateWeekly>(
             "update_txns_success_rate_weekly",
             vec![
                 ("2022-11-07", "1"),
@@ -145,7 +173,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_txns_success_rate_monthly() {
-        simple_test_chart::<TxnsSuccessRateMonthly>(
+        simple_test_chart_with_migration_variants::<TxnsSuccessRateMonthly>(
             "update_txns_success_rate_monthly",
             vec![
                 ("2022-11-01", "1"),
@@ -161,7 +189,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_txns_success_rate_yearly() {
-        simple_test_chart::<TxnsSuccessRateYearly>(
+        simple_test_chart_with_migration_variants::<TxnsSuccessRateYearly>(
             "update_txns_success_rate_yearly",
             vec![("2022-01-01", "1"), ("2023-01-01", "0.8333333333333334")],
         )

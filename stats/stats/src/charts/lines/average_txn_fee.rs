@@ -3,18 +3,21 @@
 use std::ops::Range;
 
 use crate::{
-    data_source::kinds::{
-        data_manipulation::{
-            map::{MapParseTo, MapToString},
-            resolutions::average::AverageLowerResolution,
-        },
-        local_db::{
-            parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString},
+                resolutions::average::AverageLowerResolution,
             },
-            DirectVecLocalDbChartSource,
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -33,7 +36,7 @@ const ETHER: i64 = i64::pow(10, 18);
 pub struct AverageTxnFeeStatement;
 
 impl StatementFromRange for AverageTxnFeeStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
