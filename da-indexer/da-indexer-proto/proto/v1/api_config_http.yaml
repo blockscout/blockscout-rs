@@ -7,6 +7,9 @@ http:
     - selector: blockscout.daIndexer.v1.CelestiaService.GetBlob
       get: /api/v1/celestia/blob
 
+    - selector: blockscout.daIndexer.v1.CelestiaService.GetL2BatchMetadata
+      get: /api/v1/celestia/l2BatchMetadata
+
     - selector: blockscout.daIndexer.v1.EigenDaService.GetBlob
       get: /api/v1/eigenda/blob
     
