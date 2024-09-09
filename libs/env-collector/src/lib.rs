@@ -1,17 +1,17 @@
 use anyhow::Context;
-use config::{Config, File, FileFormat};
+use config::{Config, File};
 use json_dotpath::DotPaths;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
     marker::PhantomData,
-    ops::Not,
     path::{Path, PathBuf},
 };
 
 const ANCHOR_START: &str = "anchors.envs.start";
 const ANCHOR_END: &str = "anchors.envs.end";
+const VALIDATE_ONLY_ENV: &str = "VALIDATE_ONLY";
 
 pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(
     service_name: &str,
@@ -25,7 +25,7 @@ pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(
         config_path.into(),
         skip_vars.iter().map(|s| s.to_string()).collect(),
     );
-    let validate_only = std::env::var("VALIDATE_ONLY")
+    let validate_only = std::env::var(VALIDATE_ONLY_ENV)
         .unwrap_or_default()
         .to_lowercase()
         .eq("true");
@@ -101,7 +101,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq)]
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct EnvVariable {
     pub key: String,
     pub description: String,
@@ -109,11 +109,9 @@ pub struct EnvVariable {
     pub default_value: Option<String>,
 }
 
-impl PartialEq<Self> for EnvVariable {
-    fn eq(&self, other: &Self) -> bool {
-        self.key == other.key
-            && self.required == other.required
-            && self.default_value == other.default_value
+impl EnvVariable {
+    pub fn eq_with_ignores(&self, other: &Self) -> bool {
+        self.key == other.key && self.required == other.required
     }
 }
 
@@ -129,19 +127,16 @@ impl From<BTreeMap<String, EnvVariable>> for Envs {
 }
 
 impl Envs {
-    pub fn from_example_toml<S>(
+    pub fn from_example<S>(
         service_prefix: &str,
-        example_toml_config_content: &str,
+        example_config_path: &str,
         skip_vars: Vec<String>,
     ) -> Result<Self, anyhow::Error>
     where
         S: Serialize + DeserializeOwned,
     {
         let settings: S = Config::builder()
-            .add_source(File::from_str(
-                example_toml_config_content,
-                FileFormat::Toml,
-            ))
+            .add_source(File::with_name(example_config_path))
             .build()
             .context("failed to build config")?
             .try_deserialize()
@@ -151,14 +146,16 @@ impl Envs {
             .into_iter()
             .filter(|(key, _)| !skip_vars.iter().any(|s| key.starts_with(s)))
             .map(|(key, value)| {
-                let required =
-                    var_is_required(&settings, &from_key_to_json_path(&key, service_prefix));
-                let default_value = required.not().then_some(value);
+                let default_value =
+                    default_of_var(&settings, &from_key_to_json_path(&key, service_prefix));
+                let required = default_value.is_none();
+                let description = try_get_description(&key, &value, &default_value);
+                let default_value = default_value.map(|v| v.to_string());
                 let var = EnvVariable {
                     key: key.clone(),
                     required,
                     default_value,
-                    description: Default::default(),
+                    description,
                 };
 
                 (key, var)
@@ -228,11 +225,11 @@ fn find_missing_variables_in_markdown<S>(
 where
     S: Serialize + DeserializeOwned,
 {
-    let example = Envs::from_example_toml::<S>(
+    let example = Envs::from_example::<S>(
         service_name,
-        std::fs::read_to_string(config_path)
-            .context("failed to read example file")?
-            .as_str(),
+        config_path
+            .to_str()
+            .expect("config path is not valid utf-8"),
         skip_vars,
     )?;
     let markdown: Envs = Envs::from_markdown(
@@ -246,7 +243,9 @@ where
         .iter()
         .filter(|(key, value)| {
             let maybe_markdown_var = markdown.vars.get(*key);
-            maybe_markdown_var.map(|var| var != *value).unwrap_or(true)
+            maybe_markdown_var
+                .map(|var| !var.eq_with_ignores(value))
+                .unwrap_or(true)
         })
         .map(|(_, value)| value.clone())
         .collect();
@@ -263,11 +262,11 @@ fn update_markdown_file<S>(
 where
     S: Serialize + DeserializeOwned,
 {
-    let from_config = Envs::from_example_toml::<S>(
+    let from_config = Envs::from_example::<S>(
         service_name,
-        std::fs::read_to_string(config_path)
-            .context("failed to read config file")?
-            .as_str(),
+        config_path
+            .to_str()
+            .expect("config path is not valid utf-8"),
         skip_vars,
     )?;
     let mut markdown_config = Envs::from_markdown(
@@ -294,14 +293,35 @@ where
     Ok(())
 }
 
-fn var_is_required<S>(settings: &S, path: &str) -> bool
+fn default_of_var<S>(settings: &S, path: &str) -> Option<serde_json::Value>
 where
     S: Serialize + DeserializeOwned,
 {
-    let mut json = serde_json::to_value(settings).unwrap();
-    json.dot_remove(path).unwrap();
-    let result = serde_json::from_value::<S>(json);
-    result.is_err()
+    let mut json = serde_json::to_value(settings).expect("structure should be serializable");
+    json.dot_remove(path).expect("value path not found");
+
+    let settings_with_default_value = serde_json::from_value::<S>(json).ok()?;
+    let json: serde_json::Value = serde_json::to_value(&settings_with_default_value)
+        .expect("structure should be serializable");
+    let default_value: serde_json::Value = json
+        .dot_get(path)
+        .expect("value path not found")
+        .unwrap_or_default();
+    Some(default_value)
+}
+
+fn try_get_description(_key: &str, value: &str, default: &Option<serde_json::Value>) -> String {
+    if value.is_empty() {
+        return Default::default();
+    }
+    let default_str = default.as_ref().map(|v| v.to_string()).unwrap_or_default();
+
+    // If the value is the same as the default value, we don't need to show it in the description
+    if default_str == value {
+        return Default::default();
+    }
+
+    format!("e.g. `{}`", value)
 }
 
 fn from_key_to_json_path(key: &str, service_prefix: &str) -> String {
@@ -391,76 +411,142 @@ mod tests {
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
     struct TestSettings {
         pub test: String,
-        #[serde(default)]
+        #[serde(default = "default_test2")]
         pub test2: i32,
+        pub test3_set: Option<bool>,
+        pub test4_not_set: Option<bool>,
         pub database: DatabaseSettings,
     }
 
-    fn var(key: &str, val: Option<&str>, required: bool) -> (String, EnvVariable) {
+    fn default_test2() -> i32 {
+        1000
+    }
+
+    fn var(
+        key: &str,
+        val: Option<&str>,
+        required: bool,
+        description: &str,
+    ) -> (String, EnvVariable) {
         (
             key.into(),
             EnvVariable {
                 key: key.to_string(),
                 default_value: val.map(str::to_string),
                 required,
-                description: "".to_string(),
+                description: description.into(),
             },
         )
     }
 
-    fn default_example() -> &'static str {
-        r#"test = "value"
-test2 = 123
-[database.connect]
-url = "test-url"
-"#
+    fn tempfile_with_content(content: &str, format: &str) -> tempfile::NamedTempFile {
+        let mut file = tempfile::Builder::new().suffix(format).tempfile().unwrap();
+        writeln!(file, "{}", content).unwrap();
+        file
+    }
+
+    fn default_config_example_file_toml() -> tempfile::NamedTempFile {
+        let content = r#"test = "value"
+        test2 = 123
+        test3_set = false
+        [database.connect]
+        url = "test-url"
+        "#;
+        tempfile_with_content(content, ".toml")
+    }
+
+    fn default_config_example_file_json() -> tempfile::NamedTempFile {
+        let content = r#"{
+            "test": "value",
+            "test2": 123,
+            "test3_set": false,
+            "database": {
+                "connect": {
+                    "url": "test-url"
+                }
+            }
+        }"#;
+        tempfile_with_content(content, ".json")
     }
 
     fn default_envs() -> Envs {
         Envs::from(BTreeMap::from_iter(vec![
-            var("TEST_SERVICE__TEST", None, true),
+            var("TEST_SERVICE__TEST", None, true, "e.g. `value`"),
             var(
                 "TEST_SERVICE__DATABASE__CREATE_DATABASE",
                 Some("false"),
                 false,
+                "",
             ),
             var(
                 "TEST_SERVICE__DATABASE__RUN_MIGRATIONS",
                 Some("false"),
                 false,
+                "",
             ),
-            var("TEST_SERVICE__TEST2", Some("123"), false),
-            var("TEST_SERVICE__DATABASE__CONNECT__URL", None, true),
+            var("TEST_SERVICE__TEST2", Some("1000"), false, "e.g. `123`"),
+            var(
+                "TEST_SERVICE__TEST3_SET",
+                Some("null"),
+                false,
+                "e.g. `false`",
+            ),
+            var("TEST_SERVICE__TEST4_NOT_SET", Some("null"), false, ""),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT__URL",
+                None,
+                true,
+                "e.g. `test-url`",
+            ),
         ]))
     }
 
-    fn default_markdown() -> &'static str {
+    fn default_markdown_content() -> &'static str {
         r#"
 [anchor]: <> (anchors.envs.start)
 
-| Variable                                  | Required    | Description | Default Value |
-|-------------------------------------------|-------------|-------------|---------------|
-| `TEST_SERVICE__TEST`                      | true        |             |               |
-| `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       |             | `false`       |
-| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       |             | `false`       |
-| `TEST_SERVICE__TEST2`                     | false       |             | `123`         |
-| `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        |             |               |
+| Variable                                  | Required    | Description      | Default Value |
+|-------------------------------------------|-------------|------------------|---------------|
+| `TEST_SERVICE__TEST`                      | true        | e.g. `value`     |               |
+| `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       |                  | `false`       |
+| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       |                  | `false`       |
+| `TEST_SERVICE__TEST2`                     | false       | e.g. `123`       | `1000`        |
+| `TEST_SERVICE__TEST3_SET`                 | false       | e.g. `false`     | `null`        |
+| `TEST_SERVICE__TEST4_NOT_SET`             | false       |                  | `null`        |
+| `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `test-url`  |               |
 [anchor]: <> (anchors.envs.end)
 "#
     }
 
     #[test]
-    fn from_example_works() {
-        let vars =
-            Envs::from_example_toml::<TestSettings>("TEST_SERVICE", default_example(), vec![])
-                .unwrap();
+    fn from_toml_example_works() {
+        let example_file = default_config_example_file_toml();
+        let vars = Envs::from_example::<TestSettings>(
+            "TEST_SERVICE",
+            example_file.path().to_str().unwrap(),
+            vec![],
+        )
+        .unwrap();
+        let expected = default_envs();
+        assert_eq!(vars, expected);
+    }
+
+    #[test]
+    fn from_json_example_works() {
+        let example_file = default_config_example_file_json();
+        let vars = Envs::from_example::<TestSettings>(
+            "TEST_SERVICE",
+            example_file.path().to_str().unwrap(),
+            vec![],
+        )
+        .unwrap();
         let expected = default_envs();
         assert_eq!(vars, expected);
     }
 
     #[test]
     fn from_markdown_works() {
-        let markdown = default_markdown();
+        let markdown = default_markdown_content();
         let vars = Envs::from_markdown(markdown).unwrap();
         let expected = default_envs();
         assert_eq!(vars, expected);
@@ -481,8 +567,7 @@ url = "test-url"
         )
         .unwrap();
 
-        let mut config = tempfile::NamedTempFile::new().unwrap();
-        writeln!(config, "{}", default_example()).unwrap();
+        let config = default_config_example_file_toml();
 
         let collector = EnvCollector::<TestSettings>::new(
             "TEST_SERVICE".to_string(),
@@ -514,12 +599,14 @@ url = "test-url"
 | Variable | Required | Description | Default value |
 | --- | --- | --- | --- |
 | `SOME_EXTRA_VARS2` | true | | `example_value2` |
-| `TEST_SERVICE__DATABASE__CONNECT__URL` | true | | |
-| `TEST_SERVICE__TEST` | true | | |
+| `TEST_SERVICE__DATABASE__CONNECT__URL` | true | e.g. `test-url` | |
+| `TEST_SERVICE__TEST` | true | e.g. `value` | |
 | `SOME_EXTRA_VARS` | | comment should be saved. `kek` | `example_value` |
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | | | `false` |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS` | | | `false` |
-| `TEST_SERVICE__TEST2` | | | `123` |
+| `TEST_SERVICE__TEST2` | | e.g. `123` | `1000` |
+| `TEST_SERVICE__TEST3_SET` | | e.g. `false` | `null` |
+| `TEST_SERVICE__TEST4_NOT_SET` | | | `null` |
 
 [anchor]: <> (anchors.envs.end)
 "#
