@@ -41,7 +41,7 @@ impl L2Router {
         namespace: &[u8],
         commitment: &[u8],
     ) -> Result<Option<L2BatchMetadata>> {
-        let namespace = Bytes::from(namespace.to_vec()).to_string();
+        let namespace = blockscout_display_bytes::ToHex::to_hex(namespace);
         let config = {
             let config = self.routes.get(&namespace);
             if config.is_none() {
