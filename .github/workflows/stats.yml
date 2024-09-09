@@ -57,7 +57,7 @@ jobs:
         if: success() || failure()
 
       - name: ENVs in documentation
-        run: cargo run --bin check-envs
+        run: cargo run --bin env-docs-generation
         env:
           VALIDATE_ONLY: true
 
