@@ -8,7 +8,7 @@ use crate::{
 };
 
 use async_trait::async_trait;
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
@@ -17,7 +17,7 @@ use stats::{
         timespans::{Month, Week, Year},
         Timespan,
     },
-    MissingDatePolicy, ReadError, ResolutionKind,
+    ApproxUnsignedDiff, MissingDatePolicy, ReadError, RequestedPointsLimit, ResolutionKind,
 };
 use stats_proto::blockscout::stats::v1::{self as proto_v1, Point};
 use tonic::{Request, Response, Status};
@@ -41,14 +41,14 @@ impl ReadService {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadLimits {
-    /// See [`LimitsSettings::request_interval_limit_days`]
-    pub request_interval_limit: Duration,
+    /// See [`LimitsSettings::requested_points_limit`]
+    pub requested_points_limit: RequestedPointsLimit,
 }
 
 impl From<LimitsSettings> for ReadLimits {
     fn from(value: LimitsSettings) -> Self {
         Self {
-            request_interval_limit: Duration::days(value.request_interval_limit_days.into()),
+            requested_points_limit: RequestedPointsLimit::from_points(value.requested_points_limit),
         }
     }
 }
@@ -56,7 +56,7 @@ impl From<LimitsSettings> for ReadLimits {
 fn map_read_error(err: ReadError) -> Status {
     match &err {
         ReadError::ChartNotFound(_) => Status::not_found(err.to_string()),
-        ReadError::IntervalLimitExceeded(_) => Status::invalid_argument(err.to_string()),
+        ReadError::IntervalTooLarge(_) => Status::invalid_argument(err.to_string()),
         _ => {
             tracing::error!(err = ?err, "internal read error");
             Status::internal(err.to_string())
@@ -91,12 +91,12 @@ async fn get_serialized_line_chart_data<Resolution>(
     chart_name: String,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
-    interval_limit: Option<Duration>,
+    points_limit: Option<RequestedPointsLimit>,
     policy: MissingDatePolicy,
     mark_approx: u64,
 ) -> Result<Vec<Point>, ReadError>
 where
-    Resolution: Timespan + Clone + Ord + Debug,
+    Resolution: Timespan + ApproxUnsignedDiff + Clone + Ord + Debug,
 {
     let from = from.map(|f| Resolution::from_date(f));
     let to = to.map(|t| Resolution::from_date(t));
@@ -105,7 +105,7 @@ where
         &chart_name,
         from,
         to,
-        interval_limit,
+        points_limit,
         policy,
         true,
         mark_approx,
@@ -122,7 +122,7 @@ async fn get_serialized_line_chart_data_resolution_dispatch(
     resolution: ResolutionKind,
     from: Option<NaiveDate>,
     to: Option<NaiveDate>,
-    interval_limit: Option<Duration>,
+    points_limit: Option<RequestedPointsLimit>,
     policy: MissingDatePolicy,
     mark_approx: u64,
 ) -> Result<Vec<Point>, ReadError> {
@@ -133,7 +133,7 @@ async fn get_serialized_line_chart_data_resolution_dispatch(
                 chart_name,
                 from,
                 to,
-                interval_limit,
+                points_limit,
                 policy,
                 mark_approx,
             )
@@ -145,7 +145,7 @@ async fn get_serialized_line_chart_data_resolution_dispatch(
                 chart_name,
                 from,
                 to,
-                interval_limit,
+                points_limit,
                 policy,
                 mark_approx,
             )
@@ -157,7 +157,7 @@ async fn get_serialized_line_chart_data_resolution_dispatch(
                 chart_name,
                 from,
                 to,
-                interval_limit,
+                points_limit,
                 policy,
                 mark_approx,
             )
@@ -169,7 +169,7 @@ async fn get_serialized_line_chart_data_resolution_dispatch(
                 chart_name,
                 from,
                 to,
-                interval_limit,
+                points_limit,
                 policy,
                 mark_approx,
             )
@@ -257,14 +257,14 @@ impl StatsService for ReadService {
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
         let policy = resolution_info.missing_date_policy;
         let mark_approx = resolution_info.approximate_trailing_points;
-        let interval_limit = Some(self.limits.request_interval_limit);
+        let points_limit = Some(self.limits.requested_points_limit);
         let serialized_chart = get_serialized_line_chart_data_resolution_dispatch(
             &self.db,
             chart_name.clone(),
             resolution,
             from,
             to,
-            interval_limit,
+            points_limit,
             policy,
             mark_approx,
         )

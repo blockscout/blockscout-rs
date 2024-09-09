@@ -7,10 +7,12 @@
 use std::fmt::Display;
 
 use crate::{types::Timespan, ReadError};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::{ChartResolution, ChartType};
 use sea_orm::prelude::*;
 use thiserror::Error;
+
+use super::db_interaction::read::ApproxUnsignedDiff;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
@@ -20,8 +22,8 @@ pub enum UpdateError {
     StatsDB(DbErr),
     #[error("chart {0} not found")]
     ChartNotFound(ChartKey),
-    #[error("date interval limit ({limit}) is exceeded; choose smaller time interval.")]
-    IntervalLimitExceeded { limit: Duration },
+    #[error("exceeded limit on requested data points (~{limit}); choose smaller time interval.")]
+    IntervalTooLarge { limit: u32 },
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -31,7 +33,7 @@ impl From<ReadError> for UpdateError {
         match read {
             ReadError::DB(db) => UpdateError::StatsDB(db),
             ReadError::ChartNotFound(err) => UpdateError::ChartNotFound(err),
-            ReadError::IntervalLimitExceeded(limit) => UpdateError::IntervalLimitExceeded { limit },
+            ReadError::IntervalTooLarge(limit) => UpdateError::IntervalTooLarge { limit },
         }
     }
 }
@@ -142,7 +144,7 @@ impl Display for ChartKey {
 ))]
 pub trait ChartProperties: Sync + Named {
     /// Combination name + resolution must be unique for each chart
-    type Resolution: Timespan;
+    type Resolution: Timespan + ApproxUnsignedDiff;
 
     fn chart_type() -> ChartType;
     fn resolution() -> ResolutionKind {

@@ -3,14 +3,15 @@ use crate::{
     data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
     types::{
-        timespans::DateValue, ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
+        timespans::{DateValue, Month, Week, Year},
+        ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
     },
     utils::exclusive_datetime_range_to_inclusive,
     ChartProperties, MissingDatePolicy, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
-use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::{chart_data, charts, sea_orm_active_enums::ChartResolution};
 use itertools::Itertools;
 use sea_orm::{
@@ -28,8 +29,8 @@ pub enum ReadError {
     DB(#[from] DbErr),
     #[error("chart {0} not found")]
     ChartNotFound(ChartKey),
-    #[error("date interval limit ({0}) is exceeded; choose smaller time interval.")]
-    IntervalLimitExceeded(Duration),
+    #[error("exceeded limit on requested data points (~{0}); choose smaller time interval.")]
+    IntervalTooLarge(u32),
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -208,7 +209,7 @@ fn relevant_data_until<R: Timespan>(
 ///
 /// `approximate_trailing_points` - number of trailing points to mark as approximate.
 ///
-/// `interval_limit` - max interval [from, to]. If `from` or `to` are none,
+/// `point_limit` - max interval [from, to]. If `from` or `to` are none,
 /// min or max date in DB are taken.
 ///
 /// Note: if some dates within interval `[from, to]` fall on the future, data points
@@ -296,13 +297,13 @@ pub async fn get_line_chart_data<Resolution>(
     chart_name: &String,
     from: Option<Resolution>,
     to: Option<Resolution>,
-    interval_limit: Option<Duration>,
+    point_limit: Option<RequestedPointsLimit>,
     policy: MissingDatePolicy,
     fill_missing_dates: bool,
     approximate_trailing_points: u64,
 ) -> Result<Vec<ExtendedTimespanValue<Resolution, String>>, ReadError>
 where
-    Resolution: Timespan + Debug + Ord + Clone,
+    Resolution: Timespan + ApproxUnsignedDiff + Debug + Ord + Clone,
 {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
@@ -343,7 +344,7 @@ where
     let data_in_range = fit_into_range(db_data, from.clone(), to.clone(), policy);
 
     let data_unmarked = if fill_missing_dates {
-        fill_and_filter_chart(data_in_range, from, to, policy, interval_limit)?
+        fill_and_filter_chart(data_in_range, from, to, policy, point_limit)?
     } else {
         data_in_range
     };
@@ -561,6 +562,85 @@ where
     };
 
     Ok(row)
+}
+
+/// May not be exact, but the limit is close to
+/// this number
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RequestedPointsLimit {
+    Points(u32),
+    NoLimit,
+}
+
+impl RequestedPointsLimit {
+    pub fn from_points(approx_limit: u32) -> Self {
+        Self::Points(approx_limit)
+    }
+
+    pub fn approx_limit(&self) -> Option<u32> {
+        match self {
+            RequestedPointsLimit::Points(p) => Some(*p),
+            RequestedPointsLimit::NoLimit => None,
+        }
+    }
+
+    pub fn fits_in_limit<T: ApproxUnsignedDiff>(&self, from: &T, to: &T) -> bool {
+        let limit = match self {
+            RequestedPointsLimit::Points(p) => *p,
+            RequestedPointsLimit::NoLimit => return true,
+        };
+        to.approx_unsigned_difference(from)
+            .map(|diff| diff <= limit.into())
+            .unwrap_or(true)
+    }
+}
+
+pub trait ApproxUnsignedDiff {
+    /// Approx number of repeats of this timespan to get from `other` to `self`.
+    ///
+    /// `None` if < 0.
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64>;
+}
+
+impl ApproxUnsignedDiff for NaiveDate {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.signed_duration_since(*other)
+            .num_days()
+            .try_into()
+            .ok()
+    }
+}
+
+impl ApproxUnsignedDiff for Week {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.saturating_first_day()
+            .signed_duration_since(other.saturating_first_day())
+            .num_days()
+            .try_into()
+            .ok()
+            .map(|n: u64| n / 7)
+    }
+}
+
+impl ApproxUnsignedDiff for Month {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.saturating_first_day()
+            .signed_duration_since(other.saturating_first_day())
+            .num_days()
+            .try_into()
+            .ok()
+            // 30.436875 = mean # of days in month (according to wiki)
+            .map(|n: u64| (n as f64 / 30.436875) as u64)
+    }
+}
+
+impl ApproxUnsignedDiff for Year {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.number_within_naive_date()
+            .saturating_sub(other.number_within_naive_date())
+            .try_into()
+            .ok()
+    }
 }
 
 #[cfg(test)]
