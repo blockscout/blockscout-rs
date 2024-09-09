@@ -37,6 +37,8 @@ ethers = { version = "2.0.11", features = ["ws"] }
 reqwest = { version = "0.12.5", features = ["json"] }
 chrono = "0.4"
 toml = "0.8.14"
+reqwest-middleware = "0.3.3"
+reqwest-retry = "0.6.1"
 
 [dev-dependencies]
 blockscout-service-launcher = { version = "0.9.0", features = ["test-database", "database-0_12"] }

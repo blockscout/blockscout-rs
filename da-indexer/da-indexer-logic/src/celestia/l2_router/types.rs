@@ -21,10 +21,16 @@ pub struct L2Config {
     #[serde(default = "default_request_timeout")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub request_timeout: time::Duration,
+    #[serde(default = "default_request_retries")]
+    pub request_retries: u32,
 }
 
 fn default_request_timeout() -> time::Duration {
     time::Duration::from_secs(5)
+}
+
+fn default_request_retries() -> u32 {
+    1
 }
 
 pub struct CelestiaBlobId {

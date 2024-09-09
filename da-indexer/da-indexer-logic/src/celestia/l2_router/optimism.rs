@@ -1,8 +1,8 @@
-use super::{types::L2BatchMetadata, L2Config};
+use super::{new_client, types::L2BatchMetadata, L2Config};
 use anyhow::{anyhow, Result};
 use blockscout_display_bytes::Bytes;
 use chrono::DateTime;
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{StatusCode, Url};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -37,11 +37,7 @@ pub async fn get_l2_batch(
         config.l2_api_url, height, commitment,
     );
 
-    let response = Client::new()
-        .get(&query)
-        .timeout(config.request_timeout)
-        .send()
-        .await?;
+    let response = new_client(config)?.get(&query).send().await?;
 
     if response.status() == StatusCode::NOT_FOUND {
         tracing::debug!(

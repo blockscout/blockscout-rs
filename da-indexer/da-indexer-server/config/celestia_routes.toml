@@ -10,3 +10,4 @@ l2_chain_id = 123420111
 l2_api_url = "https://opcelestia-raspberry.gelatoscout.com/"
 l2_blockscout_url = "https://opcelestia-raspberry.gelatoscout.com/"
 request_timeout = 30
+request_retries = 1

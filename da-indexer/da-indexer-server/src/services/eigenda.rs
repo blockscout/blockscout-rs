@@ -27,7 +27,7 @@ impl EigenDa for EigenDaService {
         let db = self
             .db
             .as_ref()
-            .ok_or(Status::internal("database not configured"))?;
+            .ok_or(Status::unimplemented("database is not configured"))?;
         let inner = request.into_inner();
 
         let blob_index = inner.blob_index;

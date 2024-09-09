@@ -30,7 +30,7 @@ impl Celestia for CelestiaService {
         let db = self
             .db
             .as_ref()
-            .ok_or(Status::internal("database not configured"))?;
+            .ok_or(Status::unimplemented("database is not configured"))?;
         let inner = request.into_inner();
 
         let height = inner.height;
@@ -64,7 +64,7 @@ impl Celestia for CelestiaService {
         let l2_router = self
             .l2_router
             .as_ref()
-            .ok_or(Status::internal("l2 router not configured"))?;
+            .ok_or(Status::unimplemented("l2 router is not configured"))?;
         let inner = request.into_inner();
 
         let height = inner.height;

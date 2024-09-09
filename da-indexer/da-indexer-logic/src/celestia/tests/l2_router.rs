@@ -94,6 +94,7 @@ async fn create_test_router() -> L2Router {
             l2_blockscout_url: "http://raspberry.blockscout.com".to_string(),
             l1_chain_id: None,
             request_timeout: time::Duration::from_secs(5),
+            request_retries: 1,
         },
     );
     routes.insert(
@@ -105,6 +106,7 @@ async fn create_test_router() -> L2Router {
             l2_blockscout_url: "http://arbitrum.blockscout.com".to_string(),
             l1_chain_id: Some(12),
             request_timeout: time::Duration::from_secs(5),
+            request_retries: 1,
         },
     );
 
