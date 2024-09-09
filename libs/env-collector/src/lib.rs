@@ -408,7 +408,7 @@ fn try_get_description(_key: &str, value: &str, default: &Option<serde_json::Val
     }
     let default_str = default
         .as_ref()
-        .map(|v| json_value_to_env_value(v))
+        .map(json_value_to_env_value)
         .unwrap_or_default();
 
     // If the value is the same as the default value, we don't need to show it in the description
