@@ -42,13 +42,12 @@ impl L2Router {
         commitment: &[u8],
     ) -> Result<Option<L2BatchMetadata>> {
         let namespace = blockscout_display_bytes::ToHex::to_hex(namespace);
-        let config = {
-            let config = self.routes.get(&namespace);
-            if config.is_none() {
+        let config = match self.routes.get(&namespace) {
+            Some(config) => config,
+            None => {
                 tracing::debug!("unknown namespace: {}", &namespace);
                 return Ok(None);
             }
-            config.unwrap()
         };
 
         match config.l2_chain_type {
