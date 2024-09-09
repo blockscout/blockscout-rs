@@ -11,7 +11,9 @@ use tracing::instrument;
 const MAX_LEVEL: usize = 5;
 
 #[derive(Debug, Default)]
-pub struct SubgraphPatcher {}
+pub struct SubgraphPatcher {
+    offchain_mutex: tokio::sync::Mutex<()>,
+}
 
 impl SubgraphPatcher {
     pub fn new() -> Self {
@@ -29,6 +31,7 @@ impl SubgraphPatcher {
         let range = 2..=MAX_LEVEL;
         let level_is_fine = range.contains(&level);
         if protocol.info.try_offchain_resolve && level_is_fine {
+            let _lock = self.offchain_mutex.lock().await;
             offchain_resolve(db, from_user).await?
         };
 

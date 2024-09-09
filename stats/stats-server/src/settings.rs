@@ -25,6 +25,8 @@ pub struct Settings {
     pub charts_config: PathBuf,
     pub layout_config: PathBuf,
     pub update_groups_config: PathBuf,
+    /// Location of swagger file to serve
+    pub swagger_file: PathBuf,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
@@ -55,6 +57,7 @@ impl Default for Settings {
             charts_config: PathBuf::from_str("config/charts.json").unwrap(),
             layout_config: PathBuf::from_str("config/layout.json").unwrap(),
             update_groups_config: PathBuf::from_str("config/update_groups.json").unwrap(),
+            swagger_file: PathBuf::from("../stats-proto/swagger/stats.swagger.yaml"),
             blockscout_db_url: Default::default(),
             create_database: Default::default(),
             run_migrations: Default::default(),

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
     config::{read_charts_config, read_layout_config, read_update_groups_config},
@@ -9,8 +9,11 @@ use crate::{
     update_service::UpdateService,
 };
 
+use anyhow::Context;
+use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
+use stats::metrics;
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
     health_server::HealthServer,
@@ -24,13 +27,23 @@ const SERVICE_NAME: &str = "stats";
 struct HttpRouter<S: StatsService> {
     stats: Arc<S>,
     health: Arc<HealthService>,
+    swagger_path: PathBuf,
 }
 
 impl<S: StatsService> launcher::HttpRouter for HttpRouter<S> {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config
             .configure(|config| route_health(config, self.health.clone()))
-            .configure(|config| route_stats_service(config, self.stats.clone()));
+            .configure(|config| route_stats_service(config, self.stats.clone()))
+            .configure(|config| {
+                route_swagger(
+                    config,
+                    self.swagger_path.clone(),
+                    // it's ok to not have this endpoint in swagger, as it is
+                    // the swagger itself
+                    "/api/v1/docs/swagger.yaml",
+                )
+            });
     }
 }
 
@@ -60,11 +73,17 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
         settings.run_migrations,
     )
     .await?;
-    let db = Arc::new(Database::connect(opt).await?);
+    let db = Arc::new(Database::connect(opt).await.context("stats DB")?);
 
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    let blockscout = Arc::new(Database::connect(opt).await?);
+    // we'd like to have each batch to resolve in under 1 hour
+    // as it seems to be the middleground between too many steps & occupying DB for too long
+    opt.sqlx_slow_statements_logging_settings(
+        tracing::log::LevelFilter::Warn,
+        Duration::from_secs(3600),
+    );
+    let blockscout = Arc::new(Database::connect(opt).await.context("blockscout DB")?);
 
     let charts = Arc::new(RuntimeSetup::new(
         charts_config,
@@ -93,6 +112,10 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             .await;
     });
 
+    if settings.metrics.enabled {
+        metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
+    }
+
     let read_service = Arc::new(ReadService::new(db, charts, settings.limits.into()).await?);
     let health = Arc::new(HealthService::default());
 
@@ -100,6 +123,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     let http_router = HttpRouter {
         stats: read_service,
         health: health.clone(),
+        swagger_path: settings.swagger_file,
     };
 
     let launch_settings = LaunchSettings {

@@ -37,7 +37,16 @@ impl StatementFromRange for TxnsFeeStatement {
             r#"
                 SELECT
                     DATE(b.timestamp) as date,
-                    (SUM(t.gas_used * t.gas_price) / $1)::FLOAT as value
+                    (SUM(
+                        t.gas_used *
+                        COALESCE(
+                            t.gas_price,
+                            b.base_fee_per_gas + LEAST(
+                                t.max_priority_fee_per_gas,
+                                t.max_fee_per_gas - b.base_fee_per_gas
+                            )
+                        )
+                    ) / $1)::FLOAT as value
                 FROM transactions t
                 JOIN blocks       b ON t.block_hash = b.hash
                 WHERE

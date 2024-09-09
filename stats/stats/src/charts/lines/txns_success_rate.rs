@@ -24,7 +24,7 @@ use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
-use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
+use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
 pub struct TxnsSuccessRateStatement;
 
@@ -86,18 +86,18 @@ define_and_impl_resolution_properties!(
 pub type TxnsSuccessRate =
     DirectVecLocalDbChartSource<TxnsSuccessRateRemoteString, Batch30Days, Properties>;
 pub type TxnsSuccessRateWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewBlocksInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type TxnsSuccessRateMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewBlocksInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
 pub type TxnsSuccessRateYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<TxnsSuccessRateMonthly, f64>, NewBlocksMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<TxnsSuccessRateMonthly, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,
@@ -136,6 +136,7 @@ mod tests {
                 ("2022-11-28", "1"),
                 ("2022-12-26", "1"),
                 ("2023-01-30", "1"),
+                ("2023-02-27", "0"),
             ],
         )
         .await;
@@ -151,6 +152,7 @@ mod tests {
                 ("2022-12-01", "1"),
                 ("2023-01-01", "1"),
                 ("2023-02-01", "1"),
+                ("2023-03-01", "0"),
             ],
         )
         .await;
@@ -161,7 +163,7 @@ mod tests {
     async fn update_txns_success_rate_yearly() {
         simple_test_chart::<TxnsSuccessRateYearly>(
             "update_txns_success_rate_yearly",
-            vec![("2022-01-01", "1"), ("2023-01-01", "1")],
+            vec![("2022-01-01", "1"), ("2023-01-01", "0.8333333333333334")],
         )
         .await;
     }

@@ -7,7 +7,8 @@
 //!
 //! ## Usage
 //!
-//! (you can also check [`data_source` documentation](crate::data_source) or tests there)
+//! (you can also check [`data_source` documentation](crate::data_source), tests there, or
+//! the actual usage in `stats-server` crate (`runtime_setup.rs`))
 //!
 //! 1. Create multiple connected charts
 //!     (e.g.
@@ -15,7 +16,7 @@
 //!     or
 //!     [`DailyCumulativeLocalDbChartSource`](crate::data_source::kinds::local_db::DailyCumulativeLocalDbChartSource)
 //!     ).
-//! 2. Construct simple (non-sync) update groups via `construct_update_group!`
+//! 2. Construct simple (non-sync) update groups via `construct_update_group` macro (usually done in `../update_groups.rs`)
 //! 3. Create mutexes (1-1 for each chart)
 //! 4. Create synchronous versions of groups with [`SyncUpdateGroup::new`]
 //!
@@ -99,7 +100,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///
 /// The behaviour is the following:
 /// 1. when `create` or `update` is triggered, each member's correspinding method is triggered
-/// 2. the method recursively updates/creates its dependencies
+/// 2. the method recursively updates/creates all of the member's dependencies
 ///
 /// In addition, to update synchronization, the resulting group provides object-safe interface
 /// for interacting with its members (charts). In particular, the charts themselves

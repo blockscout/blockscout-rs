@@ -65,3 +65,13 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: sig-provider
+
+
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: 'sig-provider'
+      swagger_path: 'sig-provider/sig-provider-proto/swagger/sig-provider.swagger.yaml'
+    secrets:
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}

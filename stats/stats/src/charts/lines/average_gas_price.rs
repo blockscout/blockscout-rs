@@ -24,7 +24,7 @@ use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, Statement};
 
-use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
+use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
 const GWEI: i64 = 1_000_000_000;
 
@@ -93,18 +93,18 @@ define_and_impl_resolution_properties!(
 pub type AverageGasPrice =
     DirectVecLocalDbChartSource<AverageGasPriceRemoteString, Batch30Days, Properties>;
 pub type AverageGasPriceWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewBlocksInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageGasPriceMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewBlocksInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
 pub type AverageGasPriceYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageGasPriceMonthly, f64>, NewBlocksMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<AverageGasPriceMonthly, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,
@@ -140,7 +140,7 @@ mod tests {
         simple_test_chart::<AverageGasPriceWeekly>(
             "update_average_gas_price_weekly",
             vec![
-                ("2022-11-07", "2.8166666638499995"),
+                ("2022-11-07", "2.8086419725000003"),
                 ("2022-11-28", "6.5160493762"),
                 ("2022-12-26", "1.123456789"),
                 ("2023-01-30", "9.5493827065"),
@@ -156,7 +156,7 @@ mod tests {
         simple_test_chart::<AverageGasPriceMonthly>(
             "update_average_gas_price_monthly",
             vec![
-                ("2022-11-01", "2.8166666638499995"),
+                ("2022-11-01", "2.8086419725000003"),
                 ("2022-12-01", "6.5160493762"),
                 ("2023-01-01", "1.123456789"),
                 ("2023-02-01", "9.5493827065"),
@@ -172,8 +172,8 @@ mod tests {
         simple_test_chart::<AverageGasPriceYearly>(
             "update_average_gas_price_yearly",
             vec![
-                ("2022-01-01", "3.1866049350849996"),
-                ("2023-01-01", "3.9320987615000003"),
+                ("2022-01-01", "3.260764826609756"),
+                ("2023-01-01", "6.740740734"),
             ],
         )
         .await;

@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.dependencies]
-blockscout-service-launcher = { version = "0.12.1" }
+blockscout-service-launcher = { version = "0.13.1" }
 
 
 # todo: update version after https://github.com/chronotope/chrono/pull/1600

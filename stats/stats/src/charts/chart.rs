@@ -169,9 +169,8 @@ pub trait ChartProperties: Sync + Named {
     ///
     /// ## Value
     ///
-    /// Usually set to 1 for line charts. Currently they have resolution of
-    /// 1 day. Also, data for portion of the (last) day has to be recalculated
-    /// on the next day.
+    /// Usually set to 1 for line charts. Also, data for portion of the
+    /// (latest) timeframe has to be recalculated on the next timespan.
     ///
     /// I.e. for number of blocks per day, stats for current day (0) are
     /// not complete because blocks will be produced till the end of the day.
@@ -179,6 +178,12 @@ pub trait ChartProperties: Sync + Named {
     ///    |===|=  |
     /// day -1   0
     /// ```
+    ///
+    /// ## Edge case
+    ///
+    /// If an update time is exactly at the start of timespan (e.g. midnight),
+    /// one less point is considered approximate, because we've got full data
+    /// for one timespan.
     fn approximate_trailing_points() -> u64 {
         if Self::chart_type() == ChartType::Counter {
             // there's only one value in counter

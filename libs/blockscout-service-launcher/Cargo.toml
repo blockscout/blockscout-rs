@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-service-launcher"
-version = "0.13.0"
+version = "0.13.1"
 description = "Allows to launch blazingly fast blockscout rust services"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
@@ -49,6 +49,7 @@ sea-orm-migration-0_12 = { package = "sea-orm-migration", version = "0.12.2", op
 [dev-dependencies]
 pretty_assertions = "1.4.0"
 tempfile = "3.10.1"
+regex = { version = "1", features = ["std"], default-features = false }
 
 
 [features]

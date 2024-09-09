@@ -84,3 +84,12 @@ jobs:
     with:
       version: ${{ needs.docker.outputs.tag-value }}
       project_name: visualizer
+
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: 'visualizer'
+      swagger_path: 'visualizer/visualizer-proto/swagger/visualizer.swagger.yaml'
+    secrets:
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}

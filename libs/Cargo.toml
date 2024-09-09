@@ -4,6 +4,7 @@ members = [
     "blockscout-auth",
     "blockscout-client/crate",
     "blockscout-db",
+    "endpoints/swagger",
     "blockscout-service-launcher",
     "display-bytes",
     "env-collector",

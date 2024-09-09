@@ -3,9 +3,11 @@ use blockscout_service_launcher::{
     test_server::{get_test_server_settings, init_server, send_get_request},
 };
 use chrono::NaiveDate;
+
 use stats::tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use stats_proto::blockscout::stats::v1::Counters;
 use stats_server::{stats, Settings};
+
 use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
 #[tokio::test]

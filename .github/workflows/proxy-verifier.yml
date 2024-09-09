@@ -65,3 +65,12 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: proxy-verifier
+
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: 'proxy-verifier'
+      swagger_path: 'proxy-verifier/proxy-verifier-proto/swagger/v1/proxy-verifier.swagger.yaml'
+    secrets:
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}

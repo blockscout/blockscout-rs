@@ -1,6 +1,8 @@
 use crate::repository::bundle::BundleDB;
-use ethers::prelude::{Address, H256};
-use ethers_core::{abi::AbiEncode, utils::to_checksum};
+use ethers::{
+    prelude::{abi::AbiEncode, Address, H256},
+    utils::to_checksum,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Bundle {
