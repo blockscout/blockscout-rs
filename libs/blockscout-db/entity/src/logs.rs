@@ -5,32 +5,32 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "logs")]
 pub struct Model {
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub data: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]
     pub index: i32,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub first_topic: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub second_topic: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub third_topic: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub fourth_topic: Option<Vec<u8>>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub address_hash: Option<Vec<u8>>,
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub transaction_hash: Vec<u8>,
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub block_hash: Vec<u8>,
     pub block_number: Option<i32>,

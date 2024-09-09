@@ -6,7 +6,7 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "internal_transactions")]
 pub struct Model {
     pub call_type: Option<String>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub created_contract_code: Option<Vec<u8>>,
     pub error: Option<String>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
@@ -14,11 +14,11 @@ pub struct Model {
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
     pub gas_used: Option<Decimal>,
     pub index: i32,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub init: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub input: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub output: Option<Vec<u8>>,
     pub trace_address: Vec<i32>,
     pub r#type: String,
@@ -26,20 +26,20 @@ pub struct Model {
     pub value: Decimal,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub created_contract_address_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub from_address_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub to_address_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub transaction_hash: Vec<u8>,
     pub block_number: Option<i32>,
     pub transaction_index: Option<i32>,
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub block_hash: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]

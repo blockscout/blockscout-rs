@@ -7,10 +7,10 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub address_hash: Vec<u8>,
     pub block_number: i64,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub token_contract_address_hash: Vec<u8>,
     pub value: Option<Decimal>,
     pub value_fetched_at: Option<DateTime>,

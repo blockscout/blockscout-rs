@@ -8,7 +8,7 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub token_contract_address_hash: Vec<u8>,
     pub block_number: Option<i64>,

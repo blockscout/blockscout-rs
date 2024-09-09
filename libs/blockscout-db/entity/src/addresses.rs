@@ -11,10 +11,10 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub hash: Vec<u8>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub contract_code: Option<Vec<u8>>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,

@@ -8,7 +8,7 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub address_hash: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]
@@ -16,7 +16,7 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub block_hash: Vec<u8>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]

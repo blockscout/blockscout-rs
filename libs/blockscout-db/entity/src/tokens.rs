@@ -16,7 +16,7 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)",
+        column_type = "Binary(BlobSize::Blob(None))",
         unique
     )]
     pub contract_address_hash: Vec<u8>,

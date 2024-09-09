@@ -17,11 +17,11 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub hash: Vec<u8>,
     pub index: Option<i32>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub input: Vec<u8>,
     pub nonce: i32,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
@@ -35,18 +35,18 @@ pub struct Model {
     pub value: Decimal,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub block_hash: Option<Vec<u8>>,
     pub block_number: Option<i32>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub from_address_hash: Vec<u8>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub to_address_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub created_contract_address_hash: Option<Vec<u8>>,
     pub created_contract_code_indexed_at: Option<DateTime>,
     pub earliest_processing_start: Option<DateTime>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub old_block_hash: Option<Vec<u8>>,
     #[sea_orm(column_type = "Text", nullable)]
     pub revert_reason: Option<String>,

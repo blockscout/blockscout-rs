@@ -7,7 +7,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub address_hash: Vec<u8>,
     pub is_approved: Option<bool>,
     pub submitter_name: String,

@@ -17,23 +17,23 @@ pub struct Model {
     pub viewed_at: Option<DateTime>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub name: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub subject: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub from_address_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub to_address_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub transaction_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub subject_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub from_address_hash_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub to_address_hash_hash: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
     pub transaction_hash_hash: Option<Vec<u8>>,
     pub watchlist_id: i64,
 }

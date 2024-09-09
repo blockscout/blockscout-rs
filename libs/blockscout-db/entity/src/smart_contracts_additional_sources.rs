@@ -10,7 +10,7 @@ pub struct Model {
     pub file_name: String,
     #[sea_orm(column_type = "Text")]
     pub contract_source_code: String,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub address_hash: Vec<u8>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,

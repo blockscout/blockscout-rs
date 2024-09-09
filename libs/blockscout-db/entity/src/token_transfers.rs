@@ -8,17 +8,17 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub transaction_hash: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]
     pub log_index: i32,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub from_address_hash: Vec<u8>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub to_address_hash: Vec<u8>,
     pub amount: Option<Decimal>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub token_contract_address_hash: Vec<u8>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
@@ -26,7 +26,7 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
+        column_type = "Binary(BlobSize::Blob(None))"
     )]
     pub block_hash: Vec<u8>,
     pub amounts: Option<Vec<Decimal>>,
