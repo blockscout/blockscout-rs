@@ -21,7 +21,8 @@ pub struct Model {
     pub request_id: Option<String>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
-    pub addresses: Option<Vec<Vec<u8>>>,
+    // removed: sea-orm can't compile with Vec<Vec<u8>>
+    // pub addresses: Option<Vec<Vec<u8>>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub email: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
