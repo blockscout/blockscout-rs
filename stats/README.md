@@ -33,23 +33,11 @@ stats-server
 
 ## Config
 
-### Env
+The microservice can be controlled using configuration files and environmental variables. Envs have a priority over files.
 
-| Variable                        | Description                                          | Default value               |
-| ------------------------------- | ---------------------------------------------------- | --------------------------- |
-| STATS__DB_URL                   | Postgres URL to stats db                             | ''                          |
-| STATS__BLOCKSCOUT_DB_URL        | Postgres URL to blockscout db                        | ''                          |
-| STATS__CREATE_DATABASE          | Boolean. Creates database on start                   | false                       |
-| STATS__RUN_MIGRATIONS           | Boolean. Runs migrations on start                    | false                       |
-| STATS__CHARTS_CONFIG            | Path to `charts.json` config file                    | ./config/charts.json        |
-| STATS__LAYOUT_CONFIG            | Path to `layout.json` config file                    | ./config/layout.json        |
-| STATS__UPDATE_GROUPS_CONFIG     | Path to `update_groups.json` config file             | ./config/update_groups.json |
-| STATS__FORCE_UPDATE_ON_START    | Boolean. Fully recalculates all charts on start      | false                       |
-| STATS__CONCURRENT_START_UPDATES | Integer. Amount of concurrent charts update on start | 3                           |
+### Config files
 
-### Config
-
-Blockscout provides a collection of predefined charts to visualize statistics. You can enable or disable these charts by modifying the `charts.json` file. Layout of the charts (which is returned by the server) is configurable in `layout.json`. Schedule of updated charts for each group is set up in `update_groups.json`. 
+Blockscout provides a collection of predefined charts to visualize statistics. You can enable or disable these charts by modifying the `charts.json` file. Layout of the charts (which is returned by the server) is configurable in `layout.json`. Schedule of updated charts for each group is set up in `update_groups.json`.
 
 The default configurations can be found [here](./config/). You can use these files as a base for customization.
 
@@ -57,7 +45,7 @@ If non-default config files are used, respective environment variables (e.g. `ST
 
 #### Charts parameters
 
-To disable unnecessary charts, open the `charts.json` file and set `enabled: false` for them. Other parameters can also be set/modified there. 
+To disable unnecessary charts, open the `charts.json` file and set `enabled: false` for them. Other parameters can also be set/modified there.
 
 #### Layout configuration
 
@@ -66,6 +54,140 @@ Categories for line charts, category metadata, and chart order within category a
 #### Update groups config
 
 Charts dependant on each other are combined in update groups. Charts within one update group are updated **together** according to their dependency relations. Updates are scheduled for each such group in `update_groups.json` file.
+
+
+### Env
+
+#### Service settings
+
+Some variables are hidden in a disclosure widget below the table.
+
+<!--
+There are zero-width spaces added here and there to prevent too wide tables
+by enabling word wrapping
+-->
+
+[anchor]: <> (anchors.envs.start.service)
+
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS__DB_URL` | | Postgres URL to stats db | `""` |
+| `STATS__​BLOCKSCOUT_DB_URL` | | Postgres URL to blockscout db | `""` |
+| `STATS__CREATE_DATABASE` | | Create database on start | `false` |
+| `STATS__RUN_MIGRATIONS` | | Run migrations on start | `false` |
+| `STATS__CHARTS_CONFIG` | | Path to config file for charts | `"config/charts.json"` |
+| `STATS__LAYOUT_CONFIG` | | Path to config file for chart layout | `"config/layout.json"` |
+| `STATS__UPDATE_​GROUPS_CONFIG` | | Path to config file for update groups | `"config/​update_groups.json"` |
+| `STATS__SWAGGER_FILE` | | Path of the swagger file to serve in the swagger endpoint | `"../stats-proto/​swagger/stats.​swagger.yaml"` |
+| `STATS__FORCE_​UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
+| `STATS__CONCURRENT_​START_UPDATES` | | Amount of concurrent charts update on start | `3` |
+| `STATS__​DEFAULT_​SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
+| `STATS__LIMITS__REQUEST_​INTERVAL_LIMIT_DAYS` | | Maximum allowed number of requested points  | `182500` | <-- TODO: change
+
+[anchor]: <> (anchors.envs.end.service)
+
+<details><summary>Server settings</summary>
+<p>
+
+[anchor]: <> (anchors.envs.start.server)
+
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS__SERVER__​GRPC__ADDR` | | Address for the gRPC server to listen on | `"0.0.0.0:8051"` |
+| `STATS__SERVER__​GRPC__ENABLED` | | Enable the gRPC server | `false` |
+| `STATS__SERVER__​HTTP__ADDR` | | Address for the HTTP server to listen on | `"0.0.0.0:8050"` |
+| `STATS__SERVER__​HTTP__CORS__​ALLOWED_CREDENTIALS` | | Allow credentials in CORS requests | `true` |
+| `STATS__SERVER__​HTTP__CORS__​ALLOWED_METHODS` | | List of allowed HTTP methods for CORS | `"PUT, GET, POST, OPTIONS, DELETE, PATCH"` |
+| `STATS__SERVER__​HTTP__CORS__​ALLOWED_ORIGIN` | | Allowed origin for CORS requests | `""` |
+| `STATS__SERVER__​HTTP__CORS__​BLOCK_ON_ORIGIN_MISMATCH` | | Block requests if origin does not match | `false` |
+| `STATS__SERVER__​HTTP__CORS__​ENABLED` | | Enable CORS | `false` |
+| `STATS__SERVER__​HTTP__CORS__​MAX_AGE` | | Max age for CORS preflight request caching (in seconds) | `3600` |
+| `STATS__SERVER__​HTTP__CORS__​SEND_WILDCARD` | | Send wildcard for allowed origins in CORS | `false` |
+| `STATS__SERVER__​HTTP__ENABLED` | | Enable the HTTP server | `true` |
+| `STATS__SERVER__​HTTP__MAX_BODY_SIZE` | | Maximum allowed size for HTTP request bodies (in bytes) | `2097152` |
+
+[anchor]: <> (anchors.envs.end.server)
+
+</p>
+</details>
+
+<details><summary>Tracing settings</summary>
+<p>
+
+[anchor]: <> (anchors.envs.start.tracing)
+
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS__JAEGER__AGENT_ENDPOINT` | | Jaeger agent endpoint for tracing | `"127.0.0.1:6831"` |
+| `STATS__JAEGER__ENABLED` | | Enable Jaeger tracing | `false` |
+| `STATS__TRACING__ENABLED` | | Enable tracing | `true` |
+| `STATS__TRACING__FORMAT` | | Tracing format to use, either 'default' or 'json' | `"default"` |
+
+[anchor]: <> (anchors.envs.end.tracing)
+
+</p>
+</details>
+
+<details><summary>Metrics settings</summary>
+<p>
+
+[anchor]: <> (anchors.envs.start.metrics)
+
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS__METRICS__ADDR` | | Address for the metrics server to listen on | `"0.0.0.0:6060"` |
+| `STATS__METRICS__ENABLED` | | Enable the metrics server | `false` |
+| `STATS__METRICS__ROUTE` | | Route for exposing metrics | `"/metrics"` |
+
+[anchor]: <> (anchors.envs.end.metrics)
+
+</p>
+</details>
+
+#### Charts
+
+[anchor]: <> (anchors.envs.start.charts)
+
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​DESCRIPTION` | | Counter `<COUNTER_NAME>` description, e.g. `"Some description"` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​ENABLED` | | Enable counter `<COUNTER_NAME>`, e.g. `true` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​TITLE` | | Displayed name of `<COUNTER_NAME>`, e.g. `"Some title with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​UNITS` | | Measurement units for the counter, e.g. `"Bytes"` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​DESCRIPTION` | | Line chart `<LINE_CHART_NAME>` description, e.g. `"Some description with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​ENABLED` | | Enable `<LINE_CHART_NAME>`, e.g. `true` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__DAY` | | Enable daily data for the chart, e.g. `true` | `true` if the resolution is defined |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__WEEK` | | Enable weekly data | `true` if defined |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__MONTH` | | Enable monthly data | `true` if defined |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__YEAR` | | Enable yearly data | `true` if defined |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​TITLE` | | Displayed name of `<LINE_CHART_NAME>`, e.g. `"Some line chart title"` | `null` |
+| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​UNITS` | | Measurement units, e.g. `"{{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__​TEMPLATE_VALUES__​<VARIABLE_NAME>` | | Value to substitute instead of `{{<variable_name>}}`, e.g. `"some_value"` | `null` |
+
+[anchor]: <> (anchors.envs.end.charts)
+
+#### Layout
+
+[anchor]: <> (anchors.envs.start.layout)
+
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS_LAYOUT__​COUNTERS_ORDER__​<COUNTER_NAME>` | | Override position of `<COUNTER_NAME>` in the layout; `0` will place it first and `N` will place it Nth in the layout | `null` |
+| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__ORDER` | | Override position of `<CATEGORY_NAME>` in the layout | `null` |
+| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__​CHARTS_ORDER__​<LINE_CHART_NAME>` | | Override position of `<LINE_CHART_NAME>` within its category | `null` |
+| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__TITLE` | | Displayed name of the category, e.g. `"Accounts"` | `null` |
+
+[anchor]: <> (anchors.envs.end.layout)
+
+#### Update groups
+
+[anchor]: <> (anchors.envs.start.groups)
+
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --- | --- | --- | --- |
+| `STATS_UPDATE_GROUPS__​SCHEDULES__<UPDATE_GROUP_NAME>` | | Override update schedule of the group, e.g. `"0 0 */3 * * * *"` for update each 3 hours | `null` |
+
+[anchor]: <> (anchors.envs.end.groups)
 
 ## For development
 

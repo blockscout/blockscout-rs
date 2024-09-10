@@ -1,4 +1,4 @@
-mod env;
+pub mod env;
 mod json;
 mod read;
 pub mod types;

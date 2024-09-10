@@ -4,17 +4,17 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
-pub struct LineChartCategoryOrdered {
-    pub order: Option<usize>,
-    pub title: Option<String>,
-    pub charts_order: BTreeMap<String, usize>,
+pub struct Config {
+    pub counters_order: BTreeMap<String, usize>,
+    pub line_chart_categories: BTreeMap<String, LineChartCategoryOrdered>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
-pub struct Config {
-    pub counters_order: BTreeMap<String, usize>,
-    pub line_chart_categories: BTreeMap<String, LineChartCategoryOrdered>,
+pub struct LineChartCategoryOrdered {
+    pub order: Option<usize>,
+    pub title: Option<String>,
+    pub charts_order: BTreeMap<String, usize>,
 }
 
 #[cfg(test)]
