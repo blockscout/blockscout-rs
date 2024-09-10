@@ -2,10 +2,11 @@
 use std::{fmt::Debug, ops::RangeInclusive};
 
 use crate::{
+    charts::db_interaction::read::{ApproxUnsignedDiff, RequestedPointsLimit},
     types::{Timespan, TimespanValue, ZeroTimespanValue},
     MissingDatePolicy, ReadError,
 };
-use chrono::{Duration, NaiveDate};
+use chrono::NaiveDate;
 
 /// Fits the `data` within the range (`from`, `to`), preserving
 /// information nearby the boundaries according to `policy`.
@@ -79,13 +80,13 @@ pub fn fill_and_filter_chart<Resolution>(
     from: Option<Resolution>,
     to: Option<Resolution>,
     policy: MissingDatePolicy,
-    interval_limit: Option<Duration>,
+    point_limit: Option<RequestedPointsLimit>,
 ) -> Result<Vec<TimespanValue<Resolution, String>>, ReadError>
 where
-    Resolution: Timespan + Debug + Ord + Clone,
+    Resolution: Timespan + ApproxUnsignedDiff + Debug + Ord + Clone,
 {
     let retrieved_count = data.len();
-    let data_filled = fill_missing_points(data, policy, from.clone(), to.clone(), interval_limit)?;
+    let data_filled = fill_missing_points(data, policy, from.clone(), to.clone(), point_limit)?;
     if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count) {
         if filled_count > 0 {
             tracing::debug!(policy = ?policy, "{} missing points were filled", filled_count);
@@ -110,10 +111,10 @@ pub fn fill_missing_points<T>(
     policy: MissingDatePolicy,
     from: Option<T>,
     to: Option<T>,
-    interval_limit: Option<Duration>,
+    points_limit: Option<RequestedPointsLimit>,
 ) -> Result<Vec<TimespanValue<T, String>>, ReadError>
 where
-    T: Timespan + Ord + Clone,
+    T: Timespan + ApproxUnsignedDiff + Ord + Clone,
 {
     let from = vec![from.as_ref(), data.first().map(|v| &v.timespan)]
         .into_iter()
@@ -129,9 +130,11 @@ where
         _ => return Ok(data),
     };
 
-    if let Some(interval_limit) = interval_limit {
-        if to.clone().into_date() - from.clone().into_date() > interval_limit {
-            return Err(ReadError::IntervalLimitExceeded(interval_limit));
+    if let Some(points_limit) = points_limit {
+        if let Some(limit_to_report) = points_limit.approx_limit() {
+            if !points_limit.fits_in_limit(&from, &to) {
+                return Err(ReadError::IntervalTooLarge(limit_to_report));
+            }
         }
     }
 
@@ -566,7 +569,8 @@ mod tests {
 
     #[test]
     fn limits_are_respected() {
-        let limit = Duration::days(4);
+        let n = 4;
+        let limit = RequestedPointsLimit::Points(n);
         assert_eq!(
             fill_missing_points(
                 vec![
@@ -579,7 +583,7 @@ mod tests {
                 Some(d("2023-07-12")),
                 Some(limit)
             ),
-            Err(ReadError::IntervalLimitExceeded(limit))
+            Err(ReadError::IntervalTooLarge(n))
         );
         assert_eq!(
             fill_missing_points(
@@ -613,7 +617,7 @@ mod tests {
                 Some(d("2023-07-15")),
                 Some(limit)
             ),
-            Err(ReadError::IntervalLimitExceeded(limit))
+            Err(ReadError::IntervalTooLarge(n))
         );
         assert_eq!(
             fill_missing_points(
@@ -627,7 +631,7 @@ mod tests {
                 Some(d("2023-07-14")),
                 Some(limit)
             ),
-            Err(ReadError::IntervalLimitExceeded(limit))
+            Err(ReadError::IntervalTooLarge(n))
         );
     }
 

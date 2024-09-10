@@ -82,7 +82,7 @@ by enabling word wrapping
 | `STATS__FORCE_​UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
 | `STATS__CONCURRENT_​START_UPDATES` | | Amount of concurrent charts update on start | `3` |
 | `STATS__​DEFAULT_​SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
-| `STATS__LIMITS__REQUEST_​INTERVAL_LIMIT_DAYS` | | Maximum allowed number of requested points  | `182500` | <-- TODO: change
+| `STATS__LIMITS__REQUESTED_​POINTS_LIMIT` | | Maximum allowed number of requested points  | `182500` |
 
 [anchor]: <> (anchors.envs.end.service)
 
