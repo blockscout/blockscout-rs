@@ -99,12 +99,10 @@ impl UpdateService {
             update_time_override: None,
             force_full,
         };
-        let result = {
-            group_entry
-                .group
-                .update_charts_with_mutexes(update_parameters, &group_entry.enabled_members)
-                .await
-        };
+        let result = group_entry
+            .group
+            .update_charts_with_mutexes(update_parameters, &group_entry.enabled_members)
+            .await;
         if let Err(err) = result {
             tracing::error!(
                 update_group = group_entry.group.name(),

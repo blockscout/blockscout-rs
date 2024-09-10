@@ -355,8 +355,8 @@ fn mock_transaction(
     transactions::ActiveModel {
         block_number: Set(Some(block_number)),
         block_hash: Set(Some(block.hash.as_ref().to_vec())),
-        block_timestamp: Set(Some(block.timestamp.as_ref().clone())),
-        block_consensus: Set(Some(block.consensus.as_ref().clone())),
+        block_timestamp: Set(Some(*block.timestamp.as_ref())),
+        block_consensus: Set(Some(*block.consensus.as_ref())),
         hash: Set(hash),
         gas_price: Set(Some(Decimal::new(gas_price, 0))),
         gas: Set(Decimal::new(gas, 0)),
@@ -388,8 +388,8 @@ fn mock_failed_transaction(
     transactions::ActiveModel {
         block_number: Set(block.map(|block| *block.number.as_ref() as i32)),
         block_hash: Set(block.map(|block| block.hash.as_ref().to_vec())),
-        block_timestamp: Set(block.map(|b| b.timestamp.as_ref().clone())),
-        block_consensus: Set(block.map(|b| b.consensus.as_ref().clone())),
+        block_timestamp: Set(block.map(|b| *b.timestamp.as_ref())),
+        block_consensus: Set(block.map(|b| *b.consensus.as_ref())),
         cumulative_gas_used: Set(block.map(|_| Default::default())),
         gas_used: Set(block.map(|_| gas)),
         index: Set(block.map(|_| Default::default())),
