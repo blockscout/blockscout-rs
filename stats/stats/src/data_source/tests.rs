@@ -33,7 +33,7 @@ use crate::{
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
-    utils::sql_with_range_filter_opt,
+    utils::{produce_filter_and_values, sql_with_range_filter_opt},
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
@@ -46,8 +46,12 @@ impl StatementFromRange for NewContractsQuery {
     ) -> Statement {
         // choose the statement based on migration progress
         if completed_migrations.denormalization {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
+            let (tx_filter, mut args) =
+                produce_filter_and_values(range.clone(), "t.block_timestamp", 1);
+            let (block_filter, new_args) =
+                produce_filter_and_values(range.clone(), "b.timestamp", 3);
+            args.extend(new_args);
+            let sql = format!(
                 r#"
                     SELECT day AS date, COUNT(*)::text AS value
                     FROM (
@@ -62,7 +66,7 @@ impl StatementFromRange for NewContractsQuery {
                             WHERE
                                 t.created_contract_address_hash NOTNULL AND
                                 t.block_consensus = TRUE AND
-                                t.block_timestamp != to_timestamp(0) {filter}
+                                t.block_timestamp != to_timestamp(0) {tx_filter}
                             UNION
                             SELECT
                                 it.created_contract_address_hash AS hash,
@@ -72,15 +76,13 @@ impl StatementFromRange for NewContractsQuery {
                             WHERE
                                 it.created_contract_address_hash NOTNULL AND
                                 b.consensus = TRUE AND
-                                b.timestamp != to_timestamp(0) {filter}
+                                b.timestamp != to_timestamp(0) {block_filter}
                         ) txns_plus_internal_txns
                     ) sub
                     GROUP BY sub.day;
                 "#,
-                [],
-                "t.block_timestamp",
-                range,
-            )
+            );
+            Statement::from_sql_and_values(DbBackend::Postgres, sql, args)
         } else {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
