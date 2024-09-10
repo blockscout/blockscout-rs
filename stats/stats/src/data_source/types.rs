@@ -67,7 +67,10 @@ impl BlockscoutMigrations {
                 Some("completed") => true,
                 Some("started") | None => false,
                 Some(unknown) => {
-                    warn!("unknown migration status '{}'", unknown);
+                    warn!(
+                        "unknown migration status '{}' (migration name: '{}')",
+                        unknown, migration_name
+                    );
                     continue;
                 }
             };
