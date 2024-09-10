@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-db-entity"
-version = "5.0.0"
+version = "0.1.0+blockscout.6.8.0"
 edition = "2021"
 publish = false
 
