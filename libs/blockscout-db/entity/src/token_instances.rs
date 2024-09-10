@@ -14,7 +14,7 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "Binary(BlobSize::Blob(None))"
+        column_type = "VarBinary(StringLen::None)"
     )]
     pub token_contract_address_hash: Vec<u8>,
     #[sea_orm(column_type = "JsonBinary", nullable)]
@@ -22,7 +22,7 @@ pub struct Model {
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
     pub error: Option<String>,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub owner_address_hash: Option<Vec<u8>>,
     pub owner_updated_at_block: Option<i64>,
     pub owner_updated_at_log_index: Option<i32>,

@@ -15,16 +15,16 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "Binary(BlobSize::Blob(None))"
+        column_type = "VarBinary(StringLen::None)"
     )]
     pub hash: Vec<u8>,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub miner_hash: Vec<u8>,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub nonce: Vec<u8>,
     #[sea_orm(unique)]
     pub number: i64,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", unique)]
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", unique)]
     pub parent_hash: Vec<u8>,
     pub size: Option<i32>,
     pub timestamp: DateTime,
