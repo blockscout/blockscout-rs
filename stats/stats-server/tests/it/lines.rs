@@ -15,8 +15,6 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 #[tokio::test]
 #[ignore = "needs database"]
 async fn test_lines_ok() {
-    // leaks errors from `swagger` test
-    // let _ = tracing_subscriber::fmt::try_init();
     let (stats_db, blockscout_db) = init_db_all("test_lines_ok").await;
     fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap()).await;
 
