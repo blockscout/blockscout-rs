@@ -7,6 +7,10 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
+    pub created_by: String,
+    pub updated_by: String,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub creation_code_hash: Vec<u8>,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
