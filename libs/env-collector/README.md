@@ -11,7 +11,6 @@ This is a simple tool to collect possible environment variables from `Settings` 
     [dependencies]
     env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.1.1" }
     ```
-
 2. In your `server` crate create new binary file called `check-envs.rs` with the following content:
 
     ```rust
