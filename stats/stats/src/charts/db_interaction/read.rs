@@ -337,7 +337,12 @@ where
     // This fill makes sense up to the latest update.
     let to = match (to.clone(), relevant_until.clone()) {
         (Some(to), Some(relevant_until)) => Some(to.min(relevant_until)),
-        (None, Some(d)) | (Some(d), None) => Some(d),
+        (None, Some(relevant_until)) => Some(relevant_until),
+        // It means `last_updated_at=None`, so `to` is set to `None` so the end is
+        // later deduced from `db_data`.
+        // It will return data that we have (if any, for some weird reason), or nothing
+        // if the data is empty (=chart is new)
+        (Some(_), None) => None,
         (None, None) => None,
     };
 
@@ -650,7 +655,7 @@ mod tests {
         charts::ResolutionKind,
         counters::TotalBlocks,
         data_source::kinds::local_db::parameters::DefaultQueryVec,
-        lines::{ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
+        lines::{AccountsGrowth, ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
             init_db::init_db,
             point_construction::{d, month_of},
@@ -719,6 +724,14 @@ mod tests {
                 last_updated_at: Set(Some(
                     DateTime::parse_from_rfc3339("2022-11-30T08:08:08+00:00").unwrap(),
                 )),
+                ..Default::default()
+            },
+            // the chart was only created
+            charts::ActiveModel {
+                name: Set(AccountsGrowth::name().to_string()),
+                resolution: Set(ChartResolution::Day),
+                chart_type: Set(ChartType::Line),
+                last_updated_at: Set(None),
                 ..Default::default()
             },
         ])
@@ -1027,6 +1040,28 @@ mod tests {
             ],
             data
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_new_chart_data_returns_nothing() {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let db = init_db("get_chart_data_skipped_works").await;
+        insert_mock_data(&db).await;
+        let data = get_line_chart_data::<NaiveDate>(
+            &db,
+            &AccountsGrowth::name().to_string(),
+            Some(d("2022-11-14")),
+            Some(d("2022-11-15")),
+            None,
+            MissingDatePolicy::FillPrevious,
+            true,
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(data, vec![]);
     }
 
     async fn chart_id_matches_key(
