@@ -17,7 +17,6 @@
 //! helpful.
 
 mod query;
-mod query_each;
 
 use std::{
     future::Future,

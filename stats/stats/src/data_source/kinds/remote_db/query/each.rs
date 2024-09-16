@@ -7,12 +7,13 @@ use chrono::{DateTime, Utc};
 use sea_orm::{FromQueryResult, Statement};
 
 use crate::{
-    data_source::types::{BlockscoutMigrations, UpdateContext},
+    data_source::{
+        kinds::remote_db::RemoteQueryBehaviour,
+        types::{BlockscoutMigrations, UpdateContext},
+    },
     types::{Timespan, TimespanValue},
     UpdateError,
 };
-
-use super::RemoteQueryBehaviour;
 
 pub trait StatementFromTimespan<Resolution> {
     fn get_statement(
@@ -92,10 +93,9 @@ fn split_time_range_into_resolution_points<Resolution: Timespan>(
 mod tests {
     use chrono::NaiveDate;
 
-    use crate::{
-        data_source::kinds::remote_db::query_each::split_time_range_into_resolution_points,
-        tests::point_construction::dt, types::timespans::Week,
-    };
+    use crate::{tests::point_construction::dt, types::timespans::Week};
+
+    use super::*;
 
     #[test]
     fn split_time_range_into_day_points_works() {
