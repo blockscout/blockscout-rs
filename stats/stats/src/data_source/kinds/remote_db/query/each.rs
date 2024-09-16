@@ -113,6 +113,7 @@ fn split_time_range_into_resolution_points<Resolution: Timespan>(
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
+    use pretty_assertions::assert_eq;
 
     use crate::{tests::point_construction::dt, types::timespans::Week};
 
