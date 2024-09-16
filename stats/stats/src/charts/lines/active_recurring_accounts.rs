@@ -6,6 +6,10 @@ use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
+            data_manipulation::{
+                filter_deducible::FilterDeducible,
+                map::{MapParseTo, MapToString},
+            },
             local_db::{
                 parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
             },
@@ -135,8 +139,13 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type ActiveRecurringAccounts =
-    DirectVecLocalDbChartSource<ActiveRecurringAccountsRemote<ThirtyDays>, Batch30Days, Properties>;
+pub type ActiveRecurringAccounts = DirectVecLocalDbChartSource<
+    MapToString<
+        FilterDeducible<MapParseTo<ActiveRecurringAccountsRemote<ThirtyDays>, i64>, Properties>,
+    >,
+    Batch30Days,
+    Properties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -149,16 +158,7 @@ mod tests {
     async fn update_active_recurring_accounts() {
         simple_test_chart_with_migration_variants::<ActiveRecurringAccounts>(
             "update_active_recurring_accounts",
-            vec![
-                ("2022-11-09", "0"),
-                ("2022-11-10", "0"),
-                ("2022-11-11", "0"),
-                ("2022-11-12", "1"),
-                ("2022-12-01", "0"),
-                ("2023-01-01", "0"),
-                ("2023-02-01", "0"),
-                ("2023-03-01", "0"),
-            ],
+            vec![("2022-11-12", "1"), ("2022-12-01", "1")],
         )
         .await;
     }

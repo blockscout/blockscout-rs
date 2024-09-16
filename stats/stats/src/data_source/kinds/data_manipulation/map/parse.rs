@@ -56,5 +56,7 @@ where
     }
 }
 
-/// Parse string values to specified point type `P`
+/// Parse string values to specified point type `P`.
+///
+/// Most often used with `f64`, `i64`
 pub type MapParseTo<D, P> = Map<D, ParseToFunction<P>>;
