@@ -1,6 +1,9 @@
 use crate::{
     charts::{chart::ChartMetadata, ChartKey},
-    data_source::kinds::local_db::parameter_traits::QueryBehaviour,
+    data_source::{
+        kinds::{local_db::parameter_traits::QueryBehaviour, remote_db::RemoteQueryBehaviour},
+        UpdateContext,
+    },
     missing_date::{fill_and_filter_chart, fit_into_range},
     types::{
         timespans::{DateValue, Month, Week, Year},
@@ -19,7 +22,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, ops::Range};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -645,6 +648,19 @@ impl ApproxUnsignedDiff for Year {
             .saturating_sub(other.number_within_naive_date())
             .try_into()
             .ok()
+    }
+}
+
+pub struct QueryAllBlockTimestampRange;
+
+impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
+    type Output = Range<DateTime<Utc>>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        range: Option<Range<DateTime<Utc>>>,
+    ) -> Result<Self::Output, UpdateError> {
+        todo!()
     }
 }
 

@@ -1,5 +1,6 @@
 mod accounts_growth;
 mod active_accounts;
+mod active_recurring_accounts;
 mod average_block_rewards;
 mod average_block_size;
 mod average_gas_limit;
@@ -29,6 +30,7 @@ pub use accounts_growth::{
     AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };
 pub use active_accounts::ActiveAccounts;
+pub use active_recurring_accounts::ActiveRecurringAccounts;
 pub use average_block_rewards::{
     AverageBlockRewards, AverageBlockRewardsMonthly, AverageBlockRewardsWeekly,
     AverageBlockRewardsYearly,

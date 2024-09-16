@@ -33,7 +33,10 @@ use crate::{
     UpdateError,
 };
 
-pub use query::{PullAllWithAndSort, PullOne, StatementForOne, StatementFromRange};
+pub use query::{
+    PullAllWithAndSort, PullEachWith, PullOne, StatementForOne, StatementFromRange,
+    StatementFromTimespan,
+};
 
 /// See [module-level documentation](self)
 pub struct RemoteDatabaseSource<Q: RemoteQueryBehaviour>(PhantomData<Q>);

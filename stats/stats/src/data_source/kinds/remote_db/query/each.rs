@@ -15,7 +15,7 @@ use crate::{
     UpdateError,
 };
 
-pub trait StatementFromTimespan<Resolution> {
+pub trait StatementFromTimespan {
     fn get_statement(
         point: Range<DateTime<Utc>>,
         completed_migrations: &BlockscoutMigrations,
@@ -31,8 +31,8 @@ pub struct PullEachWith<S, Resolution, Value, AllRangeSource>(
     PhantomData<(S, Resolution, Value, AllRangeSource)>,
 )
 where
-    S: StatementFromTimespan<Resolution>,
-    Resolution: Ord + Send,
+    S: StatementFromTimespan,
+    Resolution: Timespan + Ord + Send,
     Value: Send,
     TimespanValue<Resolution, Value>: FromQueryResult,
     AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>;
@@ -40,7 +40,7 @@ where
 impl<S, Resolution, Value, AllRangeSource> RemoteQueryBehaviour
     for PullEachWith<S, Resolution, Value, AllRangeSource>
 where
-    S: StatementFromTimespan<Resolution>,
+    S: StatementFromTimespan,
     Resolution: Timespan + Ord + Send,
     Value: Send,
     TimespanValue<Resolution, Value>: FromQueryResult,
