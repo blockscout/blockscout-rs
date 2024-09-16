@@ -650,7 +650,7 @@ mod tests {
         charts::ResolutionKind,
         counters::TotalBlocks,
         data_source::kinds::local_db::parameters::DefaultQueryVec,
-        lines::{ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
+        lines::{AccountsGrowth, ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
             init_db::init_db,
             point_construction::{d, month_of},
@@ -719,6 +719,14 @@ mod tests {
                 last_updated_at: Set(Some(
                     DateTime::parse_from_rfc3339("2022-11-30T08:08:08+00:00").unwrap(),
                 )),
+                ..Default::default()
+            },
+            // the chart was only created
+            charts::ActiveModel {
+                name: Set(AccountsGrowth::name().to_string()),
+                resolution: Set(ChartResolution::Day),
+                chart_type: Set(ChartType::Line),
+                last_updated_at: Set(None),
                 ..Default::default()
             },
         ])
@@ -1027,6 +1035,28 @@ mod tests {
             ],
             data
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_new_chart_data_returns_nothing() {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let db = init_db("get_chart_data_skipped_works").await;
+        insert_mock_data(&db).await;
+        let data = get_line_chart_data::<NaiveDate>(
+            &db,
+            &AccountsGrowth::name().to_string(),
+            Some(d("2022-11-14")),
+            Some(d("2022-11-15")),
+            None,
+            MissingDatePolicy::FillPrevious,
+            true,
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(data, vec![]);
     }
 
     async fn chart_id_matches_key(
