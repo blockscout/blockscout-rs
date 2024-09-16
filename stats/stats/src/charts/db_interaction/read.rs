@@ -337,7 +337,12 @@ where
     // This fill makes sense up to the latest update.
     let to = match (to.clone(), relevant_until.clone()) {
         (Some(to), Some(relevant_until)) => Some(to.min(relevant_until)),
-        (None, Some(d)) | (Some(d), None) => Some(d),
+        (None, Some(relevant_until)) => Some(relevant_until),
+        // It means `last_updated_at=None`, so `to` is set to `None` so the end is
+        // later deduced from `db_data`.
+        // It will return data that we have (if any, for some weird reason), or nothing
+        // if the data is empty (=chart is new)
+        (Some(_), None) => None,
         (None, None) => None,
     };
 
