@@ -1,10 +1,11 @@
 use std::{
+    fmt::Debug,
     marker::{PhantomData, Send},
     ops::Range,
 };
 
 use chrono::{DateTime, Utc};
-use sea_orm::{FromQueryResult, Statement};
+use sea_orm::{FromQueryResult, Statement, TryGetable};
 
 use crate::{
     data_source::{
@@ -20,6 +21,11 @@ pub trait StatementFromTimespan {
         point: Range<DateTime<Utc>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement;
+}
+
+#[derive(FromQueryResult, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ValueWrapper<V: TryGetable> {
+    value: V,
 }
 
 /// Pull each point in range with the provided statement `S`.
@@ -41,8 +47,8 @@ impl<S, Resolution, Value, AllRangeSource> RemoteQueryBehaviour
     for PullEachWith<S, Resolution, Value, AllRangeSource>
 where
     S: StatementFromTimespan,
-    Resolution: Timespan + Ord + Send,
-    Value: Send,
+    Resolution: Timespan + Ord + Send + Debug,
+    Value: Send + TryGetable,
     TimespanValue<Resolution, Value>: FromQueryResult,
     AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>,
 {
@@ -60,17 +66,32 @@ where
         let points = split_time_range_into_resolution_points::<Resolution>(query_range);
         let mut collected_data = Vec::with_capacity(points.len());
         for point_range in points {
-            let query = S::get_statement(point_range, &cx.blockscout_applied_migrations);
-            let point_data = TimespanValue::<Resolution, Value>::find_by_statement(query)
+            let query = S::get_statement(point_range.clone(), &cx.blockscout_applied_migrations);
+            let point_value = ValueWrapper::<Value>::find_by_statement(query)
                 .one(cx.blockscout)
                 .await
                 .map_err(UpdateError::BlockscoutDB)?;
-            if let Some(point_data) = point_data {
-                collected_data.push(point_data);
+            if let Some(ValueWrapper { value }) = point_value {
+                let timespan = resolution_from_range(point_range);
+                collected_data.push(TimespanValue { timespan, value });
             }
         }
         Ok(collected_data)
     }
+}
+
+fn resolution_from_range<R: Timespan + PartialEq + Debug>(range: Range<DateTime<Utc>>) -> R {
+    let res = R::from_date(range.start.date_naive());
+    let res_verify = R::from_date(range.end.date_naive());
+    if res_verify != res {
+        tracing::warn!(
+            range = ?range,
+            "Resolution ranges were constructed incorrectly, will likely lead to wrong data. \
+            See `split_time_range_into_resolution_points` for the bug."
+        );
+        debug_assert_ne!(res_verify, res);
+    }
+    res
 }
 
 fn split_time_range_into_resolution_points<Resolution: Timespan>(

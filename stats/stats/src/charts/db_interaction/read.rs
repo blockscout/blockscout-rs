@@ -658,9 +658,13 @@ impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTime<Utc>>>,
+        _range: Option<Range<DateTime<Utc>>>,
     ) -> Result<Self::Output, UpdateError> {
-        todo!()
+        let start_timestamp = get_min_date_blockscout(cx.blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?
+            .and_utc();
+        Ok(start_timestamp..cx.time)
     }
 }
 

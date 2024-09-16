@@ -9,22 +9,18 @@ use crate::{
             local_db::{
                 parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
             },
-            remote_db::{
-                PullAllWithAndSort, PullEachWith, RemoteDatabaseSource, StatementFromRange,
-                StatementFromTimespan,
-            },
+            remote_db::{PullEachWith, RemoteDatabaseSource, StatementFromTimespan},
         },
         types::{BlockscoutMigrations, Get},
     },
     gettable_const,
-    types::Timespan,
-    utils::{produce_filter_and_values, sql_with_range_filter_opt},
+    utils::produce_filter_and_values,
     ChartProperties, Named,
 };
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 pub struct ActiveRecurringAccountsStatement<Recurrance>(PhantomData<Recurrance>);
 
@@ -45,7 +41,7 @@ impl<Recurrance: RecurrancePeriod> StatementFromTimespan
 
             let sql = format!(
                 r#"
-                    SELECT COUNT(recurring_active_addresses.from_address_hash)
+                    SELECT COUNT(*)::TEXT as value
                     FROM (
                         SELECT
                             DISTINCT from_address_hash
@@ -73,7 +69,7 @@ impl<Recurrance: RecurrancePeriod> StatementFromTimespan
 
             let sql = format!(
                 r#"
-                    SELECT COUNT(recurring_active_addresses.from_address_hash)
+                    SELECT COUNT(*)::TEXT as value
                     FROM (
                         SELECT
                             DISTINCT t.from_address_hash
@@ -89,7 +85,7 @@ impl<Recurrance: RecurrancePeriod> StatementFromTimespan
                             JOIN blocks b ON b.hash = t.block_hash
                         WHERE
                             b.timestamp != to_timestamp(0) AND
-                            bconsensus = true {recurring_activity_range}
+                            b.consensus = true {recurring_activity_range}
                     ) recurring_active_addresses;
                 "#,
             );
@@ -104,7 +100,11 @@ trait RecurrancePeriod {
 
 impl<N: Get<Value = Duration>> RecurrancePeriod for N {
     fn generate(current_period: Range<DateTime<Utc>>) -> Range<DateTime<Utc>> {
-        todo!()
+        let start = current_period
+            .start
+            .checked_sub_signed(N::get())
+            .unwrap_or(DateTime::<Utc>::MIN_UTC);
+        start..current_period.start
     }
 }
 
