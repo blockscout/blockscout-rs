@@ -233,6 +233,26 @@ mod tests {
 
     use super::*;
 
+    // Human-readable account activity from mock data (that's used
+    // in the tests):
+    //
+    //
+    // | date           | active account     |
+    // |----------------|--------------------|
+    // | 2022-11-09     | 0x01(0)            |
+    // | 2022-11-10     | 0x02(0)            |
+    // | 2022-11-10     | 0x03(0)            |
+    // | 2022-11-10     | 0x04(0)            |
+    // | 2022-11-11     | 0x05(0)            |
+    // | 2022-11-11     | 0x06(0)            |
+    // | 2022-11-11     | 0x07(0)            |
+    // | 2022-11-11     | 0x08(0)            |
+    // | 2022-11-12     | 0x01(0)            |
+    // | 2022-12-01     | 0x02(0)            |
+    // | 2023-01-01     | 0x03(0)            |
+    // | 2023-02-01     | 0x04(0)            |
+    // | 2023-03-01     | x (kinda malfrmed) |
+
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_daily_60_days() {
