@@ -30,7 +30,18 @@ pub use accounts_growth::{
     AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };
 pub use active_accounts::ActiveAccounts;
-pub use active_recurring_accounts::ActiveRecurringAccountsDailyRecurrance60Days;
+pub use active_recurring_accounts::{
+    ActiveRecurringAccountsDailyRecurrance120Days, ActiveRecurringAccountsMonthlyRecurrance120Days,
+    ActiveRecurringAccountsWeeklyRecurrance120Days, ActiveRecurringAccountsYearlyRecurrance120Days,
+};
+pub use active_recurring_accounts::{
+    ActiveRecurringAccountsDailyRecurrance60Days, ActiveRecurringAccountsMonthlyRecurrance60Days,
+    ActiveRecurringAccountsWeeklyRecurrance60Days, ActiveRecurringAccountsYearlyRecurrance60Days,
+};
+pub use active_recurring_accounts::{
+    ActiveRecurringAccountsDailyRecurrance90Days, ActiveRecurringAccountsMonthlyRecurrance90Days,
+    ActiveRecurringAccountsWeeklyRecurrance90Days, ActiveRecurringAccountsYearlyRecurrance90Days,
+};
 pub use average_block_rewards::{
     AverageBlockRewards, AverageBlockRewardsMonthly, AverageBlockRewardsWeekly,
     AverageBlockRewardsYearly,

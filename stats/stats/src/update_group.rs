@@ -7,8 +7,13 @@
 //!
 //! ## Usage
 //!
-//! (you can also check [`data_source` documentation](crate::data_source), tests there, or
-//! the actual usage in `stats-server` crate (`runtime_setup.rs`))
+//! You can also check [`data_source` documentation](crate::data_source), tests there, or
+//! the actual usage in `stats-server` crate (`runtime_setup.rs`).
+//!
+//! Note: instructions provided here are for manual/direct usage of the update groups.
+//! If you're not doing somerhing exceptional see instructions in `runtime_setup.rs`
+//! that has everything already set up.
+//!
 //!
 //! 1. Create multiple connected charts
 //!     (e.g.
