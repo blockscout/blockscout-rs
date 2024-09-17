@@ -252,7 +252,7 @@ mod tests {
     async fn update_active_recurring_accounts_weekly_60_days() {
         simple_test_chart_with_migration_variants::<ActiveRecurringAccountsWeeklyRecurrance60Days>(
             "update_active_recurring_accounts_weekly_60_days",
-            vec![("2022-11-28", "1"), ("2023-12-26", "1")],
+            vec![("2022-11-28", "1"), ("2022-12-26", "1")],
         )
         .await;
     }
@@ -302,7 +302,7 @@ mod tests {
             "update_active_recurring_accounts_weekly_90_days",
             vec![
                 ("2022-11-28", "1"),
-                ("2023-12-26", "1"),
+                ("2022-12-26", "1"),
                 ("2023-01-30", "1"),
             ],
         )
@@ -355,7 +355,7 @@ mod tests {
             "update_active_recurring_accounts_weekly_120_days",
             vec![
                 ("2022-11-28", "1"),
-                ("2023-12-26", "1"),
+                ("2022-12-26", "1"),
                 ("2023-01-30", "1"),
             ],
         )
