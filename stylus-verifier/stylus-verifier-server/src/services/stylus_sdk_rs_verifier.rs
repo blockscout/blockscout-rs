@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use stylus_verifier_logic::stylus_sdk_rs;
 use stylus_verifier_proto::blockscout::stylus_verifier::v1::{
-    stylus_sdk_rs_verifier_server::StylusSdkRsVerifier, verify_response, VerificationFailure,
+    stylus_sdk_rs_verifier_server::StylusSdkRsVerifier, verify_response, CargoStylusVersion,
+    CargoStylusVersions, ListCargoStylusVersionsRequest, VerificationFailure,
     VerifyGithubRepositoryRequest, VerifyResponse,
 };
 use tonic::{Request, Response, Status};
@@ -49,6 +50,20 @@ impl StylusSdkRsVerifier for StylusSdkRsVerifierService {
 
         let result = stylus_sdk_rs::verify_github_repository(request).await;
         process_verify_result(result)
+    }
+
+    async fn list_cargo_stylus_versions(
+        &self,
+        _request: Request<ListCargoStylusVersionsRequest>,
+    ) -> Result<Response<CargoStylusVersions>, Status> {
+        let versions = self
+            .supported_cargo_stylus_versions
+            .iter()
+            .map(|version| CargoStylusVersion {
+                version: format!("v{version}"),
+            })
+            .collect();
+        Ok(Response::new(CargoStylusVersions { versions }))
     }
 }
 

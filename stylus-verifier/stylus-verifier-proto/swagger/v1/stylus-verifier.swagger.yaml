@@ -10,6 +10,20 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/stylus-sdk-rs/cargo-stylus-versions:
+    get:
+      operationId: StylusSdkRsVerifier_ListCargoStylusVersions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CargoStylusVersions'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StylusSdkRsVerifier
   /api/v1/stylus-sdk-rs:verify-github-repository:
     post:
       operationId: StylusSdkRsVerifier_VerifyGithubRepository
@@ -97,6 +111,19 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1CargoStylusVersion:
+    type: object
+    properties:
+      version:
+        type: string
+  v1CargoStylusVersions:
+    type: object
+    properties:
+      versions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1CargoStylusVersion'
   v1HealthCheckResponse:
     type: object
     properties:

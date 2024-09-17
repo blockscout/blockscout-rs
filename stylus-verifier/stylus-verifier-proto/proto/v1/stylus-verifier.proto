@@ -6,6 +6,8 @@ option go_package = "github.com/blockscout/blockscout-rs/stylus-verifier";
 
 service StylusSdkRsVerifier {
   rpc VerifyGithubRepository(VerifyGithubRepositoryRequest) returns (VerifyResponse) {}
+
+  rpc ListCargoStylusVersions(ListCargoStylusVersionsRequest) returns (CargoStylusVersions) {}
 }
 
 message VerifyGithubRepositoryRequest {
@@ -43,3 +45,13 @@ message VerifyResponse {
     VerificationSuccess verification_success = 2;
   }
 }
+
+message CargoStylusVersion {
+  string version = 1;
+}
+
+message CargoStylusVersions {
+  repeated CargoStylusVersion versions = 1;
+}
+
+message ListCargoStylusVersionsRequest {}

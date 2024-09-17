@@ -5,6 +5,8 @@ use url::Url;
 
 const VERIFY_GITHUB_REPOSITORY_ROUTE: &str = "/api/v1/stylus-sdk-rs:verify-github-repository";
 
+const LIST_CARGO_STYLUS_VERSIONS_ROUTE: &str = "/api/v1/stylus-sdk-rs/cargo-stylus-versions";
+
 mod verify_github_repository {
     use super::*;
 
@@ -42,6 +44,32 @@ mod verify_github_repository {
         .await;
 
         test_case.check_verify_response(response);
+    }
+}
+
+mod list_cargo_stylus_versions {
+    use super::*;
+    use stylus_verifier_proto::blockscout::stylus_verifier::v1::CargoStylusVersions;
+
+    #[tokio::test]
+    async fn contains_at_least_0_5_0() {
+        let server = crate::start_server().await;
+
+        let response: CargoStylusVersions =
+            blockscout_service_launcher::test_server::send_get_request(
+                &server.base_url,
+                LIST_CARGO_STYLUS_VERSIONS_ROUTE,
+            )
+            .await;
+
+        assert!(
+            response
+                .versions
+                .iter()
+                .any(|version| version.version == "v0.5.0"),
+            "v0.5.0 not found in versions: {:?}",
+            response.versions
+        );
     }
 }
 
