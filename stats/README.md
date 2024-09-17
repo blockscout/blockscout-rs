@@ -55,6 +55,7 @@ Categories for line charts, category metadata, and chart order within category a
 
 Charts dependant on each other are combined in update groups. Charts within one update group are updated **together** according to their dependency relations. Updates are scheduled for each such group in `update_groups.json` file.
 
+Syntax for schedules specified in the config is parsed by rust `cron` crate, so refer to crate's [documentation or source code](https://docs.rs/cron/latest/cron/) for precise behaviour.
 
 ### Env
 
