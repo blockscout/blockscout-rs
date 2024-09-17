@@ -71,7 +71,10 @@ pub async fn verify_github_repository(
     let repo_directory =
         github_repository_clone_and_checkout(&request.repository_url, &request.commit).await?;
 
-    let project_path = repo_directory.path().to_path_buf().join(&request.path_prefix);
+    let project_path = repo_directory
+        .path()
+        .to_path_buf()
+        .join(&request.path_prefix);
 
     let toolchain_channel = extract_toolchain_channel(&project_path).await?;
     let toolchain = validate_toolchain_channel(&toolchain_channel)?;
@@ -247,7 +250,9 @@ async fn retrieve_source_files(root_dir: &Path) -> Result<BTreeMap<String, Strin
                 directories.push(path);
             } else if path.file_name().map_or(false, |f| {
                 // By default include `rust-toolchain.toml`, `Cargo.toml`, `Cargo.lock`, and `.rs` files.
-                f == "rust-toolchain.toml" || f == "Cargo.toml" || f == "Cargo.lock"
+                f == "rust-toolchain.toml"
+                    || f == "Cargo.toml"
+                    || f == "Cargo.lock"
                     || f.to_string_lossy().ends_with(".rs")
             }) {
                 let file_path = path

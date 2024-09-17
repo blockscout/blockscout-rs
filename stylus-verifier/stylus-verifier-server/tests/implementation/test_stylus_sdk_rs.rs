@@ -39,7 +39,7 @@ mod verify_github_repository {
             VERIFY_GITHUB_REPOSITORY_ROUTE,
             &test_case.to_request(),
         )
-            .await;
+        .await;
 
         test_case.check_verify_response(response);
     }
