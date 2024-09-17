@@ -74,15 +74,10 @@ Counters:
 - New name - `STATS_UPDATE_GROUPS__SCHEDULES__<GROUP_NAME>`
 - Additional info - Schedule will be overridden for the whole group. `<GROUP_NAME>` is the name of update group
 that contains the `<NAME>` chart. It can be found in [update_groups.rs](../../../stats/src/update_groups.rs) or
-in [split.py (variable `update_groups_mapping`)](./split.py). The group name must end with __GROUP, for example:
+in [split.py (variable `update_groups_mapping`)](./split.py). Usually, the group names end with `...__GROUP`, for example:
 ```
-STATS_UPDATE_GROUPS__SCHEDULES__TOTAL_BLOCKS_GROUP
 STATS_UPDATE_GROUPS__SCHEDULES__ACTIVE_ACCOUNTS_GROUP
-STATS_UPDATE_GROUPS__SCHEDULES__COMPLETED_TXNS_GROUP
-STATS_UPDATE_GROUPS__SCHEDULES__TOTAL_ADDRESSES_GROUP
-STATS_UPDATE_GROUPS__SCHEDULES__NEW_TXNS_GROUP
-STATS_UPDATE_GROUPS__SCHEDULES__NEW_CONTRACTS_GROUP
-STATS_UPDATE_GROUPS__SCHEDULES__NEW_VERIFIED_CONTRACTS_GROUP
+STATS_UPDATE_GROUPS__SCHEDULES__NEW_ACCOUNTS_GROUP
 ```
 
 Line charts:
