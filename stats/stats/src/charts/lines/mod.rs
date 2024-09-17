@@ -30,7 +30,7 @@ pub use accounts_growth::{
     AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };
 pub use active_accounts::ActiveAccounts;
-pub use active_recurring_accounts::ActiveRecurringAccounts;
+pub use active_recurring_accounts::ActiveRecurringAccountsDailyRecurrance30Days;
 pub use average_block_rewards::{
     AverageBlockRewards, AverageBlockRewardsMonthly, AverageBlockRewardsWeekly,
     AverageBlockRewardsYearly,

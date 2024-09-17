@@ -17,7 +17,8 @@ use crate::{
         },
         types::{BlockscoutMigrations, Get},
     },
-    gettable_const,
+    define_and_impl_resolution_properties, gettable_const,
+    types::timespans::{Month, Week, Year},
     utils::produce_filter_and_values,
     ChartProperties, Named,
 };
@@ -112,26 +113,26 @@ impl<N: Get<Value = Duration>> RecurrancePeriod for N {
     }
 }
 
-gettable_const!(ThirtyDays: Duration = Duration::days(30));
+gettable_const!(Recurrance30Days: Duration = Duration::days(30));
 
-pub type ActiveRecurringAccountsRemote<Recurrance> = RemoteDatabaseSource<
+pub type ActiveRecurringAccountsRemote<Recurrance, Resolution> = RemoteDatabaseSource<
     PullEachWith<
         ActiveRecurringAccountsStatement<Recurrance>,
-        NaiveDate,
+        Resolution,
         String,
         QueryAllBlockTimestampRange,
     >,
 >;
 
-pub struct Properties;
+pub struct DailyProperties;
 
-impl Named for Properties {
+impl Named for DailyProperties {
     fn name() -> String {
         "activeRecurringAccounts".into()
     }
 }
 
-impl ChartProperties for Properties {
+impl ChartProperties for DailyProperties {
     type Resolution = NaiveDate;
 
     fn chart_type() -> ChartType {
@@ -139,24 +140,40 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type ActiveRecurringAccounts = DirectVecLocalDbChartSource<
-    MapToString<
-        FilterDeducible<MapParseTo<ActiveRecurringAccountsRemote<ThirtyDays>, i64>, Properties>,
-    >,
-    Batch30Days,
-    Properties,
->;
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: DailyProperties
+);
+
+type ActiveRecurringAccounts<Recurrance, Resolution, BatchSize, Properties> =
+    DirectVecLocalDbChartSource<
+        MapToString<
+            FilterDeducible<
+                MapParseTo<ActiveRecurringAccountsRemote<Recurrance, Resolution>, i64>,
+                Properties,
+            >,
+        >,
+        BatchSize,
+        Properties,
+    >;
+
+pub type ActiveRecurringAccountsDailyRecurrance30Days =
+    ActiveRecurringAccounts<Recurrance30Days, NaiveDate, Batch30Days, DailyProperties>;
 
 #[cfg(test)]
 mod tests {
     use crate::tests::simple_test::simple_test_chart_with_migration_variants;
 
-    use super::ActiveRecurringAccounts;
+    use super::ActiveRecurringAccountsDailyRecurrance30Days;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccounts>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsDailyRecurrance30Days>(
             "update_active_recurring_accounts",
             vec![("2022-11-12", "1"), ("2022-12-01", "1")],
         )
