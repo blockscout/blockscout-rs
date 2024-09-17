@@ -30,21 +30,21 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
-pub struct ActiveRecurringAccountsStatement<Recurrance>(PhantomData<Recurrance>);
+pub struct ActiveRecurringAccountsStatement<Recurrence>(PhantomData<Recurrence>);
 
-impl<Recurrance: RecurrancePeriod> StatementFromTimespan
-    for ActiveRecurringAccountsStatement<Recurrance>
+impl<Recurrence: RecurrencePeriod> StatementFromTimespan
+    for ActiveRecurringAccountsStatement<Recurrence>
 {
     fn get_statement(
         range: Range<DateTime<Utc>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
-        let recurrance_range = Recurrance::generate(range.clone());
+        let recurrence_range = Recurrence::generate(range.clone());
         if completed_migrations.denormalization {
             let (current_activity_range, mut args) =
                 produce_filter_and_values(Some(range), "block_timestamp", 1);
             let (recurring_activity_range, new_args) =
-                produce_filter_and_values(Some(recurrance_range), "block_timestamp", 3);
+                produce_filter_and_values(Some(recurrence_range), "block_timestamp", 3);
             args.extend(new_args);
 
             let sql = format!(
@@ -72,7 +72,7 @@ impl<Recurrance: RecurrancePeriod> StatementFromTimespan
             let (current_activity_range, mut args) =
                 produce_filter_and_values(Some(range), "b.timestamp", 1);
             let (recurring_activity_range, new_args) =
-                produce_filter_and_values(Some(recurrance_range), "b.timestamp", 3);
+                produce_filter_and_values(Some(recurrence_range), "b.timestamp", 3);
             args.extend(new_args);
 
             let sql = format!(
@@ -102,11 +102,11 @@ impl<Recurrance: RecurrancePeriod> StatementFromTimespan
     }
 }
 
-trait RecurrancePeriod {
+trait RecurrencePeriod {
     fn generate(current_period: Range<DateTime<Utc>>) -> Range<DateTime<Utc>>;
 }
 
-impl<N: Get<Value = Duration>> RecurrancePeriod for N {
+impl<N: Get<Value = Duration>> RecurrencePeriod for N {
     fn generate(current_period: Range<DateTime<Utc>>) -> Range<DateTime<Utc>> {
         let start = current_period
             .start
@@ -116,20 +116,20 @@ impl<N: Get<Value = Duration>> RecurrancePeriod for N {
     }
 }
 
-gettable_const!(Recurrance60Days: Duration = Duration::days(60));
-gettable_const!(Recurrance90Days: Duration = Duration::days(90));
-gettable_const!(Recurrance120Days: Duration = Duration::days(120));
+gettable_const!(Recurrence60Days: Duration = Duration::days(60));
+gettable_const!(Recurrence90Days: Duration = Duration::days(90));
+gettable_const!(Recurrence120Days: Duration = Duration::days(120));
 
-pub type ActiveRecurringAccountsRemote<Recurrance, Resolution> = RemoteDatabaseSource<
+pub type ActiveRecurringAccountsRemote<Recurrence, Resolution> = RemoteDatabaseSource<
     PullEachWith<
-        ActiveRecurringAccountsStatement<Recurrance>,
+        ActiveRecurringAccountsStatement<Recurrence>,
         Resolution,
         String,
         QueryAllBlockTimestampRange,
     >,
 >;
 
-macro_rules! impl_all_properties_for_recurrance {
+macro_rules! impl_all_properties_for_recurrence {
     (
         name_suffix: $name_suffix:expr,
         day: $day_type:ident,
@@ -164,7 +164,7 @@ macro_rules! impl_all_properties_for_recurrance {
     };
 }
 
-impl_all_properties_for_recurrance!(
+impl_all_properties_for_recurrence!(
     name_suffix: "60days",
     day: DailyProperties60Days,
     week: WeeklyProperties60Days,
@@ -172,7 +172,7 @@ impl_all_properties_for_recurrance!(
     year: YearlyProperties60Days,
 );
 
-impl_all_properties_for_recurrance!(
+impl_all_properties_for_recurrence!(
     name_suffix: "90days",
     day: DailyProperties90Days,
     week: WeeklyProperties90Days,
@@ -180,7 +180,7 @@ impl_all_properties_for_recurrance!(
     year: YearlyProperties90Days,
 );
 
-impl_all_properties_for_recurrance!(
+impl_all_properties_for_recurrence!(
     name_suffix: "120days",
     day: DailyProperties120Days,
     week: WeeklyProperties120Days,
@@ -188,11 +188,11 @@ impl_all_properties_for_recurrance!(
     year: YearlyProperties120Days,
 );
 
-type ActiveRecurringAccounts<Recurrance, Resolution, BatchSize, Properties> =
+type ActiveRecurringAccounts<Recurrence, Resolution, BatchSize, Properties> =
     DirectVecLocalDbChartSource<
         MapToString<
             FilterDeducible<
-                MapParseTo<ActiveRecurringAccountsRemote<Recurrance, Resolution>, i64>,
+                MapParseTo<ActiveRecurringAccountsRemote<Recurrence, Resolution>, i64>,
                 Properties,
             >,
         >,
@@ -200,32 +200,32 @@ type ActiveRecurringAccounts<Recurrance, Resolution, BatchSize, Properties> =
         Properties,
     >;
 
-pub type ActiveRecurringAccountsDailyRecurrance60Days =
-    ActiveRecurringAccounts<Recurrance60Days, NaiveDate, Batch30Days, DailyProperties60Days>;
-pub type ActiveRecurringAccountsWeeklyRecurrance60Days =
-    ActiveRecurringAccounts<Recurrance60Days, Week, Batch30Weeks, WeeklyProperties60Days>;
-pub type ActiveRecurringAccountsMonthlyRecurrance60Days =
-    ActiveRecurringAccounts<Recurrance60Days, Month, Batch36Months, MonthlyProperties60Days>;
-pub type ActiveRecurringAccountsYearlyRecurrance60Days =
-    ActiveRecurringAccounts<Recurrance60Days, Year, Batch30Years, YearlyProperties60Days>;
+pub type ActiveRecurringAccountsDailyRecurrence60Days =
+    ActiveRecurringAccounts<Recurrence60Days, NaiveDate, Batch30Days, DailyProperties60Days>;
+pub type ActiveRecurringAccountsWeeklyRecurrence60Days =
+    ActiveRecurringAccounts<Recurrence60Days, Week, Batch30Weeks, WeeklyProperties60Days>;
+pub type ActiveRecurringAccountsMonthlyRecurrence60Days =
+    ActiveRecurringAccounts<Recurrence60Days, Month, Batch36Months, MonthlyProperties60Days>;
+pub type ActiveRecurringAccountsYearlyRecurrence60Days =
+    ActiveRecurringAccounts<Recurrence60Days, Year, Batch30Years, YearlyProperties60Days>;
 
-pub type ActiveRecurringAccountsDailyRecurrance90Days =
-    ActiveRecurringAccounts<Recurrance90Days, NaiveDate, Batch30Days, DailyProperties90Days>;
-pub type ActiveRecurringAccountsWeeklyRecurrance90Days =
-    ActiveRecurringAccounts<Recurrance90Days, Week, Batch30Weeks, WeeklyProperties90Days>;
-pub type ActiveRecurringAccountsMonthlyRecurrance90Days =
-    ActiveRecurringAccounts<Recurrance90Days, Month, Batch36Months, MonthlyProperties90Days>;
-pub type ActiveRecurringAccountsYearlyRecurrance90Days =
-    ActiveRecurringAccounts<Recurrance90Days, Year, Batch30Years, YearlyProperties90Days>;
+pub type ActiveRecurringAccountsDailyRecurrence90Days =
+    ActiveRecurringAccounts<Recurrence90Days, NaiveDate, Batch30Days, DailyProperties90Days>;
+pub type ActiveRecurringAccountsWeeklyRecurrence90Days =
+    ActiveRecurringAccounts<Recurrence90Days, Week, Batch30Weeks, WeeklyProperties90Days>;
+pub type ActiveRecurringAccountsMonthlyRecurrence90Days =
+    ActiveRecurringAccounts<Recurrence90Days, Month, Batch36Months, MonthlyProperties90Days>;
+pub type ActiveRecurringAccountsYearlyRecurrence90Days =
+    ActiveRecurringAccounts<Recurrence90Days, Year, Batch30Years, YearlyProperties90Days>;
 
-pub type ActiveRecurringAccountsDailyRecurrance120Days =
-    ActiveRecurringAccounts<Recurrance120Days, NaiveDate, Batch30Days, DailyProperties120Days>;
-pub type ActiveRecurringAccountsWeeklyRecurrance120Days =
-    ActiveRecurringAccounts<Recurrance120Days, Week, Batch30Weeks, WeeklyProperties120Days>;
-pub type ActiveRecurringAccountsMonthlyRecurrance120Days =
-    ActiveRecurringAccounts<Recurrance120Days, Month, Batch36Months, MonthlyProperties120Days>;
-pub type ActiveRecurringAccountsYearlyRecurrance120Days =
-    ActiveRecurringAccounts<Recurrance120Days, Year, Batch30Years, YearlyProperties120Days>;
+pub type ActiveRecurringAccountsDailyRecurrence120Days =
+    ActiveRecurringAccounts<Recurrence120Days, NaiveDate, Batch30Days, DailyProperties120Days>;
+pub type ActiveRecurringAccountsWeeklyRecurrence120Days =
+    ActiveRecurringAccounts<Recurrence120Days, Week, Batch30Weeks, WeeklyProperties120Days>;
+pub type ActiveRecurringAccountsMonthlyRecurrence120Days =
+    ActiveRecurringAccounts<Recurrence120Days, Month, Batch36Months, MonthlyProperties120Days>;
+pub type ActiveRecurringAccountsYearlyRecurrence120Days =
+    ActiveRecurringAccounts<Recurrence120Days, Year, Batch30Years, YearlyProperties120Days>;
 
 #[cfg(test)]
 mod tests {
@@ -256,7 +256,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_daily_60_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsDailyRecurrance60Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsDailyRecurrence60Days>(
             "update_active_recurring_accounts_daily_60_days",
             vec![
                 ("2022-11-12", "1"),
@@ -270,7 +270,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_weekly_60_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsWeeklyRecurrance60Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsWeeklyRecurrence60Days>(
             "update_active_recurring_accounts_weekly_60_days",
             vec![("2022-11-28", "1"), ("2022-12-26", "1")],
         )
@@ -280,7 +280,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_monthly_60_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsMonthlyRecurrance60Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsMonthlyRecurrence60Days>(
             "update_active_recurring_accounts_monthly_60_days",
             vec![
                 ("2022-12-01", "1"),
@@ -293,7 +293,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_yearly_60_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsYearlyRecurrance60Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsYearlyRecurrence60Days>(
             "update_active_recurring_accounts_yearly_60_days",
             vec![("2023-01-01", "2")],
         )
@@ -303,7 +303,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_daily_90_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsDailyRecurrance90Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsDailyRecurrence90Days>(
             "update_active_recurring_accounts_daily_90_days",
             vec![
                 ("2022-11-12", "1"),
@@ -318,7 +318,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_weekly_90_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsWeeklyRecurrance90Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsWeeklyRecurrence90Days>(
             "update_active_recurring_accounts_weekly_90_days",
             vec![
                 ("2022-11-28", "1"),
@@ -332,7 +332,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_monthly_90_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsMonthlyRecurrance90Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsMonthlyRecurrence90Days>(
             "update_active_recurring_accounts_monthly_90_days",
             vec![
                 ("2022-12-01", "1"),
@@ -346,7 +346,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_yearly_90_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsYearlyRecurrance90Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsYearlyRecurrence90Days>(
             "update_active_recurring_accounts_yearly_90_days",
             vec![("2023-01-01", "2")],
         )
@@ -356,7 +356,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_daily_120_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsDailyRecurrance120Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsDailyRecurrence120Days>(
             "update_active_recurring_accounts_daily_120_days",
             vec![
                 ("2022-11-12", "1"),
@@ -371,7 +371,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_weekly_120_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsWeeklyRecurrance120Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsWeeklyRecurrence120Days>(
             "update_active_recurring_accounts_weekly_120_days",
             vec![
                 ("2022-11-28", "1"),
@@ -385,7 +385,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_monthly_120_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsMonthlyRecurrance120Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsMonthlyRecurrence120Days>(
             "update_active_recurring_accounts_monthly_120_days",
             vec![
                 ("2022-12-01", "1"),
@@ -399,7 +399,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_recurring_accounts_yearly_120_days() {
-        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsYearlyRecurrance120Days>(
+        simple_test_chart_with_migration_variants::<ActiveRecurringAccountsYearlyRecurrence120Days>(
             "update_active_recurring_accounts_yearly_120_days",
             vec![
                 ("2023-01-01", "2"),

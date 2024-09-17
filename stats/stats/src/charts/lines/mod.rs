@@ -31,16 +31,16 @@ pub use accounts_growth::{
 };
 pub use active_accounts::ActiveAccounts;
 pub use active_recurring_accounts::{
-    ActiveRecurringAccountsDailyRecurrance120Days, ActiveRecurringAccountsMonthlyRecurrance120Days,
-    ActiveRecurringAccountsWeeklyRecurrance120Days, ActiveRecurringAccountsYearlyRecurrance120Days,
+    ActiveRecurringAccountsDailyRecurrence120Days, ActiveRecurringAccountsMonthlyRecurrence120Days,
+    ActiveRecurringAccountsWeeklyRecurrence120Days, ActiveRecurringAccountsYearlyRecurrence120Days,
 };
 pub use active_recurring_accounts::{
-    ActiveRecurringAccountsDailyRecurrance60Days, ActiveRecurringAccountsMonthlyRecurrance60Days,
-    ActiveRecurringAccountsWeeklyRecurrance60Days, ActiveRecurringAccountsYearlyRecurrance60Days,
+    ActiveRecurringAccountsDailyRecurrence60Days, ActiveRecurringAccountsMonthlyRecurrence60Days,
+    ActiveRecurringAccountsWeeklyRecurrence60Days, ActiveRecurringAccountsYearlyRecurrence60Days,
 };
 pub use active_recurring_accounts::{
-    ActiveRecurringAccountsDailyRecurrance90Days, ActiveRecurringAccountsMonthlyRecurrance90Days,
-    ActiveRecurringAccountsWeeklyRecurrance90Days, ActiveRecurringAccountsYearlyRecurrance90Days,
+    ActiveRecurringAccountsDailyRecurrence90Days, ActiveRecurringAccountsMonthlyRecurrence90Days,
+    ActiveRecurringAccountsWeeklyRecurrence90Days, ActiveRecurringAccountsYearlyRecurrence90Days,
 };
 pub use average_block_rewards::{
     AverageBlockRewards, AverageBlockRewardsMonthly, AverageBlockRewardsWeekly,
