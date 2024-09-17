@@ -23,6 +23,20 @@ singleton_groups!(
     TotalAddresses,
     TotalBlocks,
     TotalTokens,
+    // Each of the `ActiveRecurringAccounts*` charts includes quite heavy SQL query,
+    // thus it's better to have granular control on update times.
+    ActiveRecurringAccountsDailyRecurrence60Days,
+    ActiveRecurringAccountsMonthlyRecurrence60Days,
+    ActiveRecurringAccountsWeeklyRecurrence60Days,
+    ActiveRecurringAccountsYearlyRecurrence60Days,
+    ActiveRecurringAccountsDailyRecurrence90Days,
+    ActiveRecurringAccountsMonthlyRecurrence90Days,
+    ActiveRecurringAccountsWeeklyRecurrence90Days,
+    ActiveRecurringAccountsYearlyRecurrence90Days,
+    ActiveRecurringAccountsDailyRecurrence120Days,
+    ActiveRecurringAccountsMonthlyRecurrence120Days,
+    ActiveRecurringAccountsWeeklyRecurrence120Days,
+    ActiveRecurringAccountsYearlyRecurrence120Days,
 );
 
 construct_update_group!(AverageBlockRewardsGroup {

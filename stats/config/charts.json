@@ -1,6 +1,8 @@
 {
     "template_values": {
-        "native_coin_symbol": "ETH"
+        "native_coin_symbol": "ETH",
+        "active_recurring_accounts_title": "Active recurring accounts",
+        "active_recurring_accounts_description": "Accounts active this period and during some interval before"
     },
     "counters": {
         "total_blocks": {
@@ -62,6 +64,20 @@
         "active_accounts": {
             "title": "Active accounts",
             "description": "Active accounts number per period"
+        },
+        "active_recurring_accounts_60_days": {
+            "enabled": false,
+            "title": "{{active_recurring_accounts_title}} (60 days)",
+            "description": "{{active_recurring_accounts_description}} (60 days prior to the period)"
+        },
+        "active_recurring_accounts_90_days": {
+            "title": "{{active_recurring_accounts_title}} (90 days)",
+            "description": "{{active_recurring_accounts_description}} (90 days prior to the period)"
+        },
+        "active_recurring_accounts_120_days": {
+            "enabled": false,
+            "title": "{{active_recurring_accounts_title}} (120 days)",
+            "description": "{{active_recurring_accounts_description}} (120 days prior to the period)"
         },
         "accounts_growth": {
             "title": "Number of accounts",
