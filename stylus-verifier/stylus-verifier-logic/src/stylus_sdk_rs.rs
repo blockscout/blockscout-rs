@@ -7,7 +7,6 @@ use git2::Repository;
 use semver::Version;
 use std::{
     collections::{BTreeMap, HashSet},
-    ffi::OsStr,
     path::{Path, PathBuf},
     str::Lines,
 };
@@ -69,16 +68,18 @@ pub enum Error {
 pub async fn verify_github_repository(
     request: VerifyGithubRepositoryRequest,
 ) -> Result<Success, Error> {
-    let directory =
+    let repo_directory =
         github_repository_clone_and_checkout(&request.repository_url, &request.commit).await?;
 
-    let toolchain_channel = extract_toolchain_channel(directory.path()).await?;
+    let project_path = repo_directory.path().to_path_buf().join(&request.path_prefix);
+
+    let toolchain_channel = extract_toolchain_channel(&project_path).await?;
     let toolchain = validate_toolchain_channel(&toolchain_channel)?;
 
     let verify_output = docker::run_reproducible(
         &request.cargo_stylus_version,
         &toolchain,
-        directory.path(),
+        &project_path,
         &[
             "verify",
             "--no-verify",
@@ -106,7 +107,7 @@ pub async fn verify_github_repository(
     let export_abi_output = docker::run_reproducible(
         &request.cargo_stylus_version,
         &toolchain,
-        directory.path(),
+        &project_path,
         &["export-abi"],
     )
     .await?;
@@ -116,7 +117,7 @@ pub async fn verify_github_repository(
         None => (None, None),
     };
 
-    let files = retrieve_source_files(directory.path()).await?;
+    let files = retrieve_source_files(&project_path).await?;
 
     Ok(Success {
         abi,
@@ -125,7 +126,7 @@ pub async fn verify_github_repository(
         cargo_stylus_version: request.cargo_stylus_version,
         repository_url: request.repository_url,
         commit: request.commit,
-        path_prefix: Default::default(),
+        path_prefix: request.path_prefix,
     })
 }
 
@@ -145,7 +146,6 @@ async fn github_repository_clone_and_checkout(
             return Err(Error::RepositoryNotFound(repository_url.to_string()));
         }
         Err(err) => {
-            println!("\n{err:?}\n");
             return Err(err).context("failed to clone repository")?;
         }
     };
@@ -245,9 +245,10 @@ async fn retrieve_source_files(root_dir: &Path) -> Result<BTreeMap<String, Strin
                     continue; // Skip "target" and ".git" directories
                 }
                 directories.push(path);
-            } else if path.extension().map_or(false, |f| {
-                // By default include all rust, toml and lock files.
-                f == OsStr::new(".rs") || f == OsStr::new(".toml") || f == OsStr::new(".lock")
+            } else if path.file_name().map_or(false, |f| {
+                // By default include `rust-toolchain.toml`, `Cargo.toml`, `Cargo.lock`, and `.rs` files.
+                f == "rust-toolchain.toml" || f == "Cargo.toml" || f == "Cargo.lock"
+                    || f.to_string_lossy().ends_with(".rs")
             }) {
                 let file_path = path
                     .strip_prefix(root_dir)

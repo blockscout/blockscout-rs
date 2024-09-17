@@ -5,28 +5,6 @@ use url::Url;
 
 const VERIFY_GITHUB_REPOSITORY_ROUTE: &str = "/api/v1/stylus-sdk-rs:verify-github-repository";
 
-// mod verify_directory {
-//     use super::*;
-//
-//     #[tokio::test]
-//     async fn stylus_hello_world_0_5_0() {
-//         let test_case: VerifyGithubRepositoryTestCase = VerifyGithubRepositoryTestCase::from_file(
-//             "verify_github_repository_stylus_hello_world_0.5.0",
-//         );
-//
-//         let server = crate::start_server().await;
-//
-//         let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
-//             &server.base_url,
-//             VERIFY_GITHUB_REPOSITORY_ROUTE,
-//             &test_case.to_request(),
-//         )
-//             .await;
-//
-//         test_case.check_verify_response(response);
-//     }
-// }
-
 mod verify_github_repository {
     use super::*;
 
@@ -44,6 +22,24 @@ mod verify_github_repository {
             &test_case.to_request(),
         )
         .await;
+
+        test_case.check_verify_response(response);
+    }
+
+    #[tokio::test]
+    async fn with_prefix_0_5_0() {
+        let test_case: VerifyGithubRepositoryTestCase = VerifyGithubRepositoryTestCase::from_file(
+            "verify_github_repository_single_call_with_prefix_0.5.0",
+        );
+
+        let server = crate::start_server().await;
+
+        let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
+            &server.base_url,
+            VERIFY_GITHUB_REPOSITORY_ROUTE,
+            &test_case.to_request(),
+        )
+            .await;
 
         test_case.check_verify_response(response);
     }
