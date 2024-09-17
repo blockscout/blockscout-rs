@@ -35,21 +35,14 @@ pub struct ValueWrapper<V: TryGetable> {
 /// but `DateValue<Decimal>` or other types can be useful sometimes.
 pub struct PullEachWith<S, Resolution, Value, AllRangeSource>(
     PhantomData<(S, Resolution, Value, AllRangeSource)>,
-)
-where
-    S: StatementFromTimespan,
-    Resolution: Timespan + Ord + Send,
-    Value: Send,
-    TimespanValue<Resolution, Value>: FromQueryResult,
-    AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>;
+);
 
 impl<S, Resolution, Value, AllRangeSource> RemoteQueryBehaviour
     for PullEachWith<S, Resolution, Value, AllRangeSource>
 where
     S: StatementFromTimespan,
-    Resolution: Timespan + Ord + Send + Debug,
+    Resolution: Timespan + PartialEq + Debug + Send,
     Value: Send + TryGetable,
-    TimespanValue<Resolution, Value>: FromQueryResult,
     AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>,
 {
     type Output = Vec<TimespanValue<Resolution, Value>>;
