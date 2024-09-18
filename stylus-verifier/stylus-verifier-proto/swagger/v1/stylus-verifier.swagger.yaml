@@ -145,6 +145,8 @@ definitions:
         type: object
         additionalProperties:
           type: string
+      package_name:
+        type: string
       cargo_stylus_version:
         type: string
       github_repository_metadata:

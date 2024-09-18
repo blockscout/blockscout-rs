@@ -23,8 +23,9 @@ message VerificationSuccess {
   optional string abi = 1;
   optional string contract_name = 2;
   map<string, string> files = 3;
+  string package_name = 4;
 
-  string cargo_stylus_version = 4;
+  string cargo_stylus_version = 5;
 
   message GithubRepositoryMetadata {
     string repository_url = 1;
@@ -32,7 +33,7 @@ message VerificationSuccess {
     string path_prefix = 3;
   }
   /// Metadata added in case `VerifyGithubRepository` endpoint was used for verification
-  optional GithubRepositoryMetadata github_repository_metadata = 5;
+  optional GithubRepositoryMetadata github_repository_metadata = 6;
 }
 
 message VerificationFailure {

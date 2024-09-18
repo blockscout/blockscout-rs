@@ -41,6 +41,7 @@ impl From<Success> for v1::VerificationSuccess {
             abi: value.abi.map(|abi| abi.to_string()),
             contract_name: value.contract_name,
             files: value.files,
+            package_name: value.package_name,
             cargo_stylus_version: format!("v{}", value.cargo_stylus_version),
             github_repository_metadata: Some(v1::verification_success::GithubRepositoryMetadata {
                 repository_url: value.repository_url.to_string(),

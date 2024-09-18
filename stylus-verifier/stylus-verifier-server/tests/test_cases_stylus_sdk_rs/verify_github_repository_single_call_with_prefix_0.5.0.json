@@ -6,6 +6,7 @@
     "commit": "af5029f822815e32def0015bf8e591e769c62f34",
     "path_prefix": "examples/single_call",
     "expected_contract_name": "SingleCall",
+    "expected_package_name": "stylus-single-call",
     "expected_abi": "[{\"inputs\":[{\"name\":\"target\",\"type\":\"address\"},{\"name\":\"data\",\"type\":\"bytes\"}],\"name\":\"execute\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
     "expected_files": {
         "Cargo.toml": "[package]\nname = \"stylus-single-call\"\nversion = \"0.1.5\"\nedition = \"2021\"\nlicense = \"MIT OR Apache-2.0\"\nkeywords = [\"arbitrum\", \"ethereum\", \"stylus\", \"alloy\"]\ndescription = \"Stylus single call router contract\"\n\n[dependencies]\nalloy-primitives = \"0.7.6\"\nalloy-sol-types = \"0.7.6\"\nhex = \"0.4.3\"\nstylus-sdk = \"0.6.0\" \nmini-alloc = \"0.6.0\"\n\n[features]\nexport-abi = [\"stylus-sdk/export-abi\"]\n\n[lib]\ncrate-type = [\"lib\", \"cdylib\"]\n\n[profile.release]\ncodegen-units = 1\nstrip = true\nlto = true\npanic = \"abort\"\nopt-level = \"s\"\n\n[workspace]\n",

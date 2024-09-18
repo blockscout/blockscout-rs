@@ -18,6 +18,9 @@ use url::Url;
 /// Name of the toolchain file used to specify the Rust toolchain version for a project.
 pub const TOOLCHAIN_FILE_NAME: &str = "rust-toolchain.toml";
 
+/// Name of the file used to specify the package name for a project.
+pub const PACKAGE_FILE_NAME: &str = "Cargo.toml";
+
 /// The last line to be expected from the `cargo stylus verify` command when the contract is verified.
 pub const CONTRACT_VERIFIED_MESSAGE: &str =
     "Verified - contract matches local project's file hashes";
@@ -39,6 +42,7 @@ pub struct Success {
     pub abi: Option<serde_json::Value>,
     pub contract_name: Option<String>,
     pub files: BTreeMap<String, String>,
+    pub package_name: String,
     pub cargo_stylus_version: Version,
     pub repository_url: Url,
     pub commit: String,
@@ -120,12 +124,14 @@ pub async fn verify_github_repository(
         None => (None, None),
     };
 
+    let package_name = extract_package_name(&project_path).await?;
     let files = retrieve_source_files(&project_path).await?;
 
     Ok(Success {
         abi,
         contract_name,
         files,
+        package_name,
         cargo_stylus_version: request.cargo_stylus_version,
         repository_url: request.repository_url,
         commit: request.commit,
@@ -229,6 +235,31 @@ fn validate_toolchain_channel(channel: &str) -> Result<Version, Error> {
     })?;
 
     Ok(version)
+}
+
+async fn extract_package_name(directory: &Path) -> Result<String, Error> {
+    let package_file_path = directory.join(PACKAGE_FILE_NAME);
+
+    let package_file_contents = fs::read_to_string(package_file_path)
+        .await
+        .context("failed to read package Cargo.toml file")?;
+
+    let cargo_toml: toml::Value =
+        toml::from_str(&package_file_contents).context("failed to parse Cargo.toml file")?;
+
+    // Extract the package name from the package section
+    let Some(package) = cargo_toml.get("package") else {
+        return Err(anyhow!("package section not found in Cargo.toml file").into());
+    };
+
+    let Some(package_name) = package.get("name") else {
+        return Err(anyhow!("could not find name in Cargo.toml's package section").into());
+    };
+    let Some(package_name) = package_name.as_str() else {
+        return Err(anyhow!("name in Cargo.toml's package section is not a string").into());
+    };
+
+    Ok(package_name.to_string())
 }
 
 async fn retrieve_source_files(root_dir: &Path) -> Result<BTreeMap<String, String>, Error> {
