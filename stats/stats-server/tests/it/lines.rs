@@ -50,7 +50,7 @@ async fn test_lines_ok() {
     ];
     assert_eq!(sections, expected_sections, "wrong sections response");
 
-    let enabled_resolutions: HashMap<String, Vec<String>> = line_charts
+    let mut enabled_resolutions: HashMap<String, Vec<String>> = line_charts
         .sections
         .iter()
         .flat_map(|sec| sec.charts.clone())
@@ -60,6 +60,9 @@ async fn test_lines_ok() {
     for line_name in [
         "accountsGrowth",
         "activeAccounts",
+        // "activeRecurringAccounts60Days",
+        "activeRecurringAccounts90Days",
+        // "activeRecurringAccounts120Days",
         "averageBlockSize",
         "averageBlockRewards",
         "newAccounts",
@@ -82,11 +85,12 @@ async fn test_lines_ok() {
         "contractsGrowth",
     ] {
         let line_resolutions = enabled_resolutions
-            .get(line_name)
+            .remove(line_name)
             .unwrap_or_else(|| panic!("must return chart info for {}", &line_name));
         assert!(
             line_resolutions.contains(&ResolutionKind::Day.into()),
-            "At least day resolution must be enabled for enabled chart"
+            "At least day resolution must be enabled for enabled chart `{}`. Enabled resolutions: {:?}",
+            &line_name, line_resolutions
         );
         for resolution in line_resolutions {
             let chart: serde_json::Value = send_get_request(
@@ -121,4 +125,9 @@ async fn test_lines_ok() {
         let _chart: serde_json::Value =
             send_get_request(&base, &format!("/api/v1/lines/{line_name}")).await;
     }
+    assert!(
+        enabled_resolutions.is_empty(),
+        "some charts were not tested ({:?})",
+        enabled_resolutions
+    );
 }

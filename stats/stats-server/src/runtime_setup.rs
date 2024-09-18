@@ -10,6 +10,8 @@
 //!
 //!     2.2. Configure the group update schedule in `update_groups.json` config
 //! 3. Add the new charts to `charts.json` and `layout.json` (if needed)
+//! 4. If some were added in the previous step, also consider adding the
+//!     new charts to integration tests (`tests` folder).
 //!
 
 use crate::config::{
