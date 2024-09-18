@@ -19,6 +19,7 @@ pub struct VerifyGithubRepositoryTestCase {
     pub commit: String,
     pub path_prefix: String,
 
+    #[serde_as(as = "serde_with::json::JsonString")]
     pub expected_abi: serde_json::Value,
     pub expected_contract_name: String,
     pub expected_files: BTreeMap<String, String>,
@@ -48,10 +49,15 @@ impl VerifyGithubRepositoryTestCase {
 
     pub fn check_verification_success(&self, success: VerificationSuccess) {
         assert_eq!(
-            self.expected_contract_name, success.contract_name,
+            Some(&self.expected_contract_name),
+            success.contract_name.as_ref(),
             "invalid contract name"
         );
-        assert_eq!(self.expected_abi, success.abi, "invalid abi");
+        let abi = success.abi.map(|abi| {
+            serde_json::from_str::<serde_json::Value>(&abi)
+                .expect("invalid abi: cannot parse as json value")
+        });
+        assert_eq!(Some(&self.expected_abi), abi.as_ref(), "invalid abi");
         assert_eq!(self.expected_files, success.files, "invalid files");
         assert_eq!(
             self.cargo_stylus_version, success.cargo_stylus_version,

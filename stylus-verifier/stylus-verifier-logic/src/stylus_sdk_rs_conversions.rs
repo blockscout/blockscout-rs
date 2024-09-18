@@ -38,8 +38,8 @@ impl TryFrom<v1::VerifyGithubRepositoryRequest> for VerifyGithubRepositoryReques
 impl From<Success> for v1::VerificationSuccess {
     fn from(value: Success) -> Self {
         Self {
-            abi: value.abi.unwrap().to_string(),
-            contract_name: value.contract_name.unwrap(),
+            abi: value.abi.map(|abi| abi.to_string()),
+            contract_name: value.contract_name,
             files: value.files,
             cargo_stylus_version: format!("v{}", value.cargo_stylus_version),
             github_repository_metadata: Some(v1::verification_success::GithubRepositoryMetadata {
