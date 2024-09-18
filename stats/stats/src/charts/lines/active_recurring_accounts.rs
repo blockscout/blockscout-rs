@@ -165,7 +165,7 @@ macro_rules! impl_all_properties_for_recurrence {
 }
 
 impl_all_properties_for_recurrence!(
-    name_suffix: "60days",
+    name_suffix: "60Days",
     day: DailyProperties60Days,
     week: WeeklyProperties60Days,
     month: MonthlyProperties60Days,
@@ -173,7 +173,7 @@ impl_all_properties_for_recurrence!(
 );
 
 impl_all_properties_for_recurrence!(
-    name_suffix: "90days",
+    name_suffix: "90Days",
     day: DailyProperties90Days,
     week: WeeklyProperties90Days,
     month: MonthlyProperties90Days,
@@ -181,7 +181,7 @@ impl_all_properties_for_recurrence!(
 );
 
 impl_all_properties_for_recurrence!(
-    name_suffix: "120days",
+    name_suffix: "120Days",
     day: DailyProperties120Days,
     week: WeeklyProperties120Days,
     month: MonthlyProperties120Days,
