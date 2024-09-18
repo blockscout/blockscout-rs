@@ -30,14 +30,17 @@ pub use accounts_growth::{
     AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };
 pub use active_accounts::ActiveAccounts;
+#[rustfmt::skip]
 pub use active_recurring_accounts::{
     ActiveRecurringAccountsDailyRecurrence120Days, ActiveRecurringAccountsMonthlyRecurrence120Days,
     ActiveRecurringAccountsWeeklyRecurrence120Days, ActiveRecurringAccountsYearlyRecurrence120Days,
 };
+#[rustfmt::skip]
 pub use active_recurring_accounts::{
     ActiveRecurringAccountsDailyRecurrence60Days, ActiveRecurringAccountsMonthlyRecurrence60Days,
     ActiveRecurringAccountsWeeklyRecurrence60Days, ActiveRecurringAccountsYearlyRecurrence60Days,
 };
+#[rustfmt::skip]
 pub use active_recurring_accounts::{
     ActiveRecurringAccountsDailyRecurrence90Days, ActiveRecurringAccountsMonthlyRecurrence90Days,
     ActiveRecurringAccountsWeeklyRecurrence90Days, ActiveRecurringAccountsYearlyRecurrence90Days,
