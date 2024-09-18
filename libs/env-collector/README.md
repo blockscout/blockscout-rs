@@ -11,20 +11,19 @@ This is a simple tool to collect possible environment variables from `Settings` 
     [dependencies]
     env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.1.1" }
     ```
-
 2. In your `server` crate create new binary file called `check-envs.rs` with the following content:
 
     ```rust
     // check-envs.rs
     use <path_to_settings>::Settings;
-    use env_collector::run_env_collector_cli;
+    use env_collector::{run_env_collector_cli, PrefixFilter};
     
     fn main() {
         run_env_collector_cli::<Settings>(
             "<SERVICE_NAME_PREFIX>",
             "README.md",
             "<PATH TO .TOML/.JSON EXAMPLE CONFIG>",
-            &[PrefixFilter::blacklist("<ENV_PREFIX_TO_IGNORE>")],
+            PrefixFilter::blacklist(&["<ENV_PREFIX_TO_IGNORE>"]),
             Some("some_postfix"),
         );
     }
