@@ -1,0 +1,27 @@
+[package]
+name = "stylus-verifier-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+blockscout-service-launcher = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true }
+stylus-verifier-logic = { workspace = true }
+stylus-verifier-proto = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
+tonic = { workspace = true }
+
+[dev-dependencies]
+blockscout-display-bytes = { workspace = true }
+blockscout-service-launcher = { workspace = true, features = ["test-server"] }
+bytes = { workspace = true }
+pretty_assertions = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde_json = { workspace = true }
+serde_with = { workspace = true, features = ["json"] }
+url = { workspace = true, features = ["serde"] }
+
