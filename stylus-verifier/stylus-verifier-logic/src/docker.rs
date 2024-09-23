@@ -37,7 +37,7 @@ fn validate_docker_output(output: &std::process::Output) -> anyhow::Result<Strin
             std::str::from_utf8(&output.stderr).context("failed to read Docker command stderr")?;
         if stderr.contains("Cannot connect to the Docker daemon") {
             tracing::error!("Docker is not found in the system");
-            anyhow::bail!("Docker not running");
+            anyhow::bail!("Docker is not running");
         }
         tracing::error!("Docker command failed: {stderr}");
         anyhow::bail!("Docker command failed: {stderr}");
