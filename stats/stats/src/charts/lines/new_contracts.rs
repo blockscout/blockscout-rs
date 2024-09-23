@@ -35,10 +35,13 @@ impl StatementFromRange for NewContractsStatement {
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {
-            let (tx_filter, mut args) =
-                produce_filter_and_values(range.clone(), "t.block_timestamp", 1);
+            // TODO: consider supporting such case in macro ?
+            let mut args = vec![];
+            let (tx_filter, new_args) =
+                produce_filter_and_values(range.clone(), "t.block_timestamp", args.len() + 1);
+            args.extend(new_args);
             let (block_filter, new_args) =
-                produce_filter_and_values(range.clone(), "b.timestamp", 3);
+                produce_filter_and_values(range.clone(), "b.timestamp", args.len() + 1);
             args.extend(new_args);
             let sql = format!(
                 r#"
