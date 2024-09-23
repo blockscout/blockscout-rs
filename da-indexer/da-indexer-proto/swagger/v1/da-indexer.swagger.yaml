@@ -39,6 +39,34 @@ paths:
           type: boolean
       tags:
         - CelestiaService
+  /api/v1/celestia/l2BatchMetadata:
+    get:
+      operationId: CelestiaService_GetL2BatchMetadata
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CelestiaL2BatchMetadata'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: height
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: namespace
+          in: query
+          required: false
+          type: string
+        - name: commitment
+          in: query
+          required: false
+          type: string
+      tags:
+        - CelestiaService
   /api/v1/eigenda/blob:
     get:
       operationId: EigenDaService_GetBlob
@@ -136,6 +164,48 @@ definitions:
         format: uint64
       data:
         type: string
+  v1CelestiaBlobId:
+    type: object
+    properties:
+      height:
+        type: string
+        format: uint64
+      namespace:
+        type: string
+      commitment:
+        type: string
+  v1CelestiaL2BatchMetadata:
+    type: object
+    properties:
+      l2ChainId:
+        type: integer
+        format: int64
+      l2BatchId:
+        type: string
+      l2StartBlock:
+        type: string
+        format: uint64
+      l2EndBlock:
+        type: string
+        format: uint64
+      l2BatchTxCount:
+        type: integer
+        format: int64
+      l2BlockscoutUrl:
+        type: string
+      l1TxHash:
+        type: string
+      l1TxTimestamp:
+        type: string
+        format: uint64
+      l1ChainId:
+        type: integer
+        format: int64
+      relatedBlobs:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1CelestiaBlobId'
   v1EigenDaBlob:
     type: object
     properties:

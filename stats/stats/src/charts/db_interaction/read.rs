@@ -3,14 +3,15 @@ use crate::{
     data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
     types::{
-        timespans::DateValue, ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
+        timespans::{DateValue, Month, Week, Year},
+        ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
     },
     utils::exclusive_datetime_range_to_inclusive,
     ChartProperties, MissingDatePolicy, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
-use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::{chart_data, charts, sea_orm_active_enums::ChartResolution};
 use itertools::Itertools;
 use sea_orm::{
@@ -28,8 +29,8 @@ pub enum ReadError {
     DB(#[from] DbErr),
     #[error("chart {0} not found")]
     ChartNotFound(ChartKey),
-    #[error("date interval limit ({0}) is exceeded; choose smaller time interval.")]
-    IntervalLimitExceeded(Duration),
+    #[error("exceeded limit on requested data points (~{0}); choose smaller time interval.")]
+    IntervalTooLarge(u32),
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -180,11 +181,35 @@ pub async fn get_chart_metadata(
     })
 }
 
+/// Returns tuple with:
+/// - latest resolution that has relevant data
+/// - does # of approximate points needs to be decreased by 1
+fn relevant_data_until<R: Timespan>(
+    last_updated_at: Option<DateTime<chrono::FixedOffset>>,
+) -> (Option<R>, bool) {
+    if let Some(t) = last_updated_at {
+        let t = t.to_utc();
+        let last_updated_at_timespan_border =
+            R::from_date(t.date_naive()).saturating_start_timestamp() == t;
+        // last_updated_at timestamp is not included in the range
+        let inclusive_last_updated_at_end =
+            exclusive_datetime_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t);
+        (
+            Some(R::from_date(
+                inclusive_last_updated_at_end.end().date_naive(),
+            )),
+            last_updated_at_timespan_border,
+        )
+    } else {
+        (None, false)
+    }
+}
+
 /// Get data points for the chart `name`.
 ///
 /// `approximate_trailing_points` - number of trailing points to mark as approximate.
 ///
-/// `interval_limit` - max interval [from, to]. If `from` or `to` are none,
+/// `point_limit` - max interval [from, to]. If `from` or `to` are none,
 /// min or max date in DB are taken.
 ///
 /// Note: if some dates within interval `[from, to]` fall on the future, data points
@@ -272,13 +297,13 @@ pub async fn get_line_chart_data<Resolution>(
     chart_name: &String,
     from: Option<Resolution>,
     to: Option<Resolution>,
-    interval_limit: Option<Duration>,
+    point_limit: Option<RequestedPointsLimit>,
     policy: MissingDatePolicy,
     fill_missing_dates: bool,
     approximate_trailing_points: u64,
 ) -> Result<Vec<ExtendedTimespanValue<Resolution, String>>, ReadError>
 where
-    Resolution: Timespan + Debug + Ord + Clone,
+    Resolution: Timespan + ApproxUnsignedDiff + Debug + Ord + Clone,
 {
     let chart = charts::Entity::find()
         .column(charts::Column::Id)
@@ -297,13 +322,8 @@ where
     let db_data =
         get_raw_line_chart_data::<Resolution>(db, chart.id, from.clone(), to.clone()).await?;
 
-    let last_updated_at = chart.last_updated_at.map(|t| {
-        // last_updated_at timestamp is not included in the range
-        let inclusive_last_updated_at_end =
-            exclusive_datetime_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t.to_utc());
-        Resolution::from_date(inclusive_last_updated_at_end.end().date_naive())
-    });
-    if last_updated_at.is_none() && !db_data.is_empty() {
+    let (relevant_until, decrement_approx_points) = relevant_data_until(chart.last_updated_at);
+    if relevant_until.is_none() && !db_data.is_empty() {
         tracing::warn!(
             chart_name = chart.name,
             db_data_len = db_data.len(),
@@ -315,22 +335,31 @@ where
     // However, if some points are omitted, they should be filled according
     // to policy.
     // This fill makes sense up to the latest update.
-    let to = match (to.clone(), last_updated_at.clone()) {
-        (Some(to), Some(last_updated_at)) => Some(to.min(last_updated_at)),
-        (None, Some(d)) | (Some(d), None) => Some(d),
+    let to = match (to.clone(), relevant_until.clone()) {
+        (Some(to), Some(relevant_until)) => Some(to.min(relevant_until)),
+        (None, Some(relevant_until)) => Some(relevant_until),
+        // It means `last_updated_at=None`, so `to` is set to `None` so the end is
+        // later deduced from `db_data`.
+        // It will return data that we have (if any, for some weird reason), or nothing
+        // if the data is empty (=chart is new)
+        (Some(_), None) => None,
         (None, None) => None,
     };
 
     let data_in_range = fit_into_range(db_data, from.clone(), to.clone(), policy);
 
     let data_unmarked = if fill_missing_dates {
-        fill_and_filter_chart(data_in_range, from, to, policy, interval_limit)?
+        fill_and_filter_chart(data_in_range, from, to, policy, point_limit)?
     } else {
         data_in_range
     };
+    let mut approximate_trailing_points = approximate_trailing_points;
+    if decrement_approx_points {
+        approximate_trailing_points = approximate_trailing_points.saturating_sub(1)
+    }
     let data = mark_approximate(
         data_unmarked,
-        last_updated_at.unwrap_or(Resolution::from_date(NaiveDate::MAX)),
+        relevant_until.unwrap_or(Resolution::from_date(NaiveDate::MAX)),
         approximate_trailing_points,
     );
     Ok(data)
@@ -540,6 +569,85 @@ where
     Ok(row)
 }
 
+/// May not be exact, but the limit is close to
+/// this number
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RequestedPointsLimit {
+    Points(u32),
+    NoLimit,
+}
+
+impl RequestedPointsLimit {
+    pub fn from_points(approx_limit: u32) -> Self {
+        Self::Points(approx_limit)
+    }
+
+    pub fn approx_limit(&self) -> Option<u32> {
+        match self {
+            RequestedPointsLimit::Points(p) => Some(*p),
+            RequestedPointsLimit::NoLimit => None,
+        }
+    }
+
+    pub fn fits_in_limit<T: ApproxUnsignedDiff>(&self, from: &T, to: &T) -> bool {
+        let limit = match self {
+            RequestedPointsLimit::Points(p) => *p,
+            RequestedPointsLimit::NoLimit => return true,
+        };
+        to.approx_unsigned_difference(from)
+            .map(|diff| diff <= limit.into())
+            .unwrap_or(true)
+    }
+}
+
+pub trait ApproxUnsignedDiff {
+    /// Approx number of repeats of this timespan to get from `other` to `self`.
+    ///
+    /// `None` if < 0.
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64>;
+}
+
+impl ApproxUnsignedDiff for NaiveDate {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.signed_duration_since(*other)
+            .num_days()
+            .try_into()
+            .ok()
+    }
+}
+
+impl ApproxUnsignedDiff for Week {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.saturating_first_day()
+            .signed_duration_since(other.saturating_first_day())
+            .num_days()
+            .try_into()
+            .ok()
+            .map(|n: u64| n / 7)
+    }
+}
+
+impl ApproxUnsignedDiff for Month {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.saturating_first_day()
+            .signed_duration_since(other.saturating_first_day())
+            .num_days()
+            .try_into()
+            .ok()
+            // 30.436875 = mean # of days in month (according to wiki)
+            .map(|n: u64| (n as f64 / 30.436875) as u64)
+    }
+}
+
+impl ApproxUnsignedDiff for Year {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.number_within_naive_date()
+            .saturating_sub(other.number_within_naive_date())
+            .try_into()
+            .ok()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -547,7 +655,7 @@ mod tests {
         charts::ResolutionKind,
         counters::TotalBlocks,
         data_source::kinds::local_db::parameters::DefaultQueryVec,
-        lines::{TxnsGrowth, TxnsGrowthMonthly},
+        lines::{AccountsGrowth, ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
             init_db::init_db,
             point_construction::{d, month_of},
@@ -618,6 +726,14 @@ mod tests {
                 )),
                 ..Default::default()
             },
+            // the chart was only created
+            charts::ActiveModel {
+                name: Set(AccountsGrowth::name().to_string()),
+                resolution: Set(ChartResolution::Day),
+                chart_type: Set(ChartType::Line),
+                last_updated_at: Set(None),
+                ..Default::default()
+            },
         ])
         .exec(db)
         .await
@@ -637,6 +753,41 @@ mod tests {
             mock_chart_data(5, "2022-08-17", 12),
             mock_chart_data(5, "2022-09-19", 100),
             mock_chart_data(5, "2022-10-29", 1000),
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
+    /// Depicts a chart during the process of reupdate
+    async fn insert_mock_data_reupdate(db: &DatabaseConnection) {
+        charts::Entity::insert_many([charts::ActiveModel {
+            name: Set(ActiveAccounts::name().to_string()),
+            resolution: Set(ChartResolution::Day),
+            chart_type: Set(ChartType::Line),
+            last_updated_at: Set(Some(
+                DateTime::parse_from_rfc3339("2022-06-30T00:00:00+00:00").unwrap(),
+            )),
+            ..Default::default()
+        }])
+        .exec(db)
+        .await
+        .unwrap();
+        chart_data::Entity::insert_many([
+            mock_chart_data(1, "2022-06-19", 74),
+            mock_chart_data(1, "2022-06-20", 103),
+            mock_chart_data(1, "2022-06-21", 199),
+            mock_chart_data(1, "2022-06-22", 94),
+            mock_chart_data(1, "2022-06-23", 123),
+            mock_chart_data(1, "2022-06-24", 277),
+            mock_chart_data(1, "2022-06-25", 34),
+            mock_chart_data(1, "2022-06-26", 51),
+            mock_chart_data(1, "2022-06-27", 81),
+            mock_chart_data(1, "2022-06-28", 57),
+            mock_chart_data(1, "2022-06-29", 1676),
+            mock_chart_data(1, "2022-06-30", 1636),
+            mock_chart_data(1, "2022-07-01", 99),
+            mock_chart_data(1, "2022-07-02", 1585),
         ])
         .exec(db)
         .await
@@ -891,6 +1042,28 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_new_chart_data_returns_nothing() {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let db = init_db("get_chart_data_skipped_works").await;
+        insert_mock_data(&db).await;
+        let data = get_line_chart_data::<NaiveDate>(
+            &db,
+            &AccountsGrowth::name().to_string(),
+            Some(d("2022-11-14")),
+            Some(d("2022-11-15")),
+            None,
+            MissingDatePolicy::FillPrevious,
+            true,
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(data, vec![]);
+    }
+
     async fn chart_id_matches_key(
         db: &DatabaseConnection,
         chart_id: i32,
@@ -1068,6 +1241,33 @@ mod tests {
                 timespan: month_of("2022-11-01"),
                 value: "0".into(),
             }),
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn last_accurate_point_reupdate_works() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let db = init_db("last_accurate_point_2_works").await;
+        insert_mock_data_reupdate(&db).await;
+
+        // No missing points
+        assert!(chart_id_matches_key(&db, 1, "activeAccounts", ResolutionKind::Day).await);
+        assert_eq!(
+            last_accurate_point::<ActiveAccounts, DefaultQueryVec<ActiveAccounts>>(
+                1,
+                1,
+                &db,
+                false,
+                1,
+                MissingDatePolicy::FillZero
+            )
+            .await
+            .unwrap(),
+            Some(DateValue::<String> {
+                timespan: d("2022-06-29"),
+                value: "1676".to_string()
+            })
         );
     }
 }

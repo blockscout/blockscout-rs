@@ -7,10 +7,12 @@
 use std::fmt::Display;
 
 use crate::{types::Timespan, ReadError};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::{ChartResolution, ChartType};
 use sea_orm::prelude::*;
 use thiserror::Error;
+
+use super::db_interaction::read::ApproxUnsignedDiff;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
@@ -20,8 +22,8 @@ pub enum UpdateError {
     StatsDB(DbErr),
     #[error("chart {0} not found")]
     ChartNotFound(ChartKey),
-    #[error("date interval limit ({limit}) is exceeded; choose smaller time interval.")]
-    IntervalLimitExceeded { limit: Duration },
+    #[error("exceeded limit on requested data points (~{limit}); choose smaller time interval.")]
+    IntervalTooLarge { limit: u32 },
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -31,7 +33,7 @@ impl From<ReadError> for UpdateError {
         match read {
             ReadError::DB(db) => UpdateError::StatsDB(db),
             ReadError::ChartNotFound(err) => UpdateError::ChartNotFound(err),
-            ReadError::IntervalLimitExceeded(limit) => UpdateError::IntervalLimitExceeded { limit },
+            ReadError::IntervalTooLarge(limit) => UpdateError::IntervalTooLarge { limit },
         }
     }
 }
@@ -142,7 +144,7 @@ impl Display for ChartKey {
 ))]
 pub trait ChartProperties: Sync + Named {
     /// Combination name + resolution must be unique for each chart
-    type Resolution: Timespan;
+    type Resolution: Timespan + ApproxUnsignedDiff;
 
     fn chart_type() -> ChartType;
     fn resolution() -> ResolutionKind {
@@ -169,9 +171,8 @@ pub trait ChartProperties: Sync + Named {
     ///
     /// ## Value
     ///
-    /// Usually set to 1 for line charts. Currently they have resolution of
-    /// 1 day. Also, data for portion of the (last) day has to be recalculated
-    /// on the next day.
+    /// Usually set to 1 for line charts. Also, data for portion of the
+    /// (latest) timeframe has to be recalculated on the next timespan.
     ///
     /// I.e. for number of blocks per day, stats for current day (0) are
     /// not complete because blocks will be produced till the end of the day.
@@ -179,6 +180,12 @@ pub trait ChartProperties: Sync + Named {
     ///    |===|=  |
     /// day -1   0
     /// ```
+    ///
+    /// ## Edge case
+    ///
+    /// If an update time is exactly at the start of timespan (e.g. midnight),
+    /// one less point is considered approximate, because we've got full data
+    /// for one timespan.
     fn approximate_trailing_points() -> u64 {
         if Self::chart_type() == ChartType::Counter {
             // there's only one value in counter

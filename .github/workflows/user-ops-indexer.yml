@@ -81,3 +81,12 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: user-ops-indexer
+
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: 'user-ops-indexer'
+      swagger_path: 'user-ops-indexer/user-ops-indexer-proto/swagger/user-ops-indexer.swagger.yaml'
+    secrets:
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}

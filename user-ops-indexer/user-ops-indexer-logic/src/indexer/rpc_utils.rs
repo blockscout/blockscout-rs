@@ -146,8 +146,10 @@ pub fn to_string(node_client: NodeClient) -> String {
 #[cfg(test)]
 mod tests {
     use crate::indexer::rpc_utils::{flatten_geth_trace, TraceType};
-    use ethers::prelude::{Address, Bytes, CallFrame};
-    use ethers_core::utils::to_checksum;
+    use ethers::{
+        prelude::{Address, Bytes, CallFrame},
+        utils::to_checksum,
+    };
     use std::str::FromStr;
 
     #[test]

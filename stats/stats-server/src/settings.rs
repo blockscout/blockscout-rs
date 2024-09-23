@@ -77,14 +77,14 @@ pub struct LimitsSettings {
     ///
     /// If start or end of the range is left empty, min/max values
     /// from DB are considered.
-    pub request_interval_limit_days: u32,
+    pub requested_points_limit: u32,
 }
 
 impl Default for LimitsSettings {
     fn default() -> Self {
         Self {
-            // ~500 years seems reasonable
-            request_interval_limit_days: 182500,
+            // ~500 years for days seems reasonable
+            requested_points_limit: 182500,
         }
     }
 }

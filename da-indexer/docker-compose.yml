@@ -30,11 +30,13 @@ services:
       DA_INDEXER__DATABASE__CONNECT__URL: postgres://postgres:@database:5432/blockscout
       DA_INDEXER__DATABASE__CREATE_DATABASE: "true"
       DA_INDEXER__DATABASE__RUN_MIGRATIONS: "true"
+      DA_INDEXER__L2_ROUTER__ROUTES_PATH: /app/celestia_routes.toml
     env_file:
       ## optional: if provided, would overwrite values from configuration file
       - ./da-indexer-server/config/base.env
     volumes:
       ## optional: you can use default config or provide custom via file
-      - ./da-indexer-server/config/eigenda.toml:/app/config.toml
+      - ./da-indexer-server/config/celestia.toml:/app/config.toml
+      - ./da-indexer-server/config/celestia_routes.toml:/app/celestia_routes.toml
     extra_hosts:
       - "host.docker.internal:host-gateway"

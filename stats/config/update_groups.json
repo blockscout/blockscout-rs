@@ -4,7 +4,7 @@
         "total_addresses_group": "0 0 */3 * * * *",
         "average_block_time_group": "0 0 15 * * * *",
         "completed_txns_group": "0 5 */3 * * * *",
-        "new_accounts_group": "0 0 5,16,21 * * * *",
+        "new_accounts_group": "0 0 5 * * * *",
         "new_native_coin_transfers_group": "0 0 3,13 * * * *",
         "total_tokens_group": "0 0 18 * * * *",
         "new_txns_group": "0 10 */3 * * * *",

@@ -6,6 +6,7 @@ members = [
     "stats-server",
     "stats/migration",
     "stats/entity",
+    "env-docs-generation",
 ]
 
 [workspace.dependencies]

@@ -1,0 +1,8 @@
+[package]
+name = "env-docs-generation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+stats-server = { path = "../stats-server" }
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "20b179a" }
