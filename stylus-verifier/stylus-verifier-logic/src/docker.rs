@@ -5,6 +5,25 @@ use semver::Version;
 use std::{io::Write, path::Path};
 use tokio::{io::AsyncWriteExt, process::Command};
 
+pub async fn run_reproducible(
+    cargo_stylus_version: &Version,
+    toolchain: &Version,
+    dir: &Path,
+    command_line: &[&str],
+) -> Result<String, anyhow::Error> {
+    tracing::trace!(
+        "Running reproducible Stylus command with cargo-stylus {}, toolchain {}",
+        cargo_stylus_version,
+        toolchain
+    );
+    let mut command = vec!["cargo", "stylus"];
+    for s in command_line.iter() {
+        command.push(s);
+    }
+    create_image(cargo_stylus_version, toolchain).await?;
+    run_in_docker_container(cargo_stylus_version, toolchain, dir, &command).await
+}
+
 fn version_to_image_name(cargo_stylus_version: &Version, toolchain: &Version) -> String {
     format!(
         "blockscout/cargo-stylus:{}-rust-{}",
@@ -116,23 +135,4 @@ async fn run_in_docker_container(
         .context("failed to execute Docker command")?;
 
     validate_docker_output(&output)
-}
-
-pub async fn run_reproducible(
-    cargo_stylus_version: &Version,
-    toolchain: &Version,
-    dir: &Path,
-    command_line: &[&str],
-) -> Result<String, anyhow::Error> {
-    tracing::trace!(
-        "Running reproducible Stylus command with cargo-stylus {}, toolchain {}",
-        cargo_stylus_version,
-        toolchain
-    );
-    let mut command = vec!["cargo", "stylus"];
-    for s in command_line.iter() {
-        command.push(s);
-    }
-    create_image(cargo_stylus_version, toolchain).await?;
-    run_in_docker_container(cargo_stylus_version, toolchain, dir, &command).await
 }
