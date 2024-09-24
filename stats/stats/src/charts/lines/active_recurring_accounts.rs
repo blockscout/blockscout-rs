@@ -41,10 +41,16 @@ impl<Recurrence: RecurrencePeriod> StatementFromTimespan
     ) -> Statement {
         let recurrence_range = Recurrence::generate(range.clone());
         if completed_migrations.denormalization {
-            let (current_activity_range, mut args) =
-                produce_filter_and_values(Some(range), "block_timestamp", 1);
-            let (recurring_activity_range, new_args) =
-                produce_filter_and_values(Some(recurrence_range), "block_timestamp", 3);
+            // TODO: consider supporting such case in macro ?
+            let mut args = vec![];
+            let (current_activity_range, new_args) =
+                produce_filter_and_values(Some(range), "block_timestamp", args.len() + 1);
+            args.extend(new_args);
+            let (recurring_activity_range, new_args) = produce_filter_and_values(
+                Some(recurrence_range),
+                "block_timestamp",
+                args.len() + 1,
+            );
             args.extend(new_args);
 
             let sql = format!(
@@ -69,10 +75,13 @@ impl<Recurrence: RecurrencePeriod> StatementFromTimespan
             );
             Statement::from_sql_and_values(DbBackend::Postgres, sql, args)
         } else {
-            let (current_activity_range, mut args) =
-                produce_filter_and_values(Some(range), "b.timestamp", 1);
+            // TODO: consider supporting such case in macro ?
+            let mut args = vec![];
+            let (current_activity_range, new_args) =
+                produce_filter_and_values(Some(range), "b.timestamp", args.len() + 1);
+            args.extend(new_args);
             let (recurring_activity_range, new_args) =
-                produce_filter_and_values(Some(recurrence_range), "b.timestamp", 3);
+                produce_filter_and_values(Some(recurrence_range), "b.timestamp", args.len() + 1);
             args.extend(new_args);
 
             let sql = format!(
