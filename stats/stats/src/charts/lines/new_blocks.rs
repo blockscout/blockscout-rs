@@ -1,18 +1,21 @@
 use std::ops::Range;
 
 use crate::{
-    data_source::kinds::{
-        data_manipulation::{
-            map::{MapParseTo, MapToString},
-            resolutions::sum::SumLowerResolution,
-        },
-        local_db::{
-            parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString},
+                resolutions::sum::SumLowerResolution,
             },
-            DirectVecLocalDbChartSource,
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -27,7 +30,7 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 pub struct NewBlocksStatement;
 
 impl StatementFromRange for NewBlocksStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -99,7 +102,7 @@ mod tests {
     use super::*;
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
-        data_source::{DataSource, UpdateContext},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
         get_line_chart_data,
         tests::{
             init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data,
@@ -163,6 +166,7 @@ mod tests {
         let mut cx = UpdateContext {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: current_time,
             force_full: false,
         };
@@ -256,6 +260,7 @@ mod tests {
         let cx = UpdateContext {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: current_time,
             force_full: true,
         };
@@ -359,6 +364,7 @@ mod tests {
         let cx = UpdateContext {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: current_time,
             force_full: false,
         };

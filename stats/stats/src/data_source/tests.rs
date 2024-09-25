@@ -25,55 +25,102 @@ use super::{
 };
 use crate::{
     construct_update_group,
-    data_source::kinds::local_db::parameters::update::batching::parameters::PassVecStep,
+    data_source::{
+        kinds::local_db::parameters::update::batching::parameters::PassVecStep,
+        types::BlockscoutMigrations,
+    },
     define_and_impl_resolution_properties,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
-    utils::sql_with_range_filter_opt,
+    utils::{produce_filter_and_values, sql_with_range_filter_opt},
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 pub struct NewContractsQuery;
 
 impl StatementFromRange for NewContractsQuery {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
-                SELECT day AS date, COUNT(*)::text AS value
-                FROM (
-                    SELECT
-                        DISTINCT ON (txns_plus_internal_txns.hash)
-                        txns_plus_internal_txns.day
+    fn get_statement(
+        range: Option<Range<DateTimeUtc>>,
+        completed_migrations: &BlockscoutMigrations,
+    ) -> Statement {
+        // choose the statement based on migration progress
+        if completed_migrations.denormalization {
+            let (tx_filter, mut args) =
+                produce_filter_and_values(range.clone(), "t.block_timestamp", 1);
+            let (block_filter, new_args) =
+                produce_filter_and_values(range.clone(), "b.timestamp", 3);
+            args.extend(new_args);
+            let sql = format!(
+                r#"
+                    SELECT day AS date, COUNT(*)::text AS value
                     FROM (
-                        SELECT
-                            t.created_contract_address_hash AS hash,
-                            b.timestamp::date AS day
-                        FROM transactions t
-                            JOIN blocks b ON b.hash = t.block_hash
-                        WHERE
-                            t.created_contract_address_hash NOTNULL AND
-                            b.consensus = TRUE AND
-                            b.timestamp != to_timestamp(0) {filter}
-                        UNION
-                        SELECT
-                            it.created_contract_address_hash AS hash,
-                            b.timestamp::date AS day
-                        FROM internal_transactions it
-                            JOIN blocks b ON b.hash = it.block_hash
-                        WHERE
-                            it.created_contract_address_hash NOTNULL AND
-                            b.consensus = TRUE AND
-                            b.timestamp != to_timestamp(0) {filter}
-                    ) txns_plus_internal_txns
-                ) sub
-                GROUP BY sub.day;
-            "#,
-            [],
-            "b.timestamp",
-            range
-        )
+                        SELECT 
+                            DISTINCT ON (txns_plus_internal_txns.hash)
+                            txns_plus_internal_txns.day
+                        FROM (
+                            SELECT
+                                t.created_contract_address_hash AS hash,
+                                t.block_timestamp::date AS day
+                            FROM transactions t
+                            WHERE
+                                t.created_contract_address_hash NOTNULL AND
+                                t.block_consensus = TRUE AND
+                                t.block_timestamp != to_timestamp(0) {tx_filter}
+                            UNION
+                            SELECT
+                                it.created_contract_address_hash AS hash,
+                                b.timestamp::date AS day
+                            FROM internal_transactions it
+                                JOIN blocks b ON b.hash = it.block_hash
+                            WHERE
+                                it.created_contract_address_hash NOTNULL AND
+                                b.consensus = TRUE AND
+                                b.timestamp != to_timestamp(0) {block_filter}
+                        ) txns_plus_internal_txns
+                    ) sub
+                    GROUP BY sub.day;
+                "#,
+            );
+            Statement::from_sql_and_values(DbBackend::Postgres, sql, args)
+        } else {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT day AS date, COUNT(*)::text AS value
+                    FROM (
+                        SELECT 
+                            DISTINCT ON (txns_plus_internal_txns.hash)
+                            txns_plus_internal_txns.day
+                        FROM (
+                            SELECT
+                                t.created_contract_address_hash AS hash,
+                                b.timestamp::date AS day
+                            FROM transactions t
+                                JOIN blocks b ON b.hash = t.block_hash
+                            WHERE
+                                t.created_contract_address_hash NOTNULL AND
+                                b.consensus = TRUE AND
+                                b.timestamp != to_timestamp(0) {filter}
+                            UNION
+                            SELECT
+                                it.created_contract_address_hash AS hash,
+                                b.timestamp::date AS day
+                            FROM internal_transactions it
+                                JOIN blocks b ON b.hash = it.block_hash
+                            WHERE
+                                it.created_contract_address_hash NOTNULL AND
+                                b.consensus = TRUE AND
+                                b.timestamp != to_timestamp(0) {filter}
+                        ) txns_plus_internal_txns
+                    ) sub
+                    GROUP BY sub.day;
+                "#,
+                [],
+                "b.timestamp",
+                range,
+            )
+        }
     }
 }
 
@@ -244,6 +291,7 @@ async fn update_examples() {
     let parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: None,
         force_full: true,
     };

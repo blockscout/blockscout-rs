@@ -78,7 +78,7 @@ pub type TotalBlocks = DirectPointLocalDbChartSource<TotalBlocksRemote, Properti
 mod tests {
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
         get_raw_counters,
         tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
         Named,
@@ -116,6 +116,7 @@ mod tests {
         let parameters = UpdateParameters {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
             force_full: true,
         };
@@ -142,6 +143,7 @@ mod tests {
         let parameters = UpdateParameters {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
             force_full: true,
         };
@@ -178,6 +180,7 @@ mod tests {
         let parameters = UpdateParameters {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
             force_full: true,
         };

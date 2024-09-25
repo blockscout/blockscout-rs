@@ -108,7 +108,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        data_source::{DataSource, UpdateContext},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
         gettable_const,
         lines::PredefinedMockSource,
         tests::point_construction::{d_v_int, dt, w_v_int},
@@ -140,6 +140,7 @@ mod tests {
         let context = UpdateContext {
             db: &empty_db,
             blockscout: &empty_db,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: dt("2024-07-30T09:00:00").and_utc(),
             force_full: false,
         };

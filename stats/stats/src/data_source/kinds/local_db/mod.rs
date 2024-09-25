@@ -309,7 +309,7 @@ mod tests {
                     parameters::{DefaultCreate, DefaultQueryLast},
                     DirectPointLocalDbChartSource, LocalDbChartSource,
                 },
-                types::Get,
+                types::{BlockscoutMigrations, Get},
                 DataSource, UpdateContext, UpdateParameters,
             },
             gettable_const,
@@ -444,6 +444,7 @@ mod tests {
             let parameters = UpdateParameters {
                 db: &db,
                 blockscout: &blockscout,
+                blockscout_applied_migrations: BlockscoutMigrations::latest(),
                 update_time_override: Some(next_time),
                 force_full: true,
             };
@@ -463,6 +464,7 @@ mod tests {
             let parameters = UpdateParameters {
                 db: &db,
                 blockscout: &blockscout,
+                blockscout_applied_migrations: BlockscoutMigrations::latest(),
                 update_time_override: Some(time),
                 force_full: true,
             };
@@ -478,6 +480,7 @@ mod tests {
             let parameters = UpdateParameters {
                 db: &db,
                 blockscout: &blockscout,
+                blockscout_applied_migrations: BlockscoutMigrations::latest(),
                 update_time_override: Some(time),
                 force_full: true,
             };
@@ -491,6 +494,7 @@ mod tests {
             let parameters = UpdateParameters {
                 db: &db,
                 blockscout: &blockscout,
+                blockscout_applied_migrations: BlockscoutMigrations::latest(),
                 update_time_override: Some(time),
                 force_full: true,
             };

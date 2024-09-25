@@ -6,12 +6,15 @@
 use std::ops::Range;
 
 use crate::{
-    data_source::kinds::{
-        data_manipulation::{map::MapParseTo, resolutions::sum::SumLowerResolution},
-        local_db::{
-            parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+    data_source::{
+        kinds::{
+            data_manipulation::{map::MapParseTo, resolutions::sum::SumLowerResolution},
+            local_db::{
+                parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -26,7 +29,7 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 pub struct NewBlockRewardsStatement;
 
 impl StatementFromRange for NewBlockRewardsStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -89,7 +92,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
         tests::{
             init_db::init_db_all,
             mock_blockscout::fill_mock_blockscout_data,
@@ -139,6 +142,7 @@ mod tests {
         let parameters = UpdateParameters {
             db: &db,
             blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
             force_full: false,
         };
