@@ -19,7 +19,7 @@ RUN cargo build --release
 
 FROM ubuntu:20.04 AS run
 RUN apt-get update && \
-    apt-get install -y libssl1.1 libssl-dev ca-certificates && \
+    apt-get install -y libssl1.1 libssl-dev ca-certificates curl && \
     curl -sSL https://get.docker.com/ | sh
 
 WORKDIR /app
