@@ -65,7 +65,7 @@ async fn create_image(
     toolchain: &Version,
 ) -> Result<(), anyhow::Error> {
     let name = version_to_image_name(cargo_stylus_version, toolchain);
-    if image_exists(&name).await? {
+    if image_exists(&name).await.context("check if image exists")? {
         return Ok(());
     }
 
@@ -82,7 +82,7 @@ async fn create_image(
         .arg("-f-")
         .stdin(std::process::Stdio::piped())
         .spawn()
-        .context("failed to execute Docker command")?;
+        .context("failed to execute Docker build command")?;
 
     let mut dockerfile = Vec::<u8>::new();
     write!(
@@ -132,7 +132,7 @@ async fn run_in_docker_container(
         .args(command_line)
         .output()
         .await
-        .context("failed to execute Docker command")?;
+        .context("failed to execute Docker run command")?;
 
     validate_docker_output(&output)
 }
