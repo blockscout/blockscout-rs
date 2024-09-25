@@ -35,7 +35,8 @@ check-envs:
     VALIDATE_ONLY=true cargo run --bin env-docs-generation
 
 restart-generate-entities: 
-    just restart-postgres
+    -just stop-postgres
+    just start-postgres
     just stats/migrate-up
     just stats/generate-entities
     just stop-postgres
