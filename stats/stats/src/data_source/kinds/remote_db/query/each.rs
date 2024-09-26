@@ -82,7 +82,7 @@ fn resolution_from_range<R: Timespan + PartialEq + Debug>(range: Range<DateTime<
             "Resolution ranges were constructed incorrectly, will likely lead to wrong data. \
             See `split_time_range_into_resolution_points` for the bug."
         );
-        debug_assert_ne!(res_verify, res);
+        debug_assert_eq!(res_verify, res);
     }
     res
 }
