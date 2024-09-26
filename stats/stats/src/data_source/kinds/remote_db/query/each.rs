@@ -12,6 +12,7 @@ use crate::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, UpdateContext},
     },
+    exclusive_datetime_range_to_inclusive,
     types::{Timespan, TimespanValue},
     UpdateError,
 };
@@ -74,8 +75,9 @@ where
 }
 
 fn resolution_from_range<R: Timespan + PartialEq + Debug>(range: Range<DateTime<Utc>>) -> R {
-    let res = R::from_date(range.start.date_naive());
-    let res_verify = R::from_date(range.end.date_naive());
+    let range = exclusive_datetime_range_to_inclusive(range);
+    let res = R::from_date(range.start().date_naive());
+    let res_verify = R::from_date(range.end().date_naive());
     if res_verify != res {
         tracing::warn!(
             range = ?range,
