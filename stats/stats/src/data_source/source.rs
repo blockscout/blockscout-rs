@@ -29,9 +29,7 @@ pub trait DataSource {
     /// This data source relies on these sources for 'core' of its data.
     /// Tuple of data sources is also a data source.
     type MainDependencies: DataSource;
-    /// Data sources that are used for computing various resolutions of data
-    /// for now empty; until resolutions are introduced
-    /// TODO: remove this ^ part when resolutions are finished
+    /// Additional data source that is used for computing other data resolutions.
     type ResolutionDependencies: DataSource;
     /// Data that this source provides
     type Output: Send;

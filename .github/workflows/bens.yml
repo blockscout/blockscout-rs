@@ -176,3 +176,12 @@ jobs:
     with:
       version: ${{ needs.push.outputs.semver }}
       project_name: blockscout-ens
+
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: 'bens'
+      swagger_path: 'blockscout-ens/bens-proto/swagger/bens.swagger.yaml'
+    secrets:
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}

@@ -2,7 +2,7 @@ use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use crate::{
     data_source::{
         source::DataSource,
-        types::{UpdateContext, UpdateParameters},
+        types::{BlockscoutMigrations, UpdateContext, UpdateParameters},
     },
     get_line_chart_data, get_raw_counters,
     types::Timespan,
@@ -20,12 +20,49 @@ pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
         .collect()
 }
 
+const MIGRATIONS_VARIANTS: [BlockscoutMigrations; 2] = [
+    BlockscoutMigrations::empty(),
+    BlockscoutMigrations::latest(),
+];
+
 /// `test_name` must be unique to avoid db clashes
 ///
 /// returns db handles to continue testing if needed
 pub async fn simple_test_chart<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
+) -> (TestDbGuard, TestDbGuard)
+where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    simple_test_chart_inner::<C>(test_name, expected, BlockscoutMigrations::latest()).await
+}
+
+/// tests all statement kinds for different migrations combinations.
+/// NOTE: everything is tested with only one version of DB (probably latest),
+/// so statements incompatible with the current mock DB setup are going to break.
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
+pub async fn simple_test_chart_with_migration_variants<C>(
+    test_name_base: &str,
+    expected: Vec<(&str, &str)>,
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations).await;
+    }
+}
+
+async fn simple_test_chart_inner<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+    migrations: BlockscoutMigrations,
 ) -> (TestDbGuard, TestDbGuard)
 where
     C: DataSource + ChartProperties,
@@ -43,6 +80,7 @@ where
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
+        blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -101,6 +139,7 @@ pub async fn dirty_force_update_and_check<C>(
     let parameters = UpdateParameters {
         db,
         blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -120,13 +159,72 @@ pub async fn dirty_force_update_and_check<C>(
     );
 }
 
-/// `test_name` must be unique to avoid db clashes
+/// tests only case with all migrations applied, to
+/// test statements for different migrations combinations
+/// use [`ranged_test_chart_with_migration_variants`]
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
 pub async fn ranged_test_chart<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
     from: C::Resolution,
     to: C::Resolution,
     update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    ranged_test_chart_inner::<C>(
+        test_name,
+        expected,
+        from,
+        to,
+        update_time,
+        BlockscoutMigrations::latest(),
+    )
+    .await
+}
+
+/// tests all statement kinds for different migrations combinations.
+/// NOTE: everything is tested with only one version of DB (probably latest),
+/// so statements incompatible with the current mock DB setup are going to break.
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
+pub async fn ranged_test_chart_with_migration_variants<C>(
+    test_name_base: &str,
+    expected: Vec<(&str, &str)>,
+    from: C::Resolution,
+    to: C::Resolution,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties,
+    C::Resolution: Ord + Clone + Debug,
+{
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        ranged_test_chart_inner::<C>(
+            &test_name,
+            expected.clone(),
+            from.clone(),
+            to.clone(),
+            update_time,
+            migrations,
+        )
+        .await;
+    }
+}
+
+async fn ranged_test_chart_inner<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+    from: C::Resolution,
+    to: C::Resolution,
+    update_time: Option<NaiveDateTime>,
+    migrations: BlockscoutMigrations,
 ) where
     C: DataSource + ChartProperties,
     C::Resolution: Ord + Clone + Debug,
@@ -145,6 +243,7 @@ pub async fn ranged_test_chart<C>(
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
+        blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -215,6 +314,39 @@ pub async fn simple_test_counter<C: DataSource + ChartProperties>(
     expected: &str,
     update_time: Option<NaiveDateTime>,
 ) {
+    simple_test_counter_inner::<C>(
+        test_name,
+        expected,
+        update_time,
+        BlockscoutMigrations::latest(),
+    )
+    .await
+}
+
+/// tests all statement kinds for different migrations combinations.
+/// NOTE: everything is tested with only one version of DB (probably latest),
+/// so statements incompatible with the current mock DB setup are going to break.
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
+pub async fn simple_test_counter_with_migration_variants<C: DataSource + ChartProperties>(
+    test_name_base: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) {
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations).await
+    }
+}
+
+async fn simple_test_counter_inner<C: DataSource + ChartProperties>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+    migrations: BlockscoutMigrations,
+) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
@@ -227,6 +359,7 @@ pub async fn simple_test_counter<C: DataSource + ChartProperties>(
     let mut parameters = UpdateParameters {
         db: &db,
         blockscout: &blockscout,
+        blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,
     };

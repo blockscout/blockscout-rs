@@ -10,6 +10,8 @@
 //!
 //!     2.2. Configure the group update schedule in `update_groups.json` config
 //! 3. Add the new charts to `charts.json` and `layout.json` (if needed)
+//! 4. If some were added in the previous step, also consider adding the
+//!     new charts to integration tests (`tests` folder).
 //!
 
 use crate::config::{
@@ -212,8 +214,26 @@ impl RuntimeSetup {
         use stats::update_groups::*;
 
         vec![
-            // singletons
+            // actual singletons
             Arc::new(ActiveAccountsGroup),
+            Arc::new(AverageBlockTimeGroup),
+            Arc::new(CompletedTxnsGroup),
+            Arc::new(TotalAddressesGroup),
+            Arc::new(TotalBlocksGroup),
+            Arc::new(TotalTokensGroup),
+            Arc::new(ActiveRecurringAccountsDailyRecurrence60DaysGroup),
+            Arc::new(ActiveRecurringAccountsMonthlyRecurrence60DaysGroup),
+            Arc::new(ActiveRecurringAccountsWeeklyRecurrence60DaysGroup),
+            Arc::new(ActiveRecurringAccountsYearlyRecurrence60DaysGroup),
+            Arc::new(ActiveRecurringAccountsDailyRecurrence90DaysGroup),
+            Arc::new(ActiveRecurringAccountsMonthlyRecurrence90DaysGroup),
+            Arc::new(ActiveRecurringAccountsWeeklyRecurrence90DaysGroup),
+            Arc::new(ActiveRecurringAccountsYearlyRecurrence90DaysGroup),
+            Arc::new(ActiveRecurringAccountsDailyRecurrence120DaysGroup),
+            Arc::new(ActiveRecurringAccountsMonthlyRecurrence120DaysGroup),
+            Arc::new(ActiveRecurringAccountsWeeklyRecurrence120DaysGroup),
+            Arc::new(ActiveRecurringAccountsYearlyRecurrence120DaysGroup),
+            // singletons but not really (include all resolutions of the same chart)
             Arc::new(AverageBlockRewardsGroup),
             Arc::new(AverageBlockSizeGroup),
             Arc::new(AverageGasLimitGroup),
@@ -224,11 +244,6 @@ impl RuntimeSetup {
             Arc::new(NewBlocksGroup),
             Arc::new(TxnsFeeGroup),
             Arc::new(TxnsSuccessRateGroup),
-            Arc::new(AverageBlockTimeGroup),
-            Arc::new(CompletedTxnsGroup),
-            Arc::new(TotalAddressesGroup),
-            Arc::new(TotalBlocksGroup),
-            Arc::new(TotalTokensGroup),
             // complex groups
             Arc::new(NewAccountsGroup),
             Arc::new(NewContractsGroup),

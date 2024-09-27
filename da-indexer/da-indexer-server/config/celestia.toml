@@ -25,6 +25,9 @@ agent_endpoint = "localhost:6831"
 enabled = true
 format = "default"
 
+[l2_router]
+routes_path = "./da-indexer-server/config/celestia_routes.toml"
+
 [indexer]
 concurrency = 15
 retry_interval = 180

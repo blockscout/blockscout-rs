@@ -7,8 +7,13 @@
 //!
 //! ## Usage
 //!
-//! (you can also check [`data_source` documentation](crate::data_source), tests there, or
-//! the actual usage in `stats-server` crate (`runtime_setup.rs`))
+//! You can also check [`data_source` documentation](crate::data_source), tests there, or
+//! the actual usage in `stats-server` crate (`runtime_setup.rs`).
+//!
+//! Note: instructions provided here are for manual/direct usage of the update groups.
+//! If you're not doing somerhing exceptional see instructions in `runtime_setup.rs`
+//! that has everything already set up.
+//!
 //!
 //! 1. Create multiple connected charts
 //!     (e.g.
@@ -198,7 +203,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
 /// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
 /// #     },
-/// #     types::{UpdateContext, UpdateParameters},
+/// #     types::{UpdateContext, UpdateParameters, BlockscoutMigrations},
 /// # };
 /// # use chrono::NaiveDate;
 /// # use entity::sea_orm_active_enums::ChartType;
@@ -209,7 +214,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// struct DummyRemoteStatement;
 ///
 /// impl StatementFromRange for DummyRemoteStatement {
-///     fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+///     fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
 ///         todo!()
 ///     }
 /// }

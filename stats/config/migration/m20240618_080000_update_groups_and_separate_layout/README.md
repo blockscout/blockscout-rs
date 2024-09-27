@@ -1,14 +1,25 @@
 # Config migration
 
-As a result of change in internal logic, configuration is changed.
-This "migration" is aimed to help with updating the config correspondingly.
+As a result of change in internal logic in `v2.0.0`, some configurations were changed.
+This "migration" assists with updating the config correspondingly.
+
+## When to use these instructions
+
+* You changed some values in default config file (`config.json` or `config.toml`)
+    * See "Updating config files
+* You changed the location of the config files
+    * Use `STATS___` section in "Updating environmental variables"
+* You have some environmental variables set on launch
+    * Follow "Updating environmental variables" section
 
 ## Changes
 
-- `charts.json` now does not contain update scheduling information and chart layout. 
-- Scheduling is configured per update group in a separate (`update_schedule.json`) file.
+- `charts.json` now does not contain update scheduling information and layout information (line chart categories). 
+- Scheduling is configured per update group in a separate (`update_group.json`) file.
 This file reflects update groups constructed within rust code.
+    - In other words, the 'update groups' are collections of charts that are updated simultaneously (i.e. with the same schedule + according to dependencies between them)
 - Layout is configured in `layout.json` file.
+- Envs are changed accordingly
 
 ## How to migrate
 
@@ -42,14 +53,12 @@ mv ./new_configs/* ./
 rm -r ./new_configs
 ```
 
-## Existing env updating
+### Updating environmental variables.
 
-There are respective changes to env variables.
-
-### `STATS___`
+#### `STATS___`
 Settings for the server are mostly unchanged. The only thing is, if you have non-default config location (`STATS___CHARTS_CONFIG`), you likely need to set corresponding `STATS___LAYOUT_CONFIG` and `STATS___UPDATE_GROUPS_CONFIG`.
 
-### `STATS_CHARTS`
+#### `STATS_CHARTS__`
 Unchanged variables:
 
 - `STATS_CHARTS__COUNTERS__<NAME>__*` (except `..__UPDATE_SCHEDULE`) 
@@ -57,15 +66,19 @@ Unchanged variables:
 
 Below are instructions on migrating other env variables.
 
-#### Update schedule
+##### Update schedule
 
 Counters:
 
 - Old name - `STATS_CHARTS__COUNTERS__<NAME>__UPDATE_SCHEDULE`
 - New name - `STATS_UPDATE_GROUPS__SCHEDULES__<GROUP_NAME>`
 - Additional info - Schedule will be overridden for the whole group. `<GROUP_NAME>` is the name of update group
-that contains the `<NAME>` chart. It can be found in [update_groups.rs](../../../stats-server/src/update_groups.rs) or
-in [split.py (variable `update_groups_mapping`)](./split.py)
+that contains the `<NAME>` chart. It can be found in [update_groups.rs](../../../stats/src/update_groups.rs) or
+in [split.py (variable `update_groups_mapping`)](./split.py). Usually, the group names end with `...__GROUP`, for example:
+```
+STATS_UPDATE_GROUPS__SCHEDULES__ACTIVE_ACCOUNTS_GROUP
+STATS_UPDATE_GROUPS__SCHEDULES__NEW_ACCOUNTS_GROUP
+```
 
 Line charts:
 
@@ -73,14 +86,16 @@ Line charts:
 - New name - `STATS_UPDATE_GROUPS__SCHEDULES__<GROUP_NAME>`
 - Additional info - see Counters
 
-#### Chart settings
+##### Chart settings
 
 Counters' settings are not touched.
+
+Line charts:
 
 - Old name - `STATS_CHARTS__LINES__<1>__CHARTS__<2>__*` (except `..__UPDATE_SCHEDULE`)
 - New name - `STATS_CHARTS__LINE_CHARTS__<2>__*`
 
-#### Line chart layout
+##### Line chart layout
 
 Category settings:
 

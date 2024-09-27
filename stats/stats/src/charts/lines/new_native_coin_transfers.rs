@@ -1,18 +1,21 @@
 use std::ops::Range;
 
 use crate::{
-    data_source::kinds::{
-        data_manipulation::{
-            map::{MapParseTo, MapToString},
-            resolutions::sum::SumLowerResolution,
-        },
-        local_db::{
-            parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString},
+                resolutions::sum::SumLowerResolution,
             },
-            DirectVecLocalDbChartSource,
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -27,26 +30,50 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 pub struct NewNativeCoinTransfersStatement;
 
 impl StatementFromRange for NewNativeCoinTransfersStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
-                SELECT
-                    DATE(b.timestamp) as date,
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    b.timestamp != to_timestamp(0) AND
-                    b.consensus = true AND
-                    LENGTH(t.input) = 0 AND
-                    t.value >= 0 {filter}
-                GROUP BY date
-            "#,
-            [],
-            "b.timestamp",
-            range
-        )
+    fn get_statement(
+        range: Option<Range<DateTimeUtc>>,
+        completed_migrations: &BlockscoutMigrations,
+    ) -> Statement {
+        if completed_migrations.denormalization {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        DATE(t.block_timestamp) as date,
+                        COUNT(*)::TEXT as value
+                    FROM transactions t
+                    WHERE
+                        t.block_timestamp != to_timestamp(0) AND
+                        t.block_consensus = true AND
+                        LENGTH(t.input) = 0 AND
+                        t.value >= 0 {filter}
+                    GROUP BY date
+                "#,
+                [],
+                "t.block_timestamp",
+                range
+            )
+        } else {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        DATE(b.timestamp) as date,
+                        COUNT(*)::TEXT as value
+                    FROM transactions t
+                    JOIN blocks       b ON t.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true AND
+                        LENGTH(t.input) = 0 AND
+                        t.value >= 0 {filter}
+                    GROUP BY date
+                "#,
+                [],
+                "b.timestamp",
+                range
+            )
+        }
     }
 }
 
@@ -101,12 +128,12 @@ pub type NewNativeCoinTransfersYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::simple_test::simple_test_chart_with_migration_variants;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_native_coins_transfers() {
-        simple_test_chart::<NewNativeCoinTransfers>(
+        simple_test_chart_with_migration_variants::<NewNativeCoinTransfers>(
             "update_native_coins_transfers",
             vec![
                 ("2022-11-09", "2"),
@@ -124,7 +151,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_native_coins_transfers_weekly() {
-        simple_test_chart::<NewNativeCoinTransfersWeekly>(
+        simple_test_chart_with_migration_variants::<NewNativeCoinTransfersWeekly>(
             "update_native_coins_transfers_weekly",
             vec![
                 ("2022-11-07", "12"),
@@ -139,7 +166,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_native_coins_transfers_monthly() {
-        simple_test_chart::<NewNativeCoinTransfersMonthly>(
+        simple_test_chart_with_migration_variants::<NewNativeCoinTransfersMonthly>(
             "update_native_coins_transfers_monthly",
             vec![
                 ("2022-11-01", "12"),
@@ -154,7 +181,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_native_coins_transfers_yearly() {
-        simple_test_chart::<NewNativeCoinTransfersYearly>(
+        simple_test_chart_with_migration_variants::<NewNativeCoinTransfersYearly>(
             "update_native_coins_transfers_yearly",
             vec![("2022-01-01", "14"), ("2023-01-01", "3")],
         )

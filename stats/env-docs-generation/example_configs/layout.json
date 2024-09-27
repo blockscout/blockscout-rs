@@ -1,0 +1,13 @@
+{
+    "counters_order": {
+        "<counter_name>": 3
+    },
+    "line_chart_categories": {
+        "<category_name>": {
+            "title": "Accounts",
+            "charts_order": {
+                "<line_chart_name>": 1
+            }
+        }
+    }
+}

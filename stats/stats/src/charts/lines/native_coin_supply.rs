@@ -1,15 +1,20 @@
 use std::ops::Range;
 
 use crate::{
-    data_source::kinds::{
-        data_manipulation::{map::MapToString, resolutions::last_value::LastValueLowerResolution},
-        local_db::{
-            parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::MapToString, resolutions::last_value::LastValueLowerResolution,
             },
-            DirectVecLocalDbChartSource,
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -25,7 +30,7 @@ const ETH: i64 = 1_000_000_000_000_000_000;
 pub struct NativeCoinSupplyStatement;
 
 impl StatementFromRange for NativeCoinSupplyStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
         let day_range: Option<Range<NaiveDate>> = range.map(|r| {
             let Range { start, end } = r;
             // chart is off anyway, so shouldn't be a big deal

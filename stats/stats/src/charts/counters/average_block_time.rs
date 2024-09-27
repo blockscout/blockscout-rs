@@ -1,8 +1,11 @@
 use crate::{
-    data_source::kinds::{
-        data_manipulation::map::MapToString,
-        local_db::DirectPointLocalDbChartSource,
-        remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
+    data_source::{
+        kinds::{
+            data_manipulation::map::MapToString,
+            local_db::DirectPointLocalDbChartSource,
+            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
+        },
+        types::BlockscoutMigrations,
     },
     ChartProperties, MissingDatePolicy, Named,
 };
@@ -14,7 +17,7 @@ use sea_orm::{DbBackend, Statement};
 pub struct AverageBlockTimeStatement;
 
 impl StatementForOne for AverageBlockTimeStatement {
-    fn get_statement() -> Statement {
+    fn get_statement(_: &BlockscoutMigrations) -> Statement {
         Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"

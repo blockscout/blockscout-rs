@@ -1,6 +1,6 @@
 use blockscout_db::entity::{
     address_coin_balances_daily, addresses, block_rewards, blocks, internal_transactions,
-    smart_contracts, tokens, transactions,
+    migrations_status, smart_contracts, tokens, transactions,
 };
 use chrono::{NaiveDate, NaiveDateTime};
 use rand::{Rng, SeedableRng};
@@ -260,6 +260,19 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .exec(blockscout)
         .await
         .unwrap();
+
+    let migrations = vec![
+        ("denormalization", Some(true)),
+        ("ctb_token_type", Some(false)),
+        ("tb_token_type", None),
+    ]
+    .into_iter()
+    .map(|(name, status)| mock_migration(name, status));
+
+    migrations_status::Entity::insert_many(migrations)
+        .exec(blockscout)
+        .await
+        .unwrap();
 }
 
 fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
@@ -342,8 +355,10 @@ fn mock_transaction(
     transactions::ActiveModel {
         block_number: Set(Some(block_number)),
         block_hash: Set(Some(block.hash.as_ref().to_vec())),
+        block_timestamp: Set(Some(*block.timestamp.as_ref())),
+        block_consensus: Set(Some(*block.consensus.as_ref())),
         hash: Set(hash),
-        gas_price: Set(Decimal::new(gas_price, 0)),
+        gas_price: Set(Some(Decimal::new(gas_price, 0))),
         gas: Set(Decimal::new(gas, 0)),
         input: Set(input),
         nonce: Set(Default::default()),
@@ -373,12 +388,14 @@ fn mock_failed_transaction(
     transactions::ActiveModel {
         block_number: Set(block.map(|block| *block.number.as_ref() as i32)),
         block_hash: Set(block.map(|block| block.hash.as_ref().to_vec())),
+        block_timestamp: Set(block.map(|b| *b.timestamp.as_ref())),
+        block_consensus: Set(block.map(|b| *b.consensus.as_ref())),
         cumulative_gas_used: Set(block.map(|_| Default::default())),
         gas_used: Set(block.map(|_| gas)),
         index: Set(block.map(|_| Default::default())),
         error: Set(error),
         hash: Set(hash),
-        gas_price: Set(Decimal::new(1_123_456_789, 0)),
+        gas_price: Set(Some(Decimal::new(1_123_456_789, 0))),
         gas: Set(gas),
         input: Set(Default::default()),
         nonce: Set(Default::default()),
@@ -491,5 +508,17 @@ fn mock_internal_transaction(
         block_hash: Set(tx.block_hash.as_ref().clone().unwrap()),
         block_index: Set((*tx.index.as_ref()).unwrap()),
         ..Default::default()
+    }
+}
+
+fn mock_migration(name: &str, completed: Option<bool>) -> migrations_status::ActiveModel {
+    let status = completed
+        .map(|done| if done { "completed" } else { "started" })
+        .map(|s| s.to_string());
+    migrations_status::ActiveModel {
+        migration_name: Set(name.to_string()),
+        status: Set(status),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
     }
 }

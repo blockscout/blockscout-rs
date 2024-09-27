@@ -4,6 +4,7 @@
 //! for persistent sources that retrieve local data on query.
 
 pub mod delta;
+pub mod filter_deducible;
 pub mod last_point;
 pub mod map;
 pub mod resolutions;

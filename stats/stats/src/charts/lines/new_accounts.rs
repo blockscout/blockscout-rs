@@ -16,6 +16,7 @@ use crate::{
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
+        types::BlockscoutMigrations,
         UpdateContext,
     },
     define_and_impl_resolution_properties,
@@ -32,35 +33,62 @@ use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 pub struct NewAccountsStatement;
 
 impl StatementFromRange for NewAccountsStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+    fn get_statement(
+        range: Option<Range<DateTimeUtc>>,
+        completed_migrations: &BlockscoutMigrations,
+    ) -> Statement {
         // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough
         let min_timestamp = DateTimeUtc::UNIX_EPOCH;
         // All transactions from the beginning must be considered to calculate new accounts correctly.
         // E.g. if account was first active both before `range.start()` and within the range,
         // we don't want to count it within the range (as it's not a *new* account).
         let range = range.map(|r| (min_timestamp..r.end));
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
-                SELECT
-                    first_tx.date as date,
-                    count(*)::TEXT as value
-                FROM (
-                    SELECT DISTINCT ON (t.from_address_hash)
-                        b.timestamp::date as date
-                    FROM transactions  t
-                    JOIN blocks        b ON t.block_hash = b.hash
-                    WHERE
-                        b.timestamp != to_timestamp(0) AND
-                        b.consensus = true {filter}
-                    ORDER BY t.from_address_hash, b.timestamp
-                ) first_tx
-                GROUP BY first_tx.date;
-            "#,
-            [],
-            "b.timestamp",
-            range
-        )
+        if completed_migrations.denormalization {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        first_tx.date as date,
+                        count(*)::TEXT as value
+                    FROM (
+                        SELECT DISTINCT ON (t.from_address_hash)
+                            t.block_timestamp::date as date
+                        FROM transactions  t
+                        WHERE
+                            t.block_timestamp != to_timestamp(0) AND
+                            t.block_consensus = true {filter}
+                        ORDER BY t.from_address_hash, t.block_timestamp
+                    ) first_tx
+                    GROUP BY first_tx.date;
+                "#,
+                [],
+                "t.block_timestamp",
+                range
+            )
+        } else {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        first_tx.date as date,
+                        count(*)::TEXT as value
+                    FROM (
+                        SELECT DISTINCT ON (t.from_address_hash)
+                            b.timestamp::date as date
+                        FROM transactions  t
+                        JOIN blocks        b ON t.block_hash = b.hash
+                        WHERE
+                            b.timestamp != to_timestamp(0) AND
+                            b.consensus = true {filter}
+                        ORDER BY t.from_address_hash, b.timestamp
+                    ) first_tx
+                    GROUP BY first_tx.date;
+                "#,
+                [],
+                "b.timestamp",
+                range
+            )
+        }
     }
 }
 
@@ -73,7 +101,8 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
     ) -> Result<Vec<DateValue<String>>, UpdateError> {
-        let query = NewAccountsStatement::get_statement(range.clone());
+        let query =
+            NewAccountsStatement::get_statement(range.clone(), &cx.blockscout_applied_migrations);
         let mut data = DateValue::<String>::find_by_statement(query)
             .all(cx.blockscout)
             .await
@@ -142,12 +171,14 @@ pub type NewAccountsYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
+    use crate::tests::simple_test::{
+        ranged_test_chart_with_migration_variants, simple_test_chart_with_migration_variants,
+    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_accounts() {
-        simple_test_chart::<NewAccounts>(
+        simple_test_chart_with_migration_variants::<NewAccounts>(
             "update_new_accounts",
             vec![
                 ("2022-11-09", "1"),
@@ -162,7 +193,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_accounts_weekly() {
-        simple_test_chart::<NewAccountsWeekly>(
+        simple_test_chart_with_migration_variants::<NewAccountsWeekly>(
             "update_new_accounts_weekly",
             vec![("2022-11-07", "8"), ("2023-02-27", "1")],
         )
@@ -172,7 +203,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_accounts_monthly() {
-        simple_test_chart::<NewAccountsMonthly>(
+        simple_test_chart_with_migration_variants::<NewAccountsMonthly>(
             "update_new_accounts_monthly",
             vec![("2022-11-01", "8"), ("2023-03-01", "1")],
         )
@@ -182,7 +213,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_accounts_yearly() {
-        simple_test_chart::<NewAccountsYearly>(
+        simple_test_chart_with_migration_variants::<NewAccountsYearly>(
             "update_new_accounts_yearly",
             vec![("2022-01-01", "8"), ("2023-01-01", "1")],
         )
@@ -192,7 +223,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn ranged_update_new_accounts() {
-        ranged_test_chart::<NewAccounts>(
+        ranged_test_chart_with_migration_variants::<NewAccounts>(
             "ranged_update_new_accounts",
             vec![
                 ("2022-11-09", "1"),

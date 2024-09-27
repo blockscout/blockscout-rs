@@ -1,18 +1,21 @@
 use std::ops::Range;
 
 use crate::{
-    data_source::kinds::{
-        data_manipulation::{
-            map::{MapParseTo, MapToString},
-            resolutions::sum::SumLowerResolution,
-        },
-        local_db::{
-            parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString},
+                resolutions::sum::SumLowerResolution,
             },
-            DirectVecLocalDbChartSource,
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -27,24 +30,46 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 pub struct NewTxnsStatement;
 
 impl StatementFromRange for NewTxnsStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
-                SELECT
-                    date(b.timestamp) as date,
-                    COUNT(*)::TEXT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    b.timestamp != to_timestamp(0) AND
-                    b.consensus = true {filter}
-                GROUP BY date;
-            "#,
-            [],
-            "b.timestamp",
-            range
-        )
+    fn get_statement(
+        range: Option<Range<DateTimeUtc>>,
+        completed_migrations: &BlockscoutMigrations,
+    ) -> Statement {
+        if completed_migrations.denormalization {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        date(t.block_timestamp) as date,
+                        COUNT(*)::TEXT as value
+                    FROM transactions t
+                    WHERE
+                        t.block_timestamp != to_timestamp(0) AND
+                        t.block_consensus = true {filter}
+                    GROUP BY date;
+                "#,
+                [],
+                "t.block_timestamp",
+                range
+            )
+        } else {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        date(b.timestamp) as date,
+                        COUNT(*)::TEXT as value
+                    FROM transactions t
+                    JOIN blocks       b ON t.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true {filter}
+                    GROUP BY date;
+                "#,
+                [],
+                "b.timestamp",
+                range
+            )
+        }
     }
 }
 
@@ -98,12 +123,14 @@ pub type NewTxnsYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
+    use crate::tests::simple_test::{
+        ranged_test_chart_with_migration_variants, simple_test_chart_with_migration_variants,
+    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns() {
-        simple_test_chart::<NewTxns>(
+        simple_test_chart_with_migration_variants::<NewTxns>(
             "update_new_txns",
             vec![
                 ("2022-11-09", "5"),
@@ -122,7 +149,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns_weekly() {
-        simple_test_chart::<NewTxnsWeekly>(
+        simple_test_chart_with_migration_variants::<NewTxnsWeekly>(
             "update_new_txns_weekly",
             vec![
                 ("2022-11-07", "36"),
@@ -138,7 +165,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns_monthly() {
-        simple_test_chart::<NewTxnsMonthly>(
+        simple_test_chart_with_migration_variants::<NewTxnsMonthly>(
             "update_new_txns_monthly",
             vec![
                 ("2022-11-01", "36"),
@@ -154,7 +181,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns_yearly() {
-        simple_test_chart::<NewTxnsYearly>(
+        simple_test_chart_with_migration_variants::<NewTxnsYearly>(
             "update_new_txns_yearly",
             vec![("2022-01-01", "41"), ("2023-01-01", "6")],
         )
@@ -164,7 +191,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn ranged_update_new_txns() {
-        ranged_test_chart::<NewTxns>(
+        ranged_test_chart_with_migration_variants::<NewTxns>(
             "ranged_update_new_txns",
             vec![
                 ("2022-11-09", "5"),

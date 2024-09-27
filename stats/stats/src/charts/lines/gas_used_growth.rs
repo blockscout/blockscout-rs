@@ -1,16 +1,21 @@
 use std::ops::Range;
 
 use crate::{
-    data_source::kinds::{
-        data_manipulation::{
-            map::{Map, MapFunction},
-            resolutions::last_value::LastValueLowerResolution,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{Map, MapFunction},
+                resolutions::last_value::LastValueLowerResolution,
+            },
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        local_db::{
-            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
-            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
-        },
-        remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
@@ -25,7 +30,7 @@ use sea_orm::{prelude::*, DbBackend, Statement};
 pub struct GasUsedPartialStatement;
 
 impl StatementFromRange for GasUsedPartialStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>) -> Statement {
+    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"

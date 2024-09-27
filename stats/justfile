@@ -31,8 +31,12 @@ test-with-db *args:
     just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
     just                            docker-name="{{docker-name}}-test" stop-postgres
 
+check-envs:
+    VALIDATE_ONLY=true cargo run --bin env-docs-generation
+
 restart-generate-entities: 
-    just restart-postgres
+    -just stop-postgres
+    just start-postgres
     just stats/migrate-up
     just stats/generate-entities
     just stop-postgres

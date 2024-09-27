@@ -189,7 +189,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        data_source::kinds::data_manipulation::map::MapParseTo,
+        data_source::{kinds::data_manipulation::map::MapParseTo, types::BlockscoutMigrations},
         gettable_const,
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
         tests::point_construction::{d, d_v, d_v_double, d_v_int, dt, w_v_double, week_of},
@@ -321,6 +321,7 @@ mod tests {
             &UpdateContext {
                 db: &db,
                 blockscout: &db,
+                blockscout_applied_migrations: BlockscoutMigrations::latest(),
                 time: dt("2024-07-15T09:00:00").and_utc(),
                 force_full: false,
             },
@@ -368,6 +369,7 @@ mod tests {
         let context = UpdateContext {
             db: &empty_db,
             blockscout: &empty_db,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: dt("2024-07-30T09:00:00").and_utc(),
             force_full: false,
         };
@@ -413,6 +415,7 @@ mod tests {
         let context = UpdateContext {
             db: &empty_db,
             blockscout: &empty_db,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: dt("2023-03-30T09:00:00").and_utc(),
             force_full: false,
         };
@@ -454,6 +457,7 @@ mod tests {
         let context = UpdateContext {
             db: &empty_db,
             blockscout: &empty_db,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
             time: dt("2023-03-30T09:00:00").and_utc(),
             force_full: false,
         };
