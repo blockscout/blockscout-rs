@@ -348,7 +348,6 @@ mod tests {
 
     mod test_batch_step_receives_correct_data {
         use std::{
-            ops::Deref,
             str::FromStr,
             sync::{Arc, OnceLock},
         };
