@@ -4704,7 +4704,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
- "serde_with 2.3.3",
+ "serde_with 3.9.0",
  "stats",
  "stats-proto",
  "tokio",
