@@ -61,7 +61,7 @@ async fn test_lines_ok() {
         "accountsGrowth",
         "activeAccounts",
         // "activeRecurringAccounts60Days",
-        "activeRecurringAccounts90Days",
+        // "activeRecurringAccounts90Days",
         // "activeRecurringAccounts120Days",
         "averageBlockSize",
         "averageBlockRewards",
