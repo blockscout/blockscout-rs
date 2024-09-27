@@ -328,7 +328,7 @@ mod tests {
             }
         }
 
-        impl<M, R, Resolution> UpdateBehaviour<M, Resolution> for UpdateSingleTriggerAsserter
+        impl<M, Resolution> UpdateBehaviour<M, Resolution> for UpdateSingleTriggerAsserter
         where
             M: DataSource,
             Resolution: Send,
@@ -371,7 +371,6 @@ mod tests {
         }
 
         type TestedChart = LocalDbChartSource<
-            (),
             (),
             DefaultCreate<TestedChartProps>,
             UpdateSingleTriggerAsserter,

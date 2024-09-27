@@ -11,7 +11,7 @@ use crate::{
 use super::PassVecStep;
 
 #[derive(Debug, Clone)]
-pub struct StepInput<MI, RI> {
+pub struct StepInput<MI> {
     pub chart_id: i32,
     pub update_time: DateTime<Utc>,
     pub min_blockscout_block: i64,
@@ -29,7 +29,7 @@ where
 impl<StepsRecorder> BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>>
     for RecordingPassStep<StepsRecorder>
 where
-    StepsRecorder: Recorder<Data = StepInput<Vec<DateValue<String>>, ()>>,
+    StepsRecorder: Recorder<Data = StepInput<Vec<DateValue<String>>>>,
 {
     async fn batch_update_values_step_with(
         db: &DatabaseConnection,
