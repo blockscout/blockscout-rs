@@ -384,7 +384,7 @@ mod tests {
 
         use super::{parameters::mock::StepInput, TimespanDuration};
 
-        type VecStringStepInput = StepInput<Vec<DateValue<String>>, ()>;
+        type VecStringStepInput = StepInput<Vec<DateValue<String>>>;
         type SharedInputsStorage = Arc<Mutex<Vec<VecStringStepInput>>>;
 
         // `OnceLock` in order to return the same instance each time
@@ -453,7 +453,7 @@ mod tests {
             storage: SharedInputsStorage,
             expected_update_time: Option<DateTime<Utc>>,
         ) {
-            let mut prev_input: Option<&StepInput<Vec<DateValue<String>>, ()>> = None;
+            let mut prev_input: Option<&StepInput<Vec<DateValue<String>>>> = None;
             let expected_update_time = expected_update_time
                 .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
             for input in storage.lock().await.deref() {
