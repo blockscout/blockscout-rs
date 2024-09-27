@@ -37,7 +37,6 @@ where
     DS: DataSource<Output = Vec<TimespanValue<Resolution, Value>>>,
 {
     type MainDependencies = DS;
-    type ResolutionDependencies = ();
     type Output = TimespanValue<Resolution, Value>;
     fn mutex_id() -> Option<String> {
         None

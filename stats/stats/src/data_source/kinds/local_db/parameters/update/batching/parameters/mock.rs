@@ -17,7 +17,6 @@ pub struct StepInput<MI, RI> {
     pub min_blockscout_block: i64,
     pub last_accurate_point: DateValue<String>,
     pub main_data: MI,
-    pub resolution_data: RI,
 }
 
 /// Allows to inspect values passed to each step call;
@@ -27,7 +26,7 @@ pub struct RecordingPassStep<StepsRecorder>(PhantomData<StepsRecorder>)
 where
     StepsRecorder: Recorder;
 
-impl<StepsRecorder> BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
+impl<StepsRecorder> BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>>
     for RecordingPassStep<StepsRecorder>
 where
     StepsRecorder: Recorder<Data = StepInput<Vec<DateValue<String>>, ()>>,
@@ -39,7 +38,6 @@ where
         min_blockscout_block: i64,
         last_accurate_point: DateValue<String>,
         main_data: Vec<DateValue<String>>,
-        resolution_data: (),
     ) -> Result<usize, UpdateError> {
         StepsRecorder::record(StepInput {
             chart_id,
@@ -47,7 +45,6 @@ where
             min_blockscout_block,
             last_accurate_point: last_accurate_point.clone(),
             main_data: main_data.clone(),
-            resolution_data,
         })
         .await;
         PassVecStep::batch_update_values_step_with(
@@ -57,7 +54,6 @@ where
             min_blockscout_block,
             last_accurate_point,
             main_data,
-            resolution_data,
         )
         .await
     }

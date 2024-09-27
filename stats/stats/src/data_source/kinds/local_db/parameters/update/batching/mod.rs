@@ -24,10 +24,9 @@ use crate::{
 pub mod parameter_traits;
 pub mod parameters;
 
-pub struct BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>(
+pub struct BatchUpdate<MainDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>(
     PhantomData<(
         MainDep,
-        ResolutionDep,
         BatchStep,
         BatchSizeUpperBound,
         Query,
@@ -36,19 +35,17 @@ pub struct BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Q
 )
 where
     MainDep: DataSource,
-    ResolutionDep: DataSource,
-    BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
+    BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output>,
     BatchSizeUpperBound: Get<Value = TimespanDuration<ChartProps::Resolution>>,
     Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties;
 
-impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
-    UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>
-    for BatchUpdate<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
+impl<MainDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
+    UpdateBehaviour<MainDep, ChartProps::Resolution>
+    for BatchUpdate<MainDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
 where
     MainDep: DataSource,
-    ResolutionDep: DataSource,
-    BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
+    BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output>,
     BatchSizeUpperBound: Get<Value = TimespanDuration<ChartProps::Resolution>>,
     Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties,
@@ -93,7 +90,6 @@ where
             let now = Instant::now();
             let found = batch_update_values_step::<
                 MainDep,
-                ResolutionDep,
                 BatchStep,
                 ChartProps::Resolution,
             >(
@@ -151,7 +147,7 @@ where
 }
 
 /// Returns how many records were found
-async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep, Resolution>(
+async fn batch_update_values_step<MainDep, BatchStep, Resolution>(
     cx: &UpdateContext<'_>,
     chart_id: i32,
     min_blockscout_block: i64,
@@ -161,15 +157,12 @@ async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep, Resolution>
 ) -> Result<usize, UpdateError>
 where
     MainDep: DataSource,
-    ResolutionDep: DataSource,
     Resolution: Timespan,
-    BatchStep: BatchStepBehaviour<Resolution, MainDep::Output, ResolutionDep::Output>,
+    BatchStep: BatchStepBehaviour<Resolution, MainDep::Output>,
 {
     let query_range = range.into_date_time_range();
     let main_data =
         MainDep::query_data(cx, Some(query_range.clone()), dependency_data_fetch_timer).await?;
-    let resolution_data =
-        ResolutionDep::query_data(cx, Some(query_range), dependency_data_fetch_timer).await?;
     let found = BatchStep::batch_update_values_step_with(
         cx.db,
         chart_id,
@@ -177,7 +170,6 @@ where
         min_blockscout_block,
         last_accurate_point,
         main_data,
-        resolution_data,
     )
     .await?;
     Ok(found)
@@ -433,7 +425,6 @@ mod tests {
 
         type ThisRecordingBatchUpdate = BatchUpdate<
             AccountsGrowth,
-            (),
             ThisRecordingStep,
             Batch1Day,
             DefaultQueryVec<ThisTestChartProps>,
@@ -442,7 +433,6 @@ mod tests {
 
         type RecordingChart = LocalDbChartSource<
             AccountsGrowth,
-            (),
             DefaultCreate<ThisTestChartProps>,
             ThisRecordingBatchUpdate,
             DefaultQueryVec<ThisTestChartProps>,
