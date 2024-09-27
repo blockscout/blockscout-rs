@@ -60,7 +60,7 @@ impl StatementFromRange for AverageGasPriceStatement {
                                     t_filtered.max_fee_per_gas - b.base_fee_per_gas
                                 )
                             )
-                        ) / $1)::float as value
+                        ) / $1)::TEXT as value
                     FROM (
                         SELECT * from transactions t
                         WHERE
@@ -89,7 +89,7 @@ impl StatementFromRange for AverageGasPriceStatement {
                                     transactions.max_fee_per_gas - blocks.base_fee_per_gas
                                 )
                             )
-                        ) / $1)::float as value
+                        ) / $1)::TEXT as value
                     FROM transactions
                     JOIN blocks ON transactions.block_hash = blocks.hash
                     WHERE
@@ -107,8 +107,6 @@ impl StatementFromRange for AverageGasPriceStatement {
 
 pub type AverageGasPriceRemote =
     RemoteDatabaseSource<PullAllWithAndSort<AverageGasPriceStatement, NaiveDate, f64>>;
-
-pub type AverageGasPriceRemoteString = MapToString<AverageGasPriceRemote>;
 
 pub struct Properties;
 
@@ -136,7 +134,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type AverageGasPrice =
-    DirectVecLocalDbChartSource<AverageGasPriceRemoteString, Batch30Days, Properties>;
+    DirectVecLocalDbChartSource<AverageGasPriceRemote, Batch30Days, Properties>;
 pub type AverageGasPriceWeekly = DirectVecLocalDbChartSource<
     MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
