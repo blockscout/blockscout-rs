@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-service-launcher"
-version = "0.13.1"
+version = "0.13.2"
 description = "Allows to launch blazingly fast blockscout rust services"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"

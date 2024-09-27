@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres
+        image: postgres:16
         env:
           POSTGRES_PASSWORD: admin
           POSTGRES_USER: graph-node

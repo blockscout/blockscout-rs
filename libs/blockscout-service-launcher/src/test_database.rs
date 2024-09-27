@@ -21,7 +21,8 @@ impl TestDbGuard {
             .await
             .expect("Connection to postgres (without database) failed");
         // We use a hash, as the name itself may be quite long and be trimmed.
-        let db_name = format!("_{:x}", keccak_hash::keccak(db_name));
+        // Postgres DB name should be 63 symbols max.
+        let db_name = format!("_{:x}", keccak_hash::keccak(db_name))[..63].to_string();
         let mut guard = TestDbGuard {
             conn_with_db: Arc::new(DatabaseConnection::Disconnected),
             conn_without_db: Arc::new(conn_without_db),

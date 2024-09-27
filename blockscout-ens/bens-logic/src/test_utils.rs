@@ -83,7 +83,7 @@ pub async fn mocked_blockscout_client() -> BlockscoutClient {
     let mock_server = MockServer::start().await;
     for (tx_hash, tx) in TXNS.iter() {
         let mock =
-            Mock::given(method("GET")).and(path(&format!("/api/v2/transactions/{tx_hash:#x}")));
+            Mock::given(method("GET")).and(path(format!("/api/v2/transactions/{tx_hash:#x}")));
         mock.respond_with(ResponseTemplate::new(200).set_body_json(tx))
             .mount(&mock_server)
             .await;
