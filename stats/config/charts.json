@@ -71,6 +71,7 @@
             "description": "{{active_recurring_accounts_description}} 60-day timespan"
         },
         "active_recurring_accounts_90_days": {
+            "enabled": false,
             "title": "{{active_recurring_accounts_title}} - 90 days window",
             "description": "{{active_recurring_accounts_description}} 90-day timespan"
         },
