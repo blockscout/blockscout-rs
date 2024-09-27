@@ -25,13 +25,7 @@ pub mod parameter_traits;
 pub mod parameters;
 
 pub struct BatchUpdate<MainDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>(
-    PhantomData<(
-        MainDep,
-        BatchStep,
-        BatchSizeUpperBound,
-        Query,
-        ChartProps,
-    )>,
+    PhantomData<(MainDep, BatchStep, BatchSizeUpperBound, Query, ChartProps)>,
 )
 where
     MainDep: DataSource,
@@ -88,11 +82,7 @@ where
                 "run {}/{} step of batch update", i + 1, n
             );
             let now = Instant::now();
-            let found = batch_update_values_step::<
-                MainDep,
-                BatchStep,
-                ChartProps::Resolution,
-            >(
+            let found = batch_update_values_step::<MainDep, BatchStep, ChartProps::Resolution>(
                 cx,
                 chart_id,
                 min_blockscout_block,

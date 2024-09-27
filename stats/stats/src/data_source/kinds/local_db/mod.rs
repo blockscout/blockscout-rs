@@ -101,13 +101,8 @@ pub type DirectVecLocalDbChartSource<Dependency, BatchSizeUpperBound, C> = Local
 
 /// Chart that stores single data point received from provided dependency (without
 /// any manipulations)
-pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
-    Dependency,
-    DefaultCreate<C>,
-    PassPoint<Dependency>,
-    DefaultQueryLast<C>,
-    C,
->;
+pub type DirectPointLocalDbChartSource<Dependency, C> =
+    LocalDbChartSource<Dependency, DefaultCreate<C>, PassPoint<Dependency>, DefaultQueryLast<C>, C>;
 
 impl<MainDep, Create, Update, Query, ChartProps>
     LocalDbChartSource<MainDep, Create, Update, Query, ChartProps>
