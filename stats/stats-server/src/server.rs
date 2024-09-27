@@ -99,6 +99,9 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             .await?;
     }
 
+    let _api_config = settings.api_url.map(blockscout_client::Configuration::new);
+    // todo: wait for indexing
+
     let update_service =
         Arc::new(UpdateService::new(db.clone(), blockscout, charts.clone()).await?);
 

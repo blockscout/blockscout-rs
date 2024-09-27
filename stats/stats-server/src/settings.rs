@@ -14,6 +14,7 @@ use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub db_url: String,
+    pub api_url: Option<url::Url>,
     pub create_database: bool,
     pub run_migrations: bool,
     pub blockscout_db_url: String,
@@ -50,6 +51,7 @@ impl Default for Settings {
                 },
             },
             db_url: Default::default(),
+            api_url: None,
             default_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
             force_update_on_start: Some(false),
             concurrent_start_updates: 3,
