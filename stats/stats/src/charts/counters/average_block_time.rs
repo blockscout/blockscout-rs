@@ -23,7 +23,7 @@ impl StatementForOne for AverageBlockTimeStatement {
             r#"
                 SELECT
                     max(timestamp)::date as date, 
-                    (CASE WHEN avg(diff) IS NULL THEN 0 ELSE avg(diff) END)::float as value
+                    (CASE WHEN avg(diff) IS NULL THEN 0 ELSE avg(diff) END)::TEXT as value
                 FROM
                 (
                     SELECT
@@ -41,9 +41,7 @@ impl StatementForOne for AverageBlockTimeStatement {
 }
 
 pub type AverageBlockTimeRemote =
-    RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, NaiveDate, f64>>;
-
-pub type AverageBlockTimeRemoteString = MapToString<AverageBlockTimeRemote>;
+    RemoteDatabaseSource<PullOne<AverageBlockTimeStatement, NaiveDate, String>>;
 
 pub struct Properties;
 
@@ -64,7 +62,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type AverageBlockTime = DirectPointLocalDbChartSource<AverageBlockTimeRemoteString, Properties>;
+pub type AverageBlockTime = DirectPointLocalDbChartSource<AverageBlockTimeRemote, Properties>;
 
 #[cfg(test)]
 mod tests {

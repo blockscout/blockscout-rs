@@ -51,7 +51,7 @@ impl StatementFromRange for NativeCoinSupplyStatement {
                                     WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
                                     ELSE value
                                 END
-                            ) / $1)::float AS value
+                            ) / $1)::TEXT AS value
                         FROM address_coin_balances_daily
                         WHERE  day != to_timestamp(0) AND
                                             day <= $3 AND
@@ -74,7 +74,7 @@ impl StatementFromRange for NativeCoinSupplyStatement {
                                     WHEN address_hash = '\x0000000000000000000000000000000000000000' THEN -value
                                     ELSE value
                                 END
-                            ) / $1)::float AS value
+                            ) / $1)::TEXT AS value
                         FROM address_coin_balances_daily
                         WHERE  day != to_timestamp(0)
                         GROUP BY day
@@ -89,9 +89,7 @@ impl StatementFromRange for NativeCoinSupplyStatement {
 
 // query returns float value
 pub type NativeCoinSupplyRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, f64>>;
-
-pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
+    RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, String>>;
 
 pub struct Properties;
 
@@ -119,7 +117,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type NativeCoinSupply =
-    DirectVecLocalDbChartSource<NativeCoinSupplyRemoteString, Batch30Days, Properties>;
+    DirectVecLocalDbChartSource<NativeCoinSupplyRemote, Batch30Days, Properties>;
 pub type NativeCoinSupplyWeekly = DirectVecLocalDbChartSource<
     LastValueLowerResolution<NativeCoinSupply, Week>,
     Batch30Weeks,

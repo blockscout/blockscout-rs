@@ -43,7 +43,7 @@ impl StatementFromRange for TxnsSuccessRateStatement {
                     SELECT
                         DATE(t.block_timestamp) as date,
                         COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
-                            / COUNT(*)::FLOAT as value
+                            / COUNT(*)::TEXT  as value
                     FROM transactions t
                     WHERE
                         t.block_timestamp != to_timestamp(0) AND
@@ -82,9 +82,7 @@ impl StatementFromRange for TxnsSuccessRateStatement {
 }
 
 pub type TxnsSuccessRateRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, NaiveDate, f64>>;
-
-pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;
+    RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, NaiveDate, String>>;
 
 pub struct Properties;
 
@@ -112,7 +110,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type TxnsSuccessRate =
-    DirectVecLocalDbChartSource<TxnsSuccessRateRemoteString, Batch30Days, Properties>;
+    DirectVecLocalDbChartSource<TxnsSuccessRateRemote, Batch30Days, Properties>;
 pub type TxnsSuccessRateWeekly = DirectVecLocalDbChartSource<
     MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
