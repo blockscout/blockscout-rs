@@ -106,7 +106,7 @@ impl StatementFromRange for AverageGasPriceStatement {
 }
 
 pub type AverageGasPriceRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageGasPriceStatement, NaiveDate, f64>>;
+    RemoteDatabaseSource<PullAllWithAndSort<AverageGasPriceStatement, NaiveDate, String>>;
 
 pub struct Properties;
 
