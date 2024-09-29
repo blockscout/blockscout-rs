@@ -42,8 +42,8 @@ impl StatementFromRange for TxnsSuccessRateStatement {
                 r#"
                     SELECT
                         DATE(t.block_timestamp) as date,
-                        COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
-                            / COUNT(*)::TEXT  as value
+                        (COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
+                            / COUNT(*)::FLOAT)::TEXT as value
                     FROM transactions t
                     WHERE
                         t.block_timestamp != to_timestamp(0) AND
@@ -62,8 +62,8 @@ impl StatementFromRange for TxnsSuccessRateStatement {
                 r#"
                     SELECT
                         DATE(b.timestamp) as date,
-                        COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
-                            / COUNT(*)::FLOAT as value
+                        (COUNT(CASE WHEN t.error IS NULL THEN 1 END)::FLOAT
+                            / COUNT(*)::FLOAT)::TEXT as value
                     FROM transactions t
                     JOIN blocks       b ON t.block_hash = b.hash
                     WHERE
