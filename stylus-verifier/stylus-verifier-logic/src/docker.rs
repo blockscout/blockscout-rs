@@ -1,9 +1,14 @@
-// Adapted from https://github.com/OffchainLabs/cargo-stylus
-
 use anyhow::Context;
+use bollard::{
+    container::{self, AttachContainerOptions, CreateContainerOptions, LogOutput},
+    image::{BuildImageOptions, BuilderVersion},
+    models::HostConfig,
+    Docker,
+};
+use futures_util::stream::StreamExt;
 use semver::Version;
-use std::{io::Write, path::Path};
-use tokio::{io::AsyncWriteExt, process::Command};
+use std::{path::Path, str};
+use uuid::Uuid;
 
 pub async fn run_reproducible(
     cargo_stylus_version: &Version,
@@ -11,6 +16,8 @@ pub async fn run_reproducible(
     dir: &Path,
     command_line: &[&str],
 ) -> Result<String, anyhow::Error> {
+    let docker =
+        Docker::connect_with_http_defaults().context("failed to connect to docker daemon")?;
     tracing::trace!(
         "Running reproducible Stylus command with cargo-stylus {}, toolchain {}",
         cargo_stylus_version,
@@ -20,8 +27,19 @@ pub async fn run_reproducible(
     for s in command_line.iter() {
         command.push(s);
     }
-    create_image(cargo_stylus_version, toolchain).await?;
-    run_in_docker_container(cargo_stylus_version, toolchain, dir, &command).await
+    let image_name = version_to_image_name(cargo_stylus_version, toolchain);
+    create_image(&docker, &image_name, cargo_stylus_version, toolchain)
+        .await
+        .context("creating image")?;
+
+    let container_id = create_container(&docker, &image_name, dir, &command)
+        .await
+        .context("creating container")?;
+    let output = start_container(&docker, &container_id)
+        .await
+        .context("running container")?;
+
+    Ok(output)
 }
 
 fn version_to_image_name(cargo_stylus_version: &Version, toolchain: &Version) -> String {
@@ -31,41 +49,26 @@ fn version_to_image_name(cargo_stylus_version: &Version, toolchain: &Version) ->
     )
 }
 
-fn validate_docker_output(output: &std::process::Output) -> anyhow::Result<String> {
-    if !output.status.success() {
-        let stderr =
-            std::str::from_utf8(&output.stderr).context("failed to read Docker command stderr")?;
-        if stderr.contains("Cannot connect to the Docker daemon") {
-            tracing::error!("Docker is not found in the system");
-            anyhow::bail!("Docker is not running");
-        }
-        tracing::error!("Docker command failed: {stderr}");
-        anyhow::bail!("Docker command failed: {stderr}");
+async fn image_exists(docker: &Docker, name: &str) -> Result<bool, anyhow::Error> {
+    match docker.inspect_image(name).await {
+        Ok(_) => Ok(true),
+        Err(bollard::errors::Error::DockerResponseServerError {
+            status_code: 404, ..
+        }) => Ok(false),
+        Err(err) => Err(err).context("failed to inspect docker image"),
     }
-
-    let stdout = std::str::from_utf8(&output.stdout).context("failed to read Docker stdout")?;
-    Ok(stdout.to_string())
-}
-
-async fn image_exists(name: &str) -> Result<bool, anyhow::Error> {
-    let output = Command::new("docker")
-        .arg("images")
-        .arg(name)
-        .output()
-        .await
-        .context("failed to execute Docker command")?;
-
-    let stdout = validate_docker_output(&output)?;
-
-    Ok(stdout.chars().filter(|c| *c == '\n').count() > 1)
 }
 
 async fn create_image(
+    docker: &Docker,
+    image_name: &str,
     cargo_stylus_version: &Version,
     toolchain: &Version,
 ) -> Result<(), anyhow::Error> {
-    let name = version_to_image_name(cargo_stylus_version, toolchain);
-    if image_exists(&name).await.context("check if image exists")? {
+    if image_exists(docker, image_name)
+        .await
+        .context("check if image exists")?
+    {
         return Ok(());
     }
 
@@ -74,65 +77,159 @@ async fn create_image(
         cargo_stylus_version,
         toolchain
     );
-    let mut child = Command::new("docker")
-        .arg("build")
-        .arg("-t")
-        .arg(name)
-        .arg(".")
-        .arg("-f-")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .context("failed to execute Docker build command")?;
 
-    let mut dockerfile = Vec::<u8>::new();
-    write!(
-            dockerfile,
-            "\
-            FROM --platform=linux/amd64 offchainlabs/cargo-stylus-base:{cargo_stylus_version} as base
-            RUN rustup toolchain install {toolchain}-x86_64-unknown-linux-gnu
-            RUN rustup default {toolchain}-x86_64-unknown-linux-gnu
-            RUN rustup target add wasm32-unknown-unknown
-            RUN rustup component add rust-src --toolchain {toolchain}-x86_64-unknown-linux-gnu
-            ",
-        ).expect("write into the vector should not fail");
+    let dockerfile = format!(
+        "FROM offchainlabs/cargo-stylus-base:{cargo_stylus_version} as base
+RUN rustup toolchain install {toolchain}-x86_64-unknown-linux-gnu
+RUN rustup default {toolchain}-x86_64-unknown-linux-gnu
+RUN rustup target add wasm32-unknown-unknown
+RUN rustup component add rust-src --toolchain {toolchain}-x86_64-unknown-linux-gnu
+"
+    );
 
-    child
-        .stdin
-        .as_mut()
-        .unwrap()
-        .write_all(&dockerfile)
-        .await
-        .context("failed to write dockerfile content into docker process stdin")?;
-    child.wait().await.context("wait failed")?;
+    let content = build_tar_with_dockerfile(&dockerfile)?;
+    let build_image_options = BuildImageOptions {
+        t: image_name.to_string(),
+        dockerfile: "Dockerfile".to_string(),
+        version: BuilderVersion::BuilderV1,
+        networkmode: "host".to_string(),
+        pull: true,
+        rm: true,
+        forcerm: true,
+        platform: "linux/amd64".to_string(),
+        ..Default::default()
+    };
+
+    let mut image_build_stream =
+        docker.build_image(build_image_options, None, Some(content.into()));
+
+    let mut output = vec![];
+    while let Some(result) = image_build_stream.next().await {
+        match result {
+            Ok(info) => {
+                if let Some(value) = info.stream {
+                    output.push(value)
+                }
+            }
+            Err(bollard::errors::Error::DockerStreamError { error }) => {
+                output.push(error);
+                let output = output.join("");
+                tracing::error!(
+                    image_name = image_name,
+                    output = output,
+                    "error while building an image"
+                );
+                anyhow::bail!(
+                    "error while building an image; image_name={image_name}, output={output}"
+                );
+            }
+            Err(err) => {
+                let output = output.join("");
+                tracing::error!(
+                    image_name = image_name,
+                    output = output,
+                    error = err.to_string(),
+                    "unknown error while building an image"
+                );
+                anyhow::bail!("unknown error while building an image; image_name={image_name}, output={output}, error={err}");
+            }
+        }
+    }
 
     Ok(())
 }
 
-async fn run_in_docker_container(
-    cargo_stylus_version: &Version,
-    toolchain: &Version,
+fn build_tar_with_dockerfile(content: &str) -> Result<Vec<u8>, anyhow::Error> {
+    let mut header = tar::Header::new_gnu();
+    header
+        .set_path("Dockerfile")
+        .context("set dockerfile path in the header")?;
+    header.set_size(content.len() as u64);
+    header.set_mode(0o755);
+    header.set_cksum();
+    let mut tar = tar::Builder::new(Vec::new());
+    tar.append(&header, content.as_bytes())
+        .context("append dockerfile")?;
+
+    tar.into_inner()
+        .context("convert tar into inner representation")
+}
+
+async fn create_container(
+    docker: &Docker,
+    image_name: &str,
     dir: &Path,
     command_line: &[&str],
 ) -> Result<String, anyhow::Error> {
-    let name = version_to_image_name(cargo_stylus_version, toolchain);
-    if !image_exists(&name).await? {
-        anyhow::bail!("Docker image {name} doesn't exist");
+    let container_suffix = Uuid::new_v4();
+    let container_name = format!(
+        "{}-{container_suffix}",
+        image_name.replace(|c: char| !c.is_alphanumeric(), "_")
+    );
+
+    let options = CreateContainerOptions {
+        name: container_name.clone(),
+        ..Default::default()
+    };
+    let config = container::Config {
+        image: Some(image_name),
+        working_dir: Some("/source"),
+        host_config: Some(HostConfig {
+            binds: Some(vec![format!(
+                "{}:/source",
+                dir.as_os_str().to_str().unwrap()
+            )]),
+            network_mode: Some("host".to_string()),
+            auto_remove: Some(true),
+            ..Default::default()
+        }),
+        cmd: Some(command_line.into()),
+        ..Default::default()
+    };
+
+    let container = docker.create_container(Some(options), config).await?;
+
+    Ok(container.id)
+}
+
+async fn start_container(docker: &Docker, container_id: &str) -> Result<String, anyhow::Error> {
+    docker.start_container::<String>(container_id, None).await?;
+    let mut attach_results = docker
+        .attach_container::<String>(
+            container_id,
+            Some(AttachContainerOptions {
+                stdout: Some(true),
+                stderr: Some(true),
+                stream: Some(true),
+                logs: Some(true),
+                ..Default::default()
+            }),
+        )
+        .await?;
+
+    let mut container_output = vec![];
+    while let Some(result) = attach_results.output.next().await {
+        match result {
+            Ok(output) => match output {
+                LogOutput::StdErr { message } => container_output.push(message),
+                LogOutput::StdOut { message } => container_output.push(message),
+                _ => (),
+            },
+            Err(err) => {
+                tracing::error!(
+                    err = err.to_string(),
+                    "reading output from attached container failed"
+                );
+                Err(err).context("reading output from attached container")?
+            }
+        }
     }
 
-    let output = Command::new("docker")
-        .arg("run")
-        .arg("--network")
-        .arg("host")
-        .arg("-w")
-        .arg("/source")
-        .arg("-v")
-        .arg(format!("{}:/source", dir.as_os_str().to_str().unwrap()))
-        .arg("--rm")
-        .arg(name)
-        .args(command_line)
-        .output()
-        .await
-        .context("failed to execute Docker run command")?;
-
-    validate_docker_output(&output)
+    Ok(container_output.into_iter().filter_map(|output| {match str::from_utf8(&output) {
+        Ok(s) => Some(s.to_string()),
+        Err(err) => {
+            tracing::warn!(line=?output, err=err.to_string(), "converting output line to utf8 string failed");
+            None
+        }
+    }}).collect::<Vec<_>>().join(""))
 }
