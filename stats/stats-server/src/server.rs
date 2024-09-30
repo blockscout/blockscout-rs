@@ -5,7 +5,7 @@ use crate::{
     health::HealthService,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
-    settings::Settings,
+    settings::{Settings, StartConditionSettings},
     update_service::UpdateService,
 };
 
@@ -20,6 +20,8 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
 };
+use tokio::time::sleep;
+use tracing::info;
 
 const SERVICE_NAME: &str = "stats";
 
@@ -54,6 +56,64 @@ fn grpc_router<S: StatsService>(
     tonic::transport::Server::builder()
         .add_service(HealthServer::from_arc(health))
         .add_service(StatsServiceServer::from_arc(stats))
+}
+
+fn is_threshold_passed(
+    threshold: Option<f32>,
+    float_value: Option<String>,
+    value_name: &str,
+) -> Result<bool, anyhow::Error> {
+    let Some(threshold) = threshold else {
+        return Ok(true);
+    };
+    let value = float_value
+        .map(|s| s.parse::<f64>())
+        .transpose()
+        .context(format!("Parsing `{value_name}`"))?;
+    let Some(value) = value else {
+        anyhow::bail!("Received `null` value of `{value_name}`. Can't determine indexing status.",);
+    };
+    if value < threshold.into() {
+        info!(
+            threshold = threshold,
+            current_value = value,
+            "Threshold for `{value_name}` is not satisfied"
+        );
+        Ok(false)
+    } else {
+        info!(
+            threshold = threshold,
+            current_value = value,
+            "Threshold for `{value_name}` is satisfied"
+        );
+        Ok(true)
+    }
+}
+
+async fn wait_for_blockscout_indexing(
+    api_config: blockscout_client::Configuration,
+    wait_config: StartConditionSettings,
+) -> Result<(), anyhow::Error> {
+    loop {
+        let result = blockscout_client::apis::main_page_api::get_indexing_status(&api_config)
+            .await
+            .context("Requesting indexing status")?;
+        if !is_threshold_passed(
+            wait_config.blocks_ratio_threshold,
+            result.indexed_blocks_ratio,
+            "indexed_blocks_ratio",
+        )? || !is_threshold_passed(
+            wait_config.internal_transactions_ratio_threshold,
+            result.indexed_internal_transactions_ratio,
+            "indexed_internal_transactions_ratio",
+        )? {
+            info!(
+                "Blockscout is not indexed enough. Checking again in {} secs",
+                wait_config.check_period_secs
+            );
+            sleep(Duration::from_secs(wait_config.check_period_secs.into())).await;
+        }
+    }
 }
 
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
@@ -99,8 +159,10 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             .await?;
     }
 
-    let _api_config = settings.api_url.map(blockscout_client::Configuration::new);
-    // todo: wait for indexing
+    // Wait for blockscout to index, if necessary.
+    if let Some(api_config) = settings.api_url.map(blockscout_client::Configuration::new) {
+        wait_for_blockscout_indexing(api_config, settings.conditional_start).await?;
+    }
 
     let update_service =
         Arc::new(UpdateService::new(db.clone(), blockscout, charts.clone()).await?);

@@ -10,7 +10,7 @@ use serde_with::{serde_as, DisplayFromStr};
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 
 #[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub db_url: String,
@@ -23,6 +23,7 @@ pub struct Settings {
     pub force_update_on_start: Option<bool>, // None = no update
     pub concurrent_start_updates: usize,
     pub limits: LimitsSettings,
+    pub conditional_start: StartConditionSettings,
     pub charts_config: PathBuf,
     pub layout_config: PathBuf,
     pub update_groups_config: PathBuf,
@@ -56,6 +57,7 @@ impl Default for Settings {
             force_update_on_start: Some(false),
             concurrent_start_updates: 3,
             limits: Default::default(),
+            conditional_start: Default::default(),
             charts_config: PathBuf::from_str("config/charts.json").unwrap(),
             layout_config: PathBuf::from_str("config/layout.json").unwrap(),
             update_groups_config: PathBuf::from_str("config/update_groups.json").unwrap(),
@@ -87,6 +89,26 @@ impl Default for LimitsSettings {
         Self {
             // ~500 years for days seems reasonable
             requested_points_limit: 182500,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct StartConditionSettings {
+    pub enabled: bool,
+    pub blocks_ratio_threshold: Option<f32>,
+    pub internal_transactions_ratio_threshold: Option<f32>,
+    pub check_period_secs: u32,
+}
+
+impl Default for StartConditionSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            blocks_ratio_threshold: Some(0.9),
+            internal_transactions_ratio_threshold: Some(0.9),
+            check_period_secs: 5,
         }
     }
 }
