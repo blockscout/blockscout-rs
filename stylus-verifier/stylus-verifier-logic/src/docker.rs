@@ -8,16 +8,24 @@ use bollard::{
 use futures_util::stream::StreamExt;
 use semver::Version;
 use std::{path::Path, str};
+use url::Url;
 use uuid::Uuid;
 
+/// Default timeout for all requests is 2 minutes.
+const DEFAULT_TIMEOUT: u64 = 120;
+
+pub fn connect(addr: &Url) -> Docker {
+    Docker::connect_with_http(addr.as_ref(), DEFAULT_TIMEOUT, bollard::API_DEFAULT_VERSION)
+        .expect("failed to connect to docker daemon")
+}
+
 pub async fn run_reproducible(
+    docker: &Docker,
     cargo_stylus_version: &Version,
     toolchain: &Version,
     dir: &Path,
     command_line: &[&str],
 ) -> Result<String, anyhow::Error> {
-    let docker =
-        Docker::connect_with_http_defaults().context("failed to connect to docker daemon")?;
     tracing::trace!(
         "Running reproducible Stylus command with cargo-stylus {}, toolchain {}",
         cargo_stylus_version,
@@ -28,14 +36,14 @@ pub async fn run_reproducible(
         command.push(s);
     }
     let image_name = version_to_image_name(cargo_stylus_version, toolchain);
-    create_image(&docker, &image_name, cargo_stylus_version, toolchain)
+    create_image(docker, &image_name, cargo_stylus_version, toolchain)
         .await
         .context("creating image")?;
 
-    let container_id = create_container(&docker, &image_name, dir, &command)
+    let container_id = create_container(docker, &image_name, dir, &command)
         .await
         .context("creating container")?;
-    let output = start_container(&docker, &container_id)
+    let output = start_container(docker, &container_id)
         .await
         .context("running container")?;
 
