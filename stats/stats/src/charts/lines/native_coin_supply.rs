@@ -3,9 +3,7 @@ use std::ops::Range;
 use crate::{
     data_source::{
         kinds::{
-            data_manipulation::{
-                map::MapToString, resolutions::last_value::LastValueLowerResolution,
-            },
+            data_manipulation::resolutions::last_value::LastValueLowerResolution,
             local_db::{
                 parameters::update::batching::parameters::{
                     Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
