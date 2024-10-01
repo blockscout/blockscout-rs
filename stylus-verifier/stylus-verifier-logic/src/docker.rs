@@ -1,18 +1,22 @@
 use anyhow::Context;
 use bollard::{
-    container::{self, AttachContainerOptions, CreateContainerOptions, LogOutput},
+    container::{
+        self, AttachContainerOptions, CreateContainerOptions, LogOutput, UploadToContainerOptions,
+    },
     image::{BuildImageOptions, BuilderVersion},
     models::HostConfig,
     Docker,
 };
 use futures_util::stream::StreamExt;
 use semver::Version;
-use std::{path::Path, str};
+use std::{io::Write, path::Path, str};
 use url::Url;
 use uuid::Uuid;
 
 /// Default timeout for all requests is 2 minutes.
 const DEFAULT_TIMEOUT: u64 = 120;
+
+const WORKDIR: &str = "/source";
 
 pub async fn connect(addr: &Url) -> Result<Docker, anyhow::Error> {
     let docker = match addr.scheme() {
@@ -56,9 +60,13 @@ pub async fn run_reproducible(
         .await
         .context("creating image")?;
 
-    let container_id = create_container(docker, &image_name, dir, &command)
+    let container_id = create_container(docker, &image_name, &command)
         .await
         .context("creating container")?;
+    copy_directory_to_container(docker, &container_id, dir)
+        .await
+        .context("copying directory to container")?;
+
     let output = start_container(docker, &container_id)
         .await
         .context("running container")?;
@@ -163,26 +171,9 @@ RUN rustup component add rust-src --toolchain {toolchain}-x86_64-unknown-linux-g
     Ok(())
 }
 
-fn build_tar_with_dockerfile(content: &str) -> Result<Vec<u8>, anyhow::Error> {
-    let mut header = tar::Header::new_gnu();
-    header
-        .set_path("Dockerfile")
-        .context("set dockerfile path in the header")?;
-    header.set_size(content.len() as u64);
-    header.set_mode(0o755);
-    header.set_cksum();
-    let mut tar = tar::Builder::new(Vec::new());
-    tar.append(&header, content.as_bytes())
-        .context("append dockerfile")?;
-
-    tar.into_inner()
-        .context("convert tar into inner representation")
-}
-
 async fn create_container(
     docker: &Docker,
     image_name: &str,
-    dir: &Path,
     command_line: &[&str],
 ) -> Result<String, anyhow::Error> {
     let container_suffix = Uuid::new_v4();
@@ -197,12 +188,8 @@ async fn create_container(
     };
     let config = container::Config {
         image: Some(image_name),
-        working_dir: Some("/source"),
+        working_dir: Some(WORKDIR),
         host_config: Some(HostConfig {
-            binds: Some(vec![format!(
-                "{}:/source",
-                dir.as_os_str().to_str().unwrap()
-            )]),
             network_mode: Some("host".to_string()),
             auto_remove: Some(true),
             ..Default::default()
@@ -214,6 +201,25 @@ async fn create_container(
     let container = docker.create_container(Some(options), config).await?;
 
     Ok(container.id)
+}
+
+async fn copy_directory_to_container(
+    docker: &Docker,
+    container_id: &str,
+    dir: &Path,
+) -> Result<(), anyhow::Error> {
+    let tar = build_tar_from_directory(dir).context("building tar archive from directory")?;
+
+    let options = UploadToContainerOptions {
+        path: WORKDIR,
+        no_overwrite_dir_non_dir: "",
+    };
+    docker
+        .upload_to_container(container_id, Some(options), tar.into())
+        .await
+        .context("uploading tar archive to container")?;
+
+    Ok(())
 }
 
 async fn start_container(docker: &Docker, container_id: &str) -> Result<String, anyhow::Error> {
@@ -256,4 +262,40 @@ async fn start_container(docker: &Docker, container_id: &str) -> Result<String, 
             None
         }
     }}).collect::<Vec<_>>().join(""))
+}
+
+fn build_tar_with_dockerfile(content: &str) -> Result<Vec<u8>, anyhow::Error> {
+    let mut header = tar::Header::new_gnu();
+    header
+        .set_path("Dockerfile")
+        .context("set dockerfile path in the header")?;
+    header.set_size(content.len() as u64);
+    header.set_mode(0o755);
+    header.set_cksum();
+    let mut tar = tar::Builder::new(Vec::new());
+    tar.append(&header, content.as_bytes())
+        .context("append dockerfile")?;
+
+    let uncompressed = tar
+        .into_inner()
+        .context("convert tar into inner representation")?;
+    compress_archive(&uncompressed)
+}
+
+fn build_tar_from_directory(dir: &Path) -> Result<Vec<u8>, anyhow::Error> {
+    let mut tar = tar::Builder::new(Vec::new());
+    tar.append_dir_all("", dir)
+        .context("appending files from directory")?;
+    let uncompressed = tar
+        .into_inner()
+        .context("convert tar into inner representation")?;
+    compress_archive(&uncompressed)
+}
+
+fn compress_archive(uncompressed: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder
+        .write_all(uncompressed)
+        .context("write uncompressed data to encoder")?;
+    encoder.finish().context("finish encoding")
 }
