@@ -98,15 +98,18 @@ async fn wait_for_blockscout_indexing(
         let result = blockscout_client::apis::main_page_api::get_indexing_status(&api_config)
             .await
             .context("Requesting indexing status")?;
-        if !is_threshold_passed(
+        if is_threshold_passed(
             wait_config.blocks_ratio_threshold,
             result.indexed_blocks_ratio,
             "indexed_blocks_ratio",
-        )? || !is_threshold_passed(
+        )? && is_threshold_passed(
             wait_config.internal_transactions_ratio_threshold,
             result.indexed_internal_transactions_ratio,
             "indexed_internal_transactions_ratio",
         )? {
+            info!("Blockscout indexing threshold passed");
+            return Ok(());
+        } else {
             info!(
                 "Blockscout is not indexed enough. Checking again in {} secs",
                 wait_config.check_period_secs
@@ -198,4 +201,89 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     };
 
     launcher::launch(&launch_settings, http_router, grpc_router).await
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::*;
+
+    async fn mock_indexing_status(return_body: &str) -> MockServer {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v2/main-page/indexing-status"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(return_body))
+            .mount(&mock_server)
+            .await;
+        mock_server
+    }
+
+    // check if provided future resolves within specified duration
+    async fn resolves_within(fut: impl std::future::Future, timeout: Duration) -> bool {
+        tokio::select! {
+            _ = fut => {
+                true
+            }
+            _ = tokio::time::sleep(timeout) => {
+                false
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn wait_for_blockscout_indexing_works_with_200_response() {
+        let fully_indexed_mock = mock_indexing_status(
+            r#"{
+                "finished_indexing": true,
+                "finished_indexing_blocks": true,
+                "indexed_blocks_ratio": "1.00",
+                "indexed_internal_transactions_ratio": "1.00"
+            }"#,
+        )
+        .await;
+
+        let wait_config = StartConditionSettings {
+            enabled: true,
+            blocks_ratio_threshold: Some(0.9),
+            internal_transactions_ratio_threshold: Some(0.9),
+            check_period_secs: 0,
+        };
+        matches!(
+            wait_for_blockscout_indexing(
+                blockscout_client::Configuration::new(
+                    url::Url::from_str(&fully_indexed_mock.uri()).unwrap(),
+                ),
+                wait_config.clone(),
+            )
+            .await,
+            Ok(())
+        );
+
+        let partially_indexed_mock = mock_indexing_status(
+            r#"{
+                "finished_indexing": false,
+                "finished_indexing_blocks": false,
+                "indexed_blocks_ratio": "0.80",
+                "indexed_internal_transactions_ratio": "0.80"
+            }"#,
+        )
+        .await;
+
+        assert!(
+            !resolves_within(
+                wait_for_blockscout_indexing(
+                    blockscout_client::Configuration::new(
+                        url::Url::from_str(&partially_indexed_mock.uri()).unwrap(),
+                    ),
+                    wait_config,
+                ),
+                Duration::from_millis(500)
+            )
+            .await
+        );
+    }
 }
