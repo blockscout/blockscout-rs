@@ -14,9 +14,11 @@ pub struct StylusSdkRsVerifierService {
 }
 
 impl StylusSdkRsVerifierService {
-    pub fn new(docker_api_settings: DockerApiSettings) -> Self {
+    pub async fn new(docker_api_settings: DockerApiSettings) -> Self {
         Self {
-            docker_client: stylus_sdk_rs::docker_connect(&docker_api_settings.addr),
+            docker_client: stylus_sdk_rs::docker_connect(&docker_api_settings.addr)
+                .await
+                .expect("failed to connect to docker daemon"),
             // TODO: to be automatically retrieved from the dockerhub registry
             supported_cargo_stylus_versions: vec![
                 semver::Version::new(0, 5, 0),

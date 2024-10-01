@@ -43,7 +43,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
-    let stylus_sdk_rs_verifier = Arc::new(StylusSdkRsVerifierService::new(settings.docker_api));
+    let stylus_sdk_rs_verifier =
+        Arc::new(StylusSdkRsVerifierService::new(settings.docker_api).await);
 
     // TODO: init services here
 

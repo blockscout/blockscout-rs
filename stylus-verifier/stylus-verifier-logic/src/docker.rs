@@ -14,9 +14,25 @@ use uuid::Uuid;
 /// Default timeout for all requests is 2 minutes.
 const DEFAULT_TIMEOUT: u64 = 120;
 
-pub fn connect(addr: &Url) -> Docker {
-    Docker::connect_with_http(addr.as_ref(), DEFAULT_TIMEOUT, bollard::API_DEFAULT_VERSION)
-        .expect("failed to connect to docker daemon")
+pub async fn connect(addr: &Url) -> Result<Docker, anyhow::Error> {
+    let docker = match addr.scheme() {
+        "unix" => {
+            Docker::connect_with_local(addr.as_ref(), DEFAULT_TIMEOUT, bollard::API_DEFAULT_VERSION)
+        }
+        "http" | "tcp" => {
+            Docker::connect_with_http(addr.as_ref(), DEFAULT_TIMEOUT, bollard::API_DEFAULT_VERSION)
+        }
+        _ => anyhow::bail!(
+            "unsupported docker API scheme: {}. Expected one of 'unix', 'http', 'tcp'",
+            addr.scheme()
+        ),
+    }
+    .context("connection failed")?;
+    docker
+        .ping()
+        .await
+        .context("connected daemon ping failed")?;
+    Ok(docker)
 }
 
 pub async fn run_reproducible(

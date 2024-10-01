@@ -24,7 +24,7 @@ pub struct DockerApiSettings {
 impl Default for DockerApiSettings {
     fn default() -> Self {
         Self {
-            addr: Url::parse("tcp://127.0.0.1:2375").expect("default docker api url"),
+            addr: Url::parse("unix:///var/run/docker.sock").expect("default docker api url"),
         }
     }
 }
