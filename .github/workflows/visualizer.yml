@@ -42,7 +42,7 @@ jobs:
       - name: Install sol2uml
         run: |
           npm install phantom
-          npm link sol2uml@2.1 --only=production
+          npm link sol2uml@2.5 --only=production
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
