@@ -106,8 +106,9 @@ impl Default for StartConditionSettings {
     fn default() -> Self {
         Self {
             enabled: true,
-            blocks_ratio_threshold: Some(0.9),
-            internal_transactions_ratio_threshold: Some(0.9),
+            // in some networks it's always almost 1
+            blocks_ratio_threshold: Some(0.98),
+            internal_transactions_ratio_threshold: Some(0.98),
             check_period_secs: 5,
         }
     }
