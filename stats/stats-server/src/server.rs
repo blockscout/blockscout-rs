@@ -226,10 +226,11 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
 mod tests {
     use std::str::FromStr;
 
-    use tokio::task::JoinSet;
-    use tokio::time::error::Elapsed;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use tokio::{task::JoinSet, time::error::Elapsed};
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
 
     use super::*;
 
