@@ -207,83 +207,155 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
 mod tests {
     use std::str::FromStr;
 
+    use tokio::task::JoinSet;
+    use tokio::time::error::Elapsed;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
 
-    async fn mock_indexing_status(return_body: &str) -> MockServer {
+    async fn mock_indexing_status(response: ResponseTemplate) -> MockServer {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/api/v2/main-page/indexing-status"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(return_body))
+            .respond_with(response)
             .mount(&mock_server)
             .await;
         mock_server
     }
 
-    // check if provided future resolves within specified duration
-    async fn resolves_within(fut: impl std::future::Future, timeout: Duration) -> bool {
-        tokio::select! {
-            _ = fut => {
-                true
-            }
-            _ = tokio::time::sleep(timeout) => {
-                false
-            }
-        }
+    async fn test_wait_indexing(
+        wait_config: StartConditionSettings,
+        response: ResponseTemplate,
+    ) -> Result<Result<(), anyhow::Error>, Elapsed> {
+        let server = mock_indexing_status(response).await;
+        tokio::time::timeout(
+            Duration::from_millis(500),
+            wait_for_blockscout_indexing(
+                blockscout_client::Configuration::new(url::Url::from_str(&server.uri()).unwrap()),
+                wait_config,
+            ),
+        )
+        .await
     }
 
     #[tokio::test]
     async fn wait_for_blockscout_indexing_works_with_200_response() {
-        let fully_indexed_mock = mock_indexing_status(
-            r#"{
-                "finished_indexing": true,
-                "finished_indexing_blocks": true,
-                "indexed_blocks_ratio": "1.00",
-                "indexed_internal_transactions_ratio": "1.00"
-            }"#,
-        )
-        .await;
-
         let wait_config = StartConditionSettings {
             enabled: true,
             blocks_ratio_threshold: Some(0.9),
             internal_transactions_ratio_threshold: Some(0.9),
             check_period_secs: 0,
         };
-        matches!(
-            wait_for_blockscout_indexing(
-                blockscout_client::Configuration::new(
-                    url::Url::from_str(&fully_indexed_mock.uri()).unwrap(),
-                ),
+        assert!(matches!(
+            test_wait_indexing(
                 wait_config.clone(),
+                ResponseTemplate::new(200).set_body_string(
+                    r#"{
+                    "finished_indexing": true,
+                    "finished_indexing_blocks": true,
+                    "indexed_blocks_ratio": "1.00",
+                    "indexed_internal_transactions_ratio": "1.00"
+                }"#,
+                )
             )
             .await,
-            Ok(())
-        );
+            Ok(Ok(()))
+        ));
 
-        let partially_indexed_mock = mock_indexing_status(
-            r#"{
-                "finished_indexing": false,
-                "finished_indexing_blocks": false,
-                "indexed_blocks_ratio": "0.80",
-                "indexed_internal_transactions_ratio": "0.80"
-            }"#,
-        )
-        .await;
-
-        assert!(
-            !resolves_within(
-                wait_for_blockscout_indexing(
-                    blockscout_client::Configuration::new(
-                        url::Url::from_str(&partially_indexed_mock.uri()).unwrap(),
-                    ),
-                    wait_config,
-                ),
-                Duration::from_millis(500)
+        // times out
+        assert!(matches!(
+            test_wait_indexing(
+                wait_config,
+                ResponseTemplate::new(200).set_body_string(
+                    r#"{
+                        "finished_indexing": false,
+                        "finished_indexing_blocks": false,
+                        "indexed_blocks_ratio": "0.80",
+                        "indexed_internal_transactions_ratio": "0.80"
+                    }"#,
+                )
             )
-            .await
-        );
+            .await,
+            Err(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn wait_for_blockscout_indexing_works_with_slow_response() {
+        let wait_config = StartConditionSettings {
+            enabled: true,
+            blocks_ratio_threshold: Some(0.9),
+            internal_transactions_ratio_threshold: Some(0.9),
+            check_period_secs: 0,
+        };
+
+        assert!(matches!(
+            test_wait_indexing(
+                wait_config,
+                ResponseTemplate::new(200)
+                    .set_body_string(
+                        r#"{
+                        "finished_indexing": false,
+                        "finished_indexing_blocks": false,
+                        "indexed_blocks_ratio": "0.80",
+                        "indexed_internal_transactions_ratio": "0.80"
+                    }"#,
+                    )
+                    .set_delay(Duration::from_millis(500))
+            )
+            .await,
+            Ok(Ok(()))
+        ));
+    }
+
+    #[tokio::test]
+    async fn wait_for_blockscout_indexing_works_with_infinite_timeout() {
+        let wait_config = StartConditionSettings {
+            enabled: true,
+            blocks_ratio_threshold: Some(0.9),
+            internal_transactions_ratio_threshold: Some(0.9),
+            check_period_secs: 0,
+        };
+
+        assert!(matches!(
+            test_wait_indexing(
+                wait_config,
+                ResponseTemplate::new(200)
+                    .set_body_string(
+                        r#"{
+                        "finished_indexing": false,
+                        "finished_indexing_blocks": false,
+                        "indexed_blocks_ratio": "0.80",
+                        "indexed_internal_transactions_ratio": "0.80"
+                    }"#,
+                    )
+                    .set_delay(Duration::MAX)
+            )
+            .await,
+            Err(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn wait_for_blockscout_indexing_works_with_error_codes() {
+        let wait_config = StartConditionSettings {
+            enabled: true,
+            blocks_ratio_threshold: Some(0.9),
+            internal_transactions_ratio_threshold: Some(0.9),
+            check_period_secs: 0,
+        };
+
+        let mut error_servers = JoinSet::from_iter([
+            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(503)),
+            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(500)),
+            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(404)),
+            test_wait_indexing(wait_config, ResponseTemplate::new(400)),
+        ]);
+        #[allow(for_loops_over_fallibles)]
+        for server in error_servers.join_next().await {
+            let test_result = server.unwrap();
+            assert!(matches!(test_result, Err(_)));
+        }
     }
 }
