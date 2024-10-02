@@ -92,14 +92,14 @@ fn is_threshold_passed(
 }
 
 fn is_retryable_code(status_code: &reqwest::StatusCode) -> bool {
-    match *status_code {
+    matches!(
+        *status_code,
         StatusCode::INTERNAL_SERVER_ERROR
-        | StatusCode::SERVICE_UNAVAILABLE
-        | StatusCode::GATEWAY_TIMEOUT
-        | StatusCode::TOO_MANY_REQUESTS
-        | StatusCode::IM_A_TEAPOT => true,
-        _ => false,
-    }
+            | StatusCode::SERVICE_UNAVAILABLE
+            | StatusCode::GATEWAY_TIMEOUT
+            | StatusCode::TOO_MANY_REQUESTS
+            | StatusCode::IM_A_TEAPOT
+    )
 }
 
 async fn wait_for_blockscout_indexing(
