@@ -247,38 +247,34 @@ mod tests {
             internal_transactions_ratio_threshold: Some(0.9),
             check_period_secs: 0,
         };
-        assert!(matches!(
-            test_wait_indexing(
-                wait_config.clone(),
-                ResponseTemplate::new(200).set_body_string(
-                    r#"{
+        test_wait_indexing(
+            wait_config.clone(),
+            ResponseTemplate::new(200).set_body_string(
+                r#"{
                     "finished_indexing": true,
                     "finished_indexing_blocks": true,
                     "indexed_blocks_ratio": "1.00",
-                    "indexed_internal_transactions_ratio": "1.00"
+                    "indexed_internal_transactions_ratio": "1"
                 }"#,
-                )
-            )
-            .await,
-            Ok(Ok(()))
-        ));
+            ),
+        )
+        .await
+        .expect("must not timeout")
+        .expect("must not error");
 
-        // times out
-        assert!(matches!(
-            test_wait_indexing(
-                wait_config,
-                ResponseTemplate::new(200).set_body_string(
-                    r#"{
-                        "finished_indexing": false,
-                        "finished_indexing_blocks": false,
-                        "indexed_blocks_ratio": "0.80",
-                        "indexed_internal_transactions_ratio": "0.80"
-                    }"#,
-                )
-            )
-            .await,
-            Err(_)
-        ));
+        test_wait_indexing(
+            wait_config,
+            ResponseTemplate::new(200).set_body_string(
+                r#"{
+                    "finished_indexing": false,
+                    "finished_indexing_blocks": false,
+                    "indexed_blocks_ratio": "0.80",
+                    "indexed_internal_transactions_ratio": "0.80"
+                }"#,
+            ),
+        )
+        .await
+        .expect_err("must time out");
     }
 
     #[tokio::test]
@@ -290,23 +286,22 @@ mod tests {
             check_period_secs: 0,
         };
 
-        assert!(matches!(
-            test_wait_indexing(
-                wait_config,
-                ResponseTemplate::new(200)
-                    .set_body_string(
-                        r#"{
+        test_wait_indexing(
+            wait_config,
+            ResponseTemplate::new(200)
+                .set_body_string(
+                    r#"{
                         "finished_indexing": false,
                         "finished_indexing_blocks": false,
-                        "indexed_blocks_ratio": "0.80",
-                        "indexed_internal_transactions_ratio": "0.80"
+                        "indexed_blocks_ratio": "1.0",
+                        "indexed_internal_transactions_ratio": "1.0"
                     }"#,
-                    )
-                    .set_delay(Duration::from_millis(500))
-            )
-            .await,
-            Ok(Ok(()))
-        ));
+                )
+                .set_delay(Duration::from_millis(100)),
+        )
+        .await
+        .expect("must not timeout")
+        .expect("must not error")
     }
 
     #[tokio::test]
@@ -318,23 +313,21 @@ mod tests {
             check_period_secs: 0,
         };
 
-        assert!(matches!(
-            test_wait_indexing(
-                wait_config,
-                ResponseTemplate::new(200)
-                    .set_body_string(
-                        r#"{
+        test_wait_indexing(
+            wait_config,
+            ResponseTemplate::new(200)
+                .set_body_string(
+                    r#"{
                         "finished_indexing": false,
                         "finished_indexing_blocks": false,
                         "indexed_blocks_ratio": "0.80",
                         "indexed_internal_transactions_ratio": "0.80"
                     }"#,
-                    )
-                    .set_delay(Duration::MAX)
-            )
-            .await,
-            Err(_)
-        ));
+                )
+                .set_delay(Duration::MAX),
+        )
+        .await
+        .expect_err("must time out");
     }
 
     #[tokio::test]
@@ -355,7 +348,7 @@ mod tests {
         #[allow(for_loops_over_fallibles)]
         for server in error_servers.join_next().await {
             let test_result = server.unwrap();
-            assert!(matches!(test_result, Err(_)));
+            test_result.expect_err("must time out");
         }
     }
 }
