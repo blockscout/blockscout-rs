@@ -8,6 +8,7 @@ stats = { path = "../stats" }
 stats-proto = { path = "../stats-proto" }
 async-trait = "0.1"
 actix-web = "4"
+reqwest = "0.12"
 tonic = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_with = { version = "3", features = ["hex", "base64"] }
