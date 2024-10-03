@@ -18,7 +18,7 @@ pub async fn get_blockscout_chains() -> anyhow::Result<BlockscoutChains> {
 
 pub type BlockscoutChains = HashMap<i64, BlockscoutChainData>;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockscoutChainData {
     pub name: String,
@@ -32,14 +32,14 @@ pub struct BlockscoutChainData {
     pub logo: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum Ecosystem {
     Single(String),
     Multiple(Vec<String>),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExplorerConfig {
     pub url: String,
