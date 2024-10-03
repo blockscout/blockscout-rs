@@ -1,19 +1,68 @@
-use reqwest_middleware::ClientBuilder;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::Deserialize;
 use std::collections::HashMap;
 
 const CHAINS_URL: &str = "https://chains.blockscout.com/api/chains";
 
-pub async fn get_blockscout_chains() -> anyhow::Result<BlockscoutChains> {
-    let max_retries = 3;
-    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(max_retries);
-    let client = ClientBuilder::new(reqwest::Client::new())
-        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-        .build();
-    let res = client.get(CHAINS_URL).send().await?;
-    let chains: BlockscoutChains = res.json().await?;
-    Ok(chains)
+pub struct BlockscoutChainsClient {
+    client: ClientWithMiddleware,
+    url: String,
+}
+
+impl BlockscoutChainsClient {
+    pub fn builder() -> BlockscoutChainsClientBuilder {
+        Default::default()
+    }
+
+    pub async fn fetch_all(&self) -> Result<BlockscoutChains, reqwest_middleware::Error> {
+        let res = self.client.get(&self.url).send().await?;
+        let chains: BlockscoutChains = res.json().await?;
+        Ok(chains)
+    }
+}
+
+impl Default for BlockscoutChainsClient {
+    fn default() -> Self {
+        Self::builder().build()
+    }
+}
+
+pub struct BlockscoutChainsClientBuilder {
+    max_retries: u32,
+    url: String,
+}
+
+impl BlockscoutChainsClientBuilder {
+    pub fn with_max_retries(mut self, max_retries: u32) -> Self {
+        self.max_retries = max_retries;
+        self
+    }
+
+    pub fn with_url(mut self, url: String) -> Self {
+        self.url = url;
+        self
+    }
+
+    pub fn build(self) -> BlockscoutChainsClient {
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(self.max_retries);
+        let client = ClientBuilder::new(reqwest::Client::new())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+        BlockscoutChainsClient {
+            client,
+            url: self.url,
+        }
+    }
+}
+
+impl Default for BlockscoutChainsClientBuilder {
+    fn default() -> Self {
+        Self {
+            url: CHAINS_URL.to_string(),
+            max_retries: 3,
+        }
+    }
 }
 
 pub type BlockscoutChains = HashMap<u64, BlockscoutChainData>;
@@ -52,7 +101,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_blockscout_chains() {
-        let chains = get_blockscout_chains().await.unwrap();
+        let chains = BlockscoutChainsClient::builder()
+            .with_max_retries(0)
+            .build()
+            .fetch_all()
+            .await
+            .unwrap();
         assert!(!chains.is_empty());
     }
 }
