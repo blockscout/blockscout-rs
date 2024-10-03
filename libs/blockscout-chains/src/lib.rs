@@ -16,7 +16,7 @@ pub async fn get_blockscout_chains() -> anyhow::Result<BlockscoutChains> {
     Ok(chains)
 }
 
-pub type BlockscoutChains = HashMap<i64, BlockscoutChainData>;
+pub type BlockscoutChains = HashMap<u64, BlockscoutChainData>;
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
