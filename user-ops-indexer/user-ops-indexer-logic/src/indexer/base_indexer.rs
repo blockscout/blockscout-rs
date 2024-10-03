@@ -12,12 +12,12 @@ use ethers::prelude::{
     abi::{AbiEncode, Error},
     parse_log,
     types::{Address, Bytes, Filter, Log, TransactionReceipt},
-    EthEvent, Middleware, NodeClient, Provider, ProviderError, H256,
+    EthEvent, Middleware, NodeClient, Provider, ProviderError, WsClientError, H256,
 };
 use futures::{
     stream,
     stream::{repeat_with, BoxStream},
-    Stream, StreamExt,
+    Stream, StreamExt, TryStreamExt,
 };
 use sea_orm::DatabaseConnection;
 use std::{future, num::NonZeroUsize, sync::Arc, time, time::Duration};
@@ -216,9 +216,16 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
             .filter_map(|tx_hash| async move { tx_hash });
 
         stream_txs
-            .for_each_concurrent(Some(self.settings.concurrency as usize), |tx| async move {
+            .map(Ok)
+            .try_for_each_concurrent(Some(self.settings.concurrency as usize), |tx| async move {
                 let mut backoff = vec![5, 20, 120].into_iter().map(Duration::from_secs);
-                while let Err(err) = &self.handle_tx(tx, variant).await {
+                while let Err(err) = self.handle_tx(tx, variant).await {
+                    // terminate stream if WS connection is closed, indexer will be restarted
+                    if self.client.as_ref().supports_subscriptions() && err.to_string() == WsClientError::UnexpectedClose.to_string() {
+                        tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, ws connection closed, exiting");
+                        return Err(err);
+                    }
+
                     match backoff.next() {
                         None => {
                             tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, skipping");
@@ -230,10 +237,9 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
                         }
                     };
                 }
+                Ok(())
             })
-            .await;
-
-        Ok(())
+            .await
     }
 
     async fn fetch_jobs_for_block_range(

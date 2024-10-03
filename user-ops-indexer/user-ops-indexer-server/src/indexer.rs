@@ -70,7 +70,12 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
         loop {
             match indexer.start().await {
                 Err(err) => {
-                    tracing::error!(error = ?err, version = L::version(), ?delay, "indexer startup failed, retrying");
+                    tracing::error!(
+                        error = ?err,
+                        version = L::version(),
+                        ?delay,
+                        "indexer stream ended with error, retrying"
+                    );
                 }
                 Ok(_) => {
                     if !settings.realtime.enabled {
