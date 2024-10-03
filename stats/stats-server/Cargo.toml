@@ -41,3 +41,4 @@ blockscout-service-launcher = { workspace = true, features = [ "database-0_12", 
 pretty_assertions = "1.3"
 reqwest = "0.12"
 wiremock = "0.6.2"
+rstest = { workspace = true }

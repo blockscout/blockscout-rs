@@ -226,6 +226,7 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
 mod tests {
     use std::str::FromStr;
 
+    use rstest::*;
     use tokio::{task::JoinSet, time::error::Elapsed};
     use wiremock::{
         matchers::{method, path},
@@ -259,14 +260,24 @@ mod tests {
         .await
     }
 
-    #[tokio::test]
-    async fn wait_for_blockscout_indexing_works_with_200_response() {
-        let wait_config = StartConditionSettings {
+    #[fixture]
+    fn wait_config(
+        #[default(0.9)] blocks: f32,
+        #[default(0.9)] internal_transactions: f32,
+    ) -> StartConditionSettings {
+        StartConditionSettings {
             enabled: true,
-            blocks_ratio_threshold: Some(0.9),
-            internal_transactions_ratio_threshold: Some(0.9),
+            blocks_ratio_threshold: Some(blocks),
+            internal_transactions_ratio_threshold: Some(internal_transactions),
             check_period_secs: 0,
-        };
+        }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn wait_for_blockscout_indexing_works_with_200_response(
+        wait_config: StartConditionSettings,
+    ) {
         test_wait_indexing(
             wait_config.clone(),
             ResponseTemplate::new(200).set_body_string(
@@ -297,15 +308,11 @@ mod tests {
         .expect_err("must time out");
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn wait_for_blockscout_indexing_works_with_slow_response() {
-        let wait_config = StartConditionSettings {
-            enabled: true,
-            blocks_ratio_threshold: Some(0.9),
-            internal_transactions_ratio_threshold: Some(0.9),
-            check_period_secs: 0,
-        };
-
+    async fn wait_for_blockscout_indexing_works_with_slow_response(
+        wait_config: StartConditionSettings,
+    ) {
         test_wait_indexing(
             wait_config,
             ResponseTemplate::new(200)
@@ -324,15 +331,11 @@ mod tests {
         .expect("must not error")
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn wait_for_blockscout_indexing_works_with_infinite_timeout() {
-        let wait_config = StartConditionSettings {
-            enabled: true,
-            blocks_ratio_threshold: Some(0.9),
-            internal_transactions_ratio_threshold: Some(0.9),
-            check_period_secs: 0,
-        };
-
+    async fn wait_for_blockscout_indexing_works_with_infinite_timeout(
+        wait_config: StartConditionSettings,
+    ) {
         test_wait_indexing(
             wait_config,
             ResponseTemplate::new(200)
@@ -350,15 +353,11 @@ mod tests {
         .expect_err("must time out");
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn wait_for_blockscout_indexing_retries_with_error_codes() {
-        let wait_config = StartConditionSettings {
-            enabled: true,
-            blocks_ratio_threshold: Some(0.9),
-            internal_transactions_ratio_threshold: Some(0.9),
-            check_period_secs: 0,
-        };
-
+    async fn wait_for_blockscout_indexing_retries_with_error_codes(
+        wait_config: StartConditionSettings,
+    ) {
         let mut error_servers = JoinSet::from_iter([
             test_wait_indexing(wait_config.clone(), ResponseTemplate::new(429)),
             test_wait_indexing(wait_config.clone(), ResponseTemplate::new(500)),
@@ -372,15 +371,11 @@ mod tests {
         }
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn wait_for_blockscout_indexing_fails_with_error_codes() {
-        let wait_config = StartConditionSettings {
-            enabled: true,
-            blocks_ratio_threshold: Some(0.9),
-            internal_transactions_ratio_threshold: Some(0.9),
-            check_period_secs: 0,
-        };
-
+    async fn wait_for_blockscout_indexing_fails_with_error_codes(
+        wait_config: StartConditionSettings,
+    ) {
         let mut error_servers = JoinSet::from_iter([
             test_wait_indexing(wait_config.clone(), ResponseTemplate::new(400)),
             test_wait_indexing(wait_config.clone(), ResponseTemplate::new(403)),
