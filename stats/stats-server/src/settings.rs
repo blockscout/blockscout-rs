@@ -97,8 +97,8 @@ impl Default for LimitsSettings {
 #[serde(default, deny_unknown_fields)]
 pub struct StartConditionSettings {
     pub enabled: bool,
-    pub blocks_ratio_threshold: Option<f32>,
-    pub internal_transactions_ratio_threshold: Option<f32>,
+    pub blocks_ratio_threshold: Option<f64>,
+    pub internal_transactions_ratio_threshold: Option<f64>,
     pub check_period_secs: u32,
 }
 

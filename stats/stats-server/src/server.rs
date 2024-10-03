@@ -60,7 +60,7 @@ fn grpc_router<S: StatsService>(
 }
 
 fn is_threshold_passed(
-    threshold: Option<f32>,
+    threshold: Option<f64>,
     float_value: Option<String>,
     value_name: &str,
 ) -> Result<bool, anyhow::Error> {
@@ -262,8 +262,8 @@ mod tests {
 
     #[fixture]
     fn wait_config(
-        #[default(0.9)] blocks: f32,
-        #[default(0.9)] internal_transactions: f32,
+        #[default(0.9)] blocks: f64,
+        #[default(0.9)] internal_transactions: f64,
     ) -> StartConditionSettings {
         StartConditionSettings {
             enabled: true,
