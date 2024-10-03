@@ -67,7 +67,7 @@ pub async fn run_reproducible(
         .await
         .context("copying directory to container")?;
 
-    let output = start_container(docker, &container_id)
+    let output = run_container(docker, &container_id)
         .await
         .context("running container")?;
 
@@ -140,6 +140,7 @@ RUN rustup component add rust-src --toolchain {toolchain}-x86_64-unknown-linux-g
         match result {
             Ok(info) => {
                 if let Some(value) = info.stream {
+                    tracing::trace!(image_name = image_name, value = value, "building an image");
                     output.push(value)
                 }
             }
@@ -222,7 +223,7 @@ async fn copy_directory_to_container(
     Ok(())
 }
 
-async fn start_container(docker: &Docker, container_id: &str) -> Result<String, anyhow::Error> {
+async fn run_container(docker: &Docker, container_id: &str) -> Result<String, anyhow::Error> {
     docker.start_container::<String>(container_id, None).await?;
     let mut attach_results = docker
         .attach_container::<String>(
