@@ -11,7 +11,7 @@ use crate::{
 
 use anyhow::Context;
 use blockscout_endpoint_swagger::route_swagger;
-use blockscout_service_launcher::launcher::{self, LaunchSettings};
+use blockscout_service_launcher::launcher::{self, ConfigSettings, LaunchSettings};
 use reqwest::StatusCode;
 use sea_orm::{ConnectOptions, Database};
 use stats::metrics;
@@ -140,6 +140,25 @@ async fn wait_for_blockscout_indexing(
     }
 }
 
+async fn init_api(settings: &Settings) -> anyhow::Result<Option<blockscout_client::Configuration>> {
+    match (settings.ignore_blockscout_api_absence, &settings.api_url) {
+        (_, Some(api_url)) => Ok(Some(blockscout_client::Configuration::new(api_url.clone()))),
+        (true, None) => {
+            info!(
+                "Blockscout API URL has not been provided and `IGNORE_API_ABSENCE` setting is \
+                set to `true`. Disabling API-related functionality."
+            );
+            Ok(None)
+        }
+        (false, None) => anyhow::bail!(
+            "Blockscout API URL has not been provided. Please specify it with corresponding \
+            env variable (`{0}__API_URL`) or set `{0}__IGNORE_API_ABSENCE=true` to disable \
+            functionality depending on the API.",
+            Settings::SERVICE_NAME
+        ),
+    }
+}
+
 pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
     blockscout_service_launcher::tracing::init_logs(
         SERVICE_NAME,
@@ -183,9 +202,11 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             .await?;
     }
 
+    let api_config = init_api(&settings).await?;
+
     // Wait for blockscout to index, if necessary.
-    if let Some(api_config) = settings.api_url.map(blockscout_client::Configuration::new) {
-        wait_for_blockscout_indexing(api_config, settings.conditional_start).await?;
+    if let Some(api) = api_config {
+        wait_for_blockscout_indexing(api, settings.conditional_start).await?;
     }
 
     let update_service =
