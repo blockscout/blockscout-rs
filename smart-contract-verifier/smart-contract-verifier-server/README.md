@@ -7,7 +7,7 @@ and answers requests based on provided information only.
 ## Configuration
 
 Service supports configuration via configuration file and environment variables.
-The latter overwrite the former in case if both are provided. For all missing fields
+The latter overwrites the former in case if both are provided. For all missing fields
 default values are used (if possible).
 
 ### Configuration file
