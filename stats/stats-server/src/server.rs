@@ -76,7 +76,7 @@ fn is_threshold_passed(
     let Some(value) = value else {
         anyhow::bail!("Received `null` value of `{value_name}`. Can't determine indexing status.",);
     };
-    if value < threshold.into() {
+    if value < threshold {
         info!(
             threshold = threshold,
             current_value = value,
