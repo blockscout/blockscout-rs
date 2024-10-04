@@ -163,7 +163,7 @@ by enabling word wrapping
 | `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__YEAR` | | Enable yearly data | `true` if defined |
 | `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​TITLE` | | Displayed name of `<LINE_CHART_NAME>`, e.g. `"Some line chart title"` | `null` |
 | `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​UNITS` | | Measurement units, e.g. `"{{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__​TEMPLATE_VALUES__​<VARIABLE_NAME>` | | Value to substitute instead of `{{<variable_name>}}`, e.g. `"some_value"` | `null` |
+| `STATS_CHARTS__​TEMPLATE_VALUES__​<VARIABLE_NAME>` | | Value to substitute instead of `{{<variable_name>}}`, e.g. `STATS_CHARTS__​TEMPLATE_VALUES__​NATIVE_COIN_SYMBOL​="some_value"`. See full list of variables in charts config file (`charts.json`). | `null` |
 
 [anchor]: <> (anchors.envs.end.charts)
 
