@@ -112,11 +112,11 @@ async fn wait_for_blockscout_indexing(
         match blockscout_client::apis::main_page_api::get_indexing_status(&api_config).await {
             Ok(result)
                 if is_threshold_passed(
-                    &wait_config.blocks_ratio_threshold,
+                    &wait_config.blocks_ratio,
                     result.indexed_blocks_ratio.clone(),
                     "indexed_blocks_ratio",
                 )? && is_threshold_passed(
-                    &wait_config.internal_transactions_ratio_threshold,
+                    &wait_config.internal_transactions_ratio,
                     result.indexed_internal_transactions_ratio.clone(),
                     "indexed_internal_transactions_ratio",
                 )? =>
@@ -289,10 +289,8 @@ mod tests {
         #[default(0.9)] internal_transactions: f64,
     ) -> StartConditionSettings {
         StartConditionSettings {
-            blocks_ratio_threshold: ToggleableThreshold::enabled(blocks),
-            internal_transactions_ratio_threshold: ToggleableThreshold::enabled(
-                internal_transactions,
-            ),
+            blocks_ratio: ToggleableThreshold::enabled(blocks),
+            internal_transactions_ratio: ToggleableThreshold::enabled(internal_transactions),
             check_period_secs: 0,
         }
     }
