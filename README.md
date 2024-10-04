@@ -79,7 +79,7 @@ Crates that require database connection may also have additional sea-orm defined
 
 ## Contributing
 
-We appreciate your support. Before writing code and submiting pull request, please read contributing [instructions](CONTRIBUTING.md).
+We appreciate your support. Before writing code and submitting pull request, please read contributing [instructions](CONTRIBUTING.md).
 
 
 ## License
