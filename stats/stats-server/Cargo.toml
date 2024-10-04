@@ -40,5 +40,5 @@ stats = { path = "../stats", features = ["test-utils"] }
 blockscout-service-launcher = { workspace = true, features = [ "database-0_12", "test-server" ] }
 pretty_assertions = "1.3"
 reqwest = "0.12"
-wiremock = "0.6.2"
+wiremock = { workspace = true }
 rstest = { workspace = true }

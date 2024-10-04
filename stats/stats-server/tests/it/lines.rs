@@ -5,7 +5,10 @@ use blockscout_service_launcher::{
 use chrono::NaiveDate;
 
 use stats::{
-    tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+    tests::{
+        init_db::init_db_all,
+        mock_blockscout::{fill_mock_blockscout_data, mock_blockscout_api},
+    },
     ResolutionKind,
 };
 use stats_server::{stats, Settings};
@@ -16,6 +19,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 #[ignore = "needs database"]
 async fn test_lines_ok() {
     let (stats_db, blockscout_db) = init_db_all("test_lines_ok").await;
+    let blockscout_api = mock_blockscout_api().await;
     fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap()).await;
 
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
@@ -27,6 +31,7 @@ async fn test_lines_ok() {
     settings.update_groups_config = PathBuf::from_str("../config/update_groups.json").unwrap();
     settings.db_url = stats_db.db_url();
     settings.blockscout_db_url = blockscout_db.db_url();
+    settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());
 
     init_server(|| stats(settings), &base).await;
 

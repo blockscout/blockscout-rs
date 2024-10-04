@@ -4,7 +4,7 @@ use blockscout_service_launcher::{
 };
 use pretty_assertions::assert_eq;
 
-use stats::tests::init_db::init_db_all;
+use stats::tests::{init_db::init_db_all, mock_blockscout::mock_blockscout_api};
 use stats_server::{stats, Settings};
 
 use std::{path::PathBuf, str::FromStr};
@@ -15,6 +15,8 @@ use crate::common::send_arbitrary_request;
 #[ignore = "needs database"]
 async fn test_swagger_ok() {
     let (stats_db, blockscout_db) = init_db_all("test_swagger_ok").await;
+    let blockscout_api = mock_blockscout_api().await;
+
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let mut settings = Settings::build().expect("Failed to build settings");
     let (server_settings, base) = get_test_server_settings();
@@ -24,6 +26,7 @@ async fn test_swagger_ok() {
     settings.update_groups_config = PathBuf::from_str("../config/update_groups.json").unwrap();
     settings.db_url = stats_db.db_url();
     settings.blockscout_db_url = blockscout_db.db_url();
+    settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());
 
     init_server(|| stats(settings), &base).await;
 

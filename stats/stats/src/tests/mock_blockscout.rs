@@ -1,3 +1,5 @@
+#![cfg(any(feature = "test-utils", test))]
+
 use blockscout_db::entity::{
     address_coin_balances_daily, addresses, block_rewards, blocks, internal_transactions,
     migrations_status, smart_contracts, tokens, transactions,
@@ -6,6 +8,27 @@ use chrono::{NaiveDate, NaiveDateTime};
 use rand::{Rng, SeedableRng};
 use sea_orm::{prelude::Decimal, ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
+use wiremock::{
+    matchers::{method, path},
+    Mock, MockServer, ResponseTemplate,
+};
+
+pub async fn mock_blockscout_api() -> MockServer {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v2/main-page/indexing-status"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{
+                "finished_indexing": true,
+                "finished_indexing_blocks": true,
+                "indexed_blocks_ratio": "1.00",
+                "indexed_internal_transactions_ratio": "1.00"
+            }"#,
+        ))
+        .mount(&mock_server)
+        .await;
+    mock_server
+}
 
 pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date: NaiveDate) {
     addresses::Entity::insert_many([
