@@ -103,7 +103,6 @@ impl Default for LimitsSettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct StartConditionSettings {
-    pub enabled: bool,
     pub blocks_ratio_threshold: ToggleableThreshold,
     pub internal_transactions_ratio_threshold: ToggleableThreshold,
     pub check_period_secs: u32,
@@ -112,7 +111,6 @@ pub struct StartConditionSettings {
 impl Default for StartConditionSettings {
     fn default() -> Self {
         Self {
-            enabled: true,
             // in some networks it's always almost 1
             blocks_ratio_threshold: ToggleableThreshold::default(),
             internal_transactions_ratio_threshold: ToggleableThreshold::default(),

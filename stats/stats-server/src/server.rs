@@ -289,7 +289,6 @@ mod tests {
         #[default(0.9)] internal_transactions: f64,
     ) -> StartConditionSettings {
         StartConditionSettings {
-            enabled: true,
             blocks_ratio_threshold: ToggleableThreshold::enabled(blocks),
             internal_transactions_ratio_threshold: ToggleableThreshold::enabled(
                 internal_transactions,
