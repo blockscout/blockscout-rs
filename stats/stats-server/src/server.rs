@@ -5,7 +5,7 @@ use crate::{
     health::HealthService,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
-    settings::{Settings, StartConditionSettings},
+    settings::{Settings, StartConditionSettings, ToggleableThreshold},
     update_service::UpdateService,
 };
 
@@ -60,11 +60,13 @@ fn grpc_router<S: StatsService>(
 }
 
 fn is_threshold_passed(
-    threshold: Option<f64>,
+    threshold: &ToggleableThreshold,
     float_value: Option<String>,
     value_name: &str,
 ) -> Result<bool, anyhow::Error> {
-    let Some(threshold) = threshold else {
+    let threshold = if threshold.enabled {
+        threshold.threshold
+    } else {
         return Ok(true);
     };
     let value = float_value
@@ -110,11 +112,11 @@ async fn wait_for_blockscout_indexing(
         match blockscout_client::apis::main_page_api::get_indexing_status(&api_config).await {
             Ok(result)
                 if is_threshold_passed(
-                    wait_config.blocks_ratio_threshold,
+                    &wait_config.blocks_ratio_threshold,
                     result.indexed_blocks_ratio.clone(),
                     "indexed_blocks_ratio",
                 )? && is_threshold_passed(
-                    wait_config.internal_transactions_ratio_threshold,
+                    &wait_config.internal_transactions_ratio_threshold,
                     result.indexed_internal_transactions_ratio.clone(),
                     "indexed_internal_transactions_ratio",
                 )? =>
@@ -267,8 +269,10 @@ mod tests {
     ) -> StartConditionSettings {
         StartConditionSettings {
             enabled: true,
-            blocks_ratio_threshold: Some(blocks),
-            internal_transactions_ratio_threshold: Some(internal_transactions),
+            blocks_ratio_threshold: ToggleableThreshold::enabled(blocks),
+            internal_transactions_ratio_threshold: ToggleableThreshold::enabled(
+                internal_transactions,
+            ),
             check_period_secs: 0,
         }
     }

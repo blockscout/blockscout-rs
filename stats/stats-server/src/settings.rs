@@ -97,8 +97,8 @@ impl Default for LimitsSettings {
 #[serde(default, deny_unknown_fields)]
 pub struct StartConditionSettings {
     pub enabled: bool,
-    pub blocks_ratio_threshold: Option<f64>,
-    pub internal_transactions_ratio_threshold: Option<f64>,
+    pub blocks_ratio_threshold: ToggleableThreshold,
+    pub internal_transactions_ratio_threshold: ToggleableThreshold,
     pub check_period_secs: u32,
 }
 
@@ -107,13 +107,76 @@ impl Default for StartConditionSettings {
         Self {
             enabled: true,
             // in some networks it's always almost 1
-            blocks_ratio_threshold: Some(0.98),
-            internal_transactions_ratio_threshold: Some(0.98),
+            blocks_ratio_threshold: ToggleableThreshold::default(),
+            internal_transactions_ratio_threshold: ToggleableThreshold::default(),
             check_period_secs: 5,
         }
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ToggleableThreshold {
+    pub enabled: bool,
+    pub threshold: f64,
+}
+
+impl ToggleableThreshold {
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            threshold: 0.0,
+        }
+    }
+
+    pub fn enabled(value: f64) -> Self {
+        Self {
+            enabled: true,
+            threshold: value,
+        }
+    }
+
+    pub fn set_threshold(mut self, value: f64) -> Self {
+        self.threshold = value;
+        self
+    }
+
+    pub fn set_disabled(mut self) -> Self {
+        self.enabled = false;
+        self
+    }
+}
+
+impl Default for ToggleableThreshold {
+    fn default() -> Self {
+        Self::enabled(0.98)
+    }
+}
+
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "STATS";
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config_env::test_utils::check_envs_parsed_to;
+
+    use super::*;
+
+    #[test]
+    fn start_condition_thresholds_can_be_disabled_with_envs() {
+        check_envs_parsed_to(
+            "START_SETTINGS",
+            [(
+                "START_SETTINGS__BLOCKS_RATIO_THRESHOLD__ENABLED".to_owned(),
+                "false".to_owned(),
+            )]
+            .into(),
+            StartConditionSettings {
+                blocks_ratio_threshold: ToggleableThreshold::default().set_disabled(),
+                ..StartConditionSettings::default()
+            },
+        )
+        .unwrap()
+    }
 }
