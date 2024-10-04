@@ -141,18 +141,18 @@ async fn wait_for_blockscout_indexing(
 }
 
 async fn init_api(settings: &Settings) -> anyhow::Result<Option<blockscout_client::Configuration>> {
-    match (settings.ignore_blockscout_api_absence, &settings.api_url) {
-        (_, Some(api_url)) => Ok(Some(blockscout_client::Configuration::new(api_url.clone()))),
+    match (settings.ignore_blockscout_api_absence, &settings.blockscout_api_url) {
+        (_, Some(blockscout_api_url)) => Ok(Some(blockscout_client::Configuration::new(blockscout_api_url.clone()))),
         (true, None) => {
             info!(
-                "Blockscout API URL has not been provided and `IGNORE_API_ABSENCE` setting is \
+                "Blockscout API URL has not been provided and `IGNORE_BLOCKSCOUT_API_ABSENCE` setting is \
                 set to `true`. Disabling API-related functionality."
             );
             Ok(None)
         }
         (false, None) => anyhow::bail!(
             "Blockscout API URL has not been provided. Please specify it with corresponding \
-            env variable (`{0}__API_URL`) or set `{0}__IGNORE_API_ABSENCE=true` to disable \
+            env variable (`{0}__BLOCKSCOUT_API_URL`) or set `{0}__IGNORE_BLOCKSCOUT_API_ABSENCE=true` to disable \
             functionality depending on the API.",
             Settings::SERVICE_NAME
         ),
