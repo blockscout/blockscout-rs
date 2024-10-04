@@ -173,7 +173,7 @@ mod tests {
         check_envs_parsed_to(
             "START_SETTINGS",
             [(
-                "START_SETTINGS__BLOCKS_RATIO_THRESHOLD__ENABLED".to_owned(),
+                "START_SETTINGS__BLOCKS_RATIO__ENABLED".to_owned(),
                 "false".to_owned(),
             )]
             .into(),
