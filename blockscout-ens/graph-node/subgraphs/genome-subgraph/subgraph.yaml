@@ -1,6 +1,6 @@
 specVersion: 0.0.4
 description: Subgraph to index Genome subgraph
-repository: https://github.com/blockscout/blokcscout-rs
+repository: https://github.com/blockscout/blockscout-rs
 schema:
   file: ./schema.graphql
 dataSources:
