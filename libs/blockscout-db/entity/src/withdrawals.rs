@@ -12,9 +12,9 @@ pub struct Model {
     pub amount: Decimal,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub address_hash: Vec<u8>,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub block_hash: Vec<u8>,
 }
 

@@ -8,11 +8,11 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "Binary(BlobSize::Blob(None))"
+        column_type = "VarBinary(StringLen::None)"
     )]
     pub address_hash: Vec<u8>,
     pub is_validator: Option<bool>,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub payout_key_hash: Option<Vec<u8>>,
     pub info_updated_at_block: Option<i64>,
     pub inserted_at: DateTime,

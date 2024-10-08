@@ -5,7 +5,7 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "address_names")]
 pub struct Model {
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", unique)]
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", unique)]
     pub address_hash: Vec<u8>,
     pub name: String,
     pub primary: bool,

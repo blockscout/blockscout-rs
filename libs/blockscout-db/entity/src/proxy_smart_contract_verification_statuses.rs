@@ -8,7 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub uid: String,
     pub status: i16,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))", nullable)]
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub contract_address_hash: Option<Vec<u8>>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,

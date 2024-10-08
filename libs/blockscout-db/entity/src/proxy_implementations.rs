@@ -9,7 +9,7 @@ pub struct Model {
     #[sea_orm(
         primary_key,
         auto_increment = false,
-        column_type = "Binary(BlobSize::Blob(None))"
+        column_type = "VarBinary(StringLen::None)"
     )]
     pub proxy_address_hash: Vec<u8>,
     // removed: sea-orm can't compile with Vec<Vec<u8>>
