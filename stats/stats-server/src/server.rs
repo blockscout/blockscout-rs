@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
+    blockscout_waiter::{init_blockscout_api_client, wait_for_blockscout_indexing},
     config::{read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
     read_service::ReadService,
@@ -97,6 +98,13 @@ pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
             .group
             .create_charts_with_mutexes(&db, None, &group_entry.enabled_members)
             .await?;
+    }
+
+    let blockscout_api_config = init_blockscout_api_client(&settings).await?;
+
+    // Wait for blockscout to index, if necessary.
+    if let Some(config) = blockscout_api_config {
+        wait_for_blockscout_indexing(config, settings.conditional_start).await?;
     }
 
     let update_service =

@@ -1,3 +1,4 @@
+pub mod blockscout_waiter;
 mod config;
 mod health;
 mod read_service;

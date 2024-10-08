@@ -34,6 +34,9 @@ test-with-db *args:
 check-envs:
     VALIDATE_ONLY=true cargo run --bin env-docs-generation
 
+generate-envs:
+    cargo run --bin env-docs-generation
+
 restart-generate-entities: 
     -just stop-postgres
     just start-postgres
