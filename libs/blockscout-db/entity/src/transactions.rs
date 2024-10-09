@@ -9,7 +9,7 @@ pub struct Model {
     pub cumulative_gas_used: Option<Decimal>,
     pub error: Option<String>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub gas: Decimal,
+    pub gas: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
     pub gas_price: Option<Decimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
@@ -25,14 +25,14 @@ pub struct Model {
     pub input: Vec<u8>,
     pub nonce: i32,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub r: Decimal,
+    pub r: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub s: Decimal,
+    pub s: BigDecimal,
     pub status: Option<i32>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub v: Decimal,
+    pub v: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub value: Decimal,
+    pub value: BigDecimal,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
