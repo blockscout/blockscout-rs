@@ -23,7 +23,7 @@ pub struct Model {
     pub trace_address: Vec<i32>,
     pub r#type: String,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub value: Decimal,
+    pub value: BigDecimal,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]

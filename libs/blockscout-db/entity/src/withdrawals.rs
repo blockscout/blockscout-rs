@@ -9,7 +9,7 @@ pub struct Model {
     pub index: i32,
     pub validator_index: i32,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub amount: Decimal,
+    pub amount: BigDecimal,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]

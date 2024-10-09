@@ -9,9 +9,9 @@ pub struct Model {
     #[sea_orm(column_type = "Decimal(Some((50, 0)))", nullable)]
     pub difficulty: Option<Decimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub gas_limit: Decimal,
+    pub gas_limit: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub gas_used: Decimal,
+    pub gas_used: BigDecimal,
     #[sea_orm(
         primary_key,
         auto_increment = false,
