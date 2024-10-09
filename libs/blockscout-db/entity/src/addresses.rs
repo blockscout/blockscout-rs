@@ -6,7 +6,7 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "addresses")]
 pub struct Model {
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub fetched_coin_balance: Option<Decimal>,
+    pub fetched_coin_balance: Option<BigDecimal>,
     pub fetched_coin_balance_block_number: Option<i64>,
     #[sea_orm(
         primary_key,

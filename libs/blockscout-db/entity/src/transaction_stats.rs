@@ -11,9 +11,9 @@ pub struct Model {
     pub date: Option<Date>,
     pub number_of_transactions: Option<i32>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub gas_used: Option<Decimal>,
+    pub gas_used: Option<BigDecimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub total_fee: Option<Decimal>,
+    pub total_fee: Option<BigDecimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

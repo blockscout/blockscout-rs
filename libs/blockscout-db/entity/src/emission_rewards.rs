@@ -11,7 +11,7 @@ pub struct Model {
         column_type = "custom(\"int8range\")"
     )]
     pub block_range: String,
-    pub reward: Option<Decimal>,
+    pub reward: Option<BigDecimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -7,7 +7,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     pub consensus: bool,
     #[sea_orm(column_type = "Decimal(Some((50, 0)))", nullable)]
-    pub difficulty: Option<Decimal>,
+    pub difficulty: Option<BigDecimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
     pub gas_limit: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
@@ -29,12 +29,12 @@ pub struct Model {
     pub size: Option<i32>,
     pub timestamp: DateTime,
     #[sea_orm(column_type = "Decimal(Some((50, 0)))", nullable)]
-    pub total_difficulty: Option<Decimal>,
+    pub total_difficulty: Option<BigDecimal>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
     pub refetch_needed: Option<bool>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub base_fee_per_gas: Option<Decimal>,
+    pub base_fee_per_gas: Option<BigDecimal>,
     pub is_empty: Option<bool>,
 }
 

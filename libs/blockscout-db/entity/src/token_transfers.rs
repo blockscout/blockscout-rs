@@ -17,7 +17,7 @@ pub struct Model {
     pub from_address_hash: Vec<u8>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub to_address_hash: Vec<u8>,
-    pub amount: Option<Decimal>,
+    pub amount: Option<BigDecimal>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub token_contract_address_hash: Vec<u8>,
     pub inserted_at: DateTime,
