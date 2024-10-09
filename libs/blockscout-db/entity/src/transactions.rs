@@ -6,14 +6,14 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "transactions")]
 pub struct Model {
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub cumulative_gas_used: Option<Decimal>,
+    pub cumulative_gas_used: Option<BigDecimal>,
     pub error: Option<String>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
     pub gas: BigDecimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub gas_price: Option<Decimal>,
+    pub gas_price: Option<BigDecimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub gas_used: Option<Decimal>,
+    pub gas_used: Option<BigDecimal>,
     #[sea_orm(
         primary_key,
         auto_increment = false,
@@ -51,9 +51,9 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     pub revert_reason: Option<String>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub max_priority_fee_per_gas: Option<Decimal>,
+    pub max_priority_fee_per_gas: Option<BigDecimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub max_fee_per_gas: Option<Decimal>,
+    pub max_fee_per_gas: Option<BigDecimal>,
     pub r#type: Option<i32>,
     pub has_error_in_internal_txs: Option<bool>,
     pub block_timestamp: Option<DateTime>,

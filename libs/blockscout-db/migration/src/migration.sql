@@ -1570,7 +1570,7 @@ CREATE TABLE public.tokens (
     name text,
     symbol text,
     total_supply numeric,
-    decimals numeric,
+    BigDecimals numeric,
     type character varying(255) NOT NULL,
     cataloged boolean DEFAULT false,
     contract_address_hash bytea NOT NULL,
