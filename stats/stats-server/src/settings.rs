@@ -236,10 +236,9 @@ mod tests {
     #[test]
     fn disable_internal_transactions_works_correctly() {
         let mut settings = Settings::default();
-        let charts_settings_default_enabled = {
-            let mut s = AllChartSettings::default();
-            s.enabled = true;
-            s
+        let charts_settings_default_enabled = config::types::AllChartSettings {
+            enabled: true,
+            ..Default::default()
         };
         let mut charts = config::charts::Config {
             counters: [
