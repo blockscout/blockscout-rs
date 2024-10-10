@@ -88,7 +88,7 @@ impl CreateBehaviour for Create {
 
 pub struct Update;
 
-impl UpdateBehaviour<(), (), NaiveDate> for Update {
+impl UpdateBehaviour<(), NaiveDate> for Update {
     async fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
@@ -383,7 +383,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type NativeCoinHoldersGrowth =
-    LocalDbChartSource<(), (), Create, Update, DefaultQueryVec<Properties>, Properties>;
+    LocalDbChartSource<(), Create, Update, DefaultQueryVec<Properties>, Properties>;
 pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, i64>;
 pub type NativeCoinHoldersGrowthWeekly = DirectVecLocalDbChartSource<
     LastValueLowerResolution<NativeCoinHoldersGrowth, Week>,

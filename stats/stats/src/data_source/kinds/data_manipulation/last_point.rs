@@ -28,7 +28,6 @@ where
     TimespanValue<Resolution, Value>: ZeroTimespanValue<Resolution>,
 {
     type MainDependencies = DS;
-    type ResolutionDependencies = ();
     type Output = TimespanValue<Resolution, Value>;
     fn mutex_id() -> Option<String> {
         None
