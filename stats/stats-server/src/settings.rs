@@ -7,7 +7,15 @@ use blockscout_service_launcher::{
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
+use stats::{
+    counters::LastNewContracts,
+    lines::{ContractsGrowth, NewContracts},
+    ChartProperties,
+};
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
+use tracing::warn;
+
+use crate::config::{self, types::AllChartSettings};
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -24,6 +32,11 @@ pub struct Settings {
     /// Disable functionality that utilizes [`Settings::blockscout_api_url`] if the parameter
     /// is not provided. By default the url is required to not silently suppress such features.
     pub ignore_blockscout_api_absence: bool,
+    /// Disable functionality that utilizes internal transactions. In particular, it disables
+    /// internal transactions ratio check for starting the service and related charts.
+    ///
+    /// It has a higher priority than config files and respective envs.
+    pub disable_internal_transactions: bool,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -70,11 +83,38 @@ impl Default for Settings {
             blockscout_db_url: Default::default(),
             blockscout_api_url: None,
             ignore_blockscout_api_absence: false,
+            disable_internal_transactions: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
             jaeger: Default::default(),
             tracing: Default::default(),
+        }
+    }
+}
+
+pub fn handle_disable_internal_transactions(
+    settings: &mut Settings,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if settings.disable_internal_transactions {
+        settings
+            .conditional_start
+            .internal_transactions_ratio
+            .enabled = false;
+        for disable_key in [
+            NewContracts::key().name(),
+            LastNewContracts::key().name(),
+            ContractsGrowth::key().name(),
+        ] {
+            let Some(settings) = charts.lines.get_mut(NewContracts::key().name()) else {
+                warn!(
+                    "Could not disable internal transactions related chart {}: chart not found in settings. \
+                    This should not be a problem for running the service.",
+                disable_key);
+                continue;
+            };
+            settings.enabled = false;
         }
     }
 }
