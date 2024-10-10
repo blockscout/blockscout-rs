@@ -66,7 +66,11 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     let mut charts_config = read_charts_config(&settings.charts_config)?;
     let layout_config = read_layout_config(&settings.layout_config)?;
     let update_groups_config = read_update_groups_config(&settings.update_groups_config)?;
-    handle_disable_internal_transactions(&mut settings, &mut charts_config);
+    handle_disable_internal_transactions(
+        settings.disable_internal_transactions,
+        &mut settings.conditional_start,
+        &mut charts_config,
+    );
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
