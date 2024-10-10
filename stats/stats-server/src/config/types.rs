@@ -155,15 +155,7 @@ impl EnabledChartSettings {
     /// * `Some(_)` - The chart is enabled
     /// * `None` - The chart is disabled
     pub fn from_all(value: AllChartSettings) -> Option<Self> {
-        if value.enabled {
-            Some(EnabledChartSettings {
-                units: value.units,
-                title: value.title,
-                description: value.description,
-            })
-        } else {
-            None
-        }
+        value.into_enabled()
     }
 }
 

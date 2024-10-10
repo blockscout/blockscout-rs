@@ -7,7 +7,15 @@ use blockscout_service_launcher::{
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
+use stats::{
+    counters::LastNewContracts,
+    lines::{ContractsGrowth, NewContracts},
+    ChartProperties,
+};
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
+use tracing::warn;
+
+use crate::config::{self, types::AllChartSettings};
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -24,6 +32,11 @@ pub struct Settings {
     /// Disable functionality that utilizes [`Settings::blockscout_api_url`] if the parameter
     /// is not provided. By default the url is required to not silently suppress such features.
     pub ignore_blockscout_api_absence: bool,
+    /// Disable functionality that utilizes internal transactions. In particular, it disables
+    /// internal transactions ratio check for starting the service and related charts.
+    ///
+    /// It has a higher priority than config files and respective envs.
+    pub disable_internal_transactions: bool,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -70,11 +83,43 @@ impl Default for Settings {
             blockscout_db_url: Default::default(),
             blockscout_api_url: None,
             ignore_blockscout_api_absence: false,
+            disable_internal_transactions: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
             jaeger: Default::default(),
             tracing: Default::default(),
+        }
+    }
+}
+
+pub fn handle_disable_internal_transactions(
+    disable_internal_transactions: bool,
+    conditional_start: &mut StartConditionSettings,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if disable_internal_transactions {
+        conditional_start.internal_transactions_ratio.enabled = false;
+        for disable_key in [
+            NewContracts::key().name(),
+            LastNewContracts::key().name(),
+            ContractsGrowth::key().name(),
+        ] {
+            let settings = match (
+                charts.lines.get_mut(disable_key),
+                charts.counters.get_mut(disable_key),
+            ) {
+                (Some(settings), _) => settings,
+                (_, Some(settings)) => settings,
+                _ => {
+                    warn!(
+                        "Could not disable internal transactions related chart {}: chart not found in settings. \
+                        This should not be a problem for running the service.",
+                    disable_key);
+                    continue;
+                }
+            };
+            settings.enabled = false;
         }
     }
 }
@@ -165,8 +210,11 @@ impl ConfigSettings for Settings {
 #[cfg(test)]
 mod tests {
     use crate::config_env::test_utils::check_envs_parsed_to;
+    use stats::counters::TotalContracts;
 
     use super::*;
+
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn start_condition_thresholds_can_be_disabled_with_envs() {
@@ -183,5 +231,89 @@ mod tests {
             },
         )
         .unwrap()
+    }
+
+    #[test]
+    fn disable_internal_transactions_works_correctly() {
+        let mut settings = Settings::default();
+        let charts_settings_default_enabled = config::types::AllChartSettings {
+            enabled: true,
+            ..Default::default()
+        };
+        let mut charts = config::charts::Config {
+            counters: [
+                (
+                    LastNewContracts::key().name().to_owned(),
+                    charts_settings_default_enabled.clone(),
+                ),
+                (
+                    TotalContracts::key().name().to_owned(),
+                    charts_settings_default_enabled.clone(),
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            lines: [
+                (
+                    NewContracts::key().name().to_owned(),
+                    charts_settings_default_enabled.clone(),
+                ),
+                (
+                    ContractsGrowth::key().name().to_owned(),
+                    charts_settings_default_enabled.clone(),
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+        };
+
+        settings.disable_internal_transactions = true;
+        handle_disable_internal_transactions(
+            settings.disable_internal_transactions,
+            &mut settings.conditional_start,
+            &mut charts,
+        );
+
+        assert_eq!(
+            settings
+                .conditional_start
+                .internal_transactions_ratio
+                .enabled,
+            false
+        );
+        assert_eq!(
+            charts
+                .lines
+                .get(NewContracts::key().name())
+                .unwrap()
+                .enabled,
+            false
+        );
+        assert_eq!(
+            charts
+                .lines
+                .get(ContractsGrowth::key().name())
+                .unwrap()
+                .enabled,
+            false
+        );
+        assert_eq!(
+            charts
+                .counters
+                .get(LastNewContracts::key().name())
+                .unwrap()
+                .enabled,
+            false
+        );
+        assert_eq!(
+            charts
+                .counters
+                .get(TotalContracts::key().name())
+                .unwrap()
+                .enabled,
+            true
+        );
     }
 }

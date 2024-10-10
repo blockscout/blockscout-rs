@@ -6,7 +6,7 @@ use crate::{
     health::HealthService,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
-    settings::Settings,
+    settings::{handle_disable_internal_transactions, Settings},
     update_service::UpdateService,
 };
 
@@ -57,15 +57,20 @@ fn grpc_router<S: StatsService>(
         .add_service(StatsServiceServer::from_arc(stats))
 }
 
-pub async fn stats(settings: Settings) -> Result<(), anyhow::Error> {
+pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     blockscout_service_launcher::tracing::init_logs(
         SERVICE_NAME,
         &settings.tracing,
         &settings.jaeger,
     )?;
-    let charts_config = read_charts_config(&settings.charts_config)?;
+    let mut charts_config = read_charts_config(&settings.charts_config)?;
     let layout_config = read_layout_config(&settings.layout_config)?;
     let update_groups_config = read_update_groups_config(&settings.update_groups_config)?;
+    handle_disable_internal_transactions(
+        settings.disable_internal_transactions,
+        &mut settings.conditional_start,
+        &mut charts_config,
+    );
     let mut opt = ConnectOptions::new(settings.db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
