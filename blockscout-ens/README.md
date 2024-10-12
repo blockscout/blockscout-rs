@@ -2,7 +2,7 @@
 
 This project provides indexed data of domain name service for blockscout instances.
 
-Here is brief overview of the project stucture:
+Here is brief overview of the project structure:
 
 ![bens-structure](images/bens.drawio.svg)
 
