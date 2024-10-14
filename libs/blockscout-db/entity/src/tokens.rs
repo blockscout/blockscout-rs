@@ -9,8 +9,8 @@ pub struct Model {
     pub name: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
     pub symbol: Option<String>,
-    pub total_supply: Option<Decimal>,
-    pub decimals: Option<Decimal>,
+    pub total_supply: Option<BigDecimal>,
+    pub decimals: Option<BigDecimal>,
     pub r#type: String,
     pub cataloged: Option<bool>,
     #[sea_orm(
@@ -24,12 +24,12 @@ pub struct Model {
     pub updated_at: DateTime,
     pub holder_count: Option<i32>,
     pub skip_metadata: Option<bool>,
-    pub fiat_value: Option<Decimal>,
-    pub circulating_market_cap: Option<Decimal>,
+    pub fiat_value: Option<BigDecimal>,
+    pub circulating_market_cap: Option<BigDecimal>,
     pub total_supply_updated_at_block: Option<i64>,
     pub icon_url: Option<String>,
     pub is_verified_via_admin_panel: Option<bool>,
-    pub volume_24h: Option<Decimal>,
+    pub volume_24h: Option<BigDecimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
