@@ -82,7 +82,7 @@ async fn list_chains(proxy: &ProxyService) -> Vec<Chain> {
                 icon_url.to_string()
             } else {
                 let mut url = settings.api_url;
-                url.set_path("assets/favicon/apple-touch-icon-180x180.png");
+                url.set_path("assets/favicon/web-app-manifest-192x192.png");
                 url.to_string()
             };
 
