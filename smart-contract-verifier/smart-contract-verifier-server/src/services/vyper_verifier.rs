@@ -55,6 +55,35 @@ impl VyperVerifierService {
             client: Arc::new(client),
         })
     }
+
+    /// Normalizes the requested compiler version by matching it against a list of known compiler versions.
+    /// The function takes a `DetailedVersion` from the request and attempts to find a corresponding version
+    /// from the known list, allowing for cases where the requested commit hash is either a prefix or a longer
+    /// version than the known one. If a matching version is found, it is returned; otherwise, a
+    /// [`Status::invalid_argument`] error is returned.
+    fn normalize_request_compiler_version(
+        &self,
+        request_compiler_version: &smart_contract_verifier::DetailedVersion,
+    ) -> Result<smart_contract_verifier::DetailedVersion, Status> {
+        let compilers = self.client.compilers().all_versions();
+        let corresponding_known_compiler_version = compilers.iter().find(|&version| {
+            return version.version() == request_compiler_version.version()
+                && version.date() == request_compiler_version.date()
+                && (version
+                    .commit()
+                    .starts_with(request_compiler_version.commit())
+                    || request_compiler_version
+                        .commit()
+                        .starts_with(version.commit()));
+        });
+        if let Some(compiler_version) = corresponding_known_compiler_version {
+            Ok(compiler_version.clone())
+        } else {
+            Err(Status::invalid_argument(format!(
+                "Compiler version not found: {request_compiler_version}"
+            )))
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -92,7 +121,12 @@ impl VyperVerifier for VyperVerifierService {
             "Request details"
         );
 
-        let result = vyper::multi_part::verify(self.client.clone(), request.try_into()?).await;
+        let mut verification_request: vyper::multi_part::VerificationRequest =
+            request.try_into()?;
+        verification_request.compiler_version =
+            self.normalize_request_compiler_version(&verification_request.compiler_version)?;
+
+        let result = vyper::multi_part::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
             tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
@@ -154,7 +188,7 @@ impl VyperVerifier for VyperVerifierService {
             "Request details"
         );
 
-        let verification_request = {
+        let mut verification_request: vyper::standard_json::VerificationRequest = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
                 match err {
@@ -169,6 +203,9 @@ impl VyperVerifier for VyperVerifierService {
             }
             request.unwrap()
         };
+        verification_request.compiler_version =
+            self.normalize_request_compiler_version(&verification_request.compiler_version)?;
+
         let result = vyper::standard_json::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
