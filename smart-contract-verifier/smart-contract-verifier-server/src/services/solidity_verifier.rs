@@ -107,7 +107,14 @@ impl SolidityVerifier for SolidityVerifierService {
             "Request details"
         );
 
-        let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
+        let mut verification_request: solidity::multi_part::VerificationRequest =
+            request.try_into()?;
+        verification_request.compiler_version = common::normalize_request_compiler_version(
+            &self.client.compilers().all_versions(),
+            &verification_request.compiler_version,
+        )?;
+
+        let result = solidity::multi_part::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
             tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
@@ -169,7 +176,7 @@ impl SolidityVerifier for SolidityVerifierService {
             "Request details"
         );
 
-        let verification_request = {
+        let mut verification_request: solidity::standard_json::VerificationRequest = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
                 match err {
@@ -186,6 +193,11 @@ impl SolidityVerifier for SolidityVerifierService {
             }
             request.unwrap()
         };
+        verification_request.compiler_version = common::normalize_request_compiler_version(
+            &self.client.compilers().all_versions(),
+            &verification_request.compiler_version,
+        )?;
+
         let result =
             solidity::standard_json::verify(self.client.clone(), verification_request).await;
 

@@ -92,7 +92,14 @@ impl VyperVerifier for VyperVerifierService {
             "Request details"
         );
 
-        let result = vyper::multi_part::verify(self.client.clone(), request.try_into()?).await;
+        let mut verification_request: vyper::multi_part::VerificationRequest =
+            request.try_into()?;
+        verification_request.compiler_version = common::normalize_request_compiler_version(
+            &self.client.compilers().all_versions(),
+            &verification_request.compiler_version,
+        )?;
+
+        let result = vyper::multi_part::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
             tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
@@ -154,7 +161,7 @@ impl VyperVerifier for VyperVerifierService {
             "Request details"
         );
 
-        let verification_request = {
+        let mut verification_request: vyper::standard_json::VerificationRequest = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
                 match err {
@@ -169,6 +176,11 @@ impl VyperVerifier for VyperVerifierService {
             }
             request.unwrap()
         };
+        verification_request.compiler_version = common::normalize_request_compiler_version(
+            &self.client.compilers().all_versions(),
+            &verification_request.compiler_version,
+        )?;
+
         let result = vyper::standard_json::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
