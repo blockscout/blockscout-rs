@@ -98,7 +98,7 @@ just migrate-up
 ```bash
 just generate-entities
 ```
-+ Now you ready to start API server! Just run it:
++ Now you are ready to start API server! Just run it:
 ```
 just run
 ```
