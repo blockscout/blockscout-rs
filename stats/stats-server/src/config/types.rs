@@ -189,17 +189,20 @@ impl LineChartCategory {
     /// If the settings are not present - remove the chart (i.e. remove disabled
     /// or nonexistent charts)
     pub fn intersect_info(
-        self,
+        &self,
         info: &BTreeMap<String, EnabledChartEntry>,
     ) -> proto_v1::LineChartSection {
         let charts: Vec<_> = self
             .charts_order
-            .into_iter()
-            .flat_map(|c: String| info.get(&c).map(|e| e.build_proto_line_chart_info(c)))
+            .iter()
+            .flat_map(|chart| {
+                info.get(chart)
+                    .map(|e| e.build_proto_line_chart_info(chart.clone()))
+            })
             .collect();
         proto_v1::LineChartSection {
-            id: self.id,
-            title: self.title,
+            id: self.id.clone(),
+            title: self.title.clone(),
             charts,
         }
     }
