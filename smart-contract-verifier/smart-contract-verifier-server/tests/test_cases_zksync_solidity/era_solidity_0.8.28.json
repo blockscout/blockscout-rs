@@ -8,9 +8,9 @@
     "file_name": "src/Greeter.sol",
     "contract_name": "Greeter",
     "expected_sources": {
-        "src/Greeter.sol": "//SPDX-License-Identifier: Unlicense\npragma solidity ^0.8.0;\n\ncontract Greeter {\n    string private greeting;\n\n    constructor(string memory _greeting) {\n        greeting = _greeting;\n    }\n\n    function greet() public view returns (string memory) {\n        return greeting;\n    }\n\n    function setGreeting(string memory _greeting) public {\n        greeting = _greeting;\n    }\n}\n"
+        "src/Greeter.sol": "//SPDX-License-Identifier: Unlicense\npragma solidity ^0.8.0;\n\ncontract Greeter {\n    string private greeting;\n\n    constructor(string memory _greeting) {\n        greeting = _greeting;\n    }\n\n    function greet() public view returns (string memory) {\n        return greeting;\n    }\n\n    function setGreeting(string memory _greeting) public {\n        greeting = _greeting;\n    }\n}\n\n"
     },
-    "expected_compilation_artifacts": {"abi":[{"inputs":[{"internalType":"string","name":"_greeting","type":"string"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"greet","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"_greeting","type":"string"}],"name":"setGreeting","outputs":[],"stateMutability":"nonpayable","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1},"storageLayout":{"storage":[{"astId":3,"contract":"contracts/Greeter.sol:Greeter","label":"greeting","offset":0,"slot":"0","type":"t_string_storage"}],"types":{"t_string_storage":{"encoding":"bytes","label":"string","numberOfBytes":"32"}}}},
+    "expected_compilation_artifacts": {"abi":[{"inputs":[{"internalType":"string","name":"_greeting","type":"string"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"greet","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"_greeting","type":"string"}],"name":"setGreeting","outputs":[],"stateMutability":"nonpayable","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1},"storageLayout":{"storage":[{"astId":3,"contract":"src/Greeter.sol:Greeter","label":"greeting","offset":0,"slot":"0","type":"t_string_storage"}],"types":{"t_string_storage":{"encoding":"bytes","label":"string","numberOfBytes":"32"}}}},
     "expected_creation_code_artifacts": {},
     "expected_runtime_code_artifacts": {},
 
@@ -19,7 +19,7 @@
         {
             "type": "insert",
             "reason": "constructor",
-            "offset": 4192
+            "offset": 4512
         }
     ],
     "expected_creation_values": {

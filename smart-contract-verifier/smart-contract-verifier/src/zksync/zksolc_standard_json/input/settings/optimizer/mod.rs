@@ -31,6 +31,27 @@ pub struct Optimizer {
     /// Set the jump table density threshold.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jump_table_density_threshold: Option<u32>,
+    // The original structure contained `camelCase` modifier for all optimizer fields.
+    // But sometimes those parameters are supplied in a snake case.
+    // To support such cases, we also add explicit snake case variations.
+    /// Whether to try to recompile with -Oz if the bytecode is too large.
+    #[serde(
+        rename = "fallback_to_optimizing_for_size",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub fallback_to_optimizing_for_size_snake: Option<bool>,
+    /// Whether to disable the system request memoization.
+    #[serde(
+        rename = "disable_system_request_memoization",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub disable_system_request_memoization_snake: Option<bool>,
+    /// Set the jump table density threshold.
+    #[serde(
+        rename = "jump_table_density_threshold",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub jump_table_density_threshold_snake: Option<u32>,
 }
 
 impl Optimizer {
@@ -52,6 +73,9 @@ impl Optimizer {
             fallback_to_optimizing_for_size: Some(fallback_to_optimizing_for_size),
             disable_system_request_memoization: Some(disable_system_request_memoization),
             jump_table_density_threshold,
+            fallback_to_optimizing_for_size_snake: Some(fallback_to_optimizing_for_size),
+            disable_system_request_memoization_snake: Some(disable_system_request_memoization),
+            jump_table_density_threshold_snake: jump_table_density_threshold,
         }
     }
 
