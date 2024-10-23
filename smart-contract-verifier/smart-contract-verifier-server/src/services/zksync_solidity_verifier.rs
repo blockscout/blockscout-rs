@@ -36,11 +36,20 @@ impl Service {
         let evm_fetcher = common::initialize_fetcher(
             settings.evm_fetcher,
             settings.evm_compilers_dir.clone(),
-            settings.evm_refresh_versions_schedule,
+            settings.evm_refresh_versions_schedule.clone(),
             Some(solc_validator),
         )
         .await
         .context("zksync solc fetcher initialization")?;
+
+        let era_evm_fetcher = common::initialize_fetcher(
+            settings.era_evm_fetcher,
+            settings.evm_compilers_dir.clone(),
+            settings.evm_refresh_versions_schedule,
+            None,
+        )
+        .await
+        .context("zksync era solc fetcher initialization")?;
 
         let zk_fetcher = common::initialize_fetcher(
             settings.zk_fetcher,
@@ -53,6 +62,7 @@ impl Service {
 
         let compilers = ZkSyncCompilers::new(
             evm_fetcher.clone(),
+            era_evm_fetcher.clone(),
             zk_fetcher.clone(),
             compilers_threads_semaphore,
         );

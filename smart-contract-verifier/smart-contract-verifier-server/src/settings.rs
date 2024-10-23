@@ -7,8 +7,8 @@ use cron::Schedule;
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use smart_contract_verifier::{
-    DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
-    DEFAULT_ZKSOLC_COMPILER_LIST,
+    DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST,
+    DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
 };
 use std::{
     num::{NonZeroU32, NonZeroUsize},
@@ -130,6 +130,7 @@ pub struct ZksyncSoliditySettings {
     #[serde_as(as = "DisplayFromStr")]
     pub evm_refresh_versions_schedule: Schedule,
     pub evm_fetcher: FetcherSettings,
+    pub era_evm_fetcher: FetcherSettings,
     pub zk_compilers_dir: PathBuf,
     #[serde_as(as = "DisplayFromStr")]
     pub zk_refresh_versions_schedule: Schedule,
@@ -143,6 +144,7 @@ impl Default for ZksyncSoliditySettings {
             evm_compilers_dir: default_compilers_dir("zksync-solc-compilers"),
             evm_refresh_versions_schedule: schedule_every_hour(),
             evm_fetcher: default_list_fetcher(DEFAULT_SOLIDITY_COMPILER_LIST),
+            era_evm_fetcher: default_list_fetcher(DEFAULT_ERA_SOLIDITY_COMPILER_LIST),
             zk_compilers_dir: default_compilers_dir("zksync-zksolc-compilers"),
             zk_refresh_versions_schedule: schedule_every_hour(),
             zk_fetcher: default_list_fetcher(DEFAULT_ZKSOLC_COMPILER_LIST),

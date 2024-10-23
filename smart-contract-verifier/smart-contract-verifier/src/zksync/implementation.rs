@@ -1,9 +1,9 @@
-use crate::{compiler::{CompactVersion, DetailedVersion, DownloadCache, FetchError, Fetcher}, decode_hex, Version, zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract}};
+use crate::{compiler::{CompactVersion, DetailedVersion, DownloadCache, Fetcher}, decode_hex, Version, zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract}};
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
 use foundry_compilers::error::SolcError;
-use futures::TryFutureExt;
+use futures::{StreamExt, TryFutureExt, TryStreamExt};
 use nonempty::NonEmpty;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
@@ -99,10 +99,52 @@ pub async fn verify(
 
     compiler_input.normalize_output_selection(&zk_compiler_version);
 
-    let (compiler_output, _raw_compiler_output) = compilers
-        .compile(&zk_compiler_version, &evm_compiler_version, &compiler_input)
+    let (zk_compiler_path, evm_compiler_paths) = compilers
+        .fetch_compilers(&zk_compiler_version, &evm_compiler_version)
         .await?;
 
+    let mut successes = vec![];
+    let mut failures = vec![];
+    for evm_compiler_path in evm_compiler_paths {
+        let (compiler_output, _raw_compiler_output) = compilers
+            .compile(&zk_compiler_path, &evm_compiler_path, &compiler_input)
+            .await?;
+
+        (successes, failures) = verify_compiler_output(
+            request.code.clone(),
+            request.constructor_arguments.clone(),
+            compiler_output,
+        )?;
+
+        if !successes.is_empty() {
+            break;
+        }
+    }
+
+    let sources = compiler_input
+        .sources
+        .into_iter()
+        .map(|(file, source)| (file, source.content.to_string()))
+        .collect();
+    Ok(VerificationResult {
+        zk_compiler: "zksolc".to_string(),
+        zk_compiler_version,
+        evm_compiler: "solc".to_string(),
+        evm_compiler_version,
+        language: Language::Solidity,
+        compiler_settings: serde_json::to_value(compiler_input.settings)
+            .context("compiler settings serialization")?,
+        sources,
+        successes,
+        failures,
+    })
+}
+
+fn verify_compiler_output(
+    code: Bytes,
+    constructor_arguments: Option<Bytes>,
+    compiler_output: output::Output,
+) -> Result<(Vec<VerificationSuccess>, Vec<VerificationFailure>), Error> {
     let mut successes = Vec::new();
     let mut failures = Vec::new();
     for (file, contracts) in compiler_output.contracts.unwrap_or_default() {
@@ -110,8 +152,8 @@ pub async fn verify(
             match check_contract(
                 file.clone(),
                 name,
-                request.code.clone(),
-                request.constructor_arguments.clone(),
+                code.clone(),
+                constructor_arguments.clone(),
                 contract,
             )? {
                 Ok(success) => {
@@ -137,23 +179,7 @@ pub async fn verify(
         }
     }
 
-    let sources = compiler_input
-        .sources
-        .into_iter()
-        .map(|(file, source)| (file, source.content.to_string()))
-        .collect();
-    Ok(VerificationResult {
-        zk_compiler: "zksolc".to_string(),
-        zk_compiler_version,
-        evm_compiler: "solc".to_string(),
-        evm_compiler_version,
-        language: Language::Solidity,
-        compiler_settings: serde_json::to_value(compiler_input.settings)
-            .context("compiler settings serialization")?,
-        sources,
-        successes,
-        failures,
-    })
+    Ok((successes, failures))
 }
 
 fn check_contract(
@@ -347,6 +373,8 @@ pub trait ZkSyncCompiler {
 pub struct ZkSyncCompilers<ZkC> {
     evm_cache: DownloadCache<DetailedVersion>,
     evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
+    era_evm_cache: DownloadCache<DetailedVersion>,
+    era_evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
     zk_cache: DownloadCache<CompactVersion>,
     zk_fetcher: Arc<dyn Fetcher<Version = CompactVersion>>,
     threads_semaphore: Arc<Semaphore>,
@@ -356,12 +384,15 @@ pub struct ZkSyncCompilers<ZkC> {
 impl<ZkC: ZkSyncCompiler> ZkSyncCompilers<ZkC> {
     pub fn new(
         evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
+        era_evm_fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
         zk_fetcher: Arc<dyn Fetcher<Version = CompactVersion>>,
         threads_semaphore: Arc<Semaphore>,
     ) -> Self {
         Self {
             evm_cache: DownloadCache::default(),
             evm_fetcher,
+            era_evm_cache: DownloadCache::default(),
+            era_evm_fetcher,
             zk_cache: DownloadCache::default(),
             zk_fetcher,
             threads_semaphore,
@@ -371,19 +402,17 @@ impl<ZkC: ZkSyncCompiler> ZkSyncCompilers<ZkC> {
 
     pub async fn compile(
         &self,
-        zk_compiler: &CompactVersion,
-        evm_compiler: &DetailedVersion,
+        zk_compiler_path: &Path,
+        evm_compiler_path: &Path,
         input: &ZkC::CompilerInput,
     ) -> Result<(ZkC::CompilerOutput, Value), Error> {
-        let (zk_path, evm_path) = self.fetch_compilers(zk_compiler, evm_compiler).await?;
-
         let _permit = self
             .threads_semaphore
             .acquire()
             .await
             .context("acquiring lock")?;
 
-        let raw_compiler_output = ZkC::compile(&zk_path, &evm_path, input)
+        let raw_compiler_output = ZkC::compile(zk_compiler_path, evm_compiler_path, input)
             .await
             .context("compilation")?;
 
@@ -416,29 +445,118 @@ impl<ZkC: ZkSyncCompiler> ZkSyncCompilers<ZkC> {
         &self,
         zk_compiler: &CompactVersion,
         evm_compiler: &DetailedVersion,
-    ) -> Result<(PathBuf, PathBuf), Error> {
+    ) -> Result<(PathBuf, NonEmpty<PathBuf>), Error> {
+        let (zk_compiler, maybe_evm_compiler, era_evm_compilers) =
+            self.choose_compiler_versions_to_fetch(zk_compiler, evm_compiler)?;
+
+        assert!(
+            maybe_evm_compiler.is_some() || !era_evm_compilers.is_empty(),
+            "there must be at least one valid evm compiler after choosing"
+        );
+
         let zk_path_future = self
             .zk_cache
-            .get(self.zk_fetcher.as_ref(), zk_compiler)
-            .map_err(|err| match err {
-                FetchError::NotFound(version) => Error::ZkCompilerNotFound(version),
-                err => anyhow::Error::new(err)
-                    .context("fetching zk compiler")
-                    .into(),
+            .get(self.zk_fetcher.as_ref(), &zk_compiler)
+            .map_err(|err| {
+                Error::Internal(anyhow::Error::new(err).context("fetching zk compiler"))
             });
 
-        let evm_path_future = self
-            .evm_cache
-            .get(self.evm_fetcher.as_ref(), evm_compiler)
-            .map_err(|err| match err {
-                FetchError::NotFound(version) => Error::EvmCompilerNotFound(version),
-                err => anyhow::Error::new(err)
-                    .context("fetching evm compiler")
-                    .into(),
-            });
+        let mut evm_compilers = vec![];
+        if let Some(evm_compiler) = maybe_evm_compiler {
+            evm_compilers.push(evm_compiler)
+        }
+        let evm_paths_future = tokio_stream::iter(evm_compilers)
+            .map(|version| async move {
+                self.evm_cache
+                    .get(self.evm_fetcher.as_ref(), &version)
+                    .await
+                    .map_err(|err| {
+                        Error::Internal(
+                            anyhow::Error::new(err)
+                                .context(format!("fetching evm compiler: {version}")),
+                        )
+                    })
+            })
+            .buffered(3)
+            .try_collect::<Vec<_>>();
 
-        let (zk_path_result, evm_path_result) = futures::join!(zk_path_future, evm_path_future);
-        Ok((zk_path_result?, evm_path_result?))
+        let era_evm_paths_future = tokio_stream::iter(era_evm_compilers)
+            .map(|version| async move {
+                self.era_evm_cache
+                    .get(self.era_evm_fetcher.as_ref(), &version)
+                    .await
+                    .map_err(|err| {
+                        Error::Internal(
+                            anyhow::Error::new(err)
+                                .context(format!("fetching evm compiler: {version}")),
+                        )
+                    })
+            })
+            .buffered(3)
+            .try_collect::<Vec<_>>();
+
+        let (zk_path_result, evm_paths_result, era_evm_paths_result) =
+            futures::join!(zk_path_future, evm_paths_future, era_evm_paths_future);
+        let (zk_path_result, evm_paths_result, era_evm_paths_result) =
+            (zk_path_result?, evm_paths_result?, era_evm_paths_result?);
+
+        let mut all_evm_paths_result = era_evm_paths_result;
+        all_evm_paths_result.extend(evm_paths_result);
+        let all_evm_paths_result =
+            NonEmpty::from_vec(all_evm_paths_result).expect("at least 1 valid evm_version exists");
+
+        Ok((zk_path_result, all_evm_paths_result))
+    }
+
+    fn choose_compiler_versions_to_fetch(
+        &self,
+        zk_compiler: &CompactVersion,
+        evm_compiler: &DetailedVersion,
+    ) -> Result<
+        (
+            CompactVersion,
+            Option<DetailedVersion>,
+            Vec<DetailedVersion>,
+        ),
+        Error,
+    > {
+        let all_zk_compilers = self.zk_fetcher.all_versions();
+        let zk_compiler = match all_zk_compilers
+            .into_iter()
+            .find(|value| zk_compiler == value)
+        {
+            None => return Err(Error::ZkCompilerNotFound(zk_compiler.to_string())),
+            Some(zk_compiler) => zk_compiler,
+        };
+
+        let all_evm_compilers = self.evm_fetcher.all_versions();
+        let maybe_requested_evm_compiler = all_evm_compilers
+            .contains(evm_compiler)
+            .then(|| evm_compiler.clone());
+
+        let matching_era_evm_compilers =
+            self.lookup_era_evm_compilers_by_semver_version(evm_compiler.version());
+
+        if maybe_requested_evm_compiler.is_none() && matching_era_evm_compilers.is_empty() {
+            return Err(Error::EvmCompilerNotFound(evm_compiler.to_string()));
+        }
+
+        Ok((
+            zk_compiler,
+            maybe_requested_evm_compiler,
+            matching_era_evm_compilers,
+        ))
+    }
+
+    fn lookup_era_evm_compilers_by_semver_version(
+        &self,
+        version: &semver::Version,
+    ) -> Vec<DetailedVersion> {
+        let era_evm_compilers = self.era_evm_fetcher.all_versions();
+        era_evm_compilers
+            .into_iter()
+            .filter(|compiler| compiler.version() == version)
+            .collect()
     }
 }
 
