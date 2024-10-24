@@ -29,7 +29,6 @@ where
     Properties: ChartProperties,
 {
     type MainDependencies = DS;
-    type ResolutionDependencies = ();
     type Output = DS::Output;
 
     fn mutex_id() -> Option<String> {

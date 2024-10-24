@@ -22,10 +22,9 @@ pub trait CreateBehaviour {
 
 // generic parameters are to ensure that dependencies in implementations
 // of this trait match dependencies in `impl DataSource for LocalDbChartSource<..>`
-pub trait UpdateBehaviour<MainDep, ResolutionDep, Resolution>
+pub trait UpdateBehaviour<MainDep, Resolution>
 where
     MainDep: DataSource,
-    ResolutionDep: DataSource,
 {
     /// Update only chart values.
     ///
