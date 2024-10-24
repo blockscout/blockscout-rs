@@ -53,6 +53,7 @@ pub struct StandardJson {
     pub expected_runtime_match_type: Option<String>,
     pub expected_runtime_transformations: Option<Value>,
     pub expected_runtime_values: Option<Value>,
+    pub expected_evm_compiler_version: Option<String>,
 }
 
 impl TestCase for StandardJson {
@@ -87,9 +88,13 @@ impl TestCase for StandardJson {
             success.evm_compiler.as_ref().unwrap().compiler,
             "invalid evm-compiler"
         );
+        let expected_evm_compiler_version = self
+            .expected_evm_compiler_version
+            .as_ref()
+            .unwrap_or(&self.evm_compiler_version);
         assert_eq!(
-            self.evm_compiler_version,
-            success.evm_compiler.as_ref().unwrap().version,
+            expected_evm_compiler_version,
+            &success.evm_compiler.as_ref().unwrap().version,
             "invalid evm-compiler version"
         );
 
