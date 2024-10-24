@@ -72,6 +72,27 @@ async fn zksolc_1_3_5() {
     test_case.check_verify_response(response);
 }
 
+// Era Solidity compilers are forks of Solidity compilers created by zksync.
+// They are used by foundry and hardhat tools and affect metadata hash of compiled contracts.
+#[tokio::test]
+async fn era_solidity_compiled_standard_json() {
+    const ROUTE: &str = "/api/v2/zksync-verifier/solidity/sources:verify-standard-json";
+
+    let test_case = types::from_file::<StandardJson>("era_solidity_0.8.28");
+
+    let server = super::start().await;
+
+    let request = test_case.to_request();
+    let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
+        &server.base_url,
+        ROUTE,
+        &request,
+    )
+    .await;
+
+    test_case.check_verify_response(response);
+}
+
 #[tokio::test]
 async fn cannot_compile() {
     const ROUTE: &str = "/api/v2/zksync-verifier/solidity/sources:verify-standard-json";
