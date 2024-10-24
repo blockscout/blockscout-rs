@@ -107,7 +107,9 @@ pub async fn verify(
 
     let mut successes = vec![];
     let mut failures = vec![];
+    let mut used_version = evm_compilers.head.version.clone();
     for evm_compiler in evm_compilers {
+        used_version = evm_compiler.version.clone();
         let (zk_compiler_path, evm_compiler_path) = compilers
             .fetch_compilers(&zk_compiler, &evm_compiler)
             .await?;
@@ -136,7 +138,7 @@ pub async fn verify(
         zk_compiler: "zksolc".to_string(),
         zk_compiler_version,
         evm_compiler: "solc".to_string(),
-        evm_compiler_version,
+        evm_compiler_version: used_version,
         language: Language::Solidity,
         compiler_settings: serde_json::to_value(compiler_input.settings)
             .context("compiler settings serialization")?,
