@@ -68,12 +68,12 @@ fn map_read_error(err: ReadError) -> Status {
 ///
 /// Returns `None` if info were not found for some chart.
 fn add_chart_info_to_layout(
-    layout: Vec<types::LineChartCategory>,
-    chart_info: BTreeMap<String, EnabledChartEntry>,
+    layout: &[types::LineChartCategory],
+    chart_info: &BTreeMap<String, EnabledChartEntry>,
 ) -> Vec<proto_v1::LineChartSection> {
     layout
-        .into_iter()
-        .map(|cat| cat.intersect_info(&chart_info))
+        .iter()
+        .map(|cat| cat.intersect_info(chart_info))
         .collect()
 }
 
@@ -280,9 +280,10 @@ impl StatsService for ReadService {
         &self,
         _request: Request<proto_v1::GetLineChartsRequest>,
     ) -> Result<Response<proto_v1::LineCharts>, Status> {
-        let layout = self.charts.lines_layout.clone();
-        let info = self.charts.charts_info.clone();
-        let sections = add_chart_info_to_layout(layout, info);
+        let sections = add_chart_info_to_layout(
+            self.charts.lines_layout.as_slice(),
+            &self.charts.charts_info,
+        );
 
         Ok(Response::new(proto_v1::LineCharts { sections }))
     }
