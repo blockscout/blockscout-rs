@@ -1,3 +1,4 @@
+use crate::settings::DockerApiSettings;
 use async_trait::async_trait;
 use stylus_verifier_logic::stylus_sdk_rs;
 use stylus_verifier_proto::blockscout::stylus_verifier::v1::{
@@ -8,12 +9,16 @@ use stylus_verifier_proto::blockscout::stylus_verifier::v1::{
 use tonic::{Request, Response, Status};
 
 pub struct StylusSdkRsVerifierService {
+    docker_client: stylus_sdk_rs::Docker,
     supported_cargo_stylus_versions: Vec<semver::Version>,
 }
 
 impl StylusSdkRsVerifierService {
-    pub fn new() -> Self {
+    pub async fn new(docker_api_settings: DockerApiSettings) -> Self {
         Self {
+            docker_client: stylus_sdk_rs::docker_connect(&docker_api_settings.addr)
+                .await
+                .expect("failed to connect to docker daemon"),
             // TODO: to be automatically retrieved from the dockerhub registry
             supported_cargo_stylus_versions: vec![
                 semver::Version::new(0, 5, 0),
@@ -48,7 +53,7 @@ impl StylusSdkRsVerifier for StylusSdkRsVerifierService {
             )));
         }
 
-        let result = stylus_sdk_rs::verify_github_repository(request).await;
+        let result = stylus_sdk_rs::verify_github_repository(&self.docker_client, request).await;
         process_verify_result(result)
     }
 
