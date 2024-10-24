@@ -266,6 +266,10 @@ async fn insert_contract_deployment<C: ConnectionTrait>(
 ) -> Result<contract_deployments::Model, anyhow::Error> {
     let active_model = contract_deployments::ActiveModel {
         id: Default::default(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
         chain_id: Set(deployment_data.chain_id.into()),
         address: Set(deployment_data.contract_address.clone()),
         transaction_hash: Set(deployment_data.transaction_hash.clone()),
@@ -325,6 +329,10 @@ async fn insert_contract<C: ConnectionTrait>(
 
     let active_model = contracts::ActiveModel {
         id: Default::default(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
         creation_code_hash: Set(creation_code_hash.clone()),
         runtime_code_hash: Set(runtime_code_hash.clone()),
     };
@@ -346,19 +354,22 @@ async fn insert_code<C: ConnectionTrait>(
     db: &C,
     code: Vec<u8>,
 ) -> Result<code::Model, anyhow::Error> {
-    let code_hash = keccak_hash::keccak(&code);
+    use sha2::{Digest, Sha256};
+
+    let code_hash = Sha256::digest(&code).to_vec();
+    let code_hash_keccak = keccak_hash::keccak(&code).0.to_vec();
 
     let active_model = code::ActiveModel {
-        code_hash: Set(code_hash.0.to_vec()),
+        code_hash: Set(code_hash.clone()),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
+        code_hash_keccak: Set(code_hash_keccak),
         code: Set(Some(code)),
     };
-    let (code, _inserted) = insert_then_select!(
-        db,
-        code,
-        active_model,
-        false,
-        [(CodeHash, code_hash.0.to_vec())]
-    )?;
+    let (code, _inserted) =
+        insert_then_select!(db, code, active_model, false, [(CodeHash, code_hash)])?;
 
     Ok(code)
 }
