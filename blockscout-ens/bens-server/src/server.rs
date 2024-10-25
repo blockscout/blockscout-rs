@@ -109,7 +109,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     empty_label_hash: p.empty_label_hash,
                     native_token_contract: p.native_token_contract,
                     meta: p.meta.0,
-                    try_offchain_resolve: p.try_offchain_resolve,
+                    offchain_strategy: p.offchain_strategy,
                     registry_contract: p.registry_contract,
                 },
             )

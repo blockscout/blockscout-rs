@@ -7,7 +7,6 @@ use crate::{
 };
 use alloy::primitives::Address;
 use anyhow::Context;
-use cached::proc_macro::cached;
 
 use crate::metrics;
 use sqlx::PgPool;
@@ -16,27 +15,17 @@ use std::str::FromStr;
 /// Check if `name` can be resolved using https://docs.ens.domains/ensip/10
 /// Iterates over suffixed names and tries to find a resolver
 /// Then resolve the name using CCIP-read
-#[cached(
-    key = "String",
-    convert = r#"{
-            from_user.inner.id.to_string()
-        }"#,
-    time = 14400, // 4 * 60 * 60 seconds = 4 hours
-    size = 500,
-    sync_writes = true,
-    with_cached_flag = true,
-)]
-pub async fn maybe_wildcard_resolution_with_cache(
+pub async fn maybe_wildcard_resolution(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
-) -> cached::Return<Option<CreationDomain>> {
+) -> Option<CreationDomain> {
     metrics::WILDCARD_RESOLVE_ATTEMPTS.inc();
     match try_wildcard_resolution(db, from_user).await {
         Ok(result) => {
             if result.is_some() {
                 metrics::WILDCARD_RESOLVE_SUCCESS.inc();
             }
-            cached::Return::new(result)
+            result
         }
         Err(err) => {
             tracing::error!(
@@ -44,7 +33,7 @@ pub async fn maybe_wildcard_resolution_with_cache(
                 error = ?err,
                 "error while trying wildcard resolution"
             );
-            cached::Return::new(None)
+            None
         }
     }
 }

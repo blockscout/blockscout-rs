@@ -58,7 +58,26 @@ pub struct ProtocolInfo {
     pub native_token_contract: Option<Address>,
     pub registry_contract: Option<Address>,
     pub meta: ProtocolMeta,
-    pub try_offchain_resolve: bool,
+    pub offchain_strategy: OffchainStrategy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OffchainStrategy {
+    #[default]
+    None,
+    EnsWildcard,
+    D3Connect,
+}
+
+impl OffchainStrategy {
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+
+    pub fn is_some(&self) -> bool {
+        !self.is_none()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

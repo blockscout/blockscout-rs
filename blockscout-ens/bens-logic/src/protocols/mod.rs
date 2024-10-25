@@ -5,8 +5,8 @@ mod protocoler;
 pub use domain_name::{DomainName, DomainNameOnProtocol};
 pub use hash_name::domain_id;
 pub use protocoler::{
-    AddressResolveTechnique, DeployedProtocol, Network, Protocol, ProtocolInfo, ProtocolMeta,
-    Protocoler, Tld,
+    AddressResolveTechnique, DeployedProtocol, Network, OffchainStrategy, Protocol, ProtocolInfo,
+    ProtocolMeta, Protocoler, Tld,
 };
 
 #[derive(thiserror::Error, Debug)]

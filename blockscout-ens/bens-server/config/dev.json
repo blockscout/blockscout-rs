@@ -35,7 +35,7 @@
           "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
           "docs_url": "https://docs.ens.domains/"
         },
-        "try_offchain_resolve": true,
+        "offchain_strategy": "ens",
         "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
       },
       "ens-sepolia": {
