@@ -14,7 +14,7 @@ anyhow = "1.0"
 blockscout-display-bytes = "1.0"
 blockscout-service-launcher = { workspace = true, features = ["database-0_12"] }
 config = "0.13"
-alloy = "0.1.4"
+alloy = { version = "0.5.4", features = ["full"] }
 serde = "1.0"
 serde_json = "1.0.96"
 tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }

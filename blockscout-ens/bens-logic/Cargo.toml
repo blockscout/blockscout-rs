@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
-alloy-ccip-read = "0.1.2"
+alloy-ccip-read = "0.2.0"
 anyhow = "1"
 hex = "0.4"
 chrono = "0.4"
@@ -30,7 +30,7 @@ async-trait = "0.1"
 nonempty = { version = "0.10.0", features = ["serde", "serialize"] }
 itertools = "0.11.0"
 idna = "1.0.2"
-alloy = { version = "0.1.4", features = ["full"] }
+alloy = { version = "0.5.4", features = ["full"] }
 prometheus = "0.13.4"
 
 [dependencies.sqlx]
