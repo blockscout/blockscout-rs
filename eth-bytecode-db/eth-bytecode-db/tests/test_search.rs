@@ -48,9 +48,8 @@ fn get_raw_creation_bytecode(verification_result: &VerificationResult, change: b
         .collect::<Vec<_>>()
         .join("");
 
-    match &verification_result.constructor_arguments {
-        Some(args) => raw_creation_input.push_str(args.trim_start_matches("0x")),
-        None => {}
+    if let Some(args) = &verification_result.constructor_arguments {
+        raw_creation_input.push_str(args.trim_start_matches("0x"))
     };
 
     raw_creation_input
