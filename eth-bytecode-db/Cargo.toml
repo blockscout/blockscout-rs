@@ -11,5 +11,36 @@ members = [
 ]
 
 [workspace.dependencies]
+entity = { path = "eth-bytecode-db/entity" }
+eth-bytecode-db = { path = "eth-bytecode-db" }
+eth-bytecode-db-proto = { path = "eth-bytecode-db-proto" }
+eth-bytecode-db-server = { path = "eth-bytecode-db-server" }
+migration = { path = "eth-bytecode-db/migration" }
+verifier-alliance-entity = { path = "eth-bytecode-db/verifier-alliance-entity" }
+verifier-alliance-migration = { path = "eth-bytecode-db/verifier-alliance-migration" }
+
 blockscout-service-launcher = { version = "0.14.0" }
 smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "7a6e9400" }
+
+actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-web = { version = "4" }
+anyhow = { version = "1" }
+async-trait = { version = "0.1" }
+mockall = { version = "0.12" }
+prost = { version = "0.11" }
+prost-build = { version = "0.11" }
+reqwest = { version = "0.11" }
+reqwest-middleware = { version = "0.2" }
+reqwest-retry = { version = "0.3" }
+serde = { version = "1" }
+serde_with = { version = "2.0" }
+thiserror = { version = "1" }
+tonic = { version = "0.8" }
+tonic-build = { version = "0.8" }
+tokio = { version = "1" }
+url = { version = "2" }
+
+
+
