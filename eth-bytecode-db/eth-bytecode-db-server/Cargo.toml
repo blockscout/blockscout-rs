@@ -2,21 +2,20 @@
 name = "eth-bytecode-db-server"
 version = "0.1.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eth-bytecode-db-proto = { workspace = true }
-eth-bytecode-db = { workspace = true }
-migration = { workspace = true }
 actix-web = { workspace = true }
 amplify = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = [ "database-0_12" ] }
+eth-bytecode-db = { workspace = true }
+eth-bytecode-db-proto = { workspace = true }
 ethers = { workspace = true, features = ["solc"] }
 futures = { workspace = true }
+migration = { workspace = true }
 sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -28,12 +27,9 @@ tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-smart-contract-verifier-proto = { workspace = true, features = ["mock"] }
-entity = { workspace = true }
-verifier-alliance-entity = { workspace = true }
-verifier-alliance-migration = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = [ "test-server", "test-database" ] }
 bytes = { workspace = true }
+entity = { workspace = true }
 foundry-compilers = { workspace = true }
 hex = { workspace = true }
 keccak-hash = { workspace = true }
@@ -41,3 +37,6 @@ paste = { workspace = true }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
 rstest = { workspace = true }
+smart-contract-verifier-proto = { workspace = true, features = ["mock"] }
+verifier-alliance-entity = { workspace = true }
+verifier-alliance-migration = { workspace = true }

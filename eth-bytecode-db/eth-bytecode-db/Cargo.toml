@@ -2,32 +2,29 @@
 name = "eth-bytecode-db"
 version = "0.1.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-entity = { workspace = true }
-eth-bytecode-db-proto = { workspace = true }
-verifier-alliance-entity = { workspace = true }
-
 alloy-json-abi = { workspace = true, features = ["serde_json"] }
 anyhow = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 bytes = { workspace = true }
+entity = { workspace = true }
+eth-bytecode-db-proto = { workspace = true }
 ethabi = { workspace = true }
 ethers-core = { workspace = true }
+futures = { workspace = true }
 hex = { workspace = true }
+keccak-hash = { workspace = true }
+lazy_static = { workspace = true }
 mismatch = { workspace = true }
+prometheus = { workspace = true }
+reqwest = { workspace = true }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
     "postgres-array",
 ] }
-futures = { workspace = true }
-keccak-hash = { workspace = true }
-lazy_static = { workspace = true }
-prometheus = { workspace = true }
-reqwest = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -37,6 +34,7 @@ thiserror = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
 verification-common = { workspace = true }
+verifier-alliance-entity = { workspace = true }
 
 tokio = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
@@ -50,8 +48,8 @@ rstest = { workspace = true }
 smart-contract-verifier-proto = { workspace = true, features = ["mock"] }
 tokio = { workspace = true }
 tonic = { workspace = true }
-verifier-alliance-migration = { workspace = true }
 url = { workspace = true }
+verifier-alliance-migration = { workspace = true }
 
 [features]
 # When activated includes helper methods for tests and benchmarking
