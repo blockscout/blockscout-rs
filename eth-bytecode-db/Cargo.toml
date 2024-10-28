@@ -2,12 +2,12 @@
 resolver = "2"
 members = [
     "eth-bytecode-db",
+    "eth-bytecode-db-proto",
+    "eth-bytecode-db-server",
     "eth-bytecode-db/entity",
     "eth-bytecode-db/migration",
     "eth-bytecode-db/verifier-alliance-entity",
     "eth-bytecode-db/verifier-alliance-migration",
-    "eth-bytecode-db-server",
-    "eth-bytecode-db-proto",
 ]
 
 [workspace.dependencies]
@@ -26,19 +26,23 @@ actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = 
 actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
 actix-web = { version = "4" }
 alloy-json-abi = { git = "https://github.com/alloy-rs/core", rev = "398d7e2" }
+amplify = { version = "3.13.0" }
 anyhow = { version = "1" }
 async-std = { version = "^1" }
 async-trait = { version = "0.1" }
 blockscout-display-bytes = { version = "1.0" }
 bytes = { version = "1.2" }
 ethabi = { version = "18.0" }
+ethers = { version = "2.0.0" }
 ethers-core = { version = "2.0.0" }
+foundry-compilers = { version = "0.3.13" }
 futures = { version = "0.3" }
 hex = { version = "0.4" }
 keccak-hash = { version = "0.10.0" }
 lazy_static = { version = "1" }
 mismatch = { version = "1.0" }
 mockall = { version = "0.12" }
+paste = { version = "1.0.14" }
 pretty_assertions = { version = "1.3" }
 prometheus = { version = "0.13" }
 prost = { version = "0.11" }
@@ -55,6 +59,7 @@ serde_json = { version = "1.0" }
 serde_with = { version = "2.0" }
 smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "7a6e9400" }
 solidity-metadata = { version = "1.0" }
+sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "457af68" }
 thiserror = { version = "1" }
 tonic = { version = "0.8" }
 tonic-build = { version = "0.8" }
@@ -65,12 +70,11 @@ tracing-subscriber = { version = "0.3" }
 url = { version = "2" }
 verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "7a6e9400" }
 
-#sea-orm = { version = "*", features = ["mock"] }
-#smart-contract-verifier-proto = { workspace = true, features = ["http-client", "mock"] }
-#tokio = { workspace = true }
-#tokio-stream = { version = "0.1", features = ["net"] }
-#tonic = { version = "0.8", features = ["tls-roots"] }
-#verifier-alliance-entity = { path = "./verifier-alliance-entity" }
-#verifier-alliance-migration = { path = "./verifier-alliance-migration" }
-#url = "2.4.0"
 
+
+#pretty_assertions = "1.3"
+#reqwest = { version = "0.11", features = ["json"]}
+#rand = "0.8"
+#rstest = "0.18.2"
+#sea-orm = { version = "*", features = [ "sqlx-sqlite" ]}
+#tokio-stream = { version = "0.1", features = ["net"] }
