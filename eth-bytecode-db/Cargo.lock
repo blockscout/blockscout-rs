@@ -111,7 +111,7 @@ dependencies = [
 [[package]]
 name = "actix-prost"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#32188ff27483da72a6fb8a40ad6ba8d685b07cf1"
+source = "git+https://github.com/blockscout/actix-prost#4cbba2a32b40c7da251c805cae07f7ddaa84c6d5"
 dependencies = [
  "actix-http",
  "actix-web",
@@ -142,7 +142,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-build"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#32188ff27483da72a6fb8a40ad6ba8d685b07cf1"
+source = "git+https://github.com/blockscout/actix-prost#4cbba2a32b40c7da251c805cae07f7ddaa84c6d5"
 dependencies = [
  "prettyplease 0.2.17",
  "proc-macro2",
@@ -157,8 +157,8 @@ dependencies = [
 
 [[package]]
 name = "actix-prost-macros"
-version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost#32188ff27483da72a6fb8a40ad6ba8d685b07cf1"
+version = "0.1.1"
+source = "git+https://github.com/blockscout/actix-prost?rev=4cbba2a#4cbba2a32b40c7da251c805cae07f7ddaa84c6d5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -168,7 +168,7 @@ dependencies = [
 [[package]]
 name = "actix-prost-macros"
 version = "0.1.1"
-source = "git+https://github.com/blockscout/actix-prost?rev=4cbba2a#4cbba2a32b40c7da251c805cae07f7ddaa84c6d5"
+source = "git+https://github.com/blockscout/actix-prost#4cbba2a32b40c7da251c805cae07f7ddaa84c6d5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2009,7 +2009,6 @@ dependencies = [
 name = "eth-bytecode-db"
 version = "0.1.0"
 dependencies = [
- "actix-web",
  "alloy-json-abi 0.5.2",
  "anyhow",
  "async-trait",
@@ -2054,7 +2053,7 @@ version = "0.1.0"
 dependencies = [
  "actix-prost 0.1.0 (git+https://github.com/blockscout/actix-prost?rev=4cbba2a)",
  "actix-prost-build 0.1.0 (git+https://github.com/blockscout/actix-prost?rev=4cbba2a)",
- "actix-prost-macros 0.1.1",
+ "actix-prost-macros 0.1.1 (git+https://github.com/blockscout/actix-prost?rev=4cbba2a)",
  "actix-web",
  "anyhow",
  "async-trait",
@@ -3053,7 +3052,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.6",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -3069,9 +3068,9 @@ dependencies = [
  "futures-util",
  "http",
  "hyper",
- "rustls 0.21.10",
+ "rustls",
  "tokio",
- "tokio-rustls 0.24.1",
+ "tokio-rustls",
 ]
 
 [[package]]
@@ -3591,22 +3590,22 @@ dependencies = [
 
 [[package]]
 name = "minicbor"
-version = "0.18.0"
+version = "0.24.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a20020e8e2d1881d8736f64011bb5ff99f1db9947ce3089706945c8915695cb"
+checksum = "29be4f60e41fde478b36998b88821946aafac540e53591e76db53921a0cc225b"
 dependencies = [
  "minicbor-derive",
 ]
 
 [[package]]
 name = "minicbor-derive"
-version = "0.12.0"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8608fb1c805b5b6b3d5ab7bd95c40c396df622b64d77b2d621a5eae1eed050ee"
+checksum = "bd2209fff77f705b00c737016a48e73733d7fbccb8b007194db148f03561fb70"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.85",
 ]
 
 [[package]]
@@ -4924,7 +4923,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.21.10",
+ "rustls",
  "rustls-native-certs",
  "rustls-pemfile",
  "serde",
@@ -4934,7 +4933,7 @@ dependencies = [
  "system-configuration",
  "tokio",
  "tokio-native-tls",
- "tokio-rustls 0.24.1",
+ "tokio-rustls",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -5264,18 +5263,6 @@ dependencies = [
  "libc",
  "linux-raw-sys 0.4.13",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rustls"
-version = "0.20.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b80e3dec595989ea8510028f30c408a4630db12c9cbb8de34203b89d6577e99"
-dependencies = [
- "log",
- "ring 0.16.20",
- "sct",
- "webpki",
 ]
 
 [[package]]
@@ -5874,7 +5861,7 @@ source = "git+https://github.com/blockscout/blockscout-rs?rev=7a6e9400#7a6e9400e
 dependencies = [
  "actix-prost 0.1.0 (git+https://github.com/blockscout/actix-prost)",
  "actix-prost-build 0.1.0 (git+https://github.com/blockscout/actix-prost)",
- "actix-prost-macros 0.1.0",
+ "actix-prost-macros 0.1.1 (git+https://github.com/blockscout/actix-prost)",
  "actix-web",
  "anyhow",
  "async-trait",
@@ -5929,11 +5916,10 @@ dependencies = [
 
 [[package]]
 name = "solidity-metadata"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18f0ee752c2f80c87498dba10c2120492c42073f73b37ffb49e79fcd1e91bff3"
+checksum = "27866969b7fa575837afa26079574f78f1e8223ac2f933e5808060b204ba23d8"
 dependencies = [
- "blockscout-display-bytes",
  "minicbor",
  "semver 1.0.22",
  "thiserror",
@@ -6036,7 +6022,7 @@ dependencies = [
  "paste",
  "percent-encoding",
  "rust_decimal",
- "rustls 0.21.10",
+ "rustls",
  "rustls-pemfile",
  "serde",
  "serde_json",
@@ -6589,22 +6575,11 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.23.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
-dependencies = [
- "rustls 0.20.9",
- "tokio",
- "webpki",
-]
-
-[[package]]
-name = "tokio-rustls"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
- "rustls 0.21.10",
+ "rustls",
  "tokio",
 ]
 
@@ -6627,9 +6602,9 @@ checksum = "212d5dcb2a1ce06d81107c3d0ffa3121fe974b73f068c8282cb1c32328113b6c"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.21.10",
+ "rustls",
  "tokio",
- "tokio-rustls 0.24.1",
+ "tokio-rustls",
  "tungstenite",
  "webpki-roots",
 ]
@@ -6746,10 +6721,7 @@ dependencies = [
  "pin-project",
  "prost 0.11.9",
  "prost-derive 0.11.9",
- "rustls-native-certs",
- "rustls-pemfile",
  "tokio",
- "tokio-rustls 0.23.4",
  "tokio-stream",
  "tokio-util",
  "tower",
@@ -6933,7 +6905,7 @@ dependencies = [
  "httparse",
  "log",
  "rand",
- "rustls 0.21.10",
+ "rustls",
  "sha1",
  "thiserror",
  "url",
@@ -7267,16 +7239,6 @@ checksum = "77afa9a11836342370f4817622a2f0f418b134426d91a82dfb48f532d2ec13ef"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "webpki"
-version = "0.22.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed63aea5ce73d0ff405984102c42de94fc55a6b75765d621c65262469b3c9b53"
-dependencies = [
- "ring 0.17.8",
- "untrusted 0.9.0",
 ]
 
 [[package]]
