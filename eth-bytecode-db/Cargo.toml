@@ -29,7 +29,7 @@ anyhow = { version = "1" }
 async-std = { version = "^1" }
 async-trait = { version = "0.1" }
 blockscout-display-bytes = { version = "1.0" }
-blockscout-service-launcher = { version = "0.14.0" }
+blockscout-service-launcher = { version = "0.14.0", features = ["database-1_0"] }
 bytes = { version = "1.2" }
 ethabi = { version = "18.0" }
 ethers = { version = "2.0.0" }
@@ -50,8 +50,8 @@ reqwest = { version = "0.11" }
 reqwest-middleware = { version = "0.2" }
 reqwest-retry = { version = "0.3" }
 rstest = { version = "0.18.0" }
-sea-orm = { version = "0.12.2" }
-sea-orm-migration = { version = "0.12.2" }
+sea-orm = { version = "1.1.0" }
+sea-orm-migration = { version = "1.1.0" }
 semver = { version = "1.0" }
 serde = { version = "1" }
 serde_json = { version = "1.0" }
