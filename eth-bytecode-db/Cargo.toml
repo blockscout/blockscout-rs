@@ -27,6 +27,7 @@ actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = 
 actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
 actix-web = { version = "4" }
 anyhow = { version = "1" }
+async-std = { version = "^1" }
 async-trait = { version = "0.1" }
 mockall = { version = "0.12" }
 prost = { version = "0.11" }
@@ -34,6 +35,8 @@ prost-build = { version = "0.11" }
 reqwest = { version = "0.11" }
 reqwest-middleware = { version = "0.2" }
 reqwest-retry = { version = "0.3" }
+sea-orm = { version = "0.12.2" }
+sea-orm-migration = { version = "0.12.2" }
 serde = { version = "1" }
 serde_with = { version = "2.0" }
 thiserror = { version = "1" }
