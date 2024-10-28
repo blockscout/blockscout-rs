@@ -18,7 +18,7 @@ pub enum PartType {
     #[sea_orm(string_value = "metadata")]
     Metadata,
 }
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, DeriveDisplay)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "source_type")]
 pub enum SourceType {
     #[sea_orm(string_value = "solidity")]
