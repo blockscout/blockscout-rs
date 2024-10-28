@@ -1,0 +1,16 @@
+[package]
+name = "multichain-aggregator-logic"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+anyhow = { workspace = true }
+blockscout-display-bytes = { workspace = true }
+tracing = { workspace = true }
+sea-orm = { workspace = true }
+
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true }
+pretty_assertions = { workspace = true }

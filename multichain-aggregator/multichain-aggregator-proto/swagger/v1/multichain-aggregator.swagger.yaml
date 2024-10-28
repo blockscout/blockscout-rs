@@ -1,0 +1,149 @@
+swagger: "2.0"
+info:
+  title: v1/multichain-aggregator.proto
+  version: version not set
+tags:
+  - name: TestService
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/TestService:create:
+    post:
+      operationId: TestService_TestServiceCreate
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1TestServiceCreateResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1TestServiceCreateRequest'
+      tags:
+        - TestService
+  /api/v1/TestService:search:
+    get:
+      operationId: TestService_TestServiceSearch
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1TestServiceSearchResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: filter_1
+          in: query
+          required: false
+          type: string
+        - name: filter_2
+          in: query
+          required: false
+          type: string
+        - name: filter_3
+          in: query
+          required: false
+          type: string
+      tags:
+        - TestService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1Item:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+  v1TestServiceCreateRequest:
+    type: object
+    properties:
+      foo:
+        type: string
+      bar:
+        type: string
+      timestamp:
+        type: string
+        format: int64
+      map:
+        type: object
+        additionalProperties:
+          type: string
+  v1TestServiceCreateResponse:
+    type: object
+    properties:
+      item:
+        $ref: '#/definitions/v1Item'
+  v1TestServiceSearchResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Item'
