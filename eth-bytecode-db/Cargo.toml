@@ -19,6 +19,16 @@ migration = { path = "eth-bytecode-db/migration" }
 verifier-alliance-entity = { path = "eth-bytecode-db/verifier-alliance-entity" }
 verifier-alliance-migration = { path = "eth-bytecode-db/verifier-alliance-migration" }
 
+actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-web = { version = "4" }
+alloy-json-abi = { git = "https://github.com/alloy-rs/core", rev = "398d7e2" }
+amplify = { version = "3.13.0" }
+anyhow = { version = "1" }
+async-std = { version = "^1" }
+async-trait = { version = "0.1" }
+blockscout-display-bytes = { version = "1.0" }
 blockscout-service-launcher = { version = "0.14.0" }
 bytes = { version = "1.2" }
 ethabi = { version = "18.0" }
