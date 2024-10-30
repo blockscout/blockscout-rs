@@ -37,7 +37,7 @@ ethers-core = { version = "2.0.0" }
 foundry-compilers = { version = "0.3.13" }
 futures = { version = "0.3" }
 hex = { version = "0.4" }
-keccak-hash = { version = "0.10.0" }
+keccak-hash = { version = "0.11.0" }
 lazy_static = { version = "1" }
 mismatch = { version = "1.0" }
 mockall = { version = "0.12" }
