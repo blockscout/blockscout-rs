@@ -35,7 +35,9 @@ eth-bytecode-db-proto = { workspace = true, features = [ "http-client", "mock" ]
 http-client = [
     "dep:anyhow",
     "dep:reqwest",
+    "reqwest/json",
     "dep:reqwest-middleware",
+    "reqwest-middleware/json",
     "dep:reqwest-retry",
     "dep:thiserror",
     "dep:url",

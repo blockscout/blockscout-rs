@@ -14,12 +14,11 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2
 use pretty_assertions::assert_eq;
 use routes::{eth_bytecode_db, verifier};
 use sea_orm::{prelude::Decimal, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2;
 use std::{
     collections::{BTreeMap, HashSet},
     str::FromStr,
-    sync::Arc,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
@@ -93,22 +92,33 @@ pub fn default_deployer() -> DisplayBytes {
 
 impl TestCase {
     pub fn standard_input(&self) -> serde_json::Value {
-        let input = foundry_compilers::CompilerInput {
+        #[derive(Serialize)]
+        struct Source {
+            content: String,
+        }
+
+        #[derive(Serialize)]
+        struct StandardJsonInput {
+            language: String,
+            sources: BTreeMap<String, Source>,
+            settings: serde_json::Value,
+        }
+
+        let input = StandardJsonInput {
             language: self.language.clone(),
             sources: self
                 .sources
                 .iter()
                 .map(|(file_path, content)| {
                     (
-                        std::path::PathBuf::from(file_path),
-                        foundry_compilers::artifacts::Source {
-                            content: Arc::new(content.clone()),
+                        file_path.to_string(),
+                        Source {
+                            content: content.to_string(),
                         },
                     )
                 })
                 .collect(),
-            settings: serde_json::from_value(self.compiler_settings.raw.clone())
-                .expect("settings deserialization"),
+            settings: self.compiler_settings.raw.clone(),
         };
 
         serde_json::to_value(&input).unwrap()
