@@ -34,7 +34,7 @@ bytes = { version = "1.2" }
 ethabi = { version = "18.0" }
 ethers = { version = "2.0.0" }
 ethers-core = { version = "2.0.0" }
-foundry-compilers = { version = "0.3.13" }
+foundry-compilers = { version = "0.11.6" }
 futures = { version = "0.3" }
 hex = { version = "0.4" }
 keccak-hash = { version = "0.11.0" }
