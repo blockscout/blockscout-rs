@@ -1167,13 +1167,15 @@ dependencies = [
 
 [[package]]
 name = "blockscout-display-bytes"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f4acc2bb1d1de55a55f818c10cdbc4a698f778666a7b17d2eab737aa6ed1b5e"
+checksum = "34a6e9076f2cb26f696b58c0dfed47cf4b7499b4328b1fa797b3a34d747712e5"
 dependencies = [
  "bytes",
  "hex",
  "serde",
+ "serde_json",
+ "serde_with 3.11.0",
  "thiserror",
 ]
 
