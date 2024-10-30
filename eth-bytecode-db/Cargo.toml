@@ -49,7 +49,7 @@ prost-build = { version = "0.11" }
 reqwest = { version = "0.11" }
 reqwest-middleware = { version = "0.2" }
 reqwest-retry = { version = "0.3" }
-rstest = { version = "0.18.0" }
+rstest = { version = "0.23.0" }
 sea-orm = { version = "1.1.0" }
 sea-orm-migration = { version = "1.1.0" }
 semver = { version = "1.0" }
