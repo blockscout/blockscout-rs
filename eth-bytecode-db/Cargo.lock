@@ -104,7 +104,7 @@ dependencies = [
  "prost 0.11.9",
  "serde",
  "serde_json",
- "serde_with",
+ "serde_with 2.3.3",
  "tonic",
 ]
 
@@ -119,7 +119,7 @@ dependencies = [
  "prost 0.11.9",
  "serde",
  "serde_json",
- "serde_with",
+ "serde_with 2.3.3",
  "tonic",
 ]
 
@@ -2079,7 +2079,7 @@ dependencies = [
  "reqwest-middleware",
  "reqwest-retry",
  "serde",
- "serde_with",
+ "serde_with 3.11.0",
  "thiserror",
  "tokio",
  "tonic",
@@ -2114,7 +2114,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
- "serde_with",
+ "serde_with 3.11.0",
  "smart-contract-verifier-proto",
  "sourcify",
  "tokio",
@@ -3212,6 +3212,7 @@ checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.5",
+ "serde",
 ]
 
 [[package]]
@@ -5822,7 +5823,25 @@ dependencies = [
  "indexmap 1.9.3",
  "serde",
  "serde_json",
- "serde_with_macros",
+ "serde_with_macros 2.3.3",
+ "time",
+]
+
+[[package]]
+name = "serde_with"
+version = "3.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e28bdad6db2b8340e449f7108f020b3b092e8583a9e3fb82713e1d4e71fe817"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "indexmap 1.9.3",
+ "indexmap 2.2.6",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serde_with_macros 3.11.0",
  "time",
 ]
 
@@ -5831,6 +5850,18 @@ name = "serde_with_macros"
 version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "881b6f881b17d13214e5d494c939ebab463d01264ce1811e9d4ac3a882e7695f"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.85",
+]
+
+[[package]]
+name = "serde_with_macros"
+version = "3.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d846214a9854ef724f3da161b426242d8de7c1fc7de2f89bb1efcb154dca79d"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -5987,7 +6018,7 @@ dependencies = [
  "reqwest-middleware",
  "reqwest-retry",
  "serde",
- "serde_with",
+ "serde_with 2.3.3",
  "thiserror",
  "tokio",
  "tonic",
