@@ -392,44 +392,14 @@ checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
 name = "alloy-json-abi"
-version = "0.5.2"
-source = "git+https://github.com/alloy-rs/core?rev=398d7e2#398d7e27b235f85f776c1b6b8fe2c9b081f2907a"
-dependencies = [
- "alloy-primitives 0.5.2",
- "alloy-sol-type-parser 0.5.2",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "alloy-json-abi"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31a0f0d51db8a1a30a4d98a9f90e090a94c8f44cb4d9eafc7e03aa6d00aae984"
 dependencies = [
- "alloy-primitives 0.8.10",
- "alloy-sol-type-parser 0.8.10",
+ "alloy-primitives",
+ "alloy-sol-type-parser",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "alloy-primitives"
-version = "0.5.2"
-source = "git+https://github.com/alloy-rs/core?rev=398d7e2#398d7e27b235f85f776c1b6b8fe2c9b081f2907a"
-dependencies = [
- "alloy-rlp",
- "bytes",
- "cfg-if",
- "const-hex",
- "derive_more 0.99.17",
- "hex-literal",
- "itoa",
- "proptest",
- "rand",
- "ruint",
- "serde",
- "tiny-keccak",
 ]
 
 [[package]]
@@ -469,14 +439,6 @@ checksum = "8d58d9f5da7b40e9bfff0b7e7816700be4019db97d4b6359fe7f94a9e22e42ac"
 dependencies = [
  "arrayvec",
  "bytes",
-]
-
-[[package]]
-name = "alloy-sol-type-parser"
-version = "0.5.2"
-source = "git+https://github.com/alloy-rs/core?rev=398d7e2#398d7e27b235f85f776c1b6b8fe2c9b081f2907a"
-dependencies = [
- "winnow 0.5.40",
 ]
 
 [[package]]
@@ -2091,7 +2053,7 @@ dependencies = [
 name = "eth-bytecode-db"
 version = "0.1.0"
 dependencies = [
- "alloy-json-abi 0.5.2",
+ "alloy-json-abi",
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
@@ -2693,8 +2655,8 @@ version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4754b3f3bb924202b29bd7f0584ea1446018926342884c86029a7d56ef1a22c1"
 dependencies = [
- "alloy-json-abi 0.8.10",
- "alloy-primitives 0.8.10",
+ "alloy-json-abi",
+ "alloy-primitives",
  "auto_impl",
  "derivative",
  "dirs",
@@ -2733,8 +2695,8 @@ version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1cf322ab7b726f2bafe9a7e6fb67db02801b35584a2b1d122b4feb52d8e9e7f"
 dependencies = [
- "alloy-json-abi 0.8.10",
- "alloy-primitives 0.8.10",
+ "alloy-json-abi",
+ "alloy-primitives",
  "foundry-compilers-core",
  "md-5",
  "path-slash",
@@ -2755,8 +2717,8 @@ version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec47f94c7833adfe8049c819d9e31a60c3f440a68cf5baf34c318413d3eb0700"
 dependencies = [
- "alloy-json-abi 0.8.10",
- "alloy-primitives 0.8.10",
+ "alloy-json-abi",
+ "alloy-primitives",
  "foundry-compilers-artifacts-solc",
  "foundry-compilers-core",
  "path-slash",
@@ -2770,7 +2732,7 @@ version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61971b34545e8ea01502df9d076e811ad3926f27d31adf2641e0c931ca646933"
 dependencies = [
- "alloy-primitives 0.8.10",
+ "alloy-primitives",
  "cfg-if",
  "dunce",
  "once_cell",

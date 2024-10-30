@@ -23,7 +23,7 @@ actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2
 actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
 actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
 actix-web = { version = "4" }
-alloy-json-abi = { git = "https://github.com/alloy-rs/core", rev = "398d7e2" }
+alloy-json-abi = { version = "0.8.10" }
 amplify = { version = "4.7.0" }
 anyhow = { version = "1" }
 async-std = { version = "^1" }
