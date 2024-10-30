@@ -2,7 +2,7 @@ default:
     just --list --unsorted
 
 db-host := env_var_or_default('DB_HOST', "localhost")
-db-port := env_var_or_default('DB_PORT', "9432")
+db-port := env_var_or_default('DB_PORT', "9433")
 db-user := env_var_or_default('DB_USER', "postgres")
 db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "multichain_aggregator")
@@ -37,6 +37,9 @@ migrate-up:
 
 migrate-down:
     sea-orm-cli migrate down --migration-dir {{migration-dir}}
+
+new-migration name:
+    sea-orm-cli migrate generate {{name}} --migration-dir {{migration-dir}}
 
 test *args:
     cargo test {{args}} -- --include-ignored

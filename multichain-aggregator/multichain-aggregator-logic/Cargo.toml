@@ -6,10 +6,12 @@ edition = "2021"
 
 [dependencies]
 anyhow = { workspace = true }
-blockscout-display-bytes = { workspace = true }
+blockscout-chains = { workspace = true }
 tracing = { workspace = true }
 sea-orm = { workspace = true }
-
+multichain-aggregator-entity = { workspace = true }
+multichain-aggregator-proto = { workspace = true }
+alloy-primitives = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }

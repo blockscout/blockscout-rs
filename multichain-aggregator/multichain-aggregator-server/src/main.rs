@@ -1,5 +1,5 @@
 use blockscout_service_launcher::launcher::ConfigSettings;
-use multichain_aggregator_server::{Settings, run};
+use multichain_aggregator_server::{run, Settings};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

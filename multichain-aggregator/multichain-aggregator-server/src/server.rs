@@ -1,40 +1,80 @@
 use crate::{
-    proto::{health_actix::route_health, health_server::HealthServer},
-    services::HealthService,
+    proto::{
+        health_actix::route_health, health_server::HealthServer,
+        multichain_aggregator_service_actix::route_multichain_aggregator_service,
+        multichain_aggregator_service_server::MultichainAggregatorServiceServer,
+    },
+    services::{HealthService, MultichainAggregator},
     settings::Settings,
 };
-use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
-use migration::{sea_orm::ConnectOptions, Migrator};
+use blockscout_chains::BlockscoutChainsClient;
+use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings};
+use migration::Migrator;
+use multichain_aggregator_logic::repository;
 use std::sync::Arc;
 
 const SERVICE_NAME: &str = "multichain_aggregator";
 
 #[derive(Clone)]
 struct Router {
-    // TODO: add services here
+    multichain_aggregator: Arc<MultichainAggregator>,
     health: Arc<HealthService>,
 }
 
 impl Router {
     pub fn grpc_router(&self) -> tonic::transport::server::Router {
-        tonic::transport::Server::builder().add_service(HealthServer::from_arc(self.health.clone()))
+        tonic::transport::Server::builder()
+            .add_service(HealthServer::from_arc(self.health.clone()))
+            .add_service(MultichainAggregatorServiceServer::from_arc(
+                self.multichain_aggregator.clone(),
+            ))
     }
 }
 
 impl launcher::HttpRouter for Router {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config.configure(|config| route_health(config, self.health.clone()));
+        service_config.configure(|config| {
+            route_multichain_aggregator_service(config, self.multichain_aggregator.clone())
+        });
     }
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    blockscout_service_launcher::tracing::init_logs(
+        SERVICE_NAME,
+        &settings.tracing,
+        &settings.jaeger,
+    )?;
 
     let health = Arc::new(HealthService::default());
 
-    // TODO: init services here
+    let mut connect_options = sea_orm::ConnectOptions::new(settings.database.connect.clone().url());
+    connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
+    let db = database::initialize_postgres::<Migrator>(
+        connect_options,
+        settings.database.create_database,
+        settings.database.run_migrations,
+    )
+    .await?;
 
-    let router = Router { health };
+    // Initialize/update Blockscout chains
+    let blockscout_chains = BlockscoutChainsClient::builder()
+        .with_max_retries(0)
+        .build()
+        .fetch_all()
+        .await?
+        .into_iter()
+        .map(|(id, chain)| (id as i64, chain).into())
+        .collect();
+    repository::chains::upsert_many(&db, blockscout_chains).await?;
+
+    let multichain_aggregator = Arc::new(MultichainAggregator::new(db));
+
+    let router = Router {
+        health,
+        multichain_aggregator,
+    };
 
     let grpc_router = router.grpc_router();
     let http_router = router;

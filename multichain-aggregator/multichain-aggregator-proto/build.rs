@@ -17,12 +17,7 @@ fn compile(
         .protoc_arg("grpc_api_configuration=proto/v1/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=multichain-aggregator,json_names_for_fields=false")
         .bytes(["."])
         .btree_map(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
-        // .field_attribute(
-        //     ".blockscout.multichainAggregator.v1.<MessageName>.<DefaultFieldName>",
-        //     "#[serde(default)]"
-        // )
-        ;
+        .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]");
     config.compile_protos(protos, includes)?;
     Ok(())
 }
@@ -38,7 +33,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(ActixGenerator::new("proto/v1/api_config_http.yaml").unwrap()),
     ]));
     compile(
-        &["proto/v1/multichain-aggregator.proto", "proto/v1/health.proto"],
+        &[
+            "proto/v1/multichain-aggregator.proto",
+            "proto/v1/health.proto",
+        ],
         &["proto"],
         gens,
     )?;

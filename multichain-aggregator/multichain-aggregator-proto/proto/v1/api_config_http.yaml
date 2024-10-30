@@ -4,13 +4,10 @@ config_version: 3
 http:
   rules:
     
-    - selector: blockscout.multichainAggregator.v1.TestService.TestServiceCreate
-      post: /api/v1/TestService:create
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.BatchImport
+      post: /api/v1/import:batch
       body: "*"
 
-    - selector: blockscout.multichainAggregator.v1.TestService.TestServiceSearch
-      get: /api/v1/TestService:search
-    
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check

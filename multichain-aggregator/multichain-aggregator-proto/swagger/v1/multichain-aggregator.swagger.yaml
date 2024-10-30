@@ -3,21 +3,21 @@ info:
   title: v1/multichain-aggregator.proto
   version: version not set
 tags:
-  - name: TestService
+  - name: MultichainAggregatorService
   - name: Health
 consumes:
   - application/json
 produces:
   - application/json
 paths:
-  /api/v1/TestService:create:
+  /api/v1/import:batch:
     post:
-      operationId: TestService_TestServiceCreate
+      operationId: MultichainAggregatorService_BatchImport
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1TestServiceCreateResponse'
+            $ref: '#/definitions/v1BatchImportResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -27,36 +27,9 @@ paths:
           in: body
           required: true
           schema:
-            $ref: '#/definitions/v1TestServiceCreateRequest'
+            $ref: '#/definitions/v1BatchImportRequest'
       tags:
-        - TestService
-  /api/v1/TestService:search:
-    get:
-      operationId: TestService_TestServiceSearch
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1TestServiceSearchResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: filter_1
-          in: query
-          required: false
-          type: string
-        - name: filter_2
-          in: query
-          required: false
-          type: string
-        - name: filter_3
-          in: query
-          required: false
-          type: string
-      tags:
-        - TestService
+        - MultichainAggregatorService
   /health:
     get:
       summary: |-
@@ -80,6 +53,21 @@ paths:
       tags:
         - Health
 definitions:
+  AddressUpsertTokenType:
+    type: string
+    enum:
+      - TOKEN_TYPE_UNSPECIFIED
+      - TOKEN_TYPE_ERC_20
+      - TOKEN_TYPE_ERC_721
+      - TOKEN_TYPE_ERC_1155
+      - TOKEN_TYPE_ERC_404
+    default: TOKEN_TYPE_UNSPECIFIED
+  HashUpsertHashType:
+    type: string
+    enum:
+      - HASH_TYPE_BLOCK
+      - HASH_TYPE_TRANSACTION
+    default: HASH_TYPE_BLOCK
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -108,42 +96,68 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1AddressUpsert:
+    type: object
+    properties:
+      hash:
+        type: string
+      ens_name:
+        type: string
+      contract_name:
+        type: string
+      token_name:
+        type: string
+      token_type:
+        $ref: '#/definitions/AddressUpsertTokenType'
+      is_contract:
+        type: boolean
+      is_verified_contract:
+        type: boolean
+      is_token:
+        type: boolean
+  v1BatchImportRequest:
+    type: object
+    properties:
+      chain_id:
+        type: string
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1AddressUpsert'
+      block_ranges:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1BlockRangeUpsert'
+      hashes:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1HashUpsert'
+  v1BatchImportResponse:
+    type: object
+    properties:
+      status:
+        type: string
+  v1BlockRangeUpsert:
+    type: object
+    properties:
+      min_block_number:
+        type: string
+        format: uint64
+      max_block_number:
+        type: string
+        format: uint64
+  v1HashUpsert:
+    type: object
+    properties:
+      hash:
+        type: string
+      hash_type:
+        $ref: '#/definitions/HashUpsertHashType'
   v1HealthCheckResponse:
     type: object
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1Item:
-    type: object
-    properties:
-      id:
-        type: string
-      name:
-        type: string
-  v1TestServiceCreateRequest:
-    type: object
-    properties:
-      foo:
-        type: string
-      bar:
-        type: string
-      timestamp:
-        type: string
-        format: int64
-      map:
-        type: object
-        additionalProperties:
-          type: string
-  v1TestServiceCreateResponse:
-    type: object
-    properties:
-      item:
-        $ref: '#/definitions/v1Item'
-  v1TestServiceSearchResponse:
-    type: object
-    properties:
-      items:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Item'

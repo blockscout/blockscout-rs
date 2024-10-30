@@ -13,7 +13,7 @@ pub struct Model {
     )]
     pub hash: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub chain_id: i32,
+    pub chain_id: i64,
     #[sea_orm(column_type = "Text", nullable)]
     pub ens_name: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]

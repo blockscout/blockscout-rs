@@ -6,7 +6,7 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "chains")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub id: i32,
+    pub id: i64,
     pub explorer_url: Option<String>,
     pub icon_url: Option<String>,
     pub created_at: DateTime,

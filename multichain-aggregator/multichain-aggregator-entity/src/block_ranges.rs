@@ -8,7 +8,7 @@ pub struct Model {
     pub min_block_number: i32,
     pub max_block_number: i32,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub chain_id: i32,
+    pub chain_id: i64,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
