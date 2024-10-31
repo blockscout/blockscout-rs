@@ -71,6 +71,10 @@ pub async fn insert_code<C: ConnectionTrait>(
     Ok(model)
 }
 
+/// Inserts a contract defined by its runtime and creation code into `contracts` table.
+/// Notice, that only creation code is optional, while runtime code should always exist.
+/// It can be empty though, in case creation code execution resulted in empty code.
+/// Creation code may be missed for genesis contracts.
 async fn insert_contract_code<C: ConnectionTrait>(
     database_connection: &C,
     contract_code: ContractCode,
@@ -79,12 +83,6 @@ async fn insert_contract_code<C: ConnectionTrait>(
     let mut runtime_code_hash = vec![];
 
     match contract_code {
-        ContractCode::OnlyCreationCode { code } => {
-            creation_code_hash = insert_code(database_connection, code)
-                .await
-                .context("insert creation code")?
-                .code_hash;
-        }
         ContractCode::OnlyRuntimeCode { code } => {
             runtime_code_hash = insert_code(database_connection, code)
                 .await

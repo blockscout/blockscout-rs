@@ -1,7 +1,4 @@
 pub enum ContractCode {
-    OnlyCreationCode {
-        code: Vec<u8>,
-    },
     OnlyRuntimeCode {
         code: Vec<u8>,
     },
