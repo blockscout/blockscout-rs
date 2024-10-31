@@ -1,0 +1,18 @@
+[package]
+name = "verifier-alliance-database"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+keccak-hash = { workspace = true }
+sea-orm = { workspace = true }
+sha2 = { workspace = true }
+sha3 = { workspace = true }
+verification-common = { workspace = true }
+verifier-alliance-entity = { workspace = true }
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = ["test-database"] }
+tokio = { workspace = true, features = ["macros"] }
+verifier-alliance-migration = { workspace = true }
