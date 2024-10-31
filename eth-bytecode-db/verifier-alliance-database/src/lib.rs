@@ -166,65 +166,61 @@ async fn insert_contract_code<C: ConnectionTrait>(
 fn parse_genesis_contract_deployment(
     contract_deployment: ContractDeployment,
 ) -> InternalContractDeploymentData {
-    match contract_deployment {
-        ContractDeployment::Genesis {
-            chain_id,
-            address,
-            runtime_code,
-        } => {
-            let transaction_hash =
-                calculate_genesis_contract_deployment_transaction_hash(&runtime_code);
-            let contract_code = ContractCode::OnlyRuntimeCode { code: runtime_code };
+    if let ContractDeployment::Genesis {
+        chain_id,
+        address,
+        runtime_code,
+    } = contract_deployment
+    {
+        let transaction_hash =
+            calculate_genesis_contract_deployment_transaction_hash(&runtime_code);
+        let contract_code = ContractCode::OnlyRuntimeCode { code: runtime_code };
 
-            InternalContractDeploymentData {
-                chain_id: Decimal::from(chain_id),
-                address,
-                transaction_hash,
-                block_number: Decimal::from(-1),
-                transaction_index: Decimal::from(-1),
-                deployer: vec![],
-                contract_code,
-            }
-        }
-        ContractDeployment::Regular { .. } => {
-            unreachable!()
-        }
+        return InternalContractDeploymentData {
+            chain_id: Decimal::from(chain_id),
+            address,
+            transaction_hash,
+            block_number: Decimal::from(-1),
+            transaction_index: Decimal::from(-1),
+            deployer: vec![],
+            contract_code,
+        };
     }
+
+    unreachable!()
 }
 
 fn parse_regular_contract_deployment(
     contract_deployment: ContractDeployment,
 ) -> InternalContractDeploymentData {
-    match contract_deployment {
-        ContractDeployment::Genesis { .. } => {
-            unreachable!()
-        }
-        ContractDeployment::Regular {
-            chain_id,
-            address,
-            transaction_hash,
-            block_number,
-            transaction_index,
-            deployer,
+    if let ContractDeployment::Regular {
+        chain_id,
+        address,
+        transaction_hash,
+        block_number,
+        transaction_index,
+        deployer,
+        creation_code,
+        runtime_code,
+    } = contract_deployment
+    {
+        let contract_code = ContractCode::CompleteCode {
             creation_code,
             runtime_code,
-        } => {
-            let contract_code = ContractCode::CompleteCode {
-                creation_code,
-                runtime_code,
-            };
+        };
 
-            InternalContractDeploymentData {
-                chain_id: Decimal::from(chain_id),
-                address,
-                transaction_hash,
-                block_number: Decimal::from(block_number),
-                transaction_index: Decimal::from(transaction_index),
-                deployer,
-                contract_code,
-            }
-        }
+        return InternalContractDeploymentData {
+            chain_id: Decimal::from(chain_id),
+            address,
+            transaction_hash,
+            block_number: Decimal::from(block_number),
+            transaction_index: Decimal::from(transaction_index),
+            deployer,
+            contract_code,
+        };
     }
+
+    unreachable!()
 }
 
 fn calculate_genesis_contract_deployment_transaction_hash(runtime_code: &[u8]) -> Vec<u8> {
