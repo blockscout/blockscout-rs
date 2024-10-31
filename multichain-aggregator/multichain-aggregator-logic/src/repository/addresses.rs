@@ -1,11 +1,11 @@
 use crate::types::addresses::Address;
 use entity::addresses::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, EntityTrait,
+    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
     Iterable,
 };
 
-pub async fn upsert_many<C>(db: &C, addresses: Vec<Address>) -> anyhow::Result<()>
+pub async fn upsert_many<C>(db: &C, addresses: Vec<Address>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {

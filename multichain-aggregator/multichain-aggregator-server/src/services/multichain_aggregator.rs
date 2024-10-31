@@ -2,17 +2,23 @@ use crate::proto::{
     multichain_aggregator_service_server::MultichainAggregatorService, BatchImportRequest,
     BatchImportResponse,
 };
-use multichain_aggregator_logic as logic;
+use multichain_aggregator_logic::{
+    self as logic, api_key_manager::ApiKeyManager, error::ServiceError,
+};
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
 
 pub struct MultichainAggregator {
     db: DatabaseConnection,
+    api_key_manager: ApiKeyManager,
 }
 
 impl MultichainAggregator {
     pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+        Self {
+            db: db.clone(),
+            api_key_manager: ApiKeyManager::new(db),
+        }
     }
 }
 
@@ -23,7 +29,16 @@ impl MultichainAggregatorService for MultichainAggregator {
         request: Request<BatchImportRequest>,
     ) -> Result<Response<BatchImportResponse>, Status> {
         let inner = request.into_inner();
-        let import_request: logic::BatchImportRequest = inner.try_into().unwrap();
+
+        let api_key = (inner.api_key.as_str(), inner.chain_id.as_str())
+            .try_into()
+            .map_err(ServiceError::from)?;
+        self.api_key_manager
+            .validate_api_key(api_key)
+            .await
+            .map_err(ServiceError::from)?;
+
+        let import_request: logic::BatchImportRequest = inner.try_into()?;
 
         logic::batch_import(&self.db, import_request)
             .await

@@ -17,6 +17,8 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::addresses::Entity")]
     Addresses,
+    #[sea_orm(has_many = "super::api_keys::Entity")]
+    ApiKeys,
     #[sea_orm(has_one = "super::block_ranges::Entity")]
     BlockRanges,
     #[sea_orm(has_many = "super::dapps::Entity")]
@@ -28,6 +30,12 @@ pub enum Relation {
 impl Related<super::addresses::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Addresses.def()
+    }
+}
+
+impl Related<super::api_keys::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ApiKeys.def()
     }
 }
 

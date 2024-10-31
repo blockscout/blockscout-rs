@@ -1,10 +1,10 @@
 use crate::types::chains::Chain;
 use entity::chains::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, EntityTrait,
+    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
 };
 
-pub async fn upsert_many<C>(db: &C, chains: Vec<Chain>) -> anyhow::Result<()>
+pub async fn upsert_many<C>(db: &C, chains: Vec<Chain>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {

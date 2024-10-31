@@ -135,6 +135,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1HashUpsert'
+      api_key:
+        type: string
   v1BatchImportResponse:
     type: object
     properties:

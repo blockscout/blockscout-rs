@@ -60,3 +60,4 @@ config = "0.13"
 env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.1.1" }
 pretty_assertions = "1.3"
 reqwest = "0.12"
+thiserror = "1.0"

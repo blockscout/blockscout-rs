@@ -2,7 +2,7 @@ use crate::types::hashes::Hash;
 use entity::hashes::{ActiveModel, Column, Entity, Model};
 use sea_orm::{sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait};
 
-pub async fn upsert_many<C>(db: &C, hashes: Vec<Hash>) -> anyhow::Result<()>
+pub async fn upsert_many<C>(db: &C, hashes: Vec<Hash>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {

@@ -1,10 +1,10 @@
-use crate::{repository, types::batch_import_request::BatchImportRequest};
+use crate::{error::ServiceError, repository, types::batch_import_request::BatchImportRequest};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
 pub async fn batch_import(
     db: &DatabaseConnection,
     request: BatchImportRequest,
-) -> anyhow::Result<()> {
+) -> Result<(), ServiceError> {
     let tx = db.begin().await?;
     repository::addresses::upsert_many(&tx, request.addresses).await?;
     repository::block_ranges::upsert_many(&tx, request.block_ranges).await?;

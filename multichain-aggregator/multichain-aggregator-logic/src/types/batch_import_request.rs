@@ -1,4 +1,5 @@
 use super::{addresses::Address, block_ranges::BlockRange, hashes::Hash};
+use crate::error::{ParseError, ServiceError};
 use entity::sea_orm_active_enums as db_enum;
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
     self, address_upsert as proto_address, hash_upsert as proto_hash,
@@ -12,10 +13,10 @@ pub struct BatchImportRequest {
 }
 
 impl TryFrom<v1::BatchImportRequest> for BatchImportRequest {
-    type Error = anyhow::Error;
+    type Error = ServiceError;
 
     fn try_from(value: v1::BatchImportRequest) -> Result<Self, Self::Error> {
-        let chain_id = value.chain_id.parse()?;
+        let chain_id = value.chain_id.parse().map_err(ParseError::from)?;
         Ok(Self {
             block_ranges: value
                 .block_ranges
@@ -30,7 +31,7 @@ impl TryFrom<v1::BatchImportRequest> for BatchImportRequest {
                 .hashes
                 .into_iter()
                 .map(|h| {
-                    let hash = h.hash.parse()?;
+                    let hash = h.hash.parse().map_err(ParseError::from)?;
                     let hash_type = proto_hash_type_to_db_hash_type(h.hash_type());
                     Ok(Hash {
                         chain_id,
@@ -38,12 +39,12 @@ impl TryFrom<v1::BatchImportRequest> for BatchImportRequest {
                         hash_type,
                     })
                 })
-                .collect::<anyhow::Result<Vec<_>>>()?,
+                .collect::<Result<Vec<_>, Self::Error>>()?,
             addresses: value
                 .addresses
                 .into_iter()
                 .map(|a| {
-                    let hash = a.hash.parse()?;
+                    let hash = a.hash.parse().map_err(ParseError::from)?;
                     let token_type = proto_token_type_to_db_token_type(a.token_type());
 
                     Ok(Address {
@@ -58,7 +59,7 @@ impl TryFrom<v1::BatchImportRequest> for BatchImportRequest {
                         is_token: a.is_token.unwrap_or(false),
                     })
                 })
-                .collect::<anyhow::Result<Vec<_>>>()?,
+                .collect::<Result<Vec<_>, Self::Error>>()?,
         })
     }
 }

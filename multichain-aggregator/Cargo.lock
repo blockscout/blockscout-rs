@@ -2810,6 +2810,8 @@ dependencies = [
  "multichain-aggregator-proto",
  "pretty_assertions",
  "sea-orm",
+ "thiserror",
+ "tonic",
  "tracing",
 ]
 

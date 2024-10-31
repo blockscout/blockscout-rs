@@ -1,10 +1,10 @@
 use crate::types::block_ranges::BlockRange;
 use entity::block_ranges::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, EntityTrait,
+    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
 };
 
-pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> anyhow::Result<()>
+pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {

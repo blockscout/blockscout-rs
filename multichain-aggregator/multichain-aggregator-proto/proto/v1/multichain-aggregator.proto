@@ -49,6 +49,7 @@ message BatchImportRequest {
   repeated AddressUpsert addresses = 2;
   repeated BlockRangeUpsert block_ranges = 3;
   repeated HashUpsert hashes = 4;
+  string api_key = 5;
 }
 
 message BatchImportResponse {

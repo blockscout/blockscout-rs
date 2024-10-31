@@ -3,15 +3,16 @@ name = "multichain-aggregator-logic"
 version = "0.1.0"
 edition = "2021"
 
-
 [dependencies]
+multichain-aggregator-entity = { workspace = true }
+multichain-aggregator-proto = { workspace = true }
 anyhow = { workspace = true }
 blockscout-chains = { workspace = true }
 tracing = { workspace = true }
 sea-orm = { workspace = true }
-multichain-aggregator-entity = { workspace = true }
-multichain-aggregator-proto = { workspace = true }
 alloy-primitives = { workspace = true }
+thiserror = { workspace = true }
+tonic = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }
