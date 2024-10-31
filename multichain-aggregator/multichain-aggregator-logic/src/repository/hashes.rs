@@ -28,6 +28,6 @@ where
 
     match res {
         Ok(_) | Err(DbErr::RecordNotInserted) => Ok(()),
-        Err(err) => Err(anyhow::anyhow!(err)),
+        Err(err) => Err(err),
     }
 }
