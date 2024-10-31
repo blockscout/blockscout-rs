@@ -1,4 +1,5 @@
 mod code;
+mod contract_deployments;
 mod contracts;
 
 macro_rules! database {

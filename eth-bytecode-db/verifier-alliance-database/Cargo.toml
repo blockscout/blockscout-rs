@@ -13,6 +13,7 @@ verification-common = { workspace = true }
 verifier-alliance-entity = { workspace = true }
 
 [dev-dependencies]
+blockscout-display-bytes = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = ["test-database"] }
 tokio = { workspace = true, features = ["macros"] }
 verifier-alliance-migration = { workspace = true }

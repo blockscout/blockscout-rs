@@ -2,15 +2,71 @@ mod helpers;
 mod types;
 
 use crate::helpers::insert_then_select;
-use anyhow::Context;
-use anyhow::Error;
-use sea_orm::ActiveValue::Set;
-use sea_orm::ConnectionTrait;
+use anyhow::{Context, Error};
+use sea_orm::{prelude::Decimal, ActiveValue::Set, ConnectionTrait};
 use sha2::{Digest, Sha256};
 use sha3::Keccak256;
-use verifier_alliance_entity::{code, contracts};
+use verifier_alliance_entity::{code, contract_deployments, contracts};
 
-pub use types::ContractCode;
+pub use crate::types::{ContractCode, ContractDeployment};
+
+struct InternalContractDeploymentData {
+    chain_id: Decimal,
+    address: Vec<u8>,
+    transaction_hash: Vec<u8>,
+    block_number: Decimal,
+    transaction_index: Decimal,
+    deployer: Vec<u8>,
+    contract_code: ContractCode,
+}
+
+pub async fn insert_contract_deployment<C: ConnectionTrait>(
+    database_connection: &C,
+    contract_deployment: ContractDeployment,
+) -> Result<contract_deployments::Model, Error> {
+    let data = match contract_deployment {
+        ContractDeployment::Genesis { .. } => {
+            parse_genesis_contract_deployment(contract_deployment)
+        }
+        ContractDeployment::Regular { .. } => {
+            parse_regular_contract_deployment(contract_deployment)
+        }
+    };
+
+    let contract_id = insert_contract(database_connection, data.contract_code)
+        .await
+        .context("insert contract")?
+        .id;
+
+    let active_model = contract_deployments::ActiveModel {
+        id: Default::default(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
+        chain_id: Set(data.chain_id),
+        address: Set(data.address.clone()),
+        transaction_hash: Set(data.transaction_hash.clone()),
+        block_number: Set(data.block_number),
+        transaction_index: Set(data.transaction_index),
+        deployer: Set(data.deployer),
+        contract_id: Set(contract_id),
+    };
+
+    let (model, _inserted) = insert_then_select!(
+        database_connection,
+        contract_deployments,
+        active_model,
+        false,
+        [
+            (ChainId, data.chain_id),
+            (Address, data.address),
+            (TransactionHash, data.transaction_hash)
+        ]
+    )?;
+
+    Ok(model)
+}
 
 pub async fn insert_contract<C: ConnectionTrait>(
     database_connection: &C,
@@ -80,7 +136,7 @@ async fn insert_contract_code<C: ConnectionTrait>(
     contract_code: ContractCode,
 ) -> Result<(Vec<u8>, Vec<u8>), Error> {
     let mut creation_code_hash = vec![];
-    let mut runtime_code_hash = vec![];
+    let runtime_code_hash;
 
     match contract_code {
         ContractCode::OnlyRuntimeCode { code } => {
@@ -105,4 +161,72 @@ async fn insert_contract_code<C: ConnectionTrait>(
     }
 
     Ok((creation_code_hash, runtime_code_hash))
+}
+
+fn parse_genesis_contract_deployment(
+    contract_deployment: ContractDeployment,
+) -> InternalContractDeploymentData {
+    match contract_deployment {
+        ContractDeployment::Genesis {
+            chain_id,
+            address,
+            runtime_code,
+        } => {
+            let transaction_hash =
+                calculate_genesis_contract_deployment_transaction_hash(&runtime_code);
+            let contract_code = ContractCode::OnlyRuntimeCode { code: runtime_code };
+
+            InternalContractDeploymentData {
+                chain_id: Decimal::from(chain_id),
+                address,
+                transaction_hash,
+                block_number: Decimal::from(-1),
+                transaction_index: Decimal::from(-1),
+                deployer: vec![],
+                contract_code,
+            }
+        }
+        ContractDeployment::Regular { .. } => {
+            unreachable!()
+        }
+    }
+}
+
+fn parse_regular_contract_deployment(
+    contract_deployment: ContractDeployment,
+) -> InternalContractDeploymentData {
+    match contract_deployment {
+        ContractDeployment::Genesis { .. } => {
+            unreachable!()
+        }
+        ContractDeployment::Regular {
+            chain_id,
+            address,
+            transaction_hash,
+            block_number,
+            transaction_index,
+            deployer,
+            creation_code,
+            runtime_code,
+        } => {
+            let contract_code = ContractCode::CompleteCode {
+                creation_code,
+                runtime_code,
+            };
+
+            InternalContractDeploymentData {
+                chain_id: Decimal::from(chain_id),
+                address,
+                transaction_hash,
+                block_number: Decimal::from(block_number),
+                transaction_index: Decimal::from(transaction_index),
+                deployer,
+                contract_code,
+            }
+        }
+    }
+}
+
+fn calculate_genesis_contract_deployment_transaction_hash(runtime_code: &[u8]) -> Vec<u8> {
+    Keccak256::digest(runtime_code).to_vec()
 }
