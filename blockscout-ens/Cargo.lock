@@ -356,14 +356,15 @@ dependencies = [
 
 [[package]]
 name = "alloy-ccip-read"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c8a6ee642e76c373dfe642c16804faadc30767021118331f1ab20ce3cde189b"
+checksum = "c8a1538eca71a796e7e4c2a52cb7fd60287c8b99212de5eca89865f37a9b6761"
 dependencies = [
  "alloy",
  "anyhow",
  "async-recursion",
  "async-trait",
+ "derive-new",
  "futures-util",
  "getrandom 0.2.15",
  "reqwest 0.12.8",
@@ -2183,6 +2184,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "derive-new"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2cdc8d50f426189eef89dac62fabfa0abb27d5cc008f25bf4156a0203325becc"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.85",
 ]
 
 [[package]]

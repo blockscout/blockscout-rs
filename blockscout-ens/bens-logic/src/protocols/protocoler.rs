@@ -54,30 +54,69 @@ pub struct ProtocolInfo {
     pub tld_list: NonEmpty<Tld>,
     pub subgraph_name: String,
     pub address_resolve_technique: AddressResolveTechnique,
-    pub empty_label_hash: Option<B256>,
-    pub native_token_contract: Option<Address>,
-    pub registry_contract: Option<Address>,
     pub meta: ProtocolMeta,
-    pub offchain_strategy: OffchainStrategy,
+    pub protocol_specific: ProtocolSpecific,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[serde(tag = "type")]
+pub enum ProtocolSpecific {
+    EnsLike(EnsLikeProtocol),
+    D3Connect(D3ConnectProtocol),
+}
+
+impl Default for ProtocolSpecific {
+    fn default() -> Self {
+        Self::EnsLike(Default::default())
+    }
+}
+
+impl ProtocolSpecific {
+    pub fn try_offchain_resolve(&self) -> bool {
+        match self {
+            ProtocolSpecific::EnsLike(ens) => ens.try_offchain_resolve,
+            ProtocolSpecific::D3Connect(d3) => !d3.disable_offchain_resolve,
+        }
+    }
+
+    pub fn empty_label_hash(&self) -> Option<B256> {
+        match self {
+            ProtocolSpecific::EnsLike(ens) => ens.empty_label_hash,
+            ProtocolSpecific::D3Connect(_) => None,
+        }
+    }
+
+    pub fn native_token_contract(&self) -> Option<Address> {
+        match self {
+            ProtocolSpecific::EnsLike(ens) => ens.native_token_contract,
+            ProtocolSpecific::D3Connect(d3) => Some(d3.native_token_contract),
+        }
+    }
+
+    pub fn registry_contract(&self) -> Option<Address> {
+        match self {
+            ProtocolSpecific::EnsLike(ens) => ens.registry_contract,
+            ProtocolSpecific::D3Connect(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum OffchainStrategy {
-    #[default]
-    None,
-    EnsWildcard,
-    D3Connect,
+pub struct EnsLikeProtocol {
+    pub registry_contract: Option<Address>,
+    pub empty_label_hash: Option<B256>,
+    pub native_token_contract: Option<Address>,
+    #[serde(default)]
+    pub try_offchain_resolve: bool,
 }
 
-impl OffchainStrategy {
-    pub fn is_none(&self) -> bool {
-        matches!(self, Self::None)
-    }
-
-    pub fn is_some(&self) -> bool {
-        !self.is_none()
-    }
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct D3ConnectProtocol {
+    pub resolver_contract: Address,
+    pub native_token_contract: Address,
+    #[serde(default)]
+    pub disable_offchain_resolve: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

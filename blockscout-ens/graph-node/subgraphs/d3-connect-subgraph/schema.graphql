@@ -1,0 +1,451 @@
+type Domain @entity {
+  "The namehash of the name"
+  id: ID!
+  "The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)"
+  name: String
+  "The human readable label name (imported from CSV), if known"
+  labelName: String
+  "keccak256(labelName)"
+  labelhash: Bytes
+  "The namehash (id) of the parent name"
+  parent: Domain
+  "Can count domains from length of array"
+  subdomains: [Domain!]! @derivedFrom(field: "parent")
+  "The number of subdomains"
+  subdomainCount: Int!
+  "Address logged from current resolver, if any"
+  resolvedAddress: Account
+
+  "The resolver that controls the domain's settings"
+  resolver: Resolver
+  "The time-to-live (TTL) value of the domain's records"
+  ttl: BigInt
+
+  "Indicates whether the domain has been migrated to a new registrar"
+  isMigrated: Boolean!
+  "The time when the domain was created"
+  createdAt: BigInt!
+
+  "The account that owns the domain"
+  owner: Account!
+  "The account that owns the ERC721 NFT for the domain"
+  registrant: Account
+  "The account that owns the wrapped domain"
+  wrappedOwner: Account
+
+  "The expiry date for the domain, from either the registration, or the wrapped domain if PCC is burned"
+  expiryDate: BigInt
+
+  "The registration associated with the domain"
+  registration: Registration @derivedFrom(field: "domain")
+  "The wrapped domain associated with the domain"
+  wrappedDomain: WrappedDomain @derivedFrom(field: "domain")
+
+  "The events associated with the domain"
+  events: [DomainEvent!]! @derivedFrom(field: "domain")
+}
+
+interface DomainEvent {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+}
+
+type Transfer implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The account that owns the domain after the transfer"
+  owner: Account!
+}
+
+type NewOwner implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The parent domain of the domain name associated with the event"
+  parentDomain: Domain!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The new account that owns the domain"
+  owner: Account!
+}
+
+type NewResolver implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The new resolver contract address associated with the domain"
+  resolver: Resolver!
+}
+
+type NewTTL implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The new TTL value (in seconds) associated with the domain"
+  ttl: BigInt!
+}
+
+type WrappedTransfer implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The account that owns the wrapped domain after the transfer"
+  owner: Account!
+}
+
+type NameWrapped implements DomainEvent @entity {
+  "The unique identifier of the wrapped domain"
+  id: ID!
+  "The domain name associated with the wrapped domain"
+  domain: Domain!
+  "The block number at which the wrapped domain was wrapped"
+  blockNumber: Int!
+  "The transaction hash of the transaction that wrapped the domain"
+  transactionID: Bytes!
+  "The human-readable name of the wrapped domain"
+  name: String
+  "The number of fuses associated with the wrapped domain"
+  fuses: Int!
+  "The account that owns the wrapped domain"
+  owner: Account!
+  "The expiry date of the wrapped domain registration"
+  expiryDate: BigInt!
+}
+
+type NameUnwrapped implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The account that owns the domain after it was unwrapped"
+  owner: Account!
+}
+
+type FusesSet implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The number of fuses associated with the domain after the set event"
+  fuses: Int!
+}
+
+type ExpiryExtended implements DomainEvent @entity {
+  "The unique identifier of the event"
+  id: ID!
+  "The domain name associated with the event"
+  domain: Domain!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash of the transaction that triggered the event"
+  transactionID: Bytes!
+  "The new expiry date associated with the domain after the extension event"
+  expiryDate: BigInt!
+}
+
+type Registration @entity {
+  "The unique identifier of the registration"
+  id: ID!
+  "The domain name associated with the registration"
+  domain: Domain!
+  "The registration date of the domain"
+  registrationDate: BigInt!
+  "The expiry date of the domain"
+  expiryDate: BigInt!
+  "The cost associated with the domain registration"
+  cost: BigInt
+  "The account that registered the domain"
+  registrant: Account!
+  "The human-readable label name associated with the domain registration"
+  labelName: String
+  "The events associated with the domain registration"
+  events: [RegistrationEvent!]! @derivedFrom(field: "registration")
+}
+
+interface RegistrationEvent {
+  "The unique identifier of the registration event"
+  id: ID!
+  "The registration associated with the event"
+  registration: Registration!
+  "The block number of the event"
+  blockNumber: Int!
+  "The transaction ID associated with the event"
+  transactionID: Bytes!
+}
+
+type NameRegistered implements RegistrationEvent @entity {
+  "The unique identifier of the NameRegistered event"
+  id: ID!
+  "The registration associated with the event"
+  registration: Registration!
+  "The block number of the event"
+  blockNumber: Int!
+  "The transaction ID associated with the event"
+  transactionID: Bytes!
+  "The account that registered the name"
+  registrant: Account!
+  "The expiry date of the registration"
+  expiryDate: BigInt!
+}
+
+type NameRenewed implements RegistrationEvent @entity {
+  "The unique identifier of the NameRenewed event"
+  id: ID!
+  "The registration associated with the event"
+  registration: Registration!
+  "The block number of the event"
+  blockNumber: Int!
+  "The transaction ID associated with the event"
+  transactionID: Bytes!
+  "The new expiry date of the registration"
+  expiryDate: BigInt!
+}
+
+type NameTransferred implements RegistrationEvent @entity {
+  "The ID of the event"
+  id: ID!
+  "The registration associated with the event"
+  registration: Registration!
+  "The block number of the event"
+  blockNumber: Int!
+  "The transaction ID of the event"
+  transactionID: Bytes!
+  "The new owner of the domain"
+  newOwner: Account!
+}
+
+type WrappedDomain @entity {
+  "unique identifier for each instance of the WrappedDomain entity"
+  id: ID!
+  "The domain that is wrapped by this WrappedDomain"
+  domain: Domain!
+  "The expiry date of the wrapped domain"
+  expiryDate: BigInt!
+  "The number of fuses remaining on the wrapped domain"
+  fuses: Int!
+  "The account that owns this WrappedDomain"
+  owner: Account!
+  "The name of the wrapped domain"
+  name: String
+}
+
+type Account @entity {
+  "The unique identifier for the account"
+  id: ID!
+  "The domains owned by the account"
+  domains: [Domain!]! @derivedFrom(field: "owner")
+  "The WrappedDomains owned by the account"
+  wrappedDomains: [WrappedDomain!] @derivedFrom(field: "owner")
+  "The Registrations made by the account"
+  registrations: [Registration!] @derivedFrom(field: "registrant")
+}
+
+type Resolver @entity {
+  "The unique identifier for this resolver, which is a concatenation of the resolver address and the domain namehash"
+  id: ID!
+  "The domain that this resolver is associated with"
+  domain: Domain
+  "The address of the resolver contract"
+  address: Bytes!
+  "The current value of the 'addr' record for this resolver, as determined by the associated events"
+  addr: Account
+  "The content hash for this resolver, in binary format"
+  contentHash: Bytes
+  "The set of observed text record keys for this resolver"
+  texts: [String!]
+  "The set of observed SLIP-44 coin types for this resolver"
+  coinTypes: [BigInt!]
+  "The events associated with this resolver"
+  events: [ResolverEvent!]! @derivedFrom(field: "resolver")
+}
+
+interface ResolverEvent {
+  "Concatenation of block number and log ID"
+  id: ID!
+  "Used to derive relationships to Resolvers"
+  resolver: Resolver!
+  "The block number that the event occurred on"
+  blockNumber: Int!
+  "The transaction hash of the event"
+  transactionID: Bytes!
+}
+
+type AddrChanged implements ResolverEvent @entity {
+  "Unique identifier for this event"
+  id: ID!
+  "The resolver associated with this event"
+  resolver: Resolver!
+  "The block number at which this event occurred"
+  blockNumber: Int!
+  "The transaction ID for the transaction in which this event occurred"
+  transactionID: Bytes!
+  "The new address associated with the resolver"
+  addr: Account!
+}
+
+type MulticoinAddrChanged implements ResolverEvent @entity {
+  "Unique identifier for the event"
+  id: ID!
+  "Resolver associated with this event"
+  resolver: Resolver!
+  "Block number in which this event was emitted"
+  blockNumber: Int!
+  "Transaction ID in which this event was emitted"
+  transactionID: Bytes!
+  "The coin type of the changed address"
+  coinType: BigInt!
+  "The new address value for the given coin type"
+  addr: Bytes!
+}
+
+type NameChanged implements ResolverEvent @entity {
+  "Concatenation of block number and log ID"
+  id: ID!
+  "Used to derive relationships to Resolvers"
+  resolver: Resolver!
+  "Block number where event occurred"
+  blockNumber: Int!
+  "Unique transaction ID where event occurred"
+  transactionID: Bytes!
+  "New ENS name value"
+  name: String!
+}
+
+type AbiChanged implements ResolverEvent @entity {
+  "Concatenation of block number and log ID"
+  id: ID!
+  "Used to derive relationships to Resolvers"
+  resolver: Resolver!
+  "The block number at which the event was emitted"
+  blockNumber: Int!
+  "The transaction hash of the transaction in which the event was emitted"
+  transactionID: Bytes!
+  "The content type of the ABI change"
+  contentType: BigInt!
+}
+
+type PubkeyChanged implements ResolverEvent @entity {
+  "Concatenation of block number and log ID"
+  id: ID!
+  "Used to derive relationships to Resolvers"
+  resolver: Resolver!
+  "Block number of the Ethereum block where the event occurred"
+  blockNumber: Int!
+  "Transaction hash of the Ethereum transaction where the event occurred"
+  transactionID: Bytes!
+  "The x-coordinate of the new public key"
+  x: Bytes!
+  "The y-coordinate of the new public key"
+  y: Bytes!
+}
+
+type TextChanged implements ResolverEvent @entity {
+  "Concatenation of block number and log ID"
+  id: ID!
+  "Used to derive relationships to Resolvers"
+  resolver: Resolver!
+  "Block number of the Ethereum block in which the event occurred"
+  blockNumber: Int!
+  "Hash of the Ethereum transaction in which the event occurred"
+  transactionID: Bytes!
+  "The key of the text record that was changed"
+  key: String!
+  "The new value of the text record that was changed"
+  value: String
+}
+
+type ContenthashChanged implements ResolverEvent @entity {
+  "Concatenation of block number and log ID"
+  id: ID!
+  "Used to derive relationships to Resolvers"
+  resolver: Resolver!
+  "The block number where the event occurred"
+  blockNumber: Int!
+  "The ID of the transaction where the event occurred"
+  transactionID: Bytes!
+  "The new content hash for the domain"
+  hash: Bytes!
+}
+
+type InterfaceChanged implements ResolverEvent @entity {
+  "Concatenation of block number and log ID"
+  id: ID!
+  "Used to derive relationships to Resolvers"
+  resolver: Resolver!
+  "The block number in which the event occurred"
+  blockNumber: Int!
+  "The transaction ID for the transaction in which the event occurred"
+  transactionID: Bytes!
+  "The ID of the EIP-1820 interface that was changed"
+  interfaceID: Bytes!
+  "The address of the contract that implements the interface"
+  implementer: Bytes!
+}
+
+type AuthorisationChanged implements ResolverEvent @entity {
+  "Unique identifier for this event"
+  id: ID!
+  "The resolver associated with this event"
+  resolver: Resolver!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash associated with the event"
+  transactionID: Bytes!
+  "The owner of the authorisation"
+  owner: Bytes!
+  "The target of the authorisation"
+  target: Bytes!
+  "Whether the authorisation was added or removed"
+  isAuthorized: Boolean!
+}
+
+type VersionChanged implements ResolverEvent @entity {
+  "Unique identifier for this event"
+  id: ID!
+  "The resolver associated with this event"
+  resolver: Resolver!
+  "The block number at which the event occurred"
+  blockNumber: Int!
+  "The transaction hash associated with the event"
+  transactionID: Bytes!
+  "The new version number of the resolver"
+  version: BigInt!
+}

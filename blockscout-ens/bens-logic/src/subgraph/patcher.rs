@@ -32,7 +32,7 @@ impl SubgraphPatcher {
         let level = from_user.inner.level();
         let range = 2..=MAX_LEVEL;
         let level_is_fine = range.contains(&level);
-        if protocol.info.offchain_strategy.is_some() && level_is_fine {
+        if protocol.info.protocol_specific.try_offchain_resolve() && level_is_fine {
             let _lock = self.offchain_mutex.lock().await;
             offchain_resolve(db, from_user).await?
         };

@@ -3,7 +3,7 @@ use crate::{
     protocols::{hash_name::hex, DomainNameOnProtocol, Protocol},
     subgraph::{
         sql::{utils, DbErr},
-        DomainPaginationInput, GetDomainInput, LookupAddressInput,
+        DomainPaginationInput, LookupAddressInput,
     },
 };
 use alloy::primitives::Address;
@@ -81,6 +81,7 @@ to_timestamp(ttl) as ttl,
 is_migrated,
 stored_offchain,
 resolved_with_wildcard,
+created_at,
 to_timestamp(created_at) as registration_date,
 owner,
 registrant,
@@ -132,18 +133,19 @@ pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 pub async fn get_domain(
     pool: &PgPool,
     domain_name: &DomainNameOnProtocol<'_>,
-    input: &GetDomainInput,
+    only_active: bool,
 ) -> Result<Option<DetailedDomain>, DbErr> {
-    let only_active_clause = input
-        .only_active
+    let only_active_clause = only_active
         .then(|| format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}"))
         .unwrap_or_default();
     let schema = &domain_name.deployed_protocol.protocol.subgraph_schema;
+    let protocol_slug = &domain_name.deployed_protocol.protocol.info.slug;
     let maybe_domain = sqlx::query_as(&format!(
         r#"
         SELECT
             {DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE},
             '{schema}' as schema_name,
+            '{protocol_slug}' as protocol_slug,
             COALESCE(
                 multi_coin_addresses.coin_to_addr,
                 '{{}}'::json

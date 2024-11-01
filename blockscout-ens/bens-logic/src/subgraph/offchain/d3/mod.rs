@@ -1,9 +1,5 @@
-use crate::{entity::subgraph::domain::CreationDomain, protocols::DomainNameOnProtocol};
-use sqlx::PgPool;
+mod metadata;
+mod offchain;
 
-pub async fn maybe_offchain_resolution(
-    _db: &PgPool,
-    _from_user: &DomainNameOnProtocol<'_>,
-) -> Option<CreationDomain> {
-    None
-}
+pub use metadata::get_metadata;
+pub use offchain::maybe_offchain_resolution;

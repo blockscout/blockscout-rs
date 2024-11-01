@@ -1,14 +1,12 @@
-use super::{ccip_read, DomainInfoFromCcipRead};
+use super::ccip_read;
 use crate::{
     entity::subgraph::domain::{CreationDomain, Domain},
-    protocols::DomainNameOnProtocol,
-    subgraph,
-    subgraph::ResolverInSubgraph,
+    metrics,
+    protocols::{DomainNameOnProtocol, EnsLikeProtocol},
+    subgraph::{self, offchain::creation_domain_from_offchain_resolution, ResolverInSubgraph},
 };
 use alloy::primitives::Address;
 use anyhow::Context;
-
-use crate::metrics;
 use sqlx::PgPool;
 use std::str::FromStr;
 
@@ -18,9 +16,10 @@ use std::str::FromStr;
 pub async fn maybe_wildcard_resolution(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
+    ens: &EnsLikeProtocol,
 ) -> Option<CreationDomain> {
     metrics::WILDCARD_RESOLVE_ATTEMPTS.inc();
-    match try_wildcard_resolution(db, from_user).await {
+    match try_wildcard_resolution(db, from_user, ens).await {
         Ok(result) => {
             if result.is_some() {
                 metrics::WILDCARD_RESOLVE_SUCCESS.inc();
@@ -41,8 +40,10 @@ pub async fn maybe_wildcard_resolution(
 async fn try_wildcard_resolution(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
+    ens: &EnsLikeProtocol,
 ) -> Result<Option<CreationDomain>, anyhow::Error> {
-    let Some((resolver_address, maybe_existing_domain)) = any_resolver(db, from_user).await? else {
+    let Some((resolver_address, maybe_existing_domain)) = any_resolver(db, from_user, ens).await?
+    else {
         return Ok(None);
     };
     let result = ccip_read::call_to_resolver(from_user, resolver_address)
@@ -56,7 +57,7 @@ async fn try_wildcard_resolution(
                 None
             }
         });
-        Ok(Some(creation_domain_from_rpc_resolution(
+        Ok(Some(creation_domain_from_offchain_resolution(
             from_user,
             result,
             maybe_domain_to_update,
@@ -69,8 +70,8 @@ async fn try_wildcard_resolution(
 async fn any_resolver(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
+    ens: &EnsLikeProtocol,
 ) -> Result<Option<(Address, Option<Domain>)>, anyhow::Error> {
-    let protocol = from_user.deployed_protocol.protocol;
     let name_options = from_user
         .inner
         .iter_parents_with_self()
@@ -80,15 +81,28 @@ async fn any_resolver(
     let maybe_domain_with_resolver = any_resolver_in_db(db, name_options.clone()).await?;
     if let Some((resolver, found_domain)) = maybe_domain_with_resolver {
         return Ok(Some((resolver.resolver_address, Some(found_domain))));
-    } else if protocol.info.registry_contract.is_some() {
+    } else if ens.registry_contract.is_some() {
         // try to find resolver on chain.
         // if custom registry is set, we can try to find resolver in registry
-        if let Some(resolver_address) = any_resolver_rpc(name_options).await {
+        if let Some(resolver_address) = any_resolver_rpc(name_options, ens).await {
             return Ok(Some((resolver_address, None)));
         }
     };
 
     Ok(None)
+}
+
+async fn any_resolver_rpc(
+    names: Vec<DomainNameOnProtocol<'_>>,
+    ens: &EnsLikeProtocol,
+) -> Option<Address> {
+    for name in names {
+        let resolver = ccip_read::get_resolver(&name, ens).await.ok()?;
+        if !resolver.is_zero() {
+            return Some(resolver);
+        }
+    }
+    None
 }
 
 async fn any_resolver_in_db(
@@ -119,43 +133,4 @@ async fn any_resolver_in_db(
         }
     }
     Ok(None)
-}
-
-async fn any_resolver_rpc(names: Vec<DomainNameOnProtocol<'_>>) -> Option<Address> {
-    for name in names {
-        let resolver = ccip_read::get_resolver(&name).await.ok()?;
-        if !resolver.is_zero() {
-            return Some(resolver);
-        }
-    }
-    None
-}
-fn creation_domain_from_rpc_resolution(
-    from_user: &DomainNameOnProtocol<'_>,
-    ccip_read_info: DomainInfoFromCcipRead,
-    maybe_existing_domain: Option<Domain>,
-) -> CreationDomain {
-    let parent = from_user.inner.iter_parents_with_self().nth(1);
-    let resolver =
-        ResolverInSubgraph::new(ccip_read_info.resolver_address, ccip_read_info.id.clone());
-    let now = chrono::Utc::now();
-    CreationDomain {
-        vid: maybe_existing_domain.map(|d| d.vid),
-        id: ccip_read_info.id,
-        name: Some(ccip_read_info.name),
-        label_name: Some(from_user.inner.label_name.clone()),
-        labelhash: Some(from_user.inner.labelhash().to_vec()),
-        parent: parent.map(|p| p.id),
-        subdomain_count: 0,
-        resolved_address: Some(ccip_read_info.addr.to_string().to_lowercase()),
-        resolver: Some(resolver.to_string()),
-        is_migrated: true,
-        stored_offchain: ccip_read_info.stored_offchain,
-        resolved_with_wildcard: ccip_read_info.resolved_with_wildcard,
-        created_at: now.timestamp().into(),
-        owner: Address::ZERO.to_string(),
-        wrapped_owner: None,
-        expiry_date: None,
-        is_expired: false,
-    }
 }

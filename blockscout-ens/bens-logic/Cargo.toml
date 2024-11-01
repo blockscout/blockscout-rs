@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
-alloy-ccip-read = "0.2.0"
+alloy-ccip-read = "0.3.0"
 anyhow = "1"
 hex = "0.4"
 chrono = "0.4"

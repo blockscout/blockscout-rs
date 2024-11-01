@@ -1,24 +1,10 @@
-use crate::protocols::{
-    hash_name::CustomDomainIdGenerator, DeployedProtocol, DomainNameOnProtocol,
+use crate::{
+    protocols::{DomainNameOnProtocol, EnsLikeProtocol},
+    subgraph::offchain::{ccip_read::reader_from_protocol, DomainInfoFromOffchainResolution},
 };
-use alloy::{
-    primitives::Address,
-    providers::{ProviderBuilder, RootProvider},
-    transports::BoxTransport,
-};
-use alloy_ccip_read::CCIPReader;
+use alloy::primitives::Address;
 use anyhow::Context;
 use tracing::instrument;
-
-#[derive(Debug, Clone)]
-pub struct DomainInfoFromCcipRead {
-    pub id: String,
-    pub name: String,
-    pub addr: Address,
-    pub resolver_address: Address,
-    pub stored_offchain: bool,
-    pub resolved_with_wildcard: bool,
-}
 
 #[instrument(
     skip_all,
@@ -29,7 +15,7 @@ pub struct DomainInfoFromCcipRead {
 pub async fn call_to_resolver(
     name: &DomainNameOnProtocol<'_>,
     resolver_address: Address,
-) -> Result<DomainInfoFromCcipRead, anyhow::Error> {
+) -> Result<DomainInfoFromOffchainResolution, anyhow::Error> {
     let name_str = &name.inner.name;
     let reader = reader_from_protocol(&name.deployed_protocol);
     let result =
@@ -37,13 +23,14 @@ pub async fn call_to_resolver(
             .await
             .context("perform ccip call to with resolver")?;
 
-    Ok(DomainInfoFromCcipRead {
+    Ok(DomainInfoFromOffchainResolution {
         id: name.inner.id.clone(),
         addr: result.addr.value,
         resolver_address,
         name: name.inner.name.clone(),
         stored_offchain: result.ccip_read_used,
         resolved_with_wildcard: result.wildcard_used,
+        expiry_date: None,
     })
 }
 
@@ -53,28 +40,12 @@ pub async fn call_to_resolver(
     ret(level = "DEBUG"),
     level = "INFO",
 )]
-pub async fn get_resolver(name: &DomainNameOnProtocol<'_>) -> Result<Address, anyhow::Error> {
+pub async fn get_resolver(
+    name: &DomainNameOnProtocol<'_>,
+    ens: &EnsLikeProtocol,
+) -> Result<Address, anyhow::Error> {
     let reader = reader_from_protocol(&name.deployed_protocol);
-    alloy_ccip_read::ens::get_resolver_wildcarded(
-        &reader,
-        name.deployed_protocol.protocol.info.registry_contract,
-        &name.inner.name,
-    )
-    .await
-    .context("get resolver")
-}
-
-type Reader = CCIPReader<RootProvider<BoxTransport>, CustomDomainIdGenerator>;
-
-fn reader_from_protocol(d: &DeployedProtocol) -> Reader {
-    let domain_id_provider = CustomDomainIdGenerator::new(d.protocol.info.empty_label_hash);
-
-    let provider = ProviderBuilder::new()
-        .on_http(d.deployment_network.rpc_url())
-        .boxed();
-    let builder = alloy_ccip_read::CCIPReader::builder()
-        .with_provider(provider)
-        .with_domain_id_provider(domain_id_provider);
-
-    builder.build().expect("provider passed")
+    alloy_ccip_read::ens::get_resolver_wildcarded(&reader, ens.registry_contract, &name.inner.name)
+        .await
+        .context("get resolver")
 }

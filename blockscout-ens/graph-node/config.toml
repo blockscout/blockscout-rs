@@ -37,3 +37,9 @@ provider = [
     { label = "mode-sepolia", url = "https://sepolia.mode.network", features = [] }
 ]
 shard = "primary"
+
+[chains.shibarium]
+provider = [
+    { label = "shibarium", url = "https://www.shibrpc.com", features = [] }
+]
+shard = "primary"

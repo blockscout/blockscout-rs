@@ -71,13 +71,15 @@ async fn update_domain(
         SET
             resolved_address = $1,
             stored_offchain = $2,
-            resolved_with_wildcard = $3
-        WHERE vid = $4
+            resolved_with_wildcard = $3,
+            expiry_date = $4
+        WHERE vid = $5
         "#
     ))
     .bind(&domain.resolved_address)
     .bind(domain.stored_offchain)
     .bind(domain.resolved_with_wildcard)
+    .bind(&domain.expiry_date)
     .bind(vid)
     .execute(pool)
     .await?;

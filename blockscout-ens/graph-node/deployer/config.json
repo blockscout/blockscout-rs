@@ -59,6 +59,11 @@
         "subgraph_path": "../subgraphs/zns-subgraph",
         "subgraph_name": "zns-blast-subgraph",
         "network": "blast-mainnet"
+    },
+    "d3-connect": {
+        "subgraph_path": "../subgraphs/d3-connect-subgraph",
+        "subgraph_name": "d3-connect-shib-subgraph",
+        "network": "shibarium"
     }
   }
 }
