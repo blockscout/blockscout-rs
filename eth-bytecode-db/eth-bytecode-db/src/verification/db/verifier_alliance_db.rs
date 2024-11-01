@@ -55,32 +55,6 @@ pub(crate) async fn insert_data(
     Ok(())
 }
 
-pub(crate) async fn insert_deployment_data(
-    db_client: &DatabaseConnection,
-    mut deployment_data: ContractDeploymentData,
-) -> Result<contract_deployments::Model, anyhow::Error> {
-    let txn = db_client
-        .begin()
-        .await
-        .context("begin database transaction")?;
-
-    let contract = insert_contract(
-        &txn,
-        deployment_data.creation_code.take(),
-        deployment_data.runtime_code.take(),
-    )
-    .await
-    .context("insert contract")?;
-
-    let contract_deployment = insert_contract_deployment(&txn, deployment_data, &contract)
-        .await
-        .context("insert contract deployment")?;
-
-    txn.commit().await.context("commit transaction")?;
-
-    Ok(contract_deployment)
-}
-
 pub(crate) async fn retrieve_contract_deployment<C: ConnectionTrait>(
     db: &C,
     deployment_data: &ContractDeploymentData,
@@ -265,97 +239,6 @@ async fn insert_compiled_contract<C: ConnectionTrait>(
     )?;
 
     Ok(compiled_contract)
-}
-
-async fn insert_contract_deployment<C: ConnectionTrait>(
-    db: &C,
-    deployment_data: ContractDeploymentData,
-    contract: &contracts::Model,
-) -> Result<contract_deployments::Model, anyhow::Error> {
-    let active_model = contract_deployments::ActiveModel {
-        id: Default::default(),
-        created_at: Default::default(),
-        updated_at: Default::default(),
-        created_by: Default::default(),
-        updated_by: Default::default(),
-        chain_id: Set(deployment_data.chain_id.into()),
-        address: Set(deployment_data.contract_address.clone()),
-        transaction_hash: Set(deployment_data.transaction_hash.clone()),
-        block_number: Set(deployment_data.block_number.unwrap_or(-1).into()),
-        transaction_index: Set(deployment_data.transaction_index.unwrap_or(-1).into()),
-        deployer: Set(deployment_data
-            .deployer
-            .unwrap_or(ethers_core::types::Address::zero().0.to_vec())),
-        contract_id: Set(contract.id),
-    };
-    let (contract_deployment, _inserted) = insert_then_select!(
-        db,
-        contract_deployments,
-        active_model,
-        false,
-        [
-            (ChainId, deployment_data.chain_id),
-            (Address, deployment_data.contract_address),
-            (TransactionHash, deployment_data.transaction_hash)
-        ]
-    )?;
-
-    Ok(contract_deployment)
-}
-
-async fn insert_contract<C: ConnectionTrait>(
-    db: &C,
-    creation_code: Option<Vec<u8>>,
-    runtime_code: Option<Vec<u8>>,
-) -> Result<contracts::Model, anyhow::Error> {
-    if creation_code.is_none() && runtime_code.is_none() {
-        return Err(anyhow::anyhow!(
-            "at least one of creation or runtime code must not be null"
-        ));
-    }
-    let creation_code = if let Some(creation_code) = creation_code {
-        Some(
-            insert_code(db, creation_code)
-                .await
-                .context("insert creation code")?,
-        )
-    } else {
-        None
-    };
-    let runtime_code = if let Some(runtime_code) = runtime_code {
-        Some(
-            insert_code(db, runtime_code)
-                .await
-                .context("insert runtime code")?,
-        )
-    } else {
-        None
-    };
-
-    let creation_code_hash = creation_code.map(|code| code.code_hash).unwrap_or_default();
-    let runtime_code_hash = runtime_code.map(|code| code.code_hash).unwrap_or_default();
-
-    let active_model = contracts::ActiveModel {
-        id: Default::default(),
-        created_at: Default::default(),
-        updated_at: Default::default(),
-        created_by: Default::default(),
-        updated_by: Default::default(),
-        creation_code_hash: Set(creation_code_hash.clone()),
-        runtime_code_hash: Set(runtime_code_hash.clone()),
-    };
-    let (contract, _inserted) = insert_then_select!(
-        db,
-        contracts,
-        active_model,
-        false,
-        [
-            (CreationCodeHash, creation_code_hash),
-            (RuntimeCodeHash, runtime_code_hash)
-        ]
-    )?;
-
-    Ok(contract)
 }
 
 async fn insert_code<C: ConnectionTrait>(

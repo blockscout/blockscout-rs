@@ -3,9 +3,9 @@ use crate::FromHex;
 use anyhow::Context;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
-use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::VerifierAllianceContract;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, str::FromStr};
+use verifier_alliance_database::ContractDeployment;
 /********** Bytecode Part **********/
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -492,11 +492,10 @@ impl TryFrom<eth_bytecode_db_v2::VerifierAllianceContract> for AllianceContract 
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AllianceImportRequest<T> {
-    pub contracts: Vec<AllianceContract>,
+    pub contracts: Vec<ContractDeployment>,
     pub compiler_version: String,
-    #[serde(flatten)]
     pub content: T,
 }
 
