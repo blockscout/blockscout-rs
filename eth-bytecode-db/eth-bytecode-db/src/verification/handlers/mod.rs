@@ -26,8 +26,9 @@ use crate::{
     ToHex,
 };
 use anyhow::Context;
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::str::FromStr;
+use verifier_alliance_database::{ContractCode, ContractDeployment};
 use verifier_alliance_entity::contract_deployments;
 
 enum EthBytecodeDbAction<'a> {
@@ -112,7 +113,7 @@ enum VerifierAllianceDbAction<'a> {
     },
     SaveWithDeploymentData {
         db_client: &'a DatabaseConnection,
-        deployment_data: AllianceContract,
+        deployment_data: ContractDeployment,
     },
 }
 
@@ -128,40 +129,66 @@ impl<'a> VerifierAllianceDbAction<'a> {
                 Some(VerificationMetadata {
                     chain_id: Some(chain_id),
                     contract_address: Some(contract_address),
-                    transaction_hash,
-                    block_number,
-                    transaction_index,
-                    deployer,
-                    creation_code,
-                    runtime_code,
+                    transaction_hash: Some(transaction_hash),
+                    block_number: Some(block_number),
+                    transaction_index: Some(transaction_index),
+                    deployer: Some(deployer),
+                    creation_code: Some(creation_code),
+                    runtime_code: Some(runtime_code),
                 }),
-            ) => {
-                // Contract deployment must have runtime code to exist (it may be empty, though)
-                if is_authorized && runtime_code.is_some() {
-                    Self::SaveWithDeploymentData {
-                        db_client,
-                        deployment_data: AllianceContract {
-                            chain_id: format!("{chain_id}"),
-                            contract_address,
-                            transaction_hash,
-                            block_number,
-                            transaction_index,
-                            deployer,
-                            creation_code,
-                            runtime_code: runtime_code.unwrap(),
-                        },
-                    }
-                } else {
-                    Self::SaveIfDeploymentExists {
-                        db_client,
-                        chain_id,
-                        contract_address,
-                        transaction_hash,
-                        creation_code,
-                        runtime_code,
-                    }
+            ) if is_authorized => {
+                let contract_deployment = ContractDeployment::Regular {
+                    chain_id: u128::try_from(chain_id).unwrap(),
+                    address: contract_address.to_vec(),
+                    transaction_hash: transaction_hash.to_vec(),
+                    block_number: u128::try_from(block_number).unwrap(),
+                    transaction_index: u128::try_from(transaction_index).unwrap(),
+                    deployer: deployer.to_vec(),
+                    creation_code: creation_code.to_vec(),
+                    runtime_code: runtime_code.to_vec(),
+                };
+                Self::SaveWithDeploymentData {
+                    db_client,
+                    deployment_data: contract_deployment,
                 }
             }
+            (
+                Some(db_client),
+                Some(VerificationMetadata {
+                    chain_id: Some(chain_id),
+                    contract_address: Some(contract_address),
+                    runtime_code: Some(runtime_code),
+                    ..
+                }),
+            ) if is_authorized => {
+                let contract_deployment = ContractDeployment::Genesis {
+                    chain_id: u128::try_from(chain_id).unwrap(),
+                    address: contract_address.to_vec(),
+                    runtime_code: runtime_code.to_vec(),
+                };
+                Self::SaveWithDeploymentData {
+                    db_client,
+                    deployment_data: contract_deployment,
+                }
+            }
+            (
+                Some(db_client),
+                Some(VerificationMetadata {
+                    chain_id: Some(chain_id),
+                    contract_address: Some(contract_address),
+                    transaction_hash,
+                    creation_code,
+                    runtime_code,
+                    ..
+                }),
+            ) => Self::SaveIfDeploymentExists {
+                db_client,
+                chain_id,
+                contract_address,
+                transaction_hash,
+                creation_code,
+                runtime_code,
+            },
             _ => Self::IgnoreDb,
         }
     }
@@ -173,14 +200,15 @@ impl<'a> VerifierAllianceDbAction<'a> {
             VerifierAllianceDbAction::IgnoreDb => None,
             VerifierAllianceDbAction::SaveIfDeploymentExists {
                 contract_address, ..
-            } => Some(contract_address),
+            } => Some(contract_address.clone()),
             VerifierAllianceDbAction::SaveWithDeploymentData {
-                deployment_data:
-                    AllianceContract {
-                        contract_address, ..
-                    },
+                deployment_data: ContractDeployment::Genesis { address, .. },
                 ..
-            } => Some(contract_address),
+            } => Some(address.clone().into()),
+            VerifierAllianceDbAction::SaveWithDeploymentData {
+                deployment_data: ContractDeployment::Regular { address, .. },
+                ..
+            } => Some(address.clone().into()),
         }
         .map(|contract_address| blockscout_display_bytes::Bytes::from(contract_address.to_vec()))
     }
@@ -190,9 +218,13 @@ impl<'a> VerifierAllianceDbAction<'a> {
             VerifierAllianceDbAction::IgnoreDb => None,
             VerifierAllianceDbAction::SaveIfDeploymentExists { chain_id, .. } => Some(*chain_id),
             VerifierAllianceDbAction::SaveWithDeploymentData {
-                deployment_data: AllianceContract { chain_id, .. },
+                deployment_data: ContractDeployment::Genesis { chain_id, .. },
                 ..
-            } => Some(i64::from_str(chain_id).unwrap()),
+            } => Some(i64::try_from(*chain_id).unwrap()),
+            VerifierAllianceDbAction::SaveWithDeploymentData {
+                deployment_data: ContractDeployment::Regular { chain_id, .. },
+                ..
+            } => Some(i64::try_from(*chain_id).unwrap()),
         }
     }
 }
@@ -345,6 +377,10 @@ async fn process_verifier_alliance_db_action(
     )
     .await
     .context("Insert data into verifier alliance database")
+    .map_err(|err| {
+        println!("\n[ERROR]: {err:#?}\n");
+        err
+    })
 }
 
 async fn process_abi_data(
@@ -427,11 +463,23 @@ async fn retrieve_deployment_from_action(
             db_client,
             deployment_data,
         } => {
-            let contract_deployment = save_deployment_data(db_client, deployment_data).await?;
+            let contract_deployment = save_contract_deployment(db_client, deployment_data).await?;
 
             Ok(Some((db_client, contract_deployment)))
         }
     }
+}
+
+async fn save_contract_deployment(
+    db_client: &DatabaseConnection,
+    contract_deployment: ContractDeployment,
+) -> Result<contract_deployments::Model, anyhow::Error> {
+    let txn = db_client.begin().await.context("begin transaction")?;
+    let model = verifier_alliance_database::insert_contract_deployment(&txn, contract_deployment)
+        .await
+        .context("insert contract deployment")?;
+    txn.commit().await.context("commit transaction")?;
+    Ok(model)
 }
 
 async fn save_deployment_data(

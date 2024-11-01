@@ -3,9 +3,9 @@ use crate::FromHex;
 use anyhow::Context;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
+use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::VerifierAllianceContract;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, str::FromStr};
-
 /********** Bytecode Part **********/
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

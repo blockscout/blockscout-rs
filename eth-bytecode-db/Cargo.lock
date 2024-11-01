@@ -7811,6 +7811,7 @@ name = "verifier-alliance-database"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blockscout-display-bytes",
  "blockscout-service-launcher",
  "keccak-hash 0.11.0",
  "sea-orm",
