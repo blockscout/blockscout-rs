@@ -6,12 +6,10 @@ use crate::{
     },
     ToHex,
 };
-use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
-use eth_bytecode_db_proto::tonic;
+use eth_bytecode_db_proto::{blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2, tonic};
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier_proto::http_client::solidity_verifier_client;
-use std::collections::BTreeMap;
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 use verifier_alliance_database::ContractDeployment;
 
 fn convert_contracts(contracts: Vec<ContractDeployment>) -> Vec<smart_contract_verifier::Contract> {

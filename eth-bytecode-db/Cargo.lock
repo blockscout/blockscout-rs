@@ -7814,6 +7814,7 @@ dependencies = [
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "keccak-hash 0.11.0",
+ "pretty_assertions",
  "sea-orm",
  "sha2",
  "sha3",

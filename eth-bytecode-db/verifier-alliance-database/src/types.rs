@@ -35,6 +35,14 @@ impl RetrieveContractDeployment {
             runtime_code: Some(runtime_code),
         }
     }
+
+    pub fn chain_id(&self) -> u128 {
+        self.chain_id
+    }
+
+    pub fn address(&self) -> &[u8] {
+        &self.address
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

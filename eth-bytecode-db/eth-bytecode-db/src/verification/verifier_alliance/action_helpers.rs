@@ -1,25 +1,6 @@
 use super::TransformationStatus;
 use verifier_alliance_entity::verified_contracts;
 
-pub fn derive_transaction_hash(
-    transaction_hash: Option<bytes::Bytes>,
-    creation_code: Option<bytes::Bytes>,
-    runtime_code: Option<bytes::Bytes>,
-) -> Option<Vec<u8>> {
-    match transaction_hash {
-        Some(hash) => Some(hash.to_vec()),
-        None if creation_code.is_some() || runtime_code.is_some() => {
-            let combined_hash: Vec<_> = creation_code
-                .unwrap_or_default()
-                .into_iter()
-                .chain(runtime_code.unwrap_or_default())
-                .collect();
-            Some(keccak_hash::keccak(combined_hash).0.to_vec())
-        }
-        None => None,
-    }
-}
-
 pub fn retrieve_code_transformation_status(
     id: Option<i64>,
     is_creation_code: bool,

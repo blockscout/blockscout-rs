@@ -12,18 +12,6 @@ use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
 
-#[derive(Clone, Debug, Default)]
-pub(crate) struct ContractDeploymentData {
-    pub chain_id: i64,
-    pub contract_address: Vec<u8>,
-    pub transaction_hash: Vec<u8>,
-    pub block_number: Option<i64>,
-    pub transaction_index: Option<i64>,
-    pub deployer: Option<Vec<u8>>,
-    pub creation_code: Option<Vec<u8>>,
-    pub runtime_code: Option<Vec<u8>>,
-}
-
 pub(crate) async fn insert_data(
     db_client: &DatabaseConnection,
     source_response: types::DatabaseReadySource,
@@ -53,22 +41,6 @@ pub(crate) async fn insert_data(
     txn.commit().await.context("commit transaction")?;
 
     Ok(())
-}
-
-pub(crate) async fn retrieve_contract_deployment<C: ConnectionTrait>(
-    db: &C,
-    deployment_data: &ContractDeploymentData,
-) -> Result<Option<contract_deployments::Model>, anyhow::Error> {
-    contract_deployments::Entity::find()
-        .filter(contract_deployments::Column::ChainId.eq(deployment_data.chain_id))
-        .filter(contract_deployments::Column::Address.eq(deployment_data.contract_address.clone()))
-        .filter(
-            contract_deployments::Column::TransactionHash
-                .eq(deployment_data.transaction_hash.clone()),
-        )
-        .one(db)
-        .await
-        .context("select from \"contract_deployments\"")
 }
 
 pub(crate) async fn retrieve_deployment_verified_contracts<C: ConnectionTrait>(
