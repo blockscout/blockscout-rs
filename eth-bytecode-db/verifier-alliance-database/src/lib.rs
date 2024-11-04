@@ -3,12 +3,14 @@ mod types;
 
 use crate::helpers::insert_then_select;
 use anyhow::{Context, Error};
-use sea_orm::{prelude::Decimal, ActiveValue::Set, ConnectionTrait};
+use sea_orm::{
+    prelude::Decimal, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
+};
 use sha2::{Digest, Sha256};
 use sha3::Keccak256;
 use verifier_alliance_entity::{code, contract_deployments, contracts};
 
-pub use crate::types::{ContractCode, ContractDeployment};
+pub use crate::types::{ContractCode, ContractDeployment, RetrieveContractDeployment};
 
 struct InternalContractDeploymentData {
     chain_id: Decimal,
@@ -35,7 +37,7 @@ pub async fn insert_contract_deployment<C: ConnectionTrait>(
 
     let contract_id = insert_contract(database_connection, data.contract_code)
         .await
-        .context("insert contract")?
+        .context("insert into \"contract_deployments\"")?
         .id;
 
     let active_model = contract_deployments::ActiveModel {
@@ -66,6 +68,28 @@ pub async fn insert_contract_deployment<C: ConnectionTrait>(
     )?;
 
     Ok(model)
+}
+
+pub async fn retrieve_contract_deployment<C: ConnectionTrait>(
+    database_connection: &C,
+    contract_deployment: RetrieveContractDeployment,
+) -> Result<Option<contract_deployments::Model>, Error> {
+    let transaction_hash = contract_deployment.transaction_hash.unwrap_or_else(|| {
+        let runtime_code = contract_deployment
+            .runtime_code
+            .expect("either transaction hash or runtime code must contain value");
+        calculate_genesis_contract_deployment_transaction_hash(&runtime_code)
+    });
+
+    contract_deployments::Entity::find()
+        .filter(
+            contract_deployments::Column::ChainId.eq(Decimal::from(contract_deployment.chain_id)),
+        )
+        .filter(contract_deployments::Column::Address.eq(contract_deployment.address))
+        .filter(contract_deployments::Column::TransactionHash.eq(transaction_hash))
+        .one(database_connection)
+        .await
+        .context("select from \"contract_deployments\"")
 }
 
 pub async fn insert_contract<C: ConnectionTrait>(

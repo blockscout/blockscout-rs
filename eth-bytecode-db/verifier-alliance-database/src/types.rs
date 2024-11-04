@@ -10,6 +10,34 @@ pub enum ContractCode {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RetrieveContractDeployment {
+    pub(crate) chain_id: u128,
+    pub(crate) address: Vec<u8>,
+    pub(crate) transaction_hash: Option<Vec<u8>>,
+    pub(crate) runtime_code: Option<Vec<u8>>,
+}
+
+impl RetrieveContractDeployment {
+    pub fn regular(chain_id: u128, address: Vec<u8>, transaction_hash: Vec<u8>) -> Self {
+        Self {
+            chain_id,
+            address,
+            transaction_hash: Some(transaction_hash),
+            runtime_code: None,
+        }
+    }
+
+    pub fn genesis(chain_id: u128, address: Vec<u8>, runtime_code: Vec<u8>) -> Self {
+        Self {
+            chain_id,
+            address,
+            transaction_hash: None,
+            runtime_code: Some(runtime_code),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ContractDeployment {
     Genesis {
         chain_id: u128,
