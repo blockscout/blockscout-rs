@@ -64,7 +64,7 @@ impl AddrReverseNamesView {
         fields(
             job_size = address_hashes.len(),
             protocols_size = protocols.len(),
-            fist_protocol_schema = protocols.head.subgraph_schema,
+            first_protocol_schema = protocols.head.subgraph_schema,
         ),
         err(level = "error"),
         level = "info",

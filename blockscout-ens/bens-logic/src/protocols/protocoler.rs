@@ -48,6 +48,7 @@ pub struct DeployedProtocol<'a> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ProtocolInfo {
     pub network_id: i64,
     pub slug: String,
@@ -103,6 +104,7 @@ impl ProtocolSpecific {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct EnsLikeProtocol {
     pub registry_contract: Option<Address>,
     pub empty_label_hash: Option<B256>,
@@ -112,6 +114,7 @@ pub struct EnsLikeProtocol {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct D3ConnectProtocol {
     pub resolver_contract: Address,
     pub native_token_contract: Address,
@@ -139,6 +142,8 @@ pub enum AddressResolveTechnique {
     #[default]
     ReverseRegistry,
     AllDomains,
+    #[serde(rename = "addr2name")]
+    Addr2Name,
 }
 
 impl Tld {

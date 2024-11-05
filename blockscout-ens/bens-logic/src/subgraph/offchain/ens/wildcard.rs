@@ -1,9 +1,13 @@
 use super::ccip_read;
 use crate::{
-    entity::subgraph::domain::{CreationDomain, Domain},
+    entity::subgraph::domain::Domain,
     metrics,
     protocols::{DomainNameOnProtocol, EnsLikeProtocol},
-    subgraph::{self, offchain::creation_domain_from_offchain_resolution, ResolverInSubgraph},
+    subgraph::{
+        self,
+        offchain::{offchain_resolution_to_resolve_result, ResolveResult},
+        ResolverInSubgraph,
+    },
 };
 use alloy::primitives::Address;
 use anyhow::Context;
@@ -17,7 +21,7 @@ pub async fn maybe_wildcard_resolution(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
     ens: &EnsLikeProtocol,
-) -> Option<CreationDomain> {
+) -> Option<ResolveResult> {
     metrics::WILDCARD_RESOLVE_ATTEMPTS.inc();
     match try_wildcard_resolution(db, from_user, ens).await {
         Ok(result) => {
@@ -41,7 +45,7 @@ async fn try_wildcard_resolution(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
     ens: &EnsLikeProtocol,
-) -> Result<Option<CreationDomain>, anyhow::Error> {
+) -> Result<Option<ResolveResult>, anyhow::Error> {
     let Some((resolver_address, maybe_existing_domain)) = any_resolver(db, from_user, ens).await?
     else {
         return Ok(None);
@@ -57,7 +61,7 @@ async fn try_wildcard_resolution(
                 None
             }
         });
-        Ok(Some(creation_domain_from_offchain_resolution(
+        Ok(Some(offchain_resolution_to_resolve_result(
             from_user,
             result,
             maybe_domain_to_update,

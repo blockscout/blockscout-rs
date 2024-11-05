@@ -1,4 +1,8 @@
-use crate::{entity::subgraph::domain::CreationDomain, protocols::Protocol, subgraph::sql::DbErr};
+use crate::{
+    entity::subgraph::domain::{CreationAddr2Name, CreationDomain},
+    protocols::Protocol,
+    subgraph::sql::DbErr,
+};
 use sqlx::PgPool;
 
 pub async fn create_or_update_domain(
@@ -16,6 +20,34 @@ pub async fn create_or_update_domain(
         }
     };
 
+    Ok(())
+}
+
+pub async fn create_or_update_reverse_record(
+    pool: &PgPool,
+    reverse_record: CreationAddr2Name,
+    protocol: &Protocol,
+) -> Result<(), DbErr> {
+    let schema = &protocol.subgraph_schema;
+    sqlx::query(&format!(
+        r#"
+        INSERT INTO {schema}.addr2name (
+            resolved_address,
+            domain_id,
+            domain_name
+        )
+        VALUES ($1, $2, $3)
+        ON CONFLICT (resolved_address)
+        DO UPDATE SET
+            domain_id = EXCLUDED.domain_id,
+            domain_name = EXCLUDED.domain_name;
+        "#
+    ))
+    .bind(&reverse_record.resolved_address)
+    .bind(&reverse_record.domain_id)
+    .bind(&reverse_record.domain_name)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 

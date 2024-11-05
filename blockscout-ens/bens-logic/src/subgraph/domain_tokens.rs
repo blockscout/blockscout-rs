@@ -1,7 +1,7 @@
 use super::{DomainToken, DomainTokenType};
 use crate::{
     entity::subgraph::domain::DetailedDomain,
-    protocols::{DomainNameOnProtocol, EnsLikeProtocol, ProtocolSpecific},
+    protocols::{D3ConnectProtocol, DomainNameOnProtocol, EnsLikeProtocol, ProtocolSpecific},
 };
 use alloy::primitives::Address;
 use anyhow::Context;
@@ -25,10 +25,10 @@ pub fn extract_tokens_from_domain(
 
     match &name.deployed_protocol.protocol.info.protocol_specific {
         ProtocolSpecific::EnsLike(ens_like) => {
-            extract_tokens_for_ens_like(domain, name, ens_like, &mut tokens)?;
+            extract_tokens_for_ens_like(&mut tokens, domain, name, ens_like)?;
         }
-        ProtocolSpecific::D3Connect(_) => {
-            // TODO: implement D3Connect tokens extraction
+        ProtocolSpecific::D3Connect(d3_connect) => {
+            extract_tokens_for_d3_connect(&mut tokens, domain, name, d3_connect)?;
         }
     }
 
@@ -36,10 +36,10 @@ pub fn extract_tokens_from_domain(
 }
 
 fn extract_tokens_for_ens_like(
+    tokens: &mut Vec<DomainToken>,
     domain: &DetailedDomain,
     name: &DomainNameOnProtocol<'_>,
     ens_like: &EnsLikeProtocol,
-    tokens: &mut Vec<DomainToken>,
 ) -> Result<(), anyhow::Error> {
     if let Some(contract) = ens_like.native_token_contract {
         let is_second_level_domain = name.inner.level() == 2;
@@ -72,6 +72,22 @@ fn extract_tokens_for_ens_like(
         });
     };
 
+    Ok(())
+}
+
+fn extract_tokens_for_d3_connect(
+    tokens: &mut Vec<DomainToken>,
+    domain: &DetailedDomain,
+    _name: &DomainNameOnProtocol<'_>,
+    d3_connect: &D3ConnectProtocol,
+) -> Result<(), anyhow::Error> {
+    let id = token_id(&domain.id)?;
+    let contract = d3_connect.native_token_contract;
+    tokens.push(DomainToken {
+        id,
+        contract,
+        _type: DomainTokenType::Native,
+    });
     Ok(())
 }
 

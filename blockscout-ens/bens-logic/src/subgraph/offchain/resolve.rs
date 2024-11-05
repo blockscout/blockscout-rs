@@ -1,5 +1,5 @@
+use super::ResolveResult;
 use crate::{
-    entity::subgraph::domain::CreationDomain,
     protocols::{DomainNameOnProtocol, ProtocolSpecific},
     subgraph::{
         offchain::{d3, ens},
@@ -14,20 +14,23 @@ pub async fn offchain_resolve(
     from_user: &DomainNameOnProtocol<'_>,
 ) -> Result<(), anyhow::Error> {
     let protocol = from_user.deployed_protocol.protocol;
-    let maybe_domain_cached = check_if_need_to_save_domain_cached(db, from_user).await;
+    let maybe_domain_cached = offchain_resolve_cached(db, from_user).await;
     match maybe_domain_cached {
         cached::Return {
-            value: Some(domain),
+            value: Some(result),
             was_cached: false,
             ..
         } => {
             tracing::info!(
-                id = domain.id,
-                name = domain.name,
-                vid =? domain.vid,
+                id = result.domain.id,
+                name = result.domain.name,
+                vid =? result.domain.vid,
                 "found domain with offchain resolution, save it"
             );
-            sql::create_or_update_domain(db, domain, protocol).await?;
+            sql::create_or_update_domain(db, result.domain, protocol).await?;
+            if let Some(reverse_record) = result.maybe_reverse_record {
+                sql::create_or_update_reverse_record(db, reverse_record, protocol).await?;
+            }
         }
         cached::Return {
             was_cached: true, ..
@@ -54,14 +57,13 @@ pub async fn offchain_resolve(
     sync_writes = true,
     with_cached_flag = true,
 )]
-async fn check_if_need_to_save_domain_cached(
+async fn offchain_resolve_cached(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
-) -> cached::Return<Option<CreationDomain>> {
+) -> cached::Return<Option<ResolveResult>> {
     let result = match &from_user.deployed_protocol.protocol.info.protocol_specific {
         ProtocolSpecific::EnsLike(ens) => ens::maybe_wildcard_resolution(db, from_user, ens).await,
         ProtocolSpecific::D3Connect(d3) => d3::maybe_offchain_resolution(db, from_user, d3).await,
     };
-
     cached::Return::new(result)
 }

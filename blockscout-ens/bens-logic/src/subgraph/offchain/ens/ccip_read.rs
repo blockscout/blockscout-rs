@@ -31,6 +31,7 @@ pub async fn call_to_resolver(
         stored_offchain: result.ccip_read_used,
         resolved_with_wildcard: result.wildcard_used,
         expiry_date: None,
+        addr2name: None,
     })
 }
 

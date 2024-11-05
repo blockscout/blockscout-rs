@@ -74,9 +74,9 @@ function _handleNewDomain(tokenId: BigInt, to: Address, label: string, tld: stri
     domain.name = label + "." + tld;
   }
 
-  if (domain.resolvedAddress == null) {
-    domain.resolvedAddress = to.toHexString();
-  }
+  // if (domain.resolvedAddress == null) {
+  //   domain.resolvedAddress = to.toHexString();
+  // }
 
   domain.owner = to.toHexString();
   domain.parent = node.toHexString();

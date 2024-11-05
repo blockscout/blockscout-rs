@@ -69,6 +69,13 @@ pub struct CreationDomain {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+pub struct CreationAddr2Name {
+    pub resolved_address: String,
+    pub domain_id: Option<String>,
+    pub domain_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
 pub struct DomainWithAddress {
     pub id: String,
     pub domain_name: String,

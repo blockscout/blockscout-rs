@@ -151,6 +151,9 @@ impl SubgraphReader {
                             "failed to update AddressNamesView for schema {schema}"
                         ))?;
                 }
+                AddressResolveTechnique::Addr2Name => {
+                    // addr2name doesnt have view
+                }
             }
         }
         Ok(())
@@ -176,6 +179,9 @@ impl SubgraphReader {
                         .context(format!(
                             "failed to create AddressNamesView for schema {schema}"
                         ))?;
+                }
+                AddressResolveTechnique::Addr2Name => {
+                    // addr2name doesnt have view
                 }
             }
         }

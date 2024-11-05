@@ -4,8 +4,8 @@ default:
 db-host := env_var_or_default('DB_HOST', "localhost")
 db-port := env_var_or_default('DB_PORT', "5432")
 db-user := env_var_or_default('DB_USER', "graph-node")
-db-password := env_var_or_default('DB_PASSWORD', "admin")
-db-name := env_var_or_default('DB_NAME', "bens")
+db-password := env_var_or_default('DB_PASSWORD', "let-me-in")
+db-name := env_var_or_default('DB_NAME', "graph-node")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
 
 docker-name := env_var_or_default('DOCKER_NAME', "bens-postgres")
@@ -24,6 +24,20 @@ start-postgres:
 stop-postgres:
     docker rm -f {{docker-name}}
 
+graph-node-start:
+    docker-compose --file graph-node/docker-compose.yml up -d
+    sleep 6
+    ./graph-node/rainbow.small.sh
+
+graph-node-clean:
+    rm -rf graph-node/data
+
+graph-node-stop:
+    docker-compose --file graph-node/docker-compose.yml down
+
+deploy-subgraph name:
+    (cd graph-node/deployer && python3 deployer.py {{name}}) 
+
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
 
@@ -39,3 +53,9 @@ add-test-migration name:
 
 benchmark:
     cargo run --example resolve_benchmark
+
+run config:
+    BENS__DATABASE__CONNECT__URL={{DATABASE_URL}} BENS__CONFIG=bens-server/config/{{config}}.json cargo run --bin bens-server
+
+run-dev:
+    dotenv -e bens-server/.env -e bens-server/.dev.env -- just run dev

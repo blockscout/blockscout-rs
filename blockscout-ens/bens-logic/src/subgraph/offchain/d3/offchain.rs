@@ -1,12 +1,13 @@
 use super::get_metadata;
 use crate::{
-    entity::subgraph::domain::{CreationDomain, Domain},
-    protocols::{D3ConnectProtocol, DomainNameOnProtocol},
+    entity::subgraph::domain::Domain,
+    metrics,
+    protocols::{D3ConnectProtocol, DomainName, DomainNameOnProtocol},
     subgraph::{
         self,
         offchain::{
-            creation_domain_from_offchain_resolution, reader_from_protocol,
-            DomainInfoFromOffchainResolution, Reader,
+            offchain_resolution_to_resolve_result, reader_from_protocol,
+            DomainInfoFromOffchainResolution, Reader, ResolveResult,
         },
         ResolverInSubgraph,
     },
@@ -19,15 +20,29 @@ pub async fn maybe_offchain_resolution(
     db: &PgPool,
     name: &DomainNameOnProtocol<'_>,
     d3: &D3ConnectProtocol,
-) -> Option<CreationDomain> {
-    resolve_d3_name(db, name, d3).await.ok()
+) -> Option<ResolveResult> {
+    metrics::D3_OFFCHAIN_RESOLVE_ATTEMPTS.inc();
+    match resolve_d3_name(db, name, d3).await {
+        Ok(result) => {
+            metrics::D3_OFFCHAIN_RESOLVE_SUCCESS.inc();
+            Some(result)
+        }
+        Err(err) => {
+            tracing::error!(
+                name = name.inner.name,
+                error = err.to_string(),
+                "failed to resolve d3 name"
+            );
+            None
+        }
+    }
 }
 
 async fn resolve_d3_name(
     db: &PgPool,
     name: &DomainNameOnProtocol<'_>,
     d3: &D3ConnectProtocol,
-) -> Result<CreationDomain, anyhow::Error> {
+) -> Result<ResolveResult, anyhow::Error> {
     let reader = reader_from_protocol(&name.deployed_protocol);
 
     let default_resolver = d3.resolver_contract;
@@ -50,7 +65,7 @@ async fn resolve_d3_name(
     let offchain_resolution = get_offchain_resolution(&reader, resolver_address, name, d3).await?;
     tracing::debug!(data =? offchain_resolution, "fetched offchain resolution");
     let creation_domain =
-        creation_domain_from_offchain_resolution(name, offchain_resolution, maybe_existing_domain);
+        offchain_resolution_to_resolve_result(name, offchain_resolution, maybe_existing_domain);
     Ok(creation_domain)
 }
 
@@ -63,15 +78,30 @@ async fn get_offchain_resolution(
     let resolve_result =
         alloy_ccip_read::d3::resolve_d3_name(reader, resolver_address, &name.inner.name, "")
             .await?;
+    let addr = resolve_result.addr.into_value();
+    let reverse_resolve_result =
+        alloy_ccip_read::d3::reverse_resolve_d3_name(reader, addr, resolver_address, "").await?;
+    let addr2name = DomainName::new(
+        &reverse_resolve_result.name.value,
+        name.deployed_protocol
+            .protocol
+            .info
+            .protocol_specific
+            .empty_label_hash(),
+    )
+    .map(|name| name.name)
+    .ok();
     let metadata = get_metadata(reader, name, d3).await?;
     let expiry_date = metadata.get_expiration_date();
+
     Ok(DomainInfoFromOffchainResolution {
         id: name.inner.id.clone(),
         name: name.inner.name.clone(),
-        addr: resolve_result.addr.into_value(),
+        addr,
         resolver_address,
         expiry_date,
         stored_offchain: true,
         resolved_with_wildcard: false,
+        addr2name,
     })
 }

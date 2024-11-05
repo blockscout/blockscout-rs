@@ -35,6 +35,7 @@
         ],
         "network_id": 1,
         "subgraph_name": "ens-subgraph",
+        "address_resolve_technique": "reverse_registry",
         "meta": {
           "short_name": "ENS",
           "title": "Ethereum Name Service",
@@ -44,7 +45,6 @@
         },
         "specific": {
           "type": "ens_like",
-          "address_resolve_technique": "reverse_registry",
           "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
           "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
           "try_offchain_resolve": true
@@ -54,9 +54,9 @@
         "tld_list": ["eth"],
         "network_id": 11155111,
         "subgraph_name": "ens-sepolia-subgraph",
+        "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "ens_like",
-          "address_resolve_technique": "reverse_registry",
           "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
           "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
           "try_offchain_resolve": true
@@ -73,9 +73,9 @@
         "tld_list": ["shib"],
         "network_id": 109,
         "subgraph_name": "d3-connect-shib-subgraph",
+        "address_resolve_technique": "addr2name",
         "specific": {
           "type": "d3_connect",
-          "address_resolve_technique": "reverse_registry",
           "native_token_contract": "0xDe74799371Ceac11A0F52BA2694392A391D0dA18",
           "resolver_contract": "0xD60D40674E678F0089736D6381071973a75B4B6f"
         },
