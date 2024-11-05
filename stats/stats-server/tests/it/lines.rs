@@ -7,7 +7,7 @@ use chrono::NaiveDate;
 use stats::{
     tests::{
         init_db::init_db_all,
-        mock_blockscout::{fill_mock_blockscout_data, mock_blockscout_api},
+        mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data},
     },
     ResolutionKind,
 };
@@ -19,7 +19,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 #[ignore = "needs database"]
 async fn test_lines_ok() {
     let (stats_db, blockscout_db) = init_db_all("test_lines_ok").await;
-    let blockscout_api = mock_blockscout_api().await;
+    let blockscout_api = default_mock_blockscout_api().await;
     fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap()).await;
 
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");

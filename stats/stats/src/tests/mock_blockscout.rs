@@ -13,18 +13,23 @@ use wiremock::{
     Mock, MockServer, ResponseTemplate,
 };
 
-pub async fn mock_blockscout_api() -> MockServer {
+pub async fn default_mock_blockscout_api() -> MockServer {
+    mock_blockscout_api(ResponseTemplate::new(200).set_body_string(
+        r#"{
+            "finished_indexing": true,
+            "finished_indexing_blocks": true,
+            "indexed_blocks_ratio": "1.00",
+            "indexed_internal_transactions_ratio": "1.00"
+        }"#,
+    ))
+    .await
+}
+
+pub async fn mock_blockscout_api(indexing_status_response: ResponseTemplate) -> MockServer {
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/api/v2/main-page/indexing-status"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{
-                "finished_indexing": true,
-                "finished_indexing_blocks": true,
-                "indexed_blocks_ratio": "1.00",
-                "indexed_internal_transactions_ratio": "1.00"
-            }"#,
-        ))
+        .respond_with(indexing_status_response)
         .mount(&mock_server)
         .await;
     mock_server
