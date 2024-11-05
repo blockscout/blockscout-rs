@@ -4,7 +4,10 @@ use anyhow::Context;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, str::FromStr};
+use std::collections::BTreeMap;
+use verification_common::verifier_alliance::{
+    CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts,
+};
 use verifier_alliance_database::ContractDeployment;
 /********** Bytecode Part **********/
 
@@ -254,9 +257,9 @@ pub struct DatabaseReadySource {
     pub source_type: SourceType,
     pub source_files: BTreeMap<String, String>,
     pub abi: Option<serde_json::Value>,
-    pub compilation_artifacts: Option<serde_json::Value>,
-    pub creation_code_artifacts: Option<serde_json::Value>,
-    pub runtime_code_artifacts: Option<serde_json::Value>,
+    pub compilation_artifacts: Option<CompilationArtifacts>,
+    pub creation_code_artifacts: Option<CreationCodeArtifacts>,
+    pub runtime_code_artifacts: Option<RuntimeCodeArtifacts>,
 
     pub raw_creation_code: Vec<u8>,
     pub raw_runtime_code: Vec<u8>,
@@ -275,19 +278,19 @@ impl TryFrom<Source> for DatabaseReadySource {
         let compiler_settings: serde_json::Value =
             serde_json::from_str(&value.compiler_settings)
                 .context("deserialize compiler settings into json value")?;
-        let compilation_artifacts: Option<serde_json::Value> = value
+        let compilation_artifacts: Option<CompilationArtifacts> = value
             .compilation_artifacts
             .as_deref()
             .map(serde_json::from_str)
             .transpose()
             .context("deserialize compilation artifacts into json value")?;
-        let creation_input_artifacts: Option<serde_json::Value> = value
+        let creation_input_artifacts: Option<CreationCodeArtifacts> = value
             .creation_input_artifacts
             .as_deref()
             .map(serde_json::from_str)
             .transpose()
             .context("deserialize creation input artifacts into json value")?;
-        let deployed_bytecode_artifacts: Option<serde_json::Value> = value
+        let deployed_bytecode_artifacts: Option<RuntimeCodeArtifacts> = value
             .deployed_bytecode_artifacts
             .as_deref()
             .map(serde_json::from_str)
@@ -323,22 +326,13 @@ impl TryFrom<AllianceContractImportSuccess> for DatabaseReadySource {
             Language::Vyper => SourceType::Vyper,
         };
 
-        #[derive(Deserialize)]
-        struct CompilationArtifacts {
-            pub abi: Option<serde_json::Value>,
-        }
-        let abi =
-            serde_json::from_value::<CompilationArtifacts>(value.compilation_artifacts.clone())
-                .context("extractor abi json from compilation artifacts")?
-                .abi;
-
         let creation_code_parts = code_parts(
             value.creation_code.clone(),
-            value.creation_code_artifacts.clone(),
+            value.creation_code_artifacts.clone().into(),
         )?;
         let runtime_code_parts = code_parts(
             value.runtime_code.clone(),
-            value.runtime_code_artifacts.clone(),
+            value.runtime_code_artifacts.clone().into(),
         )?;
 
         Ok(Self {
@@ -348,7 +342,7 @@ impl TryFrom<AllianceContractImportSuccess> for DatabaseReadySource {
             compiler_settings: value.compiler_settings,
             source_type,
             source_files: value.sources,
-            abi,
+            abi: value.compilation_artifacts.abi.clone(),
             compilation_artifacts: Some(value.compilation_artifacts),
             creation_code_artifacts: Some(value.creation_code_artifacts),
             runtime_code_artifacts: Some(value.runtime_code_artifacts),
@@ -568,9 +562,9 @@ pub struct AllianceContractImportSuccess {
     pub contract_name: String,
     pub sources: BTreeMap<String, String>,
     pub compiler_settings: serde_json::Value,
-    pub compilation_artifacts: serde_json::Value,
-    pub creation_code_artifacts: serde_json::Value,
-    pub runtime_code_artifacts: serde_json::Value,
+    pub compilation_artifacts: CompilationArtifacts,
+    pub creation_code_artifacts: CreationCodeArtifacts,
+    pub runtime_code_artifacts: RuntimeCodeArtifacts,
     pub creation_match_details: Option<MatchDetails>,
     pub runtime_match_details: Option<MatchDetails>,
 }
@@ -580,6 +574,14 @@ pub enum AllianceContractImportResult {
     Success(AllianceContractImportSuccess),
     VerificationFailure {},
     ImportFailure(String),
+}
+
+fn parse_response_str<'a, T>(value: &'a str) -> Result<T, crate::verification::Error>
+where
+    T: Deserialize<'a>,
+{
+    serde_json::from_str(value)
+        .map_err(|err| crate::verification::Error::Verifier(anyhow::anyhow!("{err}")))
 }
 
 impl TryFrom<smart_contract_verifier::ContractVerificationResult> for AllianceContractImportResult {
@@ -592,11 +594,6 @@ impl TryFrom<smart_contract_verifier::ContractVerificationResult> for AllianceCo
             FromHex::from_hex(value).map_err(|err| Self::Error::Verifier(anyhow::anyhow!("{err}")))
         };
 
-        let str_to_value = |value: &str| {
-            serde_json::Value::from_str(value)
-                .map_err(|err| Self::Error::Verifier(anyhow::anyhow!("{err}")))
-        };
-
         let parse_match_details = |details: smart_contract_verifier::contract_verification_success::MatchDetails|
          -> Result<MatchDetails, Self::Error> {
             let match_type = match details.match_type() {
@@ -607,8 +604,8 @@ impl TryFrom<smart_contract_verifier::ContractVerificationResult> for AllianceCo
 
             Ok(MatchDetails {
                 match_type,
-                values: str_to_value(&details.values)?,
-                transformations: str_to_value(&details.transformations)?,
+                values: parse_response_str::<serde_json::Value>(&details.values)?,
+                transformations: parse_response_str::<serde_json::Value>(&details.transformations)?,
             })
         };
 
@@ -628,10 +625,10 @@ impl TryFrom<smart_contract_verifier::ContractVerificationResult> for AllianceCo
                     file_name: value.file_name,
                     contract_name: value.contract_name,
                     sources: value.sources,
-                    compiler_settings: str_to_value(&value.compiler_settings)?,
-                    compilation_artifacts: str_to_value(&value.compilation_artifacts)?,
-                    creation_code_artifacts: str_to_value(&value.creation_code_artifacts)?,
-                    runtime_code_artifacts: str_to_value(&value.runtime_code_artifacts)?,
+                    compiler_settings: parse_response_str::<serde_json::Value>(&value.compiler_settings)?,
+                    compilation_artifacts: parse_response_str::<CompilationArtifacts>(&value.compilation_artifacts)?,
+                    creation_code_artifacts: parse_response_str::<CreationCodeArtifacts>(&value.creation_code_artifacts)?,
+                    runtime_code_artifacts: parse_response_str::<RuntimeCodeArtifacts>(&value.runtime_code_artifacts)?,
                     creation_match_details: value.creation_match_details.map(parse_match_details).transpose()?,
                     runtime_match_details: value.runtime_match_details.map(parse_match_details).transpose()?,
                 })

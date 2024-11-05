@@ -470,7 +470,10 @@ async fn check_code_matches(
         contract_deployment,
         deployed_creation_code.code.clone(),
         database_source.raw_creation_code.clone(),
-        database_source.creation_code_artifacts.clone(),
+        database_source
+            .creation_code_artifacts
+            .clone()
+            .map(|value| value.into()),
     )
     .context("verify if creation code match")?;
 
@@ -478,7 +481,10 @@ async fn check_code_matches(
         contract_deployment,
         deployed_runtime_code.code.clone(),
         database_source.raw_runtime_code.clone(),
-        database_source.runtime_code_artifacts.clone(),
+        database_source
+            .runtime_code_artifacts
+            .clone()
+            .map(|value| value.into()),
     )
     .context("verify if creation code match")?;
 

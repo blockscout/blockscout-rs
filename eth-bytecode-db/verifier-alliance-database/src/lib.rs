@@ -32,6 +32,8 @@ pub async fn insert_compiled_contract<C: ConnectionTrait>(
         .context("insert runtime code")?
         .code_hash;
 
+    // TODO: insert sources into 'sources' table
+
     let active_model = compiled_contracts::ActiveModel {
         id: Default::default(),
         created_at: Default::default(),

@@ -7,7 +7,9 @@ use sea_orm::{
     entity::prelude::ColumnTrait, ActiveValue::Set, ConnectionTrait, DatabaseConnection,
     EntityTrait, QueryFilter, TransactionTrait,
 };
-use sha2::{Digest, Sha256};
+use verifier_alliance_database::{
+    CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
+};
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
 };
@@ -154,12 +156,6 @@ async fn insert_compiled_contract<C: ConnectionTrait>(
     db: &C,
     source: types::DatabaseReadySource,
 ) -> Result<compiled_contracts::Model, anyhow::Error> {
-    let (compiler, language) = match source.source_type {
-        SourceType::Solidity => ("solc", "solidity"),
-        SourceType::Vyper => ("vyper", "vyper"),
-        SourceType::Yul => ("solc", "yul"),
-    };
-    let fully_qualified_name = format!("{}:{}", source.file_name, source.contract_name);
     let compilation_artifacts = source
         .compilation_artifacts
         .ok_or(anyhow::anyhow!("compilation artifacts are missing"))?;
@@ -170,67 +166,38 @@ async fn insert_compiled_contract<C: ConnectionTrait>(
         .runtime_code_artifacts
         .ok_or(anyhow::anyhow!("runtime code artifacts are missing"))?;
 
-    let creation_code_hash = insert_code(db, source.raw_creation_code)
-        .await
-        .context("insert creation code")?
-        .code_hash;
-    let runtime_code_hash = insert_code(db, source.raw_runtime_code)
-        .await
-        .context("insert runtime code")?
-        .code_hash;
-
-    let active_model = compiled_contracts::ActiveModel {
-        id: Default::default(),
-        created_at: Default::default(),
-        updated_at: Default::default(),
-        created_by: Default::default(),
-        updated_by: Default::default(),
-        compiler: Set(compiler.to_string()),
-        version: Set(source.compiler_version),
-        language: Set(language.to_string()),
-        name: Set(source.contract_name),
-        fully_qualified_name: Set(fully_qualified_name),
-        compiler_settings: Set(source.compiler_settings),
-        compilation_artifacts: Set(compilation_artifacts),
-        creation_code_hash: Set(creation_code_hash.clone()),
-        creation_code_artifacts: Set(creation_code_artifacts),
-        runtime_code_hash: Set(runtime_code_hash.clone()),
-        runtime_code_artifacts: Set(runtime_code_artifacts),
+    let (compiler, language) = match source.source_type {
+        SourceType::Solidity => (
+            CompiledContractCompiler::Solc,
+            CompiledContractLanguage::Solidity,
+        ),
+        SourceType::Vyper => (
+            CompiledContractCompiler::Vyper,
+            CompiledContractLanguage::Vyper,
+        ),
+        SourceType::Yul => (
+            CompiledContractCompiler::Solc,
+            CompiledContractLanguage::Yul,
+        ),
     };
-    let (compiled_contract, _inserted) = insert_then_select!(
-        db,
-        compiled_contracts,
-        active_model,
-        false,
-        [
-            (Compiler, compiler),
-            (Language, language),
-            (CreationCodeHash, creation_code_hash),
-            (RuntimeCodeHash, runtime_code_hash)
-        ]
-    )?;
 
-    Ok(compiled_contract)
-}
+    let fully_qualified_name = format!("{}:{}", source.file_name, source.contract_name);
 
-async fn insert_code<C: ConnectionTrait>(
-    db: &C,
-    code: Vec<u8>,
-) -> Result<code::Model, anyhow::Error> {
-    let code_hash = Sha256::digest(&code).to_vec();
-    let code_hash_keccak = keccak_hash::keccak(&code).0.to_vec();
-
-    let active_model = code::ActiveModel {
-        code_hash: Set(code_hash.clone()),
-        created_at: Default::default(),
-        updated_at: Default::default(),
-        created_by: Default::default(),
-        updated_by: Default::default(),
-        code_hash_keccak: Set(code_hash_keccak),
-        code: Set(Some(code)),
+    let compiled_contract = CompiledContract {
+        compiler,
+        version: source.compiler_version,
+        language,
+        name: source.contract_name,
+        fully_qualified_name,
+        sources: source.source_files,
+        compiler_settings: source.compiler_settings,
+        compilation_artifacts,
+        creation_code: source.raw_creation_code,
+        creation_code_artifacts,
+        runtime_code: source.raw_runtime_code,
+        runtime_code_artifacts,
     };
-    let (code, _inserted) =
-        insert_then_select!(db, code, active_model, false, [(CodeHash, code_hash)])?;
+    let model = verifier_alliance_database::insert_compiled_contract(db, compiled_contract).await?;
 
-    Ok(code)
+    Ok(model)
 }
