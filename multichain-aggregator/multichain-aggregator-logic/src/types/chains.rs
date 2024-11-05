@@ -21,8 +21,8 @@ impl From<Chain> for Model {
     }
 }
 
-impl From<(i64, BlockscoutChainData)> for Chain {
-    fn from((id, chain): (i64, BlockscoutChainData)) -> Self {
+impl From<(ChainId, BlockscoutChainData)> for Chain {
+    fn from((id, chain): (ChainId, BlockscoutChainData)) -> Self {
         Self {
             id,
             explorer_url: chain.explorers.first().map(|e| e.url.clone()),
