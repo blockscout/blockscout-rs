@@ -10,7 +10,7 @@ migration-dir := "./multichain-aggregator-migration"
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
 
 docker-name := env_var_or_default('DOCKER_NAME', "multichain-aggregator-postgres")
-test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
+test-db-port := env_var_or_default('TEST_DB_PORT', "9434")
 
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping
