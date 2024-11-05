@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS api_keys;
 DROP TABLE IF EXISTS addresses;
 DROP TABLE IF EXISTS block_ranges;
 DROP TABLE IF EXISTS dapps;
