@@ -27,8 +27,29 @@ where
     Entity::insert_many(block_ranges)
         .on_conflict(
             OnConflict::column(Column::ChainId)
-                .update_columns([Column::MinBlockNumber, Column::MaxBlockNumber])
-                .value(Column::UpdatedAt, Expr::current_timestamp())
+                .values([
+                    (Column::UpdatedAt, Expr::current_timestamp().into()),
+                    (
+                        Column::MinBlockNumber,
+                        Expr::cust_with_exprs(
+                            "LEAST($1, $2)",
+                            [
+                                Column::MinBlockNumber.into_expr().into(),
+                                Expr::cust("EXCLUDED.min_block_number"),
+                            ],
+                        ),
+                    ),
+                    (
+                        Column::MaxBlockNumber,
+                        Expr::cust_with_exprs(
+                            "GREATEST($1, $2)",
+                            [
+                                Column::MaxBlockNumber.into_expr().into(),
+                                Expr::cust("EXCLUDED.max_block_number"),
+                            ],
+                        ),
+                    ),
+                ])
                 .to_owned(),
         )
         .exec(db)
