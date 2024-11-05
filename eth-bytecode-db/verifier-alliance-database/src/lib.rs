@@ -8,9 +8,64 @@ use sea_orm::{
 };
 use sha2::{Digest, Sha256};
 use sha3::Keccak256;
-use verifier_alliance_entity::{code, contract_deployments, contracts};
+use verifier_alliance_entity::{code, compiled_contracts, contract_deployments, contracts};
 
-pub use crate::types::{ContractCode, ContractDeployment, RetrieveContractDeployment};
+pub use crate::types::{
+    CompiledContract, CompiledContractCompiler, CompiledContractLanguage, ContractCode,
+    ContractDeployment, RetrieveContractDeployment,
+};
+
+pub async fn insert_verified_contract<C: ConnectionTrait>() -> Result<(), Error> {
+    Ok(())
+}
+
+pub async fn insert_compiled_contract<C: ConnectionTrait>(
+    database_connection: &C,
+    compiled_contract: CompiledContract,
+) -> Result<compiled_contracts::Model, Error> {
+    let creation_code_hash = insert_code(database_connection, compiled_contract.creation_code)
+        .await
+        .context("insert creation code")?
+        .code_hash;
+    let runtime_code_hash = insert_code(database_connection, compiled_contract.runtime_code)
+        .await
+        .context("insert runtime code")?
+        .code_hash;
+
+    let active_model = compiled_contracts::ActiveModel {
+        id: Default::default(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
+        compiler: Set(compiled_contract.compiler.to_string()),
+        version: Set(compiled_contract.version),
+        language: Set(compiled_contract.language.to_string()),
+        name: Set(compiled_contract.name),
+        fully_qualified_name: Set(compiled_contract.fully_qualified_name),
+        compiler_settings: Set(compiled_contract.compiler_settings),
+        compilation_artifacts: Set(compiled_contract.compilation_artifacts.into()),
+        creation_code_hash: Set(creation_code_hash.clone()),
+        creation_code_artifacts: Set(compiled_contract.creation_code_artifacts.into()),
+        runtime_code_hash: Set(runtime_code_hash.clone()),
+        runtime_code_artifacts: Set(compiled_contract.runtime_code_artifacts.into()),
+    };
+
+    let (model, _inserted) = insert_then_select!(
+        database_connection,
+        compiled_contracts,
+        active_model,
+        false,
+        [
+            (Compiler, compiled_contract.compiler.to_string()),
+            (Language, compiled_contract.language.to_string()),
+            (CreationCodeHash, creation_code_hash),
+            (RuntimeCodeHash, runtime_code_hash)
+        ]
+    )?;
+
+    Ok(model)
+}
 
 struct InternalContractDeploymentData {
     chain_id: Decimal,
@@ -37,7 +92,7 @@ pub async fn insert_contract_deployment<C: ConnectionTrait>(
 
     let contract_id = insert_contract(database_connection, data.contract_code)
         .await
-        .context("insert into \"contract_deployments\"")?
+        .context("insert contract")?
         .id;
 
     let active_model = contract_deployments::ActiveModel {

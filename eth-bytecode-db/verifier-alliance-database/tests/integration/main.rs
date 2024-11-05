@@ -1,4 +1,5 @@
 mod code;
+mod compiled_contracts;
 mod contract_deployments;
 mod contracts;
 

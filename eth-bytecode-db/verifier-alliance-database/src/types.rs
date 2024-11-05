@@ -1,3 +1,8 @@
+use std::collections::BTreeMap;
+use verification_common::verifier_alliance::{
+    CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts,
+};
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ContractCode {
     OnlyRuntimeCode {
@@ -92,4 +97,35 @@ impl ContractDeployment {
             ContractDeployment::Regular { creation_code, .. } => Some(creation_code),
         }
     }
+}
+
+#[derive(Clone, Debug, strum::Display, PartialEq, Eq, Hash)]
+#[strum(serialize_all = "lowercase")]
+pub enum CompiledContractCompiler {
+    Solc,
+    Vyper,
+}
+
+#[derive(Clone, Debug, strum::Display, PartialEq, Eq, Hash)]
+#[strum(serialize_all = "lowercase")]
+pub enum CompiledContractLanguage {
+    Solidity,
+    Yul,
+    Vyper,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompiledContract {
+    pub compiler: CompiledContractCompiler,
+    pub version: String,
+    pub language: CompiledContractLanguage,
+    pub name: String,
+    pub fully_qualified_name: String,
+    pub sources: BTreeMap<String, String>,
+    pub compiler_settings: serde_json::Value,
+    pub compilation_artifacts: CompilationArtifacts,
+    pub creation_code: Vec<u8>,
+    pub creation_code_artifacts: CreationCodeArtifacts,
+    pub runtime_code: Vec<u8>,
+    pub runtime_code_artifacts: RuntimeCodeArtifacts,
 }
