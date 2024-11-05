@@ -1,4 +1,4 @@
-use super::block_ranges::ChainBlockNumber;
+use super::{block_ranges::ChainBlockNumber, ChainId};
 use crate::{
     proto,
     types::{addresses::Address, hashes::Hash},
@@ -28,14 +28,17 @@ impl From<ChainSearchResult> for proto::quick_search_response::ChainSearchResult
 
 #[derive(Default, Debug)]
 pub struct SearchResults {
-    // chain_id -> ChainSearchResult
-    pub items: BTreeMap<String, ChainSearchResult>,
+    pub items: BTreeMap<ChainId, ChainSearchResult>,
 }
 
 impl From<SearchResults> for proto::QuickSearchResponse {
     fn from(v: SearchResults) -> Self {
         Self {
-            items: v.items.into_iter().map(|(k, v)| (k, v.into())).collect(),
+            items: v
+                .items
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.into()))
+                .collect(),
         }
     }
 }

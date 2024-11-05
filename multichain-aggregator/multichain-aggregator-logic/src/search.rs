@@ -4,6 +4,7 @@ use crate::{
     types::{
         chains::Chain,
         search_results::{ChainSearchResult, SearchResults},
+        ChainId,
     },
 };
 use sea_orm::DatabaseConnection;
@@ -13,11 +14,10 @@ use tokio::try_join;
 macro_rules! populate_search_results {
     ($target:expr, $explorers:expr, $from:expr, $field:ident) => {
         for e in $from {
-            let chain_id = e.chain_id.to_string();
-            if let Some(explorer_url) = $explorers.get(&chain_id).cloned() {
+            if let Some(explorer_url) = $explorers.get(&e.chain_id).cloned() {
                 let entry = $target
                     .items
-                    .entry(chain_id.clone())
+                    .entry(e.chain_id)
                     .or_insert_with(ChainSearchResult::default);
                 entry.$field.push(e);
                 entry.explorer_url = explorer_url;
@@ -39,13 +39,9 @@ pub async fn quick_search(
         addresses::search_by_query(db, raw_query)
     )?;
 
-    let explorers: BTreeMap<String, String> = chains
+    let explorers: BTreeMap<ChainId, String> = chains
         .iter()
-        .filter_map(|c| {
-            c.explorer_url
-                .as_ref()
-                .map(|url| (c.id.to_string(), url.clone()))
-        })
+        .filter_map(|c| c.explorer_url.as_ref().map(|url| (c.id, url.clone())))
         .collect();
 
     let mut results = SearchResults::default();

@@ -33,7 +33,7 @@ impl From<Model> for BlockRange {
 
 #[derive(Default, Debug)]
 pub struct ChainBlockNumber {
-    pub chain_id: i64,
+    pub chain_id: ChainId,
     pub block_number: u64,
 }
 
