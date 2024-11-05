@@ -11,8 +11,10 @@ blockscout-chains = { workspace = true }
 tracing = { workspace = true }
 sea-orm = { workspace = true }
 alloy-primitives = { workspace = true }
+regex = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }

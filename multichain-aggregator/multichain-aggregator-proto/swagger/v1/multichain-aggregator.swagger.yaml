@@ -30,6 +30,25 @@ paths:
             $ref: '#/definitions/v1BatchImportRequest'
       tags:
         - MultichainAggregatorService
+  /api/v1/search:quick:
+    get:
+      operationId: MultichainAggregatorService_QuickSearch
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1QuickSearchResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /health:
     get:
       summary: |-
@@ -53,7 +72,7 @@ paths:
       tags:
         - Health
 definitions:
-  AddressUpsertTokenType:
+  AddressTokenType:
     type: string
     enum:
       - TOKEN_TYPE_UNSPECIFIED
@@ -62,7 +81,7 @@ definitions:
       - TOKEN_TYPE_ERC_1155
       - TOKEN_TYPE_ERC_404
     default: TOKEN_TYPE_UNSPECIFIED
-  HashUpsertHashType:
+  HashHashType:
     type: string
     enum:
       - HASH_TYPE_BLOCK
@@ -77,6 +96,40 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  QuickSearchResponseChainBlockNumber:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+      block_number:
+        type: string
+        format: uint64
+  QuickSearchResponseChainSearchResult:
+    type: object
+    properties:
+      explorer_url:
+        type: string
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      block_numbers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
   protobufAny:
     type: object
     properties:
@@ -96,7 +149,7 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
-  v1AddressUpsert:
+  v1Address:
     type: object
     properties:
       hash:
@@ -108,7 +161,7 @@ definitions:
       token_name:
         type: string
       token_type:
-        $ref: '#/definitions/AddressUpsertTokenType'
+        $ref: '#/definitions/AddressTokenType'
       is_contract:
         type: boolean
       is_verified_contract:
@@ -124,17 +177,17 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1AddressUpsert'
+          $ref: '#/definitions/v1Address'
       block_ranges:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1BlockRangeUpsert'
+          $ref: '#/definitions/v1BlockRange'
       hashes:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1HashUpsert'
+          $ref: '#/definitions/v1Hash'
       api_key:
         type: string
   v1BatchImportResponse:
@@ -142,7 +195,7 @@ definitions:
     properties:
       status:
         type: string
-  v1BlockRangeUpsert:
+  v1BlockRange:
     type: object
     properties:
       min_block_number:
@@ -151,15 +204,22 @@ definitions:
       max_block_number:
         type: string
         format: uint64
-  v1HashUpsert:
+  v1Hash:
     type: object
     properties:
       hash:
         type: string
       hash_type:
-        $ref: '#/definitions/HashUpsertHashType'
+        $ref: '#/definitions/HashHashType'
   v1HealthCheckResponse:
     type: object
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1QuickSearchResponse:
+    type: object
+    properties:
+      items:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/QuickSearchResponseChainSearchResult'

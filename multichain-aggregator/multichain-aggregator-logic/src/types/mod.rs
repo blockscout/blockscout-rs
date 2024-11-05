@@ -4,5 +4,5 @@ pub mod batch_import_request;
 pub mod block_ranges;
 pub mod chains;
 pub mod hashes;
-
+pub mod search_results;
 type ChainId = i64;

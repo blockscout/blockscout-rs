@@ -6,9 +6,10 @@ option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
 
 service MultichainAggregatorService {
   rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
+  rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
 }
 
-message AddressUpsert {
+message Address {
   string hash = 1;
   optional string ens_name = 2;
   optional string contract_name = 3;
@@ -28,12 +29,12 @@ message AddressUpsert {
   optional bool is_token = 8;
 }
 
-message BlockRangeUpsert {
+message BlockRange {
   uint64 min_block_number = 1;
   uint64 max_block_number = 2;
 }
 
-message HashUpsert {
+message Hash {
   string hash = 1;
 
   enum HashType {
@@ -46,12 +47,29 @@ message HashUpsert {
 
 message BatchImportRequest {
   string chain_id = 1;
-  repeated AddressUpsert addresses = 2;
-  repeated BlockRangeUpsert block_ranges = 3;
-  repeated HashUpsert hashes = 4;
+  repeated Address addresses = 2;
+  repeated BlockRange block_ranges = 3;
+  repeated Hash hashes = 4;
   string api_key = 5;
 }
 
-message BatchImportResponse {
-  string status = 1;
+message BatchImportResponse { string status = 1; }
+
+message QuickSearchRequest { string q = 1; }
+
+message QuickSearchResponse {
+  message ChainBlockNumber {
+    int64 chain_id = 1;
+    uint64 block_number = 2;
+  }
+
+  message ChainSearchResult {
+    string explorer_url = 1;
+    repeated Address addresses = 2;
+    repeated Hash blocks = 3;
+    repeated Hash transactions = 4;
+    repeated ChainBlockNumber block_numbers = 5;
+  }
+
+  map<string, ChainSearchResult> items = 1;
 }

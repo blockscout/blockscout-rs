@@ -17,7 +17,8 @@ fn compile(
         .protoc_arg("grpc_api_configuration=proto/v1/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=multichain-aggregator,json_names_for_fields=false")
         .bytes(["."])
         .btree_map(["."])
-        .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]");
+        .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
+        .field_attribute(".blockscout.multichainAggregator.v1.Address.token_type", "#[serde(default)]");
     config.compile_protos(protos, includes)?;
     Ok(())
 }

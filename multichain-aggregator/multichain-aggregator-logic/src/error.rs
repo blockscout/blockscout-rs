@@ -27,6 +27,8 @@ pub enum ParseError {
     ParseHex(#[from] FromHexError),
     #[error("parse error: invalid uuid")]
     ParseUuid(#[from] uuid::Error),
+    #[error("parse error: invalid slice")]
+    TryFromSlice(#[from] core::array::TryFromSliceError),
 }
 
 impl From<ServiceError> for tonic::Status {

@@ -1,8 +1,11 @@
-use super::{addresses::Address, block_ranges::BlockRange, hashes::Hash};
-use crate::error::{ParseError, ServiceError};
-use entity::sea_orm_active_enums as db_enum;
-use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
-    self, address_upsert as proto_address, hash_upsert as proto_hash,
+use super::{
+    addresses::{proto_token_type_to_db_token_type, Address},
+    block_ranges::BlockRange,
+    hashes::{proto_hash_type_to_db_hash_type, Hash},
+};
+use crate::{
+    error::{ParseError, ServiceError},
+    proto,
 };
 
 #[derive(Debug, Clone)]
@@ -12,10 +15,10 @@ pub struct BatchImportRequest {
     pub addresses: Vec<Address>,
 }
 
-impl TryFrom<v1::BatchImportRequest> for BatchImportRequest {
+impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
     type Error = ServiceError;
 
-    fn try_from(value: v1::BatchImportRequest) -> Result<Self, Self::Error> {
+    fn try_from(value: proto::BatchImportRequest) -> Result<Self, Self::Error> {
         let chain_id = value.chain_id.parse().map_err(ParseError::from)?;
         Ok(Self {
             block_ranges: value
@@ -61,24 +64,5 @@ impl TryFrom<v1::BatchImportRequest> for BatchImportRequest {
                 })
                 .collect::<Result<Vec<_>, Self::Error>>()?,
         })
-    }
-}
-
-fn proto_hash_type_to_db_hash_type(hash_type: proto_hash::HashType) -> db_enum::HashType {
-    match hash_type {
-        proto_hash::HashType::Block => db_enum::HashType::Block,
-        proto_hash::HashType::Transaction => db_enum::HashType::Transaction,
-    }
-}
-
-fn proto_token_type_to_db_token_type(
-    token_type: proto_address::TokenType,
-) -> Option<db_enum::TokenType> {
-    match token_type {
-        proto_address::TokenType::Erc20 => Some(db_enum::TokenType::Erc20),
-        proto_address::TokenType::Erc1155 => Some(db_enum::TokenType::Erc1155),
-        proto_address::TokenType::Erc721 => Some(db_enum::TokenType::Erc721),
-        proto_address::TokenType::Erc404 => Some(db_enum::TokenType::Erc404),
-        proto_address::TokenType::Unspecified => None,
     }
 }

@@ -66,10 +66,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .await?
         .into_iter()
         .map(|(id, chain)| (id as i64, chain).into())
-        .collect();
-    repository::chains::upsert_many(&db, blockscout_chains).await?;
+        .collect::<Vec<_>>();
+    repository::chains::upsert_many(&db, blockscout_chains.clone()).await?;
 
-    let multichain_aggregator = Arc::new(MultichainAggregator::new(db));
+    let multichain_aggregator = Arc::new(MultichainAggregator::new(db, blockscout_chains));
 
     let router = Router {
         health,
