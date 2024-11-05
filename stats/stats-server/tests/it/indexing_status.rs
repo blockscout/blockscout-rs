@@ -1,24 +1,25 @@
 use blockscout_service_launcher::{
     launcher::ConfigSettings,
-    test_server::{get_test_server_settings, init_server},
+    test_server::{get_test_server_settings, init_server, send_get_request},
 };
 use pretty_assertions::assert_eq;
 
 use stats::tests::{init_db::init_db_all, mock_blockscout::mock_blockscout_api};
 use stats_proto::blockscout::stats::v1::{
-    health_check_response::ServingStatus, HealthCheckResponse,
+    health_check_response::ServingStatus, Counters, HealthCheckResponse,
 };
 use stats_server::{stats, Settings};
 use wiremock::ResponseTemplate;
 
 use std::{path::PathBuf, str::FromStr};
 
-use crate::common::send_arbitrary_request;
+use crate::{common::send_arbitrary_request, lines::enabled_resolutions};
 
 #[tokio::test]
 #[ignore = "needs database"]
-async fn test_not_indexed_healthcheck_ok() {
-    // check that when the blockscout is not indexed, the healthcheck still succeeds
+async fn test_not_indexed_ok() {
+    // check that when the blockscout is not indexed, the healthcheck still succeeds and
+    // charts don't have any points (i.e. they are not updated)
     let (stats_db, blockscout_db) = init_db_all("test_healthcheck_ok").await;
     let blockscout_api = mock_blockscout_api(ResponseTemplate::new(200).set_body_string(
         r#"{
@@ -57,5 +58,33 @@ async fn test_not_indexed_healthcheck_ok() {
             status: ServingStatus::Serving as i32
         }
     );
-    // assert!(response.status().is_success());
+
+    // check that charts return empty data
+
+    let enabled_resolutions =
+        enabled_resolutions(send_get_request(&base, "/api/v1/lines").await).await;
+    for (line_chart_id, resolutions) in enabled_resolutions {
+        for resolution in resolutions {
+            let chart: serde_json::Value = send_get_request(
+                &base,
+                &format!("/api/v1/lines/{line_chart_id}?resolution={resolution}"),
+            )
+            .await;
+            let chart_data = chart
+                .as_object()
+                .expect("response has to be json object")
+                .get("chart")
+                .expect("response doesn't have 'chart' field")
+                .as_array()
+                .expect("'chart' field has to be json array");
+
+            assert!(
+                chart_data.is_empty(),
+                "chart '{line_chart_id}' '{resolution}' is not empty"
+            );
+        }
+    }
+
+    let counters: Counters = send_get_request(&base, "/api/v1/counters").await;
+    assert!(counters.counters.is_empty())
 }
