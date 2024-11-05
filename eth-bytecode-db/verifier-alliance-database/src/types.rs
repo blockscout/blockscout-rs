@@ -1,6 +1,7 @@
+use sea_orm::prelude::Uuid;
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
-    CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts,
+    CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -128,4 +129,25 @@ pub struct CompiledContract {
     pub creation_code_artifacts: CreationCodeArtifacts,
     pub runtime_code: Vec<u8>,
     pub runtime_code_artifacts: RuntimeCodeArtifacts,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VerifiedContractMatches {
+    OnlyRuntime {
+        runtime_match: Match,
+    },
+    OnlyCreation {
+        creation_match: Match,
+    },
+    Complete {
+        runtime_match: Match,
+        creation_match: Match,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerifiedContract {
+    pub contract_deployment_id: Uuid,
+    pub compiled_contract: CompiledContract,
+    pub matches: VerifiedContractMatches,
 }

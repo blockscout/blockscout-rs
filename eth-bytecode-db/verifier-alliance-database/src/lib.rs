@@ -8,15 +8,107 @@ use sea_orm::{
 };
 use sha2::{Digest, Sha256};
 use sha3::Keccak256;
-use verifier_alliance_entity::{code, compiled_contracts, contract_deployments, contracts};
+use verification_common::verifier_alliance::Match;
+use verifier_alliance_entity::{
+    code, compiled_contracts, contract_deployments, contracts, verified_contracts,
+};
 
 pub use crate::types::{
     CompiledContract, CompiledContractCompiler, CompiledContractLanguage, ContractCode,
-    ContractDeployment, RetrieveContractDeployment,
+    ContractDeployment, RetrieveContractDeployment, VerifiedContract, VerifiedContractMatches,
 };
 
-pub async fn insert_verified_contract<C: ConnectionTrait>() -> Result<(), Error> {
-    Ok(())
+#[derive(Clone, Debug)]
+struct InternalContractDeploymentData {
+    chain_id: Decimal,
+    address: Vec<u8>,
+    transaction_hash: Vec<u8>,
+    block_number: Decimal,
+    transaction_index: Decimal,
+    deployer: Vec<u8>,
+    contract_code: ContractCode,
+}
+
+#[derive(Clone, Debug, Default)]
+struct InternalMatchData {
+    does_match: bool,
+    metadata_match: Option<bool>,
+    values: Option<serde_json::Value>,
+    transformations: Option<serde_json::Value>,
+}
+
+pub async fn insert_verified_contract<C: ConnectionTrait>(
+    database_connection: &C,
+    verified_contract: VerifiedContract,
+) -> Result<verified_contracts::Model, Error> {
+    let compiled_contract = verified_contract.compiled_contract;
+
+    let contains_metadata_hash = compiled_contract
+        .creation_code_artifacts
+        .cbor_auxdata
+        .is_some()
+        || compiled_contract
+            .runtime_code_artifacts
+            .cbor_auxdata
+            .is_some();
+    let compiled_contract_id = insert_compiled_contract(database_connection, compiled_contract)
+        .await
+        .context("insert compiled contract")?
+        .id;
+
+    let (creation_match_data, runtime_match_data) = match verified_contract.matches {
+        VerifiedContractMatches::OnlyRuntime { runtime_match } => {
+            let runtime_match_data =
+                parse_verification_common_match(contains_metadata_hash, runtime_match);
+            (InternalMatchData::default(), runtime_match_data)
+        }
+        VerifiedContractMatches::OnlyCreation { creation_match } => {
+            let creation_match_data =
+                parse_verification_common_match(contains_metadata_hash, creation_match);
+            (creation_match_data, InternalMatchData::default())
+        }
+        VerifiedContractMatches::Complete {
+            runtime_match,
+            creation_match,
+        } => {
+            let creation_match_data =
+                parse_verification_common_match(contains_metadata_hash, creation_match);
+            let runtime_match_data =
+                parse_verification_common_match(contains_metadata_hash, runtime_match);
+            (creation_match_data, runtime_match_data)
+        }
+    };
+
+    let active_model = verified_contracts::ActiveModel {
+        id: Default::default(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        created_by: Default::default(),
+        updated_by: Default::default(),
+        deployment_id: Set(verified_contract.contract_deployment_id),
+        compilation_id: Set(compiled_contract_id),
+        creation_match: Set(creation_match_data.does_match),
+        creation_values: Set(creation_match_data.values),
+        creation_transformations: Set(creation_match_data.transformations),
+        creation_metadata_match: Set(creation_match_data.metadata_match),
+        runtime_match: Set(runtime_match_data.does_match),
+        runtime_values: Set(runtime_match_data.values),
+        runtime_transformations: Set(runtime_match_data.transformations),
+        runtime_metadata_match: Set(runtime_match_data.metadata_match),
+    };
+
+    let (model, _inserted) = insert_then_select!(
+        database_connection,
+        verified_contracts,
+        active_model,
+        false,
+        [
+            (CompilationId, compiled_contract_id),
+            (DeploymentId, verified_contract.contract_deployment_id),
+        ]
+    )?;
+
+    Ok(model)
 }
 
 pub async fn insert_compiled_contract<C: ConnectionTrait>(
@@ -67,16 +159,6 @@ pub async fn insert_compiled_contract<C: ConnectionTrait>(
     )?;
 
     Ok(model)
-}
-
-struct InternalContractDeploymentData {
-    chain_id: Decimal,
-    address: Vec<u8>,
-    transaction_hash: Vec<u8>,
-    block_number: Decimal,
-    transaction_index: Decimal,
-    deployer: Vec<u8>,
-    contract_code: ContractCode,
 }
 
 pub async fn insert_contract_deployment<C: ConnectionTrait>(
@@ -306,4 +388,18 @@ fn parse_regular_contract_deployment(
 
 fn calculate_genesis_contract_deployment_transaction_hash(runtime_code: &[u8]) -> Vec<u8> {
     Keccak256::digest(runtime_code).to_vec()
+}
+
+fn parse_verification_common_match(
+    contains_metadata_hash: bool,
+    verification_common_match: Match,
+) -> InternalMatchData {
+    InternalMatchData {
+        does_match: true,
+        metadata_match: Some(
+            contains_metadata_hash && verification_common_match.values.cbor_auxdata.is_empty(),
+        ),
+        values: Some(verification_common_match.values.into()),
+        transformations: Some(verification_common_match.transformations.into()),
+    }
 }

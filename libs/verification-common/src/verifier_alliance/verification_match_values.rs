@@ -6,19 +6,20 @@ use std::collections::BTreeMap;
 #[serde_as]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[readonly::make]
 pub struct Values {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde_as(as = "BTreeMap<_, blockscout_display_bytes::serde_as::Hex>")]
-    cbor_auxdata: BTreeMap<String, Bytes>,
+    pub cbor_auxdata: BTreeMap<String, Bytes>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<blockscout_display_bytes::serde_as::Hex>")]
-    constructor_arguments: Option<Bytes>,
+    pub constructor_arguments: Option<Bytes>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde_as(as = "BTreeMap<_, blockscout_display_bytes::serde_as::Hex>")]
-    libraries: BTreeMap<String, Bytes>,
+    pub libraries: BTreeMap<String, Bytes>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde_as(as = "BTreeMap<_, blockscout_display_bytes::serde_as::Hex>")]
-    immutables: BTreeMap<String, Bytes>,
+    pub immutables: BTreeMap<String, Bytes>,
 }
 
 impl From<Values> for serde_json::Value {

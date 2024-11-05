@@ -5266,6 +5266,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "readonly"
+version = "0.2.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a25d631e41bfb5fdcde1d4e2215f62f7f0afa3ff11e26563765bd6ea1d229aeb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.85",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7801,6 +7812,7 @@ dependencies = [
  "anyhow",
  "blockscout-display-bytes",
  "bytes",
+ "readonly",
  "serde",
  "serde_json",
  "serde_with 3.11.0",
