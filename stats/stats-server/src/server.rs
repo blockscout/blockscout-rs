@@ -107,15 +107,18 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
 
     let blockscout_api_config = init_blockscout_api_client(&settings).await?;
 
-    // Wait for blockscout to index, if necessary.
-    if let Some(config) = blockscout_api_config {
-        wait_for_blockscout_indexing(config, settings.conditional_start).await?;
-    }
-
     let update_service =
         Arc::new(UpdateService::new(db.clone(), blockscout, charts.clone()).await?);
 
     tokio::spawn(async move {
+        // Wait for blockscout to index, if necessary.
+        if let Some(config) = blockscout_api_config {
+            if let Err(e) = wait_for_blockscout_indexing(config, settings.conditional_start).await {
+                tracing::error!(error =? e, "Error starting update service. Failed while waiting for blockscout indexing");
+                return;
+            }
+        }
+
         update_service
             .force_async_update_and_run(
                 settings.concurrent_start_updates,

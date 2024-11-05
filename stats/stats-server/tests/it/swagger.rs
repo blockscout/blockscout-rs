@@ -4,7 +4,7 @@ use blockscout_service_launcher::{
 };
 use pretty_assertions::assert_eq;
 
-use stats::tests::{init_db::init_db_all, mock_blockscout::mock_blockscout_api};
+use stats::tests::{init_db::init_db_all, mock_blockscout::default_mock_blockscout_api};
 use stats_server::{stats, Settings};
 
 use std::{path::PathBuf, str::FromStr};
@@ -15,7 +15,7 @@ use crate::common::send_arbitrary_request;
 #[ignore = "needs database"]
 async fn test_swagger_ok() {
     let (stats_db, blockscout_db) = init_db_all("test_swagger_ok").await;
-    let blockscout_api = mock_blockscout_api().await;
+    let blockscout_api = default_mock_blockscout_api().await;
 
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let mut settings = Settings::build().expect("Failed to build settings");
