@@ -31,7 +31,6 @@ impl StatementForOne for AverageBlockTimeStatement {
     fn get_statement(_: &BlockscoutMigrations) -> Statement {
         blocks::Entity::find()
             .select_only()
-            .column_as(Expr::col(blocks::Column::Number), "number")
             .column_as(Expr::col(blocks::Column::Timestamp), "timestamp")
             // Do not count genesis block because it results in weird block time.
             // We assume that genesis block number is 1 or 0 (just to be safe).
@@ -52,7 +51,6 @@ impl StatementForOne for AverageBlockTimeStatement {
 
 #[derive(FromQueryResult, Debug)]
 struct BlockTimestamp {
-    number: i64,
     timestamp: chrono::NaiveDateTime,
 }
 
