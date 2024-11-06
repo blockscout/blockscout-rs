@@ -41,9 +41,9 @@
         "tld_list": ["eth"],
         "network_id": 1,
         "subgraph_name": "ens-subgraph",
+        "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "ens_like",
-          "address_resolve_technique": "reverse_registry",
           "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
           "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
         },
@@ -57,9 +57,9 @@
         "tld_list": ["gno"],
         "network_id": 10200,
         "subgraph_name": "genome-subgraph",
+        "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "ens_like",
-          "address_resolve_technique": "reverse_registry",
           "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
           "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60"
         },
