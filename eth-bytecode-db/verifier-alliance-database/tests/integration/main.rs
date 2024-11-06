@@ -3,6 +3,7 @@ mod internal_compiled_contracts;
 mod internal_contract_deployments;
 mod internal_contracts;
 mod internal_verified_contracts;
+mod types;
 
 macro_rules! database {
     () => {{
