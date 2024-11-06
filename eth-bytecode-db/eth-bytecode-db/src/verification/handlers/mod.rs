@@ -16,7 +16,7 @@ use super::{
     errors::Error,
     smart_contract_verifier,
     types::{BytecodeType, DatabaseReadySource, Source, VerificationMetadata, VerificationType},
-    AllianceBatchImportResult, AllianceContractImportResult,
+    AllianceBatchImportResult, AllianceContractImportResult, SourceType,
 };
 use crate::{
     verification::{types::AllianceContractImportSuccess, verifier_alliance::CodeMatch},
@@ -24,7 +24,11 @@ use crate::{
 };
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
-use verifier_alliance_database::{ContractDeployment, RetrieveContractDeployment};
+use verification_common::verifier_alliance::MatchBuilder;
+use verifier_alliance_database::{
+    CompiledContract, CompiledContractCompiler, CompiledContractLanguage, ContractDeployment,
+    RetrieveContractDeployment, VerifiedContract, VerifiedContractMatches,
+};
 use verifier_alliance_entity::contract_deployments;
 
 enum EthBytecodeDbAction<'a> {
@@ -360,30 +364,39 @@ async fn process_verifier_alliance_db_action(
     let database_source = DatabaseReadySource::try_from(source)
         .context("Converting source into database ready version")?;
 
-    let (creation_code_match, runtime_code_match) =
-        check_code_matches(db_client, &database_source, &contract_deployment).await?;
+    let verified_contract =
+        check_code_matches_copy(db_client, &database_source, &contract_deployment).await?;
 
-    check_match_statuses(
-        db_client,
-        &contract_deployment,
-        &creation_code_match,
-        &runtime_code_match,
-    )
-    .await?;
+    let _model = verifier_alliance_database::insert_verified_contract(db_client, verified_contract)
+        .await
+        .context("insert verified contract into verifier alliance database")?;
 
-    db::verifier_alliance_db::insert_data(
-        db_client,
-        database_source,
-        contract_deployment,
-        creation_code_match,
-        runtime_code_match,
-    )
-    .await
-    .context("Insert data into verifier alliance database")
-    .map_err(|err| {
-        println!("\n[ERROR]: {err:#?}\n");
-        err
-    })
+    // let (creation_code_match, runtime_code_match) =
+    //     check_code_matches(db_client, &database_source, &contract_deployment).await?;
+    //
+    // check_match_statuses(
+    //     db_client,
+    //     &contract_deployment,
+    //     &creation_code_match,
+    //     &runtime_code_match,
+    // )
+    // .await?;
+    //
+    // db::verifier_alliance_db::insert_data(
+    //     db_client,
+    //     database_source,
+    //     contract_deployment,
+    //     creation_code_match,
+    //     runtime_code_match,
+    // )
+    // .await
+    // .context("Insert data into verifier alliance database")
+    // .map_err(|err| {
+    //     println!("\n[ERROR]: {err:#?}\n");
+    //     err
+    // })
+
+    Ok(())
 }
 
 async fn process_abi_data(
@@ -444,6 +457,118 @@ async fn retrieve_deployment_from_action(
             Ok(Some((db_client, contract_deployment)))
         }
     }
+}
+
+async fn check_code_matches_copy(
+    db_client: &DatabaseConnection,
+    database_source: &DatabaseReadySource,
+    contract_deployment: &contract_deployments::Model,
+) -> Result<VerifiedContract, anyhow::Error> {
+    let compiled_contract = build_compiled_contract(database_source.clone())?;
+
+    let (deployed_creation_code, deployed_runtime_code) =
+        db::verifier_alliance_db::retrieve_contract_codes(db_client, contract_deployment)
+            .await
+            .context("retrieve deployment contract codes")?;
+    let deployed_runtime_code = deployed_runtime_code.code.unwrap();
+
+    let creation_match = if let Some(builder) =
+        deployed_creation_code
+            .code
+            .as_ref()
+            .and_then(|deployed_creation_code| {
+                MatchBuilder::new(
+                    deployed_creation_code,
+                    database_source.raw_creation_code.clone(),
+                )
+            }) {
+        let creation_code_artifacts = database_source.creation_code_artifacts.as_ref().unwrap();
+        let compilation_artifacts = database_source.compilation_artifacts.as_ref().unwrap();
+        let builder = builder
+            .apply_creation_code_transformations(creation_code_artifacts, compilation_artifacts)
+            .context("applying creation code transformations")?;
+        builder.verify_and_build()
+    } else {
+        None
+    };
+
+    let runtime_match = if let Some(builder) = MatchBuilder::new(
+        &deployed_runtime_code,
+        database_source.raw_runtime_code.clone(),
+    ) {
+        let runtime_code_artifacts = database_source.runtime_code_artifacts.as_ref().unwrap();
+        let builder = builder
+            .apply_runtime_code_transformations(runtime_code_artifacts)
+            .context("applying runtime code transformations")?;
+        builder.verify_and_build()
+    } else {
+        None
+    };
+
+    let verified_contract_matches = match (creation_match, runtime_match) {
+        (Some(creation_match), Some(runtime_match)) => VerifiedContractMatches::Complete {
+            creation_match,
+            runtime_match,
+        },
+        (Some(creation_match), None) => VerifiedContractMatches::OnlyCreation { creation_match },
+        (None, Some(runtime_match)) => VerifiedContractMatches::OnlyRuntime { runtime_match },
+        (None, None) => {
+            return Err(anyhow::anyhow!(
+                "Neither creation code nor runtime code have not matched"
+            ))
+        }
+    };
+
+    Ok(VerifiedContract {
+        contract_deployment_id: contract_deployment.id,
+        compiled_contract,
+        matches: verified_contract_matches,
+    })
+}
+
+fn build_compiled_contract(source: DatabaseReadySource) -> Result<CompiledContract, anyhow::Error> {
+    let compilation_artifacts = source
+        .compilation_artifacts
+        .ok_or(anyhow::anyhow!("compilation artifacts are missing"))?;
+    let creation_code_artifacts = source
+        .creation_code_artifacts
+        .ok_or(anyhow::anyhow!("creation code artifacts are missing"))?;
+    let runtime_code_artifacts = source
+        .runtime_code_artifacts
+        .ok_or(anyhow::anyhow!("runtime code artifacts are missing"))?;
+
+    let (compiler, language) = match source.source_type {
+        SourceType::Solidity => (
+            CompiledContractCompiler::Solc,
+            CompiledContractLanguage::Solidity,
+        ),
+        SourceType::Vyper => (
+            CompiledContractCompiler::Vyper,
+            CompiledContractLanguage::Vyper,
+        ),
+        SourceType::Yul => (
+            CompiledContractCompiler::Solc,
+            CompiledContractLanguage::Yul,
+        ),
+    };
+
+    let fully_qualified_name = format!("{}:{}", source.file_name, source.contract_name);
+
+    let compiled_contract = CompiledContract {
+        compiler,
+        version: source.compiler_version,
+        language,
+        name: source.contract_name,
+        fully_qualified_name,
+        sources: source.source_files,
+        compiler_settings: source.compiler_settings,
+        compilation_artifacts,
+        creation_code: source.raw_creation_code,
+        creation_code_artifacts,
+        runtime_code: source.raw_runtime_code,
+        runtime_code_artifacts,
+    };
+    Ok(compiled_contract)
 }
 
 async fn check_code_matches(

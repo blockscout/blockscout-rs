@@ -7828,6 +7828,7 @@ dependencies = [
  "keccak-hash 0.11.0",
  "pretty_assertions",
  "sea-orm",
+ "serde",
  "serde_json",
  "sha2",
  "sha3",
