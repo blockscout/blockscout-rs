@@ -23,7 +23,7 @@ use crate::{
     ToHex,
 };
 use anyhow::Context;
-use sea_orm::{DatabaseConnection, TransactionTrait};
+use sea_orm::DatabaseConnection;
 use verifier_alliance_database::{ContractDeployment, RetrieveContractDeployment};
 use verifier_alliance_entity::contract_deployments;
 
@@ -437,23 +437,13 @@ async fn retrieve_deployment_from_action(
             db_client,
             deployment_data,
         } => {
-            let contract_deployment = save_contract_deployment(db_client, deployment_data).await?;
+            let contract_deployment =
+                verifier_alliance_database::insert_contract_deployment(db_client, deployment_data)
+                    .await?;
 
             Ok(Some((db_client, contract_deployment)))
         }
     }
-}
-
-async fn save_contract_deployment(
-    db_client: &DatabaseConnection,
-    contract_deployment: ContractDeployment,
-) -> Result<contract_deployments::Model, anyhow::Error> {
-    let txn = db_client.begin().await.context("begin transaction")?;
-    let model = verifier_alliance_database::insert_contract_deployment(&txn, contract_deployment)
-        .await
-        .context("insert contract deployment")?;
-    txn.commit().await.context("commit transaction")?;
-    Ok(model)
 }
 
 async fn check_code_matches(
@@ -633,7 +623,8 @@ async fn process_batch_import_verifier_alliance(
     deployment_data: ContractDeployment,
     contract_import_success: &AllianceContractImportSuccess,
 ) -> Result<(), anyhow::Error> {
-    let contract_deployment = save_contract_deployment(db_client, deployment_data).await?;
+    let contract_deployment =
+        verifier_alliance_database::insert_contract_deployment(db_client, deployment_data).await?;
 
     let creation_code_match =
         code_match_from_match_details(contract_import_success.creation_match_details.clone());

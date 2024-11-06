@@ -1,5 +1,5 @@
 use crate::database;
-use verifier_alliance_database::ContractCode;
+use verifier_alliance_database::{internal, ContractCode};
 
 const MOD_NAME: &str = "contracts";
 
@@ -14,10 +14,9 @@ async fn insert_complete_code_works() {
         runtime_code: vec![0x3, 0x4],
     };
 
-    let _model =
-        verifier_alliance_database::insert_contract(db_guard.client().as_ref(), contract_code)
-            .await
-            .expect("error while inserting");
+    let _model = internal::insert_contract(db_guard.client().as_ref(), contract_code)
+        .await
+        .expect("error while inserting");
 }
 
 #[tokio::test]
@@ -30,8 +29,7 @@ async fn insert_only_runtime_code_works() {
         code: vec![0x3, 0x4],
     };
 
-    let _model =
-        verifier_alliance_database::insert_contract(db_guard.client().as_ref(), contract_code)
-            .await
-            .expect("error while inserting");
+    let _model = internal::insert_contract(db_guard.client().as_ref(), contract_code)
+        .await
+        .expect("error while inserting");
 }

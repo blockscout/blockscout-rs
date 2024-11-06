@@ -1,8 +1,8 @@
-mod code;
-mod compiled_contracts;
-mod contract_deployments;
-mod contracts;
-mod verified_contracts;
+mod internal_code;
+mod internal_compiled_contracts;
+mod internal_contract_deployments;
+mod internal_contracts;
+mod internal_verified_contracts;
 
 macro_rules! database {
     () => {{

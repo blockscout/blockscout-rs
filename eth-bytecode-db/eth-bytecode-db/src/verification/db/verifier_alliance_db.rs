@@ -197,7 +197,9 @@ async fn insert_compiled_contract<C: ConnectionTrait>(
         runtime_code: source.raw_runtime_code,
         runtime_code_artifacts,
     };
-    let model = verifier_alliance_database::insert_compiled_contract(db, compiled_contract).await?;
+    let model =
+        verifier_alliance_database::internal::insert_compiled_contract(db, compiled_contract)
+            .await?;
 
     Ok(model)
 }

@@ -1,7 +1,7 @@
 use crate::database;
 use blockscout_display_bytes::decode_hex;
 use pretty_assertions::assert_eq;
-use verifier_alliance_database::{ContractDeployment, RetrieveContractDeployment};
+use verifier_alliance_database::{internal, ContractDeployment, RetrieveContractDeployment};
 
 const MOD_NAME: &str = "contract_deployments";
 
@@ -27,19 +27,17 @@ async fn insert_regular_deployment_works_and_can_be_retrieved() {
         runtime_code: vec![0x3, 0x4],
     };
 
-    let inserted_model = verifier_alliance_database::insert_contract_deployment(
-        db_guard.client().as_ref(),
-        contract_deployment,
-    )
-    .await
-    .expect("error while inserting");
+    let inserted_model =
+        internal::insert_contract_deployment(db_guard.client().as_ref(), contract_deployment)
+            .await
+            .expect("error while inserting");
 
     /********** retrieval **********/
 
     let retrieve_contract_deployment =
         RetrieveContractDeployment::regular(chain_id, address, transaction_hash);
 
-    let retrieved_model = verifier_alliance_database::retrieve_contract_deployment(
+    let retrieved_model = internal::retrieve_contract_deployment(
         db_guard.client().as_ref(),
         retrieve_contract_deployment,
     )
@@ -69,19 +67,17 @@ async fn insert_genesis_deployment_works_and_can_be_retrieved() {
         runtime_code: runtime_code.clone(),
     };
 
-    let inserted_model = verifier_alliance_database::insert_contract_deployment(
-        db_guard.client().as_ref(),
-        contract_deployment,
-    )
-    .await
-    .expect("error while inserting");
+    let inserted_model =
+        internal::insert_contract_deployment(db_guard.client().as_ref(), contract_deployment)
+            .await
+            .expect("error while inserting");
 
     /********** retrieval **********/
 
     let retrieve_contract_deployment =
         RetrieveContractDeployment::genesis(chain_id, address, runtime_code);
 
-    let retrieved_model = verifier_alliance_database::retrieve_contract_deployment(
+    let retrieved_model = internal::retrieve_contract_deployment(
         db_guard.client().as_ref(),
         retrieve_contract_deployment,
     )
@@ -104,7 +100,7 @@ async fn non_existed_deployment_retrieval_returns_none() {
     let retrieve_contract_deployment =
         RetrieveContractDeployment::regular(10, vec![0x1], vec![0x1]);
 
-    let retrieved_model = verifier_alliance_database::retrieve_contract_deployment(
+    let retrieved_model = internal::retrieve_contract_deployment(
         db_guard.client().as_ref(),
         retrieve_contract_deployment,
     )

@@ -5,7 +5,7 @@ use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts, SourceId,
 };
 use verifier_alliance_database::{
-    CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
+    internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
 };
 
 const MOD_NAME: &str = "compiled_contracts";
@@ -49,12 +49,10 @@ async fn insert_compiled_contract_works() {
         },
     };
 
-    let _inserted_model = verifier_alliance_database::insert_compiled_contract(
-        db_guard.client().as_ref(),
-        compiled_contract,
-    )
-    .await
-    .expect("error while inserting");
+    let _inserted_model =
+        internal::insert_compiled_contract(db_guard.client().as_ref(), compiled_contract)
+            .await
+            .expect("error while inserting");
 }
 
 #[tokio::test]
@@ -96,10 +94,8 @@ async fn insert_compiled_contract_with_empty_artifact_values() {
         },
     };
 
-    let _inserted_model = verifier_alliance_database::insert_compiled_contract(
-        db_guard.client().as_ref(),
-        compiled_contract,
-    )
-    .await
-    .expect("error while inserting");
+    let _inserted_model =
+        internal::insert_compiled_contract(db_guard.client().as_ref(), compiled_contract)
+            .await
+            .expect("error while inserting");
 }

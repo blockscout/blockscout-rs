@@ -8,8 +8,8 @@ use verification_common::verifier_alliance::{
     MatchValues, RuntimeCodeArtifacts, SourceId,
 };
 use verifier_alliance_database::{
-    CompiledContract, CompiledContractCompiler, CompiledContractLanguage, ContractDeployment,
-    VerifiedContract, VerifiedContractMatches,
+    internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
+    ContractDeployment, VerifiedContract, VerifiedContractMatches,
 };
 
 const MOD_NAME: &str = "verified_contracts";
@@ -39,12 +39,10 @@ async fn insert_verified_contract_with_complete_matches_work() {
         },
     };
 
-    let _inserted_model = verifier_alliance_database::insert_verified_contract(
-        db_guard.client().as_ref(),
-        verified_contract,
-    )
-    .await
-    .expect("error while inserting");
+    let _inserted_model =
+        internal::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
+            .await
+            .expect("error while inserting");
 }
 
 #[tokio::test]
@@ -67,12 +65,10 @@ async fn insert_verified_contract_with_runtime_only_matches_work() {
         },
     };
 
-    let _inserted_model = verifier_alliance_database::insert_verified_contract(
-        db_guard.client().as_ref(),
-        verified_contract,
-    )
-    .await
-    .expect("error while inserting");
+    let _inserted_model =
+        internal::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
+            .await
+            .expect("error while inserting");
 }
 
 #[tokio::test]
@@ -95,12 +91,10 @@ async fn insert_verified_contract_with_creation_only_matches_work() {
         },
     };
 
-    let _inserted_model = verifier_alliance_database::insert_verified_contract(
-        db_guard.client().as_ref(),
-        verified_contract,
-    )
-    .await
-    .expect("error while inserting");
+    let _inserted_model =
+        internal::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
+            .await
+            .expect("error while inserting");
 }
 
 #[tokio::test]
@@ -182,12 +176,10 @@ async fn insert_verified_contract_with_filled_matches() {
         },
     };
 
-    let _inserted_model = verifier_alliance_database::insert_verified_contract(
-        db_guard.client().as_ref(),
-        verified_contract,
-    )
-    .await
-    .expect("error while inserting");
+    let _inserted_model =
+        internal::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
+            .await
+            .expect("error while inserting");
 }
 
 async fn insert_contract_deployment(database_connection: &DatabaseConnection) -> Uuid {
@@ -205,7 +197,7 @@ async fn insert_contract_deployment(database_connection: &DatabaseConnection) ->
         runtime_code: vec![0x3, 0x4],
     };
 
-    verifier_alliance_database::insert_contract_deployment(database_connection, contract_deployment)
+    internal::insert_contract_deployment(database_connection, contract_deployment)
         .await
         .expect("error while inserting contract deployment")
         .id
