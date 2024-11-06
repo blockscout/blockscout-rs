@@ -4,7 +4,7 @@ use blockscout_db::entity::{
     address_coin_balances_daily, addresses, block_rewards, blocks, internal_transactions,
     migrations_status, smart_contracts, tokens, transactions,
 };
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
 use rand::{Rng, SeedableRng};
 use sea_orm::{prelude::Decimal, ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
@@ -67,7 +67,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
     .into_iter()
     .filter(|val| NaiveDateTime::from_str(val).unwrap().date() <= max_date)
     .enumerate()
-    .map(|(ind, ts)| mock_block(ind as i64, ts, true))
+    .map(|(ind, ts)| mock_block(ind as i64, NaiveDateTime::from_str(ts).unwrap(), true))
     .collect::<Vec<_>>();
     blocks::Entity::insert_many(blocks.clone())
         .exec(blockscout)
@@ -223,7 +223,13 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
     .into_iter()
     .filter(|val| NaiveDateTime::from_str(val).unwrap().date() <= max_date)
     .enumerate()
-    .map(|(ind, ts)| mock_block((ind + blocks.len()) as i64, ts, false));
+    .map(|(ind, ts)| {
+        mock_block(
+            (ind + blocks.len()) as i64,
+            NaiveDateTime::from_str(ts).unwrap(),
+            false,
+        )
+    });
     blocks::Entity::insert_many(useless_blocks)
         .exec(blockscout)
         .await
@@ -298,13 +304,38 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .unwrap();
 }
 
-fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
-    let size = 1000 + (index as i32 * 15485863) % 5000;
+/// `block_times` - block time for each block from the 2nd to the latest.
+///
+/// `<number of block times> = <number of inserted blocks> + 1`
+pub async fn fill_many_blocks(
+    blockscout: &DatabaseConnection,
+    latest_block_time: NaiveDateTime,
+    block_times: &Vec<TimeDelta>,
+) {
+    let mut blocks_timestamps_reversed = Vec::with_capacity(block_times.len() + 1);
+    blocks_timestamps_reversed.push(latest_block_time);
+    for time_diff in block_times.iter().rev() {
+        let next_timestamp = *blocks_timestamps_reversed.last().unwrap() - *time_diff;
+        blocks_timestamps_reversed.push(next_timestamp);
+    }
+    let blocks_timestamps = blocks_timestamps_reversed.into_iter().rev();
+    let blocks = blocks_timestamps
+        .enumerate()
+        .map(|(ind, ts)| mock_block(ind as i64, ts, true))
+        .collect::<Vec<_>>();
+    blocks::Entity::insert_many(blocks.clone())
+        .exec(blockscout)
+        .await
+        .unwrap();
+}
+
+fn mock_block(index: i64, ts: NaiveDateTime, consensus: bool) -> blocks::ActiveModel {
+    let size = (1000 + (index * 15485863) % 5000) as i32;
     let gas_limit = if index <= 3 { 12_500_000 } else { 30_000_000 };
     blocks::ActiveModel {
         number: Set(index),
         hash: Set(index.to_le_bytes().to_vec()),
-        timestamp: Set(NaiveDateTime::from_str(ts).unwrap()),
+        timestamp: Set(ts),
         consensus: Set(consensus),
         gas_limit: Set(Decimal::new(gas_limit, 0)),
         gas_used: Set(Decimal::from(size * 10)),

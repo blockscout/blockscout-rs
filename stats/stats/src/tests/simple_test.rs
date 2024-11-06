@@ -68,14 +68,11 @@ where
     C: DataSource + ChartProperties,
     C::Resolution: Ord + Clone + Debug,
 {
-    let _ = tracing_subscriber::fmt::try_init();
+    let (current_time, db, blockscout) = prepare_chart_test::<C>(test_name, None).await;
     let expected = map_str_tuple_to_owned(expected);
-    let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
-    let current_date = current_time.date_naive();
-    C::init_recursively(&db, &current_time).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, current_date).await;
     let approximate_trailing_points = C::approximate_trailing_points();
+    let current_date = current_time.date_naive();
+    fill_mock_blockscout_data(&blockscout, current_date).await;
 
     let mut parameters = UpdateParameters {
         db: &db,
@@ -347,13 +344,9 @@ async fn simple_test_counter_inner<C: DataSource + ChartProperties>(
     update_time: Option<NaiveDateTime>,
     migrations: BlockscoutMigrations,
 ) {
-    let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_db_all(test_name).await;
+    let (current_time, db, blockscout) = prepare_chart_test::<C>(test_name, update_time).await;
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
-    let current_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
     let max_date = max_time.date_naive();
-
-    C::init_recursively(&db, &current_time).await.unwrap();
     fill_mock_blockscout_data(&blockscout, max_date).await;
 
     let mut parameters = UpdateParameters {
@@ -372,7 +365,20 @@ async fn simple_test_counter_inner<C: DataSource + ChartProperties>(
     assert_eq!(expected, get_counter::<C>(&db).await);
 }
 
-async fn get_counter<C: ChartProperties>(db: &DatabaseConnection) -> String {
+pub async fn prepare_chart_test<C: DataSource + ChartProperties>(
+    test_name: &str,
+    init_time: Option<NaiveDateTime>,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
+    let _ = tracing_subscriber::fmt::try_init();
+    let (db, blockscout) = init_db_all(test_name).await;
+    let init_time = init_time
+        .map(|t| t.and_utc())
+        .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
+    C::init_recursively(&db, &init_time).await.unwrap();
+    (init_time, db, blockscout)
+}
+
+pub async fn get_counter<C: ChartProperties>(db: &DatabaseConnection) -> String {
     let data = get_raw_counters(db).await.unwrap();
     let data = &data[&C::name()];
     data.value.clone()
