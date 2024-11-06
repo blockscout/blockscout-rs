@@ -35,8 +35,9 @@ graph-node-clean:
 graph-node-stop:
     docker-compose --file graph-node/docker-compose.yml down
 
-deploy-subgraph name:
-    (cd graph-node/deployer && python3 deployer.py {{name}}) 
+deploy-subgraph *args:
+    (cd graph-node/deployer && python3 deployer.py {{args}})
+
 
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
