@@ -1,8 +1,6 @@
 use crate::database;
 use verifier_alliance_database::internal;
 
-const MOD_NAME: &str = "code";
-
 #[tokio::test]
 async fn insert_code_works() {
     const TEST_NAME: &str = "insert_code_works";

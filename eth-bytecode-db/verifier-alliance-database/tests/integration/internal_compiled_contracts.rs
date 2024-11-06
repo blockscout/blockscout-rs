@@ -8,8 +8,6 @@ use verifier_alliance_database::{
     internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
 };
 
-const MOD_NAME: &str = "compiled_contracts";
-
 #[tokio::test]
 async fn insert_compiled_contract_works() {
     const TEST_NAME: &str = "insert_compiled_contract_works";

@@ -12,8 +12,6 @@ use verifier_alliance_database::{
     ContractDeployment, VerifiedContract, VerifiedContractMatches,
 };
 
-const MOD_NAME: &str = "verified_contracts";
-
 #[tokio::test]
 async fn insert_verified_contract_with_complete_matches_work() {
     const TEST_NAME: &str = "insert_verified_contract_with_complete_matches_work";

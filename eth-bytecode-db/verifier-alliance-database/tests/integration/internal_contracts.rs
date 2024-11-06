@@ -1,8 +1,6 @@
 use crate::database;
 use verifier_alliance_database::{internal, ContractCode};
 
-const MOD_NAME: &str = "contracts";
-
 #[tokio::test]
 async fn insert_complete_code_works() {
     const TEST_NAME: &str = "insert_complete_code_works";

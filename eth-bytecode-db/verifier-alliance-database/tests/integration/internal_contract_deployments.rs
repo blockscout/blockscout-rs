@@ -3,8 +3,6 @@ use blockscout_display_bytes::decode_hex;
 use pretty_assertions::assert_eq;
 use verifier_alliance_database::{internal, ContractDeployment, RetrieveContractDeployment};
 
-const MOD_NAME: &str = "contract_deployments";
-
 #[tokio::test]
 async fn insert_regular_deployment_works_and_can_be_retrieved() {
     const TEST_NAME: &str = "insert_regular_deployment_works_and_can_be_retrieved";
