@@ -43,7 +43,7 @@ impl StatementForOne for AverageBlockTimeStatement {
             // the metric
             .offset(OFFSET_BLOCKS)
             .order_by_desc(blocks::Column::Number)
-            // todo: check if need to have it optional
+            // Not configurable because `false` seems to be completely unused
             .filter(blocks::Column::Consensus.eq(true))
             .into_model::<BlockTimestamp>()
             .into_statement(DbBackend::Postgres)
