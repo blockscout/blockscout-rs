@@ -4,20 +4,10 @@ use crate::settings::{Settings, StartConditionSettings, ToggleableThreshold};
 
 use anyhow::Context;
 use blockscout_service_launcher::launcher::ConfigSettings;
-use reqwest::StatusCode;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
-fn is_retryable_code(status_code: &reqwest::StatusCode) -> bool {
-    matches!(
-        *status_code,
-        StatusCode::INTERNAL_SERVER_ERROR
-            | StatusCode::SERVICE_UNAVAILABLE
-            | StatusCode::GATEWAY_TIMEOUT
-            | StatusCode::TOO_MANY_REQUESTS
-            | StatusCode::IM_A_TEAPOT
-    )
-}
+const RETRIES: u64 = 10;
 
 fn is_threshold_passed(
     threshold: &ToggleableThreshold,
@@ -57,6 +47,7 @@ pub async fn wait_for_blockscout_indexing(
     api_config: blockscout_client::Configuration,
     wait_config: StartConditionSettings,
 ) -> Result<(), anyhow::Error> {
+    let mut consecutive_errors = 0;
     loop {
         match blockscout_client::apis::main_page_api::get_indexing_status(&api_config).await {
             Ok(result)
@@ -75,16 +66,20 @@ pub async fn wait_for_blockscout_indexing(
                 info!("Blockscout indexing threshold passed");
                 return Ok(());
             }
-            Ok(_) => {}
-            Err(blockscout_client::Error::ResponseError(r)) if is_retryable_code(&r.status) => {
-                warn!("Error from indexing status endpoint: {r:?}");
+            Ok(_) => {
+                info!("Blockscout indexing threshold is not passed");
+                consecutive_errors = 0;
             }
             Err(e) => {
-                return Err(e).context("Requesting indexing status");
+                if consecutive_errors >= RETRIES {
+                    return Err(e).context("Requesting indexing status");
+                }
+                warn!("Error ({consecutive_errors}/{RETRIES}) requesting indexing status: {e:?}");
+                consecutive_errors += 1;
             }
         }
         info!(
-            "Blockscout is not indexed enough. Checking again in {} secs",
+            "Rechecking indexing status in {} secs",
             wait_config.check_period_secs
         );
         sleep(Duration::from_secs(wait_config.check_period_secs.into())).await;
