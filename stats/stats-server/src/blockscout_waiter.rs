@@ -134,11 +134,12 @@ mod tests {
 
     async fn test_wait_indexing(
         wait_config: StartConditionSettings,
+        timeout: Option<Duration>,
         response: ResponseTemplate,
     ) -> Result<Result<(), anyhow::Error>, Elapsed> {
         let server = mock_indexing_status(response).await;
         tokio::time::timeout(
-            Duration::from_millis(500),
+            timeout.unwrap_or(Duration::from_millis(500)),
             wait_for_blockscout_indexing(
                 blockscout_client::Configuration::new(Url::from_str(&server.uri()).unwrap()),
                 wait_config,
@@ -151,11 +152,12 @@ mod tests {
     fn wait_config(
         #[default(0.9)] blocks: f64,
         #[default(0.9)] internal_transactions: f64,
+        #[default(0)] check_period_secs: u32,
     ) -> StartConditionSettings {
         StartConditionSettings {
             blocks_ratio: ToggleableThreshold::enabled(blocks),
             internal_transactions_ratio: ToggleableThreshold::enabled(internal_transactions),
-            check_period_secs: 0,
+            check_period_secs: check_period_secs,
         }
     }
 
@@ -166,6 +168,7 @@ mod tests {
     ) {
         test_wait_indexing(
             wait_config.clone(),
+            None,
             ResponseTemplate::new(200).set_body_string(
                 r#"{
                     "finished_indexing": true,
@@ -181,6 +184,7 @@ mod tests {
 
         test_wait_indexing(
             wait_config,
+            None,
             ResponseTemplate::new(200).set_body_string(
                 r#"{
                     "finished_indexing": false,
@@ -201,6 +205,7 @@ mod tests {
     ) {
         test_wait_indexing(
             wait_config,
+            None,
             ResponseTemplate::new(200)
                 .set_body_string(
                     r#"{
@@ -224,6 +229,7 @@ mod tests {
     ) {
         test_wait_indexing(
             wait_config,
+            None,
             ResponseTemplate::new(200)
                 .set_body_string(
                     r#"{
@@ -242,13 +248,29 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn wait_for_blockscout_indexing_retries_with_error_codes(
-        wait_config: StartConditionSettings,
+        #[with(0.9, 0.9, 1)] wait_config: StartConditionSettings,
     ) {
         let mut error_servers = JoinSet::from_iter([
-            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(429)),
-            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(500)),
-            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(503)),
-            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(504)),
+            test_wait_indexing(
+                wait_config.clone(),
+                Some(Duration::from_millis(1500)),
+                ResponseTemplate::new(429),
+            ),
+            test_wait_indexing(
+                wait_config.clone(),
+                Some(Duration::from_millis(1500)),
+                ResponseTemplate::new(500),
+            ),
+            test_wait_indexing(
+                wait_config.clone(),
+                Some(Duration::from_millis(1500)),
+                ResponseTemplate::new(503),
+            ),
+            test_wait_indexing(
+                wait_config.clone(),
+                Some(Duration::from_millis(1500)),
+                ResponseTemplate::new(504),
+            ),
         ]);
         #[allow(for_loops_over_fallibles)]
         for server in error_servers.join_next().await {
@@ -263,10 +285,10 @@ mod tests {
         wait_config: StartConditionSettings,
     ) {
         let mut error_servers = JoinSet::from_iter([
-            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(400)),
-            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(403)),
-            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(404)),
-            test_wait_indexing(wait_config.clone(), ResponseTemplate::new(405)),
+            test_wait_indexing(wait_config.clone(), None, ResponseTemplate::new(400)),
+            test_wait_indexing(wait_config.clone(), None, ResponseTemplate::new(403)),
+            test_wait_indexing(wait_config.clone(), None, ResponseTemplate::new(404)),
+            test_wait_indexing(wait_config.clone(), None, ResponseTemplate::new(405)),
         ]);
         #[allow(for_loops_over_fallibles)]
         for server in error_servers.join_next().await {
