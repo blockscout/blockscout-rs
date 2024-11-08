@@ -18,6 +18,8 @@ function createDomain(node: string, timestamp: BigInt): Domain {
     domain.isMigrated = true;
     domain.createdAt = timestamp;
     domain.subdomainCount = 0;
+    domain.storedOffchain = false;
+    domain.resolvedWithWildcard = false;
   }
   return domain;
 }
@@ -62,6 +64,8 @@ function _handleNewDomain(tokenId: BigInt, to: Address, label: string, tld: stri
     domain = new Domain(subnode.toHexString());
     domain.createdAt = block.timestamp;
     domain.subdomainCount = 0;
+    domain.storedOffchain = false;
+    domain.resolvedWithWildcard = false;
   }
 
   if (domain.parent === null && parent !== null) {

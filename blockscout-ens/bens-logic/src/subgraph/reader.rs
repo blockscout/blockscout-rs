@@ -18,7 +18,7 @@ use crate::{
     },
     subgraph::{
         resolve_addresses::resolve_addresses,
-        sql::{CachedView, DbErr},
+        sql::{AdditionalTable, CachedView, DbErr},
     },
 };
 use alloy::primitives::{Address, TxHash};
@@ -181,7 +181,11 @@ impl SubgraphReader {
                         ))?;
                 }
                 AddressResolveTechnique::Addr2Name => {
-                    // addr2name doesnt have view
+                    sql::Addr2NameTable::create_table(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to create Addr2NameTable for schema {schema}"
+                        ))?;
                 }
             }
         }

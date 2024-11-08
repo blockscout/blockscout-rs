@@ -32,8 +32,6 @@ dataSources:
           handler: handleNewResolver
         - event: NewTTL(indexed bytes32,uint64)
           handler: handleNewTTL
-  
-  
   - kind: ethereum/contract
     name: Resolver
     network: lightlink-phoenix
@@ -101,7 +99,6 @@ dataSources:
           handler: handleNameRenewed
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleNameTransferred
-    
   - kind: ethereum/contract
     name: RegistrarController
     network: lightlink-phoenix

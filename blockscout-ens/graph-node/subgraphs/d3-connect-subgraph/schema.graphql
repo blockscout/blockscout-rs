@@ -43,6 +43,11 @@ type Domain @entity {
 
   "The events associated with the domain"
   events: [DomainEvent!]! @derivedFrom(field: "domain")
+
+  "Is domain stored offchain"
+  storedOffchain: Boolean!
+  "Is domain resolved with wildcard"
+  resolvedWithWildcard: Boolean!
 }
 
 interface DomainEvent {

@@ -55,8 +55,8 @@ add-test-migration name:
 benchmark:
     cargo run --example resolve_benchmark
 
-run config:
-    BENS__DATABASE__CONNECT__URL={{DATABASE_URL}} BENS__CONFIG=bens-server/config/{{config}}.json cargo run --bin bens-server
+run:
+    BENS__DATABASE__CONNECT__URL={{DATABASE_URL}} cargo run --bin bens-server
 
 run-dev:
-    dotenv -e bens-server/.env -e bens-server/.dev.env -- just run dev
+    dotenv -e .env.dev -- just run

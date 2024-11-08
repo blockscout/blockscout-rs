@@ -1,5 +1,4 @@
-mod addr2name;
-mod cache_views;
+mod additional_tables;
 mod create;
 mod domain;
 mod schema_selector;
@@ -7,8 +6,7 @@ mod transaction_history;
 mod update;
 mod utils;
 
-pub use addr2name::*;
-pub use cache_views::*;
+pub use additional_tables::*;
 pub use create::*;
 pub use domain::*;
 pub use schema_selector::*;
