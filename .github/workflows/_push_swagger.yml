@@ -61,7 +61,7 @@ jobs:
       - name: Get the current tag, branch, or commit hash
         id: git_info
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ ! -z "${{ inputs.version }}" ]; then
             echo "version=${{ inputs.version }}" >> $GITHUB_ENV
           else
             if [[ "${GITHUB_REF}" =~ refs/tags/${{ inputs.service_name }}/v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
