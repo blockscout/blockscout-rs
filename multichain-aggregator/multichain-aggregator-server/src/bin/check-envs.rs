@@ -9,6 +9,8 @@ fn main() {
         PrefixFilter::blacklist(&[
             "MULTICHAIN_AGGREGATOR__SERVER",
             "MULTICHAIN_AGGREGATOR__JAEGER",
+            "MULTICHAIN_AGGREGATOR__METRICS",
+            "MULTICHAIN_AGGREGATOR__TRACING",
         ]),
         None,
     );
