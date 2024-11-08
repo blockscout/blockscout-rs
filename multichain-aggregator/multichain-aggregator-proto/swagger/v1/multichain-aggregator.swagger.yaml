@@ -1,0 +1,225 @@
+swagger: "2.0"
+info:
+  title: v1/multichain-aggregator.proto
+  version: version not set
+tags:
+  - name: MultichainAggregatorService
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/import:batch:
+    post:
+      operationId: MultichainAggregatorService_BatchImport
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchImportResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1BatchImportRequest'
+      tags:
+        - MultichainAggregatorService
+  /api/v1/search:quick:
+    get:
+      operationId: MultichainAggregatorService_QuickSearch
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1QuickSearchResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  AddressTokenType:
+    type: string
+    enum:
+      - TOKEN_TYPE_UNSPECIFIED
+      - TOKEN_TYPE_ERC_20
+      - TOKEN_TYPE_ERC_721
+      - TOKEN_TYPE_ERC_1155
+      - TOKEN_TYPE_ERC_404
+    default: TOKEN_TYPE_UNSPECIFIED
+  HashHashType:
+    type: string
+    enum:
+      - HASH_TYPE_BLOCK
+      - HASH_TYPE_TRANSACTION
+    default: HASH_TYPE_BLOCK
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  QuickSearchResponseChainBlockNumber:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+      block_number:
+        type: string
+        format: uint64
+  QuickSearchResponseChainSearchResult:
+    type: object
+    properties:
+      explorer_url:
+        type: string
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      block_numbers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1Address:
+    type: object
+    properties:
+      hash:
+        type: string
+      ens_name:
+        type: string
+      contract_name:
+        type: string
+      token_name:
+        type: string
+      token_type:
+        $ref: '#/definitions/AddressTokenType'
+      is_contract:
+        type: boolean
+      is_verified_contract:
+        type: boolean
+      is_token:
+        type: boolean
+  v1BatchImportRequest:
+    type: object
+    properties:
+      chain_id:
+        type: string
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      block_ranges:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1BlockRange'
+      hashes:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      api_key:
+        type: string
+  v1BatchImportResponse:
+    type: object
+    properties:
+      status:
+        type: string
+  v1BlockRange:
+    type: object
+    properties:
+      min_block_number:
+        type: string
+        format: uint64
+      max_block_number:
+        type: string
+        format: uint64
+  v1Hash:
+    type: object
+    properties:
+      hash:
+        type: string
+      hash_type:
+        $ref: '#/definitions/HashHashType'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1QuickSearchResponse:
+    type: object
+    properties:
+      items:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/QuickSearchResponseChainSearchResult'

@@ -1,0 +1,64 @@
+[workspace]
+resolver = "2"
+members = [
+    "multichain-aggregator-entity",
+    "multichain-aggregator-logic",
+    "multichain-aggregator-migration",
+    "multichain-aggregator-proto",
+    "multichain-aggregator-server",
+]
+
+[workspace.dependencies]
+multichain-aggregator-entity = { path = "./multichain-aggregator-entity" }
+multichain-aggregator-logic = { path = "./multichain-aggregator-logic" }
+multichain-aggregator-migration = { path = "./multichain-aggregator-migration" }
+multichain-aggregator-proto = { path = "./multichain-aggregator-proto" }
+
+# web
+actix-prost = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.2" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.2", features = [
+    "conversions",
+] }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.2" }
+actix-web = "4.2"
+blockscout-service-launcher = { version = "0.14.0", features = [
+    "database-1_0",
+] }
+prost = "0.11"
+prost-build = "0.11"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tonic = "0.8"
+tonic-build = "0.8"
+
+# db
+sea-orm = { version = "1", features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "macros",
+] }
+sea-orm-migration = { version = "1", features = [
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+] }
+
+# serde
+serde = { version = "1.0.197", features = ["serde_derive", "derive"] }
+serde_json = "1.0.108"
+serde_with = { version = "3.9.0", features = ["macros", "json"] }
+
+# tracing
+tracing = "0.1"
+tracing-subscriber = "0.3.18"
+
+# misc
+alloy-primitives = "0.8"
+anyhow = "1.0"
+async-std = { version = "1", features = ["attributes", "tokio1"] }
+async-trait = "0.1"
+blockscout-chains = { git = "https://github.com/blockscout/blockscout-rs", version = "0.1.0" }
+config = "0.13"
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.1.1" }
+pretty_assertions = "1.3"
+regex = "1.10"
+reqwest = "0.12"
+thiserror = "1.0"
