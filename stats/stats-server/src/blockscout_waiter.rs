@@ -250,52 +250,21 @@ mod tests {
     async fn wait_for_blockscout_indexing_retries_with_error_codes(
         #[with(0.9, 0.9, 1)] wait_config: StartConditionSettings,
     ) {
+        let timeout = Some(Duration::from_millis(1500));
         let mut error_servers = JoinSet::from_iter([
-            test_wait_indexing(
-                wait_config.clone(),
-                Some(Duration::from_millis(1500)),
-                ResponseTemplate::new(429),
-            ),
-            test_wait_indexing(
-                wait_config.clone(),
-                Some(Duration::from_millis(1500)),
-                ResponseTemplate::new(500),
-            ),
-            test_wait_indexing(
-                wait_config.clone(),
-                Some(Duration::from_millis(1500)),
-                ResponseTemplate::new(503),
-            ),
-            test_wait_indexing(
-                wait_config.clone(),
-                Some(Duration::from_millis(1500)),
-                ResponseTemplate::new(504),
-            ),
+            test_wait_indexing(wait_config.clone(), timeout, ResponseTemplate::new(429)),
+            test_wait_indexing(wait_config.clone(), timeout, ResponseTemplate::new(500)),
+            test_wait_indexing(wait_config.clone(), timeout, ResponseTemplate::new(503)),
+            test_wait_indexing(wait_config.clone(), timeout, ResponseTemplate::new(504)),
+            test_wait_indexing(wait_config.clone(), timeout, ResponseTemplate::new(400)),
+            test_wait_indexing(wait_config.clone(), timeout, ResponseTemplate::new(403)),
+            test_wait_indexing(wait_config.clone(), timeout, ResponseTemplate::new(404)),
+            test_wait_indexing(wait_config.clone(), timeout, ResponseTemplate::new(405)),
         ]);
         #[allow(for_loops_over_fallibles)]
         for server in error_servers.join_next().await {
             let test_result = server.unwrap();
             test_result.expect_err("must time out");
-        }
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn wait_for_blockscout_indexing_fails_with_error_codes(
-        wait_config: StartConditionSettings,
-    ) {
-        let mut error_servers = JoinSet::from_iter([
-            test_wait_indexing(wait_config.clone(), None, ResponseTemplate::new(400)),
-            test_wait_indexing(wait_config.clone(), None, ResponseTemplate::new(403)),
-            test_wait_indexing(wait_config.clone(), None, ResponseTemplate::new(404)),
-            test_wait_indexing(wait_config.clone(), None, ResponseTemplate::new(405)),
-        ]);
-        #[allow(for_loops_over_fallibles)]
-        for server in error_servers.join_next().await {
-            let test_result = server.unwrap();
-            test_result
-                .expect("must fail immediately")
-                .expect_err("must report error");
         }
     }
 }
