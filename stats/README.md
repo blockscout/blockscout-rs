@@ -95,6 +95,11 @@ by enabling word wrapping
 
 [anchor]: <> (anchors.envs.end.service)
 
+##### Conditional start
+In order to prevent incorrect statistics from being collected, there is an option to automatically delay chart update. This is controlled by `STATS_CONDITIONAL_​START_*` environmental variables. 
+
+The service will periodically check the enabled start conditions and start updating charts once they are satisfied.
+
 <details><summary>Server settings</summary>
 <p>
 
