@@ -73,7 +73,7 @@ The separation on "logic" and "server" crates is designed to separate functional
 For now, "server" crates contain gRPC and HTTP as the transport layer. 
 It was assumed, that users may want to implement their own APIs, for which the library with functional logic might be used.
 
-Crates that require database connection may also have additional sea-orm-defined crates:
+Crates that require database connection may also have additional `sea-orm`-defined crates:
 1. `{service-name}-migration` - contains migrations for the database
 2. `{service-name}-entity` - contains the entity files generated from the schema 
 
