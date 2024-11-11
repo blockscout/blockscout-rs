@@ -20,3 +20,10 @@ pub const DEFAULT_ZKSOLC_COMPILER_LIST: &str =
 #[cfg(target_os = "macos")]
 pub const DEFAULT_ZKSOLC_COMPILER_LIST: &str =
     "https://raw.githubusercontent.com/blockscout/solc-bin/main/zksolc.macosx-arm64.list.json";
+
+#[cfg(target_os = "linux")]
+pub const DEFAULT_ERA_SOLIDITY_COMPILER_LIST: &str =
+    "https://raw.githubusercontent.com/blockscout/solc-bin/main/era-solidity.linux-amd64.list.json";
+#[cfg(target_os = "macos")]
+pub const DEFAULT_ERA_SOLIDITY_COMPILER_LIST: &str =
+    "https://raw.githubusercontent.com/blockscout/solc-bin/main/era-solidity.macosx-arm64.list.json";

@@ -9,7 +9,7 @@ mod version_detailed;
 
 pub use compilers::{CompilerInput, Compilers, Error, EvmCompiler};
 pub use download_cache::DownloadCache;
-pub use fetcher::{FetchError, Fetcher, FileValidator, Version};
+pub use fetcher::{Fetcher, FileValidator, Version};
 pub use fetcher_list::ListFetcher;
 pub use fetcher_s3::S3Fetcher;
 pub use version_compact::CompactVersion;

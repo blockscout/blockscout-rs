@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 pub struct Metadata {
     /// The bytecode hash mode.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bytecode_hash: Option<era_compiler_llvm_context::EraVMMetadataHash>,
+    pub bytecode_hash: Option<era_compiler_llvm_context::HashType>,
     /// Whether to use literal content.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_literal_content: Option<bool>,
@@ -24,7 +24,7 @@ impl Metadata {
     /// A shortcut constructor.
     ///
     pub fn new(
-        bytecode_hash: era_compiler_llvm_context::EraVMMetadataHash,
+        bytecode_hash: era_compiler_llvm_context::HashType,
         use_literal_content: bool,
     ) -> Self {
         Self {

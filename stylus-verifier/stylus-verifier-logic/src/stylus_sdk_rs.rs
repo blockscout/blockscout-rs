@@ -69,7 +69,12 @@ pub enum Error {
     Internal(#[from] anyhow::Error),
 }
 
+pub type Docker = bollard::Docker;
+
+pub use docker::connect as docker_connect;
+
 pub async fn verify_github_repository(
+    docker: &Docker,
     request: VerifyGithubRepositoryRequest,
 ) -> Result<Success, Error> {
     let repo_directory =
@@ -84,6 +89,7 @@ pub async fn verify_github_repository(
     let toolchain = validate_toolchain_channel(&toolchain_channel)?;
 
     let verify_output = docker::run_reproducible(
+        docker,
         &request.cargo_stylus_version,
         &toolchain,
         &project_path,
@@ -112,6 +118,7 @@ pub async fn verify_github_repository(
     }
 
     let export_abi_output = docker::run_reproducible(
+        docker,
         &request.cargo_stylus_version,
         &toolchain,
         &project_path,

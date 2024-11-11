@@ -1,0 +1,18 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.BatchImport
+      post: /api/v1/import:batch
+      body: "*"
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.QuickSearch
+      get: /api/v1/search:quick
+
+    #################### Health ####################
+
+    - selector: blockscout.multichainAggregator.v1.Health.Check
+      get: /health
+
