@@ -157,7 +157,7 @@ mod tests {
         StartConditionSettings {
             blocks_ratio: ToggleableThreshold::enabled(blocks),
             internal_transactions_ratio: ToggleableThreshold::enabled(internal_transactions),
-            check_period_secs: check_period_secs,
+            check_period_secs,
         }
     }
 
