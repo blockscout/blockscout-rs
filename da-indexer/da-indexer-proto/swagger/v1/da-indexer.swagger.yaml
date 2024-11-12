@@ -67,6 +67,20 @@ paths:
           type: string
       tags:
         - CelestiaService
+  /api/v1/celestia/l2Namespaces:
+    get:
+      operationId: CelestiaService_GetL2Namespaces
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CelestiaNamespaces'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - CelestiaService
   /api/v1/eigenda/blob:
     get:
       operationId: EigenDaService_GetBlob
@@ -206,6 +220,13 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1CelestiaBlobId'
+  v1CelestiaNamespaces:
+    type: object
+    properties:
+      namespaces:
+        type: array
+        items:
+          type: string
   v1EigenDaBlob:
     type: object
     properties:

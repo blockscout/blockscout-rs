@@ -2,7 +2,8 @@ use crate::proto::celestia_service_server::CelestiaService as Celestia;
 use base64::prelude::*;
 use da_indexer_logic::celestia::{l2_router::L2Router, repository::blobs};
 use da_indexer_proto::blockscout::da_indexer::v1::{
-    CelestiaBlob, CelestiaBlobId, CelestiaL2BatchMetadata, GetCelestiaBlobRequest,
+    CelestiaBlob, CelestiaBlobId, CelestiaL2BatchMetadata, CelestiaNamespaces, Empty,
+    GetCelestiaBlobRequest,
 };
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
@@ -102,5 +103,18 @@ impl Celestia for CelestiaService {
             l1_chain_id: l2_batch_metadata.l1_chain_id,
             related_blobs,
         }))
+    }
+
+    async fn get_l2_namespaces(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<CelestiaNamespaces>, Status> {
+        let l2_router = self
+            .l2_router
+            .as_ref()
+            .ok_or(Status::unimplemented("l2 router is not configured"))?;
+
+        let namespaces = l2_router.get_namespaces();
+        Ok(Response::new(CelestiaNamespaces { namespaces }))
     }
 }

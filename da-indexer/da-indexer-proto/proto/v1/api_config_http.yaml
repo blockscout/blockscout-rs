@@ -10,6 +10,9 @@ http:
     - selector: blockscout.daIndexer.v1.CelestiaService.GetL2BatchMetadata
       get: /api/v1/celestia/l2BatchMetadata
 
+    - selector: blockscout.daIndexer.v1.CelestiaService.GetL2Namespaces
+      get: /api/v1/celestia/l2Namespaces
+
     - selector: blockscout.daIndexer.v1.EigenDaService.GetBlob
       get: /api/v1/eigenda/blob
     

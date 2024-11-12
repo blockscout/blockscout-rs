@@ -57,6 +57,10 @@ impl L2Router {
             L2Type::Arbitrum => arbitrum::get_l2_batch(config, height, commitment).await,
         }
     }
+
+    pub fn get_namespaces(&self) -> Vec<String> {
+        self.routes.keys().cloned().collect()
+    }
 }
 
 pub fn new_client(config: &L2Config) -> Result<ClientWithMiddleware> {
