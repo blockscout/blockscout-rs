@@ -139,13 +139,13 @@ async fn create_blockscout_mock() -> MockServer {
                 ],
                 "internal_id": 5,
                 "l1_timestamp": "2023-12-20T10:17:24.000000Z",
-                "l1_tx_hashes": [
+                "l1_transaction_hashes": [
                   "0xf41211e966ec23032dde713d1f775ae5cb07dc5e15951281e6844d74cc02a930",
                   "0x9abc0df13890e8c0818b448b15056ecd96368dc2b4f625c1232285e05e5b3826"
                 ],
                 "l2_block_start": 29996,
                 "l2_block_end": 33082,
-                "tx_count": 1
+                "transaction_count": 1
               }
         )))
         .mount(&mock_server)
