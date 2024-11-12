@@ -8,6 +8,24 @@ Here is brief overview of the project stucture:
 
 Service is **multi-chain**, meaning that only one instance of `graph-node`, `postgres` and `bens-server` is required.
 
+## Envs
+
+[anchor]: <> (anchors.envs.start.envs_main)
+
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --- | --- | --- | --- |
+| `BENS__DATABASE__CONNECT__URL` | true | e.g. `postgresql://postgres:postgres@localhost:5432/postgres` | |
+| `BENS__DATABASE__CREATE_DATABASE` | | | `false` |
+| `BENS__DATABASE__RUN_MIGRATIONS` | | | `false` |
+| `BENS__SERVER__HTTP__ADDR` | | | `0.0.0.0:8050` |
+| `BENS__SERVER__HTTP__ENABLED` | | | `true` |
+| `BENS__SERVER__HTTP__MAX_BODY_SIZE` | | | `2097152` |
+| `BENS__SUBGRAPHS_READER__REFRESH_CACHE_SCHEDULE` | | | `0 0 * * * *` |
+| `BENS__TRACING__ENABLED` | | | `true` |
+| `BENS__TRACING__FORMAT` | | | `default` |
+
+[anchor]: <> (anchors.envs.end.envs_main)
+
 ## Contribute
 
 If you want to add your name service procol to blockscout you should:

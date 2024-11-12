@@ -56,7 +56,7 @@ benchmark:
     cargo run --example resolve_benchmark
 
 run:
-    BENS__DATABASE__CONNECT__URL={{DATABASE_URL}} cargo run --bin bens-server
+    cargo run --bin bens-server
 
 run-dev:
     dotenv -e .env.dev -- just run

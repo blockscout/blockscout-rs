@@ -6,7 +6,8 @@
         "blockscout": {
           "url": "https://eth.blockscout.com"
         },
-        "use_protocols": ["ens"]
+        "use_protocols": ["ens"],
+        "rpc_url": "http://91.210.101.45:8545"
       },
       "10": {
         "blockscout": {
