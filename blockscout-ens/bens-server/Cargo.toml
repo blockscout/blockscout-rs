@@ -13,7 +13,7 @@ async-trait = { workspace = true }
 bens-logic = { workspace = true }
 bens-proto = { workspace = true }
 blockscout-display-bytes = { workspace = true }
-blockscout-service-launcher = { workspace = true, features = ["database-0_12"] }
+blockscout-service-launcher = { workspace = true, features = ["database-1_0"] }
 chrono = { workspace = true }
 config = { workspace = true }
 env-collector = { workspace = true }
@@ -37,7 +37,7 @@ url = { workspace = true, features = ["serde"] }
 [dev-dependencies]
 bens-logic = { workspace = true, features = ["test-utils"] }
 blockscout-service-launcher = { workspace = true, features = [
-    "database-0_12",
+    "database-1_0",
     "test-server",
 ] }
 pretty_assertions = { workspace = true }
