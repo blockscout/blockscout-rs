@@ -18,8 +18,7 @@ use blockscout_db::entity::blocks;
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
-use sea_orm::{prelude::*, FromQueryResult, QueryOrder, QuerySelect};
-use sea_orm::{DbBackend, Statement};
+use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
 
 pub const LIMIT_BLOCKS: u64 = 100;
 pub const OFFSET_BLOCKS: u64 = 100;
