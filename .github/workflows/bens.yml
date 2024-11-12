@@ -61,6 +61,11 @@ jobs:
           cache-on-failure: true
           workspaces: blockscout-ens -> target
 
+      - name: ENVs in doc tests
+        run: cargo run --bin check-envs
+        env:
+          VALIDATE_ONLY: true
+
       - name: Unit tests
         run:  cargo test --locked --workspace --all-features --lib --bins -- --nocapture
         if: success() || failure()
