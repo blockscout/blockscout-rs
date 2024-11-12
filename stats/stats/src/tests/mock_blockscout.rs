@@ -310,7 +310,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
 pub async fn fill_many_blocks(
     blockscout: &DatabaseConnection,
     latest_block_time: NaiveDateTime,
-    block_times: &Vec<TimeDelta>,
+    block_times: &[TimeDelta],
 ) {
     let mut blocks_timestamps_reversed = Vec::with_capacity(block_times.len() + 1);
     blocks_timestamps_reversed.push(latest_block_time);

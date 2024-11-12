@@ -167,7 +167,6 @@ mod tests {
             .take(2)
             .chain(
                 times_generator
-                    .clone()
                     .into_iter()
                     .cycle()
                     // -1 since for `N` blocks there are `N - 1` time deltas
@@ -184,7 +183,7 @@ mod tests {
             let full_generator_repeats = limit_block_times / generator_len;
             let full_repeats_sum = times_generator.iter().sum::<u64>() * full_generator_repeats;
             // how many elements of `times_generator` are taken for the last repeat
-            let partial_repeat_elements_taken = (limit_block_times % generator_len) as u64;
+            let partial_repeat_elements_taken = limit_block_times % generator_len;
             let partial_repeat_sum = times_generator
                 .iter()
                 .take(partial_repeat_elements_taken as usize)
