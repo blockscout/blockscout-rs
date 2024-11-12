@@ -5,9 +5,8 @@ use crate::{
         kinds::{
             data_manipulation::map::MapToString,
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementForOne},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
-        types::BlockscoutMigrations,
         UpdateContext,
     },
     types::TimespanValue,
@@ -25,33 +24,41 @@ use sea_orm::{DbBackend, Statement};
 pub const LIMIT_BLOCKS: u64 = 100;
 pub const OFFSET_BLOCKS: u64 = 100;
 
-pub struct AverageBlockTimeStatement;
-
-impl StatementForOne for AverageBlockTimeStatement {
-    fn get_statement(_: &BlockscoutMigrations) -> Statement {
-        blocks::Entity::find()
-            .select_only()
-            .column_as(Expr::col(blocks::Column::Timestamp), "timestamp")
-            // Do not count genesis block because it results in weird block time.
-            // We assume that genesis block number is 1 or 0 (just to be safe).
-            // If it's not, weird block time will be present only for
-            // `LIMIT_BLOCKS` blocks, so it's not a big deal.
-            .filter(blocks::Column::Number.gt(1))
-            .limit(LIMIT_BLOCKS)
-            // top state is considered quite unstable which is not great for computing
-            // the metric
-            .offset(OFFSET_BLOCKS)
-            .order_by_desc(blocks::Column::Number)
-            // Not configurable because `false` seems to be completely unused
-            .filter(blocks::Column::Consensus.eq(true))
-            .into_model::<BlockTimestamp>()
-            .into_statement(DbBackend::Postgres)
-    }
+fn average_block_time_statement(offset: u64) -> Statement {
+    blocks::Entity::find()
+        .select_only()
+        .column_as(Expr::col(blocks::Column::Timestamp), "timestamp")
+        // Do not count genesis block because it results in weird block time.
+        // We assume that genesis block number is 1 or 0 (just to be safe).
+        // If it's not, weird block time will be present only for
+        // `LIMIT_BLOCKS` blocks, so it's not a big deal.
+        .filter(blocks::Column::Number.gt(1))
+        .limit(LIMIT_BLOCKS)
+        // top state is considered quite unstable which is not great for computing
+        // the metric
+        .offset(offset)
+        .order_by_desc(blocks::Column::Number)
+        // Not configurable because `false` seems to be completely unused
+        .filter(blocks::Column::Consensus.eq(true))
+        .into_model::<BlockTimestamp>()
+        .into_statement(DbBackend::Postgres)
 }
 
 #[derive(FromQueryResult, Debug)]
 struct BlockTimestamp {
     timestamp: chrono::NaiveDateTime,
+}
+
+async fn query_average_block_time(
+    cx: &UpdateContext<'_>,
+    offset: u64,
+) -> Result<Option<TimespanValue<NaiveDate, f64>>, UpdateError> {
+    let query = average_block_time_statement(offset);
+    let block_timestamps = BlockTimestamp::find_by_statement(query)
+        .all(cx.blockscout)
+        .await
+        .map_err(UpdateError::BlockscoutDB)?;
+    Ok(calculate_average_block_time(block_timestamps))
 }
 
 pub struct AverageBlockTimeQuery;
@@ -63,15 +70,14 @@ impl RemoteQueryBehaviour for AverageBlockTimeQuery {
         cx: &UpdateContext<'_>,
         _range: Option<Range<DateTimeUtc>>,
     ) -> Result<TimespanValue<NaiveDate, f64>, UpdateError> {
-        let query = AverageBlockTimeStatement::get_statement(&cx.blockscout_applied_migrations);
-        let block_timestamps = BlockTimestamp::find_by_statement(query)
-            .all(cx.blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        let avg_block_time = calculate_average_block_time(block_timestamps).ok_or(
-            UpdateError::Internal("No blocks were returned to calculate average block time".into()),
-        )?;
-        Ok(avg_block_time)
+        match query_average_block_time(cx, OFFSET_BLOCKS).await? {
+            Some(avg_block_time) => Ok(avg_block_time),
+            None => query_average_block_time(cx, 0)
+                .await?
+                .ok_or(UpdateError::Internal(
+                    "No blocks were returned to calculate average block time".into(),
+                )),
+        }
     }
 }
 
@@ -138,10 +144,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateParameters},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateParameters},
         tests::{
             mock_blockscout::fill_many_blocks,
-            simple_test::{get_counter, prepare_chart_test},
+            simple_test::{get_counter, prepare_chart_test, simple_test_counter},
         },
     };
 
@@ -211,5 +217,18 @@ mod tests {
             expected_avg.to_string(),
             get_counter::<AverageBlockTime>(&db).await
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_block_time_fallback() {
+        // if there are not enough blocks to use offset, calculate from available data
+        simple_test_counter::<AverageBlockTime>(
+            "update_average_block_time_fallback",
+            // first 2 blocks are excluded
+            "958320",
+            None,
+        )
+        .await;
     }
 }
