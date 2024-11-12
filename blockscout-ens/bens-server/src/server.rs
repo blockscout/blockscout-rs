@@ -106,11 +106,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     tld_list: p.tld_list,
                     subgraph_name: p.subgraph_name,
                     address_resolve_technique: p.address_resolve_technique,
-                    empty_label_hash: p.empty_label_hash,
-                    native_token_contract: p.native_token_contract,
                     meta: p.meta.0,
-                    try_offchain_resolve: p.try_offchain_resolve,
-                    registry_contract: p.registry_contract,
+                    protocol_specific: p.protocol_specific.0,
                 },
             )
         })

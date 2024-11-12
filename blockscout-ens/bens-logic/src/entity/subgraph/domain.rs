@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, sqlx::FromRow)]
 pub struct DetailedDomain {
+    pub vid: i64,
     pub id: String,
     pub name: Option<String>,
     pub label_name: Option<String>,
@@ -18,10 +19,12 @@ pub struct DetailedDomain {
     pub owner: String,
     pub registrant: Option<String>,
     pub wrapped_owner: Option<String>,
+    pub created_at: BigDecimal,
     pub expiry_date: Option<chrono::DateTime<Utc>>,
     pub is_expired: bool,
     pub stored_offchain: bool,
     pub resolved_with_wildcard: bool,
+    pub protocol_slug: String,
     #[sqlx(default)]
     pub other_addresses: sqlx::types::Json<HashMap<String, String>>,
 }
@@ -66,6 +69,13 @@ pub struct CreationDomain {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+pub struct CreationAddr2Name {
+    pub resolved_address: String,
+    pub domain_id: Option<String>,
+    pub domain_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
 pub struct DomainWithAddress {
     pub id: String,
     pub domain_name: String,
@@ -85,4 +95,25 @@ pub struct AddrReverseDomainWithActualName {
     pub reversed_domain_id: String,
     pub resolved_address: String,
     pub name: String,
+}
+
+impl From<DetailedDomain> for Domain {
+    fn from(domain: DetailedDomain) -> Self {
+        Self {
+            vid: domain.vid,
+            id: domain.id,
+            name: domain.name,
+            resolved_address: domain.resolved_address,
+            resolver: domain.resolver,
+            registration_date: domain.registration_date,
+            owner: domain.owner,
+            wrapped_owner: domain.wrapped_owner,
+            created_at: domain.created_at,
+            expiry_date: domain.expiry_date,
+            is_expired: domain.is_expired,
+            protocol_slug: domain.protocol_slug,
+            stored_offchain: domain.stored_offchain,
+            resolved_with_wildcard: domain.resolved_with_wildcard,
+        }
+    }
 }

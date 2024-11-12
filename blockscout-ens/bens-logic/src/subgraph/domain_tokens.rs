@@ -1,5 +1,8 @@
 use super::{DomainToken, DomainTokenType};
-use crate::{entity::subgraph::domain::DetailedDomain, protocols::DomainNameOnProtocol};
+use crate::{
+    entity::subgraph::domain::DetailedDomain,
+    protocols::{D3ConnectProtocol, DomainNameOnProtocol, EnsLikeProtocol, ProtocolSpecific},
+};
 use alloy::primitives::Address;
 use anyhow::Context;
 use bigdecimal::{num_bigint::BigInt, Num};
@@ -10,7 +13,7 @@ use std::str::FromStr;
     skip_all,
     fields(
         domain_name = domain.name,
-        native_token_contract = ?name.deployed_protocol.protocol.info.native_token_contract,
+        protocol_type = ?name.deployed_protocol.protocol.info.protocol_specific,
     ),
     err,
 )]
@@ -19,7 +22,26 @@ pub fn extract_tokens_from_domain(
     name: &DomainNameOnProtocol<'_>,
 ) -> Result<Vec<DomainToken>, anyhow::Error> {
     let mut tokens = vec![];
-    if let Some(contract) = name.deployed_protocol.protocol.info.native_token_contract {
+
+    match &name.deployed_protocol.protocol.info.protocol_specific {
+        ProtocolSpecific::EnsLike(ens_like) => {
+            extract_tokens_for_ens_like(&mut tokens, domain, name, ens_like)?;
+        }
+        ProtocolSpecific::D3Connect(d3_connect) => {
+            extract_tokens_for_d3_connect(&mut tokens, domain, name, d3_connect)?;
+        }
+    }
+
+    Ok(tokens)
+}
+
+fn extract_tokens_for_ens_like(
+    tokens: &mut Vec<DomainToken>,
+    domain: &DetailedDomain,
+    name: &DomainNameOnProtocol<'_>,
+    ens_like: &EnsLikeProtocol,
+) -> Result<(), anyhow::Error> {
+    if let Some(contract) = ens_like.native_token_contract {
         let is_second_level_domain = name.inner.level() == 2;
         let is_native_domain = name.tld_is_native();
 
@@ -50,7 +72,23 @@ pub fn extract_tokens_from_domain(
         });
     };
 
-    Ok(tokens)
+    Ok(())
+}
+
+fn extract_tokens_for_d3_connect(
+    tokens: &mut Vec<DomainToken>,
+    domain: &DetailedDomain,
+    _name: &DomainNameOnProtocol<'_>,
+    d3_connect: &D3ConnectProtocol,
+) -> Result<(), anyhow::Error> {
+    let id = token_id(&domain.id)?;
+    let contract = d3_connect.native_token_contract;
+    tokens.push(DomainToken {
+        id,
+        contract,
+        _type: DomainTokenType::Native,
+    });
+    Ok(())
 }
 
 fn token_id(hexed_id: &str) -> Result<String, anyhow::Error> {
@@ -64,7 +102,7 @@ mod tests {
     use super::*;
     use crate::{
         blockscout::BlockscoutClient,
-        protocols::{DeployedProtocol, Network, Protocol, Tld},
+        protocols::{DeployedProtocol, EnsLikeProtocol, Network, Protocol, Tld},
     };
     use nonempty::nonempty;
     use pretty_assertions::assert_eq;
@@ -182,7 +220,7 @@ mod tests {
         ] {
             let mut protocol = Protocol::default();
             protocol.info.tld_list = nonempty![Tld::new("eth")];
-            protocol.info.native_token_contract = native_token_contract;
+            protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol { native_token_contract, ..Default::default() });
             let deployed_protocol = DeployedProtocol {
                 protocol: &protocol,
                 deployment_network: &Network {

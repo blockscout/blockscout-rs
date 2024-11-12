@@ -1,12 +1,11 @@
-use anyhow::Context;
-use sqlx::{Executor, PgPool, Row};
-
 mod addr_reverse_names;
 mod address_names;
-
-use crate::subgraph::sql::DbErr;
 pub use addr_reverse_names::AddrReverseNamesView;
 pub use address_names::AddressNamesView;
+
+use crate::subgraph::sql::DbErr;
+use anyhow::Context;
+use sqlx::{Executor, PgPool, Row};
 
 #[async_trait::async_trait]
 pub trait CachedView {

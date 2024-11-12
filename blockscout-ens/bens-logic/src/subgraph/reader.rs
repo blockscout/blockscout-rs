@@ -18,7 +18,7 @@ use crate::{
     },
     subgraph::{
         resolve_addresses::resolve_addresses,
-        sql::{CachedView, DbErr},
+        sql::{AdditionalTable, CachedView, DbErr},
     },
 };
 use alloy::primitives::{Address, TxHash};
@@ -151,6 +151,9 @@ impl SubgraphReader {
                             "failed to update AddressNamesView for schema {schema}"
                         ))?;
                 }
+                AddressResolveTechnique::Addr2Name => {
+                    // addr2name doesnt have view
+                }
             }
         }
         Ok(())
@@ -175,6 +178,13 @@ impl SubgraphReader {
                         .await
                         .context(format!(
                             "failed to create AddressNamesView for schema {schema}"
+                        ))?;
+                }
+                AddressResolveTechnique::Addr2Name => {
+                    sql::Addr2NameTable::create_table(self.pool.as_ref(), schema)
+                        .await
+                        .context(format!(
+                            "failed to create Addr2NameTable for schema {schema}"
                         ))?;
                 }
             }
@@ -208,7 +218,7 @@ impl SubgraphReader {
             .handle_user_domain_names(self.pool.as_ref(), &name)
             .await?;
         let maybe_domain: Option<DetailedDomain> =
-            sql::get_domain(self.pool.as_ref(), &name, &input).await?;
+            sql::get_domain(self.pool.as_ref(), &name, input.only_active).await?;
         if let Some(domain) = maybe_domain {
             let domain = self
                 .patcher
@@ -848,12 +858,7 @@ mod tests {
             reader.pool.as_ref(),
             &DomainNameOnProtocol::from_str(unresolved, protocol)
                 .expect("unresolved name is valid"),
-            &GetDomainInput {
-                network_id: DEFAULT_CHAIN_ID,
-                name: unresolved.to_string(),
-                only_active: false,
-                protocol_id: None,
-            },
+            false,
         )
         .await
         .expect("failed to get domain")
@@ -885,12 +890,7 @@ mod tests {
             reader.pool.as_ref(),
             &DomainNameOnProtocol::from_str(unresolved, protocol)
                 .expect("unresolved name is valid"),
-            &GetDomainInput {
-                network_id: DEFAULT_CHAIN_ID,
-                name: unresolved.to_string(),
-                only_active: false,
-                protocol_id: None,
-            },
+            false,
         )
         .await
         .expect("failed to get domain")
