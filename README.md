@@ -42,10 +42,10 @@ A set of services used by [Blockscout](https://blockscout.com/) blockchain explo
 
 ## Running and configuring services
 
-Services are distributed as docker images. For each service you can find information about packages and their recent releases
+Services are distributed as docker images. For each service, you can find information about packages and their recent releases
 inside service directories.
 
-You can configure your app by passing necessary environment variables when starting the container. 
+You can configure your app by passing the necessary environment variables when starting the container. 
 Configuration variables common for all services can be found [here](docs/common-envs.md).
 See full list of ENVs and their description inside service directories.
 
@@ -73,13 +73,13 @@ The separation on "logic" and "server" crates is designed to separate functional
 For now, "server" crates contain gRPC and HTTP as the transport layer. 
 It was assumed, that users may want to implement their own APIs, for which the library with functional logic might be used.
 
-Crates that require database connection may also have additional sea-orm defined crates:
+Crates that require database connection may also have additional `sea-orm`-defined crates:
 1. `{service-name}-migration` - contains migrations for the database
 2. `{service-name}-entity` - contains the entity files generated from the schema 
 
 ## Contributing
 
-We appreciate your support. Before writing code and submitting pull request, please read contributing [instructions](CONTRIBUTING.md).
+We appreciate your support. Before writing code and submitting a pull request, please read contributing [instructions](CONTRIBUTING.md).
 
 
 ## License
