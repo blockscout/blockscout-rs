@@ -110,12 +110,14 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     let update_service =
         Arc::new(UpdateService::new(db.clone(), blockscout, charts.clone()).await?);
 
-    tokio::spawn(async move {
+    let update_service_handle = tokio::spawn(async move {
         // Wait for blockscout to index, if necessary.
         if let Some(config) = blockscout_api_config {
             if let Err(e) = wait_for_blockscout_indexing(config, settings.conditional_start).await {
-                tracing::error!(error =? e, "Error starting update service. Failed while waiting for blockscout indexing");
-                return;
+                let error_msg =
+                    "Error starting update service. Failed while waiting for blockscout indexing";
+                tracing::error!(error =? e, error_msg);
+                panic!("{}. {:?}", error_msg, e);
             }
         }
 
@@ -126,6 +128,7 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
                 settings.force_update_on_start,
             )
             .await;
+        Ok(())
     });
 
     if settings.metrics.enabled {
@@ -148,5 +151,15 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
     };
 
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    let futures = vec![
+        update_service_handle,
+        tokio::spawn(
+            async move { launcher::launch(&launch_settings, http_router, grpc_router).await },
+        ),
+    ];
+    let (res, _, others) = futures::future::select_all(futures).await;
+    for future in others.into_iter() {
+        future.abort()
+    }
+    res?
 }
