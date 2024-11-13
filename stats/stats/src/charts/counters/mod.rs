@@ -11,6 +11,7 @@ mod total_native_coin_transfers;
 mod total_tokens;
 mod total_txns;
 mod total_verified_contracts;
+mod yesterday_txns;
 
 #[cfg(test)]
 mod mock;
@@ -28,6 +29,7 @@ pub use total_native_coin_transfers::TotalNativeCoinTransfers;
 pub use total_tokens::TotalTokens;
 pub use total_txns::TotalTxns;
 pub use total_verified_contracts::TotalVerifiedContracts;
+pub use yesterday_txns::YesterdayTxns;
 
 #[cfg(test)]
 pub use mock::MockCounter;
