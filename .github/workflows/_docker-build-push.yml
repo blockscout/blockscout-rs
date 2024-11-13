@@ -16,6 +16,11 @@ on:
       service-name:
         required: true
         type: string
+    secrets:
+      ARM_RUNNER_HOSTNAME:
+        required: true
+      ARM_RUNNER_KEY:
+        required: true
     outputs:
       tag-value:
         description: 'A semver compatible version retrieved from the tag'
