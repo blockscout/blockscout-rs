@@ -46,21 +46,23 @@ jobs:
           m=${{ steps.regex.outputs.group4 }}
           (if ! [[ "$t" == "" ]]; then echo tags=${{ env.IMAGE_NAME }}:$t, ${{ env.IMAGE_NAME }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ env.IMAGE_NAME }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ inputs.registry }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Setup repo
+        uses: blockscout/blockscout-ci-cd/.github/actions/setup-multiarch-buildx@master
+        id: setup
+        with:
+          docker-image: ${{ env.IMAGE_NAME }}
+          docker-username: ${{ github.actor }}
+          docker-password: ${{ secrets.GITHUB_TOKEN }}
+          docker-remote-multi-platform: true
+          docker-arm-host: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+          docker-arm-host-key: ${{ secrets.ARM_RUNNER_KEY }}
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -70,9 +72,9 @@ jobs:
             proto=proto
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
           tags: ${{ steps.tags_extractor.outputs.tags }}
-          # platforms: |
-          #   linux/amd64
-          #   linux/arm64/v8
+          platforms: |
+            linux/amd64
+            linux/arm64/v8
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:build-cache
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}:build-cache,mode=max', env.IMAGE_NAME) || '' }}
