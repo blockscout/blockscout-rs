@@ -115,6 +115,7 @@ services:
       - STATS__SERVER__HTTP__ENABLED=true
       - STATS__SERVER__HTTP__ADDR=0.0.0.0:8050
       - STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152
+      - STATS__BLOCKSCOUT_API_URL=http://backend:4000
       # - STATS__FORCE_UPDATE_ON_START=true
       - RUST_BACKTRACE=1
     ports:
