@@ -89,6 +89,9 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: stats
+    secrets:
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
 
   publish_types_package:
     name: Publish types package

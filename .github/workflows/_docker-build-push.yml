@@ -16,6 +16,12 @@ on:
       service-name:
         required: true
         type: string
+      docker-context-path:
+        required: false
+        type: string
+      dockerfile-path:
+        required: false
+        type: string
     secrets:
       ARM_RUNNER_HOSTNAME:
         required: true
@@ -71,8 +77,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ${{ inputs.service-name }}
-          file: '${{ inputs.service-name }}/Dockerfile'
+          context: ${{ inputs.docker-context-path || format('{0}/Dockerfile', inputs.service-name) }}
+          file: ${{ inputs.dockerfile-path || format('{0}/Dockerfile', inputs.service-name) }}
           build-contexts: |
             proto=proto
           push: ${{ steps.tags_extractor.outputs.tags != '' }}
@@ -80,6 +86,6 @@ jobs:
           platforms: |
             linux/amd64
             linux/arm64/v8
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: ${{ steps.setup.outputs.docker-labels }}
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:build-cache
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}:build-cache,mode=max', env.IMAGE_NAME) || '' }}

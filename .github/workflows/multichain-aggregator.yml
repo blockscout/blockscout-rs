@@ -78,6 +78,9 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: multichain-aggregator
+    secrets:
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
 
   push-swagger:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))

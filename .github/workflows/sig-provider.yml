@@ -65,6 +65,9 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: sig-provider
+    secrets:
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
 
 
   push-swagger:
