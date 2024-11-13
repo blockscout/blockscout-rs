@@ -77,7 +77,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ${{ inputs.docker-context-path || format('{0}/Dockerfile', inputs.service-name) }}
+          context: ${{ inputs.docker-context-path || format('{0}/', inputs.service-name) }}
           file: ${{ inputs.dockerfile-path || format('{0}/Dockerfile', inputs.service-name) }}
           build-contexts: |
             proto=proto

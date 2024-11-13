@@ -99,8 +99,8 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: multichain-search
-    secrets:
       docker-context-path: "multichain-search/backend"
       dockerfile-path: "multichain-search/backend/Dockerfile"
+    secrets:
       ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
       ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
