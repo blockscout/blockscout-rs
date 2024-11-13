@@ -16,12 +16,6 @@ on:
       service-name:
         required: true
         type: string
-      docker-arm-host:
-        required: true
-        type: string
-      docker-arm-host-key:
-        required: true
-        type: string
     outputs:
       tag-value:
         description: 'A semver compatible version retrieved from the tag'
@@ -66,8 +60,8 @@ jobs:
           docker-username: ${{ github.actor }}
           docker-password: ${{ secrets.GITHUB_TOKEN }}
           docker-remote-multi-platform: true
-          docker-arm-host: ${{ inputs.docker-arm-host }}
-          docker-arm-host-key: ${{ inputs.docker-arm-host-key }}
+          docker-arm-host: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+          docker-arm-host-key: ${{ secrets.ARM_RUNNER_KEY }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
