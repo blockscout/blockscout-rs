@@ -1,7 +1,7 @@
 {
     "schedules": {
         "active_accounts_group": "0 0 4 * * * *",
-        "average_block_time_group": "0 0 15 * * * *",
+        "average_block_time_group": "0 */10 * * * * *",
         "completed_txns_group": "0 5 */3 * * * *",
         "total_addresses_group": "0 0 */3 * * * *",
         "total_blocks_group": "0 0 */3 * * * *",
