@@ -22,6 +22,14 @@ pub fn get_test_server_settings() -> (ServerSettings, Url) {
     (server, base)
 }
 
+async fn run_with_delay<F, R>(run: F, delay: Duration) -> R
+where
+    F: FnOnce() -> R,
+{
+    tokio::time::sleep(delay).await;
+    run()
+}
+
 pub async fn init_server<F, R>(run: F, base: &Url) -> JoinHandle<Result<(), anyhow::Error>>
 where
     F: FnOnce() -> R + Send + 'static,
@@ -59,7 +67,11 @@ where
         }
     } else {
         tokio::time::sleep(Duration::from_secs(1)).await;
-        if server_handle.is_finished() {
+        // panic faster if server is already finished
+        if server_handle.is_finished()
+            || run_with_delay(|| server_handle.is_finished(), Duration::from_millis(500)).await
+            || run_with_delay(|| server_handle.is_finished(), Duration::from_secs(1)).await
+        {
             match server_handle.await {
                 Ok(result) => {
                     panic!("Server terminated with: {result:?}")
