@@ -4,6 +4,9 @@ use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::data_source::types::{BlockscoutMigrations, UpdateParameters};
 use std::sync::Arc;
+use tokio::task::JoinHandle;
+
+const FAILED_UPDATERS_UNTIL_PANIC: u64 = 3;
 
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
@@ -33,6 +36,9 @@ impl UpdateService {
             charts,
         })
     }
+
+    /// Perform initial update and run the service in infinite loop.
+    /// Terminates dependant threads if one fails.
     pub async fn force_async_update_and_run(
         self: Arc<Self>,
         concurrent_tasks: usize,
@@ -40,7 +46,7 @@ impl UpdateService {
         force_update_on_start: Option<bool>,
     ) {
         let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_tasks));
-        let tasks = self
+        let (tasks, mut updaters) = self
             .charts
             .update_groups
             .values()
@@ -49,24 +55,37 @@ impl UpdateService {
                 let group_entry = group.clone();
                 let default_schedule = default_schedule.clone();
                 let sema = semaphore.clone();
-                async move {
-                    let _permit = sema.acquire().await.expect("failed to acquire permit");
-                    if let Some(force_full) = force_update_on_start {
-                        this.clone().update(group_entry.clone(), force_full).await
-                    };
-                    this.spawn_group_updater(group_entry, &default_schedule);
-                }
+                (
+                    async move {
+                        let _permit = sema.acquire().await.expect("failed to acquire permit");
+                        if let Some(force_full) = force_update_on_start {
+                            this.clone().update(group_entry.clone(), force_full).await
+                        };
+                    },
+                    self.spawn_group_updater(group.clone(), &default_schedule),
+                )
             })
-            .collect::<Vec<_>>();
+            .collect::<(Vec<_>, Vec<_>)>();
         futures::future::join_all(tasks).await;
         tracing::info!("initial update is done");
+
+        let mut failed = 0;
+        while !updaters.is_empty() {
+            let (res, _, others) = futures::future::select_all(updaters).await;
+            updaters = others;
+            tracing::error!("updater stopped: {:?}", res);
+            failed += 1;
+            if failed >= FAILED_UPDATERS_UNTIL_PANIC {
+                panic!("too many failed updaters");
+            }
+        }
     }
 
     fn spawn_group_updater(
         self: &Arc<Self>,
         group_entry: UpdateGroupEntry,
         default_schedule: &Schedule,
-    ) {
+    ) -> JoinHandle<()> {
         let this = self.clone();
         let chart = group_entry.clone();
         let schedule = group_entry
@@ -74,7 +93,7 @@ impl UpdateService {
             .as_ref()
             .unwrap_or(default_schedule)
             .clone();
-        tokio::spawn(async move { this.run_cron(chart, schedule).await });
+        tokio::spawn(async move { this.run_cron(chart, schedule).await })
     }
 
     async fn update(self: Arc<Self>, group_entry: UpdateGroupEntry, force_full: bool) {
