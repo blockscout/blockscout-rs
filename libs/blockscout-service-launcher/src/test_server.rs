@@ -57,6 +57,18 @@ where
                 panic!("Server did not start in time, but did not terminate");
             }
         }
+    } else {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        if server_handle.is_finished() {
+            match server_handle.await {
+                Ok(result) => {
+                    panic!("Server terminated with: {result:?}")
+                }
+                Err(_) => {
+                    panic!("Server start terminated with exit error")
+                }
+            }
+        }
     }
 
     server_handle
