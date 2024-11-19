@@ -21,6 +21,7 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
 };
+use tokio::time::timeout;
 
 const SERVICE_NAME: &str = "stats";
 
@@ -151,15 +152,27 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
     };
 
-    let futures = vec![
+    let shutdown_token = tokio_util::sync::CancellationToken::new();
+    let futures = tokio::task::JoinSet::from_iter([
         update_service_handle,
-        tokio::spawn(
-            async move { launcher::launch(&launch_settings, http_router, grpc_router).await },
-        ),
-    ];
-    let (res, _, others) = futures::future::select_all(futures).await;
-    for future in others.into_iter() {
-        future.abort()
+        tokio::spawn(async move {
+            launcher::launch(
+                &launch_settings,
+                http_router,
+                grpc_router,
+                // Some(shutdown_token.clone()),
+            )
+            .await
+        }),
+    ]);
+    let res = futures
+        .join_next()
+        .await
+        .expect("non-empty")
+        .expect("can't recover from join error");
+    shutdown_token.cancel();
+    if let Err(_) = timeout(Duration::from_secs(10), futures.join_all()).await {
+        futures.abort_all();
     }
     res?
 }
