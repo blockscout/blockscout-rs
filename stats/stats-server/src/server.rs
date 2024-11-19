@@ -108,10 +108,13 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
 
     let blockscout_api_config = init_blockscout_api_client(&settings).await?;
 
+    let mut futures = tokio::task::JoinSet::new();
+    let tracker = tokio_util::task::task_tracker::TaskTracker::new();
+
     let update_service =
         Arc::new(UpdateService::new(db.clone(), blockscout, charts.clone()).await?);
 
-    let update_service_handle = tokio::spawn(async move {
+    futures.spawn(tracker.track_future(async move {
         // Wait for blockscout to index, if necessary.
         if let Some(config) = blockscout_api_config {
             if let Err(e) = wait_for_blockscout_indexing(config, settings.conditional_start).await {
@@ -130,7 +133,7 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
             )
             .await;
         Ok(())
-    });
+    }));
 
     if settings.metrics.enabled {
         metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
@@ -153,26 +156,20 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     };
 
     let shutdown_token = tokio_util::sync::CancellationToken::new();
-    let futures = tokio::task::JoinSet::from_iter([
-        update_service_handle,
-        tokio::spawn(async move {
-            launcher::launch(
-                &launch_settings,
-                http_router,
-                grpc_router,
-                // Some(shutdown_token.clone()),
-            )
-            .await
-        }),
-    ]);
-    let res = futures
-        .join_next()
+    futures.spawn(tracker.track_future(async move {
+        launcher::launch(
+            &launch_settings,
+            http_router,
+            grpc_router,
+            Some(shutdown_token.clone()),
+        )
         .await
-        .expect("non-empty")
-        .expect("can't recover from join error");
+    }));
+    let res = futures.join_next().await.expect("non-empty");
     shutdown_token.cancel();
-    if let Err(_) = timeout(Duration::from_secs(10), futures.join_all()).await {
+    if let Err(_) = timeout(Duration::from_secs(10), tracker.wait()).await {
         futures.abort_all();
+        tracker.wait().await;
     }
     res?
 }
