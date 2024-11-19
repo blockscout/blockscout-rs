@@ -167,7 +167,7 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     }));
     {
         let shutdown = shutdown_token.clone();
-        futures.spawn(tracker.track_future(async move { Ok(shutdown.clone().cancelled().await) }));
+        futures.spawn(tracker.track_future(async move { Ok(shutdown.cancelled().await) }));
     }
     let res = futures.join_next().await.expect("non-empty");
     tracker.close();
