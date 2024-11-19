@@ -165,11 +165,18 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         )
         .await
     }));
-    let res = futures.join_next().await.expect("non-empty");
-    shutdown_token.cancel();
-    if let Err(_) = timeout(Duration::from_secs(10), tracker.wait()).await {
-        futures.abort_all();
-        tracker.wait().await;
+    {
+        let shutdown = shutdown_token.clone();
+        futures.spawn(tracker.track_future(async move { Ok(shutdown.clone().cancelled().await) }));
     }
+    let res = futures.join_next().await.expect("non-empty");
+    tracker.close();
+    shutdown_token.cancel();
+    if let Err(_) = timeout(Duration::from_secs(11), tracker.wait()).await {
+        // timed out; fallback to simple task abort
+        futures.abort_all();
+    }
+    tracker.wait().await;
+    futures.join_all().await;
     res?
 }
