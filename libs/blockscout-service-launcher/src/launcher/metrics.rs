@@ -5,6 +5,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::launcher::launch::{stop_actix_server_on_cancel, SHUTDOWN_TIMEOUT_SEC};
 
+use super::launch::TaskTrackers;
+
 #[derive(Clone)]
 pub struct Metrics {
     metrics_middleware: PrometheusMetrics,
@@ -40,6 +42,7 @@ impl Metrics {
         self,
         addr: SocketAddr,
         shutdown: Option<CancellationToken>,
+        task_trackers: &TaskTrackers,
     ) -> actix_web::dev::Server {
         tracing::info!(addr = ?addr, "starting metrics server");
         let server = HttpServer::new(move || App::new().wrap(self.metrics_middleware.clone()))
@@ -48,7 +51,11 @@ impl Metrics {
             .unwrap()
             .run();
         if let Some(shutdown) = shutdown {
-            tokio::spawn(stop_actix_server_on_cancel(server.handle(), shutdown, true));
+            tokio::spawn(task_trackers.track_future(stop_actix_server_on_cancel(
+                server.handle(),
+                shutdown,
+                true,
+            )));
         }
         server
     }
