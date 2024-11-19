@@ -23,9 +23,10 @@ fn is_threshold_passed(
         .map(|s| s.parse::<f64>())
         .transpose()
         .context(format!("Parsing `{value_name}`"))?;
-    let Some(value) = value else {
-        anyhow::bail!("Received `null` value of `{value_name}`. Can't determine indexing status.",);
-    };
+    let value = value.unwrap_or_else(|| {
+        info!("Treating `{value_name}=null` as zero.",);
+        0.0
+    });
     if value < threshold {
         info!(
             threshold = threshold,
@@ -243,6 +244,27 @@ mod tests {
         )
         .await
         .expect_err("must time out");
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn wait_for_blockscout_indexing_works_with_null_ratios(
+        wait_config: StartConditionSettings,
+    ) {
+        test_wait_indexing(
+            wait_config,
+            Some(Duration::from_millis(300)),
+            ResponseTemplate::new(200).set_body_string(
+                r#"{
+                    "finished_indexing": false,
+                    "finished_indexing_blocks": false,
+                    "indexed_blocks_ratio": null,
+                    "indexed_internal_transactions_ratio": null
+                }"#,
+            ),
+        )
+        .await
+        .expect_err("must time out and not fall with error");
     }
 
     #[rstest]

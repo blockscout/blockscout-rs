@@ -83,9 +83,9 @@ by enabling word wrapping
 | `STATS__FORCE_​UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
 | `STATS__CONCURRENT_​START_UPDATES` | | Amount of concurrent charts update on start | `3` |
 | `STATS__​DEFAULT_​SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
-| `STATS__LIMITS__REQUESTED_​POINTS_LIMIT` | | Maximum allowed number of requested points | `182500` |
-| `STATS__BLOCKSCOUT_API_URL` | Required unless `STATS__​IGNORE_​​BLOCKSCOUT_​API_​ABSENCE` is set to `true`. | URL to Blockscout API. Used for [conditional update start](#conditional-start). | `null` |
-| `STATS__CONDITIONAL_​START__CHECK_PERIOD_SECS` | | Time between start condition checking (if they are not satisfied) | `5` |
+| `STATS__LIMITS__​REQUESTED_POINTS_​LIMIT` | | Maximum allowed number of requested points | `182500` |
+| `STATS__BLOCKSCOUT_​API_URL` | Required unless `STATS__​IGNORE_​​BLOCKSCOUT_​API_​ABSENCE` is set to `true`. | URL to Blockscout API. Used for [conditional update start](#conditional-start). | `null` |
+| `STATS__CONDITIONAL_​START__​CHECK_PERIOD_SECS` | | Time between start condition checking (if they are not satisfied) | `5` |
 | `STATS__CONDITIONAL_​START__BLOCKS_RATIO__​ENABLED` | | Enable `blocks_​ratio` threshold | `true` |
 | `STATS__CONDITIONAL_​START__BLOCKS_RATIO__​THRESHOLD` | | Value for `blocks_​ratio` threshold | `0.98` |
 | `STATS__CONDITIONAL_​START__INTERNAL_​TRANSACTIONS_RATIO__​ENABLED` | | Enable `internal_​transactions_​ratio` threshold | `true` |
