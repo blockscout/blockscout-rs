@@ -7,8 +7,9 @@ use super::{
 };
 use actix_web::{middleware::Condition, App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
-use std::net::SocketAddr;
-use tokio_util::sync::CancellationToken;
+use std::{net::SocketAddr, time::Duration};
+use tokio::task::JoinSet;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing_actix_web::TracingLogger;
 
 pub(crate) const SHUTDOWN_TIMEOUT_SEC: u64 = 10;
@@ -33,43 +34,46 @@ where
         .enabled
         .then(|| Metrics::new(&settings.service_name, &settings.metrics.route));
 
-    let mut futures = vec![];
+    let mut futures = JoinSet::new();
+    let tracker = TaskTracker::new();
 
     if settings.server.http.enabled {
-        let http_server = {
-            let http_server_future = http_serve(
-                http,
-                metrics
-                    .as_ref()
-                    .map(|metrics| metrics.http_middleware().clone()),
-                &settings.server.http,
-                shutdown.clone(),
-            );
-            tokio::spawn(async move { http_server_future.await.map_err(anyhow::Error::msg) })
-        };
-        futures.push(http_server)
+        let http_server = http_serve(
+            http,
+            metrics
+                .as_ref()
+                .map(|metrics| metrics.http_middleware().clone()),
+            &settings.server.http,
+            shutdown.clone(),
+        );
+        futures.spawn(async move { http_server.await.map_err(anyhow::Error::msg) });
     }
 
     if settings.server.grpc.enabled {
-        let grpc_server = {
-            let grpc_server_future = grpc_serve(grpc, settings.server.grpc.addr, shutdown.clone());
-            tokio::spawn(async move { grpc_server_future.await.map_err(anyhow::Error::msg) })
-        };
-        futures.push(grpc_server)
+        let grpc_server = grpc_serve(grpc, settings.server.grpc.addr, shutdown.clone());
+        futures.spawn(
+            tracker.track_future(async move { grpc_server.await.map_err(anyhow::Error::msg) }),
+        );
     }
 
     if let Some(metrics) = metrics {
         let addr = settings.metrics.addr;
-        futures.push(tokio::spawn(async move {
+        let shutdown = shutdown.clone();
+        futures.spawn(async move {
             metrics.run_server(addr, shutdown).await?;
             Ok(())
-        }));
+        });
     }
 
-    let (res, _, others) = futures::future::select_all(futures).await;
-    for future in others.into_iter() {
-        future.abort()
+    let res = futures.join_next().await.expect("future set is not empty");
+    tracker.close();
+    shutdown.map(|s| s.cancel());
+    match tokio::time::timeout(Duration::from_secs(SHUTDOWN_TIMEOUT_SEC), tracker.wait()).await {
+        Ok(_) => (),
+        Err(_) => futures.abort_all(),
     }
+    tracker.wait().await;
+    futures.join_all().await;
     res?
 }
 
