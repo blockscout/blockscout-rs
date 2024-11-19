@@ -16,6 +16,7 @@ actix-cors = { version = "0.7", optional = true }
 actix-web-prom = { version = "0.6", optional = true }
 anyhow = { version = "1.0", optional = true }
 config = { version = "0.13", optional = true }
+either = { version = "1.13", optional = true }
 futures = { version = "0.3", optional = true }
 cfg-if = { version = "1.0.0", optional = true }
 keccak-hash = { version = "0.11.0", optional = true }
@@ -65,6 +66,7 @@ launcher = [
     "dep:actix-cors",
     "dep:anyhow",
     "dep:config",
+    "dep:either",
     "dep:futures",
     "dep:once_cell",
     "dep:prometheus",
