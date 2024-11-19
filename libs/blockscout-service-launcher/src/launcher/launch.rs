@@ -66,14 +66,20 @@ where
     }
     if let Some(ref shutdown) = shutdown {
         let shutdown = shutdown.clone();
-        futures.spawn(tracker.track_future(async move { Ok(shutdown.cancelled().await) }));
+        futures.spawn(tracker.track_future(async move {
+            shutdown.cancelled().await;
+            Ok(())
+        }));
     }
 
     let res = futures.join_next().await.expect("future set is not empty");
     tracker.close();
     if let Some(shutdown) = shutdown {
         shutdown.cancel();
-        if let Err(_) = timeout(Duration::from_secs(SHUTDOWN_TIMEOUT_SEC), tracker.wait()).await {
+        if timeout(Duration::from_secs(SHUTDOWN_TIMEOUT_SEC), tracker.wait())
+            .await
+            .is_err()
+        {
             // timed out; fallback to simple task abort
             futures.abort_all();
         }
