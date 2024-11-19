@@ -74,6 +74,7 @@ impl UpdateService {
             let (res, _, others) = futures::future::select_all(updaters).await;
             updaters = others;
             tracing::error!("updater stopped: {:?}", res);
+
             failed += 1;
             if failed >= FAILED_UPDATERS_UNTIL_PANIC {
                 panic!("too many failed updaters");
@@ -93,7 +94,7 @@ impl UpdateService {
             .as_ref()
             .unwrap_or(default_schedule)
             .clone();
-        tokio::spawn(async move { this.run_cron(chart, schedule).await })
+        tokio::spawn(this.run_cron(chart, schedule))
     }
 
     async fn update(self: Arc<Self>, group_entry: UpdateGroupEntry, force_full: bool) {
