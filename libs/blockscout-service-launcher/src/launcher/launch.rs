@@ -8,7 +8,7 @@ use super::{
 use actix_web::{middleware::Condition, App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
 use std::{net::SocketAddr, time::Duration};
-use tokio::task::JoinSet;
+use tokio::{task::JoinSet, time::timeout};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing_actix_web::TracingLogger;
 
@@ -64,13 +64,21 @@ where
             Ok(())
         });
     }
+    if let Some(ref shutdown) = shutdown {
+        let shutdown = shutdown.clone();
+        futures.spawn(tracker.track_future(async move { Ok(shutdown.cancelled().await) }));
+    }
 
     let res = futures.join_next().await.expect("future set is not empty");
     tracker.close();
-    shutdown.map(|s| s.cancel());
-    match tokio::time::timeout(Duration::from_secs(SHUTDOWN_TIMEOUT_SEC), tracker.wait()).await {
-        Ok(_) => (),
-        Err(_) => futures.abort_all(),
+    if let Some(shutdown) = shutdown {
+        shutdown.cancel();
+        if let Err(_) = timeout(Duration::from_secs(SHUTDOWN_TIMEOUT_SEC), tracker.wait()).await {
+            // timed out; fallback to simple task abort
+            futures.abort_all();
+        }
+    } else {
+        futures.abort_all();
     }
     tracker.wait().await;
     futures.join_all().await;
