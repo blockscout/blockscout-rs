@@ -8,6 +8,7 @@ use super::{
 use actix_web::{middleware::Condition, App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
 use std::net::SocketAddr;
+use tokio_util::sync::CancellationToken;
 use tracing_actix_web::TracingLogger;
 
 pub struct LaunchSettings {
@@ -20,6 +21,7 @@ pub async fn launch<R>(
     settings: &LaunchSettings,
     http: R,
     grpc: tonic::transport::server::Router,
+    shutdown: Option<CancellationToken>,
 ) -> Result<(), anyhow::Error>
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
@@ -39,6 +41,7 @@ where
                     .as_ref()
                     .map(|metrics| metrics.http_middleware().clone()),
                 &settings.server.http,
+                shutdown.clone(),
             );
             tokio::spawn(async move { http_server_future.await.map_err(anyhow::Error::msg) })
         };
@@ -47,7 +50,7 @@ where
 
     if settings.server.grpc.enabled {
         let grpc_server = {
-            let grpc_server_future = grpc_serve(grpc, settings.server.grpc.addr);
+            let grpc_server_future = grpc_serve(grpc, settings.server.grpc.addr, shutdown.clone());
             tokio::spawn(async move { grpc_server_future.await.map_err(anyhow::Error::msg) })
         };
         futures.push(grpc_server)
@@ -56,7 +59,7 @@ where
     if let Some(metrics) = metrics {
         let addr = settings.metrics.addr;
         futures.push(tokio::spawn(async move {
-            metrics.run_server(addr).await?;
+            metrics.run_server(addr, shutdown).await?;
             Ok(())
         }));
     }
@@ -68,10 +71,20 @@ where
     res?
 }
 
+pub(crate) async fn stop_actix_server_on_cancel(
+    actix_handle: actix_web::dev::ServerHandle,
+    shutdown: CancellationToken,
+    graceful: bool,
+) {
+    shutdown.cancelled().await;
+    actix_handle.stop(graceful).await;
+}
+
 fn http_serve<R>(
     http: R,
     metrics: Option<PrometheusMetrics>,
     settings: &HttpServerSettings,
+    shutdown: Option<CancellationToken>,
 ) -> actix_web::dev::Server
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
@@ -84,7 +97,7 @@ where
     let json_cfg = actix_web::web::JsonConfig::default().limit(settings.max_body_size);
     let cors_settings = settings.cors.clone();
     let cors_enabled = cors_settings.enabled;
-    if let Some(metrics) = metrics {
+    let server = if let Some(metrics) = metrics {
         HttpServer::new(move || {
             let cors = cors_settings.clone().build();
             App::new()
@@ -109,13 +122,22 @@ where
         .bind(settings.addr)
         .expect("failed to bind server")
         .run()
+    };
+    if let Some(shutdown) = shutdown {
+        tokio::spawn(stop_actix_server_on_cancel(server.handle(), shutdown, true));
     }
+    server
 }
 
-fn grpc_serve(
+async fn grpc_serve(
     grpc: tonic::transport::server::Router,
     addr: SocketAddr,
-) -> impl futures::Future<Output = Result<(), tonic::transport::Error>> {
+    shutdown: Option<CancellationToken>,
+) -> Result<(), tonic::transport::Error> {
     tracing::info!("starting grpc server on addr {}", addr);
-    grpc.serve(addr)
+    if let Some(shutdown) = shutdown {
+        grpc.serve_with_shutdown(addr, shutdown.cancelled()).await
+    } else {
+        grpc.serve(addr).await
+    }
 }
