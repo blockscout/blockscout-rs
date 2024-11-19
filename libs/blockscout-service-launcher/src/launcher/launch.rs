@@ -11,6 +11,8 @@ use std::net::SocketAddr;
 use tokio_util::sync::CancellationToken;
 use tracing_actix_web::TracingLogger;
 
+pub(crate) const SHUTDOWN_TIMEOUT_SEC: u64 = 10;
+
 pub struct LaunchSettings {
     pub service_name: String,
     pub server: ServerSettings,
@@ -77,7 +79,16 @@ pub(crate) async fn stop_actix_server_on_cancel(
     graceful: bool,
 ) {
     shutdown.cancelled().await;
+    tracing::info!(
+        "Shutting down actix server (gracefully: {graceful}).\
+        Should finish within {SHUTDOWN_TIMEOUT_SEC} seconds..."
+    );
     actix_handle.stop(graceful).await;
+}
+
+pub(crate) async fn grpc_cancel_signal(shutdown: CancellationToken) {
+    shutdown.cancelled().await;
+    tracing::info!("Shutting down grpc server...");
 }
 
 fn http_serve<R>(
@@ -107,6 +118,7 @@ where
                 .app_data(json_cfg.clone())
                 .configure(configure_router(&http))
         })
+        .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)
         .expect("failed to bind server")
         .run()
@@ -119,6 +131,7 @@ where
                 .app_data(json_cfg.clone())
                 .configure(configure_router(&http))
         })
+        .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)
         .expect("failed to bind server")
         .run()
@@ -136,7 +149,8 @@ async fn grpc_serve(
 ) -> Result<(), tonic::transport::Error> {
     tracing::info!("starting grpc server on addr {}", addr);
     if let Some(shutdown) = shutdown {
-        grpc.serve_with_shutdown(addr, shutdown.cancelled()).await
+        grpc.serve_with_shutdown(addr, grpc_cancel_signal(shutdown))
+            .await
     } else {
         grpc.serve(addr).await
     }
