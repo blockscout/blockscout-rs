@@ -1067,7 +1067,7 @@ mod tests {
     async fn get_new_chart_data_returns_nothing() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = init_db("get_chart_data_skipped_works").await;
+        let db = init_db("get_new_chart_data_returns_nothing").await;
         insert_mock_data(&db).await;
         let data = get_line_chart_data::<NaiveDate>(
             &db,

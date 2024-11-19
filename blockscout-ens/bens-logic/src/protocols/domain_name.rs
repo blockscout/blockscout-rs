@@ -1,10 +1,11 @@
-use super::{domain_id, ProtocolError, Tld};
-use crate::protocols::protocoler::DeployedProtocol;
+use super::{hash_name::hash_ens_domain_name, ProtocolError, Tld};
+use crate::{hex, protocols::protocoler::DeployedProtocol};
 use alloy::primitives::{keccak256, Address, B256};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomainName {
     pub id: String,
+    pub id_bytes: B256,
     pub label_name: String,
     pub name: String,
     pub empty_label_hash: Option<B256>,
@@ -17,13 +18,15 @@ impl DomainName {
     pub fn new(name: &str, empty_label_hash: Option<B256>) -> Result<Self, ProtocolError> {
         let name = ens_normalize(name)?;
         let (label_name, _) = name.split_once(SEPARATOR).unwrap_or((&name, ""));
-        let id = domain_id(&name, empty_label_hash);
+        let id_bytes = hash_ens_domain_name(&name, empty_label_hash);
+        let id = hex(id_bytes);
         let tld = Tld::from_domain_name(&name).ok_or_else(|| ProtocolError::InvalidName {
             name: name.clone(),
             reason: "tld not found".to_string(),
         })?;
         Ok(Self {
             id,
+            id_bytes,
             label_name: label_name.to_string(),
             name: name.to_string(),
             empty_label_hash,
@@ -32,18 +35,9 @@ impl DomainName {
     }
 
     pub fn addr_reverse(addr: &Address) -> Self {
-        // label name is hexed address without 0x prefix
         let label_name = format!("{:x}", addr);
         let name = format!("{}.addr.reverse", label_name);
-        // note that addr.reverse doesn't need empty_label_hash
-        let id = domain_id(&name, None);
-        Self {
-            id,
-            label_name,
-            name,
-            empty_label_hash: None,
-            tld: Tld::reverse(),
-        }
+        Self::new(&name, None).expect("addr.reverse is always valid")
     }
 
     /// Returns true if level of domain is greater than 1
@@ -99,7 +93,14 @@ impl<'a> DomainNameOnProtocol<'a> {
         name: &str,
         protocol_network: DeployedProtocol<'a>,
     ) -> Result<Self, ProtocolError> {
-        let name = DomainName::new(name, protocol_network.protocol.info.empty_label_hash)?;
+        let name = DomainName::new(
+            name,
+            protocol_network
+                .protocol
+                .info
+                .protocol_specific
+                .empty_label_hash(),
+        )?;
 
         Ok(Self::new(name, protocol_network))
     }

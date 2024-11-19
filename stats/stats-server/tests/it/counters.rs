@@ -3,6 +3,7 @@ use blockscout_service_launcher::{
     test_server::{get_test_server_settings, init_server, send_get_request},
 };
 use chrono::NaiveDate;
+use pretty_assertions::assert_eq;
 
 use stats::tests::{
     init_db::init_db_all,

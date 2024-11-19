@@ -7,7 +7,7 @@ import subprocess
 import sys
 import glob
 
-DEFAULT_PROD_IFPS_URL = 'http://ipfs.node.blockscout.com'
+DEFAULT_PROD_IFPS_URL = 'http://ipfs-main.node.blockscout.com'
 DEFAULT_IPFS_URL = "http://127.0.0.1:5001"
 
 

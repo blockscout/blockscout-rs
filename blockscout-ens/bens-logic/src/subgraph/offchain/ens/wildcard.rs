@@ -1,42 +1,34 @@
-use super::{ccip_read, DomainInfoFromCcipRead};
+use super::ccip_read;
 use crate::{
-    entity::subgraph::domain::{CreationDomain, Domain},
-    protocols::DomainNameOnProtocol,
-    subgraph,
-    subgraph::ResolverInSubgraph,
+    entity::subgraph::domain::Domain,
+    metrics,
+    protocols::{DomainNameOnProtocol, EnsLikeProtocol},
+    subgraph::{
+        self,
+        offchain::{offchain_resolution_to_resolve_result, ResolveResult},
+        ResolverInSubgraph,
+    },
 };
 use alloy::primitives::Address;
 use anyhow::Context;
-use cached::proc_macro::cached;
-
-use crate::metrics;
 use sqlx::PgPool;
 use std::str::FromStr;
 
 /// Check if `name` can be resolved using https://docs.ens.domains/ensip/10
 /// Iterates over suffixed names and tries to find a resolver
 /// Then resolve the name using CCIP-read
-#[cached(
-    key = "String",
-    convert = r#"{
-            from_user.inner.id.to_string()
-        }"#,
-    time = 14400, // 4 * 60 * 60 seconds = 4 hours
-    size = 500,
-    sync_writes = true,
-    with_cached_flag = true,
-)]
-pub async fn maybe_wildcard_resolution_with_cache(
+pub async fn maybe_wildcard_resolution(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
-) -> cached::Return<Option<CreationDomain>> {
+    ens: &EnsLikeProtocol,
+) -> Option<ResolveResult> {
     metrics::WILDCARD_RESOLVE_ATTEMPTS.inc();
-    match try_wildcard_resolution(db, from_user).await {
+    match try_wildcard_resolution(db, from_user, ens).await {
         Ok(result) => {
             if result.is_some() {
                 metrics::WILDCARD_RESOLVE_SUCCESS.inc();
             }
-            cached::Return::new(result)
+            result
         }
         Err(err) => {
             tracing::error!(
@@ -44,7 +36,7 @@ pub async fn maybe_wildcard_resolution_with_cache(
                 error = ?err,
                 "error while trying wildcard resolution"
             );
-            cached::Return::new(None)
+            None
         }
     }
 }
@@ -52,8 +44,10 @@ pub async fn maybe_wildcard_resolution_with_cache(
 async fn try_wildcard_resolution(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
-) -> Result<Option<CreationDomain>, anyhow::Error> {
-    let Some((resolver_address, maybe_existing_domain)) = any_resolver(db, from_user).await? else {
+    ens: &EnsLikeProtocol,
+) -> Result<Option<ResolveResult>, anyhow::Error> {
+    let Some((resolver_address, maybe_existing_domain)) = any_resolver(db, from_user, ens).await?
+    else {
         return Ok(None);
     };
     let result = ccip_read::call_to_resolver(from_user, resolver_address)
@@ -67,7 +61,7 @@ async fn try_wildcard_resolution(
                 None
             }
         });
-        Ok(Some(creation_domain_from_rpc_resolution(
+        Ok(Some(offchain_resolution_to_resolve_result(
             from_user,
             result,
             maybe_domain_to_update,
@@ -80,8 +74,8 @@ async fn try_wildcard_resolution(
 async fn any_resolver(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
+    ens: &EnsLikeProtocol,
 ) -> Result<Option<(Address, Option<Domain>)>, anyhow::Error> {
-    let protocol = from_user.deployed_protocol.protocol;
     let name_options = from_user
         .inner
         .iter_parents_with_self()
@@ -91,15 +85,28 @@ async fn any_resolver(
     let maybe_domain_with_resolver = any_resolver_in_db(db, name_options.clone()).await?;
     if let Some((resolver, found_domain)) = maybe_domain_with_resolver {
         return Ok(Some((resolver.resolver_address, Some(found_domain))));
-    } else if protocol.info.registry_contract.is_some() {
+    } else if ens.registry_contract.is_some() {
         // try to find resolver on chain.
         // if custom registry is set, we can try to find resolver in registry
-        if let Some(resolver_address) = any_resolver_rpc(name_options).await {
+        if let Some(resolver_address) = any_resolver_rpc(name_options, ens).await {
             return Ok(Some((resolver_address, None)));
         }
     };
 
     Ok(None)
+}
+
+async fn any_resolver_rpc(
+    names: Vec<DomainNameOnProtocol<'_>>,
+    ens: &EnsLikeProtocol,
+) -> Option<Address> {
+    for name in names {
+        let resolver = ccip_read::get_resolver(&name, ens).await.ok()?;
+        if !resolver.is_zero() {
+            return Some(resolver);
+        }
+    }
+    None
 }
 
 async fn any_resolver_in_db(
@@ -130,43 +137,4 @@ async fn any_resolver_in_db(
         }
     }
     Ok(None)
-}
-
-async fn any_resolver_rpc(names: Vec<DomainNameOnProtocol<'_>>) -> Option<Address> {
-    for name in names {
-        let resolver = ccip_read::get_resolver(&name).await.ok()?;
-        if !resolver.is_zero() {
-            return Some(resolver);
-        }
-    }
-    None
-}
-fn creation_domain_from_rpc_resolution(
-    from_user: &DomainNameOnProtocol<'_>,
-    ccip_read_info: DomainInfoFromCcipRead,
-    maybe_existing_domain: Option<Domain>,
-) -> CreationDomain {
-    let parent = from_user.inner.iter_parents_with_self().nth(1);
-    let resolver =
-        ResolverInSubgraph::new(ccip_read_info.resolver_address, ccip_read_info.id.clone());
-    let now = chrono::Utc::now();
-    CreationDomain {
-        vid: maybe_existing_domain.map(|d| d.vid),
-        id: ccip_read_info.id,
-        name: Some(ccip_read_info.name),
-        label_name: Some(from_user.inner.label_name.clone()),
-        labelhash: Some(from_user.inner.labelhash().to_vec()),
-        parent: parent.map(|p| p.id),
-        subdomain_count: 0,
-        resolved_address: Some(ccip_read_info.addr.to_string().to_lowercase()),
-        resolver: Some(resolver.to_string()),
-        is_migrated: true,
-        stored_offchain: ccip_read_info.stored_offchain,
-        resolved_with_wildcard: ccip_read_info.resolved_with_wildcard,
-        created_at: now.timestamp().into(),
-        owner: Address::ZERO.to_string(),
-        wrapped_owner: None,
-        expiry_date: None,
-        is_expired: false,
-    }
 }

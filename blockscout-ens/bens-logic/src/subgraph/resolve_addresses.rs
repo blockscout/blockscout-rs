@@ -27,6 +27,9 @@ pub async fn resolve_addresses(
             AddressResolveTechnique::ReverseRegistry => {
                 resolve_addr_reverse_cached(pool, &protocols, &addresses).await?
             }
+            AddressResolveTechnique::Addr2Name => {
+                resolve_addr2name(pool, &protocols, &addresses).await?
+            }
         };
         result.extend(found_domains);
     }
@@ -92,6 +95,15 @@ async fn resolve_addr_reverse_cached(
         .collect();
 
     Ok(domains)
+}
+
+async fn resolve_addr2name(
+    pool: &PgPool,
+    protocols: &NonEmpty<&Protocol>,
+    addresses: &[Address],
+) -> Result<Vec<DomainWithAddress>, DbErr> {
+    let addresses_str: Vec<String> = addresses.iter().map(hex).collect();
+    sql::Addr2NameTable::batch_search_addreses(pool, protocols, &addresses_str).await
 }
 
 // async fn resolve_addr_reverse(

@@ -5,6 +5,9 @@ use std::ops::{Range, RangeInclusive};
 use chrono::{NaiveDate, NaiveTime};
 use sea_orm::{prelude::DateTimeUtc, Value};
 
+// this const is not public in `chrono` for some reason
+pub const NANOS_PER_SEC: i32 = 1_000_000_000;
+
 pub fn day_start(date: &NaiveDate) -> DateTimeUtc {
     date.and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
         .and_utc()

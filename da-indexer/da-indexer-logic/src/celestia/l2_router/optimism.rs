@@ -20,10 +20,10 @@ pub struct L2BatchOptimism {
     blobs: Vec<Blob>,
     internal_id: u64,
     l1_timestamp: String,
-    l1_tx_hashes: Vec<String>,
+    l1_transaction_hashes: Vec<String>,
     l2_block_start: u64,
     l2_block_end: u64,
-    tx_count: u64,
+    transaction_count: u64,
 }
 
 pub async fn get_l2_batch(
@@ -74,7 +74,7 @@ pub async fn get_l2_batch(
         l2_batch_id: response.internal_id.to_string(),
         l2_start_block: response.l2_block_start,
         l2_end_block: response.l2_block_end,
-        l2_batch_tx_count: response.tx_count as u32,
+        l2_batch_tx_count: response.transaction_count as u32,
         l2_blockscout_url: Url::parse(&config.l2_blockscout_url)?
             .join(&format!("batches/{}", response.internal_id))?
             .to_string(),
