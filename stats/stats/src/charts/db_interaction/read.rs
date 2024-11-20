@@ -20,7 +20,7 @@ use itertools::Itertools;
 use sea_orm::{
     sea_query::{self, Expr},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, TryGetableMany,
 };
 use std::{collections::HashMap, fmt::Debug, ops::Range};
 use thiserror::Error;
@@ -470,6 +470,45 @@ where
 }
 
 #[derive(Debug, FromQueryResult)]
+struct CountEstimate {
+    count: Option<i64>,
+}
+
+/// `None` means either that
+/// - db hasn't been initialized before
+/// - `table_name` wasn't found
+pub async fn get_estimated_table_rows(
+    blockscout: &DatabaseConnection,
+    table_name: &str,
+) -> Result<Option<i64>, DbErr> {
+    let statement: Statement = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        r#"
+            SELECT (
+                CASE WHEN c.reltuples < 0 THEN
+                    NULL
+                WHEN c.relpages = 0 THEN
+                    float8 '0'
+                ELSE c.reltuples / c.relpages
+                END *
+                (
+                    pg_catalog.pg_relation_size(c.oid) /
+                    pg_catalog.current_setting('block_size')::int
+                )
+            )::bigint as count
+            FROM pg_catalog.pg_class c
+            WHERE c.oid = $1::regclass
+        "#,
+        vec![table_name.into()],
+    );
+    let count = CountEstimate::find_by_statement(statement)
+        .one(blockscout)
+        .await?;
+    let count = count.map(|c| c.count).flatten();
+    Ok(count)
+}
+
+#[derive(Debug, FromQueryResult)]
 struct SyncInfo {
     pub min_blockscout_block: Option<i64>,
 }
@@ -677,7 +716,8 @@ mod tests {
         data_source::kinds::local_db::parameters::DefaultQueryVec,
         lines::{AccountsGrowth, ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
-            init_db::init_db,
+            init_db::{init_db, init_db_all},
+            mock_blockscout::fill_mock_blockscout_data,
             point_construction::{d, month_of},
         },
         types::timespans::Month,
@@ -686,7 +726,7 @@ mod tests {
     use chrono::DateTime;
     use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
     use pretty_assertions::assert_eq;
-    use sea_orm::{EntityTrait, Set};
+    use sea_orm::{EntityName, EntityTrait, Set};
     use std::str::FromStr;
 
     fn mock_chart_data(chart_id: i32, date: &str, value: i64) -> chart_data::ActiveModel {
@@ -1288,6 +1328,62 @@ mod tests {
                 timespan: d("2022-06-29"),
                 value: "1676".to_string()
             })
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_estimated_table_rows_works() {
+        let (_db, blockscout) = init_db_all("get_estimated_table_rows_works").await;
+        fill_mock_blockscout_data(&blockscout, d("2023-03-01")).await;
+
+        // need to analyze or vacuum for `reltuples` to be updated.
+        // source: https://www.postgresql.org/docs/9.3/planner-stats.html
+        let _ = blockscout
+            .execute(Statement::from_string(DbBackend::Postgres, "ANALYZE;"))
+            .await
+            .unwrap();
+
+        let blocks_estimate = get_estimated_table_rows(&blockscout, blocks::Entity.table_name())
+            .await
+            .unwrap()
+            .unwrap();
+
+        // should be 16 rows in the table, but it's an estimate
+        assert!(blocks_estimate > 5);
+        assert!(blocks_estimate < 30);
+
+        assert!(
+            get_estimated_table_rows(
+                &blockscout,
+                blockscout_db::entity::addresses::Entity.table_name()
+            )
+            .await
+            .unwrap()
+            .unwrap()
+                > 0
+        );
+
+        assert!(
+            get_estimated_table_rows(
+                &blockscout,
+                blockscout_db::entity::transactions::Entity.table_name()
+            )
+            .await
+            .unwrap()
+            .unwrap()
+                > 0
+        );
+
+        assert!(
+            get_estimated_table_rows(
+                &blockscout,
+                blockscout_db::entity::smart_contracts::Entity.table_name()
+            )
+            .await
+            .unwrap()
+            .unwrap()
+                > 0
         );
     }
 }
