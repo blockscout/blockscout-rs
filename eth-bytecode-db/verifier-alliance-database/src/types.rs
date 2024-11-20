@@ -4,6 +4,16 @@ use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts,
 };
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ContractDeployment {
+    pub id: Uuid,
+    pub chain_id: u128,
+    pub address: Vec<u8>,
+    pub runtime_code: Vec<u8>,
+    pub creation_code: Option<Vec<u8>>,
+    pub model: verifier_alliance_entity::contract_deployments::Model,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ContractCode {
     OnlyRuntimeCode {
@@ -13,6 +23,55 @@ pub enum ContractCode {
         creation_code: Vec<u8>,
         runtime_code: Vec<u8>,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum InsertContractDeployment {
+    Genesis {
+        chain_id: u128,
+        address: Vec<u8>,
+        runtime_code: Vec<u8>,
+    },
+    Regular {
+        chain_id: u128,
+        address: Vec<u8>,
+        transaction_hash: Vec<u8>,
+        block_number: u128,
+        transaction_index: u128,
+        deployer: Vec<u8>,
+        creation_code: Vec<u8>,
+        runtime_code: Vec<u8>,
+    },
+}
+
+impl InsertContractDeployment {
+    pub fn chain_id(&self) -> u128 {
+        match self {
+            InsertContractDeployment::Genesis { chain_id, .. } => *chain_id,
+            InsertContractDeployment::Regular { chain_id, .. } => *chain_id,
+        }
+    }
+
+    pub fn address(&self) -> &[u8] {
+        match self {
+            InsertContractDeployment::Genesis { address, .. } => address,
+            InsertContractDeployment::Regular { address, .. } => address,
+        }
+    }
+
+    pub fn runtime_code(&self) -> &[u8] {
+        match self {
+            InsertContractDeployment::Genesis { runtime_code, .. } => runtime_code,
+            InsertContractDeployment::Regular { runtime_code, .. } => runtime_code,
+        }
+    }
+
+    pub fn creation_code(&self) -> Option<&[u8]> {
+        match self {
+            InsertContractDeployment::Genesis { .. } => None,
+            InsertContractDeployment::Regular { creation_code, .. } => Some(creation_code),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -51,63 +110,14 @@ impl RetrieveContractDeployment {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ContractDeployment {
-    Genesis {
-        chain_id: u128,
-        address: Vec<u8>,
-        runtime_code: Vec<u8>,
-    },
-    Regular {
-        chain_id: u128,
-        address: Vec<u8>,
-        transaction_hash: Vec<u8>,
-        block_number: u128,
-        transaction_index: u128,
-        deployer: Vec<u8>,
-        creation_code: Vec<u8>,
-        runtime_code: Vec<u8>,
-    },
-}
-
-impl ContractDeployment {
-    pub fn chain_id(&self) -> u128 {
-        match self {
-            ContractDeployment::Genesis { chain_id, .. } => *chain_id,
-            ContractDeployment::Regular { chain_id, .. } => *chain_id,
-        }
-    }
-
-    pub fn address(&self) -> &[u8] {
-        match self {
-            ContractDeployment::Genesis { address, .. } => address,
-            ContractDeployment::Regular { address, .. } => address,
-        }
-    }
-
-    pub fn runtime_code(&self) -> &[u8] {
-        match self {
-            ContractDeployment::Genesis { runtime_code, .. } => runtime_code,
-            ContractDeployment::Regular { runtime_code, .. } => runtime_code,
-        }
-    }
-
-    pub fn creation_code(&self) -> Option<&[u8]> {
-        match self {
-            ContractDeployment::Genesis { .. } => None,
-            ContractDeployment::Regular { creation_code, .. } => Some(creation_code),
-        }
-    }
-}
-
-#[derive(Clone, Debug, strum::Display, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, strum::ToString, strum::EnumString, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "lowercase")]
 pub enum CompiledContractCompiler {
     Solc,
     Vyper,
 }
 
-#[derive(Clone, Debug, strum::Display, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, strum::ToString, strum::EnumString, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "lowercase")]
 pub enum CompiledContractLanguage {
     Solidity,
@@ -133,15 +143,15 @@ pub struct CompiledContract {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VerifiedContractMatches {
-    OnlyRuntime {
-        runtime_match: Match,
-    },
     OnlyCreation {
         creation_match: Match,
     },
-    Complete {
+    OnlyRuntime {
         runtime_match: Match,
+    },
+    Complete {
         creation_match: Match,
+        runtime_match: Match,
     },
 }
 

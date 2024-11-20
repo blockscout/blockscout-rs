@@ -1,29 +1,43 @@
 use crate::helpers::insert_then_select;
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
+use blockscout_display_bytes::ToHex;
+use sea_orm::prelude::Uuid;
 use sea_orm::{
     prelude::Decimal, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
 };
 use sha2::{Digest, Sha256};
 use sha3::Keccak256;
+use std::collections::BTreeMap;
 use verification_common::verifier_alliance::Match;
 use verifier_alliance_entity::{
-    code, compiled_contracts, contract_deployments, contracts, verified_contracts,
+    code, compiled_contracts, compiled_contracts_sources, contract_deployments, contracts, sources,
+    verified_contracts,
 };
 
 pub use crate::types::{
     CompiledContract, CompiledContractCompiler, CompiledContractLanguage, ContractCode,
-    ContractDeployment, RetrieveContractDeployment, VerifiedContract, VerifiedContractMatches,
+    InsertContractDeployment, RetrieveContractDeployment, VerifiedContract,
+    VerifiedContractMatches,
 };
 
 #[derive(Clone, Debug)]
-struct InternalContractDeploymentData {
-    chain_id: Decimal,
-    address: Vec<u8>,
-    transaction_hash: Vec<u8>,
-    block_number: Decimal,
-    transaction_index: Decimal,
-    deployer: Vec<u8>,
-    contract_code: ContractCode,
+pub struct InternalContractDeploymentData {
+    pub chain_id: Decimal,
+    pub address: Vec<u8>,
+    pub transaction_hash: Vec<u8>,
+    pub block_number: Decimal,
+    pub transaction_index: Decimal,
+    pub deployer: Vec<u8>,
+    pub contract_code: ContractCode,
+}
+
+impl From<InsertContractDeployment> for InternalContractDeploymentData {
+    fn from(value: InsertContractDeployment) -> Self {
+        match value {
+            InsertContractDeployment::Genesis { .. } => parse_genesis_contract_deployment(value),
+            InsertContractDeployment::Regular { .. } => parse_regular_contract_deployment(value),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -36,42 +50,25 @@ struct InternalMatchData {
 
 pub async fn insert_verified_contract<C: ConnectionTrait>(
     database_connection: &C,
-    verified_contract: VerifiedContract,
+    contract_deployment_id: Uuid,
+    compiled_contract_id: Uuid,
+    matches: VerifiedContractMatches,
 ) -> Result<verified_contracts::Model, Error> {
-    let compiled_contract = verified_contract.compiled_contract;
-
-    let contains_metadata_hash = compiled_contract
-        .creation_code_artifacts
-        .cbor_auxdata
-        .is_some()
-        || compiled_contract
-            .runtime_code_artifacts
-            .cbor_auxdata
-            .is_some();
-    let compiled_contract_id = insert_compiled_contract(database_connection, compiled_contract)
-        .await
-        .context("insert compiled contract")?
-        .id;
-
-    let (creation_match_data, runtime_match_data) = match verified_contract.matches {
+    let (creation_match_data, runtime_match_data) = match matches {
         VerifiedContractMatches::OnlyRuntime { runtime_match } => {
-            let runtime_match_data =
-                parse_verification_common_match(contains_metadata_hash, runtime_match);
+            let runtime_match_data = parse_verification_common_match(runtime_match);
             (InternalMatchData::default(), runtime_match_data)
         }
         VerifiedContractMatches::OnlyCreation { creation_match } => {
-            let creation_match_data =
-                parse_verification_common_match(contains_metadata_hash, creation_match);
+            let creation_match_data = parse_verification_common_match(creation_match);
             (creation_match_data, InternalMatchData::default())
         }
         VerifiedContractMatches::Complete {
             runtime_match,
             creation_match,
         } => {
-            let creation_match_data =
-                parse_verification_common_match(contains_metadata_hash, creation_match);
-            let runtime_match_data =
-                parse_verification_common_match(contains_metadata_hash, runtime_match);
+            let creation_match_data = parse_verification_common_match(creation_match);
+            let runtime_match_data = parse_verification_common_match(runtime_match);
             (creation_match_data, runtime_match_data)
         }
     };
@@ -82,7 +79,7 @@ pub async fn insert_verified_contract<C: ConnectionTrait>(
         updated_at: Default::default(),
         created_by: Default::default(),
         updated_by: Default::default(),
-        deployment_id: Set(verified_contract.contract_deployment_id),
+        deployment_id: Set(contract_deployment_id),
         compilation_id: Set(compiled_contract_id),
         creation_match: Set(creation_match_data.does_match),
         creation_values: Set(creation_match_data.values),
@@ -101,7 +98,7 @@ pub async fn insert_verified_contract<C: ConnectionTrait>(
         false,
         [
             (CompilationId, compiled_contract_id),
-            (DeploymentId, verified_contract.contract_deployment_id),
+            (DeploymentId, contract_deployment_id),
         ]
     )?;
 
@@ -120,8 +117,6 @@ pub async fn insert_compiled_contract<C: ConnectionTrait>(
         .await
         .context("insert runtime code")?
         .code_hash;
-
-    // TODO: insert sources into 'sources' table
 
     let active_model = compiled_contracts::ActiveModel {
         id: Default::default(),
@@ -158,36 +153,81 @@ pub async fn insert_compiled_contract<C: ConnectionTrait>(
     Ok(model)
 }
 
+pub async fn insert_sources<C: ConnectionTrait>(
+    database_connection: &C,
+    sources: BTreeMap<String, String>,
+) -> Result<Vec<sources::Model>, Error> {
+    let mut models = vec![];
+
+    for (_path, content) in sources {
+        let source_hash = Sha256::digest(&content).to_vec();
+        let source_hash_keccak = Keccak256::digest(&content).to_vec();
+        let active_model = sources::ActiveModel {
+            source_hash: Set(source_hash.clone()),
+            source_hash_keccak: Set(source_hash_keccak),
+            content: Set(content),
+            created_at: Default::default(),
+            updated_at: Default::default(),
+            created_by: Default::default(),
+            updated_by: Default::default(),
+        };
+        let (model, _inserted) = insert_then_select!(
+            database_connection,
+            sources,
+            active_model,
+            false,
+            [(SourceHash, source_hash)]
+        )?;
+        models.push(model)
+    }
+
+    Ok(models)
+}
+
+pub async fn insert_compiled_contract_sources<C: ConnectionTrait>(
+    database_connection: &C,
+    source_hashes: BTreeMap<String, Vec<u8>>,
+    compiled_contract_id: Uuid,
+) -> Result<Vec<compiled_contracts_sources::Model>, Error> {
+    let mut models = vec![];
+
+    for (path, source_hash) in source_hashes {
+        let active_model = compiled_contracts_sources::ActiveModel {
+            id: Default::default(),
+            compilation_id: Set(compiled_contract_id),
+            path: Set(path.clone()),
+            source_hash: Set(source_hash),
+        };
+        let (model, _inserted) = insert_then_select!(
+            database_connection,
+            compiled_contracts_sources,
+            active_model,
+            false,
+            [(CompilationId, compiled_contract_id), (Path, path)]
+        )?;
+        models.push(model);
+    }
+
+    Ok(models)
+}
+
 pub async fn insert_contract_deployment<C: ConnectionTrait>(
     database_connection: &C,
-    contract_deployment: ContractDeployment,
+    internal_data: InternalContractDeploymentData,
+    contract_id: Uuid,
 ) -> Result<contract_deployments::Model, Error> {
-    let data = match contract_deployment {
-        ContractDeployment::Genesis { .. } => {
-            parse_genesis_contract_deployment(contract_deployment)
-        }
-        ContractDeployment::Regular { .. } => {
-            parse_regular_contract_deployment(contract_deployment)
-        }
-    };
-
-    let contract_id = insert_contract(database_connection, data.contract_code)
-        .await
-        .context("insert contract")?
-        .id;
-
     let active_model = contract_deployments::ActiveModel {
         id: Default::default(),
         created_at: Default::default(),
         updated_at: Default::default(),
         created_by: Default::default(),
         updated_by: Default::default(),
-        chain_id: Set(data.chain_id),
-        address: Set(data.address.clone()),
-        transaction_hash: Set(data.transaction_hash.clone()),
-        block_number: Set(data.block_number),
-        transaction_index: Set(data.transaction_index),
-        deployer: Set(data.deployer),
+        chain_id: Set(internal_data.chain_id),
+        address: Set(internal_data.address.clone()),
+        transaction_hash: Set(internal_data.transaction_hash.clone()),
+        block_number: Set(internal_data.block_number),
+        transaction_index: Set(internal_data.transaction_index),
+        deployer: Set(internal_data.deployer),
         contract_id: Set(contract_id),
     };
 
@@ -197,9 +237,9 @@ pub async fn insert_contract_deployment<C: ConnectionTrait>(
         active_model,
         false,
         [
-            (ChainId, data.chain_id),
-            (Address, data.address),
-            (TransactionHash, data.transaction_hash)
+            (ChainId, internal_data.chain_id),
+            (Address, internal_data.address),
+            (TransactionHash, internal_data.transaction_hash)
         ]
     )?;
 
@@ -323,10 +363,42 @@ async fn insert_contract_code<C: ConnectionTrait>(
     Ok((creation_code_hash, runtime_code_hash))
 }
 
+pub async fn retrieve_contract_by_id<C: ConnectionTrait>(
+    database_connection: &C,
+    contract_id: Uuid,
+) -> Result<contracts::Model, Error> {
+    contracts::Entity::find_by_id(contract_id)
+        .one(database_connection)
+        .await
+        .context("select from \"contracts\" by id")?
+        .ok_or_else(|| anyhow!("contract id was not found: {}", contract_id))
+}
+
+pub async fn retrieve_code_by_id<C: ConnectionTrait>(
+    database_connection: &C,
+    code_hash: Vec<u8>,
+) -> Result<code::Model, Error> {
+    code::Entity::find_by_id(code_hash.clone())
+        .one(database_connection)
+        .await
+        .context("select from \"code\" by id")?
+        .ok_or_else(|| anyhow!("code hash was not found: {}", code_hash.to_hex()))
+}
+
+pub fn precalculate_source_hashes(sources: &BTreeMap<String, String>) -> BTreeMap<String, Vec<u8>> {
+    let mut source_hashes = BTreeMap::new();
+    for (path, content) in sources {
+        let source_hash = Sha256::digest(content).to_vec();
+        source_hashes.insert(path.clone(), source_hash);
+    }
+
+    source_hashes
+}
+
 fn parse_genesis_contract_deployment(
-    contract_deployment: ContractDeployment,
+    contract_deployment: InsertContractDeployment,
 ) -> InternalContractDeploymentData {
-    if let ContractDeployment::Genesis {
+    if let InsertContractDeployment::Genesis {
         chain_id,
         address,
         runtime_code,
@@ -351,9 +423,9 @@ fn parse_genesis_contract_deployment(
 }
 
 fn parse_regular_contract_deployment(
-    contract_deployment: ContractDeployment,
+    contract_deployment: InsertContractDeployment,
 ) -> InternalContractDeploymentData {
-    if let ContractDeployment::Regular {
+    if let InsertContractDeployment::Regular {
         chain_id,
         address,
         transaction_hash,
@@ -387,16 +459,11 @@ fn calculate_genesis_contract_deployment_transaction_hash(runtime_code: &[u8]) -
     Keccak256::digest(runtime_code).to_vec()
 }
 
-fn parse_verification_common_match(
-    contains_metadata_hash: bool,
-    verification_common_match: Match,
-) -> InternalMatchData {
+fn parse_verification_common_match(match_value: Match) -> InternalMatchData {
     InternalMatchData {
         does_match: true,
-        metadata_match: Some(
-            contains_metadata_hash && verification_common_match.values.cbor_auxdata.is_empty(),
-        ),
-        values: Some(verification_common_match.values.into()),
-        transformations: Some(verification_common_match.transformations.into()),
+        metadata_match: Some(match_value.metadata_match),
+        values: Some(match_value.values.into()),
+        transformations: Some(match_value.transformations.into()),
     }
 }

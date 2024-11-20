@@ -4,33 +4,31 @@ use sea_orm::{prelude::Uuid, DatabaseConnection};
 use serde_json::json;
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
-    CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation, MatchType,
-    MatchValues, RuntimeCodeArtifacts, SourceId,
+    CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation, MatchValues,
+    RuntimeCodeArtifacts, SourceId,
 };
 use verifier_alliance_database::{
-    internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
-    ContractDeployment, VerifiedContract, VerifiedContractMatches,
+    CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
+    InsertContractDeployment, VerifiedContract, VerifiedContractMatches,
 };
 
 #[tokio::test]
 async fn insert_verified_contract_with_complete_matches_work() {
-    const TEST_NAME: &str = "insert_verified_contract_with_complete_matches_work";
-
     let db_guard = database!();
 
     let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
-    let compiled_contract = compiled_contract();
+    let compiled_contract = complete_compiled_contract();
     let verified_contract = VerifiedContract {
         contract_deployment_id,
         compiled_contract,
         matches: VerifiedContractMatches::Complete {
             runtime_match: Match {
-                r#type: MatchType::Full,
+                metadata_match: true,
                 transformations: vec![],
                 values: Default::default(),
             },
             creation_match: Match {
-                r#type: MatchType::Full,
+                metadata_match: true,
                 transformations: vec![],
                 values: Default::default(),
             },
@@ -38,25 +36,23 @@ async fn insert_verified_contract_with_complete_matches_work() {
     };
 
     let _inserted_model =
-        internal::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
+        verifier_alliance_database::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
             .await
             .expect("error while inserting");
 }
 
 #[tokio::test]
 async fn insert_verified_contract_with_runtime_only_matches_work() {
-    const TEST_NAME: &str = "insert_verified_contract_with_runtime_only_matches_work";
-
     let db_guard = database!();
 
     let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
-    let compiled_contract = compiled_contract();
+    let compiled_contract = complete_compiled_contract();
     let verified_contract = VerifiedContract {
         contract_deployment_id,
         compiled_contract,
         matches: VerifiedContractMatches::OnlyRuntime {
             runtime_match: Match {
-                r#type: MatchType::Full,
+                metadata_match: true,
                 transformations: vec![],
                 values: Default::default(),
             },
@@ -64,25 +60,23 @@ async fn insert_verified_contract_with_runtime_only_matches_work() {
     };
 
     let _inserted_model =
-        internal::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
+        verifier_alliance_database::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
             .await
             .expect("error while inserting");
 }
 
 #[tokio::test]
 async fn insert_verified_contract_with_creation_only_matches_work() {
-    const TEST_NAME: &str = "insert_verified_contract_with_creation_only_matches_work";
-
     let db_guard = database!();
 
     let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
-    let compiled_contract = compiled_contract();
+    let compiled_contract = complete_compiled_contract();
     let verified_contract = VerifiedContract {
         contract_deployment_id,
         compiled_contract,
         matches: VerifiedContractMatches::OnlyCreation {
             creation_match: Match {
-                r#type: MatchType::Full,
+                metadata_match: true,
                 transformations: vec![],
                 values: Default::default(),
             },
@@ -90,19 +84,17 @@ async fn insert_verified_contract_with_creation_only_matches_work() {
     };
 
     let _inserted_model =
-        internal::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
+        verifier_alliance_database::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
             .await
             .expect("error while inserting");
 }
 
 #[tokio::test]
 async fn insert_verified_contract_with_filled_matches() {
-    const TEST_NAME: &str = "insert_verified_contract_with_filled_matches";
-
     let db_guard = database!();
 
     let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
-    let compiled_contract = compiled_contract();
+    let compiled_contract = complete_compiled_contract();
 
     let (runtime_match_values, runtime_match_transformations) = {
         let mut match_values = MatchValues::default();
@@ -162,12 +154,12 @@ async fn insert_verified_contract_with_filled_matches() {
         compiled_contract,
         matches: VerifiedContractMatches::Complete {
             runtime_match: Match {
-                r#type: MatchType::Partial,
+                metadata_match: false,
                 transformations: runtime_match_transformations,
                 values: runtime_match_values,
             },
             creation_match: Match {
-                r#type: MatchType::Partial,
+                metadata_match: false,
                 transformations: creation_match_transformations,
                 values: creation_match_values,
             },
@@ -175,33 +167,12 @@ async fn insert_verified_contract_with_filled_matches() {
     };
 
     let _inserted_model =
-        internal::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
+        verifier_alliance_database::insert_verified_contract(db_guard.client().as_ref(), verified_contract)
             .await
             .expect("error while inserting");
 }
 
-async fn insert_contract_deployment(database_connection: &DatabaseConnection) -> Uuid {
-    let contract_deployment = ContractDeployment::Regular {
-        chain_id: 10,
-        address: decode_hex("0x8FbB39A5a79aeCE03c8f13ccEE0b96C128ec1a67").unwrap(),
-        transaction_hash: decode_hex(
-            "0xf4042e19c445551d1059ad3856f83383c48699367cfb3e0edeccd26002dd2292",
-        )
-        .unwrap(),
-        block_number: 127387809,
-        transaction_index: 16,
-        deployer: decode_hex("0x1F98431c8aD98523631AE4a59f267346ea31F984").unwrap(),
-        creation_code: vec![0x1, 0x2],
-        runtime_code: vec![0x3, 0x4],
-    };
-
-    internal::insert_contract_deployment(database_connection, contract_deployment)
-        .await
-        .expect("error while inserting contract deployment")
-        .id
-}
-
-fn compiled_contract() -> CompiledContract {
+fn complete_compiled_contract() -> CompiledContract {
     CompiledContract {
         compiler: CompiledContractCompiler::Solc,
         version: "".to_string(),
@@ -234,4 +205,25 @@ fn compiled_contract() -> CompiledContract {
             source_map: Some(json!("source_map")),
         },
     }
+}
+
+async fn insert_contract_deployment(database_connection: &DatabaseConnection) -> Uuid {
+    let contract_deployment = InsertContractDeployment::Regular {
+        chain_id: 10,
+        address: decode_hex("0x8FbB39A5a79aeCE03c8f13ccEE0b96C128ec1a67").unwrap(),
+        transaction_hash: decode_hex(
+            "0xf4042e19c445551d1059ad3856f83383c48699367cfb3e0edeccd26002dd2292",
+        )
+            .unwrap(),
+        block_number: 127387809,
+        transaction_index: 16,
+        deployer: decode_hex("0x1F98431c8aD98523631AE4a59f267346ea31F984").unwrap(),
+        creation_code: vec![0x1, 0x2],
+        runtime_code: vec![0x3, 0x4],
+    };
+
+    verifier_alliance_database::insert_contract_deployment(database_connection, contract_deployment)
+        .await
+        .expect("error while inserting contract deployment")
+        .id
 }

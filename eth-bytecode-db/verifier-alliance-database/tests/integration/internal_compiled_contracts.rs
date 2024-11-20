@@ -10,8 +10,6 @@ use verifier_alliance_database::{
 
 #[tokio::test]
 async fn insert_compiled_contract_works() {
-    const TEST_NAME: &str = "insert_compiled_contract_works";
-
     let db_guard = database!();
 
     let compiled_contract = CompiledContract {
@@ -55,8 +53,6 @@ async fn insert_compiled_contract_works() {
 
 #[tokio::test]
 async fn insert_compiled_contract_with_empty_artifact_values() {
-    const TEST_NAME: &str = "insert_compiled_contract_with_empty_artifact_values";
-
     let db_guard = database!();
 
     let compiled_contract = CompiledContract {
