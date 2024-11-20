@@ -89,3 +89,27 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
         Ok(value)
     }
 }
+
+pub struct QueryLastWithEstimationFallback<C: ChartProperties>(PhantomData<C>);
+
+impl<C: ChartProperties> QueryBehaviour for QueryLastWithEstimationFallback<C> {
+    type Output = DateValue<String>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        _range: Option<Range<DateTimeUtc>>,
+    ) -> Result<Self::Output, UpdateError> {
+        let value = get_counter_data(
+            cx.db,
+            &C::name(),
+            Some(cx.time.date_naive()),
+            C::missing_date_policy(),
+        )
+        .await?
+        .ok_or(UpdateError::Internal(format!(
+            "no data for counter '{}' was found",
+            C::name()
+        )))?;
+        Ok(value)
+    }
+}
