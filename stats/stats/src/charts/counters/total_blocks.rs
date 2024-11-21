@@ -1,9 +1,10 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::get_estimated_table_rows,
     data_source::{
         kinds::{
-            local_db::DirectPointLocalDbChartSource,
+            local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         types::UpdateContext,
@@ -13,7 +14,7 @@ use crate::{
 };
 
 use blockscout_db::entity::blocks;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
 
@@ -72,7 +73,38 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type TotalBlocks = DirectPointLocalDbChartSource<TotalBlocksRemote, Properties>;
+pub struct CachedBlocksEstimation;
+
+impl ValueEstimation for CachedBlocksEstimation {
+    async fn estimate(blockscout: &DatabaseConnection) -> Result<DateValue<String>, UpdateError> {
+        #[cached::proc_macro::once(time = 60, sync_writes = true, result = true)]
+        async fn cached_blocks_estimation(
+            blockscout: &DatabaseConnection,
+        ) -> Result<Option<i64>, DbErr> {
+            get_estimated_table_rows(blockscout, blocks::Entity.table_name()).await
+        }
+
+        let now = Utc::now();
+        let value = cached_blocks_estimation(blockscout)
+            .await
+            .map_err(UpdateError::BlockscoutDB)?
+            .map(|b| {
+                let b = b as f64 * 0.9;
+                b as i64
+            })
+            .unwrap_or(0);
+        Ok(DateValue {
+            timespan: now.date_naive(),
+            value: value.to_string(),
+        })
+    }
+}
+
+pub type TotalBlocks = DirectPointLocalDbChartSourceWithEstimate<
+    TotalBlocksRemote,
+    CachedBlocksEstimation,
+    Properties,
+>;
 
 #[cfg(test)]
 mod tests {
