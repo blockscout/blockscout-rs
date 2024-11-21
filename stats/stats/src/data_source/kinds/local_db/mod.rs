@@ -22,7 +22,7 @@ use parameters::{
         },
         point::PassPoint,
     },
-    DefaultCreate, DefaultQueryLast, DefaultQueryVec,
+    DefaultCreate, DefaultQueryLast, DefaultQueryVec, QueryLastWithEstimationFallback,
 };
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
@@ -111,6 +111,15 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
     DefaultCreate<C>,
     PassPoint<Dependency>,
     DefaultQueryLast<C>,
+    C,
+>;
+
+pub type DirectPointLocalDbChartSourceWithEstimate<Dependency, Estimate, C> = LocalDbChartSource<
+    Dependency,
+    (),
+    DefaultCreate<C>,
+    PassPoint<Dependency>,
+    QueryLastWithEstimationFallback<Estimate, C>,
     C,
 >;
 
