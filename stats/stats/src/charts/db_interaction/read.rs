@@ -20,7 +20,7 @@ use itertools::Itertools;
 use sea_orm::{
     sea_query::{self, Expr},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement, TryGetableMany,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
 use std::{collections::HashMap, fmt::Debug, ops::Range};
 use thiserror::Error;
