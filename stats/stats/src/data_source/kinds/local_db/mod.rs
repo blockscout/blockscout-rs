@@ -25,11 +25,13 @@ use parameters::{
     DefaultCreate, DefaultQueryLast, DefaultQueryVec, QueryLastWithEstimationFallback,
 };
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use stats_proto::blockscout::stats::v1::Point;
 
 use crate::{
     charts::{
         chart_properties_portrait,
         db_interaction::read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
+        query_dispatch::QuerySerialized,
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
@@ -53,7 +55,7 @@ pub mod parameters;
 ///
 /// See [module-level documentation](self) for more details.
 pub struct LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>(
-    PhantomData<(MainDep, ResolutionDep, Create, Update, Query, ChartProps)>,
+    pub PhantomData<(MainDep, ResolutionDep, Create, Update, Query, ChartProps)>,
 )
 where
     MainDep: DataSource,
@@ -295,7 +297,6 @@ where
     ChartProps: ChartProperties,
 {
 }
-
 #[cfg(test)]
 mod tests {
     mod update_itself_is_triggered_once_per_group {

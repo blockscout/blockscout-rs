@@ -18,8 +18,8 @@ pub use charts::{
     db_interaction::read::{
         get_line_chart_data, get_raw_counters, ApproxUnsignedDiff, ReadError, RequestedPointsLimit,
     },
-    lines, types, ChartKey, ChartProperties, ChartPropertiesObject, MissingDatePolicy, Named,
-    ResolutionKind, UpdateError,
+    lines, types, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject, MissingDatePolicy,
+    Named, ResolutionKind, UpdateError,
 };
 
 pub use utils::exclusive_datetime_range_to_inclusive;

@@ -221,4 +221,30 @@ mod tests {
         let data = get_raw_counters(&db).await.unwrap();
         assert_eq!("13", data[&TotalBlocks::name()].value);
     }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn total_blocks_fallback() {
+        let _ = tracing_subscriber::fmt::try_init();
+        let (db, blockscout) = init_db_all("total_blocks_fallback").await;
+        let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
+        let current_date = current_time.date_naive();
+
+        TotalBlocks::init_recursively(&db, &current_time)
+            .await
+            .unwrap();
+
+        fill_mock_blockscout_data(&blockscout, current_date).await;
+
+        let parameters = UpdateParameters {
+            db: &db,
+            blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            update_time_override: Some(current_time),
+            force_full: false,
+        };
+        let cx: UpdateContext<'_> = UpdateContext::from_params_now_or_override(parameters.clone());
+        let data = get_raw_counters(&db).await.unwrap();
+        assert_eq!("13", data[&TotalBlocks::name()].value);
+    }
 }
