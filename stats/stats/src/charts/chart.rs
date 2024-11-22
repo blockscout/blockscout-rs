@@ -12,7 +12,10 @@ use entity::sea_orm_active_enums::{ChartResolution, ChartType};
 use sea_orm::prelude::*;
 use thiserror::Error;
 
-use super::db_interaction::read::ApproxUnsignedDiff;
+use super::{
+    db_interaction::read::ApproxUnsignedDiff,
+    query_dispatch::{ChartTypeSpecifics, QuerySerialized, QuerySerializedDyn},
+};
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
@@ -230,6 +233,27 @@ macro_rules! define_and_impl_resolution_properties {
         }
         )+
     };
+}
+
+/// Dynamic object representing a chart
+pub struct ChartObject {
+    pub properties: ChartPropertiesObject,
+    pub type_specifics: ChartTypeSpecifics,
+}
+
+impl ChartObject {
+    pub fn construct_from_chart<T>(t: T) -> Self
+    where
+        T: ChartProperties + QuerySerialized + Send + 'static,
+        QuerySerializedDyn<T::Output>: Into<ChartTypeSpecifics>,
+    {
+        Self {
+            properties: ChartPropertiesObject::construct_from_chart::<T>(),
+            type_specifics: <QuerySerializedDyn<T::Output> as Into<ChartTypeSpecifics>>::into(
+                Box::new(t),
+            ),
+        }
+    }
 }
 
 /// Dynamic version of trait `ChartProperties`.

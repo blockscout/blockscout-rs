@@ -41,7 +41,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::{
-    charts::{chart_properties_portrait::imports::ChartKey, ChartPropertiesObject},
+    charts::{chart_properties_portrait::imports::ChartKey, ChartObject, ChartPropertiesObject},
     data_source::UpdateParameters,
     UpdateError,
 };
@@ -263,6 +263,8 @@ macro_rules! construct_update_group {
             fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartPropertiesObject> {
                 std::vec![
                     $(
+                        // todo: uncomment and fix type mismatch
+                        // $crate::ChartObject::construct_from_chart::<$member>($member),
                         $crate::ChartPropertiesObject::construct_from_chart::<$member>(),
                     )*
                 ]
