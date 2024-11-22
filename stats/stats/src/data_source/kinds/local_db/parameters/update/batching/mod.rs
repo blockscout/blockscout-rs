@@ -132,8 +132,10 @@ where
     let last_point_range_values = Query::query_data(
         cx,
         Some(previous_step_last_point_timespan.clone().into_time_range()),
+        false,
     )
     .await?;
+    // might be replaced with `fill_missing_dates=true`
     let previous_step_last_point = last_point_range_values
         .last()
         .cloned()

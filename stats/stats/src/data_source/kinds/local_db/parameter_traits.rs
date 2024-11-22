@@ -62,5 +62,6 @@ pub trait QueryBehaviour {
     fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
+        fill_missing_dates: bool,
     ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }
