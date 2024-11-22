@@ -260,7 +260,9 @@ where
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let _timer = dependency_data_fetch_timer.start_interval();
-        Query::query_data(cx, range).await
+        // maybe add `fill_missing_dates` parameter to current function as well in the future
+        // to get rid of "Note" in the `DataSource`'s method documentation
+        Query::query_data(cx, range, false).await
     }
 }
 

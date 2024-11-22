@@ -29,6 +29,7 @@ where
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: Option<Range<DateTimeUtc>>,
+        fill_missing_dates: bool,
     ) -> Result<Self::Output, UpdateError> {
         // In DB we store data with date precision. Also, `get_line_chart_data`
         // works with inclusive range. Therefore, we need to convert the range and
@@ -54,7 +55,7 @@ where
                 end,
                 None,
                 C::missing_date_policy(),
-                false,
+                fill_missing_dates,
                 C::approximate_trailing_points(),
             )
             .await?
@@ -74,6 +75,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: Option<Range<DateTimeUtc>>,
+        _fill_missing_dates: bool,
     ) -> Result<Self::Output, UpdateError> {
         let value = get_counter_data(
             cx.db,
@@ -110,6 +112,7 @@ where
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: Option<Range<DateTimeUtc>>,
+        _fill_missing_dates: bool,
     ) -> Result<Self::Output, UpdateError> {
         let value = get_counter_data(
             cx.db,
@@ -194,7 +197,7 @@ mod tests {
         assert_eq!(
             expected_estimate(),
             QueryLastWithEstimationFallback::<TestFallback, InvalidProperties>::query_data(
-                &cx, None
+                &cx, None, true
             )
             .await
             .unwrap()
