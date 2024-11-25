@@ -236,6 +236,7 @@ macro_rules! define_and_impl_resolution_properties {
 }
 
 /// Dynamic object representing a chart
+#[derive(Debug)]
 pub struct ChartObject {
     pub properties: ChartPropertiesObject,
     pub type_specifics: ChartTypeSpecifics,
@@ -250,7 +251,7 @@ impl ChartObject {
         Self {
             properties: ChartPropertiesObject::construct_from_chart::<T>(),
             type_specifics: <QuerySerializedDyn<T::Output> as Into<ChartTypeSpecifics>>::into(
-                Box::new(t),
+                std::sync::Arc::new(Box::new(t)),
             ),
         }
     }

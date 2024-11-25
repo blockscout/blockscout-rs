@@ -3,7 +3,6 @@ use std::{clone::Clone, cmp::Ord, collections::BTreeMap, fmt::Debug, str::FromSt
 use crate::{
     config::{layout::sorted_items_according_to_layout, types},
     runtime_setup::{EnabledChartEntry, RuntimeSetup},
-    serializers::serialize_line_points,
     settings::LimitsSettings,
 };
 
@@ -13,6 +12,7 @@ use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
     entity::sea_orm_active_enums::ChartType,
+    query_dispatch::serialize_line_points,
     types::{
         timespans::{Month, Week, Year},
         Timespan,
@@ -69,11 +69,11 @@ fn map_read_error(err: ReadError) -> Status {
 /// Returns `None` if info were not found for some chart.
 fn add_chart_info_to_layout(
     layout: Vec<types::LineChartCategory>,
-    chart_info: BTreeMap<String, EnabledChartEntry>,
+    chart_info: &BTreeMap<String, EnabledChartEntry>,
 ) -> Vec<proto_v1::LineChartSection> {
     layout
         .into_iter()
-        .map(|cat| cat.intersect_info(&chart_info))
+        .map(|cat| cat.intersect_info(chart_info))
         .collect()
 }
 
@@ -194,7 +194,7 @@ impl StatsService for ReadService {
             .iter()
             .filter(|(_, chart)| {
                 chart
-                    .enabled_resolutions
+                    .resolutions
                     .iter()
                     .all(|(_, static_info)| static_info.chart_type == ChartType::Counter)
             })
@@ -202,8 +202,7 @@ impl StatsService for ReadService {
                 data.remove(name).and_then(|point| {
                     // resolutions other than day are currently not supported
                     // for counters
-                    let Some(static_info) = counter.enabled_resolutions.get(&ResolutionKind::Day)
-                    else {
+                    let Some(static_info) = counter.resolutions.get(&ResolutionKind::Day) else {
                         tracing::warn!(
                             "No 'day' resolution enabled for counter {}, skipping its value",
                             name
@@ -244,7 +243,7 @@ impl StatsService for ReadService {
             Status::not_found(format!("chart with name '{}' was not found", chart_name))
         })?;
         let resolution_info = chart_entry
-            .enabled_resolutions
+            .resolutions
             .get(&resolution)
             .filter(|static_info| static_info.chart_type == ChartType::Line)
             .ok_or_else(|| {
@@ -285,8 +284,7 @@ impl StatsService for ReadService {
         _request: Request<proto_v1::GetLineChartsRequest>,
     ) -> Result<Response<proto_v1::LineCharts>, Status> {
         let layout = self.charts.lines_layout.clone();
-        let info = self.charts.charts_info.clone();
-        let sections = add_chart_info_to_layout(layout, info);
+        let sections = add_chart_info_to_layout(layout, &self.charts.charts_info);
 
         Ok(Response::new(proto_v1::LineCharts { sections }))
     }
