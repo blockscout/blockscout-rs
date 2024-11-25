@@ -4768,6 +4768,7 @@ dependencies = [
  "rust_decimal",
  "rust_decimal_macros",
  "sea-orm",
+ "stats-proto",
  "thiserror",
  "tokio",
  "tracing",

@@ -22,8 +22,9 @@ use cron::Schedule;
 use itertools::Itertools;
 use stats::{
     entity::sea_orm_active_enums::ChartType,
+    query_dispatch::ChartTypeSpecifics,
     update_group::{ArcUpdateGroup, SyncUpdateGroup},
-    ChartKey, ChartPropertiesObject, ResolutionKind,
+    ChartKey, ChartObject, ResolutionKind,
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
@@ -31,11 +32,11 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct EnabledChartEntry {
     pub settings: EnabledChartSettings,
     /// Static information presented as dynamic object
-    pub enabled_resolutions: HashMap<ResolutionKind, EnabledResolutionEntry>,
+    pub resolutions: HashMap<ResolutionKind, EnabledResolutionEntry>,
 }
 
 impl EnabledChartEntry {
@@ -50,7 +51,7 @@ impl EnabledChartEntry {
             description: settings.description,
             units: settings.units,
             resolutions: self
-                .enabled_resolutions
+                .resolutions
                 .keys()
                 .map(|r| String::from(*r))
                 .collect_vec(),
@@ -58,21 +59,28 @@ impl EnabledChartEntry {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct EnabledResolutionEntry {
     pub name: String,
+    // todo: remove
     pub chart_type: ChartType,
     pub missing_date_policy: stats::MissingDatePolicy,
     pub approximate_trailing_points: u64,
+    pub handle: ChartTypeSpecifics,
 }
 
-impl From<ChartPropertiesObject> for EnabledResolutionEntry {
-    fn from(value: ChartPropertiesObject) -> Self {
+impl From<ChartObject> for EnabledResolutionEntry {
+    fn from(value: ChartObject) -> Self {
+        let ChartObject {
+            properties: props,
+            type_specifics,
+        } = value;
         Self {
-            name: value.name,
-            chart_type: value.chart_type,
-            missing_date_policy: value.missing_date_policy,
-            approximate_trailing_points: value.approximate_trailing_points,
+            name: props.name,
+            chart_type: props.chart_type,
+            missing_date_policy: props.missing_date_policy,
+            approximate_trailing_points: props.approximate_trailing_points,
+            handle: type_specifics,
         }
     }
 }
@@ -111,6 +119,11 @@ fn combine_disjoint_maps<K: Ord + Clone, V>(
     Ok(a)
 }
 
+struct AllChartsInfo {
+    counters: BTreeMap<String, EnabledChartEntry>,
+    line_charts: BTreeMap<String, EnabledChartEntry>,
+}
+
 impl RuntimeSetup {
     pub fn new(
         charts: config::charts::Config<AllChartSettings>,
@@ -139,10 +152,10 @@ impl RuntimeSetup {
     ///
     /// `Err(Vec<ChartKey>)` - some unknown charts+resolutions are present in settings
     fn charts_info_from_settings(
+        available_resolutions: &mut BTreeMap<ChartKey, ChartObject>,
         charts_settings: BTreeMap<String, AllChartSettings>,
         settings_chart_type: ChartType,
     ) -> Result<BTreeMap<String, EnabledChartEntry>, Vec<ChartKey>> {
-        let available_resolutions = Self::all_members();
         let mut unknown_charts = vec![];
 
         let mut charts_info = BTreeMap::new();
@@ -152,10 +165,14 @@ impl RuntimeSetup {
                 let mut enabled_resolutions_properties = HashMap::new();
                 for (resolution, resolution_setting) in settings.resolutions.into_list() {
                     let key = ChartKey::new(name.clone(), resolution);
-                    let resolution_properties = available_resolutions
-                        .get(&key)
-                        .filter(|props| props.chart_type == settings_chart_type)
-                        .cloned();
+                    let resolution_properties = match available_resolutions.entry(key.clone()) {
+                        Entry::Occupied(o)
+                            if o.get().properties.chart_type == settings_chart_type =>
+                        {
+                            Some(o.remove())
+                        }
+                        _ => None,
+                    };
                     match (resolution_setting, resolution_properties) {
                         // enabled
                         (Some(true), Some(enabled_props)) | (None, Some(enabled_props)) => {
@@ -172,7 +189,7 @@ impl RuntimeSetup {
                     name,
                     EnabledChartEntry {
                         settings: enabled_chart_settings,
-                        enabled_resolutions: enabled_resolutions_properties,
+                        resolutions: enabled_resolutions_properties,
                     },
                 );
             }
@@ -185,15 +202,26 @@ impl RuntimeSetup {
         }
     }
 
-    fn build_charts_info(
-        charts_config: config::charts::Config<AllChartSettings>,
-    ) -> anyhow::Result<BTreeMap<String, EnabledChartEntry>> {
-        let counters_info =
-            Self::charts_info_from_settings(charts_config.counters, ChartType::Counter);
-        let lines_info = Self::charts_info_from_settings(charts_config.lines, ChartType::Line);
-
-        let (counters_info, lines_info) = match (counters_info, lines_info) {
-            (Ok(c), Ok(l)) => (c, l),
+    fn all_charts_info_from_settings(
+        counters_settings: BTreeMap<String, AllChartSettings>,
+        line_charts_settings: BTreeMap<String, AllChartSettings>,
+    ) -> Result<AllChartsInfo, Vec<ChartKey>> {
+        let mut available_resolutions = Self::all_members();
+        let counters_info = Self::charts_info_from_settings(
+            &mut available_resolutions,
+            counters_settings,
+            ChartType::Counter,
+        );
+        let lines_info = Self::charts_info_from_settings(
+            &mut available_resolutions,
+            line_charts_settings,
+            ChartType::Line,
+        );
+        match (counters_info, lines_info) {
+            (Ok(c), Ok(l)) => Ok(AllChartsInfo {
+                counters: c,
+                line_charts: l,
+            }),
             (counters_result, lines_result) => {
                 let mut unknown_charts = vec![];
                 if let Err(c) = counters_result {
@@ -202,13 +230,25 @@ impl RuntimeSetup {
                 if let Err(l) = lines_result {
                     unknown_charts.extend(l);
                 }
-                return Err(anyhow::anyhow!(
-                    "non-existent charts+resolutions are present in settings: {unknown_charts:?}",
-                ));
+                Err(unknown_charts)
             }
-        };
+        }
+    }
 
-        combine_disjoint_maps(counters_info, lines_info)
+    fn build_charts_info(
+        charts_config: config::charts::Config<AllChartSettings>,
+    ) -> anyhow::Result<BTreeMap<String, EnabledChartEntry>> {
+        let AllChartsInfo {
+            counters,
+            line_charts,
+        } = Self::all_charts_info_from_settings(charts_config.counters, charts_config.lines)
+            .map_err(|unknown_charts| {
+                anyhow::anyhow!(
+                    "non-existent charts+resolutions are present in settings: {unknown_charts:?}",
+                )
+            })?;
+
+        combine_disjoint_maps(counters, line_charts)
             .map_err(|duplicate_name| anyhow::anyhow!("duplicate chart name: {duplicate_name:?}",))
     }
 
@@ -333,7 +373,7 @@ impl RuntimeSetup {
             let members: HashSet<String> = group
                 .list_charts()
                 .into_iter()
-                .map(|c| c.key.as_string())
+                .map(|c| c.properties.key.as_string())
                 .collect();
             let missing_members: HashSet<String> =
                 sync_dependencies.difference(&members).cloned().collect();
@@ -393,10 +433,10 @@ impl RuntimeSetup {
                 .into_iter()
                 .filter(|m| {
                     charts_info
-                        .get(m.key.name())
-                        .is_some_and(|a| a.enabled_resolutions.contains_key(m.key.resolution()))
+                        .get(m.properties.key.name())
+                        .is_some_and(|a| a.resolutions.contains_key(m.properties.key.resolution()))
                 })
-                .map(|m| m.key)
+                .map(|m| m.properties.key)
                 .collect();
             let sync_group = SyncUpdateGroup::new(&dep_mutexes, group)?;
             result.insert(
@@ -412,14 +452,14 @@ impl RuntimeSetup {
     }
 
     /// List all charts+resolutions that are members of at least 1 group.
-    fn all_members() -> BTreeMap<ChartKey, ChartPropertiesObject> {
+    fn all_members() -> BTreeMap<ChartKey, ChartObject> {
         let members_with_duplicates = Self::all_update_groups()
             .into_iter()
             .flat_map(|g| g.list_charts())
             .collect_vec();
         let mut members = BTreeMap::new();
         for member in members_with_duplicates {
-            match members.entry(member.key.clone()) {
+            match members.entry(member.properties.key.clone()) {
                 Entry::Vacant(v) => {
                     v.insert(member);
                 }
@@ -430,7 +470,12 @@ impl RuntimeSetup {
                     // i.e. this check does not guarantee that same mutex will not be
                     // used for 2 different charts (although it shouldn't lead to logical
                     // errors)
-                    assert_eq!(o.get(), &member, "duplicate member key '{}'", o.get().key);
+                    assert_eq!(
+                        o.get().properties,
+                        member.properties,
+                        "duplicate member key '{}'",
+                        o.get().properties.key
+                    );
                 }
             }
         }

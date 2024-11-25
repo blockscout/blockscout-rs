@@ -1,4 +1,4 @@
-use std::{future::Future, ops::Range};
+use std::{fmt::Debug, future::Future, ops::Range, sync::Arc};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use stats_proto::blockscout::stats::v1::Point;
@@ -33,14 +33,8 @@ pub trait QuerySerialized {
     ) -> Box<dyn Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>;
 }
 
-// todo: remove
-/// [`QuerySerialized`] but for dynamic dispatch.
-///
-/// Not `dyn QuerySerialized` because it adds unnecessary vtable lookup.
-// pub type QuerySerializedMethod<O> = Box<dyn Future<Output = Result<O, DbErr>> + Send>;
-
 /// [`QuerySerialized`] but for dynamic dispatch
-pub type QuerySerializedDyn<O> = Box<dyn QuerySerialized<Output = O> + Send>;
+pub type QuerySerializedDyn<O> = Arc<Box<dyn QuerySerialized<Output = O> + Send + Sync>>;
 
 pub enum ChartTypeSpecifics {
     Counter {
@@ -49,6 +43,15 @@ pub enum ChartTypeSpecifics {
     Line {
         query: QuerySerializedDyn<Vec<Point>>,
     },
+}
+
+impl Debug for ChartTypeSpecifics {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Counter { query: _ } => write!(f, "Counter"),
+            Self::Line { query: _ } => write!(f, "Line"),
+        }
+    }
 }
 
 impl Into<ChartTypeSpecifics> for QuerySerializedDyn<TimespanValue<NaiveDate, String>> {
