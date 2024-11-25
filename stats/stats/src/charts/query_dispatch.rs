@@ -1,6 +1,7 @@
 use std::{fmt::Debug, future::Future, ops::Range, sync::Arc};
 
 use chrono::{DateTime, NaiveDate, Utc};
+use entity::sea_orm_active_enums::ChartType;
 use stats_proto::blockscout::stats::v1::Point;
 
 use crate::{
@@ -50,6 +51,15 @@ impl Debug for ChartTypeSpecifics {
         match self {
             Self::Counter { query: _ } => write!(f, "Counter"),
             Self::Line { query: _ } => write!(f, "Line"),
+        }
+    }
+}
+
+impl ChartTypeSpecifics {
+    pub fn as_chart_type(&self) -> ChartType {
+        match self {
+            Self::Counter { query: _ } => ChartType::Counter,
+            Self::Line { query: _ } => ChartType::Line,
         }
     }
 }
