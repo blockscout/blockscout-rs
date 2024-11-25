@@ -6,7 +6,7 @@ use crate::{
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
@@ -136,7 +136,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type TxnsFee = DirectVecLocalDbChartSource<TxnsFeeRemoteString, Batch30Days, Properties>;
-pub type TxnsFeeFloat = MapParseTo<TxnsFee, f64>;
+pub type TxnsFeeFloat = MapParseTo<StripExt<TxnsFee>, f64>;
 pub type TxnsFeeWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<TxnsFeeFloat, Week>>,
     Batch30Weeks,
@@ -147,7 +147,7 @@ pub type TxnsFeeMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type TxnsFeeMonthlyFloat = MapParseTo<TxnsFeeMonthly, f64>;
+pub type TxnsFeeMonthlyFloat = MapParseTo<StripExt<TxnsFeeMonthly>, f64>;
 pub type TxnsFeeYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<TxnsFeeMonthlyFloat, Year>>,
     Batch30Years,

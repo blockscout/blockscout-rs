@@ -25,13 +25,11 @@ use parameters::{
     DefaultCreate, DefaultQueryLast, DefaultQueryVec, QueryLastWithEstimationFallback,
 };
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
-use stats_proto::blockscout::stats::v1::Point;
 
 use crate::{
     charts::{
         chart_properties_portrait,
         db_interaction::read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
-        query_dispatch::QuerySerialized,
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
@@ -136,6 +134,12 @@ where
     ChartProps: ChartProperties,
     ChartProps::Resolution: Ord + Clone + Debug,
 {
+    /// `new` function that is created solely for the purposes of
+    /// dynamic dispatch (see where it's used).
+    pub fn new_for_dynamic_dispatch() -> Self {
+        Self(PhantomData)
+    }
+
     /// Performs common checks and prepares values useful for further
     /// update. Then proceeds to update according to parameters.
     async fn update_itself_inner(
@@ -297,6 +301,7 @@ where
     ChartProps: ChartProperties,
 {
 }
+
 #[cfg(test)]
 mod tests {
     mod update_itself_is_triggered_once_per_group {

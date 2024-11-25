@@ -4,7 +4,8 @@ use crate::{
     data_source::{
         kinds::{
             data_manipulation::{
-                map::MapToString, resolutions::last_value::LastValueLowerResolution,
+                map::{MapToString, StripExt},
+                resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
                 parameters::update::batching::parameters::{
@@ -120,18 +121,20 @@ define_and_impl_resolution_properties!(
 
 pub type NativeCoinSupply =
     DirectVecLocalDbChartSource<NativeCoinSupplyRemoteString, Batch30Days, Properties>;
+type NativeCoinSupplyS = StripExt<NativeCoinSupply>;
 pub type NativeCoinSupplyWeekly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<NativeCoinSupply, Week>,
+    LastValueLowerResolution<NativeCoinSupplyS, Week>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type NativeCoinSupplyMonthly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<NativeCoinSupply, Month>,
+    LastValueLowerResolution<NativeCoinSupplyS, Month>,
     Batch36Months,
     MonthlyProperties,
 >;
+type NativeCoinSupplyMonthlyS = StripExt<NativeCoinSupplyMonthly>;
 pub type NativeCoinSupplyYearly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<NativeCoinSupplyMonthly, Year>,
+    LastValueLowerResolution<NativeCoinSupplyMonthlyS, Year>,
     Batch30Years,
     YearlyProperties,
 >;

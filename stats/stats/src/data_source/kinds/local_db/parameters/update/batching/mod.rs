@@ -17,7 +17,7 @@ use crate::{
         types::Get,
         UpdateContext,
     },
-    types::{Timespan, TimespanDuration, TimespanValue},
+    types::{ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue},
     ChartProperties, UpdateError,
 };
 
@@ -39,7 +39,7 @@ where
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
     BatchSizeUpperBound: Get<Value = TimespanDuration<ChartProps::Resolution>>,
-    Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
+    Query: QueryBehaviour<Output = Vec<ExtendedTimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties;
 
 impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
@@ -50,7 +50,7 @@ where
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
     BatchSizeUpperBound: Get<Value = TimespanDuration<ChartProps::Resolution>>,
-    Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
+    Query: QueryBehaviour<Output = Vec<ExtendedTimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties,
     ChartProps::Resolution: Timespan + Ord + Clone + Debug + Send,
 {
@@ -126,7 +126,7 @@ async fn get_previous_step_last_point<Query, Resolution>(
 ) -> Result<TimespanValue<Resolution, String>, UpdateError>
 where
     Resolution: Timespan + Clone,
-    Query: QueryBehaviour<Output = Vec<TimespanValue<Resolution, String>>>,
+    Query: QueryBehaviour<Output = Vec<ExtendedTimespanValue<Resolution, String>>>,
 {
     let previous_step_last_point_timespan = this_step_start.saturating_previous_timespan();
     let last_point_range_values = Query::query_data(
@@ -139,6 +139,7 @@ where
     let previous_step_last_point = last_point_range_values
         .last()
         .cloned()
+        .map(|p| p.into())
         // `None` means
         // - if `MissingDatePolicy` is `FillZero` = the value is 0
         // - if `MissingDatePolicy` is `FillPrevious` = no previous value was found at this moment in time = value at the point is 0
@@ -380,12 +381,15 @@ mod tests {
 
         use crate::{
             data_source::{
-                kinds::local_db::{
-                    parameters::{
-                        update::batching::{parameters::mock::RecordingPassStep, BatchUpdate},
-                        DefaultCreate, DefaultQueryVec,
+                kinds::{
+                    data_manipulation::map::StripExt,
+                    local_db::{
+                        parameters::{
+                            update::batching::{parameters::mock::RecordingPassStep, BatchUpdate},
+                            DefaultCreate, DefaultQueryVec,
+                        },
+                        LocalDbChartSource,
                     },
-                    LocalDbChartSource,
                 },
                 types::Get,
             },
@@ -434,7 +438,7 @@ mod tests {
         }
 
         type ThisRecordingBatchUpdate = BatchUpdate<
-            AccountsGrowth,
+            StripExt<AccountsGrowth>,
             (),
             ThisRecordingStep,
             Batch1Day,
@@ -443,7 +447,7 @@ mod tests {
         >;
 
         type RecordingChart = LocalDbChartSource<
-            AccountsGrowth,
+            StripExt<AccountsGrowth>,
             (),
             DefaultCreate<ThisTestChartProps>,
             ThisRecordingBatchUpdate,

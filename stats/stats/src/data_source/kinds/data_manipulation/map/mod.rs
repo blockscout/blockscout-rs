@@ -13,9 +13,11 @@ use crate::{
 };
 
 mod parse;
+mod strip_extension;
 mod to_string;
 
 pub use parse::MapParseTo;
+pub use strip_extension::StripExt;
 pub use to_string::MapToString;
 
 /// Apply `F` to each value queried from data source `D`

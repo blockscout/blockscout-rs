@@ -7,7 +7,10 @@ use tokio::sync::Mutex;
 
 use super::{
     kinds::{
-        data_manipulation::{map::MapParseTo, resolutions::last_value::LastValueLowerResolution},
+        data_manipulation::{
+            map::{MapParseTo, StripExt},
+            resolutions::last_value::LastValueLowerResolution,
+        },
         local_db::{
             parameters::{
                 update::batching::{
@@ -147,7 +150,7 @@ impl ChartProperties for NewContractsChartProperties {
 pub type NewContracts =
     DirectVecLocalDbChartSource<NewContractsRemote, Batch30Days, NewContractsChartProperties>;
 
-pub type NewContractsInt = MapParseTo<NewContracts, i64>;
+pub type NewContractsInt = MapParseTo<StripExt<NewContracts>, i64>;
 
 pub struct ContractsGrowthProperties;
 
@@ -180,18 +183,19 @@ define_and_impl_resolution_properties!(
 
 pub type ContractsGrowth =
     DailyCumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
+type ContractsGrowthS = StripExt<ContractsGrowth>;
 pub type ContractsGrowthWeekly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<ContractsGrowth, Week>,
+    LastValueLowerResolution<ContractsGrowthS, Week>,
     Batch30Weeks,
     ContractsGrowthWeeklyProperties,
 >;
 pub type ContractsGrowthMonthly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<ContractsGrowth, Month>,
+    LastValueLowerResolution<ContractsGrowthS, Month>,
     Batch36Months,
     ContractsGrowthMonthlyProperties,
 >;
 pub type ContractsGrowthYearly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<ContractsGrowth, Year>,
+    LastValueLowerResolution<ContractsGrowthS, Year>,
     Batch30Years,
     ContractsGrowthYearlyProperties,
 >;

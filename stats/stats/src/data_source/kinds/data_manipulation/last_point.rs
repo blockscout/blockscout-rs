@@ -9,7 +9,6 @@ use chrono::{DateTime, Utc};
 use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
 
 use crate::{
-    charts::ChartProperties,
     data_source::{source::DataSource, UpdateContext},
     types::{Timespan, TimespanValue, ZeroTimespanValue},
     utils::day_start,
@@ -24,7 +23,7 @@ impl<DS, Resolution, Value> DataSource for LastPoint<DS>
 where
     Resolution: Timespan + Ord + Send,
     Value: Send,
-    DS: DataSource<Output = Vec<TimespanValue<Resolution, Value>>> + ChartProperties,
+    DS: DataSource<Output = Vec<TimespanValue<Resolution, Value>>>,
     TimespanValue<Resolution, Value>: ZeroTimespanValue<Resolution>,
 {
     type MainDependencies = DS;

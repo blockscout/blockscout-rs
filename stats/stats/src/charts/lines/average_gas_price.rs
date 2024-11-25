@@ -4,7 +4,7 @@ use crate::{
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -137,19 +137,21 @@ define_and_impl_resolution_properties!(
 
 pub type AverageGasPrice =
     DirectVecLocalDbChartSource<AverageGasPriceRemoteString, Batch30Days, Properties>;
+type AverageGasPriceS = StripExt<AverageGasPrice>;
 pub type AverageGasPriceWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewTxnsInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPriceS, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageGasPriceMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewTxnsInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPriceS, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+type AverageGasPriceMonthlyS = StripExt<AverageGasPriceMonthly>;
 pub type AverageGasPriceYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageGasPriceMonthly, f64>, NewTxnsMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<AverageGasPriceMonthlyS, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,

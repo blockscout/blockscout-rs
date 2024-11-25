@@ -3,7 +3,7 @@
 use super::new_accounts::NewAccountsInt;
 use crate::{
     data_source::kinds::{
-        data_manipulation::resolutions::last_value::LastValueLowerResolution,
+        data_manipulation::{map::StripExt, resolutions::last_value::LastValueLowerResolution},
         local_db::{
             parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
@@ -46,18 +46,21 @@ define_and_impl_resolution_properties!(
 );
 
 pub type AccountsGrowth = DailyCumulativeLocalDbChartSource<NewAccountsInt, Properties>;
+type AccountsGrowthS = StripExt<AccountsGrowth>;
+
 pub type AccountsGrowthWeekly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<AccountsGrowth, Week>,
+    LastValueLowerResolution<AccountsGrowthS, Week>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AccountsGrowthMonthly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<AccountsGrowth, Month>,
+    LastValueLowerResolution<AccountsGrowthS, Month>,
     Batch36Months,
     MonthlyProperties,
 >;
+type AccountsGrowthMonthlyS = StripExt<AccountsGrowthMonthly>;
 pub type AccountsGrowthYearly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<AccountsGrowthMonthly, Year>,
+    LastValueLowerResolution<AccountsGrowthMonthlyS, Year>,
     Batch30Years,
     YearlyProperties,
 >;

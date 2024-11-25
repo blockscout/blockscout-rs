@@ -8,7 +8,10 @@ use std::ops::Range;
 use crate::{
     data_source::{
         kinds::{
-            data_manipulation::{map::MapParseTo, resolutions::sum::SumLowerResolution},
+            data_manipulation::{
+                map::{MapParseTo, StripExt},
+                resolutions::sum::SumLowerResolution,
+            },
             local_db::{
                 parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
             },
@@ -80,7 +83,7 @@ define_and_impl_resolution_properties!(
 
 pub type NewBlockRewards =
     DirectVecLocalDbChartSource<NewBlockRewardsRemote, Batch30Days, Properties>;
-pub type NewBlockRewardsInt = MapParseTo<NewBlockRewards, i64>;
+pub type NewBlockRewardsInt = MapParseTo<StripExt<NewBlockRewards>, i64>;
 pub type NewBlockRewardsMonthlyInt = SumLowerResolution<NewBlockRewardsInt, Month>;
 
 #[cfg(test)]
