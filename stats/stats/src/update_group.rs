@@ -41,7 +41,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::{
-    charts::{chart_properties_portrait::imports::ChartKey, ChartObject, ChartPropertiesObject},
+    charts::{chart_properties_portrait::imports::ChartKey, ChartObject},
     data_source::UpdateParameters,
     UpdateError,
 };
@@ -68,7 +68,7 @@ pub trait UpdateGroup: core::fmt::Debug {
     /// Group name (usually equal to type name for simplicity)
     fn name(&self) -> String;
     /// List chart properties - members of the group.
-    fn list_charts(&self) -> Vec<ChartPropertiesObject>;
+    fn list_charts(&self) -> Vec<ChartObject>;
     /// List mutex ids of group members + their dependencies.
     /// Dependencies participate in updates, thus access to them needs to be
     /// synchronized as well.
@@ -122,7 +122,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #     kinds::{
 /// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
 /// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-/// #         data_manipulation::map::MapToString,
+/// #         data_manipulation::map::{MapToString, StripExt},
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters},
 /// # };
@@ -147,7 +147,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #     }
 /// # }
 /// #
-/// # type DummyChart = DirectVecLocalDbChartSource<NewBlocks, Batch30Days, DummyChartProperties>;
+/// # type DummyChart = DirectVecLocalDbChartSource<StripExt<NewBlocks>, Batch30Days, DummyChartProperties>;
 ///
 /// construct_update_group!(ExampleUpdateGroup {
 ///     charts: [DummyChart],
@@ -260,12 +260,10 @@ macro_rules! construct_update_group {
                 stringify!($group_name).into()
             }
 
-            fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartPropertiesObject> {
+            fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartObject> {
                 std::vec![
                     $(
-                        // todo: uncomment and fix type mismatch
-                        // $crate::ChartObject::construct_from_chart::<$member>($member),
-                        $crate::ChartPropertiesObject::construct_from_chart::<$member>(),
+                        $crate::ChartObject::construct_from_chart::<$member>(<$member>::new_for_dynamic_dispatch()),
                     )*
                 ]
             }
@@ -393,7 +391,7 @@ impl SyncUpdateGroup {
     }
 
     /// See [`UpdateGroup::list_charts``]
-    pub fn list_charts(&self) -> Vec<ChartPropertiesObject> {
+    pub fn list_charts(&self) -> Vec<ChartObject> {
         self.inner.list_charts()
     }
 
@@ -463,7 +461,11 @@ impl SyncUpdateGroup {
         &self,
         enabled_charts: &HashSet<ChartKey>,
     ) -> (Vec<MutexGuard<()>>, HashSet<ChartKey>) {
-        let members: HashSet<ChartKey> = self.list_charts().into_iter().map(|c| c.key).collect();
+        let members: HashSet<ChartKey> = self
+            .list_charts()
+            .into_iter()
+            .map(|c| c.properties.key)
+            .collect();
         // in-place intersection
         let enabled_members: HashSet<ChartKey> = members
             .into_iter()

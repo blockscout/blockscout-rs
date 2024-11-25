@@ -4,7 +4,7 @@ use crate::{
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -82,20 +82,26 @@ define_and_impl_resolution_properties!(
 
 pub type AverageBlockSize =
     DirectVecLocalDbChartSource<AverageBlockSizeRemote, Batch30Days, Properties>;
+type AverageBlockSizeS = StripExt<AverageBlockSize>;
 
 pub type AverageBlockSizeWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSize, f64>, NewBlocksInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSizeS, f64>, NewBlocksInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageBlockSizeMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSize, f64>, NewBlocksInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSizeS, f64>, NewBlocksInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+type AverageBlockSizeMonthlyS = StripExt<AverageBlockSizeMonthly>;
 pub type AverageBlockSizeYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageBlockSizeMonthly, f64>, NewBlocksMonthlyInt, Year>,
+        AverageLowerResolution<
+            MapParseTo<AverageBlockSizeMonthlyS, f64>,
+            NewBlocksMonthlyInt,
+            Year,
+        >,
     >,
     Batch30Years,
     YearlyProperties,

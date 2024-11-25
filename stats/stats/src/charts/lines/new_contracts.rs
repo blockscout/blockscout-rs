@@ -4,7 +4,7 @@ use crate::{
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
@@ -145,7 +145,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type NewContracts = DirectVecLocalDbChartSource<NewContractsRemote, Batch30Days, Properties>;
-pub type NewContractsInt = MapParseTo<NewContracts, i64>;
+pub type NewContractsInt = MapParseTo<StripExt<NewContracts>, i64>;
 pub type NewContractsWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewContractsInt, Week>>,
     Batch30Weeks,
@@ -156,7 +156,7 @@ pub type NewContractsMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewContractsMonthlyInt = MapParseTo<NewContractsMonthly, i64>;
+pub type NewContractsMonthlyInt = MapParseTo<StripExt<NewContractsMonthly>, i64>;
 pub type NewContractsYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewContractsMonthlyInt, Year>>,
     Batch30Years,

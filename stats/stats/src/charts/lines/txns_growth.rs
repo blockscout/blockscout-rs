@@ -1,7 +1,7 @@
 use crate::{
     charts::chart::ChartProperties,
     data_source::kinds::{
-        data_manipulation::resolutions::last_value::LastValueLowerResolution,
+        data_manipulation::{map::StripExt, resolutions::last_value::LastValueLowerResolution},
         local_db::{
             parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
@@ -45,18 +45,20 @@ define_and_impl_resolution_properties!(
 );
 
 pub type TxnsGrowth = DailyCumulativeLocalDbChartSource<NewTxnsInt, Properties>;
+type TxnsGrowthS = StripExt<TxnsGrowth>;
 pub type TxnsGrowthWeekly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<TxnsGrowth, Week>,
+    LastValueLowerResolution<TxnsGrowthS, Week>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type TxnsGrowthMonthly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<TxnsGrowth, Month>,
+    LastValueLowerResolution<TxnsGrowthS, Month>,
     Batch36Months,
     MonthlyProperties,
 >;
+type TxnsGrowthMonthlyS = StripExt<TxnsGrowthMonthly>;
 pub type TxnsGrowthYearly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<TxnsGrowthMonthly, Year>,
+    LastValueLowerResolution<TxnsGrowthMonthlyS, Year>,
     Batch30Years,
     YearlyProperties,
 >;

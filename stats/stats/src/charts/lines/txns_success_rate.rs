@@ -4,7 +4,7 @@ use crate::{
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -113,19 +113,21 @@ define_and_impl_resolution_properties!(
 
 pub type TxnsSuccessRate =
     DirectVecLocalDbChartSource<TxnsSuccessRateRemoteString, Batch30Days, Properties>;
+type TxnsSuccessRateS = StripExt<TxnsSuccessRate>;
 pub type TxnsSuccessRateWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewTxnsInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRateS, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type TxnsSuccessRateMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewTxnsInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRateS, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+type TxnsSuccessRateMonthlyS = StripExt<TxnsSuccessRateMonthly>;
 pub type TxnsSuccessRateYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<TxnsSuccessRateMonthly, f64>, NewTxnsMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<TxnsSuccessRateMonthlyS, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,

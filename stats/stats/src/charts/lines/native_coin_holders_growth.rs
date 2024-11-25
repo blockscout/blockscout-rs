@@ -5,7 +5,8 @@ use crate::{
     data_source::{
         kinds::{
             data_manipulation::{
-                map::MapParseTo, resolutions::last_value::LastValueLowerResolution,
+                map::{MapParseTo, StripExt},
+                resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
                 parameter_traits::{CreateBehaviour, UpdateBehaviour},
@@ -384,19 +385,21 @@ define_and_impl_resolution_properties!(
 
 pub type NativeCoinHoldersGrowth =
     LocalDbChartSource<(), (), Create, Update, DefaultQueryVec<Properties>, Properties>;
-pub type NativeCoinHoldersGrowthInt = MapParseTo<NativeCoinHoldersGrowth, i64>;
+pub type NativeCoinHoldersGrowthInt = MapParseTo<StripExt<NativeCoinHoldersGrowth>, i64>;
+type NativeCoinHoldersGrowthS = StripExt<NativeCoinHoldersGrowth>;
 pub type NativeCoinHoldersGrowthWeekly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<NativeCoinHoldersGrowth, Week>,
+    LastValueLowerResolution<NativeCoinHoldersGrowthS, Week>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type NativeCoinHoldersGrowthMonthly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<NativeCoinHoldersGrowth, Month>,
+    LastValueLowerResolution<NativeCoinHoldersGrowthS, Month>,
     Batch36Months,
     MonthlyProperties,
 >;
+type NativeCoinHoldersGrowthMonthlyS = StripExt<NativeCoinHoldersGrowthMonthly>;
 pub type NativeCoinHoldersGrowthYearly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<NativeCoinHoldersGrowthMonthly, Year>,
+    LastValueLowerResolution<NativeCoinHoldersGrowthMonthlyS, Year>,
     Batch30Years,
     YearlyProperties,
 >;

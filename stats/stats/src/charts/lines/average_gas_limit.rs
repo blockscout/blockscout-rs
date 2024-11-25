@@ -4,7 +4,7 @@ use crate::{
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -82,19 +82,21 @@ define_and_impl_resolution_properties!(
 
 pub type AverageGasLimit =
     DirectVecLocalDbChartSource<AverageGasLimitRemote, Batch30Days, Properties>;
+type AverageGasLimitS = StripExt<AverageGasLimit>;
 pub type AverageGasLimitWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimit, f64>, NewBlocksInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimitS, f64>, NewBlocksInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageGasLimitMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimit, f64>, NewBlocksInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimitS, f64>, NewBlocksInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+type AverageGasLimitMonthlyS = StripExt<AverageGasLimitMonthly>;
 pub type AverageGasLimitYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageGasLimitMonthly, f64>, NewBlocksMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<AverageGasLimitMonthlyS, f64>, NewBlocksMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,

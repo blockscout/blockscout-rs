@@ -6,7 +6,7 @@ use crate::{
     charts::db_interaction::read::get_counter_data,
     data_source::{kinds::local_db::parameter_traits::QueryBehaviour, UpdateContext},
     get_line_chart_data,
-    types::{timespans::DateValue, Timespan, TimespanValue},
+    types::{timespans::DateValue, ExtendedTimespanValue, Timespan},
     utils::exclusive_datetime_range_to_inclusive,
     ChartProperties, UpdateError,
 };
@@ -19,7 +19,7 @@ where
     C: ChartProperties,
     C::Resolution: Timespan + Ord + Debug + Clone + Send,
 {
-    type Output = Vec<TimespanValue<C::Resolution, String>>;
+    type Output = Vec<ExtendedTimespanValue<C::Resolution, String>>;
 
     /// Retrieve chart data from local storage.
     ///
@@ -47,21 +47,17 @@ where
         // same for weeks or other resolutions.
         let start = start.map(|s| C::Resolution::from_date(s.date_naive()));
         let end = end.map(|e| C::Resolution::from_date(e.date_naive()));
-        let values: Vec<TimespanValue<C::Resolution, String>> =
-            get_line_chart_data::<C::Resolution>(
-                cx.db,
-                &C::name(),
-                start,
-                end,
-                None,
-                C::missing_date_policy(),
-                fill_missing_dates,
-                C::approximate_trailing_points(),
-            )
-            .await?
-            .into_iter()
-            .map(TimespanValue::from)
-            .collect();
+        let values = get_line_chart_data::<C::Resolution>(
+            cx.db,
+            &C::name(),
+            start,
+            end,
+            None,
+            C::missing_date_policy(),
+            fill_missing_dates,
+            C::approximate_trailing_points(),
+        )
+        .await?;
         Ok(values)
     }
 }
