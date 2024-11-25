@@ -62,11 +62,9 @@ impl EnabledChartEntry {
 #[derive(Debug)]
 pub struct EnabledResolutionEntry {
     pub name: String,
-    // todo: remove
-    pub chart_type: ChartType,
     pub missing_date_policy: stats::MissingDatePolicy,
     pub approximate_trailing_points: u64,
-    pub handle: ChartTypeSpecifics,
+    pub type_specifics: ChartTypeSpecifics,
 }
 
 impl From<ChartObject> for EnabledResolutionEntry {
@@ -77,10 +75,9 @@ impl From<ChartObject> for EnabledResolutionEntry {
         } = value;
         Self {
             name: props.name,
-            chart_type: props.chart_type,
             missing_date_policy: props.missing_date_policy,
             approximate_trailing_points: props.approximate_trailing_points,
-            handle: type_specifics,
+            type_specifics,
         }
     }
 }
@@ -167,7 +164,7 @@ impl RuntimeSetup {
                     let key = ChartKey::new(name.clone(), resolution);
                     let resolution_properties = match available_resolutions.entry(key.clone()) {
                         Entry::Occupied(o)
-                            if o.get().properties.chart_type == settings_chart_type =>
+                            if o.get().type_specifics.as_chart_type() == settings_chart_type =>
                         {
                             Some(o.remove())
                         }

@@ -193,10 +193,9 @@ impl StatsService for ReadService {
             .charts_info
             .iter()
             .filter(|(_, chart)| {
-                chart
-                    .resolutions
-                    .iter()
-                    .all(|(_, static_info)| static_info.chart_type == ChartType::Counter)
+                chart.resolutions.iter().all(|(_, static_info)| {
+                    static_info.type_specifics.as_chart_type() == ChartType::Counter
+                })
             })
             .filter_map(|(name, counter)| {
                 data.remove(name).and_then(|point| {
@@ -245,7 +244,7 @@ impl StatsService for ReadService {
         let resolution_info = chart_entry
             .resolutions
             .get(&resolution)
-            .filter(|static_info| static_info.chart_type == ChartType::Line)
+            .filter(|static_info| static_info.type_specifics.as_chart_type() == ChartType::Line)
             .ok_or_else(|| {
                 Status::not_found(format!(
                     "resolution '{}' for chart '{}' was not found",
