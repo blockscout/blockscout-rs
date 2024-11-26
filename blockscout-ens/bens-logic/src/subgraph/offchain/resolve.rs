@@ -1,6 +1,6 @@
 use super::ResolveResult;
 use crate::{
-    protocols::{DomainNameOnProtocol, ProtocolSpecific},
+    protocols::{AddressResolveTechnique, DomainNameOnProtocol, ProtocolSpecific},
     subgraph::{
         offchain::{d3, ens},
         sql,
@@ -28,8 +28,10 @@ pub async fn offchain_resolve(
                 "found domain with offchain resolution, save it"
             );
             sql::create_or_update_domain(db, result.domain, protocol).await?;
-            if let Some(reverse_record) = result.maybe_reverse_record {
-                sql::create_or_update_reverse_record(db, reverse_record, protocol).await?;
+            if protocol.info.address_resolve_technique == AddressResolveTechnique::Addr2Name {
+                if let Some(reverse_record) = result.maybe_reverse_record {
+                    sql::create_or_update_reverse_record(db, reverse_record, protocol).await?;
+                }
             }
         }
         cached::Return {
