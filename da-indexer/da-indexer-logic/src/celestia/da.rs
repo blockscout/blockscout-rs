@@ -1,16 +1,16 @@
+use crate::celestia::rpc_client::ShareV2Client;
+use crate::{
+    celestia::{repository::blobs, rpc_client},
+    indexer::{Job, DA},
+};
 use anyhow::Result;
 use async_trait::async_trait;
-use celestia_rpc::{Client, HeaderClient, ShareClient};
+use celestia_rpc::{Client, HeaderClient};
 use celestia_types::{Blob, ExtendedHeader};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
-};
-
-use crate::{
-    celestia::{repository::blobs, rpc_client},
-    indexer::{Job, DA},
 };
 
 use super::{job::CelestiaJob, parser, repository::blocks, settings::IndexerSettings};
@@ -53,12 +53,16 @@ impl CelestiaDA {
     }
 
     async fn get_blobs_by_height(&self, height: u64) -> Result<(ExtendedHeader, Vec<Blob>)> {
+        // TODO: it seems possible to avoid this request with new Celestia API
         let header = self.client.header_get_by_height(height).await?;
-        let mut blobs = vec![];
 
+        let mut blobs = vec![];
         if parser::maybe_contains_blobs(&header.dah) {
-            let eds = self.client.share_get_eds(&header).await?;
-            blobs = parser::parse_eds(&eds, header.dah.square_len())?;
+            let eds = self
+                .client
+                .share_get_eds_v2(height, header.header.version.app)
+                .await?;
+            blobs = parser::parse_eds(&eds, header.header.version.app)?;
         }
 
         Ok((header, blobs))

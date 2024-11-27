@@ -1,6 +1,10 @@
-use celestia_rpc::{Error, Result};
+use std::future::Future;
+
+use celestia_rpc::Error;
+use celestia_types::{AppVersion, ExtendedDataSquare};
 use http::{header, HeaderValue};
 use jsonrpsee::{
+    core::client::{self, ClientT},
     http_client::{HeaderMap, HttpClientBuilder},
     ws_client::WsClientBuilder,
 };
@@ -12,7 +16,7 @@ pub async fn new_celestia_client(
     auth_token: Option<&str>,
     max_request_size: u32,
     max_response_size: u32,
-) -> Result<celestia_rpc::Client> {
+) -> celestia_rpc::Result<celestia_rpc::Client> {
     let mut headers = HeaderMap::new();
 
     if let Some(token) = auth_token {
@@ -42,3 +46,47 @@ pub async fn new_celestia_client(
 
     Ok(client)
 }
+
+// celestia_rpc::Client doesn't support new version of share.GetEDS method
+// so we need to implement it manually
+pub mod rpc {
+    use celestia_types::eds::RawExtendedDataSquare;
+    use jsonrpsee::proc_macros::rpc;
+
+    #[rpc(client)]
+    pub trait ShareV2 {
+        #[method(name = "share.GetEDS")]
+        async fn share_get_eds_v2(
+            &self,
+            height: u64,
+        ) -> Result<RawExtendedDataSquare, client::Error>;
+    }
+}
+
+pub trait ShareV2Client: ClientT {
+    /// GetEDS gets the full EDS identified by the given root.
+    fn share_get_eds_v2<'a, 'b, 'fut>(
+        &'a self,
+        height: u64,
+        app_version: u64,
+    ) -> impl Future<Output = Result<ExtendedDataSquare, client::Error>> + Send + 'fut
+    where
+        'a: 'fut,
+        'b: 'fut,
+        Self: Sized + Sync + 'fut,
+    {
+        async move {
+            let app_version = AppVersion::from_u64(app_version).ok_or_else(|| {
+                let e = format!("Invalid or unsupported AppVersion: {app_version}");
+                client::Error::Custom(e)
+            })?;
+
+            let raw_eds = rpc::ShareV2Client::share_get_eds_v2(self, height).await?;
+
+            ExtendedDataSquare::from_raw(raw_eds, app_version)
+                .map_err(|e| client::Error::Custom(e.to_string()))
+        }
+    }
+}
+
+impl<T> ShareV2Client for T where T: ClientT {}

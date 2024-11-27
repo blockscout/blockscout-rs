@@ -49,6 +49,7 @@ pub async fn upsert_many<C: ConnectionTrait>(
     blobs: Vec<CelestiaBlob>,
 ) -> Result<(), anyhow::Error> {
     let blobs = blobs.into_iter().map(|blob| {
+        // TODO: do we need to store blob index?
         let model = Model {
             id: compute_id(height, &blob.commitment.0),
             height: height as i64,

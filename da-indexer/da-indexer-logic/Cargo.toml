@@ -17,19 +17,19 @@ sea-orm = { version = "0.12.2", features = [
     "postgres-array",
 ] }
 
-celestia-rpc = "0.1.1"
-celestia-types = "0.1.1"
+celestia-rpc = "0.7.0"
+celestia-types = "0.7.0"
 tokio = { version = "1", features = ["full"] }
 hex = "0.4.3"
 lazy_static = "1.4.0"
 sha3 = "0.10.8"
 futures = "0.3"
-jsonrpsee = { version = "0.20", features = ["client-core", "macros"] }
+jsonrpsee = { version = "0.24.7", features = ["client-core", "macros"] }
 serde = "1.0"
 serde_with = "3.6.1"
 serde_json = "1.0.96"
 async-trait = "0.1"
-http = "0.2.9"
+http = "1.1.0"
 tonic = { version = "0.7", features = ["tls", "tls-roots"] }
 prost = "0.10"
 ethabi = "18.0"
