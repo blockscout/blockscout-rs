@@ -1,6 +1,5 @@
-use crate::celestia::rpc_client::ShareV2Client;
 use crate::{
-    celestia::{repository::blobs, rpc_client},
+    celestia::{repository::blobs, rpc_client, rpc_client::ShareV2Client},
     indexer::{Job, DA},
 };
 use anyhow::Result;
