@@ -9,7 +9,6 @@ use std::fmt::Display;
 use crate::{types::Timespan, ReadError};
 use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::{ChartResolution, ChartType};
-use pretty_assertions::assert_eq;
 use sea_orm::prelude::*;
 use thiserror::Error;
 

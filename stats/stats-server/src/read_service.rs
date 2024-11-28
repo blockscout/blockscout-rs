@@ -1,21 +1,27 @@
 use std::{clone::Clone, cmp::Ord, collections::BTreeMap, fmt::Debug, str::FromStr, sync::Arc};
 
 use crate::{
-    config::{layout::sorted_items_according_to_layout, types},
+    config::{
+        layout::sorted_items_according_to_layout,
+        types::{self, EnabledChartSettings},
+    },
     runtime_setup::{EnabledChartEntry, RuntimeSetup},
     settings::LimitsSettings,
 };
 
+use anyhow::Context;
 use async_trait::async_trait;
-use chrono::{NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
+use futures::{stream::FuturesOrdered, StreamExt};
 use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
+    data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
     entity::sea_orm_active_enums::ChartType,
-    query_dispatch::serialize_line_points,
+    query_dispatch::{serialize_line_points, ChartTypeSpecifics, QuerySerializedDyn},
     types::{
         timespans::{Month, Week, Year},
-        Timespan,
+        Timespan, TimespanValue,
     },
     ApproxUnsignedDiff, MissingDatePolicy, ReadError, RequestedPointsLimit, ResolutionKind,
 };
@@ -25,6 +31,7 @@ use tonic::{Request, Response, Status};
 #[derive(Clone)]
 pub struct ReadService {
     db: Arc<DatabaseConnection>,
+    blockscout: Arc<DatabaseConnection>,
     charts: Arc<RuntimeSetup>,
     limits: ReadLimits,
 }
@@ -32,10 +39,16 @@ pub struct ReadService {
 impl ReadService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
+        blockscout: Arc<DatabaseConnection>,
         charts: Arc<RuntimeSetup>,
         limits: ReadLimits,
     ) -> Result<Self, DbErr> {
-        Ok(Self { db, charts, limits })
+        Ok(Self {
+            db,
+            blockscout,
+            charts,
+            limits,
+        })
     }
 }
 
@@ -178,51 +191,93 @@ async fn get_serialized_line_chart_data_resolution_dispatch(
     }
 }
 
+impl ReadService {
+    async fn query_with_handle<Data: Send>(
+        &self,
+        query_handle: QuerySerializedDyn<Data>,
+        query_time: DateTime<Utc>,
+    ) -> anyhow::Result<Data> {
+        let migrations = BlockscoutMigrations::query_from_db(&self.blockscout)
+            .await
+            .context("querying migrations from db")?;
+        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
+            db: &self.db,
+            blockscout: &self.blockscout,
+            blockscout_applied_migrations: migrations,
+            update_time_override: Some(query_time),
+            force_full: false,
+        });
+        query_handle
+            .query_data(&context, None, true)
+            .await
+            .context("querying data")
+    }
+
+    async fn query_counter_with_handle(
+        &self,
+        name: &str,
+        settings: EnabledChartSettings,
+        query_handle: QuerySerializedDyn<TimespanValue<NaiveDate, String>>,
+        query_time: DateTime<Utc>,
+    ) -> anyhow::Result<proto_v1::Counter> {
+        let point = self.query_with_handle(query_handle, query_time).await?;
+        Ok(proto_v1::Counter {
+            id: name.to_string(),
+            value: point.value,
+            title: settings.title,
+            description: settings.description,
+            units: settings.units,
+        })
+    }
+}
+
 #[async_trait]
 impl StatsService for ReadService {
     async fn get_counters(
         &self,
         _request: Request<proto_v1::GetCountersRequest>,
     ) -> Result<Response<proto_v1::Counters>, Status> {
-        let mut data = stats::get_raw_counters(&self.db)
-            .await
-            .map_err(map_read_error)?;
-
-        let counters = self
+        let now = Utc::now();
+        let counters_futures: FuturesOrdered<_> = self
             .charts
             .charts_info
             .iter()
-            .filter(|(_, chart)| {
-                chart.resolutions.iter().all(|(_, static_info)| {
-                    static_info.type_specifics.as_chart_type() == ChartType::Counter
-                })
-            })
             .filter_map(|(name, counter)| {
-                data.remove(name).and_then(|point| {
-                    // resolutions other than day are currently not supported
-                    // for counters
-                    let Some(static_info) = counter.resolutions.get(&ResolutionKind::Day) else {
-                        tracing::warn!(
-                            "No 'day' resolution enabled for counter {}, skipping its value",
-                            name
-                        );
-                        return None;
-                    };
-                    let point = if static_info.missing_date_policy == MissingDatePolicy::FillZero {
-                        point.relevant_or_zero(Utc::now().date_naive())
-                    } else {
-                        point
-                    };
-                    Some(proto_v1::Counter {
-                        id: static_info.name.clone(),
-                        value: point.value,
-                        title: counter.settings.title.clone(),
-                        description: counter.settings.description.clone(),
-                        units: counter.settings.units.clone(),
-                    })
-                })
+                // resolutions other than day are currently not supported
+                // for counters
+                let Some(enabled_resolution) = counter.resolutions.get(&ResolutionKind::Day) else {
+                    tracing::warn!(
+                        "No 'day' resolution enabled for counter {}, skipping its value",
+                        name
+                    );
+                    return None;
+                };
+                let ChartTypeSpecifics::Counter {
+                    query: query_handle,
+                } = &enabled_resolution.type_specifics
+                else {
+                    return None;
+                };
+                Some(self.query_counter_with_handle(
+                    name,
+                    counter.settings.clone(),
+                    query_handle.clone(),
+                    now.clone(),
+                ))
             })
             .collect();
+        let counters: Vec<proto_v1::Counter> = counters_futures
+            .filter_map(|query_result| async move {
+                match query_result {
+                    Ok(c) => Some(c),
+                    Err(e) => {
+                        tracing::error!("Failed to query counter: {:?}", e);
+                        None
+                    }
+                }
+            })
+            .collect()
+            .await;
         let counters_sorted =
             sorted_items_according_to_layout(counters, &self.charts.counters_layout, |c| &c.id);
         let counters = proto_v1::Counters {
