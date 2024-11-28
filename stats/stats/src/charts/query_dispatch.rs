@@ -1,4 +1,4 @@
-use std::{fmt::Debug, future::Future, ops::Range, sync::Arc};
+use std::{fmt::Debug, future::Future, ops::Range, pin::Pin, sync::Arc};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
@@ -31,7 +31,7 @@ pub trait QuerySerialized {
         cx: &UpdateContext<'a>,
         range: Option<Range<DateTime<Utc>>>,
         fill_missing_dates: bool,
-    ) -> Box<dyn Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>;
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>>;
 }
 
 /// [`QuerySerialized`] but for dynamic dispatch
@@ -118,9 +118,10 @@ where
         cx: &UpdateContext<'a>,
         range: Option<Range<DateTime<Utc>>>,
         fill_missing_dates: bool,
-    ) -> Box<dyn std::future::Future<Output = Result<Self::Output, UpdateError>> + Send + 'a> {
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>>
+    {
         let cx = cx.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let data = Query::query_data(&cx, range, fill_missing_dates).await?;
             Ok(data.serialize())
         })
