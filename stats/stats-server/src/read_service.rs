@@ -252,16 +252,14 @@ impl StatsService for ReadService {
                     );
                     return None;
                 };
-                let ChartTypeSpecifics::Counter {
-                    query: query_handle,
-                } = &enabled_resolution.type_specifics
-                else {
-                    return None;
-                };
+                let query_handle = enabled_resolution
+                    .type_specifics
+                    .clone()
+                    .into_counter_handle()?;
                 Some(self.query_counter_with_handle(
                     name,
                     counter.settings.clone(),
-                    query_handle.clone(),
+                    query_handle,
                     now.clone(),
                 ))
             })
@@ -296,13 +294,22 @@ impl StatsService for ReadService {
         let chart_entry = self.charts.charts_info.get(&chart_name).ok_or_else(|| {
             Status::not_found(format!("chart with name '{}' was not found", chart_name))
         })?;
-        let resolution_info = chart_entry
-            .resolutions
-            .get(&resolution)
-            .filter(|static_info| static_info.type_specifics.as_chart_type() == ChartType::Line)
+        let resolution_info = chart_entry.resolutions.get(&resolution);
+        let (query_handle, policy, mark_approx) = resolution_info
+            .and_then(|enabled_resolution| {
+                let handle = enabled_resolution
+                    .type_specifics
+                    .clone()
+                    .into_line_handle()?;
+                Some((
+                    handle,
+                    enabled_resolution.missing_date_policy,
+                    enabled_resolution.approximate_trailing_points,
+                ))
+            })
             .ok_or_else(|| {
                 Status::not_found(format!(
-                    "resolution '{}' for chart '{}' was not found",
+                    "resolution '{}' for line chart '{}' was not found",
                     String::from(resolution),
                     chart_name,
                 ))
@@ -312,9 +319,19 @@ impl StatsService for ReadService {
             .from
             .and_then(|date| NaiveDate::from_str(&date).ok());
         let to = request.to.and_then(|date| NaiveDate::from_str(&date).ok());
-        let policy = resolution_info.missing_date_policy;
-        let mark_approx = resolution_info.approximate_trailing_points;
         let points_limit = Some(self.limits.requested_points_limit);
+
+        let migrations = BlockscoutMigrations::query_from_db(&self.blockscout)
+            .await
+            .map_err(|e| map_read_error(ReadError::DB(e)))?;
+        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
+            db: &self.db,
+            blockscout: &self.blockscout,
+            blockscout_applied_migrations: migrations,
+            update_time_override: Some(Utc::now()),
+            force_full: false,
+        });
+        let data = query_handle.query_data().await.map_err(map_read_error)?;
         let serialized_chart = get_serialized_line_chart_data_resolution_dispatch(
             &self.db,
             chart_name.clone(),

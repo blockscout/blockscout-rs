@@ -12,7 +12,7 @@ use crate::{
         },
         DataSource, UpdateContext,
     },
-    exclusive_datetime_range_to_inclusive,
+    exclusive_datetime_range_to_inclusive, RequestedPointsLimit,
 };
 
 use super::{
@@ -29,7 +29,9 @@ pub trait QuerySerialized {
     fn query_data<'a>(
         &self,
         cx: &UpdateContext<'a>,
-        range: Option<Range<DateTime<Utc>>>,
+        from: Option<DateTime<Utc>>,
+        to: Option<DateTime<Utc>>,
+        points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
     ) -> Pin<Box<dyn Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>>;
 }
@@ -37,13 +39,13 @@ pub trait QuerySerialized {
 /// [`QuerySerialized`] but for dynamic dispatch
 pub type QuerySerializedDyn<O> = Arc<Box<dyn QuerySerialized<Output = O> + Send + Sync>>;
 
+pub type CounterHandle = QuerySerializedDyn<TimespanValue<NaiveDate, String>>;
+pub type LineHandle = QuerySerializedDyn<Vec<Point>>;
+
+#[derive(Clone)]
 pub enum ChartTypeSpecifics {
-    Counter {
-        query: QuerySerializedDyn<TimespanValue<NaiveDate, String>>,
-    },
-    Line {
-        query: QuerySerializedDyn<Vec<Point>>,
-    },
+    Counter { query: CounterHandle },
+    Line { query: LineHandle },
 }
 
 impl Debug for ChartTypeSpecifics {
@@ -62,15 +64,29 @@ impl ChartTypeSpecifics {
             Self::Line { query: _ } => ChartType::Line,
         }
     }
+
+    pub fn into_counter_handle(self) -> Option<CounterHandle> {
+        match self {
+            Self::Counter { query } => Some(query),
+            _ => None,
+        }
+    }
+
+    pub fn into_line_handle(self) -> Option<LineHandle> {
+        match self {
+            Self::Line { query } => Some(query),
+            _ => None,
+        }
+    }
 }
 
-impl Into<ChartTypeSpecifics> for QuerySerializedDyn<TimespanValue<NaiveDate, String>> {
+impl Into<ChartTypeSpecifics> for CounterHandle {
     fn into(self) -> ChartTypeSpecifics {
         ChartTypeSpecifics::Counter { query: self }
     }
 }
 
-impl Into<ChartTypeSpecifics> for QuerySerializedDyn<Vec<Point>> {
+impl Into<ChartTypeSpecifics> for LineHandle {
     fn into(self) -> ChartTypeSpecifics {
         ChartTypeSpecifics::Line { query: self }
     }
@@ -116,13 +132,15 @@ where
     fn query_data<'a>(
         &self,
         cx: &UpdateContext<'a>,
-        range: Option<Range<DateTime<Utc>>>,
+        from: Option<DateTime<Utc>>,
+        to: Option<DateTime<Utc>>,
+        points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
     ) -> Pin<Box<dyn std::future::Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>>
     {
         let cx = cx.clone();
         Box::pin(async move {
-            let data = Query::query_data(&cx, range, fill_missing_dates).await?;
+            let data = Query::query_data(&cx, range, points_limit, fill_missing_dates).await?;
             Ok(data.serialize())
         })
     }
