@@ -1,4 +1,3 @@
-
 use crate::{
     charts::db_interaction::read::get_estimated_table_rows,
     data_source::{

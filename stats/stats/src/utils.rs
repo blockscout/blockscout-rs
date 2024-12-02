@@ -94,8 +94,8 @@ mod test {
             ("".to_string(), vec![])
         );
 
-        let time_1 = DateTimeUtc::from_timestamp(1234567, 0).unwrap();
-        let time_2 = DateTimeUtc::from_timestamp(7654321, 0).unwrap();
+        let time_1 = DateTime::<Utc>::from_timestamp(1234567, 0).unwrap();
+        let time_2 = DateTime::<Utc>::from_timestamp(7654321, 0).unwrap();
         assert_eq!(
             produce_filter_and_values(Some(time_1..time_2), "aboba", 123),
             (
@@ -110,7 +110,7 @@ mod test {
 
     const ETH: i64 = 1_000_000_000_000_000_000;
 
-    fn naive_sql_selector(range: Option<Range<DateTimeUtc>>) -> Statement {
+    fn naive_sql_selector(range: Option<Range<DateTime<Utc>>>) -> Statement {
         match range {
             Some(range) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -175,8 +175,8 @@ mod test {
     #[test]
     fn sql_with_range_filter_some_works() {
         let range = Some(
-            DateTimeUtc::from_timestamp(1234567, 0).unwrap()
-                ..DateTimeUtc::from_timestamp(7654321, 0).unwrap(),
+            DateTime::<Utc>::from_timestamp(1234567, 0).unwrap()
+                ..DateTime::<Utc>::from_timestamp(7654321, 0).unwrap(),
         );
         assert_eq!(
             compact_sql(naive_sql_selector(range.clone())),

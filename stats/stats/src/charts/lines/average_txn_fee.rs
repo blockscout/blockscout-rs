@@ -27,8 +27,9 @@ use crate::{
 };
 
 use chrono::NaiveDate;
+use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
@@ -38,7 +39,7 @@ pub struct AverageTxnFeeStatement;
 
 impl StatementFromRange for AverageTxnFeeStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {
