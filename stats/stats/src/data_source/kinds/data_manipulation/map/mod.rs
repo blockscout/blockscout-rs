@@ -1,14 +1,15 @@
 //! `map` for a data source, i.e. applies a function to the output
 //! of some other source.
 
-use std::{marker::PhantomData, ops::Range};
+use std::marker::PhantomData;
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::Utc;
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use chrono::{DateTime, Utc};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{DataSource, UpdateContext},
+    range::UniversalRange,
     UpdateError,
 };
 
@@ -58,7 +59,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let inner_data =

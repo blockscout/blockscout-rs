@@ -4,17 +4,18 @@
 
 use std::{
     marker::PhantomData,
-    ops::{AddAssign, Range},
+    ops::AddAssign,
 };
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_processing::sum,
     data_source::{source::DataSource, UpdateContext},
+    range::UniversalRange,
     types::{Timespan, TimespanValue},
     UpdateError,
 };
@@ -58,12 +59,13 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         // it's possible to not request full data range and use last accurate point;
         // can be updated to work similarly to cumulative
-        let full_data = DS::query_data(cx, None, dependency_data_fetch_timer).await?;
+        let full_data =
+            DS::query_data(cx, UniversalRange::full(), dependency_data_fetch_timer).await?;
         tracing::debug!(points_len = full_data.len(), "calculating sum");
         let zero = Value::zero();
         sum::<Resolution, Value>(&full_data, zero)

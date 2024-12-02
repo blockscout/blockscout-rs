@@ -1,6 +1,6 @@
 use std::{
     marker::PhantomData,
-    ops::{AddAssign, Range},
+    ops::AddAssign,
 };
 
 use blockscout_metrics_tools::AggregateTimer;
@@ -11,6 +11,7 @@ use sea_orm::DatabaseConnection;
 use crate::{
     data_processing::cumsum,
     data_source::{DataSource, UpdateContext},
+    range::UniversalRange,
     types::TimespanValue,
     UpdateError,
 };
@@ -52,7 +53,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTime<Utc>>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let delta_data = Delta::query_data(cx, range, dependency_data_fetch_timer).await?;

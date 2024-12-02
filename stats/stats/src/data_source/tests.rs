@@ -27,6 +27,7 @@ use super::{
     types::UpdateParameters,
 };
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     construct_update_group,
     data_source::{
         kinds::local_db::parameters::update::batching::parameters::PassVecStep,
@@ -127,8 +128,9 @@ impl StatementFromRange for NewContractsQuery {
     }
 }
 
-pub type NewContractsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewContractsQuery, NaiveDate, String>>;
+pub type NewContractsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NewContractsQuery, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct NewContractsChartProperties;
 

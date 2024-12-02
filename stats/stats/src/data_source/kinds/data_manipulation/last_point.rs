@@ -2,14 +2,15 @@
 //!
 //! Takes last data point from some other (vector) source
 
-use std::{marker::PhantomData, ops::Range};
+use std::marker::PhantomData;
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{source::DataSource, UpdateContext},
+    range::UniversalRange,
     types::{Timespan, TimespanValue, ZeroTimespanValue},
     utils::day_start,
     UpdateError,
@@ -48,12 +49,12 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let data = DS::query_data(
             cx,
-            Some(day_start(&cx.time.date_naive())..cx.time),
+            (day_start(&cx.time.date_naive())..cx.time).into(),
             dependency_data_fetch_timer,
         )
         .await?;

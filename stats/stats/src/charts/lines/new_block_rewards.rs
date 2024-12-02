@@ -6,6 +6,7 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -53,8 +54,9 @@ impl StatementFromRange for NewBlockRewardsStatement {
     }
 }
 
-pub type NewBlockRewardsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewBlockRewardsStatement, NaiveDate, String>>;
+pub type NewBlockRewardsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NewBlockRewardsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct Properties;
 
@@ -96,6 +98,7 @@ mod tests {
     use super::*;
     use crate::{
         data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
+        range::UniversalRange,
         tests::{
             init_db::init_db_all,
             mock_blockscout::fill_mock_blockscout_data,
@@ -154,12 +157,13 @@ mod tests {
             .await
             .unwrap();
         let mut timer = AggregateTimer::new();
-        let data: Vec<_> = NewBlockRewardsMonthlyInt::query_data(&cx, None, &mut timer)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|p| (p.timespan.into_date().to_string(), p.value.to_string()))
-            .collect();
+        let data: Vec<_> =
+            NewBlockRewardsMonthlyInt::query_data(&cx, UniversalRange::full(), &mut timer)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|p| (p.timespan.into_date().to_string(), p.value.to_string()))
+                .collect();
         assert_eq!(data, expected);
     }
 }

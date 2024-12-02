@@ -315,8 +315,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{tests::point_construction::*, types::timespans::Week};
-    use chrono::{NaiveDate, NaiveDateTime};
+    use crate::tests::point_construction::*;
+    use chrono::NaiveDate;
     use pretty_assertions::assert_eq;
 
     #[test]

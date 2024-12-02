@@ -21,7 +21,6 @@ mod query;
 use std::{
     future::Future,
     marker::{PhantomData, Send},
-    ops::Range,
 };
 
 use blockscout_metrics_tools::AggregateTimer;
@@ -30,6 +29,7 @@ use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{source::DataSource, types::UpdateContext},
+    range::UniversalRange,
     UpdateError,
 };
 
@@ -47,7 +47,7 @@ pub trait RemoteQueryBehaviour {
     /// Retrieve chart data from remote storage.
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTime<Utc>>>,
+        range: UniversalRange<DateTime<Utc>>,
     ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }
 
@@ -69,7 +69,7 @@ impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTime<Utc>>>,
+        range: UniversalRange<DateTime<Utc>>,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<<Self as DataSource>::Output, UpdateError> {
         let _interval = remote_fetch_timer.start_interval();

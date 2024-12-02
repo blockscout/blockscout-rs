@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -89,8 +90,9 @@ impl StatementFromRange for NativeCoinSupplyStatement {
 }
 
 // query returns float value
-pub type NativeCoinSupplyRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, f64>>;
+pub type NativeCoinSupplyRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
 pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
 

@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -50,8 +51,9 @@ impl StatementFromRange for NewBlocksStatement {
     }
 }
 
-pub type NewBlocksRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, NaiveDate, String>>;
+pub type NewBlocksRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NewBlocksStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct Properties;
 

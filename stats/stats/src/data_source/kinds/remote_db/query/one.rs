@@ -1,15 +1,14 @@
-use std::{
-    marker::{PhantomData, Send},
-    ops::Range,
-};
+use std::marker::{PhantomData, Send};
 
-use sea_orm::{prelude::DateTimeUtc, FromQueryResult, Statement};
+use chrono::{DateTime, Utc};
+use sea_orm::{FromQueryResult, Statement};
 
 use crate::{
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, UpdateContext},
     },
+    range::UniversalRange,
     types::TimespanValue,
     UpdateError,
 };
@@ -42,7 +41,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<TimespanValue<Resolution, Value>, UpdateError> {
         let query = S::get_statement(&cx.blockscout_applied_migrations);
         let data = TimespanValue::<Resolution, Value>::find_by_statement(query)

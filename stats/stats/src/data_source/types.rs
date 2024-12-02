@@ -1,4 +1,3 @@
-use anyhow::Context;
 use blockscout_db::entity::migrations_status;
 use chrono::Utc;
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement};

@@ -1,13 +1,13 @@
-use std::{collections::HashSet, future::Future, marker::Send, ops::Range};
+use std::{collections::HashSet, future::Future, marker::Send};
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use futures::{future::BoxFuture, FutureExt};
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 use tracing::instrument;
 use tynm::type_name;
 
-use crate::UpdateError;
+use crate::{range::UniversalRange, UpdateError};
 
 use super::types::UpdateContext;
 
@@ -163,7 +163,7 @@ pub trait DataSource {
     /// to call [`DataSource::update_recursively`] beforehand.
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }
@@ -208,7 +208,7 @@ impl DataSource for () {
 
     async fn query_data(
         _cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
         _remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         Ok(())
@@ -249,7 +249,7 @@ macro_rules! impl_data_source_for_tuple {
 
             async fn query_data(
                 cx: &UpdateContext<'_>,
-                range: Option<Range<DateTimeUtc>>,
+                range: UniversalRange<DateTime<Utc>>,
                 remote_fetch_timer: &mut AggregateTimer,
             ) -> Result<Self::Output, UpdateError> {
                 Ok((

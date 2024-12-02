@@ -5,6 +5,7 @@ use blockscout_metrics_tools::AggregateTimer;
 use crate::{
     charts::db_interaction::write::insert_data_many,
     data_source::{kinds::local_db::UpdateBehaviour, DataSource, UpdateContext},
+    range::UniversalRange,
     types::{Timespan, TimespanValue},
     UpdateError,
 };
@@ -25,7 +26,7 @@ where
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), UpdateError> {
         // range doesn't make sense there; thus is not used
-        let data = MainDep::query_data(cx, None, remote_fetch_timer).await?;
+        let data = MainDep::query_data(cx, UniversalRange::full(), remote_fetch_timer).await?;
         let value = data.active_model(chart_id, Some(min_blockscout_block));
         insert_data_many(cx.db, vec![value])
             .await

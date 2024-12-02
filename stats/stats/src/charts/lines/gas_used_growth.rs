@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -51,8 +52,9 @@ impl StatementFromRange for GasUsedPartialStatement {
     }
 }
 
-pub type GasUsedPartialRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, NaiveDate, Decimal>>;
+pub type GasUsedPartialRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<GasUsedPartialStatement, NaiveDate, Decimal, QueryAllBlockTimestampRange>,
+>;
 
 pub struct IncrementsFromPartialSum;
 

@@ -3,19 +3,16 @@
 //! Intended for "new"/"delta" charts where change of something
 //! is presented.
 
-use std::{
-    fmt::Debug,
-    marker::PhantomData,
-    ops::{AddAssign, Range},
-};
+use std::{fmt::Debug, marker::PhantomData, ops::AddAssign};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{DataSource, UpdateContext},
+    range::UniversalRange,
     types::{ConsistsOf, Timespan, TimespanValue},
     UpdateError,
 };
@@ -27,7 +24,7 @@ pub struct SumLowerResolution<DS, LowerRes>(PhantomData<(DS, LowerRes)>);
 
 impl<DS, LowerRes, HigherRes, Value> DataSource for SumLowerResolution<DS, LowerRes>
 where
-    LowerRes: Timespan + ConsistsOf<HigherRes> + Eq + Debug + Send,
+    LowerRes: Timespan + ConsistsOf<HigherRes> + Eq + Ord + Debug + Send,
     HigherRes: Clone + Debug,
     Value: AddAssign + Zero + Send + Debug,
     DS: DataSource<Output = Vec<TimespanValue<HigherRes, Value>>>,
@@ -56,16 +53,12 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        let time_range_for_lower_res = range.map(extend_to_timespan_boundaries::<LowerRes>);
-        let high_res_data = DS::query_data(
-            cx,
-            time_range_for_lower_res.clone(),
-            dependency_data_fetch_timer,
-        )
-        .await?;
+        let time_range_for_lower_res = extend_to_timespan_boundaries::<LowerRes>(range);
+        let high_res_data =
+            DS::query_data(cx, time_range_for_lower_res, dependency_data_fetch_timer).await?;
         Ok(reduce_each_timespan(
             high_res_data,
             |t| LowerRes::from_smaller(t.timespan.clone()),
@@ -111,6 +104,7 @@ mod tests {
         data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
         gettable_const,
         lines::PredefinedMockSource,
+        range::UniversalRange,
         tests::point_construction::{d_v_int, dt, w_v_int},
         types::timespans::{DateValue, Week},
         MissingDatePolicy,
@@ -145,7 +139,7 @@ mod tests {
             force_full: false,
         };
         assert_eq!(
-            MockSource::query_data(&context, None, &mut AggregateTimer::new())
+            MockSource::query_data(&context, UniversalRange::full(), &mut AggregateTimer::new())
                 .await
                 .unwrap(),
             vec![
@@ -156,9 +150,13 @@ mod tests {
             ]
         );
         assert_eq!(
-            MockSourceWeekly::query_data(&context, None, &mut AggregateTimer::new())
-                .await
-                .unwrap(),
+            MockSourceWeekly::query_data(
+                &context,
+                UniversalRange::full(),
+                &mut AggregateTimer::new()
+            )
+            .await
+            .unwrap(),
             vec![w_v_int("2024-07-08", 4), w_v_int("2024-07-22", 1239),]
         );
     }

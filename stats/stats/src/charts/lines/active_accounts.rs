@@ -3,6 +3,7 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             local_db::{
@@ -66,8 +67,9 @@ impl StatementFromRange for ActiveAccountsStatement {
     }
 }
 
-pub type ActiveAccountsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<ActiveAccountsStatement, NaiveDate, String>>;
+pub type ActiveAccountsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<ActiveAccountsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct Properties;
 
