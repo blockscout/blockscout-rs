@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -81,8 +82,9 @@ impl StatementFromRange for TxnsSuccessRateStatement {
     }
 }
 
-pub type TxnsSuccessRateRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, NaiveDate, f64>>;
+pub type TxnsSuccessRateRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<TxnsSuccessRateStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
 pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;
 

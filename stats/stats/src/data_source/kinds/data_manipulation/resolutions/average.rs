@@ -1,15 +1,16 @@
 //! Constructors for lower resolutions of average value charts
-use std::{cmp::Ordering, fmt::Debug, marker::PhantomData, ops::Range};
+use std::{cmp::Ordering, fmt::Debug, marker::PhantomData};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 use itertools::{EitherOrBoth, Itertools};
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{
         kinds::data_manipulation::resolutions::reduce_each_timespan, DataSource, UpdateContext,
     },
+    range::UniversalRange,
     types::{ConsistsOf, Timespan, TimespanValue},
     UpdateError,
 };
@@ -34,7 +35,7 @@ impl<Average, Weight, LowerRes, HigherRes> DataSource
 where
     Average: DataSource<Output = Vec<TimespanValue<HigherRes, f64>>>,
     Weight: DataSource<Output = Vec<TimespanValue<HigherRes, i64>>>,
-    LowerRes: Timespan + ConsistsOf<HigherRes> + Eq + Debug + Send,
+    LowerRes: Timespan + ConsistsOf<HigherRes> + Eq + Ord + Debug + Send,
     HigherRes: Ord + Clone + Debug + Send,
 {
     type MainDependencies = Average;
@@ -61,10 +62,10 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
-        let time_range_for_lower_res = range.map(extend_to_timespan_boundaries::<LowerRes>);
+        let time_range_for_lower_res = extend_to_timespan_boundaries::<LowerRes>(range);
         let high_res_averages = Average::query_data(
             cx,
             time_range_for_lower_res.clone(),
@@ -188,6 +189,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Range;
+
     use crate::{
         data_source::{kinds::data_manipulation::map::MapParseTo, types::BlockscoutMigrations},
         gettable_const,
@@ -325,7 +328,7 @@ mod tests {
                 time: dt("2024-07-15T09:00:00").and_utc(),
                 force_full: false,
             },
-            Some(dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()),
+            (dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()).into(),
             &mut AggregateTimer::new(),
         )
         .await
@@ -375,9 +378,13 @@ mod tests {
         };
         let week_1_average = (5.0 * 100.0 + 34.2 * 2.0 + 10.3 * 12.0) / (100.0 + 2.0 + 12.0);
         assert_eq!(
-            TestedAverageSource::query_data(&context, None, &mut AggregateTimer::new())
-                .await
-                .unwrap(),
+            TestedAverageSource::query_data(
+                &context,
+                UniversalRange::full(),
+                &mut AggregateTimer::new()
+            )
+            .await
+            .unwrap(),
             vec![
                 w_v_double("2024-07-08", week_1_average),
                 w_v_double("2024-07-15", 5.0)
@@ -420,9 +427,13 @@ mod tests {
             force_full: false,
         };
         assert_eq!(
-            TestedAverageSource::query_data(&context, None, &mut AggregateTimer::new())
-                .await
-                .unwrap(),
+            TestedAverageSource::query_data(
+                &context,
+                UniversalRange::full(),
+                &mut AggregateTimer::new()
+            )
+            .await
+            .unwrap(),
             vec![w_v_double("2022-11-07", 0.8888888888888888),]
         );
     }
@@ -462,9 +473,13 @@ mod tests {
             force_full: false,
         };
         assert_eq!(
-            TestedAverageSource::query_data(&context, None, &mut AggregateTimer::new())
-                .await
-                .unwrap(),
+            TestedAverageSource::query_data(
+                &context,
+                UniversalRange::full(),
+                &mut AggregateTimer::new()
+            )
+            .await
+            .unwrap(),
             vec![w_v_double("2022-11-07", 1.0),]
         );
     }

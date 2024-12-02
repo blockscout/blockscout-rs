@@ -5,11 +5,11 @@ use crate::{
         UpdateContext,
     },
     missing_date::{fill_and_filter_chart, fit_into_range},
+    range::{exclusive_range_to_inclusive, UniversalRange},
     types::{
         timespans::{DateValue, Month, Week, Year},
         ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
     },
-    utils::exclusive_datetime_range_to_inclusive,
     ChartProperties, MissingDatePolicy, UpdateError,
 };
 
@@ -196,7 +196,7 @@ fn relevant_data_until<R: Timespan>(
             R::from_date(t.date_naive()).saturating_start_timestamp() == t;
         // last_updated_at timestamp is not included in the range
         let inclusive_last_updated_at_end =
-            exclusive_datetime_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t);
+            exclusive_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t);
         (
             Some(R::from_date(
                 inclusive_last_updated_at_end.end().date_naive(),
@@ -697,7 +697,7 @@ impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTime<Utc>>>,
+        _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, UpdateError> {
         let start_timestamp = get_min_date_blockscout(cx.blockscout)
             .await

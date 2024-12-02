@@ -1,14 +1,15 @@
-use std::{future::Future, marker::Send, ops::Range};
+use std::{future::Future, marker::Send};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     charts::db_interaction::write::set_last_updated_at,
     data_source::{DataSource, UpdateContext},
+    range::UniversalRange,
     types::TimespanValue,
-    UpdateError,
+    RequestedPointsLimit, UpdateError,
 };
 
 /// In most cases, [`super::DefaultCreate`] is enough.
@@ -61,7 +62,8 @@ pub trait QueryBehaviour {
     /// Retrieve chart data from local storage.
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
+        points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
     ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
 }

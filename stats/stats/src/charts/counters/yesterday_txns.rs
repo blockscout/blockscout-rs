@@ -1,4 +1,3 @@
-use std::ops::Range;
 
 use crate::{
     data_source::{
@@ -9,6 +8,7 @@ use crate::{
         UpdateContext,
     },
     lines::NewTxnsStatement,
+    range::UniversalRange,
     types::TimespanValue,
     utils::day_start,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
@@ -24,7 +24,7 @@ impl RemoteQueryBehaviour for YesterdayTxnsQuery {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTime<Utc>>>,
+        _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, UpdateError> {
         let today = cx.time.date_naive();
         let yesterday = today

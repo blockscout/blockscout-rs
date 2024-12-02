@@ -1,4 +1,3 @@
-use std::ops::Range;
 
 use crate::{
     data_source::{
@@ -8,12 +7,13 @@ use crate::{
         },
         UpdateContext,
     },
+    range::UniversalRange,
     types::timespans::DateValue,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::addresses;
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::prelude::*;
 
@@ -24,7 +24,7 @@ impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, UpdateError> {
         let value = addresses::Entity::find()
             .filter(addresses::Column::ContractCode.is_not_null())

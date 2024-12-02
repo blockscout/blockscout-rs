@@ -1,4 +1,4 @@
-use std::{fmt::Debug, future::Future, ops::Range, pin::Pin, sync::Arc};
+use std::{fmt::Debug, future::Future, pin::Pin, sync::Arc};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
@@ -12,7 +12,8 @@ use crate::{
         },
         DataSource, UpdateContext,
     },
-    exclusive_datetime_range_to_inclusive, RequestedPointsLimit,
+    range::{exclusive_range_to_inclusive, UniversalRange},
+    RequestedPointsLimit,
 };
 
 use super::{
@@ -29,8 +30,7 @@ pub trait QuerySerialized {
     fn query_data<'a>(
         &self,
         cx: &UpdateContext<'a>,
-        from: Option<DateTime<Utc>>,
-        to: Option<DateTime<Utc>>,
+        range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
     ) -> Pin<Box<dyn Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>>;
@@ -132,8 +132,7 @@ where
     fn query_data<'a>(
         &self,
         cx: &UpdateContext<'a>,
-        from: Option<DateTime<Utc>>,
-        to: Option<DateTime<Utc>>,
+        range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
     ) -> Pin<Box<dyn std::future::Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>>
@@ -149,7 +148,7 @@ where
 fn serialize_point<Resolution: Timespan>(
     point: ExtendedTimespanValue<Resolution, String>,
 ) -> Point {
-    let time_range = exclusive_datetime_range_to_inclusive(point.timespan.into_time_range());
+    let time_range = exclusive_range_to_inclusive(point.timespan.into_time_range());
     let date_range = { time_range.start().date_naive()..=time_range.end().date_naive() };
     Point {
         date: date_range.start().to_string(),

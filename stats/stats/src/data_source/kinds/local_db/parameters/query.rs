@@ -1,14 +1,15 @@
-use std::{fmt::Debug, marker::PhantomData, ops::Range};
+use std::{fmt::Debug, marker::PhantomData};
 
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection};
+use chrono::{DateTime, Utc};
+use sea_orm::DatabaseConnection;
 
 use crate::{
     charts::db_interaction::read::get_counter_data,
     data_source::{kinds::local_db::parameter_traits::QueryBehaviour, UpdateContext},
     get_line_chart_data,
+    range::UniversalRange,
     types::{timespans::DateValue, ExtendedTimespanValue, Timespan},
-    utils::exclusive_datetime_range_to_inclusive,
-    ChartProperties, UpdateError,
+    ChartProperties, RequestedPointsLimit, UpdateError,
 };
 
 /// Usually the choice for line charts
@@ -28,14 +29,14 @@ where
     /// Expects metadata to be consistent with stored data
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
+        points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
     ) -> Result<Self::Output, UpdateError> {
         // In DB we store data with date precision. Also, `get_line_chart_data`
         // works with inclusive range. Therefore, we need to convert the range and
         // get date without time.
-        let range = range.map(exclusive_datetime_range_to_inclusive);
-        let (start, end) = range.map(|r| r.into_inner()).unzip();
+        let (start, end) = range.into_inclusive_pair();
 
         // At the same time, update-time relevance for local charts
         // is achieved while requesting remote source data.
@@ -52,7 +53,7 @@ where
             &C::name(),
             start,
             end,
-            None,
+            points_limit,
             C::missing_date_policy(),
             fill_missing_dates,
             C::approximate_trailing_points(),
@@ -70,7 +71,8 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
+        _points_limit: Option<RequestedPointsLimit>,
         _fill_missing_dates: bool,
     ) -> Result<Self::Output, UpdateError> {
         let value = get_counter_data(
@@ -107,7 +109,8 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
+        _points_limit: Option<RequestedPointsLimit>,
         _fill_missing_dates: bool,
     ) -> Result<Self::Output, UpdateError> {
         let value = get_counter_data(
@@ -193,7 +196,10 @@ mod tests {
         assert_eq!(
             expected_estimate(),
             QueryLastWithEstimationFallback::<TestFallback, InvalidProperties>::query_data(
-                &cx, None, true
+                &cx,
+                UniversalRange::full(),
+                None,
+                true
             )
             .await
             .unwrap()

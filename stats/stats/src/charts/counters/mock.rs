@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::Range};
+use std::marker::PhantomData;
 
 use crate::{
     data_source::{
@@ -9,13 +9,13 @@ use crate::{
         types::Get,
         UpdateContext,
     },
+    range::UniversalRange,
     types::timespans::DateValue,
     ChartProperties, Named, UpdateError,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::DateTimeUtc;
 
 pub struct MockCounterRetrieve<PointDateTime, Value>(PhantomData<(PointDateTime, Value)>)
 where
@@ -31,7 +31,7 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, UpdateError> {
         if cx.time >= PointDateTime::get() {
             Ok(DateValue::<String> {

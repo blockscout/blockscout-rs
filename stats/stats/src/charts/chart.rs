@@ -17,6 +17,7 @@ use super::{
     query_dispatch::{ChartTypeSpecifics, QuerySerialized, QuerySerializedDyn},
 };
 
+// todo: rename to `ChartError` or similar
 #[derive(Error, Debug)]
 pub enum UpdateError {
     #[error("blockscout database error: {0}")]

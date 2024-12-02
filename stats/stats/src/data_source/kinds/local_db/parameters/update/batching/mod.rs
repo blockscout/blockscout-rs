@@ -17,6 +17,7 @@ use crate::{
         types::Get,
         UpdateContext,
     },
+    range::UniversalRange,
     types::{ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue},
     ChartProperties, UpdateError,
 };
@@ -131,7 +132,11 @@ where
     let previous_step_last_point_timespan = this_step_start.saturating_previous_timespan();
     let last_point_range_values = Query::query_data(
         cx,
-        Some(previous_step_last_point_timespan.clone().into_time_range()),
+        previous_step_last_point_timespan
+            .clone()
+            .into_time_range()
+            .into(),
+        None,
         false,
     )
     .await?;
@@ -168,11 +173,11 @@ where
     Resolution: Timespan,
     BatchStep: BatchStepBehaviour<Resolution, MainDep::Output, ResolutionDep::Output>,
 {
-    let query_range = range.into_date_time_range();
+    let query_range: UniversalRange<_> = range.into_date_time_range().into();
     let main_data =
-        MainDep::query_data(cx, Some(query_range.clone()), dependency_data_fetch_timer).await?;
+        MainDep::query_data(cx, query_range.clone(), dependency_data_fetch_timer).await?;
     let resolution_data =
-        ResolutionDep::query_data(cx, Some(query_range), dependency_data_fetch_timer).await?;
+        ResolutionDep::query_data(cx, query_range, dependency_data_fetch_timer).await?;
     let found = BatchStep::batch_update_values_step_with(
         cx.db,
         chart_id,

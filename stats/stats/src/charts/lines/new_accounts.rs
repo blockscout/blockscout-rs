@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::timespans::DateValue,
+    charts::{db_interaction::read::QueryAllBlockTimestampRange, types::timespans::DateValue},
     data_source::{
         kinds::{
             data_manipulation::{
@@ -21,12 +21,13 @@ use crate::{
     },
     define_and_impl_resolution_properties,
     missing_date::trim_out_of_range_sorted,
+    range::{data_source_query_range_to_db_statement_range, UniversalRange},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
     ChartProperties, Named, UpdateError,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
 
@@ -99,17 +100,22 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<DateValue<String>>, UpdateError> {
-        let query =
-            NewAccountsStatement::get_statement(range.clone(), &cx.blockscout_applied_migrations);
+        let statement_range =
+            data_source_query_range_to_db_statement_range::<QueryAllBlockTimestampRange>(cx, range)
+                .await?;
+        let query = NewAccountsStatement::get_statement(
+            statement_range.clone(),
+            &cx.blockscout_applied_migrations,
+        );
         let mut data = DateValue::<String>::find_by_statement(query)
             .all(cx.blockscout)
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         // make sure that it's sorted
         data.sort_by_key(|d| d.timespan);
-        if let Some(range) = range {
+        if let Some(range) = statement_range {
             let range = range.start.date_naive()..=range.end.date_naive();
             trim_out_of_range_sorted(&mut data, range);
         }

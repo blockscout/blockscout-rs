@@ -3,6 +3,7 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -108,8 +109,9 @@ impl StatementFromRange for AverageTxnFeeStatement {
     }
 }
 
-pub type AverageTxnFeeRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageTxnFeeStatement, NaiveDate, f64>>;
+pub type AverageTxnFeeRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<AverageTxnFeeStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
 pub type AverageTxnFeeRemoteString = MapToString<AverageTxnFeeRemote>;
 

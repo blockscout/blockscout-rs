@@ -1,4 +1,3 @@
-use std::ops::Range;
 
 use crate::{
     charts::db_interaction::read::get_estimated_table_rows,
@@ -9,12 +8,13 @@ use crate::{
         },
         types::UpdateContext,
     },
+    range::UniversalRange,
     types::timespans::DateValue,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
-use chrono::{NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
 
@@ -31,7 +31,7 @@ impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, UpdateError> {
         let data = blocks::Entity::find()
             .select_only()

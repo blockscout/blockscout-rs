@@ -1,4 +1,4 @@
-use std::{cmp::Reverse, ops::Range};
+use std::cmp::Reverse;
 
 use crate::{
     data_source::{
@@ -9,13 +9,14 @@ use crate::{
         },
         UpdateContext,
     },
+    range::UniversalRange,
     types::TimespanValue,
     utils::NANOS_PER_SEC,
     ChartProperties, MissingDatePolicy, Named, UpdateError,
 };
 
 use blockscout_db::entity::blocks;
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
@@ -67,7 +68,7 @@ impl RemoteQueryBehaviour for AverageBlockTimeQuery {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
+        _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<TimespanValue<NaiveDate, f64>, UpdateError> {
         match query_average_block_time(cx, OFFSET_BLOCKS).await? {
             Some(avg_block_time) => Ok(avg_block_time),

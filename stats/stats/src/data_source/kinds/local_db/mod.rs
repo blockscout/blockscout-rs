@@ -9,7 +9,7 @@
 //! Charts are intended to be such persisted sources,
 //! because their data is directly retreived from the database (on requests).
 
-use std::{fmt::Debug, marker::PhantomData, ops::Range, time::Duration};
+use std::{fmt::Debug, marker::PhantomData, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, SubsecRound, Utc};
@@ -24,7 +24,7 @@ use parameters::{
     },
     DefaultCreate, DefaultQueryLast, DefaultQueryVec, QueryLastWithEstimationFallback,
 };
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     charts::{
@@ -33,7 +33,9 @@ use crate::{
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
-    metrics, UpdateError,
+    metrics,
+    range::UniversalRange,
+    UpdateError,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -262,13 +264,13 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, UpdateError> {
         let _timer = dependency_data_fetch_timer.start_interval();
         // maybe add `fill_missing_dates` parameter to current function as well in the future
         // to get rid of "Note" in the `DataSource`'s method documentation
-        Query::query_data(cx, range, false).await
+        Query::query_data(cx, range, None, false).await
     }
 }
 

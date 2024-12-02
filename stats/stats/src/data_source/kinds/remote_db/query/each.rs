@@ -12,7 +12,7 @@ use crate::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, UpdateContext},
     },
-    exclusive_datetime_range_to_inclusive,
+    range::{exclusive_range_to_inclusive, UniversalRange},
     types::{Timespan, TimespanValue},
     UpdateError,
 };
@@ -50,12 +50,13 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTime<Utc>>>,
+        range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError> {
-        let query_range = if let Some(r) = range {
+        let query_range = if let Some(r) = range.clone().try_into_exclusive() {
             r
         } else {
-            AllRangeSource::query_data(cx, None).await?
+            let whole_range = AllRangeSource::query_data(cx, UniversalRange::full()).await?;
+            range.into_exclusive_with_backup(whole_range)
         };
         let points = split_time_range_into_resolution_points::<Resolution>(query_range);
         let mut collected_data = Vec::with_capacity(points.len());
@@ -75,7 +76,7 @@ where
 }
 
 fn resolution_from_range<R: Timespan + PartialEq + Debug>(range: Range<DateTime<Utc>>) -> R {
-    let range = exclusive_datetime_range_to_inclusive(range);
+    let range = exclusive_range_to_inclusive(range);
     let res = R::from_date(range.start().date_naive());
     let res_verify = R::from_date(range.end().date_naive());
     if res_verify != res {

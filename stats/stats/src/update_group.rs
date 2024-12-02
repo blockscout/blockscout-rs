@@ -197,7 +197,10 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// ## Example
 ///
 /// ```rust
-/// # use stats::{ChartProperties, Named, construct_update_group, types::timespans::DateValue, UpdateError};
+/// # use stats::{
+/// #     QueryAllBlockTimestampRange, construct_update_group,
+/// #     types::timespans::DateValue, ChartProperties, Named, UpdateError,
+/// # };
 /// # use stats::data_source::{
 /// #     kinds::{
 /// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
@@ -219,7 +222,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///     }
 /// }
 ///
-/// type DummyRemote = RemoteDatabaseSource<PullAllWithAndSort<DummyRemoteStatement, NaiveDate, String>>;
+/// type DummyRemote = RemoteDatabaseSource<PullAllWithAndSort<DummyRemoteStatement, NaiveDate, String, QueryAllBlockTimestampRange>>;
 ///
 /// struct DummyChartProperties;
 ///
