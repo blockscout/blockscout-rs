@@ -78,7 +78,7 @@ impl<Idx> From<RangeInclusive<Option<Idx>>> for UniversalRange<Idx> {
     fn from(value: RangeInclusive<Option<Idx>>) -> Self {
         let (start, end) = value.into_inner();
         Self {
-            start: start,
+            start,
             end: match end {
                 Some(e) => Bound::Included(e),
                 None => Bound::Unbounded,

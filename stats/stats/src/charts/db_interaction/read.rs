@@ -504,7 +504,7 @@ pub async fn get_estimated_table_rows(
     let count = CountEstimate::find_by_statement(statement)
         .one(blockscout)
         .await?;
-    let count = count.map(|c| c.count).flatten();
+    let count = count.and_then(|c| c.count);
     Ok(count)
 }
 
