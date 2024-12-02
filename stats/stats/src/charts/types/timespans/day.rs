@@ -37,20 +37,26 @@ impl Timespan for NaiveDate {
         day_start(self)
     }
 
-    fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self
+    fn checked_add(&self, duration: TimespanDuration<Self>) -> Option<Self>
     where
         Self: Sized,
     {
         self.checked_add_days(Days::new(duration.repeats()))
-            .unwrap_or(NaiveDate::MAX)
     }
 
-    fn saturating_sub(&self, duration: TimespanDuration<Self>) -> Self
+    fn checked_sub(&self, duration: TimespanDuration<Self>) -> Option<Self>
     where
         Self: Sized,
     {
         self.checked_sub_days(Days::new(duration.repeats()))
-            .unwrap_or(NaiveDate::MIN)
+    }
+
+    fn max() -> Self {
+        NaiveDate::MAX
+    }
+
+    fn min() -> Self {
+        NaiveDate::MIN
     }
 }
 

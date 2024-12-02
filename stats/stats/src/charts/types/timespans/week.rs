@@ -88,26 +88,30 @@ impl Timespan for Week {
         self.saturating_first_day().saturating_start_timestamp()
     }
 
-    fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self
+    fn checked_add(&self, duration: TimespanDuration<Self>) -> Option<Self>
     where
         Self: Sized,
     {
-        let result_week_date = self
-            .saturating_first_day()
+        self.saturating_first_day()
             .checked_add_days(Days::new(duration.repeats() * 7))
-            .unwrap_or(NaiveDate::MAX);
-        Self::from_date(result_week_date)
+            .map(Self::from_date)
     }
 
-    fn saturating_sub(&self, duration: TimespanDuration<Self>) -> Self
+    fn checked_sub(&self, duration: TimespanDuration<Self>) -> Option<Self>
     where
         Self: Sized,
     {
-        let result_week_date = self
-            .saturating_first_day()
+        self.saturating_first_day()
             .checked_sub_days(Days::new(duration.repeats() * 7))
-            .unwrap_or(NaiveDate::MIN);
-        Self::from_date(result_week_date)
+            .map(Self::from_date)
+    }
+
+    fn max() -> Self {
+        Self::from_date(NaiveDate::MAX)
+    }
+
+    fn min() -> Self {
+        Self::from_date(NaiveDate::MIN)
     }
 }
 
