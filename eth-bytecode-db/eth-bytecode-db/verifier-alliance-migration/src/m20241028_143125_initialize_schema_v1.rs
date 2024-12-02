@@ -7,13 +7,13 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = include_str!("./migrations/initialize_schema_v1_up.sql");
-        manager.get_connection().execute_unprepared(&sql).await?;
+        manager.get_connection().execute_unprepared(sql).await?;
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = include_str!("./migrations/initialize_schema_v1_down.sql");
-        manager.get_connection().execute_unprepared(&sql).await?;
+        manager.get_connection().execute_unprepared(sql).await?;
         Ok(())
     }
 }
