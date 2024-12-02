@@ -25,8 +25,9 @@ use crate::{
 };
 
 use chrono::NaiveDate;
+use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 use super::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 
@@ -35,7 +36,7 @@ const ETH: i64 = 1_000_000_000_000_000_000;
 pub struct AverageBlockRewardsQuery;
 
 impl StatementFromRange for AverageBlockRewardsQuery {
-    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"

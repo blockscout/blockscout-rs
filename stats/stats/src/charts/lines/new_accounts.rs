@@ -29,17 +29,17 @@ use crate::{
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{DbBackend, FromQueryResult, Statement};
 
 pub struct NewAccountsStatement;
 
 impl StatementFromRange for NewAccountsStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough
-        let min_timestamp = DateTimeUtc::UNIX_EPOCH;
+        let min_timestamp = DateTime::<Utc>::UNIX_EPOCH;
         // All transactions from the beginning must be considered to calculate new accounts correctly.
         // E.g. if account was first active both before `range.start()` and within the range,
         // we don't want to count it within the range (as it's not a *new* account).

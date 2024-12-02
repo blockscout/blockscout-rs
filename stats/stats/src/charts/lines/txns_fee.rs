@@ -27,8 +27,9 @@ use crate::{
 };
 
 use chrono::NaiveDate;
+use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 const ETHER: i64 = i64::pow(10, 18);
 
@@ -36,7 +37,7 @@ pub struct TxnsFeeStatement;
 
 impl StatementFromRange for TxnsFeeStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {

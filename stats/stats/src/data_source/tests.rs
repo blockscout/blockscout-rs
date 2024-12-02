@@ -2,7 +2,7 @@ use std::{collections::HashSet, ops::Range, str::FromStr, sync::Arc};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DatabaseConnection, DbBackend, Statement};
 use tokio::sync::Mutex;
 
 use super::{
@@ -45,7 +45,7 @@ pub struct NewContractsQuery;
 
 impl StatementFromRange for NewContractsQuery {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         // choose the statement based on migration progress

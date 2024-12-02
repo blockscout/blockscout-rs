@@ -24,15 +24,16 @@ use crate::{
 };
 
 use chrono::NaiveDate;
+use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 const ETH: i64 = 1_000_000_000_000_000_000;
 
 pub struct NativeCoinSupplyStatement;
 
 impl StatementFromRange for NativeCoinSupplyStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
         let day_range: Option<Range<NaiveDate>> = range.map(|r| {
             let Range { start, end } = r;
             // chart is off anyway, so shouldn't be a big deal
