@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 mod charts;
 pub mod data_processing;
 pub mod data_source;
