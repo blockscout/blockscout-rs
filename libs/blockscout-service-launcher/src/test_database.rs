@@ -100,3 +100,31 @@ impl Deref for TestDbGuard {
         &self.conn_with_db
     }
 }
+
+#[macro_export]
+macro_rules! database_name {
+    () => {
+        format!("{}_{}_{}", file!(), line!(), column!())
+    };
+    ($custom_suffix:expr) => {
+        format!("{}_{}_{}_{}", file!(), line!(), column!(), $custom_suffix)
+    };
+}
+pub use database_name;
+
+#[macro_export]
+macro_rules! database {
+    ($migration_crate:ident) => {{
+        $crate::test_database::TestDbGuard::new::<$migration_crate::Migrator>(
+            &$crate::test_database::database_name!(),
+        )
+        .await
+    }};
+    ($migration_crate:ident, $custom_suffix:expr) => {{
+        $crate::test_database::TestDbGuard::new::<$migration_crate::Migrator>(
+            $crate::test_database::database_name!($custom_suffix),
+        )
+        .await
+    }};
+}
+pub use database;
