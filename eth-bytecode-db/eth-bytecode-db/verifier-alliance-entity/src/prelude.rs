@@ -2,6 +2,7 @@
 
 pub use super::{
     code::Entity as Code, compiled_contracts::Entity as CompiledContracts,
+    compiled_contracts_sources::Entity as CompiledContractsSources,
     contract_deployments::Entity as ContractDeployments, contracts::Entity as Contracts,
-    verified_contracts::Entity as VerifiedContracts,
+    sources::Entity as Sources, verified_contracts::Entity as VerifiedContracts,
 };
