@@ -8,16 +8,16 @@ use std::collections::BTreeMap;
 #[serde(rename_all = "camelCase")]
 #[readonly::make]
 pub struct Values {
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     #[serde_as(as = "BTreeMap<_, blockscout_display_bytes::serde_as::Hex>")]
     pub cbor_auxdata: BTreeMap<String, Bytes>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<blockscout_display_bytes::serde_as::Hex>")]
     pub constructor_arguments: Option<Bytes>,
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     #[serde_as(as = "BTreeMap<_, blockscout_display_bytes::serde_as::Hex>")]
     pub libraries: BTreeMap<String, Bytes>,
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     #[serde_as(as = "BTreeMap<_, blockscout_display_bytes::serde_as::Hex>")]
     pub immutables: BTreeMap<String, Bytes>,
 }

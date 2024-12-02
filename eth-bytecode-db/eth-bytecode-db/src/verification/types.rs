@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts,
 };
-use verifier_alliance_database::ContractDeployment;
+use verifier_alliance_database::InsertContractDeployment;
 /********** Bytecode Part **********/
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -488,7 +488,7 @@ impl TryFrom<eth_bytecode_db_v2::VerifierAllianceContract> for AllianceContract 
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AllianceImportRequest<T> {
-    pub contracts: Vec<ContractDeployment>,
+    pub contracts: Vec<InsertContractDeployment>,
     pub compiler_version: String,
     pub content: T,
 }

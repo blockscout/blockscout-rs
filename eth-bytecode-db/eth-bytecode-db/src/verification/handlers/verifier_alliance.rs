@@ -10,9 +10,11 @@ use eth_bytecode_db_proto::{blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier_proto::http_client::solidity_verifier_client;
 use std::{collections::BTreeMap, str::FromStr};
-use verifier_alliance_database::ContractDeployment;
+use verifier_alliance_database::InsertContractDeployment;
 
-fn convert_contracts(contracts: Vec<ContractDeployment>) -> Vec<smart_contract_verifier::Contract> {
+fn convert_contracts(
+    contracts: Vec<InsertContractDeployment>,
+) -> Vec<smart_contract_verifier::Contract> {
     contracts
         .into_iter()
         .map(|v| smart_contract_verifier::Contract {
@@ -28,7 +30,7 @@ fn convert_contracts(contracts: Vec<ContractDeployment>) -> Vec<smart_contract_v
 
 fn verifier_alliance_contract_try_into_contract_deployment(
     value: eth_bytecode_db_v2::VerifierAllianceContract,
-) -> Result<ContractDeployment, tonic::Status> {
+) -> Result<InsertContractDeployment, tonic::Status> {
     let str_to_bytes = |value: &str| {
         blockscout_display_bytes::decode_hex(value)
             .map_err(|err| tonic::Status::invalid_argument(err.to_string()))
@@ -53,7 +55,7 @@ fn verifier_alliance_contract_try_into_contract_deployment(
         value.deployer,
         value.creation_code,
     ) {
-        (None, None, None, None, None) => ContractDeployment::Genesis {
+        (None, None, None, None, None) => InsertContractDeployment::Genesis {
             chain_id,
             address,
             runtime_code,
@@ -64,7 +66,7 @@ fn verifier_alliance_contract_try_into_contract_deployment(
             Some(transaction_index),
             Some(deployer),
             Some(creation_code),
-        ) => ContractDeployment::Regular {
+        ) => InsertContractDeployment::Regular {
             chain_id,
             address,
             transaction_hash: str_to_bytes(&transaction_hash)?,

@@ -1,8 +1,7 @@
-use sea_orm::prelude::{BigDecimal, Uuid};
+use sea_orm::prelude::{Uuid};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
-use sha2::Sha256;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -139,7 +138,7 @@ impl TestCase {
 
 impl TestCase {
     pub async fn validate_final_database_state(&self, database_connection: &DatabaseConnection) {
-        let contract_deployment = self
+        let _contract_deployment = self
             .validate_contract_deployments_table(database_connection)
             .await;
         let contract = self.validate_contracts_table(database_connection).await;

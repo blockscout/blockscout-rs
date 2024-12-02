@@ -26,7 +26,7 @@ use anyhow::Context;
 use sea_orm::DatabaseConnection;
 use verification_common::verifier_alliance::MatchBuilder;
 use verifier_alliance_database::{
-    CompiledContract, CompiledContractCompiler, CompiledContractLanguage, ContractDeployment,
+    CompiledContract, CompiledContractCompiler, CompiledContractLanguage, InsertContractDeployment,
     RetrieveContractDeployment, VerifiedContract, VerifiedContractMatches,
 };
 use verifier_alliance_entity::contract_deployments;
@@ -109,7 +109,7 @@ enum VerifierAllianceDbAction<'a> {
     },
     SaveWithDeploymentData {
         db_client: &'a DatabaseConnection,
-        deployment_data: ContractDeployment,
+        deployment_data: InsertContractDeployment,
     },
 }
 
@@ -133,7 +133,7 @@ impl<'a> VerifierAllianceDbAction<'a> {
                     runtime_code: Some(runtime_code),
                 }),
             ) if is_authorized => {
-                let contract_deployment = ContractDeployment::Regular {
+                let contract_deployment = InsertContractDeployment::Regular {
                     chain_id: u128::try_from(chain_id).unwrap(),
                     address: contract_address.to_vec(),
                     transaction_hash: transaction_hash.to_vec(),
@@ -157,7 +157,7 @@ impl<'a> VerifierAllianceDbAction<'a> {
                     ..
                 }),
             ) if is_authorized => {
-                let contract_deployment = ContractDeployment::Genesis {
+                let contract_deployment = InsertContractDeployment::Genesis {
                     chain_id: u128::try_from(chain_id).unwrap(),
                     address: contract_address.to_vec(),
                     runtime_code: runtime_code.to_vec(),
@@ -364,8 +364,7 @@ async fn process_verifier_alliance_db_action(
     let database_source = DatabaseReadySource::try_from(source)
         .context("Converting source into database ready version")?;
 
-    let verified_contract =
-        check_code_matches_copy(db_client, &database_source, &contract_deployment).await?;
+    let verified_contract = check_code_matches_copy(&database_source, contract_deployment).await?;
 
     let _model = verifier_alliance_database::insert_verified_contract(db_client, verified_contract)
         .await
@@ -426,19 +425,23 @@ async fn process_abi_data(
 
 async fn retrieve_deployment_from_action(
     action: VerifierAllianceDbAction<'_>,
-) -> Result<Option<(&DatabaseConnection, contract_deployments::Model)>, anyhow::Error> {
+) -> Result<
+    Option<(
+        &DatabaseConnection,
+        verifier_alliance_database::ContractDeployment,
+    )>,
+    anyhow::Error,
+> {
     match action {
         VerifierAllianceDbAction::IgnoreDb => Ok(None),
         VerifierAllianceDbAction::SaveIfDeploymentExists {
             db_client,
             deployment_data,
         } => {
-            let contract_deployment = verifier_alliance_database::retrieve_contract_deployment(
-                db_client,
-                deployment_data,
-            )
-            .await
-            .context("retrieve contract deployment")?;
+            let contract_deployment =
+                verifier_alliance_database::find_contract_deployment(db_client, deployment_data)
+                    .await
+                    .context("retrieve contract deployment")?;
             if let Some(contract_deployment) = contract_deployment {
                 return Ok(Some((db_client, contract_deployment)));
             }
@@ -452,7 +455,8 @@ async fn retrieve_deployment_from_action(
         } => {
             let contract_deployment =
                 verifier_alliance_database::insert_contract_deployment(db_client, deployment_data)
-                    .await?;
+                    .await
+                    .context("insert contract deployment")?;
 
             Ok(Some((db_client, contract_deployment)))
         }
@@ -460,21 +464,16 @@ async fn retrieve_deployment_from_action(
 }
 
 async fn check_code_matches_copy(
-    db_client: &DatabaseConnection,
     database_source: &DatabaseReadySource,
-    contract_deployment: &contract_deployments::Model,
+    contract_deployment: verifier_alliance_database::ContractDeployment,
 ) -> Result<VerifiedContract, anyhow::Error> {
     let compiled_contract = build_compiled_contract(database_source.clone())?;
 
-    let (deployed_creation_code, deployed_runtime_code) =
-        db::verifier_alliance_db::retrieve_contract_codes(db_client, contract_deployment)
-            .await
-            .context("retrieve deployment contract codes")?;
-    let deployed_runtime_code = deployed_runtime_code.code.unwrap();
+    let deployed_creation_code = contract_deployment.creation_code;
+    let deployed_runtime_code = contract_deployment.runtime_code;
 
     let creation_match = if let Some(builder) =
         deployed_creation_code
-            .code
             .as_ref()
             .and_then(|deployed_creation_code| {
                 MatchBuilder::new(
@@ -664,7 +663,7 @@ async fn process_batch_import_response(
     eth_bytecode_db_client: &DatabaseConnection,
     alliance_db_client: &DatabaseConnection,
     response: smart_contract_verifier::BatchVerifyResponse,
-    deployment_data: Vec<ContractDeployment>,
+    deployment_data: Vec<InsertContractDeployment>,
 ) -> Result<AllianceBatchImportResult, Error> {
     let mut import_result = response.try_into()?;
 
@@ -745,7 +744,7 @@ async fn process_batch_import_response(
 async fn process_batch_import_verifier_alliance(
     db_client: &DatabaseConnection,
     database_source: DatabaseReadySource,
-    deployment_data: ContractDeployment,
+    deployment_data: InsertContractDeployment,
     contract_import_success: &AllianceContractImportSuccess,
 ) -> Result<(), anyhow::Error> {
     let contract_deployment =
@@ -758,7 +757,7 @@ async fn process_batch_import_verifier_alliance(
 
     check_match_statuses(
         db_client,
-        &contract_deployment,
+        &contract_deployment.model,
         &creation_code_match,
         &runtime_code_match,
     )
@@ -767,7 +766,7 @@ async fn process_batch_import_verifier_alliance(
     db::verifier_alliance_db::insert_data(
         db_client,
         database_source,
-        contract_deployment,
+        contract_deployment.model,
         creation_code_match,
         runtime_code_match,
     )
