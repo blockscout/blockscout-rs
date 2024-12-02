@@ -44,12 +44,26 @@ pub trait Timespan {
         self.saturating_start_timestamp()
             ..self.saturating_next_timespan().saturating_start_timestamp()
     }
+    fn checked_add(&self, duration: TimespanDuration<Self>) -> Option<Self>
+    where
+        Self: Sized;
+    fn checked_sub(&self, duration: TimespanDuration<Self>) -> Option<Self>
+    where
+        Self: Sized;
+    fn max() -> Self;
+    fn min() -> Self;
     fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        self.checked_add(duration).unwrap_or_else(|| Self::max())
+    }
     fn saturating_sub(&self, duration: TimespanDuration<Self>) -> Self
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        self.checked_sub(duration).unwrap_or_else(|| Self::min())
+    }
 }
 
 // if for some rare reason trait is needed
