@@ -89,6 +89,7 @@ tracing = [
 database = [
     "dep:anyhow",
     "dep:cfg-if",
+    "dep:serde",
     "dep:tracing",
     "dep:url",
 ]
