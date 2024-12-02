@@ -17,8 +17,6 @@ pub struct Model {
     pub name: String,
     pub fully_qualified_name: String,
     #[sea_orm(column_type = "JsonBinary")]
-    pub sources: Json,
-    #[sea_orm(column_type = "JsonBinary")]
     pub compiler_settings: Json,
     #[sea_orm(column_type = "JsonBinary")]
     pub compilation_artifacts: Json,
@@ -50,8 +48,16 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Code1,
+    #[sea_orm(has_many = "super::compiled_contracts_sources::Entity")]
+    CompiledContractsSources,
     #[sea_orm(has_many = "super::verified_contracts::Entity")]
     VerifiedContracts,
+}
+
+impl Related<super::compiled_contracts_sources::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CompiledContractsSources.def()
+    }
 }
 
 impl Related<super::verified_contracts::Entity> for Entity {
