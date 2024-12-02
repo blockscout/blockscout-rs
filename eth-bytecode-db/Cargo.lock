@@ -2131,8 +2131,8 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "verification-common",
- "verifier-alliance-entity",
- "verifier-alliance-migration",
+ "verifier-alliance-entity 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=ec1c755)",
+ "verifier-alliance-migration 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=ec1c755)",
 ]
 
 [[package]]
@@ -2195,8 +2195,8 @@ dependencies = [
  "tonic",
  "tracing",
  "url",
- "verifier-alliance-entity",
- "verifier-alliance-migration",
+ "verifier-alliance-entity 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=ec1c755)",
+ "verifier-alliance-migration 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=ec1c755)",
 ]
 
 [[package]]
@@ -7652,8 +7652,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "verifier-alliance-entity"
+version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=ec1c755#ec1c7554fde2b67350fc44e905040698a8cdf40b"
+dependencies = [
+ "sea-orm",
+]
+
+[[package]]
 name = "verifier-alliance-migration"
 version = "0.1.0"
+dependencies = [
+ "async-std",
+ "sea-orm-migration",
+]
+
+[[package]]
+name = "verifier-alliance-migration"
+version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=ec1c755#ec1c7554fde2b67350fc44e905040698a8cdf40b"
 dependencies = [
  "async-std",
  "sea-orm-migration",
