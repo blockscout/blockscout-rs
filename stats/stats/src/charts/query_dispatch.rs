@@ -80,15 +80,15 @@ impl ChartTypeSpecifics {
     }
 }
 
-impl Into<ChartTypeSpecifics> for CounterHandle {
-    fn into(self) -> ChartTypeSpecifics {
-        ChartTypeSpecifics::Counter { query: self }
+impl From<CounterHandle> for ChartTypeSpecifics {
+    fn from(val: CounterHandle) -> Self {
+        ChartTypeSpecifics::Counter { query: val }
     }
 }
 
-impl Into<ChartTypeSpecifics> for LineHandle {
-    fn into(self) -> ChartTypeSpecifics {
-        ChartTypeSpecifics::Line { query: self }
+impl From<LineHandle> for ChartTypeSpecifics {
+    fn from(val: LineHandle) -> Self {
+        ChartTypeSpecifics::Line { query: val }
     }
 }
 

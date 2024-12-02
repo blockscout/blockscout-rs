@@ -186,7 +186,7 @@ impl StatsService for ReadService {
                     name.clone(),
                     counter.settings.clone(),
                     query_handle,
-                    now.clone(),
+                    now,
                 ))
             })
             .collect();
