@@ -28,7 +28,7 @@ pub fn parse_eds(eds: &ExtendedDataSquare, app_version: u64) -> Result<Vec<Blob>
         .ok_or_else(|| anyhow::anyhow!("invalid or unsupported app_version: {app_version}"))?;
 
     Blob::reconstruct_all(eds.data_square(), app_version).map_err(|err| {
-        tracing::error!("failed to parse EDS: {:?}", err);
+        tracing::error!(err = ?err, "failed to parse EDS");
         anyhow::anyhow!(err)
     })
 }
