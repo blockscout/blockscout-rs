@@ -110,14 +110,17 @@ mod tests {
     use super::*;
     use crate::{
         data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
-        get_raw_counters,
-        tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-        ChartObject, Named,
+        query_dispatch::QuerySerialized,
+        tests::{
+            init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data,
+            simple_test::get_counter,
+        },
+        ChartObject,
     };
     use chrono::NaiveDate;
     use entity::chart_data;
-    use pretty_assertions::assert_eq;
-    use sea_orm::{DatabaseConnection, EntityTrait, Set};
+    use pretty_assertions::{assert_eq, assert_ne};
+    use sea_orm::{DatabaseConnection, DbBackend, EntityTrait, Set, Statement};
     use std::str::FromStr;
 
     #[tokio::test]
@@ -153,8 +156,8 @@ mod tests {
         };
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_raw_counters(&db).await.unwrap();
-        assert_eq!("13", data[&TotalBlocks::name()].value);
+        let data = get_counter::<TotalBlocks>(&cx).await;
+        assert_eq!("13", data.value);
     }
 
     #[tokio::test]
@@ -180,8 +183,8 @@ mod tests {
         };
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_raw_counters(&db).await.unwrap();
-        assert_eq!("9", data[&TotalBlocks::name()].value);
+        let data = get_counter::<TotalBlocks>(&cx).await;
+        assert_eq!("9", data.value);
     }
 
     #[tokio::test]
@@ -217,8 +220,8 @@ mod tests {
         };
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_raw_counters(&db).await.unwrap();
-        assert_eq!("13", data[&TotalBlocks::name()].value);
+        let data = get_counter::<TotalBlocks>(&cx).await;
+        assert_eq!("13", data.value);
     }
 
     #[tokio::test]
@@ -238,6 +241,13 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
+        // need to analyze or vacuum for `reltuples` to be updated.
+        // source: https://www.postgresql.org/docs/9.3/planner-stats.html
+        let _ = blockscout
+            .execute(Statement::from_string(DbBackend::Postgres, "ANALYZE;"))
+            .await
+            .unwrap();
+
         let parameters = UpdateParameters {
             db: &db,
             blockscout: &blockscout,
@@ -246,7 +256,7 @@ mod tests {
             force_full: false,
         };
         let cx: UpdateContext<'_> = UpdateContext::from_params_now_or_override(parameters.clone());
-        let data = get_raw_counters(&db).await.unwrap();
-        // assert_eq!("13", data[&TotalBlocks::name()].value);
+        let data = get_counter::<TotalBlocks>(&cx).await;
+        assert_ne!("0", data.value);
     }
 }

@@ -207,14 +207,14 @@ mod tests {
         AverageBlockTime::update_recursively(&cx).await.unwrap();
         assert_eq!(
             expected_avg.to_string(),
-            get_counter::<AverageBlockTime>(&db).await
+            get_counter::<AverageBlockTime>(&cx).await.value
         );
         parameters.force_full = false;
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         AverageBlockTime::update_recursively(&cx).await.unwrap();
         assert_eq!(
             expected_avg.to_string(),
-            get_counter::<AverageBlockTime>(&db).await
+            get_counter::<AverageBlockTime>(&cx).await.value
         );
     }
 

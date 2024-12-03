@@ -22,7 +22,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
-use std::{collections::HashMap, fmt::Debug, ops::Range};
+use std::{fmt::Debug, ops::Range};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -53,48 +53,6 @@ pub async fn find_chart(db: &DatabaseConnection, chart: &ChartKey) -> Result<Opt
         .one(db)
         .await
         .map(|id| id.map(|id| id.id))
-}
-
-#[derive(Debug, FromQueryResult)]
-struct CounterData {
-    name: String,
-    date: NaiveDate,
-    value: String,
-}
-
-/// Get counters with raw values
-/// (i.e. with date relevance not handled)
-pub async fn get_raw_counters(
-    db: &DatabaseConnection,
-) -> Result<HashMap<String, DateValue<String>>, ReadError> {
-    let data = CounterData::find_by_statement(Statement::from_string(
-        DbBackend::Postgres,
-        r#"
-            SELECT distinct on (charts.id) charts.name, data.date, data.value
-            FROM "chart_data" "data"
-            INNER JOIN "charts"
-                ON data.chart_id = charts.id
-            WHERE charts.chart_type = 'COUNTER'
-            ORDER BY charts.id, data.id DESC;
-        "#,
-    ))
-    .all(db)
-    .await?;
-
-    let counters: HashMap<_, _> = data
-        .into_iter()
-        .map(|data| {
-            (
-                data.name,
-                DateValue::<String> {
-                    timespan: data.date,
-                    value: data.value,
-                },
-            )
-        })
-        .collect();
-
-    Ok(counters)
 }
 
 /// Get counter value for the requested date
@@ -713,12 +671,16 @@ mod tests {
     use crate::{
         charts::ResolutionKind,
         counters::TotalBlocks,
-        data_source::kinds::local_db::parameters::DefaultQueryVec,
+        data_source::{
+            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations,
+            UpdateParameters,
+        },
         lines::{AccountsGrowth, ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
             init_db::{init_db, init_db_all},
             mock_blockscout::fill_mock_blockscout_data,
             point_construction::{d, month_of},
+            simple_test::get_counter,
         },
         types::timespans::Month,
         Named,
@@ -868,10 +830,17 @@ mod tests {
 
         let db = init_db("get_counters_mock").await;
         insert_mock_data(&db).await;
-        let counters = get_raw_counters(&db).await.unwrap();
+        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
+            db: &db,
+            // shouldn't use this because mock data contains total blocks value
+            blockscout: &db,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            update_time_override: None,
+            force_full: false,
+        });
         assert_eq!(
-            HashMap::from_iter([("totalBlocks".into(), value("2022-11-12", "1350"))]),
-            counters
+            value("2022-11-12", "1350"),
+            get_counter::<TotalBlocks>(&cx).await
         );
     }
 
