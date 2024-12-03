@@ -49,12 +49,6 @@ macro_rules! insert_then_select {
                         ).await.context(format!("update on conflict in \"{}\"", stringify!($entity_module)))?;
 
                         if updated_model != model {
-                            // tracing::warn!(
-                            //     model=?model,
-                            //     updated_model=?updated_model,
-                            //     "the \"{}\" model has been updated",
-                            //     stringify!($entity_module)
-                            // );
                             model = updated_model;
                         }
                     }
