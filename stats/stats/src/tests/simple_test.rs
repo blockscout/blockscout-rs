@@ -4,8 +4,10 @@ use crate::{
         source::DataSource,
         types::{BlockscoutMigrations, UpdateContext, UpdateParameters},
     },
-    get_line_chart_data, get_raw_counters,
-    types::Timespan,
+    get_line_chart_data,
+    query_dispatch::QuerySerialized,
+    range::UniversalRange,
+    types::{timespans::DateValue, Timespan},
     ChartProperties, MissingDatePolicy,
 };
 use blockscout_service_launcher::test_database::TestDbGuard;
@@ -306,11 +308,13 @@ where
 }
 
 /// `test_name` must be unique to avoid db clashes
-pub async fn simple_test_counter<C: DataSource + ChartProperties>(
+pub async fn simple_test_counter<C>(
     test_name: &str,
     expected: &str,
     update_time: Option<NaiveDateTime>,
-) {
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
     simple_test_counter_inner::<C>(
         test_name,
         expected,
@@ -327,23 +331,27 @@ pub async fn simple_test_counter<C: DataSource + ChartProperties>(
 /// - db is going to be initialized separately for each variant
 /// - `_N` will be added to `test_name_base` for each variant
 /// - the resulting test name must be unique to avoid db clashes
-pub async fn simple_test_counter_with_migration_variants<C: DataSource + ChartProperties>(
+pub async fn simple_test_counter_with_migration_variants<C>(
     test_name_base: &str,
     expected: &str,
     update_time: Option<NaiveDateTime>,
-) {
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
         simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations).await
     }
 }
 
-async fn simple_test_counter_inner<C: DataSource + ChartProperties>(
+async fn simple_test_counter_inner<C>(
     test_name: &str,
     expected: &str,
     update_time: Option<NaiveDateTime>,
     migrations: BlockscoutMigrations,
-) {
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
     let (current_time, db, blockscout) = prepare_chart_test::<C>(test_name, update_time).await;
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let max_date = max_time.date_naive();
@@ -358,11 +366,11 @@ async fn simple_test_counter_inner<C: DataSource + ChartProperties>(
     };
     let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
-    assert_eq!(expected, get_counter::<C>(&db).await);
+    assert_eq!(expected, get_counter::<C>(&cx).await.value);
     parameters.force_full = false;
     let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
-    assert_eq!(expected, get_counter::<C>(&db).await);
+    assert_eq!(expected, get_counter::<C>(&cx).await.value);
 }
 
 pub async fn prepare_chart_test<C: DataSource + ChartProperties>(
@@ -378,8 +386,12 @@ pub async fn prepare_chart_test<C: DataSource + ChartProperties>(
     (init_time, db, blockscout)
 }
 
-pub async fn get_counter<C: ChartProperties>(db: &DatabaseConnection) -> String {
-    let data = get_raw_counters(db).await.unwrap();
-    let data = &data[&C::name()];
-    data.value.clone()
+pub async fn get_counter<C: QuerySerialized<Output = DateValue<String>>>(
+    cx: &UpdateContext<'_>,
+) -> DateValue<String> {
+    let counter_object = <C as QuerySerialized>::new_for_dynamic_dispatch();
+    counter_object
+        .query_data(cx, UniversalRange::full(), None, false)
+        .await
+        .unwrap()
 }

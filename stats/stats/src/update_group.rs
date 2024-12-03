@@ -264,7 +264,9 @@ macro_rules! construct_update_group {
             fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartObject> {
                 std::vec![
                     $(
-                        $crate::ChartObject::construct_from_chart::<$member>(<$member>::new_for_dynamic_dispatch()),
+                        $crate::ChartObject::construct_from_chart::<$member>(
+                            <$member as $crate::query_dispatch::QuerySerialized>::new_for_dynamic_dispatch()
+                        ),
                     )*
                 ]
             }
@@ -272,15 +274,23 @@ macro_rules! construct_update_group {
             fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<String> {
                 let mut ids = ::std::collections::HashSet::new();
                 $(
-                    ids.extend(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids().into_iter());
+                    ids.extend(
+                        <$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids()
+                            .into_iter()
+                    );
                 )*
                 ids
             }
 
-            fn dependency_mutex_ids_of(&self, chart_id: &$crate::ChartKey) -> Option<::std::collections::HashSet<String>> {
+            fn dependency_mutex_ids_of(
+                &self,
+                chart_id: &$crate::ChartKey
+            ) -> Option<::std::collections::HashSet<String>> {
                 $(
                     if chart_id == &<$member as $crate::ChartProperties>::key() {
-                        return Some(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids());
+                        return Some(
+                            <$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids()
+                        );
                     }
                 )*
                 return None;
@@ -300,7 +310,9 @@ macro_rules! construct_update_group {
                 let current_time = creation_time_override.unwrap_or_else(|| ::chrono::Utc::now());
                 $(
                     if enabled_charts.contains(&<$member as $crate::ChartProperties>::key()) {
-                        <$member as $crate::data_source::DataSource>::init_recursively(db, &current_time).await?;
+                        <$member as $crate::data_source::DataSource>::init_recursively(
+                            db, &current_time
+                        ).await?;
                     }
                 )*
                 Ok(())
@@ -308,7 +320,11 @@ macro_rules! construct_update_group {
 
             // updates are expected to be unique by group name & update time; this instrumentation
             // should allow to single out one update process in logs
-            #[::tracing::instrument(skip_all, fields(update_group=self.name(), update_time), level = tracing::Level::INFO)]
+            #[::tracing::instrument(
+                skip_all,
+                fields(update_group=self.name(), update_time),
+                level = tracing::Level::INFO
+            )]
             async fn update_charts<'a>(
                 &self,
                 params: $crate::data_source::UpdateParameters<'a>,

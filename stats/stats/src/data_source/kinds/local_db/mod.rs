@@ -136,12 +136,6 @@ where
     ChartProps: ChartProperties,
     ChartProps::Resolution: Ord + Clone + Debug,
 {
-    /// `new` function that is created solely for the purposes of
-    /// dynamic dispatch (see where it's used).
-    pub fn new_for_dynamic_dispatch() -> Self {
-        Self(PhantomData)
-    }
-
     /// Performs common checks and prepares values useful for further
     /// update. Then proceeds to update according to parameters.
     async fn update_itself_inner(

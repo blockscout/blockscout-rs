@@ -26,6 +26,12 @@ pub trait QuerySerialized {
     /// Currently `Point` or `Vec<Point>`
     type Output: Send;
 
+    /// `new` function that is created solely for the purposes of
+    /// dynamic dispatch (see where it's used).
+    fn new_for_dynamic_dispatch() -> Self
+    where
+        Self: Sized;
+
     /// Retrieve chart data from local storage.
     fn query_data<'a>(
         &self,
@@ -118,14 +124,15 @@ impl SerializableQueryOutput for TimespanValue<NaiveDate, String> {
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps, QueryOutput> QuerySerialized
     for LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
 where
-    MainDep: DataSource,
-    ResolutionDep: DataSource,
-    Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
-    Query: QueryBehaviour<Output = QueryOutput>,
+    MainDep: DataSource + Sync,
+    ResolutionDep: DataSource + Sync,
+    Create: CreateBehaviour + Sync,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
+    Query: QueryBehaviour<Output = QueryOutput> + Sync,
     QueryOutput: SerializableQueryOutput,
     QueryOutput::Serialized: Send,
     ChartProps: ChartProperties,
+    ChartProps::Resolution: Ord + Clone + Debug,
 {
     type Output = QueryOutput::Serialized;
 
@@ -142,6 +149,13 @@ where
             let data = Query::query_data(&cx, range, points_limit, fill_missing_dates).await?;
             Ok(data.serialize())
         })
+    }
+
+    fn new_for_dynamic_dispatch() -> Self
+    where
+        Self: Sized,
+    {
+        Self(std::marker::PhantomData)
     }
 }
 

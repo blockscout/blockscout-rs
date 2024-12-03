@@ -19,8 +19,8 @@ pub use migration;
 pub use charts::{
     counters,
     db_interaction::read::{
-        get_line_chart_data, get_raw_counters, ApproxUnsignedDiff, QueryAllBlockTimestampRange,
-        ReadError, RequestedPointsLimit,
+        get_line_chart_data, ApproxUnsignedDiff, QueryAllBlockTimestampRange, ReadError,
+        RequestedPointsLimit,
     },
     lines, query_dispatch, types, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject,
     MissingDatePolicy, Named, ResolutionKind, UpdateError,
