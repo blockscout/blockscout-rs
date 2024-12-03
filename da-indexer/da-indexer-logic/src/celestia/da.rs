@@ -1,6 +1,10 @@
+use crate::{
+    celestia::{client, repository::blobs},
+    indexer::{Job, DA},
+};
 use anyhow::Result;
 use async_trait::async_trait;
-use celestia_rpc::{Client, HeaderClient, ShareClient};
+use celestia_rpc::{Client, HeaderClient};
 use celestia_types::{Blob, ExtendedHeader};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::sync::{
@@ -8,12 +12,10 @@ use std::sync::{
     Arc,
 };
 
-use crate::{
-    celestia::{repository::blobs, rpc_client},
-    indexer::{Job, DA},
+use super::{
+    client::share::ShareClient, job::CelestiaJob, parser, repository::blocks,
+    settings::IndexerSettings,
 };
-
-use super::{job::CelestiaJob, parser, repository::blocks, settings::IndexerSettings};
 
 pub struct CelestiaDA {
     client: Client,
@@ -25,7 +27,7 @@ pub struct CelestiaDA {
 
 impl CelestiaDA {
     pub async fn new(db: Arc<DatabaseConnection>, settings: IndexerSettings) -> Result<Self> {
-        let client = rpc_client::new_celestia_client(
+        let client = client::new_celestia_client(
             &settings.rpc.url,
             settings.rpc.auth_token.as_deref(),
             settings.rpc.max_request_size,
@@ -54,11 +56,14 @@ impl CelestiaDA {
 
     async fn get_blobs_by_height(&self, height: u64) -> Result<(ExtendedHeader, Vec<Blob>)> {
         let header = self.client.header_get_by_height(height).await?;
-        let mut blobs = vec![];
 
+        let mut blobs = vec![];
         if parser::maybe_contains_blobs(&header.dah) {
-            let eds = self.client.share_get_eds(&header).await?;
-            blobs = parser::parse_eds(&eds, header.dah.square_len())?;
+            let eds = self
+                .client
+                .share_get_eds(height, header.header.version.app)
+                .await?;
+            blobs = parser::parse_eds(&eds, header.header.version.app)?;
         }
 
         Ok((header, blobs))
@@ -102,6 +107,11 @@ impl DA for CelestiaDA {
     async fn new_jobs(&self) -> anyhow::Result<Vec<Job>> {
         let height = self.client.header_local_head().await?.header.height.value();
         tracing::info!(height, "latest block");
+
+        if height <= self.last_known_height.load(Ordering::Acquire) {
+            tracing::info!("latest block is below last known height, skipping...");
+            return Ok(vec![]);
+        }
 
         let from = self.last_known_height.swap(height, Ordering::AcqRel) + 1;
         Ok((from..=height)

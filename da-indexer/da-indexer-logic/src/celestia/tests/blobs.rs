@@ -1,4 +1,7 @@
-use celestia_types::{nmt::Namespace, Blob as CelestiaBlob, Commitment};
+use celestia_types::{
+    consts::appconsts::subtree_root_threshold, nmt::Namespace, AppVersion, Blob as CelestiaBlob,
+    Commitment,
+};
 
 use crate::celestia::{
     repository::{blobs, blocks},
@@ -49,12 +52,19 @@ fn celestia_blob(seed: u32) -> CelestiaBlob {
         Namespace::new(0, &[&[0_u8; 18], &sha3("namespace", seed)[..10]].concat()).unwrap();
     let data = sha3("data", seed).to_vec();
     let share_version = 0;
-    let commitment = Commitment::from_blob(namespace, share_version, &data).unwrap();
+    let commitment = Commitment::from_blob(
+        namespace,
+        &data,
+        share_version,
+        subtree_root_threshold(AppVersion::latest()),
+    )
+    .unwrap();
     CelestiaBlob {
         namespace,
         data,
         share_version,
         commitment,
+        index: None,
     }
 }
 

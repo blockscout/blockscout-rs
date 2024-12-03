@@ -1,9 +1,8 @@
-use celestia_rpc::{Error, Result};
-use http::{header, HeaderValue};
-use jsonrpsee::{
-    http_client::{HeaderMap, HttpClientBuilder},
-    ws_client::WsClientBuilder,
-};
+pub mod share;
+
+use celestia_rpc::{Client, Error, Result};
+use http::{header, HeaderMap, HeaderValue};
+use jsonrpsee::{http_client::HttpClientBuilder, ws_client::WsClientBuilder};
 
 /// The maximum request size in the default client in celestia_rpc is not sufficient for some blocks,
 /// therefore, we need to customize client initialization
@@ -12,7 +11,7 @@ pub async fn new_celestia_client(
     auth_token: Option<&str>,
     max_request_size: u32,
     max_response_size: u32,
-) -> Result<celestia_rpc::Client> {
+) -> Result<Client> {
     let mut headers = HeaderMap::new();
 
     if let Some(token) = auth_token {

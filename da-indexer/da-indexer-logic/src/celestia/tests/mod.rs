@@ -1,7 +1,6 @@
 pub mod blobs;
 pub mod blocks;
 pub mod l2_router;
-pub mod parser;
 
 use blockscout_service_launcher::test_database::TestDbGuard;
 
