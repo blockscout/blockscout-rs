@@ -435,7 +435,7 @@ struct CountEstimate {
 /// `None` means either that
 /// - db hasn't been initialized before
 /// - `table_name` wasn't found
-pub async fn get_estimated_table_rows(
+pub async fn query_estimated_table_rows(
     blockscout: &DatabaseConnection,
     table_name: &str,
 ) -> Result<Option<i64>, DbErr> {
@@ -1316,7 +1316,7 @@ mod tests {
             .await
             .unwrap();
 
-        let blocks_estimate = get_estimated_table_rows(&blockscout, blocks::Entity.table_name())
+        let blocks_estimate = query_estimated_table_rows(&blockscout, blocks::Entity.table_name())
             .await
             .unwrap()
             .unwrap();
@@ -1326,7 +1326,7 @@ mod tests {
         assert!(blocks_estimate < 30);
 
         assert!(
-            get_estimated_table_rows(
+            query_estimated_table_rows(
                 &blockscout,
                 blockscout_db::entity::addresses::Entity.table_name()
             )
@@ -1337,7 +1337,7 @@ mod tests {
         );
 
         assert!(
-            get_estimated_table_rows(
+            query_estimated_table_rows(
                 &blockscout,
                 blockscout_db::entity::transactions::Entity.table_name()
             )
@@ -1348,7 +1348,7 @@ mod tests {
         );
 
         assert!(
-            get_estimated_table_rows(
+            query_estimated_table_rows(
                 &blockscout,
                 blockscout_db::entity::smart_contracts::Entity.table_name()
             )
