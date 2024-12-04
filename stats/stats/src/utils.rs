@@ -22,7 +22,7 @@ pub struct MarkedDbConnection {
 }
 
 impl MarkedDbConnection {
-    #![cfg(any(feature = "test-utils", test))]
+    #[cfg(any(feature = "test-utils", test))]
     pub fn from_test_db(
         guard: &blockscout_service_launcher::test_database::TestDbGuard,
     ) -> Option<Self> {
