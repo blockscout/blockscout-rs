@@ -101,17 +101,62 @@ impl Deref for TestDbGuard {
     }
 }
 
+/// Generates a unique database name for use in tests.
+///
+/// This macro creates a database name based on the file name, line number, and column number
+/// of the macro invocation. Optionally, a custom prefix can be appended for added specificity,
+/// which is useful in scenarios like parameterized tests.
+///
+/// For more details on usage and examples, see the [`database!`](macro.database.html) macro.
+///
+/// # Arguments
+///
+/// - `custom_prefix` (optional): A custom string to append to the database name.
 #[macro_export]
 macro_rules! database_name {
     () => {
         format!("{}_{}_{}", file!(), line!(), column!())
     };
-    ($custom_suffix:expr) => {
-        format!("{}_{}_{}_{}", file!(), line!(), column!(), $custom_suffix)
+    ($custom_prefix:expr) => {
+        format!("{}_{}_{}_{}", $custom_prefix, file!(), line!(), column!())
     };
 }
 pub use database_name;
 
+/// Initializes a test database for use in tests.
+///
+/// This macro simplifies setting up a database by automatically generating a database name
+/// based on the location where the function is defined. It eliminates the need to manually
+/// specify the test case name for the database name.
+///
+/// # Usage
+///
+/// The macro can be used within a test as follows:
+/// ```text
+/// use blockscout_service_launcher::test_database::database;
+///
+/// #[tokio::test]
+/// async fn test() {
+///     let db_guard = database!(migration_crate);
+///     // Perform operations with the database...
+/// }
+/// ```
+///
+/// The `migration_crate` parameter refers to the migration crate associated with the database.
+///
+/// # Parameterized Tests
+///
+/// **Note:** When using this macro with [`rstest` parameterized test cases](https://docs.rs/rstest/latest/rstest/attr.rstest.html#test-parametrized-cases),
+/// the same database name will be used for all test cases. To avoid conflicts, you need to provide
+/// a meaningful prefix explicitly, as demonstrated below:
+///
+/// ```text
+/// #[tokio::test]
+/// async fn test_with_prefix() {
+///     let db_guard = database!(migration_crate, "custom_prefix");
+///     // Perform operations with the database...
+/// }
+/// ```
 #[macro_export]
 macro_rules! database {
     ($migration_crate:ident) => {{
@@ -120,9 +165,9 @@ macro_rules! database {
         )
         .await
     }};
-    ($migration_crate:ident, $custom_suffix:expr) => {{
+    ($migration_crate:ident, $custom_prefix:expr) => {{
         $crate::test_database::TestDbGuard::new::<$migration_crate::Migrator>(
-            $crate::test_database::database_name!($custom_suffix),
+            $crate::test_database::database_name!($custom_prefix),
         )
         .await
     }};
