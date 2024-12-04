@@ -12,7 +12,7 @@ use crate::{
     missing_date::fit_into_range,
     range::{Incrementable, UniversalRange},
     types::{timespans::DateValue, Timespan, TimespanValue},
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, MissingDatePolicy, Named, ChartError,
 };
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -100,7 +100,7 @@ where
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Vec<DateValue<String>>, UpdateError> {
+    ) -> Result<Vec<DateValue<String>>, ChartError> {
         let full_data = mocked_lines(DateRange::get(), ValueRange::get());
         Ok(mock_trim_lines(full_data, cx.time, range, Policy::get()))
     }
@@ -146,7 +146,7 @@ where
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         Ok(mock_trim_lines(Data::get(), cx.time, range, Policy::get()))
     }
 }

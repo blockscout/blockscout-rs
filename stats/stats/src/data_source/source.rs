@@ -7,7 +7,7 @@ use sea_orm::{DatabaseConnection, DbErr};
 use tracing::instrument;
 use tynm::type_name;
 
-use crate::{range::UniversalRange, UpdateError};
+use crate::{range::UniversalRange, ChartError};
 
 use super::types::UpdateContext;
 
@@ -116,7 +116,7 @@ pub trait DataSource {
     #[instrument(skip_all, level = tracing::Level::DEBUG, fields(source_mutex_id = Self::mutex_id()))]
     fn update_recursively(
         cx: &UpdateContext<'_>,
-    ) -> impl Future<Output = Result<(), UpdateError>> + Send {
+    ) -> impl Future<Output = Result<(), ChartError>> + Send {
         async move {
             // Couldn't figure out how to control level per-argument basis (in instrumentation)
             // so this event is used insted, since the name is usually quite verbose
@@ -146,9 +146,8 @@ pub trait DataSource {
     ///
     /// ## Description
     /// Update only thise data source's data (values + metadat)
-    fn update_itself(
-        cx: &UpdateContext<'_>,
-    ) -> impl Future<Output = Result<(), UpdateError>> + Send;
+    fn update_itself(cx: &UpdateContext<'_>)
+        -> impl Future<Output = Result<(), ChartError>> + Send;
 
     /// Retrieve chart data.
     /// If `range` is `Some`, should return data within the range. Otherwise - all data.
@@ -165,7 +164,7 @@ pub trait DataSource {
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
+    ) -> impl Future<Output = Result<Self::Output, ChartError>> + Send;
 }
 
 // Base case for recursive type
@@ -197,12 +196,12 @@ impl DataSource for () {
         HashSet::new()
     }
 
-    async fn update_recursively(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_recursively(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // stop recursion
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         unreachable!("not called by `update_recursively` and must not be called by anything else")
     }
 
@@ -210,7 +209,7 @@ impl DataSource for () {
         _cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
         _remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         Ok(())
     }
 }
@@ -234,14 +233,14 @@ macro_rules! impl_data_source_for_tuple {
                 None
             }
 
-            async fn update_recursively(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+            async fn update_recursively(cx: &UpdateContext<'_>) -> Result<(), ChartError> {
                 $(
                     $element_generic_name::update_recursively(cx).await?;
                 )+
                 Ok(())
             }
 
-            async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+            async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
                 // dependencies are called in `update_recursively`
                 // the tuple itself does not need any init
                 Ok(())
@@ -251,7 +250,7 @@ macro_rules! impl_data_source_for_tuple {
                 cx: &UpdateContext<'_>,
                 range: UniversalRange<DateTime<Utc>>,
                 remote_fetch_timer: &mut AggregateTimer,
-            ) -> Result<Self::Output, UpdateError> {
+            ) -> Result<Self::Output, ChartError> {
                 Ok((
                     $(
                         $element_generic_name::query_data(cx, range.clone(), remote_fetch_timer).await?

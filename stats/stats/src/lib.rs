@@ -23,5 +23,5 @@ pub use charts::{
         RequestedPointsLimit,
     },
     lines, query_dispatch, types, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject,
-    MissingDatePolicy, Named, ResolutionKind, UpdateError,
+    MissingDatePolicy, Named, ResolutionKind, ChartError,
 };

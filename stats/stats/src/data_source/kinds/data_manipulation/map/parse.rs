@@ -1,7 +1,7 @@
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use crate::{
-    data_source::kinds::data_manipulation::map::MapFunction, types::TimespanValue, UpdateError,
+    data_source::kinds::data_manipulation::map::MapFunction, types::TimespanValue, ChartError,
 };
 
 use super::Map;
@@ -19,19 +19,19 @@ where
 
     fn function(
         inner_data: Vec<TimespanValue<Resolution, String>>,
-    ) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError> {
+    ) -> Result<Vec<TimespanValue<Resolution, Value>>, ChartError> {
         inner_data
             .into_iter()
             .map(|p| {
                 let val_parsed = p.value.parse::<Value>().map_err(|e| {
-                    UpdateError::Internal(format!("failed to parse values of dependency: {e}"))
+                    ChartError::Internal(format!("failed to parse values of dependency: {e}"))
                 })?;
                 Ok(TimespanValue {
                     timespan: p.timespan,
                     value: val_parsed,
                 })
             })
-            .collect::<Result<Vec<_>, UpdateError>>()
+            .collect::<Result<Vec<_>, ChartError>>()
     }
 }
 
@@ -45,9 +45,9 @@ where
 
     fn function(
         inner_data: TimespanValue<Resolution, String>,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let val_parsed = inner_data.value.parse::<Value>().map_err(|e| {
-            UpdateError::Internal(format!("failed to parse values of dependency: {e}"))
+            ChartError::Internal(format!("failed to parse values of dependency: {e}"))
         })?;
         Ok(TimespanValue {
             timespan: inner_data.timespan,

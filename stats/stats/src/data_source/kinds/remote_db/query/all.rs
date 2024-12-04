@@ -13,7 +13,7 @@ use crate::{
     },
     range::{data_source_query_range_to_db_statement_range, UniversalRange},
     types::TimespanValue,
-    UpdateError,
+    ChartError,
 };
 
 pub trait StatementFromRange {
@@ -54,7 +54,7 @@ where
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError> {
+    ) -> Result<Vec<TimespanValue<Resolution, Value>>, ChartError> {
         // to not overcomplicate the queries
         let query_range =
             data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
@@ -62,7 +62,7 @@ where
         let mut data = TimespanValue::<Resolution, Value>::find_by_statement(query)
             .all(cx.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?;
+            .map_err(ChartError::BlockscoutDB)?;
         // linear time for sorted sequences
         data.sort_unstable_by(|a, b| a.timespan.cmp(&b.timespan));
         // can't use sort_*_by_key: https://github.com/rust-lang/rust/issues/34162

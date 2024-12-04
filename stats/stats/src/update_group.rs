@@ -43,7 +43,7 @@ use tokio::sync::{Mutex, MutexGuard};
 use crate::{
     charts::{chart_properties_portrait::imports::ChartKey, ChartObject},
     data_source::UpdateParameters,
-    UpdateError,
+    ChartError,
 };
 
 #[derive(Error, Debug, PartialEq)]
@@ -95,7 +95,7 @@ pub trait UpdateGroup: core::fmt::Debug {
         &self,
         params: UpdateParameters<'a>,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> Result<(), UpdateError>;
+    ) -> Result<(), ChartError>;
 }
 
 /// Construct update group that implemants [`UpdateGroup`]. The main purpose of the
@@ -117,7 +117,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// ```rust
 /// # use stats::data_source::kinds::{
 /// # };
-/// # use stats::{ChartProperties, Named, construct_update_group, types::timespans::DateValue, UpdateError};
+/// # use stats::{ChartProperties, Named, construct_update_group, types::timespans::DateValue, ChartError};
 /// # use stats::data_source::{
 /// #     kinds::{
 /// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
@@ -198,7 +198,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// ```rust
 /// # use stats::{
 /// #     QueryAllBlockTimestampRange, construct_update_group,
-/// #     types::timespans::DateValue, ChartProperties, Named, UpdateError,
+/// #     types::timespans::DateValue, ChartProperties, Named, ChartError,
 /// # };
 /// # use stats::data_source::{
 /// #     kinds::{
@@ -330,7 +330,7 @@ macro_rules! construct_update_group {
                 params: $crate::data_source::UpdateParameters<'a>,
                 #[allow(unused)]
                 enabled_charts: &::std::collections::HashSet<$crate::ChartKey>,
-            ) -> Result<(), $crate::UpdateError> {
+            ) -> Result<(), $crate::ChartError> {
                 let cx = $crate::data_source::UpdateContext::from_params_now_or_override(params);
                 ::tracing::Span::current().record("update_time", ::std::format!("{}",&cx.time));
                 $(
@@ -500,12 +500,12 @@ impl SyncUpdateGroup {
         db: &DatabaseConnection,
         creation_time_override: Option<chrono::DateTime<Utc>>,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> Result<(), UpdateError> {
+    ) -> Result<(), ChartError> {
         let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
         self.inner
             .create_charts(db, creation_time_override, &enabled_members)
             .await
-            .map_err(UpdateError::StatsDB)
+            .map_err(ChartError::StatsDB)
     }
 
     /// Ignores unknown names
@@ -513,7 +513,7 @@ impl SyncUpdateGroup {
         &self,
         params: UpdateParameters<'a>,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> Result<(), UpdateError> {
+    ) -> Result<(), ChartError> {
         let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
         tracing::info!(
             update_group = self.name(),

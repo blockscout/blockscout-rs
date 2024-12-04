@@ -14,7 +14,7 @@ use crate::{
     },
     range::{exclusive_range_to_inclusive, UniversalRange},
     types::{Timespan, TimespanValue},
-    UpdateError,
+    ChartError,
 };
 
 pub trait StatementFromTimespan {
@@ -51,7 +51,7 @@ where
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError> {
+    ) -> Result<Vec<TimespanValue<Resolution, Value>>, ChartError> {
         let query_range = if let Some(r) = range.clone().try_into_exclusive() {
             r
         } else {
@@ -65,7 +65,7 @@ where
             let point_value = ValueWrapper::<Value>::find_by_statement(query)
                 .one(cx.blockscout.connection.as_ref())
                 .await
-                .map_err(UpdateError::BlockscoutDB)?;
+                .map_err(ChartError::BlockscoutDB)?;
             if let Some(ValueWrapper { value }) = point_value {
                 let timespan = resolution_from_range(point_range);
                 collected_data.push(TimespanValue { timespan, value });

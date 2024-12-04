@@ -15,7 +15,7 @@ use crate::{
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
-    UpdateError,
+    ChartError,
 };
 
 /// Calculate delta data from cumulative dependency.
@@ -52,7 +52,7 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
@@ -61,7 +61,7 @@ where
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let mut request_range = range.clone();
         request_range.start = request_range.start.map(|s| {
             s.checked_sub_signed(TimeDelta::days(1))

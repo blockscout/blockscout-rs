@@ -21,7 +21,7 @@ use crate::{
     },
     define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, MissingDatePolicy, Named, ChartError,
 };
 
 use blockscout_db::entity::address_coin_balances_daily;
@@ -96,7 +96,7 @@ impl UpdateBehaviour<(), (), NaiveDate> for Update {
         last_accurate_point: Option<DateValue<String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<(), UpdateError> {
+    ) -> Result<(), ChartError> {
         update_sequentially_with_support_table(
             cx,
             chart_id,
@@ -115,7 +115,7 @@ pub async fn update_sequentially_with_support_table(
     last_accurate_point: Option<DateValue<String>>,
     min_blockscout_block: i64,
     remote_fetch_timer: &mut AggregateTimer,
-) -> Result<(), UpdateError> {
+) -> Result<(), ChartError> {
     tracing::info!(chart =% Properties::key(), "start sequential update");
     let all_days = match last_accurate_point {
         Some(last_row) => get_unique_ordered_days(
@@ -124,14 +124,14 @@ pub async fn update_sequentially_with_support_table(
             remote_fetch_timer,
         )
         .await
-        .map_err(UpdateError::BlockscoutDB)?,
+        .map_err(ChartError::BlockscoutDB)?,
         None => {
             clear_support_table(cx.db.connection.as_ref())
                 .await
-                .map_err(UpdateError::BlockscoutDB)?;
+                .map_err(ChartError::BlockscoutDB)?;
             get_unique_ordered_days(cx.blockscout.connection.as_ref(), None, remote_fetch_timer)
                 .await
-                .map_err(UpdateError::BlockscoutDB)?
+                .map_err(ChartError::BlockscoutDB)?
         }
     };
 
@@ -151,21 +151,21 @@ pub async fn update_sequentially_with_support_table(
             .connection
             .begin()
             .await
-            .map_err(UpdateError::StatsDB)?;
+            .map_err(ChartError::StatsDB)?;
         let data: Vec<entity::chart_data::ActiveModel> = calculate_days_using_support_table(
             &db_tx,
             cx.blockscout.connection.as_ref(),
             days.iter().copied(),
         )
         .await
-        .map_err(|e| UpdateError::Internal(e.to_string()))?
+        .map_err(|e| ChartError::Internal(e.to_string()))?
         .into_iter()
         .map(|result| result.active_model(chart_id, Some(min_blockscout_block)))
         .collect();
         insert_data_many(&db_tx, data)
             .await
-            .map_err(UpdateError::StatsDB)?;
-        db_tx.commit().await.map_err(UpdateError::StatsDB)?;
+            .map_err(ChartError::StatsDB)?;
+        db_tx.commit().await.map_err(ChartError::StatsDB)?;
     }
     Ok(())
 }
@@ -174,7 +174,7 @@ async fn calculate_days_using_support_table<C1, C2>(
     db: &C1,
     blockscout: &C2,
     days: impl IntoIterator<Item = NaiveDate>,
-) -> Result<Vec<DateValue<String>>, UpdateError>
+) -> Result<Vec<DateValue<String>>, ChartError>
 where
     C1: ConnectionTrait,
     C2: ConnectionTrait,
@@ -182,7 +182,7 @@ where
     let mut result = vec![];
     let new_holders_by_date = get_holder_changes_by_date(blockscout, days)
         .await
-        .map_err(|e| UpdateError::Internal(format!("cannot get new holders: {e}")))?;
+        .map_err(|e| ChartError::Internal(format!("cannot get new holders: {e}")))?;
 
     for (date, holders) in new_holders_by_date {
         // this check shouldnt be triggered if data in blockscout is correct,
@@ -190,7 +190,7 @@ where
         let addresses = holders.iter().map(|h| &h.address).collect::<HashSet<_>>();
         if addresses.len() != holders.len() {
             tracing::error!(addresses = ?addresses, date = ?date, "duplicate addresses in holders");
-            return Err(UpdateError::Internal(
+            return Err(ChartError::Internal(
                 "duplicate addresses in holders".to_string(),
             ));
         };
@@ -203,10 +203,10 @@ where
 
         update_current_holders(db, holders)
             .await
-            .map_err(|e| UpdateError::Internal(format!("cannot update holders: {e}")))?;
+            .map_err(|e| ChartError::Internal(format!("cannot update holders: {e}")))?;
         let new_count = count_current_holders(db)
             .await
-            .map_err(|e| UpdateError::Internal(format!("cannot count holders: {e}")))?;
+            .map_err(|e| ChartError::Internal(format!("cannot count holders: {e}")))?;
         result.push(DateValue::<String> {
             timespan: date,
             value: new_count.to_string(),

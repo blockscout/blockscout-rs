@@ -9,7 +9,7 @@ use crate::{
     range::UniversalRange,
     types::{timespans::DateValue, ExtendedTimespanValue, Timespan},
     utils::MarkedDbConnection,
-    ChartProperties, RequestedPointsLimit, UpdateError,
+    ChartProperties, RequestedPointsLimit, ChartError,
 };
 
 /// Usually the choice for line charts
@@ -32,7 +32,7 @@ where
         range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         // In DB we store data with date precision. Also, `get_line_chart_data`
         // works with inclusive range. Therefore, we need to convert the range and
         // get date without time.
@@ -74,7 +74,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
         _range: UniversalRange<DateTime<Utc>>,
         _points_limit: Option<RequestedPointsLimit>,
         _fill_missing_dates: bool,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let value = get_counter_data(
             cx.db.connection.as_ref(),
             &C::name(),
@@ -82,7 +82,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
             C::missing_date_policy(),
         )
         .await?
-        .ok_or(UpdateError::Internal(format!(
+        .ok_or(ChartError::Internal(format!(
             "no data for counter '{}' was found",
             C::name()
         )))?;
@@ -92,7 +92,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
 
 #[trait_variant::make(Send)]
 pub trait ValueEstimation {
-    async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, UpdateError>;
+    async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, ChartError>;
 }
 
 pub struct QueryLastWithEstimationFallback<E, C>(PhantomData<(E, C)>)
@@ -112,7 +112,7 @@ where
         _range: UniversalRange<DateTime<Utc>>,
         _points_limit: Option<RequestedPointsLimit>,
         _fill_missing_dates: bool,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let value = match get_counter_data(
             cx.db.connection.as_ref(),
             &C::name(),
@@ -142,7 +142,7 @@ mod tests {
         data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
         tests::init_db::init_marked_db_all,
         types::timespans::DateValue,
-        MissingDatePolicy, Named, UpdateError,
+        MissingDatePolicy, Named, ChartError,
     };
 
     #[tokio::test]
@@ -173,7 +173,7 @@ mod tests {
         impl ValueEstimation for TestFallback {
             async fn estimate(
                 _blockscout: &MarkedDbConnection,
-            ) -> Result<DateValue<String>, UpdateError> {
+            ) -> Result<DateValue<String>, ChartError> {
                 Ok(expected_estimate())
             }
         }

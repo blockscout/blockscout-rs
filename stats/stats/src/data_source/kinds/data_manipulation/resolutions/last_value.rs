@@ -13,7 +13,7 @@ use crate::{
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
     types::{ConsistsOf, Timespan, TimespanValue},
-    UpdateError,
+    ChartError,
 };
 
 use super::{extend_to_timespan_boundaries, reduce_each_timespan};
@@ -45,7 +45,7 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
@@ -54,7 +54,7 @@ where
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let time_range_for_lower_res = extend_to_timespan_boundaries::<LowerRes>(range);
         let high_res_data =
             DS::query_data(cx, time_range_for_lower_res, dependency_data_fetch_timer).await?;

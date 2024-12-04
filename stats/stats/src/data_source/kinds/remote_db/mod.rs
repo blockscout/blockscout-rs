@@ -30,7 +30,7 @@ use sea_orm::{DatabaseConnection, DbErr};
 use crate::{
     data_source::{source::DataSource, types::UpdateContext},
     range::UniversalRange,
-    UpdateError,
+    ChartError,
 };
 
 pub use query::{
@@ -48,7 +48,7 @@ pub trait RemoteQueryBehaviour {
     fn query_data(
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
-    ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
+    ) -> impl Future<Output = Result<Self::Output, ChartError>> + Send;
 }
 
 impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
@@ -71,12 +71,12 @@ impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<<Self as DataSource>::Output, UpdateError> {
+    ) -> Result<<Self as DataSource>::Output, ChartError> {
         let _interval = remote_fetch_timer.start_interval();
         Q::query_data(cx, range).await
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         Ok(())
     }
 }

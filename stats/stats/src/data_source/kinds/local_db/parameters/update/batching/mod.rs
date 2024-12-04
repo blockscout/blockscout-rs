@@ -19,7 +19,7 @@ use crate::{
     },
     range::UniversalRange,
     types::{ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue},
-    ChartProperties, UpdateError,
+    ChartProperties, ChartError,
 };
 
 pub mod parameter_traits;
@@ -61,7 +61,7 @@ where
         last_accurate_point: Option<TimespanValue<ChartProps::Resolution, String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<(), UpdateError> {
+    ) -> Result<(), ChartError> {
         let now = cx.time;
         let update_from = last_accurate_point
             .clone()
@@ -72,7 +72,7 @@ where
                 get_min_date_blockscout(cx.blockscout.connection.as_ref())
                     .await
                     .map(|time| time.date())
-                    .map_err(UpdateError::BlockscoutDB)?,
+                    .map_err(ChartError::BlockscoutDB)?,
             ),
         };
 
@@ -129,7 +129,7 @@ where
 async fn get_previous_step_last_point<Query, Resolution>(
     cx: &UpdateContext<'_>,
     this_step_start: Resolution,
-) -> Result<TimespanValue<Resolution, String>, UpdateError>
+) -> Result<TimespanValue<Resolution, String>, ChartError>
 where
     Resolution: Timespan + Clone,
     Query: QueryBehaviour<Output = Vec<ExtendedTimespanValue<Resolution, String>>>,
@@ -158,7 +158,7 @@ where
         ));
     if last_point_range_values.len() > 1 {
         // return error because it's likely that date in `previous_step_last_point` is incorrect
-        return Err(UpdateError::Internal("Retrieved 2 points from previous step; probably an issue with range construction and handling".to_owned()));
+        return Err(ChartError::Internal("Retrieved 2 points from previous step; probably an issue with range construction and handling".to_owned()));
     }
     Ok(previous_step_last_point)
 }
@@ -171,7 +171,7 @@ async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep, Resolution>
     last_accurate_point: TimespanValue<Resolution, String>,
     range: BatchRange<Resolution>,
     dependency_data_fetch_timer: &mut AggregateTimer,
-) -> Result<usize, UpdateError>
+) -> Result<usize, ChartError>
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
@@ -235,12 +235,12 @@ fn generate_batch_ranges<Resolution>(
     start: Resolution,
     end: DateTime<Utc>,
     max_step: TimespanDuration<Resolution>,
-) -> Result<Vec<BatchRange<Resolution>>, UpdateError>
+) -> Result<Vec<BatchRange<Resolution>>, ChartError>
 where
     Resolution: Timespan + Ord + Clone,
 {
     if max_step.repeats() == 0 {
-        return Err(UpdateError::Internal(
+        return Err(ChartError::Internal(
             "Zero maximum batch step is not allowed".into(),
         ));
     }

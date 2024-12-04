@@ -14,7 +14,7 @@ use crate::{
     data_source::{source::DataSource, UpdateContext},
     range::UniversalRange,
     types::{Timespan, TimespanValue},
-    UpdateError,
+    ChartError,
 };
 
 /// Sum all dependency's data.
@@ -49,7 +49,7 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
@@ -58,7 +58,7 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         // it's possible to not request full data range and use last accurate point;
         // can be updated to work similarly to cumulative
         let full_data =
