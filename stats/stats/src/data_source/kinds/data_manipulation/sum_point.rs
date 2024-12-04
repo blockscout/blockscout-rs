@@ -2,10 +2,7 @@
 //!
 //! Sums all points from the other (vector) source.
 
-use std::{
-    marker::PhantomData,
-    ops::AddAssign,
-};
+use std::{marker::PhantomData, ops::AddAssign};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
