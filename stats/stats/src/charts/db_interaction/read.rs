@@ -826,10 +826,10 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn get_counters_mock() {
+    async fn get_counter_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = MarkedDbConnection::from_test_db(&init_db("get_counters_mock").await).unwrap();
+        let db = MarkedDbConnection::from_test_db(&init_db("get_counter_mock").await).unwrap();
         insert_mock_data(&db.connection).await;
         let current_time = dt("2022-11-12T08:08:08").and_utc();
         let date = current_time.date_naive();
