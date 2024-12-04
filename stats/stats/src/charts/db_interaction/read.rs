@@ -679,7 +679,7 @@ mod tests {
         tests::{
             init_db::{init_db, init_db_all},
             mock_blockscout::fill_mock_blockscout_data,
-            point_construction::{d, month_of},
+            point_construction::{d, dt, month_of},
             simple_test::get_counter,
         },
         types::timespans::Month,
@@ -831,16 +831,18 @@ mod tests {
 
         let db = MarkedDbConnection::from_test_db(&init_db("get_counters_mock").await).unwrap();
         insert_mock_data(&db.connection).await;
+        let current_time = dt("2022-11-12T08:08:08").and_utc();
+        let date = current_time.date_naive();
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
             // shouldn't use this because mock data contains total blocks value
             blockscout: &db,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            update_time_override: None,
+            update_time_override: Some(current_time),
             force_full: false,
         });
         assert_eq!(
-            value("2022-11-12", "1350"),
+            value(&date.to_string(), "1350"),
             get_counter::<TotalBlocks>(&cx).await
         );
     }

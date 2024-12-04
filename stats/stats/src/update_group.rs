@@ -207,7 +207,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters, BlockscoutMigrations},
 /// # };
-/// # use chrono::NaiveDate;
+/// # use chrono::{NaiveDate, DateTime, Utc};
 /// # use entity::sea_orm_active_enums::ChartType;
 /// # use std::ops::Range;
 /// # use sea_orm::Statement;
