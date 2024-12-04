@@ -1,10 +1,10 @@
 //! Common utilities used across statistics
 
-use std::{ops::Range, sync::Arc};
-
+#[cfg(test)]
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use sea_orm::Value;
+use std::{ops::Range, sync::Arc};
 
 // this const is not public in `chrono` for some reason
 pub const NANOS_PER_SEC: i32 = 1_000_000_000;
@@ -21,6 +21,7 @@ pub struct MarkedDbConnection {
 }
 
 impl MarkedDbConnection {
+    #[cfg(test)]
     pub fn from_test_db(guard: &TestDbGuard) -> Option<Self> {
         Some(Self {
             connection: guard.client(),
