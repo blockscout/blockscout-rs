@@ -87,12 +87,6 @@ impl<Idx> From<RangeInclusive<Option<Idx>>> for UniversalRange<Idx> {
     }
 }
 
-impl<Idx: PartialEq<Idx>> UniversalRange<Idx> {
-    pub fn is_unbounded(&self) -> bool {
-        self.start.is_none() || self.end == Bound::Unbounded
-    }
-}
-
 impl<Idx: Incrementable> UniversalRange<Idx> {
     /// None only if no backup is provided
     fn into_exclusive_inner(self, backup_bounds: Option<Range<Idx>>) -> Option<Range<Idx>> {
