@@ -450,7 +450,7 @@ mod tests {
                 .collect();
             let group = SyncUpdateGroup::new(&mutexes, Arc::new(TestUpdateGroup)).unwrap();
             group
-                .create_charts_with_mutexes(&db.connection.as_ref(), Some(current_time), &enabled)
+                .create_charts_with_mutexes(db.connection.as_ref(), Some(current_time), &enabled)
                 .await
                 .unwrap();
 

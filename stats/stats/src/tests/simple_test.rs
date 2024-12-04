@@ -140,8 +140,8 @@ pub async fn dirty_force_update_and_check<C>(
     let approximate_trailing_points = C::approximate_trailing_points();
 
     let parameters = UpdateParameters {
-        db: &MarkedDbConnection::from_test_db(&db).unwrap(),
-        blockscout: &MarkedDbConnection::from_test_db(&blockscout).unwrap(),
+        db: &MarkedDbConnection::from_test_db(db).unwrap(),
+        blockscout: &MarkedDbConnection::from_test_db(blockscout).unwrap(),
         blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: Some(current_time),
         force_full: true,
