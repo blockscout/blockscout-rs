@@ -105,7 +105,8 @@ mod tests {
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
         data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
-        get_line_chart_data,
+        query_dispatch::{serialize_line_points, QuerySerialized},
+        range::UniversalRange,
         tests::{
             init_db::init_marked_db_all, mock_blockscout::fill_mock_blockscout_data,
             point_construction::dt, simple_test::simple_test_chart,
@@ -175,18 +176,9 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data::<NaiveDate>(
-            db.connection.as_ref(),
-            &NewBlocks::name(),
-            None,
-            None,
-            None,
-            crate::MissingDatePolicy::FillZero,
-            false,
-            1,
-        )
-        .await
-        .unwrap();
+        let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
+            .await
+            .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-10").unwrap(),
@@ -204,25 +196,16 @@ mod tests {
                 is_approximate: true,
             },
         ];
-        assert_eq!(expected, data);
+        assert_eq!(serialize_line_points(expected), data);
 
         // note that update is full, therefore there is entry with date `2022-11-09`
         cx.force_full = true;
         // need to update time so that the update is not ignored as the same one
         cx.time = chrono::DateTime::<Utc>::from_str("2022-11-12T13:00:00Z").unwrap();
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data::<NaiveDate>(
-            db.connection.as_ref(),
-            &NewBlocks::name(),
-            None,
-            None,
-            None,
-            crate::MissingDatePolicy::FillZero,
-            false,
-            1,
-        )
-        .await
-        .unwrap();
+        let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
+            .await
+            .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-09").unwrap(),
@@ -245,7 +228,7 @@ mod tests {
                 is_approximate: true,
             },
         ];
-        assert_eq!(expected, data);
+        assert_eq!(serialize_line_points(expected), data);
     }
 
     #[tokio::test]
@@ -269,18 +252,9 @@ mod tests {
             force_full: true,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data::<NaiveDate>(
-            db.connection.as_ref(),
-            &NewBlocks::name(),
-            None,
-            None,
-            None,
-            crate::MissingDatePolicy::FillZero,
-            false,
-            0,
-        )
-        .await
-        .unwrap();
+        let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
+            .await
+            .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-09").unwrap(),
@@ -300,10 +274,10 @@ mod tests {
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
-                is_approximate: false,
+                is_approximate: true,
             },
         ];
-        assert_eq!(expected, data);
+        assert_eq!(serialize_line_points(expected), data);
     }
 
     #[tokio::test]
@@ -375,18 +349,9 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data::<NaiveDate>(
-            db.connection.as_ref(),
-            &NewBlocks::name(),
-            None,
-            None,
-            None,
-            crate::MissingDatePolicy::FillZero,
-            false,
-            1,
-        )
-        .await
-        .unwrap();
+        let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
+            .await
+            .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-09").unwrap(),
@@ -409,7 +374,7 @@ mod tests {
                 is_approximate: true,
             },
         ];
-        assert_eq!(expected, data);
+        assert_eq!(serialize_line_points(expected), data);
     }
 
     #[tokio::test]

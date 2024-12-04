@@ -3,9 +3,8 @@ use std::{fmt::Debug, marker::PhantomData};
 use chrono::{DateTime, Utc};
 
 use crate::{
-    charts::db_interaction::read::get_counter_data,
+    charts::db_interaction::read::{get_counter_data, get_line_chart_data},
     data_source::{kinds::local_db::parameter_traits::QueryBehaviour, UpdateContext},
-    get_line_chart_data,
     range::UniversalRange,
     types::{timespans::DateValue, ExtendedTimespanValue, Timespan},
     utils::MarkedDbConnection,
