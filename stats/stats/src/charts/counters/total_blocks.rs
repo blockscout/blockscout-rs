@@ -80,6 +80,7 @@ impl ChartProperties for Properties {
 pub struct CachedBlocksEstimation;
 
 const TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC_DEFAULT: u64 = 10;
+// so that it can be added to settings if necessary
 pub static TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC: OnceLock<u64> = OnceLock::new();
 static CACHED_BLOCKS_ESTIMATION: OnceLock<Mutex<cached::TimedCache<String, i64>>> = OnceLock::new();
 
