@@ -97,7 +97,6 @@ impl<Idx: Incrementable> UniversalRange<Idx> {
     /// None only if no backup is provided
     fn into_exclusive_inner(self, backup_bounds: Option<Range<Idx>>) -> Option<Range<Idx>> {
         let (backup_start, backup_end) = backup_bounds.map(|b| (b.start, b.end)).unzip();
-        // todo: test that none backup and some start works as expected (+ end)
         let start = self.start.or(backup_start)?;
         match self.end {
             Bound::Included(end) => Some(inclusive_range_to_exclusive(start..=end)),
@@ -369,6 +368,26 @@ mod tests {
         assert_eq!(
             inclusive.clone().try_into_exclusive(),
             Some(d("2023-01-01")..d("2023-01-15"))
+        );
+
+        let partial: UniversalRange<NaiveDate> = UniversalRange {
+            start: None,
+            end: Bound::Excluded(d("2023-01-15")),
+        };
+        assert_eq!(partial.clone().try_into_exclusive(), None);
+        assert_eq!(
+            partial
+                .clone()
+                .into_exclusive_with_backup(d("2023-01-01")..d("2023-01-16")),
+            d("2023-01-01")..d("2023-01-15")
+        );
+        assert_eq!(
+            UniversalRange {
+                start: Some(d("2023-01-01")),
+                end: Bound::Unbounded,
+            }
+            .into_exclusive_with_backup(d("2023-01-02")..d("2023-01-16")),
+            d("2023-01-01")..d("2023-01-16")
         );
 
         let unbounded = UniversalRange::full();
