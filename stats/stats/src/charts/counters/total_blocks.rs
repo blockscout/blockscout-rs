@@ -1,5 +1,7 @@
+use std::sync::OnceLock;
+
 use crate::{
-    charts::db_interaction::read::get_estimated_table_rows,
+    charts::db_interaction::read::query_estimated_table_rows,
     data_source::{
         kinds::{
             local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
@@ -14,9 +16,11 @@ use crate::{
 };
 
 use blockscout_db::entity::blocks;
+use cached::Cached;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
+use tokio::sync::Mutex;
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -75,20 +79,36 @@ impl ChartProperties for Properties {
 
 pub struct CachedBlocksEstimation;
 
+const TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC_DEFAULT: u64 = 10;
+pub static TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC: OnceLock<u64> = OnceLock::new();
+static CACHED_BLOCKS_ESTIMATION: OnceLock<Mutex<cached::TimedCache<String, i64>>> = OnceLock::new();
+
 impl ValueEstimation for CachedBlocksEstimation {
     async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, UpdateError> {
-        #[cached::proc_macro::cached(
-            time = 60,
-            key = "String",
-            convert = r#"{ String::from(_db_id) }"#,
-            sync_writes = true,
-            result = true
-        )]
         async fn cached_blocks_estimation(
             blockscout: &DatabaseConnection,
-            _db_id: &str,
+            db_id: &str,
         ) -> Result<Option<i64>, DbErr> {
-            get_estimated_table_rows(blockscout, blocks::Entity.table_name()).await
+            let mut cache = CACHED_BLOCKS_ESTIMATION
+                .get_or_init(|| {
+                    Mutex::new(cached::TimedCache::with_lifespan_and_refresh(
+                        *TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC
+                            .get_or_init(|| TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC_DEFAULT),
+                        false,
+                    ))
+                })
+                .lock()
+                .await;
+            if let Some(cached_estimate) = cache.cache_get(db_id) {
+                return Ok(Some(*cached_estimate));
+            }
+
+            let query_result =
+                query_estimated_table_rows(blockscout, blocks::Entity.table_name()).await;
+            if let Ok(Some(estimate)) = &query_result {
+                cache.cache_set(db_id.to_string(), *estimate);
+            }
+            query_result
         }
 
         let now = Utc::now();
