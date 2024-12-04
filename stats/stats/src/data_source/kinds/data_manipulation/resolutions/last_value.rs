@@ -77,6 +77,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use blockscout_metrics_tools::AggregateTimer;
     use pretty_assertions::assert_eq;
 
@@ -87,6 +89,7 @@ mod tests {
         range::UniversalRange,
         tests::point_construction::{d_v_int, dt, w_v_int},
         types::timespans::{DateValue, Week},
+        utils::MarkedDbConnection,
         MissingDatePolicy,
     };
 
@@ -109,7 +112,9 @@ mod tests {
         type MockSourceWeekly = LastValueLowerResolution<MockSource, Week>;
 
         // db is not used in mock
-        let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+        let empty_db = MarkedDbConnection::in_memory(Arc::new(
+            sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
+        ));
 
         let context = UpdateContext {
             db: &empty_db,

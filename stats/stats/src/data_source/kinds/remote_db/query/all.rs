@@ -60,7 +60,7 @@ where
             data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
         let query = S::get_statement(query_range, &cx.blockscout_applied_migrations);
         let mut data = TimespanValue::<Resolution, Value>::find_by_statement(query)
-            .all(cx.blockscout)
+            .all(cx.blockscout.connection.as_ref())
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         // linear time for sorted sequences

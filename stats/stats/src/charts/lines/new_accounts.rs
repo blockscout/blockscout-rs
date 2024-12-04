@@ -110,7 +110,7 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
             &cx.blockscout_applied_migrations,
         );
         let mut data = DateValue::<String>::find_by_statement(query)
-            .all(cx.blockscout)
+            .all(cx.blockscout.connection.as_ref())
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         // make sure that it's sorted

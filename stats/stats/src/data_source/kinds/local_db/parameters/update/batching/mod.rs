@@ -69,7 +69,7 @@ where
         let update_range_start = match update_from {
             Some(d) => d,
             None => ChartProps::Resolution::from_date(
-                get_min_date_blockscout(cx.blockscout)
+                get_min_date_blockscout(cx.blockscout.connection.as_ref())
                     .await
                     .map(|time| time.date())
                     .map_err(UpdateError::BlockscoutDB)?,
@@ -107,7 +107,12 @@ where
             )
             .await?;
             // for query in `get_previous_step_last_point` to work correctly
-            Self::update_metadata(cx.db, chart_id, range.into_date_time_range().end).await?;
+            Self::update_metadata(
+                cx.db.connection.as_ref(),
+                chart_id,
+                range.into_date_time_range().end,
+            )
+            .await?;
             let elapsed: std::time::Duration = now.elapsed();
             tracing::info!(
                 found =? found,
@@ -179,7 +184,7 @@ where
     let resolution_data =
         ResolutionDep::query_data(cx, query_range, dependency_data_fetch_timer).await?;
     let found = BatchStep::batch_update_values_step_with(
-        cx.db,
+        cx.db.connection.as_ref(),
         chart_id,
         cx.time,
         min_blockscout_block,

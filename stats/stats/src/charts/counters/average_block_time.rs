@@ -55,7 +55,7 @@ async fn query_average_block_time(
 ) -> Result<Option<TimespanValue<NaiveDate, f64>>, UpdateError> {
     let query = average_block_time_statement(offset);
     let block_timestamps = BlockTimestamp::find_by_statement(query)
-        .all(cx.blockscout)
+        .all(cx.blockscout.connection.as_ref())
         .await
         .map_err(UpdateError::BlockscoutDB)?;
     Ok(calculate_average_block_time(block_timestamps))
@@ -149,6 +149,7 @@ mod tests {
             mock_blockscout::fill_many_blocks,
             simple_test::{get_counter, prepare_chart_test, simple_test_counter},
         },
+        utils::MarkedDbConnection,
     };
 
     #[tokio::test]
@@ -197,8 +198,8 @@ mod tests {
         };
         fill_many_blocks(&blockscout, current_time.naive_utc(), &block_times).await;
         let mut parameters = UpdateParameters {
-            db: &db,
-            blockscout: &blockscout,
+            db: &MarkedDbConnection::from_test_db(&db).unwrap(),
+            blockscout: &MarkedDbConnection::from_test_db(&blockscout).unwrap(),
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
             force_full: true,

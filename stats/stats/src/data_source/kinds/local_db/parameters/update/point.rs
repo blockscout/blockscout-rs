@@ -28,7 +28,7 @@ where
         // range doesn't make sense there; thus is not used
         let data = MainDep::query_data(cx, UniversalRange::full(), remote_fetch_timer).await?;
         let value = data.active_model(chart_id, Some(min_blockscout_block));
-        insert_data_many(cx.db, vec![value])
+        insert_data_many(cx.db.connection.as_ref(), vec![value])
             .await
             .map_err(UpdateError::StatsDB)?;
         Ok(())
