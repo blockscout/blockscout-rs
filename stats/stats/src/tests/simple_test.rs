@@ -1,4 +1,7 @@
-use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
+use super::{
+    init_db::{init_db_all, init_marked_db_all},
+    mock_blockscout::fill_mock_blockscout_data,
+};
 use crate::{
     data_source::{
         source::DataSource,
@@ -8,6 +11,7 @@ use crate::{
     query_dispatch::QuerySerialized,
     range::UniversalRange,
     types::{timespans::DateValue, Timespan},
+    utils::MarkedDbConnection,
     ChartProperties, MissingDatePolicy,
 };
 use blockscout_service_launcher::test_database::TestDbGuard;
@@ -77,8 +81,8 @@ where
     fill_mock_blockscout_data(&blockscout, current_date).await;
 
     let mut parameters = UpdateParameters {
-        db: &db,
-        blockscout: &blockscout,
+        db: &MarkedDbConnection::from_test_db(&db).unwrap(),
+        blockscout: &MarkedDbConnection::from_test_db(&blockscout).unwrap(),
         blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,
@@ -120,8 +124,8 @@ where
 ///
 /// Tests that force update with existing data works correctly
 pub async fn dirty_force_update_and_check<C>(
-    db: &DatabaseConnection,
-    blockscout: &DatabaseConnection,
+    db: &TestDbGuard,
+    blockscout: &TestDbGuard,
     expected: Vec<(&str, &str)>,
     update_time_override: Option<DateTime<Utc>>,
 ) where
@@ -136,8 +140,8 @@ pub async fn dirty_force_update_and_check<C>(
     let approximate_trailing_points = C::approximate_trailing_points();
 
     let parameters = UpdateParameters {
-        db,
-        blockscout,
+        db: &MarkedDbConnection::from_test_db(&db).unwrap(),
+        blockscout: &MarkedDbConnection::from_test_db(&blockscout).unwrap(),
         blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -230,12 +234,14 @@ async fn ranged_test_chart_inner<C>(
 {
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
-    let (db, blockscout) = init_db_all(test_name).await;
+    let (db, blockscout) = init_marked_db_all(test_name).await;
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
     let max_date = max_time.date_naive();
-    C::init_recursively(&db, &current_time).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, max_date).await;
+    C::init_recursively(db.connection.as_ref(), &current_time)
+        .await
+        .unwrap();
+    fill_mock_blockscout_data(blockscout.connection.as_ref(), max_date).await;
     let policy = C::missing_date_policy();
     let approximate_trailing_points = C::approximate_trailing_points();
 
@@ -250,7 +256,7 @@ async fn ranged_test_chart_inner<C>(
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
         &get_chart::<C>(
-            &db,
+            db.connection.as_ref(),
             Some(from.clone()),
             Some(to.clone()),
             policy,
@@ -266,7 +272,7 @@ async fn ranged_test_chart_inner<C>(
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(
         &get_chart::<C>(
-            &db,
+            db.connection.as_ref(),
             Some(from),
             Some(to),
             policy,
@@ -358,8 +364,8 @@ async fn simple_test_counter_inner<C>(
     fill_mock_blockscout_data(&blockscout, max_date).await;
 
     let mut parameters = UpdateParameters {
-        db: &db,
-        blockscout: &blockscout,
+        db: &MarkedDbConnection::from_test_db(&db).unwrap(),
+        blockscout: &MarkedDbConnection::from_test_db(&blockscout).unwrap(),
         blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,

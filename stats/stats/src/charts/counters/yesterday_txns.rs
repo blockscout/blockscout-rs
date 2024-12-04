@@ -1,4 +1,3 @@
-
 use crate::{
     data_source::{
         kinds::{
@@ -38,7 +37,7 @@ impl RemoteQueryBehaviour for YesterdayTxnsQuery {
             &cx.blockscout_applied_migrations,
         );
         let data = Self::Output::find_by_statement(query)
-            .one(cx.blockscout)
+            .one(cx.blockscout.connection.as_ref())
             .await
             .map_err(UpdateError::BlockscoutDB)?
             // no transactions for yesterday

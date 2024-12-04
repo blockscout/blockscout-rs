@@ -657,7 +657,7 @@ impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, UpdateError> {
-        let start_timestamp = get_min_date_blockscout(cx.blockscout)
+        let start_timestamp = get_min_date_blockscout(cx.blockscout.connection.as_ref())
             .await
             .map_err(UpdateError::BlockscoutDB)?
             .and_utc();
@@ -683,6 +683,7 @@ mod tests {
             simple_test::get_counter,
         },
         types::timespans::Month,
+        utils::MarkedDbConnection,
         Named,
     };
     use chrono::DateTime;
@@ -828,8 +829,8 @@ mod tests {
     async fn get_counters_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = init_db("get_counters_mock").await;
-        insert_mock_data(&db).await;
+        let db = MarkedDbConnection::from_test_db(&init_db("get_counters_mock").await).unwrap();
+        insert_mock_data(&db.connection).await;
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
             // shouldn't use this because mock data contains total blocks value

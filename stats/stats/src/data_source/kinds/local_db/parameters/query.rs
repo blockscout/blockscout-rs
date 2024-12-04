@@ -1,7 +1,6 @@
 use std::{fmt::Debug, marker::PhantomData};
 
 use chrono::{DateTime, Utc};
-use sea_orm::DatabaseConnection;
 
 use crate::{
     charts::db_interaction::read::get_counter_data,
@@ -9,6 +8,7 @@ use crate::{
     get_line_chart_data,
     range::UniversalRange,
     types::{timespans::DateValue, ExtendedTimespanValue, Timespan},
+    utils::MarkedDbConnection,
     ChartProperties, RequestedPointsLimit, UpdateError,
 };
 
@@ -49,7 +49,7 @@ where
         let start = start.map(|s| C::Resolution::from_date(s.date_naive()));
         let end = end.map(|e| C::Resolution::from_date(e.date_naive()));
         let values = get_line_chart_data::<C::Resolution>(
-            cx.db,
+            cx.db.connection.as_ref(),
             &C::name(),
             start,
             end,
@@ -76,7 +76,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
         _fill_missing_dates: bool,
     ) -> Result<Self::Output, UpdateError> {
         let value = get_counter_data(
-            cx.db,
+            cx.db.connection.as_ref(),
             &C::name(),
             Some(cx.time.date_naive()),
             C::missing_date_policy(),
@@ -92,7 +92,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
 
 #[trait_variant::make(Send)]
 pub trait ValueEstimation {
-    async fn estimate(blockscout: &DatabaseConnection) -> Result<DateValue<String>, UpdateError>;
+    async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, UpdateError>;
 }
 
 pub struct QueryLastWithEstimationFallback<E, C>(PhantomData<(E, C)>)
@@ -113,14 +113,17 @@ where
         _points_limit: Option<RequestedPointsLimit>,
         _fill_missing_dates: bool,
     ) -> Result<Self::Output, UpdateError> {
-        let value = get_counter_data(
-            cx.db,
+        let value = match get_counter_data(
+            cx.db.connection.as_ref(),
             &C::name(),
             Some(cx.time.date_naive()),
             C::missing_date_policy(),
         )
         .await?
-        .unwrap_or(E::estimate(cx.blockscout).await?);
+        {
+            Some(v) => v,
+            None => E::estimate(cx.blockscout).await?,
+        };
         Ok(value)
     }
 }
@@ -132,13 +135,12 @@ mod tests {
     use chrono::NaiveDate;
     use entity::sea_orm_active_enums::ChartType;
     use pretty_assertions::assert_eq;
-    use sea_orm::DatabaseConnection;
 
     use super::*;
 
     use crate::{
         data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
-        tests::init_db::init_db_all,
+        tests::init_db::init_marked_db_all,
         types::timespans::DateValue,
         MissingDatePolicy, Named, UpdateError,
     };
@@ -147,7 +149,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn fallback_query_works() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("fallback_query_works").await;
+        let (db, blockscout) = init_marked_db_all("fallback_query_works").await;
         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
 
         let parameters = UpdateParameters {
@@ -170,7 +172,7 @@ mod tests {
 
         impl ValueEstimation for TestFallback {
             async fn estimate(
-                _blockscout: &DatabaseConnection,
+                _blockscout: &MarkedDbConnection,
             ) -> Result<DateValue<String>, UpdateError> {
                 Ok(expected_estimate())
             }

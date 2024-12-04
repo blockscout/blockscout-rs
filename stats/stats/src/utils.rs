@@ -1,7 +1,8 @@
 //! Common utilities used across statistics
 
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
+use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use sea_orm::Value;
 
@@ -11,6 +12,35 @@ pub const NANOS_PER_SEC: i32 = 1_000_000_000;
 pub fn day_start(date: &NaiveDate) -> DateTime<Utc> {
     date.and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
         .and_utc()
+}
+
+#[derive(Debug, Clone)]
+pub struct MarkedDbConnection {
+    pub connection: Arc<sea_orm::DatabaseConnection>,
+    pub db_name: String,
+}
+
+impl MarkedDbConnection {
+    pub fn from_test_db(guard: &TestDbGuard) -> Option<Self> {
+        Some(Self {
+            connection: guard.client(),
+            db_name: guard.db_url().split("/").last()?.to_owned(),
+        })
+    }
+
+    pub fn main_connection(inner: Arc<sea_orm::DatabaseConnection>) -> Self {
+        Self {
+            connection: inner,
+            db_name: "main".to_owned(),
+        }
+    }
+
+    pub fn in_memory(inner: Arc<sea_orm::DatabaseConnection>) -> Self {
+        Self {
+            connection: inner,
+            db_name: "in_memory".to_owned(),
+        }
+    }
 }
 
 /// Used inside [`sql_with_range_filter_opt`]

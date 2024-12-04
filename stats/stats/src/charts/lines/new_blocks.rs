@@ -108,7 +108,7 @@ mod tests {
         data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
         get_line_chart_data,
         tests::{
-            init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data,
+            init_db::init_marked_db_all, mock_blockscout::fill_mock_blockscout_data,
             point_construction::dt, simple_test::simple_test_chart,
         },
         types::ExtendedTimespanValue,
@@ -117,23 +117,25 @@ mod tests {
     use chrono::{NaiveDate, Utc};
     use entity::{chart_data, charts};
     use pretty_assertions::assert_eq;
-    use sea_orm::{DatabaseConnection, EntityTrait, Set};
+    use sea_orm::{EntityTrait, Set};
     use std::str::FromStr;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
+        let (db, blockscout) = init_marked_db_all("update_new_blocks_recurrent").await;
         let current_time = chrono::DateTime::<Utc>::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        fill_mock_blockscout_data(&blockscout, current_date).await;
+        fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
 
-        NewBlocks::init_recursively(&db, &current_time)
+        NewBlocks::init_recursively(db.connection.as_ref(), &current_time)
             .await
             .unwrap();
 
-        let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
+        let min_blockscout_block = get_min_block_blockscout(blockscout.connection.as_ref())
+            .await
+            .unwrap();
         // set wrong value and check, that it was rewritten
         chart_data::Entity::insert_many([
             chart_data::ActiveModel {
@@ -151,7 +153,7 @@ mod tests {
                 ..Default::default()
             },
         ])
-        .exec(&db as &DatabaseConnection)
+        .exec(db.connection.as_ref())
         .await
         .unwrap();
         // set corresponding `last_updated_at` for successful partial update
@@ -160,7 +162,7 @@ mod tests {
             last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
             ..Default::default()
         })
-        .exec(&db as &DatabaseConnection)
+        .exec(db.connection.as_ref())
         .await
         .unwrap();
 
@@ -175,7 +177,7 @@ mod tests {
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data::<NaiveDate>(
-            &db,
+            db.connection.as_ref(),
             &NewBlocks::name(),
             None,
             None,
@@ -211,7 +213,7 @@ mod tests {
         cx.time = chrono::DateTime::<Utc>::from_str("2022-11-12T13:00:00Z").unwrap();
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data::<NaiveDate>(
-            &db,
+            db.connection.as_ref(),
             &NewBlocks::name(),
             None,
             None,
@@ -251,12 +253,12 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_new_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
+        let (db, blockscout) = init_marked_db_all("update_new_blocks_fresh").await;
         let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        fill_mock_blockscout_data(&blockscout, current_date).await;
+        fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
 
-        NewBlocks::init_recursively(&db, &current_time)
+        NewBlocks::init_recursively(db.connection.as_ref(), &current_time)
             .await
             .unwrap();
 
@@ -269,7 +271,7 @@ mod tests {
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data::<NaiveDate>(
-            &db,
+            db.connection.as_ref(),
             &NewBlocks::name(),
             None,
             None,
@@ -309,16 +311,18 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_new_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_last").await;
+        let (db, blockscout) = init_marked_db_all("update_new_blocks_last").await;
         let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        fill_mock_blockscout_data(&blockscout, current_date).await;
+        fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
 
-        NewBlocks::init_recursively(&db, &current_time)
+        NewBlocks::init_recursively(db.connection.as_ref(), &current_time)
             .await
             .unwrap();
 
-        let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
+        let min_blockscout_block = get_min_block_blockscout(blockscout.connection.as_ref())
+            .await
+            .unwrap();
         // set wrong values and check, that they weren't rewritten
         // except the last one
         chart_data::Entity::insert_many([
@@ -351,7 +355,7 @@ mod tests {
                 ..Default::default()
             },
         ])
-        .exec(&db as &DatabaseConnection)
+        .exec(db.connection.as_ref())
         .await
         .unwrap();
         // set corresponding `last_updated_at` for successful partial update
@@ -360,7 +364,7 @@ mod tests {
             last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
             ..Default::default()
         })
-        .exec(&db as &DatabaseConnection)
+        .exec(db.connection.as_ref())
         .await
         .unwrap();
 
@@ -373,7 +377,7 @@ mod tests {
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = get_line_chart_data::<NaiveDate>(
-            &db,
+            db.connection.as_ref(),
             &NewBlocks::name(),
             None,
             None,

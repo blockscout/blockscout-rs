@@ -1,4 +1,3 @@
-
 use crate::{
     data_source::{
         kinds::{
@@ -29,7 +28,7 @@ impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
         let value = addresses::Entity::find()
             .filter(addresses::Column::ContractCode.is_not_null())
             .filter(addresses::Column::InsertedAt.lte(cx.time))
-            .count(cx.blockscout)
+            .count(cx.blockscout.connection.as_ref())
             .await
             .map_err(UpdateError::BlockscoutDB)?;
         let timespan = cx.time.date_naive();

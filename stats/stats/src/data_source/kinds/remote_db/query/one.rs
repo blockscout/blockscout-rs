@@ -45,7 +45,7 @@ where
     ) -> Result<TimespanValue<Resolution, Value>, UpdateError> {
         let query = S::get_statement(&cx.blockscout_applied_migrations);
         let data = TimespanValue::<Resolution, Value>::find_by_statement(query)
-            .one(cx.blockscout)
+            .one(cx.blockscout.connection.as_ref())
             .await
             .map_err(UpdateError::BlockscoutDB)?
             .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;

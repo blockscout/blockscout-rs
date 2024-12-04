@@ -1,16 +1,19 @@
 use crate::runtime_setup::{RuntimeSetup, UpdateGroupEntry};
 use chrono::Utc;
 use cron::Schedule;
-use sea_orm::{DatabaseConnection, DbErr};
-use stats::data_source::types::{BlockscoutMigrations, UpdateParameters};
+use sea_orm::DbErr;
+use stats::{
+    data_source::types::{BlockscoutMigrations, UpdateParameters},
+    utils::MarkedDbConnection,
+};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 const FAILED_UPDATERS_UNTIL_PANIC: u64 = 3;
 
 pub struct UpdateService {
-    db: Arc<DatabaseConnection>,
-    blockscout: Arc<DatabaseConnection>,
+    db: MarkedDbConnection,
+    blockscout: MarkedDbConnection,
     charts: Arc<RuntimeSetup>,
 }
 
@@ -26,8 +29,8 @@ fn time_till_next_call(schedule: &Schedule) -> std::time::Duration {
 
 impl UpdateService {
     pub async fn new(
-        db: Arc<DatabaseConnection>,
-        blockscout: Arc<DatabaseConnection>,
+        db: MarkedDbConnection,
+        blockscout: MarkedDbConnection,
         charts: Arc<RuntimeSetup>,
     ) -> Result<Self, DbErr> {
         Ok(Self {
@@ -104,11 +107,12 @@ impl UpdateService {
             force_update = force_full,
             "updating group of charts"
         );
-        let Ok(active_migrations) = BlockscoutMigrations::query_from_db(&self.blockscout)
-            .await
-            .inspect_err(|err| {
-                tracing::error!("error during blockscout migrations detection: {:?}", err)
-            })
+        let Ok(active_migrations) =
+            BlockscoutMigrations::query_from_db(self.blockscout.connection.as_ref())
+                .await
+                .inspect_err(|err| {
+                    tracing::error!("error during blockscout migrations detection: {:?}", err)
+                })
         else {
             return;
         };
