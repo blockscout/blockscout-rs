@@ -3,6 +3,14 @@ use crate::database::{
 };
 use std::{ops::Deref, sync::Arc};
 
+/// Postgres supports maximum 63 symbols.
+/// All exceeding symbols are truncated by the database.
+const MAX_DATABASE_NAME_LEN: usize = 63;
+
+/// A length of the hex encoded hash of database name
+/// when the original exceeds [`MAX_DATABASE_NAME_LEN`]
+const HASH_SUFFIX_STRING_LEN: usize = 8;
+
 #[derive(Clone, Debug)]
 pub struct TestDbGuard {
     conn_with_db: Arc<DatabaseConnection>,
@@ -20,9 +28,7 @@ impl TestDbGuard {
         let conn_without_db = Database::connect(&base_db_url)
             .await
             .expect("Connection to postgres (without database) failed");
-        // We use a hash, as the name itself may be quite long and be trimmed.
-        // Postgres DB name should be 63 symbols max.
-        let db_name = format!("_{:x}", keccak_hash::keccak(db_name))[..63].to_string();
+        let db_name = Self::preprocess_database_name(db_name);
         let mut guard = TestDbGuard {
             conn_with_db: Arc::new(DatabaseConnection::Disconnected),
             conn_without_db: Arc::new(conn_without_db),
@@ -33,6 +39,35 @@ impl TestDbGuard {
         guard.init_database().await;
         guard.run_migrations::<Migrator>().await;
         guard
+    }
+
+    /// Creates a new test database helper with a unique name.
+    ///
+    /// This function initializes a test database, where the database name is constructed
+    /// as a concatenation of the provided `prefix_name`, `file`, `line`, and `column` arguments.
+    /// It ensures that the generated database name is unique to the location in the code
+    /// where this function is called.
+    ///
+    /// # Arguments
+    ///
+    /// - `prefix_name`: A custom prefix for the database name.
+    /// - `file`: The file name where this function is invoked. Must be the result of the `file!` macro.
+    /// - `line`: The line number where this function is invoked. Must be the result of the `line!` macro.
+    /// - `column`: The column number where this function is invoked. Must be the result of the `column!` macro.
+    ///
+    /// # Example
+    ///
+    /// ```text
+    /// let db_guard = TestDbGuard::new_with_metadata::<Migrator>("test_db", file!(), line!(), column!()).await;
+    /// ```
+    pub async fn new_with_metadata<Migrator: MigratorTrait>(
+        prefix_name: &str,
+        file: &str,
+        line: u32,
+        column: u32,
+    ) -> Self {
+        let db_name = format!("{prefix_name}_{file}_{line}_{column}");
+        Self::new::<Migrator>(db_name.as_str()).await
     }
 
     pub fn client(&self) -> Arc<DatabaseConnection> {
@@ -91,6 +126,21 @@ impl TestDbGuard {
         Migrator::up(self.conn_with_db.as_ref(), None)
             .await
             .expect("Database migration failed");
+    }
+
+    /// Strips given database name if the one is too long to be supported.
+    /// To differentiate the resultant name with other similar prefixes,
+    /// a 4-bytes hash of the original name is added at the end.
+    fn preprocess_database_name(name: &str) -> String {
+        if name.len() <= MAX_DATABASE_NAME_LEN {
+            return name.to_string();
+        }
+
+        let hash = &format!("{:x}", keccak_hash::keccak(name))[..HASH_SUFFIX_STRING_LEN];
+        format!(
+            "{}-{hash}",
+            &name[..MAX_DATABASE_NAME_LEN - HASH_SUFFIX_STRING_LEN - 1]
+        )
     }
 }
 
