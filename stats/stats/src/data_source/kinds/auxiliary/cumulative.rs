@@ -1,7 +1,4 @@
-use std::{
-    marker::PhantomData,
-    ops::AddAssign,
-};
+use std::{marker::PhantomData, ops::AddAssign};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};

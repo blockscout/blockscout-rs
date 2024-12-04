@@ -3,12 +3,7 @@
 //!
 //! I.e. chart "New accounts" is a delta of  "Total accounts".
 
-use std::{
-    fmt::Display,
-    marker::PhantomData,
-    ops::SubAssign,
-    str::FromStr,
-};
+use std::{fmt::Display, marker::PhantomData, ops::SubAssign, str::FromStr};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, TimeDelta, Utc};
