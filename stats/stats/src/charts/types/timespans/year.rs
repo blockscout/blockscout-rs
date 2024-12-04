@@ -292,6 +292,53 @@ mod tests {
             Year::from_date(NaiveDate::MIN)
         );
     }
+    #[test]
+    fn year_checked_add_works() {
+        assert_eq!(
+            Year(2016).checked_add(TimespanDuration::from_timespan_repeats(16)),
+            Some(Year(2032))
+        );
+        assert_eq!(
+            Year(2016).checked_add(TimespanDuration::from_timespan_repeats(0)),
+            Some(Year(2016))
+        );
+        assert_eq!(
+            Year(2016).checked_add(TimespanDuration::from_timespan_repeats(u64::MAX)),
+            None
+        );
+        assert_eq!(
+            Year::from_date(NaiveDate::MAX).checked_add(TimespanDuration::from_timespan_repeats(1)),
+            None
+        );
+        assert_eq!(
+            Year(i32::MAX - 5).checked_add(TimespanDuration::from_timespan_repeats(3)),
+            None
+        );
+    }
+
+    #[test]
+    fn year_checked_sub_works() {
+        assert_eq!(
+            Year(2016).checked_sub(TimespanDuration::from_timespan_repeats(16)),
+            Some(Year(2000))
+        );
+        assert_eq!(
+            Year(2016).checked_sub(TimespanDuration::from_timespan_repeats(0)),
+            Some(Year(2016))
+        );
+        assert_eq!(
+            Year(2016).checked_sub(TimespanDuration::from_timespan_repeats(u64::MAX)),
+            None
+        );
+        assert_eq!(
+            Year::from_date(NaiveDate::MIN).checked_sub(TimespanDuration::from_timespan_repeats(1)),
+            None
+        );
+        assert_eq!(
+            Year(i32::MIN + 5).checked_sub(TimespanDuration::from_timespan_repeats(3)),
+            None
+        );
+    }
 
     #[test]
     fn year_saturating_first_timestamp_works() {
