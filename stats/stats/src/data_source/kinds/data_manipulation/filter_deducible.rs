@@ -12,7 +12,7 @@ use crate::{
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
-    ChartProperties, MissingDatePolicy, UpdateError,
+    ChartProperties, MissingDatePolicy, ChartError,
 };
 
 /// Pass only essential points from `D`, removing ones that can be deduced
@@ -45,7 +45,7 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
@@ -54,7 +54,7 @@ where
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let data = DS::query_data(cx, range, dependency_data_fetch_timer).await?;
         Ok(match Properties::missing_date_policy() {
             MissingDatePolicy::FillZero => {

@@ -10,7 +10,7 @@ use sea_orm::{DatabaseConnection, DbErr};
 use crate::{
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
-    UpdateError,
+    ChartError,
 };
 
 mod parse;
@@ -29,7 +29,7 @@ where
 
 pub trait MapFunction<Input> {
     type Output: Send;
-    fn function(inner_data: Input) -> Result<Self::Output, UpdateError>;
+    fn function(inner_data: Input) -> Result<Self::Output, ChartError>;
 }
 
 impl<D, F> DataSource for Map<D, F>
@@ -52,7 +52,7 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
@@ -61,7 +61,7 @@ where
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let inner_data =
             <D as DataSource>::query_data(cx, range, dependency_data_fetch_timer).await?;
         F::function(inner_data)

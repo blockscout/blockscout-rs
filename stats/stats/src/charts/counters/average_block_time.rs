@@ -12,7 +12,7 @@ use crate::{
     range::UniversalRange,
     types::TimespanValue,
     utils::NANOS_PER_SEC,
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, MissingDatePolicy, Named, ChartError,
 };
 
 use blockscout_db::entity::blocks;
@@ -52,12 +52,12 @@ struct BlockTimestamp {
 async fn query_average_block_time(
     cx: &UpdateContext<'_>,
     offset: u64,
-) -> Result<Option<TimespanValue<NaiveDate, f64>>, UpdateError> {
+) -> Result<Option<TimespanValue<NaiveDate, f64>>, ChartError> {
     let query = average_block_time_statement(offset);
     let block_timestamps = BlockTimestamp::find_by_statement(query)
         .all(cx.blockscout.connection.as_ref())
         .await
-        .map_err(UpdateError::BlockscoutDB)?;
+        .map_err(ChartError::BlockscoutDB)?;
     Ok(calculate_average_block_time(block_timestamps))
 }
 
@@ -69,12 +69,12 @@ impl RemoteQueryBehaviour for AverageBlockTimeQuery {
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<TimespanValue<NaiveDate, f64>, UpdateError> {
+    ) -> Result<TimespanValue<NaiveDate, f64>, ChartError> {
         match query_average_block_time(cx, OFFSET_BLOCKS).await? {
             Some(avg_block_time) => Ok(avg_block_time),
             None => query_average_block_time(cx, 0)
                 .await?
-                .ok_or(UpdateError::Internal(
+                .ok_or(ChartError::Internal(
                     "No blocks were returned to calculate average block time".into(),
                 )),
         }

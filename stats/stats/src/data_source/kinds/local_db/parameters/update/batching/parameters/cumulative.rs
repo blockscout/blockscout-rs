@@ -9,7 +9,7 @@ use sea_orm::DatabaseConnection;
 use crate::{
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
     types::{Timespan, TimespanValue},
-    ChartProperties, UpdateError,
+    ChartProperties, ChartError,
 };
 
 use super::PassVecStep;
@@ -37,9 +37,9 @@ where
         last_accurate_point: TimespanValue<Resolution, String>,
         main_data: Vec<TimespanValue<Resolution, Value>>,
         _resolution_data: (),
-    ) -> Result<usize, UpdateError> {
+    ) -> Result<usize, ChartError> {
         let partial_sum = last_accurate_point.value.parse::<Value>().map_err(|e| {
-            UpdateError::Internal(format!(
+            ChartError::Internal(format!(
                 "failed to parse value in chart '{}': {e}",
                 ChartProps::key()
             ))

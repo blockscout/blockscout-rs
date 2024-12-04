@@ -12,7 +12,7 @@ use crate::{
     range::UniversalRange,
     types::timespans::DateValue,
     utils::MarkedDbConnection,
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, MissingDatePolicy, Named, ChartError,
 };
 
 use blockscout_db::entity::blocks;
@@ -36,7 +36,7 @@ impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let data = blocks::Entity::find()
             .select_only()
             .column_as(Expr::col(blocks::Column::Number).count(), "number")
@@ -45,8 +45,8 @@ impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
             .into_model::<TotalBlocksData>()
             .one(cx.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?
-            .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
+            .map_err(ChartError::BlockscoutDB)?
+            .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
 
         let data = DateValue::<String> {
             timespan: data.timestamp.date(),
@@ -85,7 +85,7 @@ pub static TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC: OnceLock<u64> = OnceLock:
 static CACHED_BLOCKS_ESTIMATION: OnceLock<Mutex<cached::TimedCache<String, i64>>> = OnceLock::new();
 
 impl ValueEstimation for CachedBlocksEstimation {
-    async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, UpdateError> {
+    async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, ChartError> {
         async fn cached_blocks_estimation(
             blockscout: &DatabaseConnection,
             db_id: &str,
@@ -115,7 +115,7 @@ impl ValueEstimation for CachedBlocksEstimation {
         let now = Utc::now();
         let value = cached_blocks_estimation(blockscout.connection.as_ref(), &blockscout.db_name)
             .await
-            .map_err(UpdateError::BlockscoutDB)?
+            .map_err(ChartError::BlockscoutDB)?
             .map(|b| {
                 let b = b as f64 * 0.9;
                 b as i64

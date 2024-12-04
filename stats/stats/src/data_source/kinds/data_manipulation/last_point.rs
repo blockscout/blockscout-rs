@@ -13,7 +13,7 @@ use crate::{
     range::UniversalRange,
     types::{Timespan, TimespanValue, ZeroTimespanValue},
     utils::day_start,
-    UpdateError,
+    ChartError,
 };
 
 pub struct LastPoint<DS>(PhantomData<DS>)
@@ -42,7 +42,7 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
@@ -51,7 +51,7 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let data = DS::query_data(
             cx,
             (day_start(&cx.time.date_naive())..cx.time).into(),

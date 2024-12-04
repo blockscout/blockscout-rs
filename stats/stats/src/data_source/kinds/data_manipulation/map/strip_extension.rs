@@ -1,6 +1,6 @@
 use crate::{
     types::{ExtendedTimespanValue, TimespanValue},
-    UpdateError,
+    ChartError,
 };
 
 use super::{Map, MapFunction};
@@ -16,7 +16,7 @@ where
     V: Send,
 {
     type Output = Vec<TimespanValue<R, V>>;
-    fn function(inner_data: Vec<ExtendedTimespanValue<R, V>>) -> Result<Self::Output, UpdateError> {
+    fn function(inner_data: Vec<ExtendedTimespanValue<R, V>>) -> Result<Self::Output, ChartError> {
         Ok(inner_data.into_iter().map(|p| p.into()).collect())
     }
 }
@@ -27,7 +27,7 @@ where
     V: Send,
 {
     type Output = TimespanValue<R, V>;
-    fn function(inner_data: ExtendedTimespanValue<R, V>) -> Result<Self::Output, UpdateError> {
+    fn function(inner_data: ExtendedTimespanValue<R, V>) -> Result<Self::Output, ChartError> {
         Ok(inner_data.into())
     }
 }

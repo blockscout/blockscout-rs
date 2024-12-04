@@ -21,7 +21,7 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -61,7 +61,7 @@ pub struct IncrementsFromPartialSum;
 
 impl MapFunction<Vec<DateValue<Decimal>>> for IncrementsFromPartialSum {
     type Output = Vec<DateValue<Decimal>>;
-    fn function(inner_data: Vec<DateValue<Decimal>>) -> Result<Self::Output, UpdateError> {
+    fn function(inner_data: Vec<DateValue<Decimal>>) -> Result<Self::Output, ChartError> {
         Ok(inner_data
             .into_iter()
             .scan(Decimal::ZERO, |state, mut next| {

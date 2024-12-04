@@ -24,7 +24,7 @@ use crate::{
     range::{data_source_query_range_to_db_statement_range, UniversalRange},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, Named, UpdateError,
+    ChartError, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -101,7 +101,7 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Vec<DateValue<String>>, UpdateError> {
+    ) -> Result<Vec<DateValue<String>>, ChartError> {
         let statement_range =
             data_source_query_range_to_db_statement_range::<QueryAllBlockTimestampRange>(cx, range)
                 .await?;
@@ -112,7 +112,7 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
         let mut data = DateValue::<String>::find_by_statement(query)
             .all(cx.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?;
+            .map_err(ChartError::BlockscoutDB)?;
         // make sure that it's sorted
         data.sort_by_key(|d| d.timespan);
         if let Some(range) = statement_range {

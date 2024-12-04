@@ -10,7 +10,7 @@ use crate::{
     range::UniversalRange,
     types::TimespanValue,
     utils::day_start,
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, MissingDatePolicy, Named, ChartError,
 };
 use chrono::{DateTime, Days, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
@@ -24,11 +24,11 @@ impl RemoteQueryBehaviour for YesterdayTxnsQuery {
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let today = cx.time.date_naive();
         let yesterday = today
             .checked_sub_days(Days::new(1))
-            .ok_or(UpdateError::Internal(
+            .ok_or(ChartError::Internal(
                 "Update time is incorrect: ~ minimum possible date".into(),
             ))?;
         let yesterday_range = day_start(&yesterday)..day_start(&today);
@@ -39,7 +39,7 @@ impl RemoteQueryBehaviour for YesterdayTxnsQuery {
         let data = Self::Output::find_by_statement(query)
             .one(cx.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?
+            .map_err(ChartError::BlockscoutDB)?
             // no transactions for yesterday
             .unwrap_or(TimespanValue::with_zero_value(yesterday));
         Ok(data)

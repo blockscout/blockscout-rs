@@ -18,7 +18,7 @@ use crate::{
 
 use super::{
     types::{ExtendedTimespanValue, Timespan, TimespanValue},
-    ChartProperties, UpdateError,
+    ChartProperties, ChartError,
 };
 
 /// Data query trait with unified data format (for external use)
@@ -39,7 +39,7 @@ pub trait QuerySerialized {
         range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Output, ChartError>> + Send + 'a>>;
 }
 
 /// [`QuerySerialized`] but for dynamic dispatch
@@ -142,7 +142,7 @@ where
         range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
-    ) -> Pin<Box<dyn std::future::Future<Output = Result<Self::Output, UpdateError>> + Send + 'a>>
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<Self::Output, ChartError>> + Send + 'a>>
     {
         let cx = cx.clone();
         Box::pin(async move {

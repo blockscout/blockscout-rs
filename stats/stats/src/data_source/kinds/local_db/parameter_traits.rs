@@ -9,7 +9,7 @@ use crate::{
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
-    RequestedPointsLimit, UpdateError,
+    RequestedPointsLimit, ChartError,
 };
 
 /// In most cases, [`super::DefaultCreate`] is enough.
@@ -38,18 +38,18 @@ where
         last_accurate_point: Option<TimespanValue<Resolution, String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> impl Future<Output = Result<(), UpdateError>> + Send;
+    ) -> impl Future<Output = Result<(), ChartError>> + Send;
 
     /// Update only chart metadata.
     fn update_metadata(
         db: &DatabaseConnection,
         chart_id: i32,
         update_time: DateTime<Utc>,
-    ) -> impl Future<Output = Result<(), UpdateError>> + Send {
+    ) -> impl Future<Output = Result<(), ChartError>> + Send {
         async move {
             set_last_updated_at(chart_id, db, update_time)
                 .await
-                .map_err(UpdateError::StatsDB)
+                .map_err(ChartError::StatsDB)
         }
     }
 }
@@ -65,5 +65,5 @@ pub trait QueryBehaviour {
         range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
-    ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
+    ) -> impl Future<Output = Result<Self::Output, ChartError>> + Send;
 }

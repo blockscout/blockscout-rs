@@ -11,7 +11,7 @@ use crate::{
     },
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartProperties, Named, UpdateError,
+    ChartProperties, Named, ChartError,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -32,7 +32,7 @@ where
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         if cx.time >= PointDateTime::get() {
             Ok(DateValue::<String> {
                 timespan: PointDateTime::get().date_naive(),

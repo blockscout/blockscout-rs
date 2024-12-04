@@ -10,7 +10,7 @@ use crate::{
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
-    UpdateError,
+    ChartError,
 };
 
 /// Auxiliary source for cumulative chart.
@@ -43,7 +43,7 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
@@ -52,7 +52,7 @@ where
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let delta_data = Delta::query_data(cx, range, dependency_data_fetch_timer).await?;
         let data = cumsum::<Resolution, Value>(delta_data, Value::zero())?;
         Ok(data)

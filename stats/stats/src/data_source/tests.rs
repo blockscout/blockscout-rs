@@ -38,7 +38,7 @@ use crate::{
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, MissingDatePolicy, Named, ChartError,
 };
 
 pub struct NewContractsQuery;
@@ -217,7 +217,7 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
         _last_accurate_point: DateValue<String>,
         _main_data: Vec<DateValue<String>>,
         _resolution_data: (),
-    ) -> Result<usize, UpdateError> {
+    ) -> Result<usize, ChartError> {
         // do something (just an example, not intended for running)
         todo!();
         // save data

@@ -20,7 +20,7 @@ use stats::{
     range::UniversalRange,
     types::Timespan,
     utils::{day_start, MarkedDbConnection},
-    RequestedPointsLimit, ResolutionKind, UpdateError,
+    RequestedPointsLimit, ResolutionKind, ChartError,
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use tonic::{Request, Response, Status};
@@ -63,10 +63,10 @@ impl From<LimitsSettings> for ReadLimits {
     }
 }
 
-fn map_update_error(err: UpdateError) -> Status {
+fn map_update_error(err: ChartError) -> Status {
     match &err {
-        UpdateError::ChartNotFound(_) => Status::not_found(err.to_string()),
-        UpdateError::IntervalTooLarge { limit: _ } => Status::invalid_argument(err.to_string()),
+        ChartError::ChartNotFound(_) => Status::not_found(err.to_string()),
+        ChartError::IntervalTooLarge { limit: _ } => Status::invalid_argument(err.to_string()),
         _ => {
             tracing::error!(err = ?err, "internal read error");
             Status::internal(err.to_string())
@@ -103,10 +103,10 @@ impl ReadService {
         range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         query_time: DateTime<Utc>,
-    ) -> Result<Data, UpdateError> {
+    ) -> Result<Data, ChartError> {
         let migrations = BlockscoutMigrations::query_from_db(self.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?;
+            .map_err(ChartError::BlockscoutDB)?;
         let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &self.db,
             blockscout: &self.blockscout,
@@ -146,7 +146,7 @@ impl ReadService {
         range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         query_time: DateTime<Utc>,
-    ) -> Result<proto_v1::LineChart, UpdateError> {
+    ) -> Result<proto_v1::LineChart, ChartError> {
         let data = self
             .query_with_handle(query_handle, range, points_limit, query_time)
             .await?;

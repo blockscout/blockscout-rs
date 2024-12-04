@@ -8,7 +8,7 @@ use crate::{
     },
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartProperties, MissingDatePolicy, Named, ChartError,
 };
 
 use blockscout_db::entity::addresses;
@@ -24,13 +24,13 @@ impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let value = addresses::Entity::find()
             .filter(addresses::Column::ContractCode.is_not_null())
             .filter(addresses::Column::InsertedAt.lte(cx.time))
             .count(cx.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?;
+            .map_err(ChartError::BlockscoutDB)?;
         let timespan = cx.time.date_naive();
         Ok(DateValue::<String> {
             timespan,

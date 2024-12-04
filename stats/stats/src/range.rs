@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use crate::{
     data_source::{kinds::remote_db::RemoteQueryBehaviour, UpdateContext},
     types::{Timespan, TimespanDuration},
-    UpdateError,
+    ChartError,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -298,7 +298,7 @@ impl Decrementable for i32 {
 pub async fn data_source_query_range_to_db_statement_range<AllRangeSource>(
     cx: &UpdateContext<'_>,
     data_source_range: UniversalRange<DateTime<Utc>>,
-) -> Result<Option<Range<DateTime<Utc>>>, UpdateError>
+) -> Result<Option<Range<DateTime<Utc>>>, ChartError>
 where
     AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>,
 {

@@ -17,9 +17,8 @@ use super::{
     query_dispatch::{ChartTypeSpecifics, QuerySerialized, QuerySerializedDyn},
 };
 
-// todo: rename to `ChartError` or similar
 #[derive(Error, Debug)]
-pub enum UpdateError {
+pub enum ChartError {
     #[error("blockscout database error: {0}")]
     BlockscoutDB(DbErr),
     #[error("stats database error: {0}")]
@@ -32,12 +31,12 @@ pub enum UpdateError {
     Internal(String),
 }
 
-impl From<ReadError> for UpdateError {
+impl From<ReadError> for ChartError {
     fn from(read: ReadError) -> Self {
         match read {
-            ReadError::DB(db) => UpdateError::StatsDB(db),
-            ReadError::ChartNotFound(err) => UpdateError::ChartNotFound(err),
-            ReadError::IntervalTooLarge(limit) => UpdateError::IntervalTooLarge { limit },
+            ReadError::DB(db) => ChartError::StatsDB(db),
+            ReadError::ChartNotFound(err) => ChartError::ChartNotFound(err),
+            ReadError::IntervalTooLarge(limit) => ChartError::IntervalTooLarge { limit },
         }
     }
 }

@@ -10,7 +10,7 @@ use crate::{
         timespans::{DateValue, Month, Week, Year},
         ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
     },
-    ChartProperties, MissingDatePolicy, UpdateError,
+    ChartProperties, MissingDatePolicy, ChartError,
 };
 
 use blockscout_db::entity::blocks;
@@ -482,7 +482,7 @@ pub async fn last_accurate_point<ChartProps, Query>(
     force_full: bool,
     approximate_trailing_points: u64,
     policy: MissingDatePolicy,
-) -> Result<Option<TimespanValue<ChartProps::Resolution, String>>, UpdateError>
+) -> Result<Option<TimespanValue<ChartProps::Resolution, String>>, ChartError>
 where
     ChartProps: ChartProperties + ?Sized,
     ChartProps::Resolution: Ord + Clone + Debug,
@@ -499,7 +499,7 @@ where
             .into_model()
             .one(db)
             .await
-            .map_err(UpdateError::StatsDB)?;
+            .map_err(ChartError::StatsDB)?;
         let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
 
         match recorded_min_blockscout_block {
@@ -536,7 +536,7 @@ where
                     }
                 });
                 let Some(last_accurate_point) = last_accurate_point else {
-                    return Err(UpdateError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
+                    return Err(ChartError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
                 };
 
                 if let Some(block) = recorded_min_blockscout_block.min_blockscout_block {
@@ -656,10 +656,10 @@ impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let start_timestamp = get_min_date_blockscout(cx.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?
+            .map_err(ChartError::BlockscoutDB)?
             .and_utc();
         Ok(start_timestamp..cx.time)
     }
