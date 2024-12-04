@@ -18,7 +18,7 @@ use crate::{
 
 use super::{
     types::{ExtendedTimespanValue, Timespan, TimespanValue},
-    ChartProperties, ChartError,
+    ChartError, ChartProperties,
 };
 
 /// Data query trait with unified data format (for external use)

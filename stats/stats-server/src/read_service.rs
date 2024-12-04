@@ -20,7 +20,7 @@ use stats::{
     range::UniversalRange,
     types::Timespan,
     utils::{day_start, MarkedDbConnection},
-    RequestedPointsLimit, ResolutionKind, ChartError,
+    ChartError, RequestedPointsLimit, ResolutionKind,
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use tonic::{Request, Response, Status};

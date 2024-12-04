@@ -43,9 +43,7 @@ where
 {
     type Output = TimespanValue<Resolution, Value>;
 
-    fn function(
-        inner_data: TimespanValue<Resolution, String>,
-    ) -> Result<Self::Output, ChartError> {
+    fn function(inner_data: TimespanValue<Resolution, String>) -> Result<Self::Output, ChartError> {
         let val_parsed = inner_data.value.parse::<Value>().map_err(|e| {
             ChartError::Internal(format!("failed to parse values of dependency: {e}"))
         })?;

@@ -19,7 +19,7 @@ use crate::{
     },
     range::UniversalRange,
     types::{ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue},
-    ChartProperties, ChartError,
+    ChartError, ChartProperties,
 };
 
 pub mod parameter_traits;

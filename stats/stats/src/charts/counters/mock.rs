@@ -11,7 +11,7 @@ use crate::{
     },
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartProperties, Named, ChartError,
+    ChartError, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};

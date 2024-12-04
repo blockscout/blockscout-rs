@@ -9,7 +9,7 @@ use crate::{
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
-    RequestedPointsLimit, ChartError,
+    ChartError, RequestedPointsLimit,
 };
 
 /// In most cases, [`super::DefaultCreate`] is enough.

@@ -10,7 +10,7 @@ use crate::{
     range::UniversalRange,
     types::TimespanValue,
     utils::day_start,
-    ChartProperties, MissingDatePolicy, Named, ChartError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 use chrono::{DateTime, Days, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;

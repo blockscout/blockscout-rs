@@ -12,7 +12,7 @@ use crate::{
     range::UniversalRange,
     types::timespans::DateValue,
     utils::MarkedDbConnection,
-    ChartProperties, MissingDatePolicy, Named, ChartError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::blocks;

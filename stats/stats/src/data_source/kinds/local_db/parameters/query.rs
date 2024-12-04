@@ -9,7 +9,7 @@ use crate::{
     range::UniversalRange,
     types::{timespans::DateValue, ExtendedTimespanValue, Timespan},
     utils::MarkedDbConnection,
-    ChartProperties, RequestedPointsLimit, ChartError,
+    ChartError, ChartProperties, RequestedPointsLimit,
 };
 
 /// Usually the choice for line charts
@@ -142,7 +142,7 @@ mod tests {
         data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
         tests::init_db::init_marked_db_all,
         types::timespans::DateValue,
-        MissingDatePolicy, Named, ChartError,
+        ChartError, MissingDatePolicy, Named,
     };
 
     #[tokio::test]
