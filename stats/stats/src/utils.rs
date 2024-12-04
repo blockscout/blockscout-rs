@@ -1,7 +1,5 @@
 //! Common utilities used across statistics
 
-#[cfg(test)]
-use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use sea_orm::Value;
 use std::{ops::Range, sync::Arc};
@@ -21,8 +19,10 @@ pub struct MarkedDbConnection {
 }
 
 impl MarkedDbConnection {
-    #[cfg(test)]
-    pub fn from_test_db(guard: &TestDbGuard) -> Option<Self> {
+    #![cfg(any(feature = "test-utils", test))]
+    pub fn from_test_db(
+        guard: &blockscout_service_launcher::test_database::TestDbGuard,
+    ) -> Option<Self> {
         Some(Self {
             connection: guard.client(),
             db_name: guard.db_url().split("/").last()?.to_owned(),
