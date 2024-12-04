@@ -86,6 +86,12 @@ static CACHED_BLOCKS_ESTIMATION: OnceLock<Mutex<cached::TimedCache<String, i64>>
 
 impl ValueEstimation for CachedBlocksEstimation {
     async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, ChartError> {
+        /// Basically `cached::proc_macro::cached` implementation but
+        /// - manual
+        /// - using OnceLock value instead of hardcoded one
+        /// - expanding `result=true` to Result<Option<_>>
+        ///
+        /// Note, that `sync_writes = true` version was taken as a basis
         async fn cached_blocks_estimation(
             blockscout: &DatabaseConnection,
             db_id: &str,
