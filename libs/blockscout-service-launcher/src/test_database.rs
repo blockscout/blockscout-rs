@@ -106,7 +106,7 @@ impl TestDbGuard {
         tracing::info!(name = db_name, "creating database");
         db.execute(Statement::from_string(
             db.get_database_backend(),
-            format!("CREATE DATABASE {db_name}"),
+            format!("CREATE DATABASE \"{db_name}\""),
         ))
         .await?;
         Ok(())
@@ -116,7 +116,7 @@ impl TestDbGuard {
         tracing::info!(name = db_name, "dropping database");
         db.execute(Statement::from_string(
             db.get_database_backend(),
-            format!("DROP DATABASE IF EXISTS {db_name} WITH (FORCE)"),
+            format!("DROP DATABASE IF EXISTS \"{db_name}\" WITH (FORCE)"),
         ))
         .await?;
         Ok(())
