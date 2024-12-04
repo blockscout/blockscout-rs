@@ -40,6 +40,19 @@ pub trait QuerySerialized {
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
     ) -> Pin<Box<dyn Future<Output = Result<Self::Output, ChartError>> + Send + 'a>>;
+
+    /// Retrieve chart data from local storage.
+    fn query_data_static<'a>(
+        cx: &UpdateContext<'a>,
+        range: UniversalRange<DateTime<Utc>>,
+        points_limit: Option<RequestedPointsLimit>,
+        fill_missing_dates: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Output, ChartError>> + Send + 'a>>
+    where
+        Self: Sized,
+    {
+        Self::new_for_dynamic_dispatch().query_data(cx, range, points_limit, fill_missing_dates)
+    }
 }
 
 /// [`QuerySerialized`] but for dynamic dispatch
