@@ -10,7 +10,7 @@ use crate::{
         timespans::{DateValue, Month, Week, Year},
         ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
     },
-    ChartProperties, MissingDatePolicy, ChartError,
+    ChartError, ChartProperties, MissingDatePolicy,
 };
 
 use blockscout_db::entity::blocks;

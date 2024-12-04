@@ -12,7 +12,7 @@ use crate::{
     missing_date::fit_into_range,
     range::{Incrementable, UniversalRange},
     types::{timespans::DateValue, Timespan, TimespanValue},
-    ChartProperties, MissingDatePolicy, Named, ChartError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};

@@ -38,7 +38,7 @@ use crate::{
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartProperties, MissingDatePolicy, Named, ChartError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 pub struct NewContractsQuery;

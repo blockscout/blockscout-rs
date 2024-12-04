@@ -12,7 +12,7 @@ use crate::{
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
-    ChartProperties, MissingDatePolicy, ChartError,
+    ChartError, ChartProperties, MissingDatePolicy,
 };
 
 /// Pass only essential points from `D`, removing ones that can be deduced

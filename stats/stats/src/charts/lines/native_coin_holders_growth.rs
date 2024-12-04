@@ -21,7 +21,7 @@ use crate::{
     },
     define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
-    ChartProperties, MissingDatePolicy, Named, ChartError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::address_coin_balances_daily;

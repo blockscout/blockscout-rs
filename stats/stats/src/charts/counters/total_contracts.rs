@@ -8,7 +8,7 @@ use crate::{
     },
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartProperties, MissingDatePolicy, Named, ChartError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::addresses;

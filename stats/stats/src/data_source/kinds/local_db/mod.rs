@@ -329,7 +329,7 @@ mod tests {
             tests::{init_db::init_marked_db_all, mock_blockscout::fill_mock_blockscout_data},
             types::{timespans::DateValue, TimespanValue},
             update_group::{SyncUpdateGroup, UpdateGroup},
-            ChartProperties, Named, ChartError,
+            ChartError, ChartProperties, Named,
         };
 
         type WasTriggeredStorage = Arc<Mutex<bool>>;
