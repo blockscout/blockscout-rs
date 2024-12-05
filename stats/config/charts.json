@@ -38,6 +38,10 @@
             "title": "Total txns",
             "description": "All transactions including pending, dropped, replaced, failed transactions"
         },
+        "yesterday_txns": {
+            "title": "Yesterday transactions",
+            "description": "Number of transactions yesterday (0:00 - 23:59 UTC)"
+        },
         "last_new_contracts": {
             "title": "Number of deployed contracts today",
             "description": "Number of deployed contracts today"

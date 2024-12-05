@@ -221,6 +221,7 @@ impl RuntimeSetup {
             Arc::new(TotalAddressesGroup),
             Arc::new(TotalBlocksGroup),
             Arc::new(TotalTokensGroup),
+            Arc::new(YesterdayTxnsGroup),
             Arc::new(ActiveRecurringAccountsDailyRecurrence60DaysGroup),
             Arc::new(ActiveRecurringAccountsMonthlyRecurrence60DaysGroup),
             Arc::new(ActiveRecurringAccountsWeeklyRecurrence60DaysGroup),

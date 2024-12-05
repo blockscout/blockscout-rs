@@ -6,6 +6,7 @@
         "total_addresses_group": "0 0 */3 * * * *",
         "total_blocks_group": "0 0 */3 * * * *",
         "total_tokens_group": "0 0 18 * * * *",
+        "yesterday_txns_group": "0 8 0 * * * *",
         "active_recurring_accounts_daily_recurrence_60_days_group": "0 0 2 * * * *",
         "active_recurring_accounts_daily_recurrence_90_days_group": "0 20 2 * * * *",
         "active_recurring_accounts_daily_recurrence_120_days_group": "0 40 2 * * * *",
