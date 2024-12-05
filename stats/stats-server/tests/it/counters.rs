@@ -12,7 +12,7 @@ use stats::tests::{
 use stats_proto::blockscout::stats::v1::Counters;
 use stats_server::{stats, Settings};
 
-use std::{collections::HashSet, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
 #[tokio::test]
 #[ignore = "needs database"]
@@ -42,20 +42,21 @@ async fn test_counters_ok() {
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
-    let counter_names: HashSet<_> = counters.counters.iter().map(|c| c.id.as_str()).collect();
-    let expected_counter_names: HashSet<_> = [
-        "totalBlocks",
-        "totalAddresses",
+    // Also check the order set in layout
+    let counter_names: Vec<_> = counters.counters.iter().map(|c| c.id.as_str()).collect();
+    let expected_counter_names: Vec<_> = [
         "averageBlockTime",
         "completedTxns",
-        "totalTxns",
-        "totalAccounts",
-        "totalTokens",
-        // "totalNativeCoinHolders",
-        "totalNativeCoinTransfers",
         "lastNewContracts",
         "lastNewVerifiedContracts",
+        "totalAccounts",
+        "totalAddresses",
+        "totalBlocks",
         "totalContracts",
+        // "totalNativeCoinHolders",
+        "totalNativeCoinTransfers",
+        "totalTokens",
+        "totalTxns",
         "totalVerifiedContracts",
     ]
     .into_iter()
