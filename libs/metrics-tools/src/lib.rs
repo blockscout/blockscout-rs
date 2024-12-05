@@ -50,7 +50,7 @@ pub struct Interval<'a> {
     discarded: bool,
 }
 
-impl<'a> Interval<'a> {
+impl Interval<'_> {
     /// Get current time of the interval without recording.
     pub fn elapsed_from_start(&self) -> Duration {
         self.start_time.elapsed()
@@ -62,7 +62,7 @@ impl<'a> Interval<'a> {
     }
 }
 
-impl<'a> Drop for Interval<'a> {
+impl Drop for Interval<'_> {
     fn drop(&mut self) {
         if !self.discarded {
             self.recorder.add_time(self.elapsed_from_start())

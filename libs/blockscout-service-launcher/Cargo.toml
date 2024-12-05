@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-service-launcher"
-version = "0.14.0"
+version = "0.15.0"
 description = "Allows to launch blazingly fast blockscout rust services"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
@@ -89,6 +89,7 @@ tracing = [
 database = [
     "dep:anyhow",
     "dep:cfg-if",
+    "dep:serde",
     "dep:tracing",
     "dep:url",
 ]
