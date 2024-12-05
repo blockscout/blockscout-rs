@@ -1,0 +1,46 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/api/v2/verifier/solidity/sources:verify-standard-json",
+    "headers": {
+      "content-type": {
+        "equalTo": "application/json"
+      }
+    },
+    "bodyPatterns": [
+      {
+        "equalToJson": {
+          "bytecode": "0x608060405234801561001057600080fd5b50610249806100206000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c80636057361d146100465780638381f58a14610062578063e2e2a85a14610080575b600080fd5b610060600480360381019061005b919061017d565b6100b0565b005b61006a610124565b60405161007791906101b9565b60405180910390f35b61009a6004803603810190610095919061017d565b61012a565b6040516100a791906101b9565b60405180910390f35b80600081905550737d53f102f4d4aa014db4e10d6deec2009b3cda6b632be59dd56001836040518363ffffffff1660e01b81526004016100f19291906101ea565b60006040518083038186803b15801561010957600080fd5b505af415801561011d573d6000803e3d6000fd5b5050505050565b60005481565b60016020528060005260406000206000915090505481565b600080fd5b6000819050919050565b61015a81610147565b811461016557600080fd5b50565b60008135905061017781610151565b92915050565b60006020828403121561019357610192610142565b5b60006101a184828501610168565b91505092915050565b6101b381610147565b82525050565b60006020820190506101ce60008301846101aa565b92915050565b8082525050565b6101e481610147565b82525050565b60006040820190506101ff60008301856101d4565b61020c60208301846101db565b939250505056fea26469706673582212205d40d1517b560d915e1b7c005887b93fcce9ec65c0a38a80ee147739551bdd7264736f6c63430008120033",
+          "bytecodeType": "CREATION_INPUT",
+          "compilerVersion": "v0.8.18+commit.87f61d96",
+          "input": "{\"language\":\"Solidity\",\"sources\":{\"contracts/1_Storage.sol\":{\"content\":\"// SPDX-License-Identifier: GPL-3.0\\n\\npragma solidity >=0.7.0 <0.9.0;\\n\\nlibrary Journal {\\n    function record(mapping(uint256 => uint256) storage journal, uint256 num) public {\\n        journal[block.number] = num;\\n    }\\n}\\n\\n/**\\n * @title Storage\\n * @dev Store & retrieve value in a variable\\n */\\ncontract Storage {\\n    uint256 public number;\\n\\n    mapping(uint256 => uint256) public journal;\\n\\n    /**\\n     * @dev Store value in variable\\n     * @param num value to store\\n     */\\n    function store(uint256 num) public {\\n        number = num;\\n        Journal.record(journal, num);\\n    }\\n}\"}},\"settings\":{\"optimizer\":{\"enabled\":false,\"runs\":200},\"libraries\":{},\"outputSelection\":{\"*\":{\"*\":[\"*\"]}}}}",
+          "postActions": []
+        },
+        "ignoreExtraElements": true
+      }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": {
+      "message": "No contract could be verified with provided data",
+      "status": "FAILURE",
+      "source": null,
+      "extraData": null,
+      "postActionResponses": null
+    },
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "8da9c0cdbb21f164-CDG",
+      "connection": "keep-alive",
+      "content-length": "139",
+      "content-type": "application/json",
+      "date": "Wed, 30 Oct 2024 07:39:43 GMT",
+      "nel": "{\"success_fraction\":0, \"report_to\":\"cf-nel\", \"max_age\":604800}",
+      "report-to": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report\\/v4?s=KfcdiVzJxNCzbvxVTO%2F55Kr1kCxLANTf5sbeZTyBcRIH2YgKSRCW9WpU7iX5OGgEwHjkWUBzuGi%2FSvaBu%2B9lWeYw3nZ2cdCOxlTH%2BhPGXU6mXIicWKeI06Q0TZreAqHxNMT1ac1MclW46h1G67%2B5oNrDAW644iqT9BwMibupZCexUyRbvAbTC9%2FK\"}], \"group\":\"cf-nel\", \"max_age\":604800}",
+      "server": "cloudflare",
+      "strict-transport-security": "max-age=31536000; includeSubDomains"
+    }
+  }
+}
