@@ -90,6 +90,7 @@ pub struct UpdateGroupEntry {
 
 pub struct RuntimeSetup {
     pub lines_layout: Vec<LineChartCategory>,
+    pub counters_layout: Vec<String>,
     pub update_groups: BTreeMap<String, UpdateGroupEntry>,
     pub charts_info: BTreeMap<String, EnabledChartEntry>,
 }
@@ -128,6 +129,7 @@ impl RuntimeSetup {
         let update_groups = Self::init_update_groups(update_groups, &charts_info)?;
         Ok(Self {
             lines_layout: layout.line_chart_categories,
+            counters_layout: layout.counters_order,
             update_groups,
             charts_info,
         })
