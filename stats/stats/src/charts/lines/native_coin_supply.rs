@@ -1,10 +1,12 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::MapToString, resolutions::last_value::LastValueLowerResolution,
+                map::{MapToString, StripExt},
+                resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
                 parameters::update::batching::parameters::{
@@ -21,16 +23,16 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 const ETH: i64 = 1_000_000_000_000_000_000;
 
 pub struct NativeCoinSupplyStatement;
 
 impl StatementFromRange for NativeCoinSupplyStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
         let day_range: Option<Range<NaiveDate>> = range.map(|r| {
             let Range { start, end } = r;
             // chart is off anyway, so shouldn't be a big deal
@@ -88,8 +90,9 @@ impl StatementFromRange for NativeCoinSupplyStatement {
 }
 
 // query returns float value
-pub type NativeCoinSupplyRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, f64>>;
+pub type NativeCoinSupplyRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
 pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;
 
@@ -120,18 +123,20 @@ define_and_impl_resolution_properties!(
 
 pub type NativeCoinSupply =
     DirectVecLocalDbChartSource<NativeCoinSupplyRemoteString, Batch30Days, Properties>;
+type NativeCoinSupplyS = StripExt<NativeCoinSupply>;
 pub type NativeCoinSupplyWeekly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<NativeCoinSupply, Week>,
+    LastValueLowerResolution<NativeCoinSupplyS, Week>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type NativeCoinSupplyMonthly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<NativeCoinSupply, Month>,
+    LastValueLowerResolution<NativeCoinSupplyS, Month>,
     Batch36Months,
     MonthlyProperties,
 >;
+type NativeCoinSupplyMonthlyS = StripExt<NativeCoinSupplyMonthly>;
 pub type NativeCoinSupplyYearly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<NativeCoinSupplyMonthly, Year>,
+    LastValueLowerResolution<NativeCoinSupplyMonthlyS, Year>,
     Batch30Years,
     YearlyProperties,
 >;

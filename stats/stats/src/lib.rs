@@ -1,11 +1,14 @@
+#![recursion_limit = "256"]
+
 mod charts;
 pub mod data_processing;
 pub mod data_source;
 pub mod metrics;
 mod missing_date;
+pub mod range;
 pub mod update_group;
 pub mod update_groups;
-pub(crate) mod utils;
+pub mod utils;
 
 #[cfg(any(feature = "test-utils", test))]
 pub mod tests;
@@ -16,10 +19,8 @@ pub use migration;
 pub use charts::{
     counters,
     db_interaction::read::{
-        get_line_chart_data, get_raw_counters, ApproxUnsignedDiff, ReadError, RequestedPointsLimit,
+        ApproxUnsignedDiff, QueryAllBlockTimestampRange, ReadError, RequestedPointsLimit,
     },
-    lines, types, ChartKey, ChartProperties, ChartPropertiesObject, MissingDatePolicy, Named,
-    ResolutionKind, UpdateError,
+    lines, query_dispatch, types, ChartError, ChartKey, ChartObject, ChartProperties,
+    ChartPropertiesObject, MissingDatePolicy, Named, ResolutionKind,
 };
-
-pub use utils::exclusive_datetime_range_to_inclusive;

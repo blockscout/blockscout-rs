@@ -8,7 +8,7 @@ use crate::{
         timespans::{Month, Week, Year},
         Timespan, TimespanDuration, TimespanValue,
     },
-    UpdateError,
+    ChartError,
 };
 
 use super::parameter_traits::BatchStepBehaviour;
@@ -42,7 +42,7 @@ where
         _last_accurate_point: TimespanValue<Resolution, String>,
         main_data: Vec<TimespanValue<Resolution, String>>,
         _resolution_data: (),
-    ) -> Result<usize, UpdateError> {
+    ) -> Result<usize, ChartError> {
         let found = main_data.len();
         // note: right away cloning another chart will not result in exact copy,
         // because if the other chart is `FillPrevious`, then omitted starting point
@@ -56,7 +56,7 @@ where
             .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
         insert_data_many(db, values)
             .await
-            .map_err(UpdateError::StatsDB)?;
+            .map_err(ChartError::StatsDB)?;
         Ok(found)
     }
 }

@@ -6,9 +6,13 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
-            data_manipulation::{map::MapParseTo, resolutions::sum::SumLowerResolution},
+            data_manipulation::{
+                map::{MapParseTo, StripExt},
+                resolutions::sum::SumLowerResolution,
+            },
             local_db::{
                 parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
             },
@@ -22,14 +26,14 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 pub struct NewBlockRewardsStatement;
 
 impl StatementFromRange for NewBlockRewardsStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -50,8 +54,9 @@ impl StatementFromRange for NewBlockRewardsStatement {
     }
 }
 
-pub type NewBlockRewardsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewBlockRewardsStatement, NaiveDate, String>>;
+pub type NewBlockRewardsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NewBlockRewardsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct Properties;
 
@@ -80,7 +85,7 @@ define_and_impl_resolution_properties!(
 
 pub type NewBlockRewards =
     DirectVecLocalDbChartSource<NewBlockRewardsRemote, Batch30Days, Properties>;
-pub type NewBlockRewardsInt = MapParseTo<NewBlockRewards, i64>;
+pub type NewBlockRewardsInt = MapParseTo<StripExt<NewBlockRewards>, i64>;
 pub type NewBlockRewardsMonthlyInt = SumLowerResolution<NewBlockRewardsInt, Month>;
 
 #[cfg(test)]
@@ -93,8 +98,9 @@ mod tests {
     use super::*;
     use crate::{
         data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
+        range::UniversalRange,
         tests::{
-            init_db::init_db_all,
+            init_db::init_marked_db_all,
             mock_blockscout::fill_mock_blockscout_data,
             simple_test::{map_str_tuple_to_owned, simple_test_chart},
         },
@@ -131,13 +137,13 @@ mod tests {
             ("2023-02-01", "1"),
             ("2023-03-01", "1"),
         ]);
-        let (db, blockscout) = init_db_all("update_new_block_rewards_monthly_int").await;
+        let (db, blockscout) = init_marked_db_all("update_new_block_rewards_monthly_int").await;
         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        NewBlockRewardsMonthlyInt::init_recursively(&db, &current_time)
+        NewBlockRewardsMonthlyInt::init_recursively(&db.connection, &current_time)
             .await
             .unwrap();
-        fill_mock_blockscout_data(&blockscout, current_date).await;
+        fill_mock_blockscout_data(&blockscout.connection, current_date).await;
 
         let parameters = UpdateParameters {
             db: &db,
@@ -151,12 +157,13 @@ mod tests {
             .await
             .unwrap();
         let mut timer = AggregateTimer::new();
-        let data: Vec<_> = NewBlockRewardsMonthlyInt::query_data(&cx, None, &mut timer)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|p| (p.timespan.into_date().to_string(), p.value.to_string()))
-            .collect();
+        let data: Vec<_> =
+            NewBlockRewardsMonthlyInt::query_data(&cx, UniversalRange::full(), &mut timer)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|p| (p.timespan.into_date().to_string(), p.value.to_string()))
+                .collect();
         assert_eq!(data, expected);
     }
 }

@@ -16,7 +16,8 @@ mod tests {
     const EXAMPLE_CONFIG: &str = r#"{
         "counters_order": [
             "total_blocks",
-            "total_txns"
+            "total_txns",
+            "best_block_number"
         ],
         "line_chart_categories": [
             {
@@ -36,7 +37,9 @@ mod tests {
         assert_eq!(
             c,
             Config {
-                counters_order: ["total_blocks", "total_txns"].map(|s| s.to_owned()).into(),
+                counters_order: ["total_blocks", "total_txns", "best_block_number"]
+                    .map(|s| s.to_owned())
+                    .into(),
                 line_chart_categories: vec![LineChartCategory {
                     id: "accounts".into(),
                     title: "Accounts".into(),

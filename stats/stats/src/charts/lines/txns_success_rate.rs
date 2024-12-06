@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -23,9 +24,9 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
@@ -33,7 +34,7 @@ pub struct TxnsSuccessRateStatement;
 
 impl StatementFromRange for TxnsSuccessRateStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {
@@ -81,8 +82,9 @@ impl StatementFromRange for TxnsSuccessRateStatement {
     }
 }
 
-pub type TxnsSuccessRateRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<TxnsSuccessRateStatement, NaiveDate, f64>>;
+pub type TxnsSuccessRateRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<TxnsSuccessRateStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
 pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;
 
@@ -113,19 +115,21 @@ define_and_impl_resolution_properties!(
 
 pub type TxnsSuccessRate =
     DirectVecLocalDbChartSource<TxnsSuccessRateRemoteString, Batch30Days, Properties>;
+type TxnsSuccessRateS = StripExt<TxnsSuccessRate>;
 pub type TxnsSuccessRateWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewTxnsInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRateS, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type TxnsSuccessRateMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRate, f64>, NewTxnsInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<TxnsSuccessRateS, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+type TxnsSuccessRateMonthlyS = StripExt<TxnsSuccessRateMonthly>;
 pub type TxnsSuccessRateYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<TxnsSuccessRateMonthly, f64>, NewTxnsMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<TxnsSuccessRateMonthlyS, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,

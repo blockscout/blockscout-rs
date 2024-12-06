@@ -2,12 +2,15 @@ use std::{collections::HashSet, ops::Range, str::FromStr, sync::Arc};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DatabaseConnection, DbBackend, Statement};
 use tokio::sync::Mutex;
 
 use super::{
     kinds::{
-        data_manipulation::{map::MapParseTo, resolutions::last_value::LastValueLowerResolution},
+        data_manipulation::{
+            map::{MapParseTo, StripExt},
+            resolutions::last_value::LastValueLowerResolution,
+        },
         local_db::{
             parameters::{
                 update::batching::{
@@ -24,24 +27,25 @@ use super::{
     types::UpdateParameters,
 };
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     construct_update_group,
     data_source::{
         kinds::local_db::parameters::update::batching::parameters::PassVecStep,
         types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
-    tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+    tests::{init_db::init_marked_db_all, mock_blockscout::fill_mock_blockscout_data},
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 pub struct NewContractsQuery;
 
 impl StatementFromRange for NewContractsQuery {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         // choose the statement based on migration progress
@@ -124,8 +128,9 @@ impl StatementFromRange for NewContractsQuery {
     }
 }
 
-pub type NewContractsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewContractsQuery, NaiveDate, String>>;
+pub type NewContractsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NewContractsQuery, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct NewContractsChartProperties;
 
@@ -147,7 +152,7 @@ impl ChartProperties for NewContractsChartProperties {
 pub type NewContracts =
     DirectVecLocalDbChartSource<NewContractsRemote, Batch30Days, NewContractsChartProperties>;
 
-pub type NewContractsInt = MapParseTo<NewContracts, i64>;
+pub type NewContractsInt = MapParseTo<StripExt<NewContracts>, i64>;
 
 pub struct ContractsGrowthProperties;
 
@@ -180,18 +185,19 @@ define_and_impl_resolution_properties!(
 
 pub type ContractsGrowth =
     DailyCumulativeLocalDbChartSource<NewContractsInt, ContractsGrowthProperties>;
+type ContractsGrowthS = StripExt<ContractsGrowth>;
 pub type ContractsGrowthWeekly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<ContractsGrowth, Week>,
+    LastValueLowerResolution<ContractsGrowthS, Week>,
     Batch30Weeks,
     ContractsGrowthWeeklyProperties,
 >;
 pub type ContractsGrowthMonthly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<ContractsGrowth, Month>,
+    LastValueLowerResolution<ContractsGrowthS, Month>,
     Batch36Months,
     ContractsGrowthMonthlyProperties,
 >;
 pub type ContractsGrowthYearly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<ContractsGrowth, Year>,
+    LastValueLowerResolution<ContractsGrowthS, Year>,
     Batch30Years,
     ContractsGrowthYearlyProperties,
 >;
@@ -211,7 +217,7 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
         _last_accurate_point: DateValue<String>,
         _main_data: Vec<DateValue<String>>,
         _resolution_data: (),
-    ) -> Result<usize, UpdateError> {
+    ) -> Result<usize, ChartError> {
         // do something (just an example, not intended for running)
         todo!();
         // save data
@@ -261,10 +267,10 @@ construct_update_group!(ExampleUpdateGroup {
 #[ignore = "needs database to run"]
 async fn update_examples() {
     let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_db_all("update_examples").await;
+    let (db, blockscout) = init_marked_db_all("update_examples").await;
     let current_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    fill_mock_blockscout_data(&blockscout, current_date).await;
+    fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
     let enabled = HashSet::from(
         [
             NewContractsChartProperties::key(),
@@ -284,7 +290,7 @@ async fn update_examples() {
         .collect();
     let group = SyncUpdateGroup::new(&mutexes, Arc::new(ExampleUpdateGroup)).unwrap();
     group
-        .create_charts_with_mutexes(&db, None, &enabled)
+        .create_charts_with_mutexes(db.connection.as_ref(), None, &enabled)
         .await
         .unwrap();
 

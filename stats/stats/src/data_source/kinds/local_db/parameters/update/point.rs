@@ -5,8 +5,9 @@ use blockscout_metrics_tools::AggregateTimer;
 use crate::{
     charts::db_interaction::write::insert_data_many,
     data_source::{kinds::local_db::UpdateBehaviour, DataSource, UpdateContext},
+    range::UniversalRange,
     types::{Timespan, TimespanValue},
-    UpdateError,
+    ChartError,
 };
 
 /// Store output of the `MainDep` right in the local db
@@ -23,13 +24,13 @@ where
         _last_accurate_point: Option<TimespanValue<Resolution, String>>,
         min_blockscout_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<(), UpdateError> {
+    ) -> Result<(), ChartError> {
         // range doesn't make sense there; thus is not used
-        let data = MainDep::query_data(cx, None, remote_fetch_timer).await?;
+        let data = MainDep::query_data(cx, UniversalRange::full(), remote_fetch_timer).await?;
         let value = data.active_model(chart_id, Some(min_blockscout_block));
-        insert_data_many(cx.db, vec![value])
+        insert_data_many(cx.db.connection.as_ref(), vec![value])
             .await
-            .map_err(UpdateError::StatsDB)?;
+            .map_err(ChartError::StatsDB)?;
         Ok(())
     }
 }

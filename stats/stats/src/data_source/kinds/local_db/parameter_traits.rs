@@ -1,14 +1,15 @@
-use std::{future::Future, marker::Send, ops::Range};
+use std::{future::Future, marker::Send};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     charts::db_interaction::write::set_last_updated_at,
     data_source::{DataSource, UpdateContext},
+    range::UniversalRange,
     types::TimespanValue,
-    UpdateError,
+    ChartError, RequestedPointsLimit,
 };
 
 /// In most cases, [`super::DefaultCreate`] is enough.
@@ -37,18 +38,18 @@ where
         last_accurate_point: Option<TimespanValue<Resolution, String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> impl Future<Output = Result<(), UpdateError>> + Send;
+    ) -> impl Future<Output = Result<(), ChartError>> + Send;
 
     /// Update only chart metadata.
     fn update_metadata(
         db: &DatabaseConnection,
         chart_id: i32,
         update_time: DateTime<Utc>,
-    ) -> impl Future<Output = Result<(), UpdateError>> + Send {
+    ) -> impl Future<Output = Result<(), ChartError>> + Send {
         async move {
             set_last_updated_at(chart_id, db, update_time)
                 .await
-                .map_err(UpdateError::StatsDB)
+                .map_err(ChartError::StatsDB)
         }
     }
 }
@@ -61,6 +62,8 @@ pub trait QueryBehaviour {
     /// Retrieve chart data from local storage.
     fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
-    ) -> impl Future<Output = Result<Self::Output, UpdateError>> + Send;
+        range: UniversalRange<DateTime<Utc>>,
+        points_limit: Option<RequestedPointsLimit>,
+        fill_missing_dates: bool,
+    ) -> impl Future<Output = Result<Self::Output, ChartError>> + Send;
 }

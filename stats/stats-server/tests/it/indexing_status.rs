@@ -85,6 +85,8 @@ async fn test_not_indexed_ok() {
         }
     }
 
-    let counters: Counters = send_get_request(&base, "/api/v1/counters").await;
-    assert!(counters.counters.is_empty())
+    let mut counters: Counters = send_get_request(&base, "/api/v1/counters").await;
+    // totalBlocks has fallback with estimate, so it should always return
+    assert_eq!(counters.counters.pop().unwrap().id, "totalBlocks");
+    assert_eq!(counters.counters, vec![])
 }

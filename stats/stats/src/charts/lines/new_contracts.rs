@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
@@ -23,15 +24,15 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::DateTimeUtc, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 pub struct NewContractsStatement;
 
 impl StatementFromRange for NewContractsStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {
@@ -116,8 +117,9 @@ impl StatementFromRange for NewContractsStatement {
     }
 }
 
-pub type NewContractsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewContractsStatement, NaiveDate, String>>;
+pub type NewContractsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NewContractsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct Properties;
 
@@ -145,7 +147,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type NewContracts = DirectVecLocalDbChartSource<NewContractsRemote, Batch30Days, Properties>;
-pub type NewContractsInt = MapParseTo<NewContracts, i64>;
+pub type NewContractsInt = MapParseTo<StripExt<NewContracts>, i64>;
 pub type NewContractsWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewContractsInt, Week>>,
     Batch30Weeks,
@@ -156,7 +158,7 @@ pub type NewContractsMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewContractsMonthlyInt = MapParseTo<NewContractsMonthly, i64>;
+pub type NewContractsMonthlyInt = MapParseTo<StripExt<NewContractsMonthly>, i64>;
 pub type NewContractsYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewContractsMonthlyInt, Year>>,
     Batch30Years,

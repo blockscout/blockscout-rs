@@ -1,6 +1,6 @@
 use crate::{
     data_source::kinds::{
-        data_manipulation::resolutions::last_value::LastValueLowerResolution,
+        data_manipulation::{map::StripExt, resolutions::last_value::LastValueLowerResolution},
         local_db::{
             parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
@@ -44,18 +44,20 @@ define_and_impl_resolution_properties!(
 );
 
 pub type ContractsGrowth = DailyCumulativeLocalDbChartSource<NewContractsInt, Properties>;
+type ContractsGrowthS = StripExt<ContractsGrowth>;
 pub type ContractsGrowthWeekly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<ContractsGrowth, Week>,
+    LastValueLowerResolution<ContractsGrowthS, Week>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type ContractsGrowthMonthly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<ContractsGrowth, Month>,
+    LastValueLowerResolution<ContractsGrowthS, Month>,
     Batch36Months,
     MonthlyProperties,
 >;
+type ContractsGrowthMonthlyS = StripExt<ContractsGrowthMonthly>;
 pub type ContractsGrowthYearly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<ContractsGrowthMonthly, Year>,
+    LastValueLowerResolution<ContractsGrowthMonthlyS, Year>,
     Batch30Years,
     YearlyProperties,
 >;
