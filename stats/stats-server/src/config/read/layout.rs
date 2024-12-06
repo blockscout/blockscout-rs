@@ -35,12 +35,12 @@ impl From<json::layout::Config> for Config {
 ///
 /// `push_missing_items_back`:
 /// - if `true`, then items not present in
-/// `layout` are placed at the end of the vector in their original
-/// relative order.
+///     `layout` are placed at the end of the vector in their original
+///     relative order.
 /// - if `false` - at the beginning with the same logic.
 pub fn sorted_items_according_to_layout<Item, Key, F>(
     to_sort: Vec<Item>,
-    layout: &Vec<Key>,
+    layout: &[Key],
     get_key: F,
     push_missing_items_back: bool,
 ) -> Vec<Item>

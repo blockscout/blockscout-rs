@@ -1,6 +1,6 @@
 //! Common types for the configs
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
