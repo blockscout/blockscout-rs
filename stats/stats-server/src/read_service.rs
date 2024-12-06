@@ -1,7 +1,7 @@
 use std::{clone::Clone, cmp::Ord, collections::BTreeMap, fmt::Debug, str::FromStr, sync::Arc};
 
 use crate::{
-    config::types,
+    config::{layout::sorted_items_according_to_layout, types},
     runtime_setup::{EnabledChartEntry, RuntimeSetup},
     serializers::serialize_line_points,
     settings::LimitsSettings,
@@ -225,7 +225,15 @@ impl StatsService for ReadService {
                 })
             })
             .collect();
-        let counters = proto_v1::Counters { counters };
+        let counters_sorted = sorted_items_according_to_layout(
+            counters,
+            &self.charts.counters_layout,
+            |c| &c.id,
+            true,
+        );
+        let counters = proto_v1::Counters {
+            counters: counters_sorted,
+        };
         Ok(Response::new(counters))
     }
 
