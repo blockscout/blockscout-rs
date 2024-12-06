@@ -23,6 +23,7 @@ singleton_groups!(
     TotalAddresses,
     TotalBlocks,
     TotalTokens,
+    YesterdayTxns,
     // Each of the `ActiveRecurringAccounts*` charts includes quite heavy SQL query,
     // thus it's better to have granular control on update times.
     ActiveRecurringAccountsDailyRecurrence60Days,
