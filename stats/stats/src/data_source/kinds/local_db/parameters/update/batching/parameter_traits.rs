@@ -8,11 +8,10 @@ use crate::{
     UpdateError,
 };
 
-pub trait BatchStepBehaviour<Resolution, MainInput, ResolutionInput>
+pub trait BatchStepBehaviour<Resolution, MainInput>
 where
     Resolution: Timespan,
     MainInput: Send,
-    ResolutionInput: Send,
 {
     /// Update chart with data from its dependencies.
     ///
@@ -24,6 +23,5 @@ where
         min_blockscout_block: i64,
         last_accurate_point: TimespanValue<Resolution, String>,
         main_data: MainInput,
-        resolution_data: ResolutionInput,
-    ) -> impl Future<Output = Result<usize, UpdateError>> + std::marker::Send;
+    ) -> impl Future<Output = Result<usize, UpdateError>> + Send;
 }

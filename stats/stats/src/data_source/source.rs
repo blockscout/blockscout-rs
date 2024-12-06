@@ -29,8 +29,6 @@ pub trait DataSource {
     /// This data source relies on these sources for 'core' of its data.
     /// Tuple of data sources is also a data source.
     type MainDependencies: DataSource;
-    /// Additional data source that is used for computing other data resolutions.
-    type ResolutionDependencies: DataSource;
     /// Data that this source provides
     type Output: Send;
 
@@ -63,8 +61,6 @@ pub trait DataSource {
             // A → B
             tracing::debug!("recursively initializing main dependencies");
             Self::MainDependencies::init_recursively(db, init_time).await?;
-            tracing::debug!("recursively initializing resolution dependencies");
-            Self::ResolutionDependencies::init_recursively(db, init_time).await?;
             tracing::debug!("initializing itself");
             Self::init_itself(db, init_time).await
         }
@@ -94,7 +90,6 @@ pub trait DataSource {
     /// combined
     fn all_dependencies_mutex_ids() -> HashSet<String> {
         let mut ids = Self::MainDependencies::all_dependencies_mutex_ids();
-        ids.extend(Self::ResolutionDependencies::all_dependencies_mutex_ids());
         if let Some(self_id) = Self::mutex_id() {
             let is_not_duplicate = ids.insert(self_id.clone());
             // Type system shouldn't allow same type to be present in the dependencies,
@@ -127,8 +122,6 @@ pub trait DataSource {
             tracing::debug!("updating {}", type_name::<Self>());
             tracing::debug!("recursively updating primary dependency");
             Self::MainDependencies::update_recursively(cx).await?;
-            tracing::debug!("recursively updating secondary dependencies");
-            Self::ResolutionDependencies::update_recursively(cx).await?;
             tracing::debug!("updating itself");
             Self::update_itself(cx).await
         }
@@ -171,7 +164,6 @@ pub trait DataSource {
 // Base case for recursive type
 impl DataSource for () {
     type MainDependencies = ();
-    type ResolutionDependencies = ();
     type Output = ();
 
     fn mutex_id() -> Option<String> {
@@ -224,7 +216,6 @@ macro_rules! impl_data_source_for_tuple {
             ),+
         {
             type MainDependencies = ();
-            type ResolutionDependencies = ();
             type Output = ($(
                 $element_generic_name::Output
             ),+);

@@ -21,7 +21,7 @@ use super::PassVecStep;
 pub struct AddLastValueStep<ChartProps>(PhantomData<ChartProps>);
 
 impl<Resolution, Value, ChartProps>
-    BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, Value>>, ()>
+    BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, Value>>>
     for AddLastValueStep<ChartProps>
 where
     Resolution: Timespan + Clone + Send + Sync,
@@ -36,7 +36,6 @@ where
         min_blockscout_block: i64,
         last_accurate_point: TimespanValue<Resolution, String>,
         main_data: Vec<TimespanValue<Resolution, Value>>,
-        _resolution_data: (),
     ) -> Result<usize, UpdateError> {
         let partial_sum = last_accurate_point.value.parse::<Value>().map_err(|e| {
             UpdateError::Internal(format!(
@@ -57,7 +56,6 @@ where
         <PassVecStep as BatchStepBehaviour<
             Resolution,
             Vec<TimespanValue<Resolution, String>>,
-            (),
         >>::batch_update_values_step_with(
             db,
             chart_id,
@@ -65,7 +63,6 @@ where
             min_blockscout_block,
             last_accurate_point,
             main_data,
-            (),
         )
         .await
     }

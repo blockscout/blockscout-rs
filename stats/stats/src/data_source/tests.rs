@@ -200,7 +200,7 @@ pub type ContractsGrowthYearly = DirectVecLocalDbChartSource<
 #[allow(unused)]
 struct ContractsGrowthCustomBatchStepBehaviour;
 
-impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
+impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>>
     for ContractsGrowthCustomBatchStepBehaviour
 {
     async fn batch_update_values_step_with(
@@ -210,7 +210,6 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
         _min_blockscout_block: i64,
         _last_accurate_point: DateValue<String>,
         _main_data: Vec<DateValue<String>>,
-        _resolution_data: (),
     ) -> Result<usize, UpdateError> {
         // do something (just an example, not intended for running)
         todo!();
@@ -223,7 +222,6 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
             _min_blockscout_block,
             _last_accurate_point,
             _main_data,
-            _resolution_data,
         )
         .await
     }
@@ -232,11 +230,9 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
 #[allow(unused)]
 type AlternativeContractsGrowth = LocalDbChartSource<
     NewContracts,
-    (),
     DefaultCreate<ContractsGrowthProperties>,
     BatchUpdate<
         NewContracts,
-        (),
         ContractsGrowthCustomBatchStepBehaviour,
         Batch30Days,
         DefaultQueryVec<ContractsGrowthProperties>,

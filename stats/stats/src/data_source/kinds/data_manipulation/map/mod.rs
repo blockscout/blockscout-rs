@@ -35,7 +35,6 @@ where
     F: MapFunction<D::Output>,
 {
     type MainDependencies = D;
-    type ResolutionDependencies = ();
     type Output = F::Output;
     fn mutex_id() -> Option<String> {
         None
