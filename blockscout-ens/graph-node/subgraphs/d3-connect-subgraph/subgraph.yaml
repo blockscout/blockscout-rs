@@ -30,3 +30,5 @@ dataSources:
           handler: handleSLDMintedForOrder
         - event: SLDRenewed(indexed uint256,uint256,string)
           handler: handleSLDRenewed
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
