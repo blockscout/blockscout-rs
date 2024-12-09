@@ -2,6 +2,7 @@ use blockscout_service_launcher::{
     launcher::ConfigSettings,
     test_server::{get_test_server_settings, init_server, send_get_request},
 };
+use itertools::Itertools;
 use pretty_assertions::assert_eq;
 
 use stats::tests::{init_db::init_db_all, mock_blockscout::mock_blockscout_api};
@@ -85,8 +86,11 @@ async fn test_not_indexed_ok() {
         }
     }
 
-    let mut counters: Counters = send_get_request(&base, "/api/v1/counters").await;
-    // totalBlocks has fallback with estimate, so it should always return
-    assert_eq!(counters.counters.pop().unwrap().id, "totalBlocks");
-    assert_eq!(counters.counters, vec![])
+    let counters: Counters = send_get_request(&base, "/api/v1/counters").await;
+    // returns onle counters with fallback query logic,
+    // so they are returned even without calling an update
+    assert_eq!(
+        counters.counters.into_iter().map(|c| c.id).collect_vec(),
+        vec!["totalBlocks", "totalTxns"]
+    )
 }
