@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
@@ -23,15 +24,15 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 pub struct NewTxnsStatement;
 
 impl StatementFromRange for NewTxnsStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {
@@ -73,8 +74,9 @@ impl StatementFromRange for NewTxnsStatement {
     }
 }
 
-pub type NewTxnsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewTxnsStatement, NaiveDate, String>>;
+pub type NewTxnsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NewTxnsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct Properties;
 
@@ -102,7 +104,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type NewTxns = DirectVecLocalDbChartSource<NewTxnsRemote, Batch30Days, Properties>;
-pub type NewTxnsInt = MapParseTo<NewTxns, i64>;
+pub type NewTxnsInt = MapParseTo<StripExt<NewTxns>, i64>;
 pub type NewTxnsWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewTxnsInt, Week>>,
     Batch30Weeks,
@@ -113,7 +115,7 @@ pub type NewTxnsMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewTxnsMonthlyInt = MapParseTo<NewTxnsMonthly, i64>;
+pub type NewTxnsMonthlyInt = MapParseTo<StripExt<NewTxnsMonthly>, i64>;
 pub type NewTxnsYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewTxnsMonthlyInt, Year>>,
     Batch30Years,

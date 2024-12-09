@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -23,16 +24,16 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
 pub struct AverageGasLimitStatement;
 
 impl StatementFromRange for AverageGasLimitStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -52,8 +53,9 @@ impl StatementFromRange for AverageGasLimitStatement {
     }
 }
 
-pub type AverageGasLimitRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageGasLimitStatement, NaiveDate, String>>;
+pub type AverageGasLimitRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<AverageGasLimitStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct Properties;
 
@@ -82,19 +84,21 @@ define_and_impl_resolution_properties!(
 
 pub type AverageGasLimit =
     DirectVecLocalDbChartSource<AverageGasLimitRemote, Batch30Days, Properties>;
+type AverageGasLimitS = StripExt<AverageGasLimit>;
 pub type AverageGasLimitWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimit, f64>, NewBlocksInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimitS, f64>, NewBlocksInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageGasLimitMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimit, f64>, NewBlocksInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasLimitS, f64>, NewBlocksInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+type AverageGasLimitMonthlyS = StripExt<AverageGasLimitMonthly>;
 pub type AverageGasLimitYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageGasLimitMonthly, f64>, NewBlocksMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<AverageGasLimitMonthlyS, f64>, NewBlocksMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,

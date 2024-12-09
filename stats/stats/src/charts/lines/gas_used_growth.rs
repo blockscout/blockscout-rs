@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{Map, MapFunction},
+                map::{Map, MapFunction, StripExt},
                 resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
@@ -20,17 +21,18 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use rust_decimal::Decimal;
+use sea_orm::{DbBackend, Statement};
 
 pub struct GasUsedPartialStatement;
 
 impl StatementFromRange for GasUsedPartialStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -51,14 +53,15 @@ impl StatementFromRange for GasUsedPartialStatement {
     }
 }
 
-pub type GasUsedPartialRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<GasUsedPartialStatement, NaiveDate, Decimal>>;
+pub type GasUsedPartialRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<GasUsedPartialStatement, NaiveDate, Decimal, QueryAllBlockTimestampRange>,
+>;
 
 pub struct IncrementsFromPartialSum;
 
 impl MapFunction<Vec<DateValue<Decimal>>> for IncrementsFromPartialSum {
     type Output = Vec<DateValue<Decimal>>;
-    fn function(inner_data: Vec<DateValue<Decimal>>) -> Result<Self::Output, UpdateError> {
+    fn function(inner_data: Vec<DateValue<Decimal>>) -> Result<Self::Output, ChartError> {
         Ok(inner_data
             .into_iter()
             .scan(Decimal::ZERO, |state, mut next| {
@@ -102,18 +105,20 @@ define_and_impl_resolution_properties!(
 );
 
 pub type GasUsedGrowth = DailyCumulativeLocalDbChartSource<NewGasUsedRemote, Properties>;
+type GasUsedGrowthS = StripExt<GasUsedGrowth>;
 pub type GasUsedGrowthWeekly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<GasUsedGrowth, Week>,
+    LastValueLowerResolution<GasUsedGrowthS, Week>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type GasUsedGrowthMonthly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<GasUsedGrowth, Month>,
+    LastValueLowerResolution<GasUsedGrowthS, Month>,
     Batch36Months,
     MonthlyProperties,
 >;
+type GasUsedGrowthMonthlyS = StripExt<GasUsedGrowthMonthly>;
 pub type GasUsedGrowthYearly = DirectVecLocalDbChartSource<
-    LastValueLowerResolution<GasUsedGrowthMonthly, Year>,
+    LastValueLowerResolution<GasUsedGrowthMonthlyS, Year>,
     Batch30Years,
     YearlyProperties,
 >;

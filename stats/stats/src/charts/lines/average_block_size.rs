@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -23,16 +24,16 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
 pub struct AverageBlockSizeStatement;
 
 impl StatementFromRange for AverageBlockSizeStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -52,8 +53,9 @@ impl StatementFromRange for AverageBlockSizeStatement {
     }
 }
 
-pub type AverageBlockSizeRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageBlockSizeStatement, NaiveDate, String>>;
+pub type AverageBlockSizeRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<AverageBlockSizeStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct Properties;
 
@@ -82,20 +84,26 @@ define_and_impl_resolution_properties!(
 
 pub type AverageBlockSize =
     DirectVecLocalDbChartSource<AverageBlockSizeRemote, Batch30Days, Properties>;
+type AverageBlockSizeS = StripExt<AverageBlockSize>;
 
 pub type AverageBlockSizeWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSize, f64>, NewBlocksInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSizeS, f64>, NewBlocksInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageBlockSizeMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSize, f64>, NewBlocksInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSizeS, f64>, NewBlocksInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+type AverageBlockSizeMonthlyS = StripExt<AverageBlockSizeMonthly>;
 pub type AverageBlockSizeYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageBlockSizeMonthly, f64>, NewBlocksMonthlyInt, Year>,
+        AverageLowerResolution<
+            MapParseTo<AverageBlockSizeMonthlyS, f64>,
+            NewBlocksMonthlyInt,
+            Year,
+        >,
     >,
     Batch30Years,
     YearlyProperties,

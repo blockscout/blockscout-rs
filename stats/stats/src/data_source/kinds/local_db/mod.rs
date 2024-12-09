@@ -9,7 +9,7 @@
 //! Charts are intended to be such persisted sources,
 //! because their data is directly retreived from the database (on requests).
 
-use std::{fmt::Debug, marker::PhantomData, ops::Range, time::Duration};
+use std::{fmt::Debug, marker::PhantomData, time::Duration};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, SubsecRound, Utc};
@@ -22,9 +22,9 @@ use parameters::{
         },
         point::PassPoint,
     },
-    DefaultCreate, DefaultQueryLast, DefaultQueryVec,
+    DefaultCreate, DefaultQueryLast, DefaultQueryVec, QueryLastWithEstimationFallback,
 };
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     charts::{
@@ -33,7 +33,9 @@ use crate::{
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
-    metrics, UpdateError,
+    metrics,
+    range::UniversalRange,
+    ChartError,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -53,7 +55,7 @@ pub mod parameters;
 ///
 /// See [module-level documentation](self) for more details.
 pub struct LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>(
-    PhantomData<(MainDep, ResolutionDep, Create, Update, Query, ChartProps)>,
+    pub PhantomData<(MainDep, ResolutionDep, Create, Update, Query, ChartProps)>,
 )
 where
     MainDep: DataSource,
@@ -114,6 +116,15 @@ pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
     C,
 >;
 
+pub type DirectPointLocalDbChartSourceWithEstimate<Dependency, Estimate, C> = LocalDbChartSource<
+    Dependency,
+    (),
+    DefaultCreate<C>,
+    PassPoint<Dependency>,
+    QueryLastWithEstimationFallback<Estimate, C>,
+    C,
+>;
+
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
     LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
 where
@@ -130,8 +141,8 @@ where
     async fn update_itself_inner(
         cx: &UpdateContext<'_>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<(), UpdateError> {
-        let metadata = get_chart_metadata(cx.db, &ChartProps::key()).await?;
+    ) -> Result<(), ChartError> {
+        let metadata = get_chart_metadata(cx.db.connection.as_ref(), &ChartProps::key()).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
             if postgres_timestamps_eq(cx.time, last_updated_at) {
                 // no need to perform update.
@@ -152,13 +163,13 @@ where
             }
         }
         let chart_id = metadata.id;
-        let min_blockscout_block = get_min_block_blockscout(cx.blockscout)
+        let min_blockscout_block = get_min_block_blockscout(cx.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?;
+            .map_err(ChartError::BlockscoutDB)?;
         let last_accurate_point = last_accurate_point::<ChartProps, Query>(
             chart_id,
             min_blockscout_block,
-            cx.db,
+            cx.db.connection.as_ref(),
             cx.force_full,
             ChartProps::approximate_trailing_points(),
             ChartProps::missing_date_policy(),
@@ -174,7 +185,7 @@ where
         )
         .await?;
         tracing::info!(chart =% ChartProps::key(), "updating chart metadata");
-        Update::update_metadata(cx.db, chart_id, cx.time).await?;
+        Update::update_metadata(cx.db.connection.as_ref(), chart_id, cx.time).await?;
         Ok(())
     }
 
@@ -218,7 +229,7 @@ where
         Create::create(db, init_time).await
     }
 
-    async fn update_itself(cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // set up metrics + write some logs
 
         let mut dependency_data_fetch_timer = AggregateTimer::new();
@@ -247,11 +258,13 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let _timer = dependency_data_fetch_timer.start_interval();
-        Query::query_data(cx, range).await
+        // maybe add `fill_missing_dates` parameter to current function as well in the future
+        // to get rid of "Note" in the `DataSource`'s method documentation
+        Query::query_data(cx, range, None, false).await
     }
 }
 
@@ -313,10 +326,10 @@ mod tests {
                 DataSource, UpdateContext, UpdateParameters,
             },
             gettable_const,
-            tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
+            tests::{init_db::init_marked_db_all, mock_blockscout::fill_mock_blockscout_data},
             types::{timespans::DateValue, TimespanValue},
             update_group::{SyncUpdateGroup, UpdateGroup},
-            ChartProperties, Named, UpdateError,
+            ChartError, ChartProperties, Named,
         };
 
         type WasTriggeredStorage = Arc<Mutex<bool>>;
@@ -355,7 +368,7 @@ mod tests {
                 _last_accurate_point: Option<TimespanValue<Resolution, String>>,
                 min_blockscout_block: i64,
                 _dependency_data_fetch_timer: &mut AggregateTimer,
-            ) -> Result<(), UpdateError> {
+            ) -> Result<(), ChartError> {
                 Self::record_trigger().await;
                 // insert smth for dependency to work well
                 let data = DateValue::<String> {
@@ -363,9 +376,9 @@ mod tests {
                     value: "0".to_owned(),
                 };
                 let value = data.active_model(chart_id, Some(min_blockscout_block));
-                insert_data_many(cx.db, vec![value])
+                insert_data_many(cx.db.connection.as_ref(), vec![value])
                     .await
-                    .map_err(UpdateError::StatsDB)?;
+                    .map_err(ChartError::StatsDB)?;
                 Ok(())
             }
         }
@@ -422,10 +435,11 @@ mod tests {
         #[ignore = "needs database to run"]
         async fn update_itself_is_triggered_once_per_group() {
             let _ = tracing_subscriber::fmt::try_init();
-            let (db, blockscout) = init_db_all("update_itself_is_triggered_once_per_group").await;
+            let (db, blockscout) =
+                init_marked_db_all("update_itself_is_triggered_once_per_group").await;
             let current_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
             let current_date = current_time.date_naive();
-            fill_mock_blockscout_data(&blockscout, current_date).await;
+            fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
             let enabled = HashSet::from(
                 [TestedChartProps::key(), ChartDependedOnTestedProps::key()].map(|l| l.to_owned()),
             );
@@ -436,7 +450,7 @@ mod tests {
                 .collect();
             let group = SyncUpdateGroup::new(&mutexes, Arc::new(TestUpdateGroup)).unwrap();
             group
-                .create_charts_with_mutexes(&db, Some(current_time), &enabled)
+                .create_charts_with_mutexes(db.connection.as_ref(), Some(current_time), &enabled)
                 .await
                 .unwrap();
 

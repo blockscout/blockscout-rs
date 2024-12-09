@@ -5,12 +5,12 @@ use crate::{
         UpdateContext,
     },
     missing_date::{fill_and_filter_chart, fit_into_range},
+    range::{exclusive_range_to_inclusive, UniversalRange},
     types::{
         timespans::{DateValue, Month, Week, Year},
         ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
     },
-    utils::exclusive_datetime_range_to_inclusive,
-    ChartProperties, MissingDatePolicy, UpdateError,
+    ChartError, ChartProperties, MissingDatePolicy,
 };
 
 use blockscout_db::entity::blocks;
@@ -22,7 +22,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
-use std::{collections::HashMap, fmt::Debug, ops::Range};
+use std::{fmt::Debug, ops::Range};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -53,48 +53,6 @@ pub async fn find_chart(db: &DatabaseConnection, chart: &ChartKey) -> Result<Opt
         .one(db)
         .await
         .map(|id| id.map(|id| id.id))
-}
-
-#[derive(Debug, FromQueryResult)]
-struct CounterData {
-    name: String,
-    date: NaiveDate,
-    value: String,
-}
-
-/// Get counters with raw values
-/// (i.e. with date relevance not handled)
-pub async fn get_raw_counters(
-    db: &DatabaseConnection,
-) -> Result<HashMap<String, DateValue<String>>, ReadError> {
-    let data = CounterData::find_by_statement(Statement::from_string(
-        DbBackend::Postgres,
-        r#"
-            SELECT distinct on (charts.id) charts.name, data.date, data.value
-            FROM "chart_data" "data"
-            INNER JOIN "charts"
-                ON data.chart_id = charts.id
-            WHERE charts.chart_type = 'COUNTER'
-            ORDER BY charts.id, data.id DESC;
-        "#,
-    ))
-    .all(db)
-    .await?;
-
-    let counters: HashMap<_, _> = data
-        .into_iter()
-        .map(|data| {
-            (
-                data.name,
-                DateValue::<String> {
-                    timespan: data.date,
-                    value: data.value,
-                },
-            )
-        })
-        .collect();
-
-    Ok(counters)
 }
 
 /// Get counter value for the requested date
@@ -196,7 +154,7 @@ fn relevant_data_until<R: Timespan>(
             R::from_date(t.date_naive()).saturating_start_timestamp() == t;
         // last_updated_at timestamp is not included in the range
         let inclusive_last_updated_at_end =
-            exclusive_datetime_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t);
+            exclusive_range_to_inclusive(DateTime::<Utc>::MIN_UTC..t);
         (
             Some(R::from_date(
                 inclusive_last_updated_at_end.end().date_naive(),
@@ -470,6 +428,45 @@ where
 }
 
 #[derive(Debug, FromQueryResult)]
+struct CountEstimate {
+    count: Option<i64>,
+}
+
+/// `None` means either that
+/// - db hasn't been initialized before
+/// - `table_name` wasn't found
+pub async fn query_estimated_table_rows(
+    blockscout: &DatabaseConnection,
+    table_name: &str,
+) -> Result<Option<i64>, DbErr> {
+    let statement: Statement = Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        r#"
+            SELECT (
+                CASE WHEN c.reltuples < 0 THEN
+                    NULL
+                WHEN c.relpages = 0 THEN
+                    float8 '0'
+                ELSE c.reltuples / c.relpages
+                END *
+                (
+                    pg_catalog.pg_relation_size(c.oid) /
+                    pg_catalog.current_setting('block_size')::int
+                )
+            )::bigint as count
+            FROM pg_catalog.pg_class c
+            WHERE c.oid = $1::regclass
+        "#,
+        vec![table_name.into()],
+    );
+    let count = CountEstimate::find_by_statement(statement)
+        .one(blockscout)
+        .await?;
+    let count = count.and_then(|c| c.count);
+    Ok(count)
+}
+
+#[derive(Debug, FromQueryResult)]
 struct SyncInfo {
     pub min_blockscout_block: Option<i64>,
 }
@@ -485,7 +482,7 @@ pub async fn last_accurate_point<ChartProps, Query>(
     force_full: bool,
     approximate_trailing_points: u64,
     policy: MissingDatePolicy,
-) -> Result<Option<TimespanValue<ChartProps::Resolution, String>>, UpdateError>
+) -> Result<Option<TimespanValue<ChartProps::Resolution, String>>, ChartError>
 where
     ChartProps: ChartProperties + ?Sized,
     ChartProps::Resolution: Ord + Clone + Debug,
@@ -502,7 +499,7 @@ where
             .into_model()
             .one(db)
             .await
-            .map_err(UpdateError::StatsDB)?;
+            .map_err(ChartError::StatsDB)?;
         let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
 
         match recorded_min_blockscout_block {
@@ -539,7 +536,7 @@ where
                     }
                 });
                 let Some(last_accurate_point) = last_accurate_point else {
-                    return Err(UpdateError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
+                    return Err(ChartError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
                 };
 
                 if let Some(block) = recorded_min_blockscout_block.min_blockscout_block {
@@ -658,11 +655,11 @@ impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTime<Utc>>>,
-    ) -> Result<Self::Output, UpdateError> {
-        let start_timestamp = get_min_date_blockscout(cx.blockscout)
+        _range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Self::Output, ChartError> {
+        let start_timestamp = get_min_date_blockscout(cx.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?
+            .map_err(ChartError::BlockscoutDB)?
             .and_utc();
         Ok(start_timestamp..cx.time)
     }
@@ -674,19 +671,25 @@ mod tests {
     use crate::{
         charts::ResolutionKind,
         counters::TotalBlocks,
-        data_source::kinds::local_db::parameters::DefaultQueryVec,
+        data_source::{
+            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations,
+            UpdateParameters,
+        },
         lines::{AccountsGrowth, ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
-            init_db::init_db,
-            point_construction::{d, month_of},
+            init_db::{init_db, init_db_all},
+            mock_blockscout::fill_mock_blockscout_data,
+            point_construction::{d, dt, month_of},
+            simple_test::get_counter,
         },
         types::timespans::Month,
+        utils::MarkedDbConnection,
         Named,
     };
     use chrono::DateTime;
     use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
     use pretty_assertions::assert_eq;
-    use sea_orm::{EntityTrait, Set};
+    use sea_orm::{EntityName, EntityTrait, Set};
     use std::str::FromStr;
 
     fn mock_chart_data(chart_id: i32, date: &str, value: i64) -> chart_data::ActiveModel {
@@ -823,15 +826,24 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn get_counters_mock() {
+    async fn get_counter_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = init_db("get_counters_mock").await;
-        insert_mock_data(&db).await;
-        let counters = get_raw_counters(&db).await.unwrap();
+        let db = MarkedDbConnection::from_test_db(&init_db("get_counter_mock").await).unwrap();
+        insert_mock_data(&db.connection).await;
+        let current_time = dt("2022-11-12T08:08:08").and_utc();
+        let date = current_time.date_naive();
+        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
+            db: &db,
+            // shouldn't use this because mock data contains total blocks value
+            blockscout: &db,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            update_time_override: Some(current_time),
+            force_full: false,
+        });
         assert_eq!(
-            HashMap::from_iter([("totalBlocks".into(), value("2022-11-12", "1350"))]),
-            counters
+            value(&date.to_string(), "1350"),
+            get_counter::<TotalBlocks>(&cx).await
         );
     }
 
@@ -1288,6 +1300,62 @@ mod tests {
                 timespan: d("2022-06-29"),
                 value: "1676".to_string()
             })
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_estimated_table_rows_works() {
+        let (_db, blockscout) = init_db_all("get_estimated_table_rows_works").await;
+        fill_mock_blockscout_data(&blockscout, d("2023-03-01")).await;
+
+        // need to analyze or vacuum for `reltuples` to be updated.
+        // source: https://www.postgresql.org/docs/9.3/planner-stats.html
+        let _ = blockscout
+            .execute(Statement::from_string(DbBackend::Postgres, "ANALYZE;"))
+            .await
+            .unwrap();
+
+        let blocks_estimate = query_estimated_table_rows(&blockscout, blocks::Entity.table_name())
+            .await
+            .unwrap()
+            .unwrap();
+
+        // should be 16 rows in the table, but it's an estimate
+        assert!(blocks_estimate > 5);
+        assert!(blocks_estimate < 30);
+
+        assert!(
+            query_estimated_table_rows(
+                &blockscout,
+                blockscout_db::entity::addresses::Entity.table_name()
+            )
+            .await
+            .unwrap()
+            .unwrap()
+                > 0
+        );
+
+        assert!(
+            query_estimated_table_rows(
+                &blockscout,
+                blockscout_db::entity::transactions::Entity.table_name()
+            )
+            .await
+            .unwrap()
+            .unwrap()
+                > 0
+        );
+
+        assert!(
+            query_estimated_table_rows(
+                &blockscout,
+                blockscout_db::entity::smart_contracts::Entity.table_name()
+            )
+            .await
+            .unwrap()
+            .unwrap()
+                > 0
         );
     }
 }

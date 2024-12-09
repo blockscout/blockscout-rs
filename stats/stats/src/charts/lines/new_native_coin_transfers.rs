@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
@@ -23,15 +24,15 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 pub struct NewNativeCoinTransfersStatement;
 
 impl StatementFromRange for NewNativeCoinTransfersStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {
@@ -77,8 +78,14 @@ impl StatementFromRange for NewNativeCoinTransfersStatement {
     }
 }
 
-pub type NewNativeCoinTransfersRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewNativeCoinTransfersStatement, NaiveDate, String>>;
+pub type NewNativeCoinTransfersRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<
+        NewNativeCoinTransfersStatement,
+        NaiveDate,
+        String,
+        QueryAllBlockTimestampRange,
+    >,
+>;
 
 pub struct Properties;
 
@@ -107,7 +114,7 @@ define_and_impl_resolution_properties!(
 
 pub type NewNativeCoinTransfers =
     DirectVecLocalDbChartSource<NewNativeCoinTransfersRemote, Batch30Days, Properties>;
-pub type NewNativeCoinTransfersInt = MapParseTo<NewNativeCoinTransfers, i64>;
+pub type NewNativeCoinTransfersInt = MapParseTo<StripExt<NewNativeCoinTransfers>, i64>;
 pub type NewNativeCoinTransfersWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewNativeCoinTransfersInt, Week>>,
     Batch30Weeks,
@@ -118,7 +125,8 @@ pub type NewNativeCoinTransfersMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewNativeCoinTransfersMonthlyInt = MapParseTo<NewNativeCoinTransfersMonthly, i64>;
+pub type NewNativeCoinTransfersMonthlyInt =
+    MapParseTo<StripExt<NewNativeCoinTransfersMonthly>, i64>;
 pub type NewNativeCoinTransfersYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewNativeCoinTransfersMonthlyInt, Year>>,
     Batch30Years,

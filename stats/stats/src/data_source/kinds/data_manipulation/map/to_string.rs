@@ -1,4 +1,4 @@
-use crate::{types::TimespanValue, UpdateError};
+use crate::{types::TimespanValue, ChartError};
 
 use super::{Map, MapFunction};
 
@@ -12,7 +12,7 @@ where
     type Output = Vec<TimespanValue<Resolution, String>>;
     fn function(
         inner_data: Vec<TimespanValue<Resolution, Value>>,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         Ok(inner_data.into_iter().map(|p| p.into()).collect())
     }
 }
@@ -23,7 +23,7 @@ where
     TimespanValue<Resolution, Value>: Into<TimespanValue<Resolution, String>>,
 {
     type Output = TimespanValue<Resolution, String>;
-    fn function(inner_data: TimespanValue<Resolution, Value>) -> Result<Self::Output, UpdateError> {
+    fn function(inner_data: TimespanValue<Resolution, Value>) -> Result<Self::Output, ChartError> {
         Ok(inner_data.into())
     }
 }

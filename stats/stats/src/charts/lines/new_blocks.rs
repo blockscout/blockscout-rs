@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
@@ -23,14 +24,14 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 pub struct NewBlocksStatement;
 
 impl StatementFromRange for NewBlocksStatement {
-    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -50,8 +51,9 @@ impl StatementFromRange for NewBlocksStatement {
     }
 }
 
-pub type NewBlocksRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<NewBlocksStatement, NaiveDate, String>>;
+pub type NewBlocksRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NewBlocksStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
 pub struct Properties;
 
@@ -79,7 +81,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type NewBlocks = DirectVecLocalDbChartSource<NewBlocksRemote, Batch30Days, Properties>;
-pub type NewBlocksInt = MapParseTo<NewBlocks, i64>;
+pub type NewBlocksInt = MapParseTo<StripExt<NewBlocks>, i64>;
 pub type NewBlocksWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewBlocksInt, Week>>,
     Batch30Weeks,
@@ -90,7 +92,7 @@ pub type NewBlocksMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewBlocksMonthlyInt = MapParseTo<NewBlocksMonthly, i64>;
+pub type NewBlocksMonthlyInt = MapParseTo<StripExt<NewBlocksMonthly>, i64>;
 pub type NewBlocksYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewBlocksMonthlyInt, Year>>,
     Batch30Years,
@@ -103,9 +105,10 @@ mod tests {
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
         data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
-        get_line_chart_data,
+        query_dispatch::{serialize_line_points, QuerySerialized},
+        range::UniversalRange,
         tests::{
-            init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data,
+            init_db::init_marked_db_all, mock_blockscout::fill_mock_blockscout_data,
             point_construction::dt, simple_test::simple_test_chart,
         },
         types::ExtendedTimespanValue,
@@ -114,23 +117,25 @@ mod tests {
     use chrono::{NaiveDate, Utc};
     use entity::{chart_data, charts};
     use pretty_assertions::assert_eq;
-    use sea_orm::{DatabaseConnection, EntityTrait, Set};
+    use sea_orm::{EntityTrait, Set};
     use std::str::FromStr;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
+        let (db, blockscout) = init_marked_db_all("update_new_blocks_recurrent").await;
         let current_time = chrono::DateTime::<Utc>::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        fill_mock_blockscout_data(&blockscout, current_date).await;
+        fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
 
-        NewBlocks::init_recursively(&db, &current_time)
+        NewBlocks::init_recursively(db.connection.as_ref(), &current_time)
             .await
             .unwrap();
 
-        let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
+        let min_blockscout_block = get_min_block_blockscout(blockscout.connection.as_ref())
+            .await
+            .unwrap();
         // set wrong value and check, that it was rewritten
         chart_data::Entity::insert_many([
             chart_data::ActiveModel {
@@ -148,7 +153,7 @@ mod tests {
                 ..Default::default()
             },
         ])
-        .exec(&db as &DatabaseConnection)
+        .exec(db.connection.as_ref())
         .await
         .unwrap();
         // set corresponding `last_updated_at` for successful partial update
@@ -157,7 +162,7 @@ mod tests {
             last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
             ..Default::default()
         })
-        .exec(&db as &DatabaseConnection)
+        .exec(db.connection.as_ref())
         .await
         .unwrap();
 
@@ -171,18 +176,9 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data::<NaiveDate>(
-            &db,
-            &NewBlocks::name(),
-            None,
-            None,
-            None,
-            crate::MissingDatePolicy::FillZero,
-            false,
-            1,
-        )
-        .await
-        .unwrap();
+        let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
+            .await
+            .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-10").unwrap(),
@@ -200,25 +196,16 @@ mod tests {
                 is_approximate: true,
             },
         ];
-        assert_eq!(expected, data);
+        assert_eq!(serialize_line_points(expected), data);
 
         // note that update is full, therefore there is entry with date `2022-11-09`
         cx.force_full = true;
         // need to update time so that the update is not ignored as the same one
         cx.time = chrono::DateTime::<Utc>::from_str("2022-11-12T13:00:00Z").unwrap();
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data::<NaiveDate>(
-            &db,
-            &NewBlocks::name(),
-            None,
-            None,
-            None,
-            crate::MissingDatePolicy::FillZero,
-            false,
-            1,
-        )
-        .await
-        .unwrap();
+        let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
+            .await
+            .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-09").unwrap(),
@@ -241,19 +228,19 @@ mod tests {
                 is_approximate: true,
             },
         ];
-        assert_eq!(expected, data);
+        assert_eq!(serialize_line_points(expected), data);
     }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
+        let (db, blockscout) = init_marked_db_all("update_new_blocks_fresh").await;
         let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        fill_mock_blockscout_data(&blockscout, current_date).await;
+        fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
 
-        NewBlocks::init_recursively(&db, &current_time)
+        NewBlocks::init_recursively(db.connection.as_ref(), &current_time)
             .await
             .unwrap();
 
@@ -265,18 +252,9 @@ mod tests {
             force_full: true,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data::<NaiveDate>(
-            &db,
-            &NewBlocks::name(),
-            None,
-            None,
-            None,
-            crate::MissingDatePolicy::FillZero,
-            false,
-            0,
-        )
-        .await
-        .unwrap();
+        let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
+            .await
+            .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-09").unwrap(),
@@ -296,26 +274,28 @@ mod tests {
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-12").unwrap(),
                 value: "1".into(),
-                is_approximate: false,
+                is_approximate: true,
             },
         ];
-        assert_eq!(expected, data);
+        assert_eq!(serialize_line_points(expected), data);
     }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_db_all("update_new_blocks_last").await;
+        let (db, blockscout) = init_marked_db_all("update_new_blocks_last").await;
         let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        fill_mock_blockscout_data(&blockscout, current_date).await;
+        fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
 
-        NewBlocks::init_recursively(&db, &current_time)
+        NewBlocks::init_recursively(db.connection.as_ref(), &current_time)
             .await
             .unwrap();
 
-        let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
+        let min_blockscout_block = get_min_block_blockscout(blockscout.connection.as_ref())
+            .await
+            .unwrap();
         // set wrong values and check, that they weren't rewritten
         // except the last one
         chart_data::Entity::insert_many([
@@ -348,7 +328,7 @@ mod tests {
                 ..Default::default()
             },
         ])
-        .exec(&db as &DatabaseConnection)
+        .exec(db.connection.as_ref())
         .await
         .unwrap();
         // set corresponding `last_updated_at` for successful partial update
@@ -357,7 +337,7 @@ mod tests {
             last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
             ..Default::default()
         })
-        .exec(&db as &DatabaseConnection)
+        .exec(db.connection.as_ref())
         .await
         .unwrap();
 
@@ -369,18 +349,9 @@ mod tests {
             force_full: false,
         };
         NewBlocks::update_recursively(&cx).await.unwrap();
-        let data = get_line_chart_data::<NaiveDate>(
-            &db,
-            &NewBlocks::name(),
-            None,
-            None,
-            None,
-            crate::MissingDatePolicy::FillZero,
-            false,
-            1,
-        )
-        .await
-        .unwrap();
+        let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
+            .await
+            .unwrap();
         let expected = vec![
             ExtendedTimespanValue {
                 timespan: NaiveDate::from_str("2022-11-09").unwrap(),
@@ -403,7 +374,7 @@ mod tests {
                 is_approximate: true,
             },
         ];
-        assert_eq!(expected, data);
+        assert_eq!(serialize_line_points(expected), data);
     }
 
     #[tokio::test]

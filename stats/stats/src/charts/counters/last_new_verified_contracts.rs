@@ -1,6 +1,7 @@
 use crate::{
     data_source::kinds::{
-        data_manipulation::last_point::LastPoint, local_db::DirectPointLocalDbChartSource,
+        data_manipulation::{last_point::LastPoint, map::StripExt},
+        local_db::DirectPointLocalDbChartSource,
     },
     lines::NewVerifiedContracts,
     ChartProperties, Named,
@@ -26,7 +27,7 @@ impl ChartProperties for Properties {
 }
 
 pub type LastNewVerifiedContracts =
-    DirectPointLocalDbChartSource<LastPoint<NewVerifiedContracts>, Properties>;
+    DirectPointLocalDbChartSource<LastPoint<StripExt<NewVerifiedContracts>>, Properties>;
 
 #[cfg(test)]
 mod tests {

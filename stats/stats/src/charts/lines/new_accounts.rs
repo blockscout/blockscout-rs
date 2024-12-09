@@ -1,11 +1,11 @@
 use std::ops::Range;
 
 use crate::{
-    charts::types::timespans::DateValue,
+    charts::{db_interaction::read::QueryAllBlockTimestampRange, types::timespans::DateValue},
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
@@ -21,24 +21,25 @@ use crate::{
     },
     define_and_impl_resolution_properties,
     missing_date::trim_out_of_range_sorted,
+    range::{data_source_query_range_to_db_statement_range, UniversalRange},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, Named, UpdateError,
+    ChartError, ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{DbBackend, FromQueryResult, Statement};
 
 pub struct NewAccountsStatement;
 
 impl StatementFromRange for NewAccountsStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough
-        let min_timestamp = DateTimeUtc::UNIX_EPOCH;
+        let min_timestamp = DateTime::<Utc>::UNIX_EPOCH;
         // All transactions from the beginning must be considered to calculate new accounts correctly.
         // E.g. if account was first active both before `range.start()` and within the range,
         // we don't want to count it within the range (as it's not a *new* account).
@@ -99,17 +100,22 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
-    ) -> Result<Vec<DateValue<String>>, UpdateError> {
-        let query =
-            NewAccountsStatement::get_statement(range.clone(), &cx.blockscout_applied_migrations);
+        range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Vec<DateValue<String>>, ChartError> {
+        let statement_range =
+            data_source_query_range_to_db_statement_range::<QueryAllBlockTimestampRange>(cx, range)
+                .await?;
+        let query = NewAccountsStatement::get_statement(
+            statement_range.clone(),
+            &cx.blockscout_applied_migrations,
+        );
         let mut data = DateValue::<String>::find_by_statement(query)
-            .all(cx.blockscout)
+            .all(cx.blockscout.connection.as_ref())
             .await
-            .map_err(UpdateError::BlockscoutDB)?;
+            .map_err(ChartError::BlockscoutDB)?;
         // make sure that it's sorted
         data.sort_by_key(|d| d.timespan);
-        if let Some(range) = range {
+        if let Some(range) = statement_range {
             let range = range.start.date_naive()..=range.end.date_naive();
             trim_out_of_range_sorted(&mut data, range);
         }
@@ -150,7 +156,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type NewAccounts = DirectVecLocalDbChartSource<NewAccountsRemote, BatchMaxDays, Properties>;
-pub type NewAccountsInt = MapParseTo<NewAccounts, i64>;
+pub type NewAccountsInt = MapParseTo<StripExt<NewAccounts>, i64>;
 pub type NewAccountsWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewAccountsInt, Week>>,
     Batch30Weeks,
@@ -161,7 +167,7 @@ pub type NewAccountsMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewAccountsMonthlyInt = MapParseTo<NewAccountsMonthly, i64>;
+pub type NewAccountsMonthlyInt = MapParseTo<StripExt<NewAccountsMonthly>, i64>;
 pub type NewAccountsYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewAccountsMonthlyInt, Year>>,
     Batch30Years,

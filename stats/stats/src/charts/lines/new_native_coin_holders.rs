@@ -3,7 +3,7 @@ use crate::{
     data_source::kinds::{
         data_manipulation::{
             delta::Delta,
-            map::{MapParseTo, MapToString},
+            map::{MapParseTo, MapToString, StripExt},
             resolutions::sum::SumLowerResolution,
         },
         local_db::{
@@ -52,7 +52,7 @@ pub type NewNativeCoinHolders = DirectVecLocalDbChartSource<
     Batch30Days,
     Properties,
 >;
-pub type NewNativeCoinHoldersInt = MapParseTo<NewNativeCoinHolders, i64>;
+pub type NewNativeCoinHoldersInt = MapParseTo<StripExt<NewNativeCoinHolders>, i64>;
 pub type NewNativeCoinHoldersWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewNativeCoinHoldersInt, Week>>,
     Batch30Weeks,
@@ -63,7 +63,7 @@ pub type NewNativeCoinHoldersMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewNativeCoinHoldersMonthlyInt = MapParseTo<NewNativeCoinHoldersMonthly, i64>;
+pub type NewNativeCoinHoldersMonthlyInt = MapParseTo<StripExt<NewNativeCoinHoldersMonthly>, i64>;
 pub type NewNativeCoinHoldersYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewNativeCoinHoldersMonthlyInt, Year>>,
     Batch30Years,

@@ -41,9 +41,9 @@ use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::{
-    charts::{chart_properties_portrait::imports::ChartKey, ChartPropertiesObject},
+    charts::{chart_properties_portrait::imports::ChartKey, ChartObject},
     data_source::UpdateParameters,
-    UpdateError,
+    ChartError,
 };
 
 #[derive(Error, Debug, PartialEq)]
@@ -68,7 +68,7 @@ pub trait UpdateGroup: core::fmt::Debug {
     /// Group name (usually equal to type name for simplicity)
     fn name(&self) -> String;
     /// List chart properties - members of the group.
-    fn list_charts(&self) -> Vec<ChartPropertiesObject>;
+    fn list_charts(&self) -> Vec<ChartObject>;
     /// List mutex ids of group members + their dependencies.
     /// Dependencies participate in updates, thus access to them needs to be
     /// synchronized as well.
@@ -95,7 +95,7 @@ pub trait UpdateGroup: core::fmt::Debug {
         &self,
         params: UpdateParameters<'a>,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> Result<(), UpdateError>;
+    ) -> Result<(), ChartError>;
 }
 
 /// Construct update group that implemants [`UpdateGroup`]. The main purpose of the
@@ -117,12 +117,12 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// ```rust
 /// # use stats::data_source::kinds::{
 /// # };
-/// # use stats::{ChartProperties, Named, construct_update_group, types::timespans::DateValue, UpdateError};
+/// # use stats::{ChartProperties, Named, construct_update_group, types::timespans::DateValue, ChartError};
 /// # use stats::data_source::{
 /// #     kinds::{
 /// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
 /// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-/// #         data_manipulation::map::MapToString,
+/// #         data_manipulation::map::{MapToString, StripExt},
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters},
 /// # };
@@ -130,7 +130,6 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # use chrono::NaiveDate;
 /// # use entity::sea_orm_active_enums::ChartType;
 /// # use std::ops::RangeInclusive;
-/// # use sea_orm::prelude::DateTimeUtc;
 /// # use sea_orm::Statement;
 /// #
 /// # struct DummyChartProperties;
@@ -147,7 +146,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #     }
 /// # }
 /// #
-/// # type DummyChart = DirectVecLocalDbChartSource<NewBlocks, Batch30Days, DummyChartProperties>;
+/// # type DummyChart = DirectVecLocalDbChartSource<StripExt<NewBlocks>, Batch30Days, DummyChartProperties>;
 ///
 /// construct_update_group!(ExampleUpdateGroup {
 ///     charts: [DummyChart],
@@ -197,7 +196,10 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// ## Example
 ///
 /// ```rust
-/// # use stats::{ChartProperties, Named, construct_update_group, types::timespans::DateValue, UpdateError};
+/// # use stats::{
+/// #     QueryAllBlockTimestampRange, construct_update_group,
+/// #     types::timespans::DateValue, ChartProperties, Named, ChartError,
+/// # };
 /// # use stats::data_source::{
 /// #     kinds::{
 /// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
@@ -205,21 +207,20 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #     },
 /// #     types::{UpdateContext, UpdateParameters, BlockscoutMigrations},
 /// # };
-/// # use chrono::NaiveDate;
+/// # use chrono::{NaiveDate, DateTime, Utc};
 /// # use entity::sea_orm_active_enums::ChartType;
 /// # use std::ops::Range;
-/// # use sea_orm::prelude::DateTimeUtc;
 /// # use sea_orm::Statement;
 ///
 /// struct DummyRemoteStatement;
 ///
 /// impl StatementFromRange for DummyRemoteStatement {
-///     fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
 ///         todo!()
 ///     }
 /// }
 ///
-/// type DummyRemote = RemoteDatabaseSource<PullAllWithAndSort<DummyRemoteStatement, NaiveDate, String>>;
+/// type DummyRemote = RemoteDatabaseSource<PullAllWithAndSort<DummyRemoteStatement, NaiveDate, String, QueryAllBlockTimestampRange>>;
 ///
 /// struct DummyChartProperties;
 ///
@@ -260,10 +261,12 @@ macro_rules! construct_update_group {
                 stringify!($group_name).into()
             }
 
-            fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartPropertiesObject> {
+            fn list_charts(&self) -> ::std::vec::Vec<$crate::ChartObject> {
                 std::vec![
                     $(
-                        $crate::ChartPropertiesObject::construct_from_chart::<$member>(),
+                        $crate::ChartObject::construct_from_chart::<$member>(
+                            <$member as $crate::query_dispatch::QuerySerialized>::new_for_dynamic_dispatch()
+                        ),
                     )*
                 ]
             }
@@ -271,15 +274,23 @@ macro_rules! construct_update_group {
             fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<String> {
                 let mut ids = ::std::collections::HashSet::new();
                 $(
-                    ids.extend(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids().into_iter());
+                    ids.extend(
+                        <$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids()
+                            .into_iter()
+                    );
                 )*
                 ids
             }
 
-            fn dependency_mutex_ids_of(&self, chart_id: &$crate::ChartKey) -> Option<::std::collections::HashSet<String>> {
+            fn dependency_mutex_ids_of(
+                &self,
+                chart_id: &$crate::ChartKey
+            ) -> Option<::std::collections::HashSet<String>> {
                 $(
                     if chart_id == &<$member as $crate::ChartProperties>::key() {
-                        return Some(<$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids());
+                        return Some(
+                            <$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids()
+                        );
                     }
                 )*
                 return None;
@@ -299,7 +310,9 @@ macro_rules! construct_update_group {
                 let current_time = creation_time_override.unwrap_or_else(|| ::chrono::Utc::now());
                 $(
                     if enabled_charts.contains(&<$member as $crate::ChartProperties>::key()) {
-                        <$member as $crate::data_source::DataSource>::init_recursively(db, &current_time).await?;
+                        <$member as $crate::data_source::DataSource>::init_recursively(
+                            db, &current_time
+                        ).await?;
                     }
                 )*
                 Ok(())
@@ -307,13 +320,17 @@ macro_rules! construct_update_group {
 
             // updates are expected to be unique by group name & update time; this instrumentation
             // should allow to single out one update process in logs
-            #[::tracing::instrument(skip_all, fields(update_group=self.name(), update_time), level = tracing::Level::INFO)]
+            #[::tracing::instrument(
+                skip_all,
+                fields(update_group=self.name(), update_time),
+                level = tracing::Level::INFO
+            )]
             async fn update_charts<'a>(
                 &self,
                 params: $crate::data_source::UpdateParameters<'a>,
                 #[allow(unused)]
                 enabled_charts: &::std::collections::HashSet<$crate::ChartKey>,
-            ) -> Result<(), $crate::UpdateError> {
+            ) -> Result<(), $crate::ChartError> {
                 let cx = $crate::data_source::UpdateContext::from_params_now_or_override(params);
                 ::tracing::Span::current().record("update_time", ::std::format!("{}",&cx.time));
                 $(
@@ -391,7 +408,7 @@ impl SyncUpdateGroup {
     }
 
     /// See [`UpdateGroup::list_charts``]
-    pub fn list_charts(&self) -> Vec<ChartPropertiesObject> {
+    pub fn list_charts(&self) -> Vec<ChartObject> {
         self.inner.list_charts()
     }
 
@@ -461,7 +478,11 @@ impl SyncUpdateGroup {
         &self,
         enabled_charts: &HashSet<ChartKey>,
     ) -> (Vec<MutexGuard<()>>, HashSet<ChartKey>) {
-        let members: HashSet<ChartKey> = self.list_charts().into_iter().map(|c| c.key).collect();
+        let members: HashSet<ChartKey> = self
+            .list_charts()
+            .into_iter()
+            .map(|c| c.properties.key)
+            .collect();
         // in-place intersection
         let enabled_members: HashSet<ChartKey> = members
             .into_iter()
@@ -479,12 +500,12 @@ impl SyncUpdateGroup {
         db: &DatabaseConnection,
         creation_time_override: Option<chrono::DateTime<Utc>>,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> Result<(), UpdateError> {
+    ) -> Result<(), ChartError> {
         let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
         self.inner
             .create_charts(db, creation_time_override, &enabled_members)
             .await
-            .map_err(UpdateError::StatsDB)
+            .map_err(ChartError::StatsDB)
     }
 
     /// Ignores unknown names
@@ -492,7 +513,7 @@ impl SyncUpdateGroup {
         &self,
         params: UpdateParameters<'a>,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> Result<(), UpdateError> {
+    ) -> Result<(), ChartError> {
         let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
         tracing::info!(
             update_group = self.name(),

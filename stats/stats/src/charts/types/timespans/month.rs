@@ -73,30 +73,34 @@ impl Timespan for Month {
         self.saturating_first_day().saturating_start_timestamp()
     }
 
-    fn saturating_add(&self, duration: TimespanDuration<Self>) -> Self
+    fn checked_add(&self, duration: TimespanDuration<Self>) -> Option<Self>
     where
         Self: Sized,
     {
-        let result_month_date = self
-            .date_in_month
+        self.date_in_month
             .checked_add_months(chrono::Months::new(
                 duration.repeats().try_into().unwrap_or(u32::MAX),
             ))
-            .unwrap_or(NaiveDate::MAX);
-        Self::from_date(result_month_date)
+            .map(Self::from_date)
     }
 
-    fn saturating_sub(&self, duration: TimespanDuration<Self>) -> Self
+    fn checked_sub(&self, duration: TimespanDuration<Self>) -> Option<Self>
     where
         Self: Sized,
     {
-        let result_month_date = self
-            .date_in_month
+        self.date_in_month
             .checked_sub_months(chrono::Months::new(
                 duration.repeats().try_into().unwrap_or(u32::MAX),
             ))
-            .unwrap_or(NaiveDate::MIN);
-        Self::from_date(result_month_date)
+            .map(Self::from_date)
+    }
+
+    fn max() -> Self {
+        Self::from_date(NaiveDate::MAX)
+    }
+
+    fn min() -> Self {
+        Self::from_date(NaiveDate::MIN)
     }
 }
 

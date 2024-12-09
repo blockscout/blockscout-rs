@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -23,9 +24,9 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
@@ -35,7 +36,7 @@ pub struct AverageGasPriceStatement;
 
 impl StatementFromRange for AverageGasPriceStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {
@@ -105,8 +106,9 @@ impl StatementFromRange for AverageGasPriceStatement {
     }
 }
 
-pub type AverageGasPriceRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageGasPriceStatement, NaiveDate, f64>>;
+pub type AverageGasPriceRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<AverageGasPriceStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
 pub type AverageGasPriceRemoteString = MapToString<AverageGasPriceRemote>;
 
@@ -137,19 +139,21 @@ define_and_impl_resolution_properties!(
 
 pub type AverageGasPrice =
     DirectVecLocalDbChartSource<AverageGasPriceRemoteString, Batch30Days, Properties>;
+type AverageGasPriceS = StripExt<AverageGasPrice>;
 pub type AverageGasPriceWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewTxnsInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPriceS, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageGasPriceMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageGasPrice, f64>, NewTxnsInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageGasPriceS, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+type AverageGasPriceMonthlyS = StripExt<AverageGasPriceMonthly>;
 pub type AverageGasPriceYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageGasPriceMonthly, f64>, NewTxnsMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<AverageGasPriceMonthlyS, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,
