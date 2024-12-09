@@ -1,19 +1,48 @@
 use crate::{
     charts::db_interaction::read::query_estimated_table_rows,
-    data_source::kinds::{
-        data_manipulation::{map::MapToString, sum_point::Sum},
-        local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
+    data_source::{
+        kinds::{
+            local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
+        },
+        UpdateContext,
     },
-    lines::NewTxnsInt,
+    range::UniversalRange,
     types::timespans::DateValue,
     utils::MarkedDbConnection,
     ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::transactions;
-use chrono::{NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::EntityName;
+use sea_orm::{EntityName, EntityTrait, PaginatorTrait, QuerySelect};
+
+pub struct TotalTxnsQueryBehaviour;
+
+impl RemoteQueryBehaviour for TotalTxnsQueryBehaviour {
+    type Output = DateValue<String>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        _range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Self::Output, ChartError> {
+        let now = cx.time;
+        let value = transactions::Entity::find()
+            .select_only()
+            .count(cx.blockscout.connection.as_ref())
+            .await
+            .map_err(ChartError::BlockscoutDB)?;
+
+        let data = DateValue::<String> {
+            timespan: now.date_naive(),
+            value: value.to_string(),
+        };
+        Ok(data)
+    }
+}
+
+pub type TotalTxnsRemote = RemoteDatabaseSource<TotalTxnsQueryBehaviour>;
 
 pub struct Properties;
 
@@ -53,11 +82,15 @@ impl ValueEstimation for TotalTxnsEstimation {
     }
 }
 
-pub type TotalTxns = DirectPointLocalDbChartSourceWithEstimate<
-    MapToString<Sum<NewTxnsInt>>,
-    TotalTxnsEstimation,
-    Properties,
->;
+// We will need it to update on not fully indexed data soon, therefore this counter is
+// separated from `NewTxns`.
+//
+// Separate query not reliant on previous computation helps this counter to work in such
+// environments.
+//
+// todo: make it dependant again if #845 is resolved
+pub type TotalTxns =
+    DirectPointLocalDbChartSourceWithEstimate<TotalTxnsRemote, TotalTxnsEstimation, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -67,7 +100,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_txns() {
-        simple_test_counter::<TotalTxns>("update_total_txns", "47", None).await;
+        simple_test_counter::<TotalTxns>("update_total_txns", "48", None).await;
     }
 
     #[tokio::test]
