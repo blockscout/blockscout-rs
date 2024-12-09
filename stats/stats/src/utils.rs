@@ -13,6 +13,7 @@ pub fn day_start(date: &NaiveDate) -> DateTime<Utc> {
 }
 
 /// Database connection with a mark of what database it is.
+///
 /// Used to separate caching for different databases to
 /// prevent data clashes when running unit tests concurrently.
 #[derive(Debug, Clone)]

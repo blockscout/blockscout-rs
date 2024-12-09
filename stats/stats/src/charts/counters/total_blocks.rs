@@ -1,5 +1,3 @@
-use std::sync::OnceLock;
-
 use crate::{
     charts::db_interaction::read::query_estimated_table_rows,
     data_source::{
@@ -16,11 +14,9 @@ use crate::{
 };
 
 use blockscout_db::entity::blocks;
-use cached::Cached;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
-use tokio::sync::Mutex;
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -77,56 +73,20 @@ impl ChartProperties for Properties {
     }
 }
 
-pub struct CachedBlocksEstimation;
+pub struct TotalBlocksEstimation;
 
-const TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC_DEFAULT: u64 = 10;
-// so that it can be added to settings if necessary
-pub static TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC: OnceLock<u64> = OnceLock::new();
-static CACHED_BLOCKS_ESTIMATION: OnceLock<Mutex<cached::TimedCache<String, i64>>> = OnceLock::new();
-
-impl ValueEstimation for CachedBlocksEstimation {
+impl ValueEstimation for TotalBlocksEstimation {
     async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, ChartError> {
-        /// Basically `cached::proc_macro::cached` implementation but
-        /// - manual
-        /// - using OnceLock value instead of hardcoded one
-        /// - expanding `result=true` to Result<Option<_>>
-        ///
-        /// Note, that `sync_writes = true` version was taken as a basis
-        async fn cached_blocks_estimation(
-            blockscout: &DatabaseConnection,
-            db_id: &str,
-        ) -> Result<Option<i64>, DbErr> {
-            let mut cache = CACHED_BLOCKS_ESTIMATION
-                .get_or_init(|| {
-                    Mutex::new(cached::TimedCache::with_lifespan_and_refresh(
-                        *TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC
-                            .get_or_init(|| TOTAL_BLOCKS_ESTIMATION_CACHE_LIVENESS_SEC_DEFAULT),
-                        false,
-                    ))
-                })
-                .lock()
-                .await;
-            if let Some(cached_estimate) = cache.cache_get(db_id) {
-                return Ok(Some(*cached_estimate));
-            }
-
-            let query_result =
-                query_estimated_table_rows(blockscout, blocks::Entity.table_name()).await;
-            if let Ok(Some(estimate)) = &query_result {
-                cache.cache_set(db_id.to_string(), *estimate);
-            }
-            query_result
-        }
-
         let now = Utc::now();
-        let value = cached_blocks_estimation(blockscout.connection.as_ref(), &blockscout.db_name)
-            .await
-            .map_err(ChartError::BlockscoutDB)?
-            .map(|b| {
-                let b = b as f64 * 0.9;
-                b as i64
-            })
-            .unwrap_or(0);
+        let value =
+            query_estimated_table_rows(blockscout.connection.as_ref(), blocks::Entity.table_name())
+                .await
+                .map_err(ChartError::BlockscoutDB)?
+                .map(|b| {
+                    let b = b as f64 * 0.9;
+                    b as i64
+                })
+                .unwrap_or(0);
         Ok(DateValue {
             timespan: now.date_naive(),
             value: value.to_string(),
@@ -134,11 +94,8 @@ impl ValueEstimation for CachedBlocksEstimation {
     }
 }
 
-pub type TotalBlocks = DirectPointLocalDbChartSourceWithEstimate<
-    TotalBlocksRemote,
-    CachedBlocksEstimation,
-    Properties,
->;
+pub type TotalBlocks =
+    DirectPointLocalDbChartSourceWithEstimate<TotalBlocksRemote, TotalBlocksEstimation, Properties>;
 
 #[cfg(test)]
 mod tests {
