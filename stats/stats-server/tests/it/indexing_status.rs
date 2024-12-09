@@ -91,6 +91,6 @@ async fn test_not_indexed_ok() {
     // so they are returned even without calling an update
     assert_eq!(
         counters.counters.into_iter().map(|c| c.id).collect_vec(),
-        vec!["totalBlocks", "totalTxns"]
+        vec!["totalAddresses", "totalBlocks", "totalTxns"]
     )
 }
