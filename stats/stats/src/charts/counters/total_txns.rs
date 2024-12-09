@@ -74,6 +74,7 @@ impl ValueEstimation for TotalTxnsEstimation {
         )
         .await
         .map_err(ChartError::BlockscoutDB)?
+        .map(|n| u64::try_from(n).unwrap_or(0))
         .unwrap_or(0);
         Ok(DateValue {
             timespan: now.date_naive(),
