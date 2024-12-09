@@ -10,6 +10,8 @@ use stats_proto::blockscout::stats::v1 as proto_v1;
 
 use crate::runtime_setup::EnabledChartEntry;
 
+use super::layout::sorted_items_according_to_layout;
+
 /// `None` means 'enable if present'
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -192,11 +194,17 @@ impl LineChartCategory {
         self,
         info: &BTreeMap<String, EnabledChartEntry>,
     ) -> proto_v1::LineChartSection {
-        let charts: Vec<_> = self
-            .charts_order
-            .into_iter()
-            .flat_map(|c: String| info.get(&c).map(|e| e.build_proto_line_chart_info(c)))
+        let category_charts = HashSet::<_>::from_iter(self.charts_order.iter());
+        let category_infos_alphabetic_order: Vec<_> = info
+            .iter()
+            .filter(|(id, _)| category_charts.contains(id))
+            .map(|(id, e)| e.build_proto_line_chart_info(id.to_string()))
             .collect();
+        let charts = sorted_items_according_to_layout(
+            category_infos_alphabetic_order,
+            &self.charts_order,
+            |chart_info| &chart_info.id,
+        );
         proto_v1::LineChartSection {
             id: self.id,
             title: self.title,
