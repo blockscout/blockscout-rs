@@ -16,6 +16,7 @@ use crate::{
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use pretty_assertions::assert_eq;
+use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use stats_proto::blockscout::stats::v1::Point;
 use std::{fmt::Debug, str::FromStr};
 
@@ -328,6 +329,44 @@ async fn simple_test_counter_inner<C>(
     let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(expected, get_counter::<C>(&cx).await.value);
+}
+
+/// Test that the counter returns non-zero fallback value when both
+/// - Blockscout data is populated
+/// - Update is not called on the counter
+pub async fn test_counter_fallback<C>(test_name: &str)
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    let _ = tracing_subscriber::fmt::try_init();
+    let (db, blockscout) = init_marked_db_all(test_name).await;
+    let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
+    let current_date = current_time.date_naive();
+
+    C::init_recursively(&db.connection, &current_time)
+        .await
+        .unwrap();
+
+    fill_mock_blockscout_data(&blockscout.connection, current_date).await;
+
+    // need to analyze or vacuum for `reltuples` to be updated.
+    // source: https://www.postgresql.org/docs/9.3/planner-stats.html
+    let _ = blockscout
+        .connection
+        .execute(Statement::from_string(DbBackend::Postgres, "ANALYZE;"))
+        .await
+        .unwrap();
+
+    let parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        update_time_override: Some(current_time),
+        force_full: false,
+    };
+    let cx: UpdateContext<'_> = UpdateContext::from_params_now_or_override(parameters.clone());
+    let data = get_counter::<C>(&cx).await;
+    assert_ne!("0", data.value);
 }
 
 pub async fn prepare_chart_test<C: DataSource + ChartProperties>(

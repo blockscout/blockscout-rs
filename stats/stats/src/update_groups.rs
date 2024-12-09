@@ -23,6 +23,7 @@ singleton_groups!(
     TotalAddresses,
     TotalBlocks,
     TotalTokens,
+    TotalTxns,
     YesterdayTxns,
     // Each of the `ActiveRecurringAccounts*` charts includes quite heavy SQL query,
     // thus it's better to have granular control on update times.
@@ -167,7 +168,6 @@ construct_update_group!(NewTxnsGroup {
         TxnsGrowthWeekly,
         TxnsGrowthMonthly,
         TxnsGrowthYearly,
-        TotalTxns,
     ],
 });
 

@@ -35,6 +35,9 @@ impl StatementFromRange for NewTxnsStatement {
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
+        // do not filter by `!= to_timestamp(0)` because
+        // 1. it allows to use index `transactions_block_consensus_index`
+        // 2. there is no reason not to count genesis transactions
         if completed_migrations.denormalization {
             sql_with_range_filter_opt!(
                 DbBackend::Postgres,
@@ -44,7 +47,6 @@ impl StatementFromRange for NewTxnsStatement {
                         COUNT(*)::TEXT as value
                     FROM transactions t
                     WHERE
-                        t.block_timestamp != to_timestamp(0) AND
                         t.block_consensus = true {filter}
                     GROUP BY date;
                 "#,
@@ -62,7 +64,6 @@ impl StatementFromRange for NewTxnsStatement {
                     FROM transactions t
                     JOIN blocks       b ON t.block_hash = b.hash
                     WHERE
-                        b.timestamp != to_timestamp(0) AND
                         b.consensus = true {filter}
                     GROUP BY date;
                 "#,
