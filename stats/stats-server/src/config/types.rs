@@ -204,7 +204,6 @@ impl LineChartCategory {
             category_infos_alphabetic_order,
             &self.charts_order,
             |chart_info| &chart_info.id,
-            true,
         );
         proto_v1::LineChartSection {
             id: self.id,

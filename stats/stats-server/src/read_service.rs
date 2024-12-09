@@ -225,12 +225,8 @@ impl StatsService for ReadService {
                 })
             })
             .collect();
-        let counters_sorted = sorted_items_according_to_layout(
-            counters,
-            &self.charts.counters_layout,
-            |c| &c.id,
-            true,
-        );
+        let counters_sorted =
+            sorted_items_according_to_layout(counters, &self.charts.counters_layout, |c| &c.id);
         let counters = proto_v1::Counters {
             counters: counters_sorted,
         };
