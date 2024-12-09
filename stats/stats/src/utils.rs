@@ -12,6 +12,9 @@ pub fn day_start(date: &NaiveDate) -> DateTime<Utc> {
         .and_utc()
 }
 
+// todo: remove marked part if not used until May 2025.
+// probably rename to some wrapper of db connection to add some other
+// stuff if necessary (or use UpdateContext as a place to extend the context)
 /// Database connection with a mark of what database it is.
 ///
 /// Used to separate caching for different databases to
