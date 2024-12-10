@@ -17,6 +17,7 @@ mod new_contracts;
 mod new_native_coin_holders;
 mod new_native_coin_transfers;
 mod new_txns;
+mod new_txns_window;
 mod new_verified_contracts;
 mod txns_fee;
 mod txns_growth;
