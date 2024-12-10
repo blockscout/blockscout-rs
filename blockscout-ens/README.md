@@ -8,6 +8,20 @@ Here is brief overview of the project structure:
 
 Service is **multi-chain**, meaning that only one instance of `graph-node`, `postgres` and `bens-server` is required.
 
+## Current supported domains
+
+| Subgraph Name | Network | TLD | Note |
+|--------------|---------|-----|------|
+| ens-subgraph | Ethereum | .eth |      |
+| rns-subgraph | Rootstock | .rsk |      |
+| genome-subgraph | Gnosis | .gno | SpaceID contracts |
+| bns-subgraph | Base | .base |      |
+| mode-subgraph | Mode | .mode | SpaceID contracts |
+| lightlink-subgraph | Lightlink | .ll | SpaceID contracts |
+| zns-subgraph | Polygon | .poly |      |
+| d3-connect-subgraph | Shibarium | .shib |      |
+
+
 ## Envs
 
 [anchor]: <> (anchors.envs.start.envs_main)
@@ -26,21 +40,52 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 
 [anchor]: <> (anchors.envs.end.envs_main)
 
+## Quickstart developer run
+
+1. Install [just](https://github.com/casey/just), [dotenv-cli](https://www.npmjs.com/package/dotenv-cli)
+
+2. Run commands:
+    ```bash
+    just graph-node-start
+    just deploy-subgraph ens-sepolia
+    just run-dev
+    ```
+
+
 ## Contribute
 
 If you want to add your name service procol to blockscout you should:
 
 1. Clone this `blockscout-rs` repo to add new protocol.
-1. Write subraph code: read [subgraph writer guide](./graph-node/subgraph-writer/README.md#howto-create-subgraph-for-your-domain-name-protocol)
-1. [OPTIONAL] if your protocol is based on SpaceID, read [SpaceID integration](./graph-node/subgraphs/README.md#spaceid-integration) section.
-1. Start graph-node: read [graph-node guide](./graph-node/README.md#start-locally-using-docker-compose)
-1. Deploy subgraph to graph-node: read [how to deploy subgraphs guide](./graph-node/subgraphs/README.md#deploy-subgraph-to-graph-node)
-1. Update default config of BENS server for [production](../../bens-server/config/prod.json) and [staging](../../bens-server/config/staging.json)
-1. Start `bens-server` connected to common database: read [how to start bens guide](./bens-server/README.md#to-start-locally)
-1. Check that `bens-server` responses with valid domains
-1. Add your protocol to list of [supported domains](./graph-node/subgraphs/README.md#current-supported-domains)
-1. Finally, create PR with:
+2. Write subraph code: read [subgraph writer guide](./graph-node/subgraph-writer/README.md#howto-create-subgraph-for-your-domain-name-protocol)
+3. [OPTIONAL] if your protocol is based on SpaceID, read [SpaceID integration](./graph-node/README.md#spaceid-integration) section.
+4. Add your protocol to deployment config [config.json](./graph-node/deployer/config.json)
+5. Start graph-node (more in [graph-node guide](./graph-node/README.md#start-locally-using-docker-compose)):
+
+   ```bash
+   just graph-node-start
+   ```
+
+6. Deploy subgraph to graph-node (read more in [how to deploy subgraphs guide](./graph-node/README.md#deploy-subgraph-to-graph-node))
+    ```bash
+    just deploy-subgraph <protocol_name>
+    ```
+
+7. Add protocol to [dev.json](./bens-server/config/dev.json) config and start `bens-server` connected to common database (read more in [how to start bens guide](./bens-server/README.md#to-start-locally))
+
+    ```bash
+    just run-dev
+    ```
+
+8. Check that `bens-server` responses with valid domains. You can find swagger docs at [https://blockscout.github.io/swaggers/services/bens/main/index.html](https://blockscout.github.io/swaggers/services/bens/main/index.html)
+
+9. Add your protocol to list of [supported domains](#current-supported-domains)
+
+10. Update default config of BENS server for [production](./bens-server/config/prod.json) and [staging](./bens-server/config/staging.json)
+
+11. Finally, create PR with:
     * New directory inside `blockscout-ens/graph-node/subgraphs` with your subgraph code
     * Updated BENS config
     * Updated supported domains list
     * Result of indexed data: proof that your indexed subgraph contains correct amount of domains, resolved_addresses and so on
+

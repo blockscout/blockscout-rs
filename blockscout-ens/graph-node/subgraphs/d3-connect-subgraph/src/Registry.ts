@@ -3,7 +3,8 @@ import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import {
   SLDMintedForOrder as SLDMintedForOrderEvent,
   SLDRenewed as SLDRenewedEvent,
-  SLDMinted as SLDMintedEvent
+  SLDMinted as SLDMintedEvent,
+  Transfer as TransferEvent
 } from "../generated/Registry/Registry"
 import { Domain, Account } from "../generated/schema"
 import { EMPTY_ADDRESS, ROOT_NODE, hashByName, keccakFromStr } from "./utils";
@@ -49,6 +50,10 @@ export function handleSLDRenewed(event: SLDRenewedEvent): void {
   _handleRenewed(event.params.tokenId, event.params.expiration);
 }
 
+
+export function handleTransfer(event: TransferEvent): void {
+  _handleTransfer(event.params.tokenId, event.params.to, event.params.from);
+}
 
 function _handleNewDomain(tokenId: BigInt, to: Address, label: string, tld: string, expiration: BigInt, block: ethereum.Block): void {
   let account = new Account(to.toHexString());
@@ -96,6 +101,17 @@ function _handleRenewed(tokenId: BigInt, expiration: BigInt): void {
       domain.expiryDate = expiration;
       domain.save();
     }    
+}
+
+function _handleTransfer(tokenId: BigInt, to: Address, from: Address): void {
+  let domain = getDomain(tokenId.toHexString());
+  if (domain) {
+    // Create account entity for new owner
+    let account = new Account(to.toHexString());
+    account.save();
+    domain.owner = to.toHexString();
+    domain.save();
+  }
 }
 
 // // Handler for Transfer events
