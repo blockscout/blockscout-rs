@@ -31,7 +31,6 @@ where
     Delta: DataSource<Output = Vec<TimespanValue<Resolution, Value>>>,
 {
     type MainDependencies = Delta;
-    type ResolutionDependencies = ();
     type Output = Vec<TimespanValue<Resolution, Value>>;
     fn mutex_id() -> Option<String> {
         None

@@ -12,7 +12,7 @@ use crate::{
 /// Store output of the `MainDep` right in the local db
 pub struct PassPoint<MainDep>(PhantomData<MainDep>);
 
-impl<MainDep, Resolution> UpdateBehaviour<MainDep, (), Resolution> for PassPoint<MainDep>
+impl<MainDep, Resolution> UpdateBehaviour<MainDep, Resolution> for PassPoint<MainDep>
 where
     MainDep: DataSource<Output = TimespanValue<Resolution, String>>,
     Resolution: Timespan + Clone + Send,

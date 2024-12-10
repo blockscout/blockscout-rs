@@ -52,14 +52,13 @@ pub mod parameters;
 /// with common parameter combinations.
 ///
 /// See [module-level documentation](self) for more details.
-pub struct LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>(
-    PhantomData<(MainDep, ResolutionDep, Create, Update, Query, ChartProps)>,
+pub struct LocalDbChartSource<MainDep, Create, Update, Query, ChartProps>(
+    PhantomData<(MainDep, Create, Update, Query, ChartProps)>,
 )
 where
     MainDep: DataSource,
-    ResolutionDep: DataSource,
     Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
+    Update: UpdateBehaviour<MainDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties;
 
@@ -78,11 +77,9 @@ where
 /// The opposite logic to [`Delta`](`crate::data_source::kinds::data_manipulation::delta::Delta`)
 pub type DailyCumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
     PartialCumulative<DeltaDep>,
-    (),
     DefaultCreate<C>,
     BatchUpdate<
         PartialCumulative<DeltaDep>,
-        (),
         AddLastValueStep<C>,
         Batch30Days,
         DefaultQueryVec<C>,
@@ -96,31 +93,23 @@ pub type DailyCumulativeLocalDbChartSource<DeltaDep, C> = LocalDbChartSource<
 /// any manipulations)
 pub type DirectVecLocalDbChartSource<Dependency, BatchSizeUpperBound, C> = LocalDbChartSource<
     Dependency,
-    (),
     DefaultCreate<C>,
-    BatchUpdate<Dependency, (), PassVecStep, BatchSizeUpperBound, DefaultQueryVec<C>, C>,
+    BatchUpdate<Dependency, PassVecStep, BatchSizeUpperBound, DefaultQueryVec<C>, C>,
     DefaultQueryVec<C>,
     C,
 >;
 
 /// Chart that stores single data point received from provided dependency (without
 /// any manipulations)
-pub type DirectPointLocalDbChartSource<Dependency, C> = LocalDbChartSource<
-    Dependency,
-    (),
-    DefaultCreate<C>,
-    PassPoint<Dependency>,
-    DefaultQueryLast<C>,
-    C,
->;
+pub type DirectPointLocalDbChartSource<Dependency, C> =
+    LocalDbChartSource<Dependency, DefaultCreate<C>, PassPoint<Dependency>, DefaultQueryLast<C>, C>;
 
-impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
-    LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
+impl<MainDep, Create, Update, Query, ChartProps>
+    LocalDbChartSource<MainDep, Create, Update, Query, ChartProps>
 where
     MainDep: DataSource + Sync,
-    ResolutionDep: DataSource + Sync,
     Create: CreateBehaviour + Sync,
-    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
+    Update: UpdateBehaviour<MainDep, ChartProps::Resolution> + Sync,
     Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
     ChartProps::Resolution: Ord + Clone + Debug,
@@ -195,19 +184,17 @@ fn postgres_timestamps_eq(time_1: DateTime<Utc>, time_2: DateTime<Utc>) -> bool 
     time_1.trunc_subsecs(6).eq(&time_2.trunc_subsecs(6))
 }
 
-impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> DataSource
-    for LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
+impl<MainDep, Create, Update, Query, ChartProps> DataSource
+    for LocalDbChartSource<MainDep, Create, Update, Query, ChartProps>
 where
     MainDep: DataSource + Sync,
-    ResolutionDep: DataSource + Sync,
     Create: CreateBehaviour + Sync,
-    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
+    Update: UpdateBehaviour<MainDep, ChartProps::Resolution> + Sync,
     Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
     ChartProps::Resolution: Ord + Clone + Debug + Send,
 {
     type MainDependencies = MainDep;
-    type ResolutionDependencies = ResolutionDep;
     type Output = Query::Output;
 
     fn mutex_id() -> Option<String> {
@@ -257,13 +244,12 @@ where
 
 // need to delegate these traits for update groups to use
 
-impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> Named
-    for LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
+impl<MainDep, Create, Update, Query, ChartProps> Named
+    for LocalDbChartSource<MainDep, Create, Update, Query, ChartProps>
 where
     MainDep: DataSource,
-    ResolutionDep: DataSource,
     Create: CreateBehaviour,
-    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution>,
+    Update: UpdateBehaviour<MainDep, ChartProps::Resolution>,
     Query: QueryBehaviour,
     ChartProps: ChartProperties + Named,
 {
@@ -273,13 +259,12 @@ where
 }
 
 #[portrait::fill(portrait::delegate(ChartProps))]
-impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps> ChartProperties
-    for LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
+impl<MainDep, Create, Update, Query, ChartProps> ChartProperties
+    for LocalDbChartSource<MainDep, Create, Update, Query, ChartProps>
 where
     MainDep: DataSource + Sync,
-    ResolutionDep: DataSource + Sync,
     Create: CreateBehaviour + Sync,
-    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
+    Update: UpdateBehaviour<MainDep, ChartProps::Resolution> + Sync,
     Query: QueryBehaviour + Sync,
     ChartProps: ChartProperties,
 {
@@ -343,10 +328,9 @@ mod tests {
             }
         }
 
-        impl<M, R, Resolution> UpdateBehaviour<M, R, Resolution> for UpdateSingleTriggerAsserter
+        impl<M, Resolution> UpdateBehaviour<M, Resolution> for UpdateSingleTriggerAsserter
         where
             M: DataSource,
-            R: DataSource,
             Resolution: Send,
         {
             async fn update_values(
@@ -387,7 +371,6 @@ mod tests {
         }
 
         type TestedChart = LocalDbChartSource<
-            (),
             (),
             DefaultCreate<TestedChartProps>,
             UpdateSingleTriggerAsserter,

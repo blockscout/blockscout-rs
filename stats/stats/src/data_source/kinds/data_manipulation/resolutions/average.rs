@@ -37,8 +37,7 @@ where
     LowerRes: Timespan + ConsistsOf<HigherRes> + Eq + Debug + Send,
     HigherRes: Ord + Clone + Debug + Send,
 {
-    type MainDependencies = Average;
-    type ResolutionDependencies = Weight;
+    type MainDependencies = (Average, Weight);
     type Output = Vec<TimespanValue<LowerRes, f64>>;
 
     fn mutex_id() -> Option<String> {

@@ -29,7 +29,7 @@ gettable_const!(Batch30Years: TimespanDuration<Year> = TimespanDuration::from_ti
 /// Pass the vector data from main dependency right into the database
 pub struct PassVecStep;
 
-impl<Resolution> BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, String>>, ()>
+impl<Resolution> BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, String>>>
     for PassVecStep
 where
     Resolution: Timespan + Clone + Send + Sync,
@@ -41,7 +41,6 @@ where
         min_blockscout_block: i64,
         _last_accurate_point: TimespanValue<Resolution, String>,
         main_data: Vec<TimespanValue<Resolution, String>>,
-        _resolution_data: (),
     ) -> Result<usize, UpdateError> {
         let found = main_data.len();
         // note: right away cloning another chart will not result in exact copy,

@@ -42,7 +42,6 @@ where
     <Value as FromStr>::Err: Display,
 {
     type MainDependencies = DS;
-    type ResolutionDependencies = ();
     type Output = Vec<TimespanValue<Resolution, Value>>;
     fn mutex_id() -> Option<String> {
         None
