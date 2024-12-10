@@ -53,7 +53,6 @@ pub trait RemoteQueryBehaviour {
 
 impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
     type MainDependencies = ();
-    type ResolutionDependencies = ();
     type Output = Q::Output;
     // No local state => no race conditions expected
     fn mutex_id() -> Option<String> {

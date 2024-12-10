@@ -14,8 +14,7 @@
 //! Therefore, each "node" in stats (charts + deps) is represented by a separate type.
 //!
 //! All these types have common trait ([`DataSource`]) with relationships
-//! being associated types ([`MainDependencies`](DataSource::MainDependencies) and
-//! [`ResolutionDependencies`](DataSource::ResolutionDependencies)).
+//! being associated types ([`MainDependencies`](DataSource::MainDependencies).
 //! They can be [initialized](`DataSource::init_recursively`), [updated](DataSource::update_recursively),
 //! or [queried](DataSource::query_data).
 //!
