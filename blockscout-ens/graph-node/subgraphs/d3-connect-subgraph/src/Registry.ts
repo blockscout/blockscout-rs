@@ -106,6 +106,9 @@ function _handleRenewed(tokenId: BigInt, expiration: BigInt): void {
 function _handleTransfer(tokenId: BigInt, to: Address, from: Address): void {
   let domain = getDomain(tokenId.toHexString());
   if (domain) {
+    // Create account entity for new owner
+    let account = new Account(to.toHexString());
+    account.save();
     domain.owner = to.toHexString();
     domain.save();
   }

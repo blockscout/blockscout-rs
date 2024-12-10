@@ -35,7 +35,7 @@ You can take a look at that subgraph and understand structure of our project mor
 1. Move to recently created directory and run
 
     ```bash
-    yarn init && yarn codegen
+    yarn install && yarn codegen
     ```
 
     In case of any error, adjust typescript code of subgraph. Also make sure subgraph handles events properly.
