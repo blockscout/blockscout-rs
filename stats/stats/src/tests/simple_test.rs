@@ -65,7 +65,7 @@ pub async fn simple_test_chart_with_migration_variants<C>(
     }
 }
 
-fn chart_output_to_expected(output: Vec<Point>) -> Vec<(String, String)> {
+pub fn chart_output_to_expected(output: Vec<Point>) -> Vec<(String, String)> {
     output.into_iter().map(|p| (p.date, p.value)).collect()
 }
 
