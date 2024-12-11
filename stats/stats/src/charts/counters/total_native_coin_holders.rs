@@ -1,6 +1,7 @@
 use crate::{
     data_source::kinds::{
-        data_manipulation::last_point::LastPoint, local_db::DirectPointLocalDbChartSource,
+        data_manipulation::{last_point::LastPoint, map::StripExt},
+        local_db::DirectPointLocalDbChartSource,
     },
     lines::NativeCoinHoldersGrowth,
     ChartProperties, MissingDatePolicy, Named,
@@ -29,7 +30,7 @@ impl ChartProperties for Properties {
 }
 
 pub type TotalNativeCoinHolders =
-    DirectPointLocalDbChartSource<LastPoint<NativeCoinHoldersGrowth>, Properties>;
+    DirectPointLocalDbChartSource<LastPoint<StripExt<NativeCoinHoldersGrowth>>, Properties>;
 
 #[cfg(test)]
 mod tests {

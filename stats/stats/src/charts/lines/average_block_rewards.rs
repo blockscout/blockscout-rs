@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -23,9 +24,9 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 use super::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 
@@ -34,7 +35,7 @@ const ETH: i64 = 1_000_000_000_000_000_000;
 pub struct AverageBlockRewardsQuery;
 
 impl StatementFromRange for AverageBlockRewardsQuery {
-    fn get_statement(range: Option<Range<DateTimeUtc>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -55,8 +56,9 @@ impl StatementFromRange for AverageBlockRewardsQuery {
     }
 }
 
-pub type AverageBlockRewardsRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageBlockRewardsQuery, NaiveDate, f64>>;
+pub type AverageBlockRewardsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<AverageBlockRewardsQuery, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
 pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;
 
@@ -87,24 +89,26 @@ define_and_impl_resolution_properties!(
 
 pub type AverageBlockRewards =
     DirectVecLocalDbChartSource<AverageBlockRewardsRemoteString, Batch30Days, Properties>;
+type AverageBlockRewardsS = StripExt<AverageBlockRewards>;
 pub type AverageBlockRewardsWeekly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageBlockRewards, f64>, NewBlockRewardsInt, Week>,
+        AverageLowerResolution<MapParseTo<AverageBlockRewardsS, f64>, NewBlockRewardsInt, Week>,
     >,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageBlockRewardsMonthly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageBlockRewards, f64>, NewBlockRewardsInt, Month>,
+        AverageLowerResolution<MapParseTo<AverageBlockRewardsS, f64>, NewBlockRewardsInt, Month>,
     >,
     Batch36Months,
     MonthlyProperties,
 >;
+type AverageBlockRewardsMonthlyS = StripExt<AverageBlockRewardsMonthly>;
 pub type AverageBlockRewardsYearly = DirectVecLocalDbChartSource<
     MapToString<
         AverageLowerResolution<
-            MapParseTo<AverageBlockRewardsMonthly, f64>,
+            MapParseTo<AverageBlockRewardsMonthlyS, f64>,
             NewBlockRewardsMonthlyInt,
             Year,
         >,

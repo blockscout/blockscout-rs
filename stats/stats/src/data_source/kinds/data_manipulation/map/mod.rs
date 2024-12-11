@@ -1,21 +1,24 @@
 //! `map` for a data source, i.e. applies a function to the output
 //! of some other source.
 
-use std::{marker::PhantomData, ops::Range};
+use std::marker::PhantomData;
 
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::Utc;
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use chrono::{DateTime, Utc};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{DataSource, UpdateContext},
-    UpdateError,
+    range::UniversalRange,
+    ChartError,
 };
 
 mod parse;
+mod strip_extension;
 mod to_string;
 
 pub use parse::MapParseTo;
+pub use strip_extension::StripExt;
 pub use to_string::MapToString;
 
 /// Apply `F` to each value queried from data source `D`
@@ -26,7 +29,7 @@ where
 
 pub trait MapFunction<Input> {
     type Output: Send;
-    fn function(inner_data: Input) -> Result<Self::Output, UpdateError>;
+    fn function(inner_data: Input) -> Result<Self::Output, ChartError>;
 }
 
 impl<D, F> DataSource for Map<D, F>
@@ -49,16 +52,16 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let inner_data =
             <D as DataSource>::query_data(cx, range, dependency_data_fetch_timer).await?;
         F::function(inner_data)

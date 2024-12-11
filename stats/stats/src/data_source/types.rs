@@ -3,10 +3,12 @@ use chrono::Utc;
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement};
 use tracing::warn;
 
+use crate::utils::MarkedDbConnection;
+
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
-    pub db: &'a DatabaseConnection,
-    pub blockscout: &'a DatabaseConnection,
+    pub db: &'a MarkedDbConnection,
+    pub blockscout: &'a MarkedDbConnection,
     pub blockscout_applied_migrations: BlockscoutMigrations,
     /// If `None`, it will be measured at the start of update
     /// (i.e. after taking mutexes)
@@ -17,8 +19,8 @@ pub struct UpdateParameters<'a> {
 
 #[derive(Clone)]
 pub struct UpdateContext<'a> {
-    pub db: &'a DatabaseConnection,
-    pub blockscout: &'a DatabaseConnection,
+    pub db: &'a MarkedDbConnection,
+    pub blockscout: &'a MarkedDbConnection,
     pub blockscout_applied_migrations: BlockscoutMigrations,
     /// Update time
     pub time: chrono::DateTime<Utc>,

@@ -3,10 +3,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
@@ -25,9 +26,9 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 const ETHER: i64 = i64::pow(10, 18);
 
@@ -35,7 +36,7 @@ pub struct TxnsFeeStatement;
 
 impl StatementFromRange for TxnsFeeStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {
@@ -106,7 +107,9 @@ impl StatementFromRange for TxnsFeeStatement {
     }
 }
 
-pub type TxnsFeeRemote = RemoteDatabaseSource<PullAllWithAndSort<TxnsFeeStatement, NaiveDate, f64>>;
+pub type TxnsFeeRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<TxnsFeeStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
 pub type TxnsFeeRemoteString = MapToString<TxnsFeeRemote>;
 
@@ -136,7 +139,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type TxnsFee = DirectVecLocalDbChartSource<TxnsFeeRemoteString, Batch30Days, Properties>;
-pub type TxnsFeeFloat = MapParseTo<TxnsFee, f64>;
+pub type TxnsFeeFloat = MapParseTo<StripExt<TxnsFee>, f64>;
 pub type TxnsFeeWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<TxnsFeeFloat, Week>>,
     Batch30Weeks,
@@ -147,7 +150,7 @@ pub type TxnsFeeMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type TxnsFeeMonthlyFloat = MapParseTo<TxnsFeeMonthly, f64>;
+pub type TxnsFeeMonthlyFloat = MapParseTo<StripExt<TxnsFeeMonthly>, f64>;
 pub type TxnsFeeYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<TxnsFeeMonthlyFloat, Year>>,
     Batch30Years,

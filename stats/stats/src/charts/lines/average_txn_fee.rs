@@ -3,10 +3,11 @@
 use std::ops::Range;
 
 use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{MapParseTo, MapToString},
+                map::{MapParseTo, MapToString, StripExt},
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
@@ -25,9 +26,9 @@ use crate::{
     ChartProperties, Named,
 };
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
@@ -37,7 +38,7 @@ pub struct AverageTxnFeeStatement;
 
 impl StatementFromRange for AverageTxnFeeStatement {
     fn get_statement(
-        range: Option<Range<DateTimeUtc>>,
+        range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
         if completed_migrations.denormalization {
@@ -108,8 +109,9 @@ impl StatementFromRange for AverageTxnFeeStatement {
     }
 }
 
-pub type AverageTxnFeeRemote =
-    RemoteDatabaseSource<PullAllWithAndSort<AverageTxnFeeStatement, NaiveDate, f64>>;
+pub type AverageTxnFeeRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<AverageTxnFeeStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
 pub type AverageTxnFeeRemoteString = MapToString<AverageTxnFeeRemote>;
 
@@ -140,19 +142,21 @@ define_and_impl_resolution_properties!(
 
 pub type AverageTxnFee =
     DirectVecLocalDbChartSource<AverageTxnFeeRemoteString, Batch30Days, Properties>;
+type AverageTxnFeeS = StripExt<AverageTxnFee>;
 pub type AverageTxnFeeWeekly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFee, f64>, NewTxnsInt, Week>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFeeS, f64>, NewTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
 pub type AverageTxnFeeMonthly = DirectVecLocalDbChartSource<
-    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFee, f64>, NewTxnsInt, Month>>,
+    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFeeS, f64>, NewTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+type AverageTxnFeeMonthlyS = StripExt<AverageTxnFeeMonthly>;
 pub type AverageTxnFeeYearly = DirectVecLocalDbChartSource<
     MapToString<
-        AverageLowerResolution<MapParseTo<AverageTxnFeeMonthly, f64>, NewTxnsMonthlyInt, Year>,
+        AverageLowerResolution<MapParseTo<AverageTxnFeeMonthlyS, f64>, NewTxnsMonthlyInt, Year>,
     >,
     Batch30Years,
     YearlyProperties,

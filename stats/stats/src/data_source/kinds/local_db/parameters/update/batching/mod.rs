@@ -17,8 +17,9 @@ use crate::{
         types::Get,
         UpdateContext,
     },
-    types::{Timespan, TimespanDuration, TimespanValue},
-    ChartProperties, UpdateError,
+    range::UniversalRange,
+    types::{ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue},
+    ChartError, ChartProperties,
 };
 
 pub mod parameter_traits;
@@ -39,7 +40,7 @@ where
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
     BatchSizeUpperBound: Get<Value = TimespanDuration<ChartProps::Resolution>>,
-    Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
+    Query: QueryBehaviour<Output = Vec<ExtendedTimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties;
 
 impl<MainDep, ResolutionDep, BatchStep, BatchSizeUpperBound, Query, ChartProps>
@@ -50,7 +51,7 @@ where
     ResolutionDep: DataSource,
     BatchStep: BatchStepBehaviour<ChartProps::Resolution, MainDep::Output, ResolutionDep::Output>,
     BatchSizeUpperBound: Get<Value = TimespanDuration<ChartProps::Resolution>>,
-    Query: QueryBehaviour<Output = Vec<TimespanValue<ChartProps::Resolution, String>>>,
+    Query: QueryBehaviour<Output = Vec<ExtendedTimespanValue<ChartProps::Resolution, String>>>,
     ChartProps: ChartProperties,
     ChartProps::Resolution: Timespan + Ord + Clone + Debug + Send,
 {
@@ -60,7 +61,7 @@ where
         last_accurate_point: Option<TimespanValue<ChartProps::Resolution, String>>,
         min_blockscout_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<(), UpdateError> {
+    ) -> Result<(), ChartError> {
         let now = cx.time;
         let update_from = last_accurate_point
             .clone()
@@ -68,10 +69,10 @@ where
         let update_range_start = match update_from {
             Some(d) => d,
             None => ChartProps::Resolution::from_date(
-                get_min_date_blockscout(cx.blockscout)
+                get_min_date_blockscout(cx.blockscout.connection.as_ref())
                     .await
                     .map(|time| time.date())
-                    .map_err(UpdateError::BlockscoutDB)?,
+                    .map_err(ChartError::BlockscoutDB)?,
             ),
         };
 
@@ -106,7 +107,12 @@ where
             )
             .await?;
             // for query in `get_previous_step_last_point` to work correctly
-            Self::update_metadata(cx.db, chart_id, range.into_date_time_range().end).await?;
+            Self::update_metadata(
+                cx.db.connection.as_ref(),
+                chart_id,
+                range.into_date_time_range().end,
+            )
+            .await?;
             let elapsed: std::time::Duration = now.elapsed();
             tracing::info!(
                 found =? found,
@@ -123,20 +129,27 @@ where
 async fn get_previous_step_last_point<Query, Resolution>(
     cx: &UpdateContext<'_>,
     this_step_start: Resolution,
-) -> Result<TimespanValue<Resolution, String>, UpdateError>
+) -> Result<TimespanValue<Resolution, String>, ChartError>
 where
     Resolution: Timespan + Clone,
-    Query: QueryBehaviour<Output = Vec<TimespanValue<Resolution, String>>>,
+    Query: QueryBehaviour<Output = Vec<ExtendedTimespanValue<Resolution, String>>>,
 {
     let previous_step_last_point_timespan = this_step_start.saturating_previous_timespan();
     let last_point_range_values = Query::query_data(
         cx,
-        Some(previous_step_last_point_timespan.clone().into_time_range()),
+        previous_step_last_point_timespan
+            .clone()
+            .into_time_range()
+            .into(),
+        None,
+        false,
     )
     .await?;
+    // might be replaced with `fill_missing_dates=true`
     let previous_step_last_point = last_point_range_values
         .last()
         .cloned()
+        .map(|p| p.into())
         // `None` means
         // - if `MissingDatePolicy` is `FillZero` = the value is 0
         // - if `MissingDatePolicy` is `FillPrevious` = no previous value was found at this moment in time = value at the point is 0
@@ -145,7 +158,7 @@ where
         ));
     if last_point_range_values.len() > 1 {
         // return error because it's likely that date in `previous_step_last_point` is incorrect
-        return Err(UpdateError::Internal("Retrieved 2 points from previous step; probably an issue with range construction and handling".to_owned()));
+        return Err(ChartError::Internal("Retrieved 2 points from previous step; probably an issue with range construction and handling".to_owned()));
     }
     Ok(previous_step_last_point)
 }
@@ -158,20 +171,20 @@ async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep, Resolution>
     last_accurate_point: TimespanValue<Resolution, String>,
     range: BatchRange<Resolution>,
     dependency_data_fetch_timer: &mut AggregateTimer,
-) -> Result<usize, UpdateError>
+) -> Result<usize, ChartError>
 where
     MainDep: DataSource,
     ResolutionDep: DataSource,
     Resolution: Timespan,
     BatchStep: BatchStepBehaviour<Resolution, MainDep::Output, ResolutionDep::Output>,
 {
-    let query_range = range.into_date_time_range();
+    let query_range: UniversalRange<_> = range.into_date_time_range().into();
     let main_data =
-        MainDep::query_data(cx, Some(query_range.clone()), dependency_data_fetch_timer).await?;
+        MainDep::query_data(cx, query_range.clone(), dependency_data_fetch_timer).await?;
     let resolution_data =
-        ResolutionDep::query_data(cx, Some(query_range), dependency_data_fetch_timer).await?;
+        ResolutionDep::query_data(cx, query_range, dependency_data_fetch_timer).await?;
     let found = BatchStep::batch_update_values_step_with(
-        cx.db,
+        cx.db.connection.as_ref(),
         chart_id,
         cx.time,
         min_blockscout_block,
@@ -222,12 +235,12 @@ fn generate_batch_ranges<Resolution>(
     start: Resolution,
     end: DateTime<Utc>,
     max_step: TimespanDuration<Resolution>,
-) -> Result<Vec<BatchRange<Resolution>>, UpdateError>
+) -> Result<Vec<BatchRange<Resolution>>, ChartError>
 where
     Resolution: Timespan + Ord + Clone,
 {
     if max_step.repeats() == 0 {
-        return Err(UpdateError::Internal(
+        return Err(ChartError::Internal(
             "Zero maximum batch step is not allowed".into(),
         ));
     }
@@ -378,12 +391,15 @@ mod tests {
 
         use crate::{
             data_source::{
-                kinds::local_db::{
-                    parameters::{
-                        update::batching::{parameters::mock::RecordingPassStep, BatchUpdate},
-                        DefaultCreate, DefaultQueryVec,
+                kinds::{
+                    data_manipulation::map::StripExt,
+                    local_db::{
+                        parameters::{
+                            update::batching::{parameters::mock::RecordingPassStep, BatchUpdate},
+                            DefaultCreate, DefaultQueryVec,
+                        },
+                        LocalDbChartSource,
                     },
-                    LocalDbChartSource,
                 },
                 types::Get,
             },
@@ -432,7 +448,7 @@ mod tests {
         }
 
         type ThisRecordingBatchUpdate = BatchUpdate<
-            AccountsGrowth,
+            StripExt<AccountsGrowth>,
             (),
             ThisRecordingStep,
             Batch1Day,
@@ -441,7 +457,7 @@ mod tests {
         >;
 
         type RecordingChart = LocalDbChartSource<
-            AccountsGrowth,
+            StripExt<AccountsGrowth>,
             (),
             DefaultCreate<ThisTestChartProps>,
             ThisRecordingBatchUpdate,

@@ -14,7 +14,7 @@ use anyhow::Context;
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
-use stats::metrics;
+use stats::{metrics, utils::MarkedDbConnection};
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
     health_server::HealthServer,
@@ -79,7 +79,9 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         settings.run_migrations,
     )
     .await?;
-    let db = Arc::new(Database::connect(opt).await.context("stats DB")?);
+    let db = MarkedDbConnection::main_connection(Arc::new(
+        Database::connect(opt).await.context("stats DB")?,
+    ));
 
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
@@ -89,7 +91,9 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         tracing::log::LevelFilter::Warn,
         Duration::from_secs(3600),
     );
-    let blockscout = Arc::new(Database::connect(opt).await.context("blockscout DB")?);
+    let blockscout = MarkedDbConnection::main_connection(Arc::new(
+        Database::connect(opt).await.context("blockscout DB")?,
+    ));
 
     let charts = Arc::new(RuntimeSetup::new(
         charts_config,
@@ -101,14 +105,14 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     for group_entry in charts.update_groups.values() {
         group_entry
             .group
-            .create_charts_with_mutexes(&db, None, &group_entry.enabled_members)
+            .create_charts_with_mutexes(db.connection.as_ref(), None, &group_entry.enabled_members)
             .await?;
     }
 
     let blockscout_api_config = init_blockscout_api_client(&settings).await?;
 
     let update_service =
-        Arc::new(UpdateService::new(db.clone(), blockscout, charts.clone()).await?);
+        Arc::new(UpdateService::new(db.clone(), blockscout.clone(), charts.clone()).await?);
 
     let update_service_handle = tokio::spawn(async move {
         // Wait for blockscout to index, if necessary.
@@ -135,7 +139,8 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
     }
 
-    let read_service = Arc::new(ReadService::new(db, charts, settings.limits.into()).await?);
+    let read_service =
+        Arc::new(ReadService::new(db, blockscout, charts, settings.limits.into()).await?);
     let health = Arc::new(HealthService::default());
 
     let grpc_router = grpc_router(read_service.clone(), health.clone());

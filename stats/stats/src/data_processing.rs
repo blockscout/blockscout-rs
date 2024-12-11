@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 use crate::{
     charts::types::timespans::DateValue,
     types::{Timespan, TimespanValue},
-    UpdateError,
+    ChartError,
 };
 use std::{
     mem,
@@ -17,7 +17,7 @@ use std::{
 pub fn cumsum<Resolution, Value>(
     mut data: Vec<TimespanValue<Resolution, Value>>,
     mut prev_sum: Value,
-) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError>
+) -> Result<Vec<TimespanValue<Resolution, Value>>, ChartError>
 where
     Value: AddAssign + Clone,
     TimespanValue<Resolution, Value>: Default,
@@ -40,7 +40,7 @@ where
 pub fn deltas<Resolution, Value>(
     mut data: Vec<TimespanValue<Resolution, Value>>,
     mut prev_value: Value,
-) -> Result<Vec<TimespanValue<Resolution, Value>>, UpdateError>
+) -> Result<Vec<TimespanValue<Resolution, Value>>, ChartError>
 where
     Value: SubAssign + Clone,
     TimespanValue<Resolution, Value>: Default,
@@ -61,7 +61,7 @@ where
 pub fn sum<Resolution, Value>(
     data: &[TimespanValue<Resolution, Value>],
     mut partial_sum: Value,
-) -> Result<TimespanValue<Resolution, Value>, UpdateError>
+) -> Result<TimespanValue<Resolution, Value>, ChartError>
 where
     Resolution: Timespan + Clone + Ord,
     Value: AddAssign + Clone,

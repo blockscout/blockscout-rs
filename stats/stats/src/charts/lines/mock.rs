@@ -10,15 +10,18 @@ use crate::{
         UpdateContext,
     },
     missing_date::fit_into_range,
+    range::{Incrementable, UniversalRange},
     types::{timespans::DateValue, Timespan, TimespanValue},
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use rand::{distributions::uniform::SampleUniform, rngs::StdRng, Rng, SeedableRng};
-use sea_orm::prelude::*;
-use std::{marker::PhantomData, ops::Range};
+use std::{
+    marker::PhantomData,
+    ops::{Bound, Range},
+};
 
 /// non-inclusive range
 fn generate_intervals(mut start: NaiveDate, end: NaiveDate) -> Vec<NaiveDate> {
@@ -51,7 +54,7 @@ pub fn mocked_lines<T: SampleUniform + PartialOrd + Clone + ToString>(
 pub fn mock_trim_lines<T, V>(
     data: Vec<TimespanValue<T, V>>,
     query_time: DateTime<Utc>,
-    query_range: Option<Range<DateTimeUtc>>,
+    query_range: UniversalRange<DateTime<Utc>>,
     policy: MissingDatePolicy,
 ) -> Vec<TimespanValue<T, V>>
 where
@@ -59,11 +62,16 @@ where
     V: Clone,
 {
     let date_range_start = query_range
-        .clone()
-        .map(|r| T::from_date(r.start.date_naive()));
+        .start
+        .map(|start| T::from_date(start.date_naive()));
     let mut date_range_end = query_time;
-    if let Some(r) = query_range {
-        date_range_end = date_range_end.min(r.end)
+    let query_range_end_exclusive = match query_range.end {
+        Bound::Included(end) => Some(end.saturating_inc()),
+        Bound::Excluded(end) => Some(end),
+        Bound::Unbounded => None,
+    };
+    if let Some(end_exclusive) = query_range_end_exclusive {
+        date_range_end = date_range_end.min(end_exclusive)
     }
     fit_into_range(
         data,
@@ -91,8 +99,8 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
-    ) -> Result<Vec<DateValue<String>>, UpdateError> {
+        range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Vec<DateValue<String>>, ChartError> {
         let full_data = mocked_lines(DateRange::get(), ValueRange::get());
         Ok(mock_trim_lines(full_data, cx.time, range, Policy::get()))
     }
@@ -137,8 +145,8 @@ where
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
-    ) -> Result<Self::Output, UpdateError> {
+        range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Self::Output, ChartError> {
         Ok(mock_trim_lines(Data::get(), cx.time, range, Policy::get()))
     }
 }

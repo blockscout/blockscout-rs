@@ -55,13 +55,17 @@ impl Year {
         self.clamp_by_naive_date_range().0
     }
 
+    fn year_number_within_naive_date(year: i32) -> bool {
+        NaiveDate::from_yo_opt(year, 1).is_some()
+    }
+
     fn clamp_by_naive_date_range(self) -> Self {
-        if NaiveDate::from_yo_opt(self.0, 1).is_some() {
+        if Self::year_number_within_naive_date(self.0) {
             self
         } else if self.0 > 0 {
-            Self::from_date(NaiveDate::MAX)
+            <Self as Timespan>::max()
         } else {
-            Self::from_date(NaiveDate::MIN)
+            <Self as Timespan>::min()
         }
     }
 }
@@ -97,6 +101,40 @@ impl Timespan for Year {
     {
         let sub_years: i32 = duration.repeats().try_into().unwrap_or(i32::MAX);
         Self(self.number_within_naive_date().saturating_sub(sub_years)).clamp_by_naive_date_range()
+    }
+
+    fn checked_add(&self, duration: TimespanDuration<Self>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let add_years = duration.repeats().try_into().ok()?;
+        let new_year_num = self.number_within_naive_date().checked_add(add_years)?;
+        if Self::year_number_within_naive_date(new_year_num) {
+            Some(Self(new_year_num))
+        } else {
+            None
+        }
+    }
+
+    fn checked_sub(&self, duration: TimespanDuration<Self>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let sub_years: i32 = duration.repeats().try_into().ok()?;
+        let new_year_num = self.number_within_naive_date().checked_sub(sub_years)?;
+        if Self::year_number_within_naive_date(new_year_num) {
+            Some(Self(new_year_num))
+        } else {
+            None
+        }
+    }
+
+    fn max() -> Self {
+        Self::from_date(NaiveDate::MAX)
+    }
+
+    fn min() -> Self {
+        Self::from_date(NaiveDate::MIN)
     }
 }
 
@@ -252,6 +290,53 @@ mod tests {
             Year::from_date(NaiveDate::MIN)
                 .saturating_sub(TimespanDuration::from_timespan_repeats(1)),
             Year::from_date(NaiveDate::MIN)
+        );
+    }
+    #[test]
+    fn year_checked_add_works() {
+        assert_eq!(
+            Year(2016).checked_add(TimespanDuration::from_timespan_repeats(16)),
+            Some(Year(2032))
+        );
+        assert_eq!(
+            Year(2016).checked_add(TimespanDuration::from_timespan_repeats(0)),
+            Some(Year(2016))
+        );
+        assert_eq!(
+            Year(2016).checked_add(TimespanDuration::from_timespan_repeats(u64::MAX)),
+            None
+        );
+        assert_eq!(
+            Year::from_date(NaiveDate::MAX).checked_add(TimespanDuration::from_timespan_repeats(1)),
+            None
+        );
+        assert_eq!(
+            Year(i32::MAX - 5).checked_add(TimespanDuration::from_timespan_repeats(3)),
+            None
+        );
+    }
+
+    #[test]
+    fn year_checked_sub_works() {
+        assert_eq!(
+            Year(2016).checked_sub(TimespanDuration::from_timespan_repeats(16)),
+            Some(Year(2000))
+        );
+        assert_eq!(
+            Year(2016).checked_sub(TimespanDuration::from_timespan_repeats(0)),
+            Some(Year(2016))
+        );
+        assert_eq!(
+            Year(2016).checked_sub(TimespanDuration::from_timespan_repeats(u64::MAX)),
+            None
+        );
+        assert_eq!(
+            Year::from_date(NaiveDate::MIN).checked_sub(TimespanDuration::from_timespan_repeats(1)),
+            None
+        );
+        assert_eq!(
+            Year(i32::MIN + 5).checked_sub(TimespanDuration::from_timespan_repeats(3)),
+            None
         );
     }
 

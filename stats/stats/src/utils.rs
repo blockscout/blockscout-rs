@@ -1,26 +1,54 @@
 //! Common utilities used across statistics
 
-use std::ops::{Range, RangeInclusive};
-
-use chrono::{NaiveDate, NaiveTime};
-use sea_orm::{prelude::DateTimeUtc, Value};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use sea_orm::Value;
+use std::{ops::Range, sync::Arc};
 
 // this const is not public in `chrono` for some reason
 pub const NANOS_PER_SEC: i32 = 1_000_000_000;
 
-pub fn day_start(date: &NaiveDate) -> DateTimeUtc {
+pub fn day_start(date: &NaiveDate) -> DateTime<Utc> {
     date.and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
         .and_utc()
 }
 
-pub fn exclusive_datetime_range_to_inclusive(r: Range<DateTimeUtc>) -> RangeInclusive<DateTimeUtc> {
-    // subtract the smallest unit of time to get semantically the same range
-    // but inclusive
-    let new_end = r
-        .end
-        .checked_sub_signed(chrono::Duration::nanoseconds(1))
-        .unwrap_or(DateTimeUtc::MIN_UTC); // saturating sub
-    r.start..=new_end
+// todo: remove marked part if not used until May 2025.
+// probably rename to some wrapper of db connection to add some other
+// stuff if necessary (or use UpdateContext as a place to extend the context)
+/// Database connection with a mark of what database it is.
+///
+/// Used to separate caching for different databases to
+/// prevent data clashes when running unit tests concurrently.
+#[derive(Debug, Clone)]
+pub struct MarkedDbConnection {
+    pub connection: Arc<sea_orm::DatabaseConnection>,
+    pub db_name: String,
+}
+
+impl MarkedDbConnection {
+    #[cfg(any(feature = "test-utils", test))]
+    pub fn from_test_db(
+        guard: &blockscout_service_launcher::test_database::TestDbGuard,
+    ) -> Option<Self> {
+        Some(Self {
+            connection: guard.client(),
+            db_name: guard.db_url().split("/").last()?.to_owned(),
+        })
+    }
+
+    pub fn main_connection(inner: Arc<sea_orm::DatabaseConnection>) -> Self {
+        Self {
+            connection: inner,
+            db_name: "main".to_owned(),
+        }
+    }
+
+    pub fn in_memory(inner: Arc<sea_orm::DatabaseConnection>) -> Self {
+        Self {
+            connection: inner,
+            db_name: "in_memory".to_owned(),
+        }
+    }
 }
 
 /// Used inside [`sql_with_range_filter_opt`]
@@ -32,7 +60,7 @@ pub fn exclusive_datetime_range_to_inclusive(r: Range<DateTimeUtc>) -> RangeIncl
 /// Vec should be appended to the args.
 /// String should be inserted in places for filter.
 pub(crate) fn produce_filter_and_values(
-    range: Option<Range<DateTimeUtc>>,
+    range: Option<Range<DateTime<Utc>>>,
     filter_by: &str,
     filter_arg_number_start: usize,
 ) -> (String, Vec<Value>) {
@@ -104,8 +132,8 @@ mod test {
             ("".to_string(), vec![])
         );
 
-        let time_1 = DateTimeUtc::from_timestamp(1234567, 0).unwrap();
-        let time_2 = DateTimeUtc::from_timestamp(7654321, 0).unwrap();
+        let time_1 = DateTime::<Utc>::from_timestamp(1234567, 0).unwrap();
+        let time_2 = DateTime::<Utc>::from_timestamp(7654321, 0).unwrap();
         assert_eq!(
             produce_filter_and_values(Some(time_1..time_2), "aboba", 123),
             (
@@ -120,7 +148,7 @@ mod test {
 
     const ETH: i64 = 1_000_000_000_000_000_000;
 
-    fn naive_sql_selector(range: Option<Range<DateTimeUtc>>) -> Statement {
+    fn naive_sql_selector(range: Option<Range<DateTime<Utc>>>) -> Statement {
         match range {
             Some(range) => Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -185,8 +213,8 @@ mod test {
     #[test]
     fn sql_with_range_filter_some_works() {
         let range = Some(
-            DateTimeUtc::from_timestamp(1234567, 0).unwrap()
-                ..DateTimeUtc::from_timestamp(7654321, 0).unwrap(),
+            DateTime::<Utc>::from_timestamp(1234567, 0).unwrap()
+                ..DateTime::<Utc>::from_timestamp(7654321, 0).unwrap(),
         );
         assert_eq!(
             compact_sql(naive_sql_selector(range.clone())),

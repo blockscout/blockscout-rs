@@ -5,7 +5,7 @@ use sea_orm::DatabaseConnection;
 
 use crate::{
     types::{Timespan, TimespanValue},
-    UpdateError,
+    ChartError,
 };
 
 pub trait BatchStepBehaviour<Resolution, MainInput, ResolutionInput>
@@ -25,5 +25,5 @@ where
         last_accurate_point: TimespanValue<Resolution, String>,
         main_data: MainInput,
         resolution_data: ResolutionInput,
-    ) -> impl Future<Output = Result<usize, UpdateError>> + std::marker::Send;
+    ) -> impl Future<Output = Result<usize, ChartError>> + std::marker::Send;
 }

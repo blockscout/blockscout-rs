@@ -1,7 +1,7 @@
 //! Filter points that can be deduced according to `MissingDatePolicy`.
 //! Can help with space usage efficiency.
 
-use std::{marker::PhantomData, ops::Range};
+use std::marker::PhantomData;
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
@@ -10,8 +10,9 @@ use sea_orm::DatabaseConnection;
 
 use crate::{
     data_source::{DataSource, UpdateContext},
+    range::UniversalRange,
     types::TimespanValue,
-    ChartProperties, MissingDatePolicy, UpdateError,
+    ChartError, ChartProperties, MissingDatePolicy,
 };
 
 /// Pass only essential points from `D`, removing ones that can be deduced
@@ -44,16 +45,16 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTime<Utc>>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
+    ) -> Result<Self::Output, ChartError> {
         let data = DS::query_data(cx, range, dependency_data_fetch_timer).await?;
         Ok(match Properties::missing_date_policy() {
             MissingDatePolicy::FillZero => {
@@ -79,12 +80,16 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crate::{
         data_source::types::BlockscoutMigrations,
         gettable_const,
         lines::PredefinedMockSource,
+        range::UniversalRange,
         tests::point_construction::{d_v_double, dt},
         types::timespans::DateValue,
+        utils::MarkedDbConnection,
         MissingDatePolicy, Named,
     };
 
@@ -151,7 +156,9 @@ mod tests {
         type TestedPrevious = FilterDeducible<PredefinedSourcePrevious, PropertiesPrevious>;
 
         // db is not used in mock
-        let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+        let empty_db = MarkedDbConnection::in_memory(Arc::new(
+            sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
+        ));
 
         let context = UpdateContext {
             db: &empty_db,
@@ -161,9 +168,13 @@ mod tests {
             force_full: false,
         };
         assert_eq!(
-            <TestedZero as DataSource>::query_data(&context, None, &mut AggregateTimer::new())
-                .await
-                .unwrap(),
+            <TestedZero as DataSource>::query_data(
+                &context,
+                UniversalRange::full(),
+                &mut AggregateTimer::new()
+            )
+            .await
+            .unwrap(),
             vec![
                 d_v_double("2024-07-08", 5.0),
                 d_v_double("2024-07-10", 5.0),
@@ -175,9 +186,13 @@ mod tests {
             ]
         );
         assert_eq!(
-            <TestedPrevious as DataSource>::query_data(&context, None, &mut AggregateTimer::new())
-                .await
-                .unwrap(),
+            <TestedPrevious as DataSource>::query_data(
+                &context,
+                UniversalRange::full(),
+                &mut AggregateTimer::new()
+            )
+            .await
+            .unwrap(),
             vec![
                 d_v_double("2024-07-08", 5.0),
                 d_v_double("2024-07-14", 10.3),

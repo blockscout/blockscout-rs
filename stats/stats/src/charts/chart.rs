@@ -12,10 +12,13 @@ use entity::sea_orm_active_enums::{ChartResolution, ChartType};
 use sea_orm::prelude::*;
 use thiserror::Error;
 
-use super::db_interaction::read::ApproxUnsignedDiff;
+use super::{
+    db_interaction::read::ApproxUnsignedDiff,
+    query_dispatch::{ChartTypeSpecifics, QuerySerialized, QuerySerializedDyn},
+};
 
 #[derive(Error, Debug)]
-pub enum UpdateError {
+pub enum ChartError {
     #[error("blockscout database error: {0}")]
     BlockscoutDB(DbErr),
     #[error("stats database error: {0}")]
@@ -28,12 +31,12 @@ pub enum UpdateError {
     Internal(String),
 }
 
-impl From<ReadError> for UpdateError {
+impl From<ReadError> for ChartError {
     fn from(read: ReadError) -> Self {
         match read {
-            ReadError::DB(db) => UpdateError::StatsDB(db),
-            ReadError::ChartNotFound(err) => UpdateError::ChartNotFound(err),
-            ReadError::IntervalTooLarge(limit) => UpdateError::IntervalTooLarge { limit },
+            ReadError::DB(db) => ChartError::StatsDB(db),
+            ReadError::ChartNotFound(err) => ChartError::ChartNotFound(err),
+            ReadError::IntervalTooLarge(limit) => ChartError::IntervalTooLarge { limit },
         }
     }
 }
@@ -232,6 +235,35 @@ macro_rules! define_and_impl_resolution_properties {
     };
 }
 
+/// Dynamic object representing a chart
+#[derive(Debug)]
+pub struct ChartObject {
+    pub properties: ChartPropertiesObject,
+    pub type_specifics: ChartTypeSpecifics,
+}
+
+impl ChartObject {
+    pub fn construct_from_chart<T>(t: T) -> Self
+    where
+        T: ChartProperties + QuerySerialized + Send + 'static,
+        QuerySerializedDyn<T::Output>: Into<ChartTypeSpecifics>,
+    {
+        let type_specifics = <QuerySerializedDyn<T::Output> as Into<ChartTypeSpecifics>>::into(
+            std::sync::Arc::new(Box::new(t)),
+        );
+        assert_eq!(
+            type_specifics.as_chart_type(),
+            T::chart_type(),
+            "data returned by chart {} does not match chart type",
+            T::name()
+        );
+        Self {
+            properties: ChartPropertiesObject::construct_from_chart::<T>(),
+            type_specifics,
+        }
+    }
+}
+
 /// Dynamic version of trait `ChartProperties`.
 ///
 /// Helpful when need a unified type for different charts
@@ -240,7 +272,6 @@ pub struct ChartPropertiesObject {
     /// unique identifier of the chart
     pub key: ChartKey,
     pub name: String,
-    pub chart_type: ChartType,
     pub resolution: ResolutionKind,
     pub missing_date_policy: MissingDatePolicy,
     pub approximate_trailing_points: u64,
@@ -251,7 +282,6 @@ impl ChartPropertiesObject {
         Self {
             key: T::key(),
             name: T::name(),
-            chart_type: T::chart_type(),
             resolution: T::resolution(),
             missing_date_policy: T::missing_date_policy(),
             approximate_trailing_points: T::approximate_trailing_points(),

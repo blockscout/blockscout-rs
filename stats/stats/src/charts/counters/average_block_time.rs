@@ -1,4 +1,4 @@
-use std::{cmp::Reverse, ops::Range};
+use std::cmp::Reverse;
 
 use crate::{
     data_source::{
@@ -9,13 +9,14 @@ use crate::{
         },
         UpdateContext,
     },
+    range::UniversalRange,
     types::TimespanValue,
     utils::NANOS_PER_SEC,
-    ChartProperties, MissingDatePolicy, Named, UpdateError,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::blocks;
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
 use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
@@ -51,12 +52,12 @@ struct BlockTimestamp {
 async fn query_average_block_time(
     cx: &UpdateContext<'_>,
     offset: u64,
-) -> Result<Option<TimespanValue<NaiveDate, f64>>, UpdateError> {
+) -> Result<Option<TimespanValue<NaiveDate, f64>>, ChartError> {
     let query = average_block_time_statement(offset);
     let block_timestamps = BlockTimestamp::find_by_statement(query)
-        .all(cx.blockscout)
+        .all(cx.blockscout.connection.as_ref())
         .await
-        .map_err(UpdateError::BlockscoutDB)?;
+        .map_err(ChartError::BlockscoutDB)?;
     Ok(calculate_average_block_time(block_timestamps))
 }
 
@@ -67,13 +68,13 @@ impl RemoteQueryBehaviour for AverageBlockTimeQuery {
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        _range: Option<Range<DateTimeUtc>>,
-    ) -> Result<TimespanValue<NaiveDate, f64>, UpdateError> {
+        _range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<TimespanValue<NaiveDate, f64>, ChartError> {
         match query_average_block_time(cx, OFFSET_BLOCKS).await? {
             Some(avg_block_time) => Ok(avg_block_time),
             None => query_average_block_time(cx, 0)
                 .await?
-                .ok_or(UpdateError::Internal(
+                .ok_or(ChartError::Internal(
                     "No blocks were returned to calculate average block time".into(),
                 )),
         }
@@ -148,6 +149,7 @@ mod tests {
             mock_blockscout::fill_many_blocks,
             simple_test::{get_counter, prepare_chart_test, simple_test_counter},
         },
+        utils::MarkedDbConnection,
     };
 
     #[tokio::test]
@@ -196,8 +198,8 @@ mod tests {
         };
         fill_many_blocks(&blockscout, current_time.naive_utc(), &block_times).await;
         let mut parameters = UpdateParameters {
-            db: &db,
-            blockscout: &blockscout,
+            db: &MarkedDbConnection::from_test_db(&db).unwrap(),
+            blockscout: &MarkedDbConnection::from_test_db(&blockscout).unwrap(),
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
             force_full: true,
@@ -206,14 +208,14 @@ mod tests {
         AverageBlockTime::update_recursively(&cx).await.unwrap();
         assert_eq!(
             expected_avg.to_string(),
-            get_counter::<AverageBlockTime>(&db).await
+            get_counter::<AverageBlockTime>(&cx).await.value
         );
         parameters.force_full = false;
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         AverageBlockTime::update_recursively(&cx).await.unwrap();
         assert_eq!(
             expected_avg.to_string(),
-            get_counter::<AverageBlockTime>(&db).await
+            get_counter::<AverageBlockTime>(&cx).await.value
         );
     }
 

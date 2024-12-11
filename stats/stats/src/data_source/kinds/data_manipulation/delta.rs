@@ -3,23 +3,19 @@
 //!
 //! I.e. chart "New accounts" is a delta of  "Total accounts".
 
-use std::{
-    fmt::Display,
-    marker::PhantomData,
-    ops::{Range, SubAssign},
-    str::FromStr,
-};
+use std::{fmt::Display, marker::PhantomData, ops::SubAssign, str::FromStr};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, TimeDelta, Utc};
 use rust_decimal::prelude::Zero;
-use sea_orm::{prelude::DateTimeUtc, DatabaseConnection, DbErr};
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_processing::deltas,
     data_source::{DataSource, UpdateContext},
+    range::UniversalRange,
     types::TimespanValue,
-    UpdateError,
+    ChartError,
 };
 
 /// Calculate delta data from cumulative dependency.
@@ -56,26 +52,25 @@ where
         Ok(())
     }
 
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), UpdateError> {
+    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
 
     async fn query_data(
         cx: &UpdateContext<'_>,
-        range: Option<Range<DateTimeUtc>>,
+        range: UniversalRange<DateTime<Utc>>,
         dependency_data_fetch_timer: &mut AggregateTimer,
-    ) -> Result<Self::Output, UpdateError> {
-        let request_range = range.clone().map(|r| {
-            let start = r
-                .start
-                .checked_sub_signed(TimeDelta::days(1))
-                .unwrap_or(DateTime::<Utc>::MAX_UTC);
-            let end = r.end;
-            start..end
+    ) -> Result<Self::Output, ChartError> {
+        let mut request_range = range.clone();
+        request_range.start = request_range.start.map(|s| {
+            s.checked_sub_signed(TimeDelta::days(1))
+                .unwrap_or(DateTime::<Utc>::MAX_UTC)
         });
+        let start_is_bounded = request_range.start.is_some();
+
         let cum_data = DS::query_data(cx, request_range, dependency_data_fetch_timer).await?;
-        let (prev_value, cum_data) = if range.is_some() {
+        let (prev_value, cum_data) = if start_is_bounded {
             let mut cum_data = cum_data.into_iter();
             let Some(range_start) = cum_data.next() else {
                 tracing::warn!("Value before the range was not found, finishing update");

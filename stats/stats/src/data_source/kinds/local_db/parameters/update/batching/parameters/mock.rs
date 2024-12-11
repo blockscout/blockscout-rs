@@ -5,7 +5,7 @@ use sea_orm::DatabaseConnection;
 
 use crate::{
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
-    tests::recorder::Recorder, types::timespans::DateValue, UpdateError,
+    tests::recorder::Recorder, types::timespans::DateValue, ChartError,
 };
 
 use super::PassVecStep;
@@ -40,7 +40,7 @@ where
         last_accurate_point: DateValue<String>,
         main_data: Vec<DateValue<String>>,
         resolution_data: (),
-    ) -> Result<usize, UpdateError> {
+    ) -> Result<usize, ChartError> {
         StepsRecorder::record(StepInput {
             chart_id,
             update_time,

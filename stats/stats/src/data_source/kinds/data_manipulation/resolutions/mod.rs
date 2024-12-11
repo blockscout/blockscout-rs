@@ -2,34 +2,35 @@
 //! type/meaning.
 //! E.g. "weekly average block rewards" from "daily average block rewards".
 
-use std::ops::{Range, RangeInclusive};
-
 use chrono::{DateTime, Utc};
 
-use crate::{types::Timespan, utils::exclusive_datetime_range_to_inclusive};
+use crate::{range::UniversalRange, types::Timespan};
 
 pub mod average;
 pub mod last_value;
 pub mod sum;
 
 // Boundaries of resulting range - timespans that contain boundaries of date range
-fn date_range_to_timespan<T: Timespan>(range: Range<DateTime<Utc>>) -> RangeInclusive<T> {
-    let range = exclusive_datetime_range_to_inclusive(range);
-    let start_timespan = T::from_date(range.start().date_naive());
-    let end_timespan = T::from_date(range.end().date_naive());
-    start_timespan..=end_timespan
+fn date_range_to_timespan<T: Timespan>(range: UniversalRange<DateTime<Utc>>) -> UniversalRange<T> {
+    let (start, end_inclusive) = range.into_inclusive_pair();
+    let start_timespan = start.map(|s| T::from_date(s.date_naive()));
+    let end_timespan = end_inclusive.map(|e| T::from_date(e.date_naive()));
+    (start_timespan..=end_timespan).into()
 }
 
-pub fn extend_to_timespan_boundaries<T: Timespan>(
-    range: Range<DateTime<Utc>>,
-) -> Range<DateTime<Utc>> {
+pub fn extend_to_timespan_boundaries<T: Timespan + Ord>(
+    range: UniversalRange<DateTime<Utc>>,
+) -> UniversalRange<DateTime<Utc>> {
     let timespan_range = date_range_to_timespan::<T>(range);
     // start of timespan containing range start
-    let start: DateTime<Utc> = timespan_range.start().saturating_start_timestamp();
+    let (start, end) = timespan_range.into_inclusive_pair();
+    let start = start.map(|s| s.saturating_start_timestamp());
     // start of timespan following range end (to get exclusive range again)
-    let timespan_after_range = timespan_range.end().saturating_next_timespan();
-    let end = timespan_after_range.saturating_start_timestamp();
-    start..end
+    let end = end.map(|e| {
+        let timespan_after_range = e.saturating_next_timespan();
+        timespan_after_range.saturating_start_timestamp()
+    });
+    (start..end).into()
 }
 
 /// Produce vector of timespan data `LResPoint` from vector of smaller timespan data `HResPoint`.
@@ -87,45 +88,59 @@ mod tests {
 
         assert_eq!(
             date_range_to_timespan::<Week>(
-                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-14T09:00:00").and_utc()
-            ),
+                (dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-14T09:00:00").and_utc()).into()
+            )
+            .try_into_inclusive()
+            .unwrap(),
             week_of("2024-07-08")..=week_of("2024-07-08")
         );
         assert_eq!(
             date_range_to_timespan::<Week>(
-                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-14T23:59:59").and_utc()
-            ),
+                (dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-14T23:59:59").and_utc()).into()
+            )
+            .try_into_inclusive()
+            .unwrap(),
             week_of("2024-07-08")..=week_of("2024-07-08")
         );
         assert_eq!(
             date_range_to_timespan::<Week>(
-                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:00").and_utc()
-            ),
+                (dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:00").and_utc()).into()
+            )
+            .try_into_inclusive()
+            .unwrap(),
             week_of("2024-07-08")..=week_of("2024-07-08")
         );
         assert_eq!(
             date_range_to_timespan::<Week>(
-                dt("1995-12-31T09:00:00").and_utc()..dt("1995-12-31T23:59:60").and_utc()
-            ),
+                (dt("1995-12-31T09:00:00").and_utc()..dt("1995-12-31T23:59:60").and_utc()).into()
+            )
+            .try_into_inclusive()
+            .unwrap(),
             week_of("1995-12-31")..=week_of("1995-12-31")
         );
         assert_eq!(
             date_range_to_timespan::<Week>(
-                dt("1995-12-31T09:00:00").and_utc()..dt("1996-01-01T00:00:00").and_utc()
-            ),
+                (dt("1995-12-31T09:00:00").and_utc()..dt("1996-01-01T00:00:00").and_utc()).into()
+            )
+            .try_into_inclusive()
+            .unwrap(),
             week_of("1995-12-31")..=week_of("1995-12-31")
         );
 
         assert_eq!(
             date_range_to_timespan::<Week>(
-                dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()
-            ),
+                (dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()).into()
+            )
+            .try_into_inclusive()
+            .unwrap(),
             week_of("2024-07-08")..=week_of("2024-07-15")
         );
         assert_eq!(
             date_range_to_timespan::<Week>(
-                dt("1995-12-31T09:00:00").and_utc()..dt("1996-01-01T00:00:01").and_utc()
-            ),
+                (dt("1995-12-31T09:00:00").and_utc()..dt("1996-01-01T00:00:01").and_utc()).into()
+            )
+            .try_into_inclusive()
+            .unwrap(),
             week_of("1995-12-31")..=week_of("1996-01-01")
         );
     }
