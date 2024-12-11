@@ -13,10 +13,12 @@ use crate::{
     ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
-use blockscout_db::entity::transactions;
-use chrono::{DateTime, NaiveDate, Utc};
+use blockscout_db::entity::{blocks, transactions};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{EntityName, EntityTrait, PaginatorTrait, QuerySelect};
+use sea_orm::{
+    prelude::Expr, ColumnTrait, EntityName, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect,
+};
 
 pub struct TotalTxnsQueryBehaviour;
 
@@ -27,15 +29,25 @@ impl RemoteQueryBehaviour for TotalTxnsQueryBehaviour {
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, ChartError> {
-        let now = cx.time;
+        let blockscout = cx.blockscout.connection.as_ref();
+        let timespan: NaiveDateTime = blocks::Entity::find()
+            .select_only()
+            .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
+            .filter(blocks::Column::Consensus.eq(true))
+            .into_tuple()
+            .one(blockscout)
+            .await
+            .map_err(ChartError::BlockscoutDB)?
+            .ok_or_else(|| ChartError::Internal("no block timestamps in database".into()))?;
+
         let value = transactions::Entity::find()
             .select_only()
-            .count(cx.blockscout.connection.as_ref())
+            .count(blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?;
 
         let data = DateValue::<String> {
-            timespan: now.date_naive(),
+            timespan: timespan.date(),
             value: value.to_string(),
         };
         Ok(data)
@@ -67,6 +79,8 @@ pub struct TotalTxnsEstimation;
 
 impl ValueEstimation for TotalTxnsEstimation {
     async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, ChartError> {
+        // `now()` is more relevant when taken right before the query rather than
+        // `cx.time` measured a bit earlier.
         let now = Utc::now();
         let value = query_estimated_table_rows(
             blockscout.connection.as_ref(),

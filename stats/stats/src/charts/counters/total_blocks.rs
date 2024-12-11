@@ -77,6 +77,8 @@ pub struct TotalBlocksEstimation;
 
 impl ValueEstimation for TotalBlocksEstimation {
     async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, ChartError> {
+        // `now()` is more relevant when taken right before the query rather than
+        // `cx.time` measured a bit earlier.
         let now = Utc::now();
         let value =
             query_estimated_table_rows(blockscout.connection.as_ref(), blocks::Entity.table_name())
