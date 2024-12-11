@@ -220,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn month_saturating_arithmetics_works() {
+    fn month_arithmetics_works() {
         assert_eq!(
             Month::from_date(d("2015-06-01"))
                 .saturating_add(TimespanDuration::from_timespan_repeats(3)),
@@ -230,6 +230,16 @@ mod tests {
             Month::from_date(d("2015-06-01"))
                 .saturating_sub(TimespanDuration::from_timespan_repeats(3)),
             Month::from_date(d("2015-03-01"))
+        );
+        assert_eq!(
+            Month::from_date(d("2015-06-01"))
+                .checked_add(TimespanDuration::from_timespan_repeats(3)),
+            Some(Month::from_date(d("2015-09-01")))
+        );
+        assert_eq!(
+            Month::from_date(d("2015-06-01"))
+                .checked_sub(TimespanDuration::from_timespan_repeats(3)),
+            Some(Month::from_date(d("2015-03-01")))
         );
 
         assert_eq!(
@@ -244,6 +254,17 @@ mod tests {
         );
 
         assert_eq!(
+            Month::from_date(d("2015-06-01"))
+                .checked_add(TimespanDuration::from_timespan_repeats(u64::MAX)),
+            None
+        );
+        assert_eq!(
+            Month::from_date(d("2015-06-01"))
+                .checked_sub(TimespanDuration::from_timespan_repeats(u64::MAX)),
+            None
+        );
+
+        assert_eq!(
             Month::from_date(NaiveDate::MAX)
                 .saturating_add(TimespanDuration::from_timespan_repeats(1)),
             Month::from_date(NaiveDate::MAX)
@@ -252,6 +273,17 @@ mod tests {
             Month::from_date(NaiveDate::MIN)
                 .saturating_sub(TimespanDuration::from_timespan_repeats(1)),
             Month::from_date(NaiveDate::MIN)
+        );
+
+        assert_eq!(
+            Month::from_date(NaiveDate::MAX)
+                .checked_add(TimespanDuration::from_timespan_repeats(1)),
+            None
+        );
+        assert_eq!(
+            Month::from_date(NaiveDate::MIN)
+                .checked_sub(TimespanDuration::from_timespan_repeats(1)),
+            None
         );
     }
 
