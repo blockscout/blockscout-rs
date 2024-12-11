@@ -5,51 +5,33 @@
 //!
 //! Does not include last day, even as incomplete day.
 
-use std::ops::Range;
-
 use crate::{
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
             local_db::{
                 parameters::{
                     update::batching::{
-                        parameter_traits::BatchStepBehaviour,
-                        parameters::{
-                            Batch30Days, Batch30Weeks, Batch30Years, Batch36Months, BatchMaxDays,
-                            ClearAllAndPassStep,
-                        },
+                        parameters::{BatchMaxDays, ClearAllAndPassStep},
                         BatchUpdate,
                     },
                     DefaultCreate, DefaultQueryVec,
                 },
-                DirectVecLocalDbChartSource, LocalDbChartSource,
+                LocalDbChartSource,
             },
-            remote_db::{
-                PullAllWithAndSort, RemoteDatabaseSource, RemoteQueryBehaviour, StatementForOne,
-                StatementFromRange,
-            },
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
         types::BlockscoutMigrations,
         UpdateContext,
     },
-    define_and_impl_resolution_properties,
     range::UniversalRange,
-    types::{
-        timespans::{Month, Week, Year},
-        Timespan, TimespanDuration, TimespanValue,
-    },
-    utils::{day_start, sql_with_range_filter_opt},
+    types::{Timespan, TimespanDuration, TimespanValue},
+    utils::day_start,
     ChartError, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DatabaseConnection, DbBackend, FromQueryResult, Statement};
+use sea_orm::{FromQueryResult, Statement};
 
 use super::NewTxnsStatement;
 
@@ -137,10 +119,7 @@ mod tests {
         tests::{
             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
             point_construction::dt,
-            simple_test::{
-                chart_output_to_expected, map_str_tuple_to_owned, prepare_chart_test,
-                simple_test_chart_with_migration_variants,
-            },
+            simple_test::{chart_output_to_expected, map_str_tuple_to_owned, prepare_chart_test},
         },
         utils::MarkedDbConnection,
     };
