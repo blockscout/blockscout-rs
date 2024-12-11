@@ -9,6 +9,7 @@ multichain-aggregator-proto = { workspace = true }
 multichain-aggregator-logic = { workspace = true }
 multichain-aggregator-migration = { workspace = true }
 actix-web = { workspace = true }
+alloy-primitives = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 blockscout-service-launcher = { workspace = true }

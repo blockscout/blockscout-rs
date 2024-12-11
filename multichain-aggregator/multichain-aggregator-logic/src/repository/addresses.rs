@@ -1,18 +1,27 @@
 use crate::{
     error::{ParseError, ServiceError},
-    types::addresses::Address,
+    types::{addresses::Address, ChainId},
 };
+use alloy_primitives::Address as AddressAlloy;
 use entity::addresses::{ActiveModel, Column, Entity, Model};
 use regex::Regex;
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, Iterable, QueryFilter, QuerySelect,
+    prelude::Expr,
+    sea_query::{OnConflict, PostgresQueryBuilder},
+    ActiveValue::NotSet,
+    ConnectionTrait, DbErr, EntityTrait, IntoSimpleExpr, Iterable, QueryFilter, QueryOrder,
+    QuerySelect, QueryTrait,
 };
 use std::sync::OnceLock;
 
 fn words_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"[a-zA-Z0-9]+").unwrap())
+}
+
+fn hex_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^(0x)?[0-9a-fA-F]{3,40}$").unwrap())
 }
 
 pub async fn upsert_many<C>(db: &C, addresses: Vec<Address>) -> Result<(), DbErr>
@@ -44,32 +53,43 @@ where
     Ok(())
 }
 
-pub async fn find_by_address<C>(
-    db: &C,
-    address: alloy_primitives::Address,
-) -> Result<Vec<Address>, ServiceError>
-where
-    C: ConnectionTrait,
-{
-    let res = Entity::find()
-        .filter(Column::Hash.eq(address.as_slice()))
-        .all(db)
-        .await?
-        .into_iter()
-        .map(Address::try_from)
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(res)
-}
-
 pub async fn search_by_query<C>(db: &C, q: &str) -> Result<Vec<Address>, ServiceError>
 where
     C: ConnectionTrait,
 {
-    let mut query = Entity::find();
+    search_by_query_paginated(db, q, None, 100)
+        .await
+        .map(|(addresses, _)| addresses)
+}
 
-    if let Ok(address) = try_parse_address(q) {
-        query = query.filter(Column::Hash.eq(address.as_slice()));
+pub async fn search_by_query_paginated<C>(
+    db: &C,
+    q: &str,
+    page_token: Option<(ChainId, AddressAlloy)>,
+    limit: u64,
+) -> Result<(Vec<Address>, Option<(ChainId, AddressAlloy)>), ServiceError>
+where
+    C: ConnectionTrait,
+{
+    let page_token = page_token.unwrap_or((ChainId::MIN, AddressAlloy::ZERO));
+    let mut query = Entity::find()
+        .filter(
+            Expr::tuple([
+                Column::ChainId.into_simple_expr(),
+                Column::Hash.into_simple_expr(),
+            ])
+            .gte(Expr::tuple([
+                page_token.0.into(),
+                page_token.1.as_slice().into(),
+            ])),
+        )
+        .order_by_asc(Column::Hash)
+        .order_by_asc(Column::ChainId)
+        .limit(limit + 1);
+
+    if hex_regex().is_match(q) {
+        let prefix = format!("\\x{}", q.strip_prefix("0x").unwrap_or(q));
+        query = query.filter(Expr::cust_with_expr("hash LIKE $1", format!("{}%", prefix)));
     } else {
         let ts_query = prepare_ts_query(q);
         query = query.filter(Expr::cust_with_expr(
@@ -80,14 +100,22 @@ where
         ));
     }
 
-    let res = query
-        .limit(50)
+    println!("{}", query.as_query().to_string(PostgresQueryBuilder));
+
+    let addresses = query
         .all(db)
         .await?
         .into_iter()
         .map(Address::try_from)
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(res)
+
+    match addresses.get(limit as usize) {
+        Some(a) => Ok((
+            addresses[0..limit as usize].to_vec(),
+            Some((a.chain_id, a.hash)),
+        )),
+        None => Ok((addresses, None)),
+    }
 }
 
 fn non_primary_columns() -> impl Iterator<Item = Column> {
