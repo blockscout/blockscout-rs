@@ -77,10 +77,9 @@ impl Timespan for Month {
     where
         Self: Sized,
     {
+        let duration = chrono::Months::new(duration.repeats().try_into().ok()?);
         self.date_in_month
-            .checked_add_months(chrono::Months::new(
-                duration.repeats().try_into().unwrap_or(u32::MAX),
-            ))
+            .checked_add_months(duration)
             .map(Self::from_date)
     }
 
@@ -88,10 +87,9 @@ impl Timespan for Month {
     where
         Self: Sized,
     {
+        let duration = chrono::Months::new(duration.repeats().try_into().ok()?);
         self.date_in_month
-            .checked_sub_months(chrono::Months::new(
-                duration.repeats().try_into().unwrap_or(u32::MAX),
-            ))
+            .checked_sub_months(duration)
             .map(Self::from_date)
     }
 

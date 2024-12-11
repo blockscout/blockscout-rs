@@ -107,7 +107,7 @@ impl Timespan for Year {
     where
         Self: Sized,
     {
-        let add_years = duration.repeats().try_into().unwrap_or(i32::MAX);
+        let add_years = duration.repeats().try_into().ok()?;
         let new_year_num = self.number_within_naive_date().checked_add(add_years)?;
         if Self::year_number_within_naive_date(new_year_num) {
             Some(Self(new_year_num))
@@ -120,7 +120,7 @@ impl Timespan for Year {
     where
         Self: Sized,
     {
-        let sub_years: i32 = duration.repeats().try_into().unwrap_or(i32::MAX);
+        let sub_years: i32 = duration.repeats().try_into().ok()?;
         let new_year_num = self.number_within_naive_date().checked_sub(sub_years)?;
         if Self::year_number_within_naive_date(new_year_num) {
             Some(Self(new_year_num))

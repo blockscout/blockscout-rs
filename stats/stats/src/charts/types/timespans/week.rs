@@ -92,8 +92,9 @@ impl Timespan for Week {
     where
         Self: Sized,
     {
+        let duration = Days::new(duration.repeats().checked_mul(7)?);
         self.saturating_first_day()
-            .checked_add_days(Days::new(duration.repeats() * 7))
+            .checked_add_days(duration)
             .map(Self::from_date)
     }
 
@@ -101,8 +102,9 @@ impl Timespan for Week {
     where
         Self: Sized,
     {
+        let duration = Days::new(duration.repeats().checked_mul(7)?);
         self.saturating_first_day()
-            .checked_sub_days(Days::new(duration.repeats() * 7))
+            .checked_sub_days(duration)
             .map(Self::from_date)
     }
 
