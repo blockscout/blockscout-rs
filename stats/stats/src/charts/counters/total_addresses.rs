@@ -92,10 +92,7 @@ pub type TotalAddresses = DirectPointLocalDbChartSourceWithEstimate<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        counters::TotalTxns,
-        tests::simple_test::{simple_test_counter, test_counter_fallback},
-    };
+    use crate::tests::simple_test::{simple_test_counter, test_counter_fallback};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
@@ -106,6 +103,6 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn total_addresses_fallback() {
-        test_counter_fallback::<TotalTxns>("total_addresses_fallback").await;
+        test_counter_fallback::<TotalAddresses>("total_addresses_fallback").await;
     }
 }
