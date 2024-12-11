@@ -88,6 +88,7 @@ async fn test_lines_ok() {
         "newBlocks",
         "newNativeCoinTransfers",
         "newTxns",
+        "newTxnsWindow",
         "txnsFee",
         "txnsGrowth",
         "txnsSuccessRate",
