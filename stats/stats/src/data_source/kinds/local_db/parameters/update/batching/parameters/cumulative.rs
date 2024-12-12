@@ -4,7 +4,7 @@ use std::{fmt::Display, marker::PhantomData, ops::Add, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
@@ -29,15 +29,18 @@ where
     <Value as FromStr>::Err: Display,
     ChartProps: ChartProperties,
 {
-    async fn batch_update_values_step_with(
-        db: &DatabaseConnection,
+    async fn batch_update_values_step_with<C>(
+        db: &C,
         chart_id: i32,
         update_time: DateTime<Utc>,
         min_blockscout_block: i64,
         last_accurate_point: TimespanValue<Resolution, String>,
         main_data: Vec<TimespanValue<Resolution, Value>>,
         _resolution_data: (),
-    ) -> Result<usize, ChartError> {
+    ) -> Result<usize, ChartError>
+    where
+        C: ConnectionTrait + TransactionTrait,
+    {
         let partial_sum = last_accurate_point.value.parse::<Value>().map_err(|e| {
             ChartError::Internal(format!(
                 "failed to parse value in chart '{}': {e}",

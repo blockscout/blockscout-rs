@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
     charts::db_interaction::write::{clear_all_chart_data, insert_data_many},
@@ -34,8 +34,8 @@ impl<Resolution> BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, St
 where
     Resolution: Timespan + Clone + Send + Sync,
 {
-    async fn batch_update_values_step_with(
-        db: &DatabaseConnection,
+    async fn batch_update_values_step_with<C: ConnectionTrait + TransactionTrait>(
+        db: &C,
         chart_id: i32,
         _update_time: DateTime<Utc>,
         min_blockscout_block: i64,
@@ -73,8 +73,8 @@ impl<Resolution> BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, St
 where
     Resolution: Timespan + Clone + Send + Sync,
 {
-    async fn batch_update_values_step_with(
-        db: &DatabaseConnection,
+    async fn batch_update_values_step_with<C: ConnectionTrait + TransactionTrait>(
+        db: &C,
         chart_id: i32,
         _update_time: DateTime<Utc>,
         min_blockscout_block: i64,
@@ -82,11 +82,12 @@ where
         main_data: Vec<TimespanValue<Resolution, String>>,
         _resolution_data: (),
     ) -> Result<usize, ChartError> {
-        clear_all_chart_data(db, chart_id)
+        let db = db.begin().await.map_err(ChartError::StatsDB)?;
+        clear_all_chart_data(&db, chart_id)
             .await
             .map_err(ChartError::StatsDB)?;
         PassVecStep::batch_update_values_step_with(
-            db,
+            &db,
             chart_id,
             _update_time,
             min_blockscout_block,
