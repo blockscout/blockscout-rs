@@ -187,12 +187,13 @@ pub use database_name;
 ///
 /// #[tokio::test]
 /// async fn test() {
-///     let db_guard = database!(migration_crate);
+///     let db_guard = database!(Migrator);
 ///     // Perform operations with the database...
 /// }
 /// ```
 ///
-/// The `migration_crate` parameter refers to the migration crate associated with the database.
+/// The `Migrator` parameter refers to the struct implementing
+/// `sea_orm_migration::MigratorTrait` associated with the database.
 ///
 /// # Parameterized Tests
 ///
@@ -203,22 +204,22 @@ pub use database_name;
 /// ```text
 /// #[tokio::test]
 /// async fn test_with_prefix() {
-///     let db_guard = database!(migration_crate, "custom_prefix");
+///     let db_guard = database!(Migrator, "custom_prefix");
 ///     // Perform operations with the database...
 /// }
 /// ```
 #[macro_export]
 macro_rules! database {
-    ($migration_crate:ident) => {{
-        $crate::test_database::TestDbGuard::new::<$migration_crate::Migrator>(
+    ($migrator:ty) => {{
+        $crate::test_database::TestDbGuard::new::<$migrator>(
             &$crate::test_database::database_name!(),
         )
         .await
     }};
-    ($migration_crate:ident, $custom_prefix:expr) => {{
-        $crate::test_database::TestDbGuard::new::<$migration_crate::Migrator>(
-            $crate::test_database::database_name!($custom_prefix),
-        )
+    ($migrator:ty, $custom_prefix:expr) => {{
+        $crate::test_database::TestDbGuard::new::<$migrator>($crate::test_database::database_name!(
+            $custom_prefix
+        ))
         .await
     }};
 }
