@@ -10,6 +10,34 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/addresses:
+    get:
+      operationId: MultichainAggregatorService_ListAddresses
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListAddressesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /api/v1/import:batch:
     post:
       operationId: MultichainAggregatorService_BatchImport
@@ -130,6 +158,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
+      dapps:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
   protobufAny:
     type: object
     properties:
@@ -216,6 +249,35 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1ListAddressesResponse:
+    type: object
+    properties:
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      pagination:
+        $ref: '#/definitions/v1Pagination'
+  v1MarketplaceDapp:
+    type: object
+    properties:
+      id:
+        type: string
+      title:
+        type: string
+      logo:
+        type: string
+      short_description:
+        type: string
+  v1Pagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+      page_size:
+        type: integer
+        format: int64
   v1QuickSearchResponse:
     type: object
     properties:

@@ -4,6 +4,7 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -17,6 +18,22 @@ pub struct Settings {
     #[serde(default)]
     pub jaeger: JaegerSettings,
     pub database: DatabaseSettings,
+
+    pub service: ServiceSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ServiceSettings {
+    pub dapp_client: DappClientSettings,
+    #[serde(default = "default_max_page_size")]
+    pub max_page_size: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DappClientSettings {
+    pub url: Url,
 }
 
 impl ConfigSettings for Settings {
@@ -35,6 +52,16 @@ impl Settings {
                 create_database: Default::default(),
                 run_migrations: Default::default(),
             },
+            service: ServiceSettings {
+                dapp_client: DappClientSettings {
+                    url: Url::parse("http://localhost:8050").unwrap(),
+                },
+                max_page_size: 100,
+            },
         }
     }
+}
+
+fn default_max_page_size() -> u32 {
+    100
 }

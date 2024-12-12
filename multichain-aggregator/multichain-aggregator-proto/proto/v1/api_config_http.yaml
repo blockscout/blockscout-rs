@@ -11,6 +11,9 @@ http:
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.QuickSearch
       get: /api/v1/search:quick
 
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListAddresses
+      get: /api/v1/addresses
+
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check

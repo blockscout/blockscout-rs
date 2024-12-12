@@ -27,7 +27,7 @@ stop-test-postgres:
 
 run:
     MULTICHAIN_AGGREGATOR__DATABASE__CONNECT__URL={{DATABASE_URL}} \
-    cargo run --bin multichain-aggregator-server
+    dotenvy -f multichain-aggregator-server/config/base.env cargo run --bin multichain-aggregator-server
 
 generate-entities:
     sea-orm-cli generate entity --lib -o multichain-aggregator-entity/src

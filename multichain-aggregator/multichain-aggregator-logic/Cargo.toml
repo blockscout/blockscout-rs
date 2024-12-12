@@ -12,9 +12,13 @@ tracing = { workspace = true }
 sea-orm = { workspace = true }
 alloy-primitives = { workspace = true }
 regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }
+reqwest = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }
