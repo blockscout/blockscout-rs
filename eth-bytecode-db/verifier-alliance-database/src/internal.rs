@@ -1,4 +1,4 @@
-use crate::helpers::insert_then_select;
+use crate::helpers;
 use anyhow::{anyhow, Context, Error};
 use blockscout_display_bytes::ToHex;
 use sea_orm::{
@@ -92,16 +92,17 @@ pub async fn insert_verified_contract<C: ConnectionTrait>(
         runtime_metadata_match: Set(runtime_match_data.metadata_match),
     };
 
-    let (model, _inserted) = insert_then_select!(
+    use verified_contracts::Column;
+    let (model, _inserted) = helpers::insert_then_select(
         database_connection,
-        verified_contracts,
+        verified_contracts::Entity,
         active_model,
-        false,
         [
-            (CompilationId, compiled_contract_id),
-            (DeploymentId, contract_deployment_id),
-        ]
-    )?;
+            (Column::CompilationId, compiled_contract_id.into()),
+            (Column::DeploymentId, contract_deployment_id.into()),
+        ],
+    )
+    .await?;
 
     Ok(model)
 }
@@ -138,18 +139,25 @@ pub async fn insert_compiled_contract<C: ConnectionTrait>(
         runtime_code_artifacts: Set(compiled_contract.runtime_code_artifacts.into()),
     };
 
-    let (model, _inserted) = insert_then_select!(
+    use compiled_contracts::Column;
+    let (model, _inserted) = helpers::insert_then_select(
         database_connection,
-        compiled_contracts,
+        compiled_contracts::Entity,
         active_model,
-        false,
         [
-            (Compiler, compiled_contract.compiler.to_string()),
-            (Language, compiled_contract.language.to_string()),
-            (CreationCodeHash, creation_code_hash),
-            (RuntimeCodeHash, runtime_code_hash)
-        ]
-    )?;
+            (
+                Column::Compiler,
+                compiled_contract.compiler.to_string().into(),
+            ),
+            (
+                Column::Language,
+                compiled_contract.language.to_string().into(),
+            ),
+            (Column::CreationCodeHash, creation_code_hash.into()),
+            (Column::RuntimeCodeHash, runtime_code_hash.into()),
+        ],
+    )
+    .await?;
 
     Ok(model)
 }
@@ -172,13 +180,13 @@ pub async fn insert_sources<C: ConnectionTrait>(
             created_by: Default::default(),
             updated_by: Default::default(),
         };
-        let (model, _inserted) = insert_then_select!(
+        let (model, _inserted) = helpers::insert_then_select(
             database_connection,
-            sources,
+            sources::Entity,
             active_model,
-            false,
-            [(SourceHash, source_hash)]
-        )?;
+            [(sources::Column::SourceHash, source_hash.into())],
+        )
+        .await?;
         models.push(model)
     }
 
@@ -199,13 +207,17 @@ pub async fn insert_compiled_contract_sources<C: ConnectionTrait>(
             path: Set(path.clone()),
             source_hash: Set(source_hash),
         };
-        let (model, _inserted) = insert_then_select!(
+        use compiled_contracts_sources::Column;
+        let (model, _inserted) = helpers::insert_then_select(
             database_connection,
-            compiled_contracts_sources,
+            compiled_contracts_sources::Entity,
             active_model,
-            false,
-            [(CompilationId, compiled_contract_id), (Path, path)]
-        )?;
+            [
+                (Column::CompilationId, compiled_contract_id.into()),
+                (Column::Path, path.into()),
+            ],
+        )
+        .await?;
         models.push(model);
     }
 
@@ -232,17 +244,21 @@ pub async fn insert_contract_deployment<C: ConnectionTrait>(
         contract_id: Set(contract_id),
     };
 
-    let (model, _inserted) = insert_then_select!(
+    use contract_deployments::Column;
+    let (model, _inserted) = helpers::insert_then_select(
         database_connection,
-        contract_deployments,
+        contract_deployments::Entity,
         active_model,
-        false,
         [
-            (ChainId, internal_data.chain_id),
-            (Address, internal_data.address),
-            (TransactionHash, internal_data.transaction_hash)
-        ]
-    )?;
+            (Column::ChainId, internal_data.chain_id.into()),
+            (Column::Address, internal_data.address.into()),
+            (
+                Column::TransactionHash,
+                internal_data.transaction_hash.into(),
+            ),
+        ],
+    )
+    .await?;
 
     Ok(model)
 }
@@ -286,16 +302,17 @@ pub async fn insert_contract<C: ConnectionTrait>(
         runtime_code_hash: Set(runtime_code_hash.clone()),
     };
 
-    let (model, _inserted) = insert_then_select!(
+    use contracts::Column;
+    let (model, _inserted) = helpers::insert_then_select(
         database_connection,
-        contracts,
+        contracts::Entity,
         active_model,
-        false,
         [
-            (CreationCodeHash, creation_code_hash),
-            (RuntimeCodeHash, runtime_code_hash)
-        ]
-    )?;
+            (Column::CreationCodeHash, creation_code_hash.into()),
+            (Column::RuntimeCodeHash, runtime_code_hash.into()),
+        ],
+    )
+    .await?;
 
     Ok(model)
 }
@@ -317,13 +334,13 @@ pub async fn insert_code<C: ConnectionTrait>(
         code: Set(Some(code)),
     };
 
-    let (model, _inserted) = insert_then_select!(
+    let (model, _inserted) = helpers::insert_then_select(
         database_connection,
-        code,
+        code::Entity,
         active_model,
-        false,
-        [(CodeHash, code_hash)]
-    )?;
+        [(code::Column::CodeHash, code_hash.into())],
+    )
+    .await?;
 
     Ok(model)
 }
