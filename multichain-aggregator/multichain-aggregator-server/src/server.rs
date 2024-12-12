@@ -65,7 +65,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .fetch_all()
         .await?
         .into_iter()
-        .map(|(id, chain)| (id as i64, chain).into())
+        .filter_map(|(id, chain)| {
+            let id = id.parse::<i64>().ok()?;
+            Some((id, chain).into())
+        })
         .collect::<Vec<_>>();
     repository::chains::upsert_many(&db, blockscout_chains.clone()).await?;
 
