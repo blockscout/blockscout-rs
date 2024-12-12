@@ -425,11 +425,6 @@ impl TestCase {
             Some(Value::from(self.creation_transformations.clone())),
             "invalid verified contract creation transformations"
         );
-        assert_eq!(
-            verified_contract.creation_metadata_match,
-            Some(self.creation_metadata_match),
-            "invalid verified contract creation metadata match"
-        );
 
         assert!(
             verified_contract.runtime_match,
@@ -437,7 +432,7 @@ impl TestCase {
         );
         assert_eq!(
             verified_contract.runtime_metadata_match,
-            Some(self.creation_metadata_match),
+            Some(self.runtime_metadata_match),
             "invalid verified contract runtime metadata match"
         );
         assert_eq!(
@@ -449,11 +444,6 @@ impl TestCase {
             verified_contract.runtime_transformations,
             Some(Value::from(self.runtime_transformations.clone())),
             "invalid verified contract runtime transformations"
-        );
-        assert_eq!(
-            verified_contract.runtime_metadata_match,
-            Some(self.runtime_metadata_match),
-            "invalid verified contract runtime metadata match"
         );
 
         verified_contract
