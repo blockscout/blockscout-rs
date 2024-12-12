@@ -10,26 +10,10 @@ use alloy_dyn_abi::JsonAbiExt;
 use anyhow::Context;
 use bytes::Bytes;
 use serde::Deserialize;
-use std::fmt::{Display, Formatter};
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum MatchType {
-    Full,
-    Partial,
-}
-
-impl Display for MatchType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MatchType::Full => f.write_str("full"),
-            MatchType::Partial => f.write_str("partial"),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Match {
-    pub r#type: MatchType,
+    pub metadata_match: bool,
     pub transformations: Vec<MatchTransformation>,
     pub values: MatchValues,
 }
@@ -90,13 +74,9 @@ impl<'a> MatchBuilder<'a> {
         if !self.invalid_constructor_arguments
             && self.deployed_code == self.compiled_code.as_slice()
         {
-            let match_type = if self.has_cbor_auxdata_transformation || !self.has_cbor_auxdata {
-                MatchType::Partial
-            } else {
-                MatchType::Full
-            };
+            let metadata_match = self.has_cbor_auxdata && !self.has_cbor_auxdata_transformation;
             return Some(Match {
-                r#type: match_type,
+                metadata_match,
                 transformations: self.transformations,
                 values: self.values,
             });

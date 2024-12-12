@@ -4,6 +4,8 @@ pub mod prelude;
 
 pub mod code;
 pub mod compiled_contracts;
+pub mod compiled_contracts_sources;
 pub mod contract_deployments;
 pub mod contracts;
+pub mod sources;
 pub mod verified_contracts;
