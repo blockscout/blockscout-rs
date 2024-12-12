@@ -54,8 +54,8 @@ message Hash {
 message MarketplaceDapp {
   string id = 1;
   string title = 2;
-  string logo = 4;
-  string short_description = 5;
+  string logo = 3;
+  string short_description = 4;
 }
 
 message BatchImportRequest {
