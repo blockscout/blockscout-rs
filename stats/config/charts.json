@@ -106,6 +106,10 @@
             "title": "New transactions",
             "description": "Number of new transactions"
         },
+        "new_txns_window": {
+            "title": "Daily transactions",
+            "description": "Number of transactions yesterday (0:00 - 23:59 UTC). The chart displays daily transactions for the past 30 days."
+        },
         "txns_growth": {
             "title": "Number of transactions",
             "description": "Cumulative transaction growth over time"

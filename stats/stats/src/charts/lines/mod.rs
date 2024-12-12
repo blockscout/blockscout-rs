@@ -17,6 +17,7 @@ mod new_contracts;
 mod new_native_coin_holders;
 mod new_native_coin_transfers;
 mod new_txns;
+mod new_txns_window;
 mod new_verified_contracts;
 mod txns_fee;
 mod txns_growth;
@@ -90,6 +91,7 @@ pub use new_native_coin_transfers::{
 };
 pub(crate) use new_txns::NewTxnsStatement;
 pub use new_txns::{NewTxns, NewTxnsInt, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
+pub use new_txns_window::NewTxnsWindow;
 pub use new_verified_contracts::{
     NewVerifiedContracts, NewVerifiedContractsMonthly, NewVerifiedContractsWeekly,
     NewVerifiedContractsYearly,

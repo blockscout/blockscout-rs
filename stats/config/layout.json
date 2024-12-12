@@ -36,7 +36,8 @@
                 "new_txns",
                 "txns_fee",
                 "txns_growth",
-                "txns_success_rate"
+                "txns_success_rate",
+                "new_txns_window"
             ]
         },
         {

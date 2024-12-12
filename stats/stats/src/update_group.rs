@@ -22,8 +22,9 @@
 //!     [`DailyCumulativeLocalDbChartSource`](crate::data_source::kinds::local_db::DailyCumulativeLocalDbChartSource)
 //!     ).
 //! 2. Construct simple (non-sync) update groups via `construct_update_group` macro (usually done in `../update_groups.rs`)
-//! 3. Create mutexes (1-1 for each chart)
+//! 3. Create mutexes (1-1 for each chart) (in general automatically done in `stats-server`, see instructions there)
 //! 4. Create synchronous versions of groups with [`SyncUpdateGroup::new`]
+//!     (in general automatically done in `stats-server`, see instructions there)
 //!
 
 use std::{

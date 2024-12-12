@@ -274,6 +274,7 @@ impl RuntimeSetup {
             Arc::new(ActiveRecurringAccountsMonthlyRecurrence120DaysGroup),
             Arc::new(ActiveRecurringAccountsWeeklyRecurrence120DaysGroup),
             Arc::new(ActiveRecurringAccountsYearlyRecurrence120DaysGroup),
+            Arc::new(NewTxnsWindowGroup),
             // singletons but not really (include all resolutions of the same chart)
             Arc::new(AverageBlockRewardsGroup),
             Arc::new(AverageBlockSizeGroup),

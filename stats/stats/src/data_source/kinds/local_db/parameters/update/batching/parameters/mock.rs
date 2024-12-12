@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use chrono::{DateTime, NaiveDate, Utc};
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
@@ -32,15 +32,18 @@ impl<StepsRecorder> BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
 where
     StepsRecorder: Recorder<Data = StepInput<Vec<DateValue<String>>, ()>>,
 {
-    async fn batch_update_values_step_with(
-        db: &DatabaseConnection,
+    async fn batch_update_values_step_with<C>(
+        db: &C,
         chart_id: i32,
         update_time: DateTime<Utc>,
         min_blockscout_block: i64,
         last_accurate_point: DateValue<String>,
         main_data: Vec<DateValue<String>>,
         resolution_data: (),
-    ) -> Result<usize, ChartError> {
+    ) -> Result<usize, ChartError>
+    where
+        C: ConnectionTrait + TransactionTrait,
+    {
         StepsRecorder::record(StepInput {
             chart_id,
             update_time,

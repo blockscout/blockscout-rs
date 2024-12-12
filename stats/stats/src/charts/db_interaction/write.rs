@@ -56,6 +56,14 @@ where
     Ok(())
 }
 
+pub async fn clear_all_chart_data<C: ConnectionTrait>(db: &C, chart_id: i32) -> Result<(), DbErr> {
+    chart_data::Entity::delete_many()
+        .filter(chart_data::Column::ChartId.eq(chart_id))
+        .exec(db)
+        .await?;
+    Ok(())
+}
+
 pub async fn set_last_updated_at<Tz>(
     chart_id: i32,
     db: &DatabaseConnection,

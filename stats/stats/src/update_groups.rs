@@ -39,6 +39,8 @@ singleton_groups!(
     ActiveRecurringAccountsMonthlyRecurrence120Days,
     ActiveRecurringAccountsWeeklyRecurrence120Days,
     ActiveRecurringAccountsYearlyRecurrence120Days,
+    // Standalone chart
+    NewTxnsWindow,
 );
 
 construct_update_group!(AverageBlockRewardsGroup {
