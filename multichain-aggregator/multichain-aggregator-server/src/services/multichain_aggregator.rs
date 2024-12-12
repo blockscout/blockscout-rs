@@ -80,7 +80,7 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<ListAddressesResponse>, Status> {
         let inner = request.into_inner();
 
-        let page_token: Option<(logic::ChainId, alloy_primitives::Address)> =
+        let page_token: Option<(alloy_primitives::Address, logic::ChainId)> =
             inner.page_token.map(parse_query_2).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
@@ -98,8 +98,8 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListAddressesResponse {
             addresses: addresses.into_iter().map(|a| a.into()).collect(),
-            pagination: next_page_token.map(|(c, a)| Pagination {
-                page_token: format!("{},{}", c, a.to_checksum(None)),
+            pagination: next_page_token.map(|(a, c)| Pagination {
+                page_token: format!("{},{}", a.to_checksum(None), c),
                 page_size,
             }),
         }))

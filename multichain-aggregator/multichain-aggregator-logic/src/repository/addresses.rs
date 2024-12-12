@@ -62,22 +62,22 @@ where
 pub async fn search_by_query_paginated<C>(
     db: &C,
     q: &str,
-    page_token: Option<(ChainId, AddressAlloy)>,
+    page_token: Option<(AddressAlloy, ChainId)>,
     limit: u64,
-) -> Result<(Vec<Address>, Option<(ChainId, AddressAlloy)>), ServiceError>
+) -> Result<(Vec<Address>, Option<(AddressAlloy, ChainId)>), ServiceError>
 where
     C: ConnectionTrait,
 {
-    let page_token = page_token.unwrap_or((ChainId::MIN, AddressAlloy::ZERO));
+    let page_token = page_token.unwrap_or((AddressAlloy::ZERO, ChainId::MIN));
     let mut query = Entity::find()
         .filter(
             Expr::tuple([
-                Column::ChainId.into_simple_expr(),
                 Column::Hash.into_simple_expr(),
+                Column::ChainId.into_simple_expr(),
             ])
             .gte(Expr::tuple([
-                page_token.0.into(),
-                page_token.1.as_slice().into(),
+                page_token.0.as_slice().into(),
+                page_token.1.into(),
             ])),
         )
         .order_by_asc(Column::Hash)
@@ -109,7 +109,7 @@ where
     match addresses.get(limit as usize) {
         Some(a) => Ok((
             addresses[0..limit as usize].to_vec(),
-            Some((a.chain_id, a.hash)),
+            Some((a.hash, a.chain_id)),
         )),
         None => Ok((addresses, None)),
     }
