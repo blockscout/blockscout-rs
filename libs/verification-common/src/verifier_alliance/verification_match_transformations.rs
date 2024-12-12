@@ -10,8 +10,8 @@ enum TransformationType {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 enum TransformationReason {
-    Auxdata,
-    Constructor,
+    CborAuxdata,
+    ConstructorArguments,
     Immutable,
     Library,
 }
@@ -33,39 +33,39 @@ impl From<Transformation> for serde_json::Value {
 }
 
 impl Transformation {
-    pub fn auxdata(offset: usize, id: String) -> Self {
+    pub fn auxdata(offset: usize, id: impl Into<String>) -> Self {
         Self {
             r#type: TransformationType::Replace,
-            reason: TransformationReason::Auxdata,
+            reason: TransformationReason::CborAuxdata,
             offset,
-            id: Some(id),
+            id: Some(id.into()),
         }
     }
 
     pub fn constructor(offset: usize) -> Self {
         Self {
             r#type: TransformationType::Insert,
-            reason: TransformationReason::Constructor,
+            reason: TransformationReason::ConstructorArguments,
             offset,
             id: None,
         }
     }
 
-    pub fn immutable(offset: usize, id: String) -> Self {
+    pub fn immutable(offset: usize, id: impl Into<String>) -> Self {
         Self {
             r#type: TransformationType::Replace,
             reason: TransformationReason::Immutable,
             offset,
-            id: Some(id),
+            id: Some(id.into()),
         }
     }
 
-    pub fn library(offset: usize, id: String) -> Self {
+    pub fn library(offset: usize, id: impl Into<String>) -> Self {
         Self {
             r#type: TransformationType::Replace,
             reason: TransformationReason::Library,
             offset,
-            id: Some(id),
+            id: Some(id.into()),
         }
     }
 }

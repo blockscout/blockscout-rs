@@ -28,11 +28,8 @@ impl<T: ToCreationCodeArtifacts> ToCreationCodeArtifacts for &T {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreationCodeArtifacts {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub source_map: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub link_references: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub cbor_auxdata: Option<Value>,
 }
 

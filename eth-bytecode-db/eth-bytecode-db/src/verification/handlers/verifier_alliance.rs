@@ -1,28 +1,89 @@
 use crate::{
     verification::{
         smart_contract_verifier,
-        types::{AllianceBatchImportResult, AllianceContract, AllianceImportRequest},
+        types::{AllianceBatchImportResult, AllianceImportRequest},
         Client, Error,
     },
     ToHex,
 };
-use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
+use eth_bytecode_db_proto::{blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2, tonic};
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier_proto::http_client::solidity_verifier_client;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
+use verifier_alliance_database::InsertContractDeployment;
 
-fn convert_contracts(contracts: Vec<AllianceContract>) -> Vec<smart_contract_verifier::Contract> {
+fn convert_contracts(
+    contracts: Vec<InsertContractDeployment>,
+) -> Vec<smart_contract_verifier::Contract> {
     contracts
         .into_iter()
         .map(|v| smart_contract_verifier::Contract {
-            creation_code: v.creation_code.as_ref().map(ToHex::to_hex),
-            runtime_code: Some(v.runtime_code.to_hex()),
+            creation_code: v.creation_code().map(|v| ToHex::to_hex(&v)),
+            runtime_code: Some(v.runtime_code().to_hex()),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
-                chain_id: Some(v.chain_id),
-                contract_address: Some(v.contract_address.to_hex()),
+                chain_id: Some(format!("{}", v.chain_id())),
+                contract_address: Some(v.address().to_hex()),
             }),
         })
         .collect()
+}
+
+fn verifier_alliance_contract_try_into_contract_deployment(
+    value: eth_bytecode_db_v2::VerifierAllianceContract,
+) -> Result<InsertContractDeployment, tonic::Status> {
+    let str_to_bytes = |value: &str| {
+        blockscout_display_bytes::decode_hex(value)
+            .map_err(|err| tonic::Status::invalid_argument(err.to_string()))
+    };
+
+    let str_to_u128 = |value: &str| {
+        u128::from_str(value).map_err(|err| tonic::Status::invalid_argument(err.to_string()))
+    };
+
+    let i64_to_u128 = |value: i64| {
+        u128::try_from(value).map_err(|err| tonic::Status::invalid_argument(err.to_string()))
+    };
+
+    let chain_id = str_to_u128(&value.chain_id)?;
+    let address = str_to_bytes(&value.contract_address)?;
+    let runtime_code = str_to_bytes(&value.runtime_code)?;
+
+    let contract_deployment = match (
+        value.transaction_hash,
+        value.block_number,
+        value.transaction_index,
+        value.deployer,
+        value.creation_code,
+    ) {
+        (None, None, None, None, None) => InsertContractDeployment::Genesis {
+            chain_id,
+            address,
+            runtime_code,
+        },
+        (
+            Some(transaction_hash),
+            Some(block_number),
+            Some(transaction_index),
+            Some(deployer),
+            Some(creation_code),
+        ) => InsertContractDeployment::Regular {
+            chain_id,
+            address,
+            transaction_hash: str_to_bytes(&transaction_hash)?,
+            block_number: i64_to_u128(block_number)?,
+            transaction_index: i64_to_u128(transaction_index)?,
+            deployer: str_to_bytes(&deployer)?,
+            creation_code: str_to_bytes(&creation_code)?,
+            runtime_code,
+        },
+        _ => {
+            return Err(tonic::Status::invalid_argument(
+                "the verifier alliance contract is neither genesis, nor regular one",
+            ))
+        }
+    };
+
+    Ok(contract_deployment)
 }
 
 /******************** Solidity Standard Json ********************/
@@ -56,7 +117,7 @@ impl TryFrom<eth_bytecode_db_v2::VerifierAllianceBatchImportSolidityStandardJson
             contracts: value
                 .contracts
                 .into_iter()
-                .map(TryFrom::try_from)
+                .map(verifier_alliance_contract_try_into_contract_deployment)
                 .collect::<Result<Vec<_>, _>>()?,
             compiler_version: value.compiler_version,
             content: StandardJson { input: value.input },
@@ -125,7 +186,7 @@ impl TryFrom<eth_bytecode_db_v2::VerifierAllianceBatchImportSolidityMultiPartReq
             contracts: value
                 .contracts
                 .into_iter()
-                .map(TryFrom::try_from)
+                .map(verifier_alliance_contract_try_into_contract_deployment)
                 .collect::<Result<Vec<_>, _>>()?,
             compiler_version: value.compiler_version,
             content: MultiPart {
