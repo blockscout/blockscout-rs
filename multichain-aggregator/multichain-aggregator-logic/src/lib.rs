@@ -5,6 +5,7 @@ mod proto;
 pub mod repository;
 pub mod search;
 mod types;
+mod dapp_client;
 
 pub use import::batch_import;
 pub use types::{
