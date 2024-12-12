@@ -86,7 +86,7 @@ where
         clear_all_chart_data(&db, chart_id)
             .await
             .map_err(ChartError::StatsDB)?;
-        PassVecStep::batch_update_values_step_with(
+        let result = PassVecStep::batch_update_values_step_with(
             &db,
             chart_id,
             _update_time,
@@ -95,6 +95,8 @@ where
             main_data,
             _resolution_data,
         )
-        .await
+        .await?;
+        db.commit().await.map_err(ChartError::StatsDB)?;
+        Ok(result)
     }
 }
