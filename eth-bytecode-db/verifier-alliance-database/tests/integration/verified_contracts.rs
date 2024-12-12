@@ -1,5 +1,5 @@
-use crate::database;
 use blockscout_display_bytes::decode_hex;
+use blockscout_service_launcher::test_database::database;
 use sea_orm::{prelude::Uuid, DatabaseConnection};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -11,10 +11,11 @@ use verifier_alliance_database::{
     CompiledContract, CompiledContractCompiler, CompiledContractLanguage, InsertContractDeployment,
     VerifiedContract, VerifiedContractMatches,
 };
+use verifier_alliance_migration_v1::Migrator;
 
 #[tokio::test]
 async fn insert_verified_contract_with_complete_matches_work() {
-    let db_guard = database!();
+    let db_guard = database!(Migrator);
 
     let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
     let compiled_contract = complete_compiled_contract();
@@ -45,7 +46,7 @@ async fn insert_verified_contract_with_complete_matches_work() {
 
 #[tokio::test]
 async fn insert_verified_contract_with_runtime_only_matches_work() {
-    let db_guard = database!();
+    let db_guard = database!(Migrator);
 
     let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
     let compiled_contract = complete_compiled_contract();
@@ -71,7 +72,7 @@ async fn insert_verified_contract_with_runtime_only_matches_work() {
 
 #[tokio::test]
 async fn insert_verified_contract_with_creation_only_matches_work() {
-    let db_guard = database!();
+    let db_guard = database!(Migrator);
 
     let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
     let compiled_contract = complete_compiled_contract();
@@ -97,7 +98,7 @@ async fn insert_verified_contract_with_creation_only_matches_work() {
 
 #[tokio::test]
 async fn insert_verified_contract_with_filled_matches() {
-    let db_guard = database!();
+    let db_guard = database!(Migrator);
 
     let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
     let compiled_contract = complete_compiled_contract();

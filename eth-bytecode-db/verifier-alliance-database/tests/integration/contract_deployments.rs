@@ -1,11 +1,12 @@
-use crate::database;
 use blockscout_display_bytes::decode_hex;
+use blockscout_service_launcher::test_database::database;
 use pretty_assertions::assert_eq;
 use verifier_alliance_database::{InsertContractDeployment, RetrieveContractDeployment};
+use verifier_alliance_migration_v1::Migrator;
 
 #[tokio::test]
 async fn insert_regular_deployment_works_and_can_be_retrieved() {
-    let db_guard = database!();
+    let db_guard = database!(Migrator);
 
     let chain_id = 10;
     let address = decode_hex("0x8FbB39A5a79aeCE03c8f13ccEE0b96C128ec1a67").unwrap();
@@ -51,7 +52,7 @@ async fn insert_regular_deployment_works_and_can_be_retrieved() {
 
 #[tokio::test]
 async fn insert_genesis_deployment_works_and_can_be_retrieved() {
-    let db_guard = database!();
+    let db_guard = database!(Migrator);
 
     let chain_id = 10;
     let address = decode_hex("0x4200000000000000000000000000000000000008").unwrap();
@@ -91,7 +92,7 @@ async fn insert_genesis_deployment_works_and_can_be_retrieved() {
 
 #[tokio::test]
 async fn non_existed_deployment_retrieval_returns_none() {
-    let db_guard = database!();
+    let db_guard = database!(Migrator);
 
     let retrieve_contract_deployment =
         RetrieveContractDeployment::regular(10, vec![0x1], vec![0x1]);

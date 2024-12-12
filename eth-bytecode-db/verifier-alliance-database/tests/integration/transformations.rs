@@ -1,5 +1,7 @@
-use crate::{database, transformations_types::TestCase};
+use crate::transformations_types::TestCase;
+use blockscout_service_launcher::test_database::database;
 use verifier_alliance_database::{insert_contract_deployment, insert_verified_contract};
+use verifier_alliance_migration_v1::Migrator;
 
 macro_rules! build_test {
     ($test_name:ident) => {
@@ -11,7 +13,7 @@ macro_rules! build_test {
                 ".json"
             ));
 
-            let database_guard = database!();
+            let database_guard = database!(Migrator);
             let database_connection = database_guard.client();
 
             let test_case = TestCase::from_content(TEST_CASE_CONTENT);

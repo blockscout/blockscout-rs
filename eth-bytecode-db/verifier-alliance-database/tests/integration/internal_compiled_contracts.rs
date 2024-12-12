@@ -1,4 +1,4 @@
-use crate::database;
+use blockscout_service_launcher::test_database::database;
 use serde_json::json;
 use std::collections::BTreeMap;
 use verification_common_v1::verifier_alliance::{
@@ -7,10 +7,11 @@ use verification_common_v1::verifier_alliance::{
 use verifier_alliance_database::{
     internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
 };
+use verifier_alliance_migration_v1::Migrator;
 
 #[tokio::test]
 async fn insert_compiled_contract_works() {
-    let db_guard = database!();
+    let db_guard = database!(Migrator);
 
     let compiled_contract = CompiledContract {
         compiler: CompiledContractCompiler::Solc,
@@ -53,7 +54,7 @@ async fn insert_compiled_contract_works() {
 
 #[tokio::test]
 async fn insert_compiled_contract_with_empty_artifact_values() {
-    let db_guard = database!();
+    let db_guard = database!(Migrator);
 
     let compiled_contract = CompiledContract {
         compiler: CompiledContractCompiler::Solc,
