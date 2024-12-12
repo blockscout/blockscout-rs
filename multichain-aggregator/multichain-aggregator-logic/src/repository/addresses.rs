@@ -6,11 +6,8 @@ use alloy_primitives::Address as AddressAlloy;
 use entity::addresses::{ActiveModel, Column, Entity, Model};
 use regex::Regex;
 use sea_orm::{
-    prelude::Expr,
-    sea_query::{OnConflict, PostgresQueryBuilder},
-    ActiveValue::NotSet,
-    ConnectionTrait, DbErr, EntityTrait, IntoSimpleExpr, Iterable, QueryFilter, QueryOrder,
-    QuerySelect, QueryTrait,
+    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
+    IntoSimpleExpr, Iterable, QueryFilter, QueryOrder, QuerySelect,
 };
 use std::sync::OnceLock;
 
@@ -88,8 +85,10 @@ where
         .limit(limit + 1);
 
     if hex_regex().is_match(q) {
-        let prefix = format!("\\x{}", q.strip_prefix("0x").unwrap_or(q));
-        query = query.filter(Expr::cust_with_expr("hash LIKE $1", format!("{}%", prefix)));
+        query = query.filter(Expr::cust_with_expr(
+            "encode(hash, 'hex') LIKE $1",
+            format!("{}%", q.to_lowercase().strip_prefix("0x").unwrap_or(q)),
+        ));
     } else {
         let ts_query = prepare_ts_query(q);
         query = query.filter(Expr::cust_with_expr(
@@ -99,8 +98,6 @@ where
             ts_query,
         ));
     }
-
-    println!("{}", query.as_query().to_string(PostgresQueryBuilder));
 
     let addresses = query
         .all(db)

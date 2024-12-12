@@ -1,11 +1,11 @@
 pub mod api_key_manager;
+pub mod dapp_client;
 pub mod error;
 mod import;
 mod proto;
 pub mod repository;
 pub mod search;
 mod types;
-mod dapp_client;
 
 pub use import::batch_import;
 pub use types::{

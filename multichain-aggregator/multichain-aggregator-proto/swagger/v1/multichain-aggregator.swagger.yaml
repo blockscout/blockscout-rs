@@ -158,6 +158,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
+      dapps:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
   protobufAny:
     type: object
     properties:
@@ -254,6 +259,17 @@ definitions:
           $ref: '#/definitions/v1Address'
       pagination:
         $ref: '#/definitions/v1Pagination'
+  v1MarketplaceDapp:
+    type: object
+    properties:
+      id:
+        type: string
+      title:
+        type: string
+      logo:
+        type: string
+      short_description:
+        type: string
   v1Pagination:
     type: object
     properties:

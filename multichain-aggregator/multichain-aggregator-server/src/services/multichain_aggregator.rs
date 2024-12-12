@@ -1,13 +1,11 @@
-use crate::{
-    proto::{
-        multichain_aggregator_service_server::MultichainAggregatorService, BatchImportRequest,
-        BatchImportResponse, ListAddressesRequest, ListAddressesResponse, Pagination,
-        QuickSearchRequest, QuickSearchResponse,
-    },
-    settings::ServiceSettings,
+use crate::proto::{
+    multichain_aggregator_service_server::MultichainAggregatorService, BatchImportRequest,
+    BatchImportResponse, ListAddressesRequest, ListAddressesResponse, Pagination,
+    QuickSearchRequest, QuickSearchResponse,
 };
 use multichain_aggregator_logic::{
-    self as logic, api_key_manager::ApiKeyManager, error::ServiceError, Chain,
+    self as logic, api_key_manager::ApiKeyManager, dapp_client::DappClient, error::ServiceError,
+    Chain,
 };
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
@@ -20,23 +18,29 @@ pub struct MultichainAggregator {
     api_key_manager: ApiKeyManager,
     // Cached chains
     chains: Vec<Chain>,
-
-    settings: ServiceSettings,
+    dapp_client: DappClient,
+    max_page_size: u32,
 }
 
 impl MultichainAggregator {
-    pub fn new(db: DatabaseConnection, chains: Vec<Chain>, settings: ServiceSettings) -> Self {
+    pub fn new(
+        db: DatabaseConnection,
+        chains: Vec<Chain>,
+        dapp_client: DappClient,
+        max_page_size: u32,
+    ) -> Self {
         Self {
             db: db.clone(),
             api_key_manager: ApiKeyManager::new(db),
             chains,
-            settings,
+            dapp_client,
+            max_page_size,
         }
     }
 
     fn normalize_page_size(&self, size: Option<u32>) -> u32 {
         size.unwrap_or(DEFAULT_PAGE_SIZE)
-            .clamp(1, self.settings.max_page_size)
+            .clamp(1, self.max_page_size)
     }
 }
 
@@ -107,12 +111,13 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<QuickSearchResponse>, Status> {
         let inner = request.into_inner();
 
-        let results = logic::search::quick_search(&self.db, inner.q, &self.chains)
-            .await
-            .map_err(|err| {
-                tracing::error!(error = ?err, "failed to quick search");
-                Status::internal("failed to quick search")
-            })?;
+        let results =
+            logic::search::quick_search(&self.db, &self.dapp_client, inner.q, &self.chains)
+                .await
+                .map_err(|err| {
+                    tracing::error!(error = ?err, "failed to quick search");
+                    Status::internal("failed to quick search")
+                })?;
 
         Ok(Response::new(results.into()))
     }

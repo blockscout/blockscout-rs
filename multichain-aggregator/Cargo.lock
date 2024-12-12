@@ -934,7 +934,7 @@ dependencies = [
 [[package]]
 name = "blockscout-chains"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs#3892914d5d334699a92cd90f571988e86c7c9b2b"
+source = "git+https://github.com/blockscout/blockscout-rs#e03d4016016f687a7b2229156fe6425931c53dbc"
 dependencies = [
  "reqwest 0.12.9",
  "reqwest-middleware",
@@ -1613,7 +1613,7 @@ dependencies = [
 [[package]]
 name = "env-collector"
 version = "0.1.1"
-source = "git+https://github.com/blockscout/blockscout-rs#3892914d5d334699a92cd90f571988e86c7c9b2b"
+source = "git+https://github.com/blockscout/blockscout-rs#e03d4016016f687a7b2229156fe6425931c53dbc"
 dependencies = [
  "anyhow",
  "config 0.14.1",
@@ -2810,11 +2810,15 @@ dependencies = [
  "multichain-aggregator-proto",
  "pretty_assertions",
  "regex",
+ "reqwest 0.12.9",
  "sea-orm",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tonic",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -2864,6 +2868,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -5776,6 +5781,7 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]
