@@ -46,10 +46,6 @@ fn new_txns_window_statement(
     let window =
         day_start(&update_day.saturating_sub(TimespanDuration::from_timespan_repeats(WINDOW)))
             ..day_start(&update_day);
-    // `t.block_timestamp != to_timestamp(0)` in this case doesn't introduce major
-    // performance drawbacks, as happened with `total_txns`, so we can
-    // reuse the statement.
-    // i.e. on sepolia testnet: 83s (w/ filter) vs 78s (w/o)
     NewTxnsStatement::get_statement(Some(window), completed_migrations)
 }
 
