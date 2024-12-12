@@ -50,25 +50,45 @@ pub async fn quick_search(
 
     let mut results = SearchResults::default();
 
-    if let Ok((blocks, transactions)) = hashes {
-        populate_search_results!(results, explorers, blocks, blocks);
-        populate_search_results!(results, explorers, transactions, transactions);
+    match hashes {
+        Ok((blocks, transactions)) => {
+            populate_search_results!(results, explorers, blocks, blocks);
+            populate_search_results!(results, explorers, transactions, transactions);
+        }
+        Err(err) => {
+            tracing::error!(error = ?err, "failed to search hashes");
+        }
     }
 
-    if let Ok(block_numbers) = block_numbers {
-        populate_search_results!(results, explorers, block_numbers, block_numbers);
+    match block_numbers {
+        Ok(block_numbers) => {
+            populate_search_results!(results, explorers, block_numbers, block_numbers);
+        }
+        Err(err) => {
+            tracing::error!(error = ?err, "failed to search block numbers");
+        }
     }
 
-    if let Ok(addresses) = addresses {
-        populate_search_results!(results, explorers, addresses, addresses);
+    match addresses {
+        Ok(addresses) => {
+            populate_search_results!(results, explorers, addresses, addresses);
+        }
+        Err(err) => {
+            tracing::error!(error = ?err, "failed to search addresses");
+        }
     }
 
-    if let Ok(dapps) = dapps {
-        let dapps: Vec<MarketplaceDapp> = dapps
-            .into_iter()
-            .filter_map(|d| d.try_into().ok())
-            .collect();
-        populate_search_results!(results, explorers, dapps, dapps);
+    match dapps {
+        Ok(dapps) => {
+            let dapps: Vec<MarketplaceDapp> = dapps
+                .into_iter()
+                .filter_map(|d| d.try_into().ok())
+                .collect();
+            populate_search_results!(results, explorers, dapps, dapps);
+        }
+        Err(err) => {
+            tracing::error!(error = ?err, "failed to search dapps");
+        }
     }
 
     Ok(results)
