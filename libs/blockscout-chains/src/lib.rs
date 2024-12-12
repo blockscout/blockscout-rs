@@ -65,7 +65,7 @@ impl Default for BlockscoutChainsClientBuilder {
     }
 }
 
-pub type BlockscoutChains = HashMap<u64, BlockscoutChainData>;
+pub type BlockscoutChains = HashMap<String, BlockscoutChainData>;
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
