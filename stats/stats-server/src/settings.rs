@@ -8,8 +8,8 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::{
-    counters::LastNewContracts,
-    lines::{ContractsGrowth, NewContracts},
+    counters::{LastNewContracts, TotalOperationalTxns},
+    lines::{ContractsGrowth, NewContracts, NewOperationalTxns, OperationalTxnsGrowth},
     ChartProperties,
 };
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
@@ -37,6 +37,8 @@ pub struct Settings {
     ///
     /// It has a higher priority than config files and respective envs.
     pub disable_internal_transactions: bool,
+    /// Enable arbitrum-specific charts
+    pub enable_all_arbitrum: bool,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -84,6 +86,7 @@ impl Default for Settings {
             blockscout_api_url: None,
             ignore_blockscout_api_absence: false,
             disable_internal_transactions: false,
+            enable_all_arbitrum: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
@@ -115,11 +118,42 @@ pub fn handle_disable_internal_transactions(
                     warn!(
                         "Could not disable internal transactions related chart {}: chart not found in settings. \
                         This should not be a problem for running the service.",
-                    disable_key);
+                        disable_key
+                    );
                     continue;
                 }
             };
             settings.enabled = false;
+        }
+    }
+}
+
+pub fn handle_enable_all_arbitrum(
+    enable_all_arbitrum: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all_arbitrum {
+        for enable_key in [
+            NewOperationalTxns::key().name(),
+            OperationalTxnsGrowth::key().name(),
+            TotalOperationalTxns::key().name(),
+        ] {
+            let settings = match (
+                charts.lines.get_mut(enable_key),
+                charts.counters.get_mut(enable_key),
+            ) {
+                (Some(settings), _) => settings,
+                (_, Some(settings)) => settings,
+                _ => {
+                    warn!(
+                        "Could not enable arbitrum-specific chart {}: chart not found in settings. \
+                        This should not be a problem for running the service.",
+                        enable_key
+                    );
+                    continue;
+                }
+            };
+            settings.enabled = true;
         }
     }
 }
