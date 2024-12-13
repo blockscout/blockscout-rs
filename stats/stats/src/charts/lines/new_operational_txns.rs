@@ -1,12 +1,22 @@
 use crate::{
     data_processing::zip_same_timespan,
     data_source::kinds::{
-        data_manipulation::map::{Map, MapFunction},
+        data_manipulation::{
+            map::{Map, MapFunction, MapParseTo, MapToString, StripExt},
+            resolutions::sum::SumLowerResolution,
+        },
         local_db::{
-            parameters::update::batching::parameters::BatchMaxDays, DirectVecLocalDbChartSource,
+            parameters::update::batching::parameters::{
+                Batch30Weeks, Batch30Years, Batch36Months, BatchMaxDays,
+            },
+            DirectVecLocalDbChartSource,
         },
     },
-    types::{Timespan, TimespanValue},
+    define_and_impl_resolution_properties,
+    types::{
+        timespans::{Month, Week, Year},
+        Timespan, TimespanValue,
+    },
     ChartProperties, MissingDatePolicy, Named,
 };
 
@@ -69,10 +79,36 @@ where
     }
 }
 
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
 pub type NewOperationalTxns = DirectVecLocalDbChartSource<
     Map<(NewBlocksInt, NewTxnsInt), Calculate>,
     BatchMaxDays,
     Properties,
+>;
+pub type NewOperationalTxnsInt = MapParseTo<StripExt<NewOperationalTxns>, i64>;
+pub type NewOperationalTxnsWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewOperationalTxnsInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewOperationalTxnsMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewOperationalTxnsInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewOperationalTxnsMonthlyInt = MapParseTo<StripExt<NewOperationalTxnsMonthly>, i64>;
+pub type NewOperationalTxnsYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewOperationalTxnsMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
 >;
 
 // todo: resolutions
@@ -100,4 +136,8 @@ mod tests {
         )
         .await;
     }
+
+    // the implementation is generic over resolutions,
+    // therefore other res should also work fine
+    // (tests are becoming excruciatingly slow)
 }
