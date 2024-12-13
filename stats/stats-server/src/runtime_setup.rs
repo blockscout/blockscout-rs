@@ -357,6 +357,7 @@ impl RuntimeSetup {
                 "TotalOperationalTxnsGroup",
                 vec!["totalBlocks_DAY", "totalTxns_DAY"],
             ),
+            // todo: other operational txns
         ]
         .map(|(group_name, allowed_missing)| {
             (
