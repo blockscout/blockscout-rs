@@ -19,7 +19,7 @@ mod new_native_coin_transfers;
 mod new_operational_txns;
 mod new_txns;
 mod new_verified_contracts;
-// mod operational_txns_growth;
+mod operational_txns_growth;
 mod txns_fee;
 mod txns_growth;
 mod txns_success_rate;
