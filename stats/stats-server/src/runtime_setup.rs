@@ -311,6 +311,11 @@ impl RuntimeSetup {
             ("AverageGasPriceGroup", vec!["newTxns_DAY", "newTxns_MONTH"]),
             ("AverageTxnFeeGroup", vec!["newTxns_DAY", "newTxns_MONTH"]),
             ("TxnsSuccessRateGroup", vec!["newTxns_DAY", "newTxns_MONTH"]),
+            // total blocks and total txns have their own respective groups
+            (
+                "TotalOperationalTxnsGroup",
+                vec!["totalBlocks_DAY", "totalTxns_DAY"],
+            ),
         ]
         .map(|(group_name, allowed_missing)| {
             (
