@@ -195,8 +195,8 @@ class CronVisualizerGUI:
                     x2, self.canvas_height - 40,
                     fill=color, outline='',
                     tags=('time_slot', f'minute_{minute}', 
-                         f'count_{count}', 
-                         f'tasks_{"_".join(timeline[minute])}')
+                        f'count_{count}', 
+                        f'tasks_{"/".join(timeline[minute])}')  # Change separator to '/'
                 )
         
         self.status_var.set(f"Maximum concurrent tasks: {max_overlaps}")
@@ -226,12 +226,13 @@ class CronVisualizerGUI:
             if 0 <= minute_index < 24 * 60:
                 time_str = f"{hour:02d}:{minute_in_hour:02d}"
                 items = self.canvas.find_overlapping(x-1, 20, x+1, self.canvas_height-40)
-                
                 if items:
                     for item in items:
                         tags = self.canvas.gettags(item)
-                        if 'tasks_' in tags[3]:  # Get the tasks tag
-                            tasks = tags[3][6:].split('_')  # Remove 'tasks_' prefix
+                        # Fix 1: Check if we have a tasks tag before accessing index 3
+                        tasks_tag = next((tag for tag in tags if tag.startswith('tasks_')), None)
+                        if tasks_tag:
+                            tasks = tasks_tag[6:].split('/')  # Fix 2: Change separator to '/'
                             count = len(tasks)
                             task_list = ', '.join(tasks)
                             self.status_var.set(
