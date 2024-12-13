@@ -12,6 +12,7 @@
         "total_native_coin_transfers",
         "total_tokens",
         "total_txns",
+        "total_operational_txns",
         "total_verified_contracts",
         "yesterday_txns"
     ],

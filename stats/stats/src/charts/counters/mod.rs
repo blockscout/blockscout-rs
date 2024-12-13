@@ -27,6 +27,7 @@ pub use total_blocks::{TotalBlocks, TotalBlocksInt};
 pub use total_contracts::TotalContracts;
 pub use total_native_coin_holders::TotalNativeCoinHolders;
 pub use total_native_coin_transfers::TotalNativeCoinTransfers;
+pub use total_operational_txns::TotalOperationalTxns;
 pub use total_tokens::TotalTokens;
 pub use total_txns::{TotalTxns, TotalTxnsInt};
 pub use total_verified_contracts::TotalVerifiedContracts;

@@ -22,8 +22,12 @@ singleton_groups!(
     CompletedTxns,
     TotalAddresses,
     TotalBlocks,
-    TotalTokens,
     TotalTxns,
+    // Even though it depends on `TotalTxns` and `TotalBlocks`,
+    // it's ok not to update it as frequently.
+    // Granular control over these 2 still seems useful.
+    TotalOperationalTxns,
+    TotalTokens,
     YesterdayTxns,
     // Each of the `ActiveRecurringAccounts*` charts includes quite heavy SQL query,
     // thus it's better to have granular control on update times.
