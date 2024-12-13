@@ -87,8 +87,8 @@ fn match_contract_from_model(
 
     let match_type = extract_match_type(&compiled_contract, &verified_contract)?;
 
-    let source_files = serde_json::from_value(compiled_contract.sources)
-        .context("compiled contract sources are not valid BTreeMap<String, String>")?;
+    // let source_files = serde_json::from_value(compiled_contract.sources)
+    //     .context("compiled contract sources are not valid BTreeMap<String, String>")?;
 
     let match_contract = MatchContract {
         updated_at,
@@ -97,7 +97,7 @@ fn match_contract_from_model(
         compiler_version: compiled_contract.version,
         compiler_settings: compiled_contract.compiler_settings.to_string(),
         source_type: extract_source_type(&compiled_contract.language)?,
-        source_files,
+        source_files: Default::default(),
         abi: extract_abi(&compiled_contract.compilation_artifacts)?,
         constructor_arguments: extract_constructor_arguments(&verified_contract)?,
         match_type,

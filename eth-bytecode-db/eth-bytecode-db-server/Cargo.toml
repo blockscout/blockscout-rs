@@ -35,7 +35,7 @@ hex = { workspace = true }
 keccak-hash = { workspace = true }
 paste = { workspace = true }
 pretty_assertions = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
 rstest = { workspace = true }
 smart-contract-verifier-proto = { workspace = true, features = ["mock"] }
 verifier-alliance-entity = { workspace = true }

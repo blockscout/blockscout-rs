@@ -18,11 +18,13 @@ pub struct Model {
     pub creation_values: Option<Json>,
     #[sea_orm(column_type = "JsonBinary", nullable)]
     pub creation_transformations: Option<Json>,
+    pub creation_metadata_match: Option<bool>,
     pub runtime_match: bool,
     #[sea_orm(column_type = "JsonBinary", nullable)]
     pub runtime_values: Option<Json>,
     #[sea_orm(column_type = "JsonBinary", nullable)]
     pub runtime_transformations: Option<Json>,
+    pub runtime_metadata_match: Option<bool>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

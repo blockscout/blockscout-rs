@@ -199,9 +199,9 @@ async fn insert_source_details(
         raw_deployed_bytecode: Set(source.raw_runtime_code.clone()),
         abi: Set(source.abi.clone()),
         file_ids_hash: Set(file_ids_hash),
-        compilation_artifacts: Set(source.compilation_artifacts),
-        creation_input_artifacts: Set(source.creation_code_artifacts),
-        deployed_bytecode_artifacts: Set(source.runtime_code_artifacts),
+        compilation_artifacts: Set(source.compilation_artifacts.map(|value| value.into())),
+        creation_input_artifacts: Set(source.creation_code_artifacts.map(|value| value.into())),
+        deployed_bytecode_artifacts: Set(source.runtime_code_artifacts.map(|value| value.into())),
         ..Default::default()
     };
     insert_then_select!(

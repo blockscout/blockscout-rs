@@ -11,6 +11,12 @@ pub struct Model {
         column_type = "VarBinary(StringLen::None)"
     )]
     pub code_hash: Vec<u8>,
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
+    pub created_by: String,
+    pub updated_by: String,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
+    pub code_hash_keccak: Vec<u8>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub code: Option<Vec<u8>>,
 }
