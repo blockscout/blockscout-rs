@@ -5,17 +5,12 @@ use crate::{
             resolutions::last_value::LastValueLowerResolution,
         },
         local_db::{
-            parameters::update::batching::parameters::{
-                Batch30Weeks, Batch30Years, Batch36Months,
-            },
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
         },
     },
     define_and_impl_resolution_properties,
-    types::{
-        timespans::{Month, Week, Year},
-        Timespan,
-    },
+    types::timespans::{Month, Week, Year},
     ChartProperties, MissingDatePolicy, Named,
 };
 
