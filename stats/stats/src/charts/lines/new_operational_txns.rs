@@ -111,8 +111,6 @@ pub type NewOperationalTxnsYearly = DirectVecLocalDbChartSource<
     YearlyProperties,
 >;
 
-// todo: resolutions
-
 #[cfg(test)]
 mod tests {
     use super::*;
