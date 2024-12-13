@@ -2,7 +2,7 @@ use crate::{
     data_processing::zip_same_timespan,
     data_source::kinds::{
         data_manipulation::{
-            map::{Map, MapFunction, MapParseTo, MapToString, StripExt},
+            map::{Map, MapFunction, MapParseTo, MapToString},
             resolutions::sum::SumLowerResolution,
         },
         local_db::{
@@ -61,7 +61,7 @@ where
 {
     type Output = Vec<TimespanValue<Resolution, String>>;
 
-    fn function(inner_data: Input<Resolution>) -> Result<Self::Output, crate::ChartError> {
+    fn function(inner_data: Input<Resolution>) -> Result<Self::Output, crate::UpdateError> {
         let (blocks_data, txns_data) = inner_data;
         let combined = zip_same_timespan(blocks_data, txns_data);
         let data = combined
@@ -93,7 +93,7 @@ pub type NewOperationalTxns = DirectVecLocalDbChartSource<
     BatchMaxDays,
     Properties,
 >;
-pub type NewOperationalTxnsInt = MapParseTo<StripExt<NewOperationalTxns>, i64>;
+pub type NewOperationalTxnsInt = MapParseTo<NewOperationalTxns, i64>;
 pub type NewOperationalTxnsWeekly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewOperationalTxnsInt, Week>>,
     Batch30Weeks,
@@ -104,7 +104,7 @@ pub type NewOperationalTxnsMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewOperationalTxnsMonthlyInt = MapParseTo<StripExt<NewOperationalTxnsMonthly>, i64>;
+pub type NewOperationalTxnsMonthlyInt = MapParseTo<NewOperationalTxnsMonthly, i64>;
 pub type NewOperationalTxnsYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewOperationalTxnsMonthlyInt, Year>>,
     Batch30Years,

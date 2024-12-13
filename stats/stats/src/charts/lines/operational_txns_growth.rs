@@ -1,21 +1,16 @@
 use crate::{
     data_source::kinds::{
         data_manipulation::{
-            map::{MapParseTo, MapToString, StripExt},
+            map::{MapParseTo, MapToString},
             resolutions::last_value::LastValueLowerResolution,
         },
         local_db::{
-            parameters::update::batching::parameters::{
-                Batch30Weeks, Batch30Years, Batch36Months,
-            },
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
         },
     },
     define_and_impl_resolution_properties,
-    types::{
-        timespans::{Month, Week, Year},
-        Timespan,
-    },
+    types::timespans::{Month, Week, Year},
     ChartProperties, MissingDatePolicy, Named,
 };
 
@@ -54,8 +49,8 @@ define_and_impl_resolution_properties!(
 );
 
 pub type OperationalTxnsGrowth =
-    DailyCumulativeLocalDbChartSource<MapParseTo<StripExt<NewOperationalTxns>, i64>, Properties>;
-pub type OperationalTxnsGrowthInt = MapParseTo<StripExt<OperationalTxnsGrowth>, i64>;
+    DailyCumulativeLocalDbChartSource<MapParseTo<NewOperationalTxns, i64>, Properties>;
+pub type OperationalTxnsGrowthInt = MapParseTo<OperationalTxnsGrowth, i64>;
 pub type OperationalTxnsGrowthWeekly = DirectVecLocalDbChartSource<
     MapToString<LastValueLowerResolution<OperationalTxnsGrowthInt, Week>>,
     Batch30Weeks,
@@ -66,7 +61,7 @@ pub type OperationalTxnsGrowthMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type OperationalTxnsGrowthMonthlyInt = MapParseTo<StripExt<OperationalTxnsGrowthMonthly>, i64>;
+pub type OperationalTxnsGrowthMonthlyInt = MapParseTo<OperationalTxnsGrowthMonthly, i64>;
 pub type OperationalTxnsGrowthYearly = DirectVecLocalDbChartSource<
     MapToString<LastValueLowerResolution<OperationalTxnsGrowthMonthlyInt, Year>>,
     Batch30Years,

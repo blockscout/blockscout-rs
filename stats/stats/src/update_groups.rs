@@ -112,6 +112,14 @@ construct_update_group!(NewBlocksGroup {
         NewBlocksWeekly,
         NewBlocksMonthly,
         NewBlocksYearly,
+        NewOperationalTxns,
+        NewOperationalTxnsWeekly,
+        NewOperationalTxnsMonthly,
+        NewOperationalTxnsYearly,
+        OperationalTxnsGrowth,
+        OperationalTxnsGrowthWeekly,
+        OperationalTxnsGrowthMonthly,
+        OperationalTxnsGrowthYearly
     ]
 });
 

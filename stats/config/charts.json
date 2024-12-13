@@ -111,6 +111,16 @@
             "title": "Number of transactions",
             "description": "Cumulative transaction growth over time"
         },
+        "new_operational_txns": {
+            "enabled": false,
+            "title": "New operational transactions",
+            "description": "Number of new transactions without block creation"
+        },
+        "operational_txns_growth": {
+            "enabled": false,
+            "title": "Number of operational transactions",
+            "description": "Cumulative transactions growth without block creation"
+        },
         "txns_success_rate": {
             "title": "Transaction success rate",
             "description": "Success rate for all included transactions"

@@ -90,10 +90,19 @@ pub use new_native_coin_transfers::{
     NewNativeCoinTransfers, NewNativeCoinTransfersInt, NewNativeCoinTransfersMonthly,
     NewNativeCoinTransfersWeekly, NewNativeCoinTransfersYearly,
 };
+pub use new_operational_txns::{
+    NewOperationalTxns, NewOperationalTxnsMonthly, NewOperationalTxnsWeekly,
+    NewOperationalTxnsYearly,
+};
+pub(crate) use new_txns::NewTxnsStatement;
 pub use new_txns::{NewTxns, NewTxnsInt, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
 pub use new_verified_contracts::{
     NewVerifiedContracts, NewVerifiedContractsMonthly, NewVerifiedContractsWeekly,
     NewVerifiedContractsYearly,
+};
+pub use operational_txns_growth::{
+    OperationalTxnsGrowth, OperationalTxnsGrowthMonthly, OperationalTxnsGrowthWeekly,
+    OperationalTxnsGrowthYearly,
 };
 pub use txns_fee::{TxnsFee, TxnsFeeMonthly, TxnsFeeWeekly, TxnsFeeYearly};
 pub use txns_growth::{TxnsGrowth, TxnsGrowthMonthly, TxnsGrowthWeekly, TxnsGrowthYearly};
