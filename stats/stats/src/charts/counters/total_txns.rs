@@ -1,6 +1,9 @@
 use crate::{
     data_source::kinds::{
-        data_manipulation::{map::MapToString, sum_point::Sum},
+        data_manipulation::{
+            map::{MapParseTo, MapToString},
+            sum_point::Sum,
+        },
         local_db::DirectPointLocalDbChartSource,
     },
     lines::NewTxnsInt,
