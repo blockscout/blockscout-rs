@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta
 from croniter import croniter
 import colorsys
+import os
 from tkcalendar import Calendar
 from typing import Dict, List, Tuple
 
@@ -20,7 +21,21 @@ class CronVisualizerGUI:
         self.selected_date = datetime.now()
         self.default_duration = 20  # Duration in minutes
         
+        # Add default path
+        default_path = "../update_groups.json"
+        if os.path.exists(default_path):
+            try:
+                with open(default_path, 'r') as f:
+                    data = json.load(f)
+                    self.schedules = data.get('schedules', {})
+            except Exception as e:
+                print(f"Failed to load default file: {str(e)}")
+
         self.setup_gui()
+
+        if self.schedules:
+            self.update_visualization()
+            self.update_schedule_list()
         
     def setup_gui(self):
         # Top frame for file selection and controls
