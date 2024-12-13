@@ -12,7 +12,8 @@
         "total_native_coin_transfers",
         "total_tokens",
         "total_txns",
-        "total_verified_contracts"
+        "total_verified_contracts",
+        "total_operational_txns"
     ],
     "line_chart_categories": [
         {

@@ -38,6 +38,11 @@
             "title": "Total txns",
             "description": "All transactions including pending, dropped, replaced, failed transactions"
         },
+        "total_operational_txns": {
+            "enabled": false,
+            "title": "Total operational txns",
+            "description": "'Total txns' without block creation transactions"
+        },
         "last_new_contracts": {
             "title": "Number of deployed contracts today",
             "description": "Number of deployed contracts today"
