@@ -30,6 +30,7 @@ impl ChartProperties for Properties {
 }
 
 pub type TotalTxns = DirectPointLocalDbChartSource<MapToString<Sum<NewTxnsInt>>, Properties>;
+pub type TotalTxnsInt = MapParseTo<TotalTxns, i64>;
 
 #[cfg(test)]
 mod tests {
