@@ -112,6 +112,7 @@ construct_update_group!(NewBlocksGroup {
         NewBlocksWeekly,
         NewBlocksMonthly,
         NewBlocksYearly,
+        // if the following are enabled, then NewTxns is updated as well
         NewOperationalTxns,
         NewOperationalTxnsWeekly,
         NewOperationalTxnsMonthly,
