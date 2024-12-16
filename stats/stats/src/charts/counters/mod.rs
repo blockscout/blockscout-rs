@@ -1,7 +1,10 @@
 mod average_block_time;
+mod average_txn_fee_24h;
 mod completed_txns;
 mod last_new_contracts;
 mod last_new_verified_contracts;
+mod new_txns_24h;
+mod pending_txns;
 mod total_accounts;
 mod total_addresses;
 mod total_blocks;
@@ -12,6 +15,7 @@ mod total_operational_txns;
 mod total_tokens;
 mod total_txns;
 mod total_verified_contracts;
+mod txns_fee_24h;
 mod yesterday_txns;
 
 #[cfg(test)]
