@@ -316,7 +316,11 @@ impl RuntimeSetup {
                 "TotalOperationalTxnsGroup",
                 vec!["totalBlocks_DAY", "totalTxns_DAY"],
             ),
-            // todo: other operational txns
+            // the operational txns charts that depend on `newTxns_DAY` are
+            // rarely turned on, also `newTxns_DAY` is not that expensive to
+            // compute, therefore this solution is ok (to not introduce
+            // more update groups if not necessary)
+            ("NewBlocksGroup", vec!["newTxns_DAY"]),
         ]
         .map(|(group_name, allowed_missing)| {
             (
