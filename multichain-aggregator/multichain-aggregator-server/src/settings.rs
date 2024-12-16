@@ -26,8 +26,26 @@ pub struct Settings {
 #[serde(deny_unknown_fields)]
 pub struct ServiceSettings {
     pub dapp_client: DappClientSettings,
+    #[serde(default)]
+    pub api: ApiSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ApiSettings {
+    #[serde(default = "default_default_page_size")]
+    pub default_page_size: u32,
     #[serde(default = "default_max_page_size")]
     pub max_page_size: u32,
+}
+
+impl Default for ApiSettings {
+    fn default() -> Self {
+        Self {
+            default_page_size: default_default_page_size(),
+            max_page_size: default_max_page_size(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -56,7 +74,10 @@ impl Settings {
                 dapp_client: DappClientSettings {
                     url: Url::parse("http://localhost:8050").unwrap(),
                 },
-                max_page_size: 100,
+                api: ApiSettings {
+                    default_page_size: default_default_page_size(),
+                    max_page_size: default_max_page_size(),
+                },
             },
         }
     }
@@ -64,4 +85,8 @@ impl Settings {
 
 fn default_max_page_size() -> u32 {
     100
+}
+
+fn default_default_page_size() -> u32 {
+    50
 }

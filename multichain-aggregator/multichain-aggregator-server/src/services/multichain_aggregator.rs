@@ -1,7 +1,10 @@
-use crate::proto::{
-    multichain_aggregator_service_server::MultichainAggregatorService, BatchImportRequest,
-    BatchImportResponse, ListAddressesRequest, ListAddressesResponse, Pagination,
-    QuickSearchRequest, QuickSearchResponse,
+use crate::{
+    proto::{
+        multichain_aggregator_service_server::MultichainAggregatorService, BatchImportRequest,
+        BatchImportResponse, ListAddressesRequest, ListAddressesResponse, Pagination,
+        QuickSearchRequest, QuickSearchResponse,
+    },
+    settings::ApiSettings,
 };
 use multichain_aggregator_logic::{
     self as logic, api_key_manager::ApiKeyManager, dapp_client::DappClient, error::ServiceError,
@@ -11,15 +14,13 @@ use sea_orm::DatabaseConnection;
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
 
-const DEFAULT_PAGE_SIZE: u32 = 50;
-
 pub struct MultichainAggregator {
     db: DatabaseConnection,
     api_key_manager: ApiKeyManager,
     // Cached chains
     chains: Vec<Chain>,
     dapp_client: DappClient,
-    max_page_size: u32,
+    api_settings: ApiSettings,
 }
 
 impl MultichainAggregator {
@@ -27,20 +28,20 @@ impl MultichainAggregator {
         db: DatabaseConnection,
         chains: Vec<Chain>,
         dapp_client: DappClient,
-        max_page_size: u32,
+        api_settings: ApiSettings,
     ) -> Self {
         Self {
             db: db.clone(),
             api_key_manager: ApiKeyManager::new(db),
             chains,
             dapp_client,
-            max_page_size,
+            api_settings,
         }
     }
 
     fn normalize_page_size(&self, size: Option<u32>) -> u32 {
-        size.unwrap_or(DEFAULT_PAGE_SIZE)
-            .clamp(1, self.max_page_size)
+        size.unwrap_or(self.api_settings.default_page_size)
+            .clamp(1, self.api_settings.max_page_size)
     }
 }
 

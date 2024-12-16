@@ -78,7 +78,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         db,
         blockscout_chains,
         dapp_client,
-        settings.service.max_page_size,
+        settings.service.api,
     ));
 
     let router = Router {
