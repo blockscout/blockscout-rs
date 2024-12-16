@@ -2,10 +2,10 @@
 //!
 //! The main application - SQL queries from remote (=blockscout) database.
 //!
-//! ## Details
+//! ## Note
 //!
-//! This source does not have any persistency and is only an adapter for representing
-//! a remote DB as a `DataSource`.
+//! [`RemoteDatabaseSource`] usually does not have any persistency and is only an
+//! adapter for representing a remote DB as a `DataSource`.
 //!
 //! Since each [`RemoteQueryBehaviour::query_data`] performs (likely a heavy) database
 //! query, it is undesireable to have this source present in more than one place.
