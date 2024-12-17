@@ -1,3 +1,4 @@
+mod bytecode_comparison;
 mod client;
 mod db;
 mod errors;

@@ -35,6 +35,9 @@ tokio-stream = { workspace = true }
 tracing = { workspace = true }
 verification-common = { workspace = true }
 verifier-alliance-entity = { workspace = true }
+verifier-alliance-database = { workspace = true }
+verification-common-v1 = { workspace = true }
+verifier-alliance-entity-v1 = {workspace = true }
 
 tokio = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }

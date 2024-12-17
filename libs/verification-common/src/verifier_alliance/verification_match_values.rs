@@ -29,19 +29,23 @@ impl From<Values> for serde_json::Value {
 }
 
 impl Values {
-    pub fn add_cbor_auxdata(&mut self, key: impl Into<String>, value: Bytes) {
+    pub fn add_cbor_auxdata(&mut self, key: impl Into<String>, value: Bytes) -> &mut Self {
         self.cbor_auxdata.insert(key.into(), value);
+        self
     }
 
-    pub fn add_constructor_arguments(&mut self, value: Bytes) {
+    pub fn add_constructor_arguments(&mut self, value: Bytes) -> &mut Self {
         self.constructor_arguments = Some(value);
+        self
     }
 
-    pub fn add_library(&mut self, key: impl Into<String>, value: Bytes) {
+    pub fn add_library(&mut self, key: impl Into<String>, value: Bytes) -> &mut Self {
         self.libraries.insert(key.into(), value);
+        self
     }
 
-    pub fn add_immutable(&mut self, key: impl Into<String>, value: Bytes) {
+    pub fn add_immutable(&mut self, key: impl Into<String>, value: Bytes) -> &mut Self {
         self.immutables.insert(key.into(), value);
+        self
     }
 }

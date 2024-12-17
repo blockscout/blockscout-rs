@@ -252,7 +252,7 @@ async fn process_verify_response(
     Ok(source)
 }
 
-async fn from_response_to_source(
+pub(crate) async fn from_response_to_source(
     response: smart_contract_verifier::VerifyResponse,
 ) -> Result<Source, Error> {
     let (source, extra_data) = match (response.status(), response.source, response.extra_data) {

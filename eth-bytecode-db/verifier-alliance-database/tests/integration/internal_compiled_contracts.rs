@@ -2,7 +2,7 @@ use blockscout_service_launcher::test_database::database;
 use serde_json::json;
 use std::collections::BTreeMap;
 use verification_common_v1::verifier_alliance::{
-    CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts, SourceId,
+    CborAuxdata, CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts, SourceId,
 };
 use verifier_alliance_database::{
     internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
@@ -12,6 +12,11 @@ use verifier_alliance_migration_v1::Migrator;
 #[tokio::test]
 async fn insert_compiled_contract_works() {
     let db_guard = database!(Migrator);
+
+    let cbor_auxdata: CborAuxdata = serde_json::from_value(json!({
+        "1": {"offset": 1, "value": "0x1234"}
+    }))
+    .unwrap();
 
     let compiled_contract = CompiledContract {
         compiler: CompiledContractCompiler::Solc,
@@ -35,11 +40,11 @@ async fn insert_compiled_contract_works() {
         creation_code_artifacts: CreationCodeArtifacts {
             source_map: Some(json!("source_map")),
             link_references: Some(json!({"linkReferences": "value"})),
-            cbor_auxdata: Some(json!({"cborAuxdata": "value"})),
+            cbor_auxdata: Some(cbor_auxdata.clone()),
         },
         runtime_code: vec![0x3, 0x4],
         runtime_code_artifacts: RuntimeCodeArtifacts {
-            cbor_auxdata: Some(json!({"cborAuxdata": "value"})),
+            cbor_auxdata: Some(cbor_auxdata),
             immutable_references: Some(json!({"immutableReferences": "value"})),
             link_references: Some(json!({"linkReferences": "value"})),
             source_map: Some(json!("source_map")),

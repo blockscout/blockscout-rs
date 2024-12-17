@@ -1,8 +1,9 @@
+use super::CborAuxdata;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub trait ToCreationCodeArtifacts {
-    fn cbor_auxdata(&self) -> Option<Value> {
+    fn cbor_auxdata(&self) -> Option<CborAuxdata> {
         None
     }
     fn link_references(&self) -> Option<Value> {
@@ -14,7 +15,7 @@ pub trait ToCreationCodeArtifacts {
 }
 
 impl<T: ToCreationCodeArtifacts> ToCreationCodeArtifacts for &T {
-    fn cbor_auxdata(&self) -> Option<Value> {
+    fn cbor_auxdata(&self) -> Option<CborAuxdata> {
         (*self).cbor_auxdata()
     }
     fn link_references(&self) -> Option<Value> {
@@ -30,7 +31,7 @@ impl<T: ToCreationCodeArtifacts> ToCreationCodeArtifacts for &T {
 pub struct CreationCodeArtifacts {
     pub source_map: Option<Value>,
     pub link_references: Option<Value>,
-    pub cbor_auxdata: Option<Value>,
+    pub cbor_auxdata: Option<CborAuxdata>,
 }
 
 impl<T: ToCreationCodeArtifacts> From<T> for CreationCodeArtifacts {

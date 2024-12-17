@@ -1,8 +1,9 @@
+use super::CborAuxdata;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub trait ToRuntimeCodeArtifacts {
-    fn cbor_auxdata(&self) -> Option<Value> {
+    fn cbor_auxdata(&self) -> Option<CborAuxdata> {
         None
     }
     fn immutable_references(&self) -> Option<Value> {
@@ -17,7 +18,7 @@ pub trait ToRuntimeCodeArtifacts {
 }
 
 impl<T: ToRuntimeCodeArtifacts> ToRuntimeCodeArtifacts for &T {
-    fn cbor_auxdata(&self) -> Option<Value> {
+    fn cbor_auxdata(&self) -> Option<CborAuxdata> {
         (*self).cbor_auxdata()
     }
     fn immutable_references(&self) -> Option<Value> {
@@ -34,7 +35,7 @@ impl<T: ToRuntimeCodeArtifacts> ToRuntimeCodeArtifacts for &T {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeCodeArtifacts {
-    pub cbor_auxdata: Option<Value>,
+    pub cbor_auxdata: Option<CborAuxdata>,
     pub immutable_references: Option<Value>,
     pub link_references: Option<Value>,
     pub source_map: Option<Value>,

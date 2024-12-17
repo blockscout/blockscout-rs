@@ -1,6 +1,6 @@
 use super::{
     compilation_artifacts::CompilationArtifacts, creation_code_artifacts::CreationCodeArtifacts,
-    runtime_code_artifacts::RuntimeCodeArtifacts,
+    runtime_code_artifacts::RuntimeCodeArtifacts, CborAuxdata,
 };
 pub use super::{
     verification_match_transformations::Transformation as MatchTransformation,
@@ -86,9 +86,12 @@ impl<'a> MatchBuilder<'a> {
     }
 
     fn apply_cbor_auxdata_transformations(
-        self,
-        _cbor_auxdata: Option<&serde_json::Value>,
+        mut self,
+        cbor_auxdata: Option<&CborAuxdata>,
     ) -> Result<Self, anyhow::Error> {
+        if let Some(cbor_auxdata) = cbor_auxdata {
+            self.has_cbor_auxdata = !cbor_auxdata.is_empty();
+        }
         Ok(self)
     }
 

@@ -4,8 +4,8 @@ use sea_orm::{prelude::Uuid, DatabaseConnection};
 use serde_json::json;
 use std::collections::BTreeMap;
 use verification_common_v1::verifier_alliance::{
-    CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation, MatchValues,
-    RuntimeCodeArtifacts, SourceId,
+    CborAuxdata, CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation,
+    MatchValues, RuntimeCodeArtifacts, SourceId,
 };
 use verifier_alliance_database::{
     CompiledContract, CompiledContractCompiler, CompiledContractLanguage, InsertContractDeployment,
@@ -182,6 +182,10 @@ async fn insert_verified_contract_with_filled_matches() {
 }
 
 fn complete_compiled_contract() -> CompiledContract {
+    let cbor_auxdata: CborAuxdata = serde_json::from_value(json!({
+        "1": {"offset": 1, "value": "0x1234"}
+    }))
+    .unwrap();
     CompiledContract {
         compiler: CompiledContractCompiler::Solc,
         version: "".to_string(),
@@ -204,11 +208,11 @@ fn complete_compiled_contract() -> CompiledContract {
         creation_code_artifacts: CreationCodeArtifacts {
             source_map: Some(json!("source_map")),
             link_references: Some(json!({"linkReferences": "value"})),
-            cbor_auxdata: Some(json!({"cborAuxdata": "value"})),
+            cbor_auxdata: Some(cbor_auxdata.clone()),
         },
         runtime_code: vec![0x3, 0x4],
         runtime_code_artifacts: RuntimeCodeArtifacts {
-            cbor_auxdata: Some(json!({"cborAuxdata": "value"})),
+            cbor_auxdata: Some(cbor_auxdata),
             immutable_references: Some(json!({"immutableReferences": "value"})),
             link_references: Some(json!({"linkReferences": "value"})),
             source_map: Some(json!("source_map")),

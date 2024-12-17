@@ -23,7 +23,8 @@ verifier-alliance-migration = { git = "https://github.com/blockscout/blockscout-
 
 verifier-alliance-entity-v1 = { path = "eth-bytecode-db/verifier-alliance-entity", package = "verifier-alliance-entity" }
 verifier-alliance-migration-v1 = { path = "eth-bytecode-db/verifier-alliance-migration", package = "verifier-alliance-migration" }
-verification-common-v1 = { git = "https://github.com/blockscout/blockscout-rs", rev = "1164e09", package = "verification-common" }
+verification-common-v1 = { path = "../libs/verification-common", package = "verification-common" }
+#verification-common-v1 = { git = "https://github.com/blockscout/blockscout-rs", rev = "1164e09", package = "verification-common" }
 
 actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
 actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
