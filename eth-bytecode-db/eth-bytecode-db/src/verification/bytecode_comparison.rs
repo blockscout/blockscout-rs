@@ -86,29 +86,19 @@ fn check_code_matches_new(
 
     let mut creation_match = None;
     if let Some(on_chain_creation_code) = contract_deployment.creation_code {
-        creation_match = verifier_alliance::MatchBuilder::new(
+        creation_match = verifier_alliance::verify_creation_code(
             &on_chain_creation_code,
             re_compiled_contract.creation_code.clone(),
-        )
-        .map(|builder| {
-            builder.apply_creation_code_transformations(
-                &re_compiled_contract.creation_code_artifacts,
-                &re_compiled_contract.compilation_artifacts,
-            )
-        })
-        .transpose()?
-        .and_then(|builder| builder.verify_and_build());
+            &re_compiled_contract.creation_code_artifacts,
+            &re_compiled_contract.compilation_artifacts,
+        )?;
     }
 
-    let runtime_match = verifier_alliance::MatchBuilder::new(
+    let runtime_match = verifier_alliance::verify_runtime_code(
         &contract_deployment.runtime_code,
         re_compiled_contract.runtime_code.clone(),
-    )
-    .map(|builder| {
-        builder.apply_runtime_code_transformations(&re_compiled_contract.runtime_code_artifacts)
-    })
-    .transpose()?
-    .and_then(|builder| builder.verify_and_build());
+        &re_compiled_contract.runtime_code_artifacts,
+    )?;
 
     let verified_contract_matches = match (creation_match, runtime_match) {
         (Some(creation_match), Some(runtime_match)) => VerifiedContractMatches::Complete {
