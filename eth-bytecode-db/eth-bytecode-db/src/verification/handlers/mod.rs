@@ -501,7 +501,7 @@ async fn check_code_matches(
 
     if !(creation_code_match.does_match || runtime_code_match.does_match) {
         return Err(anyhow::anyhow!(
-            "Neither creation code nor runtime code have not matched"
+            "neither creation code nor runtime code did not match"
         ));
     }
 

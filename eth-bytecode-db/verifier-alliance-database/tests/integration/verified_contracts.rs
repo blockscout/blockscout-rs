@@ -110,22 +110,18 @@ async fn insert_verified_contract_with_filled_matches() {
         match_values.add_immutable(
             "immutable",
             decode_hex("0x0000000000000000000000000000000000000000000000000000000000000032")
-                .unwrap()
-                .into(),
+                .unwrap(),
         );
         match_transformations.push(MatchTransformation::immutable(1, "immutable"));
         match_values.add_library(
             "library",
-            decode_hex("0x0000000000000000000000000000000000000020")
-                .unwrap()
-                .into(),
+            decode_hex("0x0000000000000000000000000000000000000020").unwrap(),
         );
         match_transformations.push(MatchTransformation::library(1, "library"));
         match_values.add_cbor_auxdata(
             "cborAuxdata",
             decode_hex("0x1000000000000000000000000000000000000000000000000000000000000032")
-                .unwrap()
-                .into(),
+                .unwrap(),
         );
         match_transformations.push(MatchTransformation::auxdata(1, "cborAuxdata"));
 
@@ -136,20 +132,17 @@ async fn insert_verified_contract_with_filled_matches() {
         let mut match_values = MatchValues::default();
         let mut match_transformations = vec![];
 
-        match_values.add_constructor_arguments(decode_hex("0x01020304").unwrap().into());
+        match_values.add_constructor_arguments(decode_hex("0x01020304").unwrap());
         match_transformations.push(MatchTransformation::constructor(1));
         match_values.add_library(
             "library",
-            decode_hex("0x0000000000000000000000000000000000000020")
-                .unwrap()
-                .into(),
+            decode_hex("0x0000000000000000000000000000000000000020").unwrap(),
         );
         match_transformations.push(MatchTransformation::library(1, "library"));
         match_values.add_cbor_auxdata(
             "cborAuxdata",
             decode_hex("0x1000000000000000000000000000000000000000000000000000000000000032")
-                .unwrap()
-                .into(),
+                .unwrap(),
         );
         match_transformations.push(MatchTransformation::auxdata(1, "cborAuxdata"));
 

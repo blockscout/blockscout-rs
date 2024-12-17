@@ -6,8 +6,9 @@ pub use super::{
     verification_match_transformations::Transformation as MatchTransformation,
     verification_match_values::Values as MatchValues,
 };
+use crate::verifier_alliance::verification_match_transformations::Transformation;
 use alloy_dyn_abi::JsonAbiExt;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use bytes::Bytes;
 use serde::Deserialize;
 
@@ -89,9 +90,33 @@ impl<'a> MatchBuilder<'a> {
         mut self,
         cbor_auxdata: Option<&CborAuxdata>,
     ) -> Result<Self, anyhow::Error> {
-        if let Some(cbor_auxdata) = cbor_auxdata {
-            self.has_cbor_auxdata = !cbor_auxdata.is_empty();
+        let cbor_auxdata = match cbor_auxdata {
+            Some(cbor_auxdata) => cbor_auxdata,
+            None => return Ok(self),
+        };
+
+        self.has_cbor_auxdata = !cbor_auxdata.is_empty();
+        for (id, cbor_auxdata_value) in cbor_auxdata {
+            let offset = cbor_auxdata_value.offset as usize;
+            let re_compiled_value = cbor_auxdata_value.value.to_vec();
+
+            let range = offset..offset + re_compiled_value.len();
+
+            if self.compiled_code.len() < range.end {
+                return Err(anyhow!("(reason=cbor_auxdata; id={id}) out of range"));
+            }
+
+            let on_chain_value = &self.deployed_code[range.clone()];
+            if on_chain_value != re_compiled_value {
+                self.has_cbor_auxdata_transformation = true;
+                self.compiled_code.as_mut_slice()[range].copy_from_slice(on_chain_value);
+
+                self.transformations
+                    .push(Transformation::auxdata(offset, id.clone()));
+                self.values.add_cbor_auxdata(id, on_chain_value.to_vec());
+            }
         }
+
         Ok(self)
     }
 
