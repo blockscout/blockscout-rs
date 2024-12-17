@@ -8,5 +8,13 @@ pub struct CborAuxdataValue {
     pub value: Vec<u8>,
     pub offset: u32,
 }
-
 pub type CborAuxdata = BTreeMap<String, CborAuxdataValue>;
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Offset {
+    pub start: u32,
+    pub length: u32,
+}
+pub type Offsets = Vec<Offset>;
+
+pub type ImmutableReferences = BTreeMap<String, Offsets>;

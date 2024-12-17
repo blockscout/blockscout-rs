@@ -2,7 +2,8 @@ use blockscout_service_launcher::test_database::database;
 use serde_json::json;
 use std::collections::BTreeMap;
 use verification_common_v1::verifier_alliance::{
-    CborAuxdata, CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts, SourceId,
+    CborAuxdata, CompilationArtifacts, CreationCodeArtifacts, ImmutableReferences,
+    RuntimeCodeArtifacts, SourceId,
 };
 use verifier_alliance_database::{
     internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
@@ -15,6 +16,10 @@ async fn insert_compiled_contract_works() {
 
     let cbor_auxdata: CborAuxdata = serde_json::from_value(json!({
         "1": {"offset": 1, "value": "0x1234"}
+    }))
+    .unwrap();
+    let immutable_references: ImmutableReferences = serde_json::from_value(json!({
+        "1234": {"offset": 1, "length": 32}
     }))
     .unwrap();
 
@@ -45,7 +50,7 @@ async fn insert_compiled_contract_works() {
         runtime_code: vec![0x3, 0x4],
         runtime_code_artifacts: RuntimeCodeArtifacts {
             cbor_auxdata: Some(cbor_auxdata),
-            immutable_references: Some(json!({"immutableReferences": "value"})),
+            immutable_references: Some(immutable_references),
             link_references: Some(json!({"linkReferences": "value"})),
             source_map: Some(json!("source_map")),
         },

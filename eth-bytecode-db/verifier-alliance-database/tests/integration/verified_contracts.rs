@@ -4,8 +4,8 @@ use sea_orm::{prelude::Uuid, DatabaseConnection};
 use serde_json::json;
 use std::collections::BTreeMap;
 use verification_common_v1::verifier_alliance::{
-    CborAuxdata, CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation,
-    MatchValues, RuntimeCodeArtifacts, SourceId,
+    CborAuxdata, CompilationArtifacts, CreationCodeArtifacts, ImmutableReferences, Match,
+    MatchTransformation, MatchValues, RuntimeCodeArtifacts, SourceId,
 };
 use verifier_alliance_database::{
     CompiledContract, CompiledContractCompiler, CompiledContractLanguage, InsertContractDeployment,
@@ -179,6 +179,11 @@ fn complete_compiled_contract() -> CompiledContract {
         "1": {"offset": 1, "value": "0x1234"}
     }))
     .unwrap();
+    let immutable_references: ImmutableReferences = serde_json::from_value(json!({
+        "1234": {"offset": 1, "length": 32}
+    }))
+    .unwrap();
+
     CompiledContract {
         compiler: CompiledContractCompiler::Solc,
         version: "".to_string(),
@@ -206,7 +211,7 @@ fn complete_compiled_contract() -> CompiledContract {
         runtime_code: vec![0x3, 0x4],
         runtime_code_artifacts: RuntimeCodeArtifacts {
             cbor_auxdata: Some(cbor_auxdata),
-            immutable_references: Some(json!({"immutableReferences": "value"})),
+            immutable_references: Some(immutable_references),
             link_references: Some(json!({"linkReferences": "value"})),
             source_map: Some(json!("source_map")),
         },

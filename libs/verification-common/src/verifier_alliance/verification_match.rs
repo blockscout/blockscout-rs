@@ -6,7 +6,9 @@ pub use super::{
     verification_match_transformations::Transformation as MatchTransformation,
     verification_match_values::Values as MatchValues,
 };
-use crate::verifier_alliance::verification_match_transformations::Transformation;
+use crate::verifier_alliance::{
+    code_artifact_types::ImmutableReferences, verification_match_transformations::Transformation,
+};
 use alloy_dyn_abi::JsonAbiExt;
 use anyhow::{anyhow, Context};
 use bytes::Bytes;
@@ -112,7 +114,7 @@ impl<'a> MatchBuilder<'a> {
                 self.compiled_code.as_mut_slice()[range].copy_from_slice(on_chain_value);
 
                 self.transformations
-                    .push(Transformation::auxdata(offset, id.clone()));
+                    .push(Transformation::auxdata(offset, id));
                 self.values.add_cbor_auxdata(id, on_chain_value.to_vec());
             }
         }
@@ -128,9 +130,41 @@ impl<'a> MatchBuilder<'a> {
     }
 
     fn apply_immutable_transformations(
-        self,
-        _immutable_references: Option<&serde_json::Value>,
+        mut self,
+        immutable_references: Option<&ImmutableReferences>,
     ) -> Result<Self, anyhow::Error> {
+        let immutable_references = match immutable_references {
+            Some(immutable_references) => immutable_references,
+            None => return Ok(self),
+        };
+
+        for (id, offsets) in immutable_references {
+            let mut on_chain_value = None;
+            for offset in offsets {
+                let start = offset.start as usize;
+                let end = start + offset.length as usize;
+                let range = start..end;
+
+                let offset_value = &self.deployed_code[range.clone()];
+                match on_chain_value {
+                    None => {
+                        on_chain_value = Some(offset_value);
+                    }
+                    Some(on_chain_value) if on_chain_value != offset_value => {
+                        return Err(anyhow!(
+                        "(reason=immutable_reference; id={id}) offset values are not consistent"
+                    ))
+                    }
+                    _ => {}
+                }
+
+                self.compiled_code.as_mut_slice()[range].copy_from_slice(offset_value);
+                self.transformations
+                    .push(Transformation::immutable(start, id));
+                self.values.add_immutable(id, offset_value.to_vec());
+            }
+        }
+
         Ok(self)
     }
 
