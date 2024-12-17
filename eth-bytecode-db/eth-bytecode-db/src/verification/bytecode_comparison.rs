@@ -439,4 +439,55 @@ mod tests {
             value => panic!("not complete match: {value:#?}"),
         }
     }
+
+    #[tokio::test]
+    async fn should_verify_constructor_arguments() {
+        let address = "0x664EEA330e41684EFE308014A4Ba358Bc079a853";
+        let on_chain_creation_code = "0x608060405234801561001057600080fd5b506040516101e93803806101e98339818101604052810190610032919061007a565b80600081905550506100a7565b600080fd5b6000819050919050565b61005781610044565b811461006257600080fd5b50565b6000815190506100748161004e565b92915050565b6000602082840312156100905761008f61003f565b5b600061009e84828501610065565b91505092915050565b610133806100b66000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80636057361d1460375780638381f58a14604f575b600080fd5b604d60048036038101906049919060af565b6069565b005b60556073565b6040516060919060e4565b60405180910390f35b8060008190555050565b60005481565b600080fd5b6000819050919050565b608f81607e565b8114609957600080fd5b50565b60008135905060a9816088565b92915050565b60006020828403121560c25760c16079565b5b600060ce84828501609c565b91505092915050565b60de81607e565b82525050565b600060208201905060f7600083018460d7565b9291505056fea2646970667358221220dd712ec4cb31d63cd32d3152e52e890b087769e9e4d6746844608039b5015d6a64736f6c634300081200330000000000000000000000000000000000000000000000000000000000003039";
+        let on_chain_runtime_code = "0x6080604052348015600f57600080fd5b506004361060325760003560e01c80636057361d1460375780638381f58a14604f575b600080fd5b604d60048036038101906049919060af565b6069565b005b60556073565b6040516060919060e4565b60405180910390f35b8060008190555050565b60005481565b600080fd5b6000819050919050565b608f81607e565b8114609957600080fd5b50565b60008135905060a9816088565b92915050565b60006020828403121560c25760c16079565b5b600060ce84828501609c565b91505092915050565b60de81607e565b82525050565b600060208201905060f7600083018460d7565b9291505056fea2646970667358221220dd712ec4cb31d63cd32d3152e52e890b087769e9e4d6746844608039b5015d6a64736f6c63430008120033";
+        let request = VerifySolidityStandardJsonRequest {
+            bytecode: on_chain_creation_code.into(),
+            bytecode_type: BytecodeType::CreationInput as i32,
+            compiler_version: "v0.8.18+commit.87f61d96".into(),
+            input: "{\"language\":\"Solidity\",\"sources\":{\"contracts/1_Storage.sol\":{\"content\":\"// SPDX-License-Identifier: GPL-3.0\\n\\npragma solidity >=0.7.0 <0.9.0;\\n\\n/**\\n * @title Storage\\n * @dev Store & retrieve value in a variable\\n */\\ncontract Storage {\\n    uint256 public number;\\n\\n    constructor(uint256 num) {\\n        number = num;\\n    }\\n\\n    /**\\n     * @dev Store value in variable\\n     * @param num value to store\\n     */\\n    function store(uint256 num) public {\\n        number = num;\\n    }\\n}\"}},\"settings\":{\"optimizer\":{\"enabled\":false,\"runs\":200},\"libraries\":{},\"outputSelection\":{\"*\":{\"*\":[\"*\"]}}}}".into(),
+            metadata: Some(VerificationMetadata {
+                chain_id: Some("11155111".into()),
+                contract_address: Some(address.into()),
+            }),
+            post_actions: vec![],
+        };
+        let source = verify_contract(request).await;
+
+        let contract_deployment =
+            contract_deployment(address, on_chain_creation_code, on_chain_runtime_code);
+
+        let verified_contract = check_code_matches_new(&source, contract_deployment)
+            .expect("check code matches failed");
+        match verified_contract.matches {
+            VerifiedContractMatches::Complete {
+                creation_match,
+                runtime_match,
+            } => {
+                assert!(
+                    creation_match.metadata_match,
+                    "creation metadata should match"
+                );
+                assert_eq!(
+                    creation_match.transformations.len(),
+                    1,
+                    "invalid creation transformations length"
+                );
+                assert!(
+                    runtime_match.metadata_match,
+                    "runtime metadata should match"
+                );
+                assert_eq!(
+                    runtime_match.transformations.len(),
+                    0,
+                    "invalid runtime transformations length"
+                )
+            }
+            value => panic!("not complete match: {value:#?}"),
+        }
+    }
 }
