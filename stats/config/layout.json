@@ -14,7 +14,11 @@
         "total_txns",
         "total_operational_txns",
         "total_verified_contracts",
-        "yesterday_txns"
+        "yesterday_txns",
+        "new_txns_24h",
+        "pending_txns",
+        "txns_fee_24h",
+        "average_txn_fee_24h"
     ],
     "line_chart_categories": [
         {

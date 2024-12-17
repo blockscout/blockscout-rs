@@ -18,6 +18,11 @@
             "description": "Average time taken in seconds for a block to be included in the blockchain",
             "units": "s"
         },
+        "average_txn_fee_24h": {
+            "title": "Avg. transaction fee",
+            "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction within last 24 hours",
+            "units": "{{native_coin_symbol}}"
+        },
         "completed_txns": {
             "title": "Completed txns",
             "description": "Number of transactions with success status"
