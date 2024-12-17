@@ -95,7 +95,9 @@ impl StatementFromRange for AverageTxnFeeUngroupedStatement {
 
 #[derive(FromQueryResult)]
 struct Value {
-    value: f64,
+    // if there are no transactions/blocks - the row is still returned
+    // but with null value
+    value: Option<f64>,
 }
 
 pub struct AverageTxnFee24hQuery;
@@ -116,16 +118,18 @@ impl RemoteQueryBehaviour for AverageTxnFee24hQuery {
             &cx.blockscout_applied_migrations,
         );
 
-        let data = Value::find_by_statement(query)
+        let value = Value::find_by_statement(query)
             .one(cx.blockscout.connection.as_ref())
             .await
             .map_err(ChartError::BlockscoutDB)?
+            .map(|v| v.value)
+            .flatten()
             // no transactions for yesterday
-            .unwrap_or_else(|| Value { value: 0.0 });
+            .unwrap_or_else(|| 0.0);
 
         Ok(TimespanValue {
             timespan: update_time.date_naive(),
-            value: data.value,
+            value: value,
         })
     }
 }
@@ -177,6 +181,17 @@ mod tests {
             "update_average_txns_fee_2",
             "0.00006938997814411765",
             Some(dt("2022-11-11T16:00:00")),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_txns_fee_3() {
+        simple_test_counter::<AverageTxnFee24h>(
+            "update_average_txns_fee_3",
+            "0",
+            Some(dt("2024-10-10T00:00:00")),
         )
         .await;
     }

@@ -59,10 +59,10 @@ async fn test_counters_ok() {
         "totalTxns",
         "totalVerifiedContracts",
         "yesterdayTxns",
-        "new_txns_24h",
-        "pending_txns",
-        "txns_fee_24h",
-        "average_txn_fee_24h",
+        "newTxns24h",
+        "pendingTxns",
+        "txnsFee24h",
+        "averageTxnFee24h",
     ]
     .into_iter()
     .collect();

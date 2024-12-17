@@ -144,4 +144,15 @@ mod tests {
         )
         .await;
     }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_txns_24h_3() {
+        simple_test_counter::<NewTxns24h>(
+            "update_new_txns_24h_3",
+            "0",
+            Some(dt("2024-11-11T00:00:00")),
+        )
+        .await;
+    }
 }
