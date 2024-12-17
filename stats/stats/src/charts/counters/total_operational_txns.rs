@@ -7,7 +7,7 @@ use crate::{
         DataSource,
     },
     types::TimespanValue,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;
@@ -54,11 +54,7 @@ impl MapFunction<Input> for Calculate {
         let date = total_blocks_data.timespan;
         let value = total_txns_data
             .value
-            .checked_sub(total_blocks_data.value)
-            .ok_or(ChartError::Internal(format!(
-                "overflow calculating {}",
-                Properties::name()
-            )))?;
+            .saturating_sub(total_blocks_data.value);
         Ok(TimespanValue {
             timespan: date,
             value: value.to_string(),
