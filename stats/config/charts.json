@@ -24,7 +24,7 @@
         },
         "pending_txns": {
             "title": "Pending transactions",
-            "description": ""
+            "description": " "
         },
         "txns_fee_24h": {
             "title": "Transactions fees",
