@@ -4,19 +4,17 @@ use crate::{
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
+            remote_db::{
+                PullOne24h, RemoteDatabaseSource, StatementFromRange,
+            },
         },
         types::BlockscoutMigrations,
-        UpdateContext,
     },
-    range::{inclusive_range_to_exclusive, UniversalRange},
-    types::TimespanValue,
-    utils::sql_with_range_filter_opt,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    utils::sql_with_range_filter_opt, ChartProperties, MissingDatePolicy, Named,
 };
-use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, FromQueryResult, Statement};
+use sea_orm::{DbBackend, Statement};
 
 /// `NewTxnsStatement` but without `group by`
 pub struct NewTxnsUngroupedStatement;
@@ -62,44 +60,7 @@ impl StatementFromRange for NewTxnsUngroupedStatement {
     }
 }
 
-#[derive(FromQueryResult)]
-struct Value {
-    value: String,
-}
-
-pub struct NewTxns24hQuery;
-
-impl RemoteQueryBehaviour for NewTxns24hQuery {
-    type Output = TimespanValue<NaiveDate, String>;
-
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, ChartError> {
-        let update_time = cx.time;
-        let range_24h = update_time
-            .checked_sub_signed(TimeDelta::hours(24))
-            .unwrap_or(DateTime::<Utc>::MIN_UTC)..=update_time;
-        let query = NewTxnsUngroupedStatement::get_statement(
-            Some(inclusive_range_to_exclusive(range_24h)),
-            &cx.blockscout_applied_migrations,
-        );
-        let data = Value::find_by_statement(query)
-            .one(cx.blockscout.connection.as_ref())
-            .await
-            .map_err(ChartError::BlockscoutDB)?
-            // no transactions for yesterday
-            .unwrap_or_else(|| Value {
-                value: "0".to_string(),
-            });
-        Ok(TimespanValue {
-            timespan: update_time.date_naive(),
-            value: data.value,
-        })
-    }
-}
-
-pub type NewTxns24hRemote = RemoteDatabaseSource<NewTxns24hQuery>;
+pub type NewTxns24hRemote = RemoteDatabaseSource<PullOne24h<NewTxnsUngroupedStatement, String>>;
 
 pub struct Properties;
 

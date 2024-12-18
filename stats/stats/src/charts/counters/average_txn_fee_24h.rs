@@ -5,19 +5,16 @@ use crate::{
         kinds::{
             data_manipulation::map::MapToString,
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
+            remote_db::{PullOne24h, RemoteDatabaseSource, StatementFromRange},
         },
         types::BlockscoutMigrations,
-        UpdateContext,
     },
-    range::{inclusive_range_to_exclusive, UniversalRange},
-    types::TimespanValue,
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartProperties, MissingDatePolicy, Named,
 };
-use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, FromQueryResult, Statement};
+use sea_orm::{DbBackend, Statement};
 
 const ETHER: i64 = i64::pow(10, 18);
 
@@ -93,48 +90,8 @@ impl StatementFromRange for AverageTxnFeeUngroupedStatement {
     }
 }
 
-#[derive(FromQueryResult)]
-struct Value {
-    // if there are no transactions/blocks - the row is still returned
-    // but with null value
-    value: Option<f64>,
-}
-
-pub struct AverageTxnFee24hQuery;
-
-impl RemoteQueryBehaviour for AverageTxnFee24hQuery {
-    type Output = TimespanValue<NaiveDate, f64>;
-
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, ChartError> {
-        let update_time = cx.time;
-        let range_24h = update_time
-            .checked_sub_signed(TimeDelta::hours(24))
-            .unwrap_or(DateTime::<Utc>::MIN_UTC)..=update_time;
-        let query = AverageTxnFeeUngroupedStatement::get_statement(
-            Some(inclusive_range_to_exclusive(range_24h)),
-            &cx.blockscout_applied_migrations,
-        );
-
-        let value = Value::find_by_statement(query)
-            .one(cx.blockscout.connection.as_ref())
-            .await
-            .map_err(ChartError::BlockscoutDB)?
-            .map(|v| v.value)
-            .flatten()
-            // no transactions for yesterday
-            .unwrap_or_else(|| 0.0);
-
-        Ok(TimespanValue {
-            timespan: update_time.date_naive(),
-            value: value,
-        })
-    }
-}
-
-pub type AverageTxnFee24hRemote = RemoteDatabaseSource<AverageTxnFee24hQuery>;
+pub type AverageTxnFee24hRemote =
+    RemoteDatabaseSource<PullOne24h<AverageTxnFeeUngroupedStatement, f64>>;
 
 pub struct Properties;
 
