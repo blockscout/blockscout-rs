@@ -1,9 +1,8 @@
+mod code_artifact_types;
 mod compilation_artifacts;
 mod creation_code_artifacts;
 mod runtime_code_artifacts;
 mod verification_match;
-
-mod code_artifact_types;
 mod verification_match_transformations;
 mod verification_match_values;
 
