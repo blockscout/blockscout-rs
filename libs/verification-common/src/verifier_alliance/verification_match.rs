@@ -1,13 +1,13 @@
 use super::{
-    compilation_artifacts::CompilationArtifacts, creation_code_artifacts::CreationCodeArtifacts,
-    runtime_code_artifacts::RuntimeCodeArtifacts,
+    code_artifact_types::CborAuxdata, compilation_artifacts::CompilationArtifacts,
+    creation_code_artifacts::CreationCodeArtifacts, runtime_code_artifacts::RuntimeCodeArtifacts,
 };
 pub use super::{
     verification_match_transformations::Transformation as MatchTransformation,
     verification_match_values::Values as MatchValues,
 };
 use alloy_dyn_abi::JsonAbiExt;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use bytes::Bytes;
 use serde::Deserialize;
 
@@ -115,9 +115,36 @@ impl<'a> MatchBuilder<'a> {
     }
 
     fn apply_cbor_auxdata_transformations(
-        self,
-        _cbor_auxdata: Option<&serde_json::Value>,
+        mut self,
+        cbor_auxdata: Option<&CborAuxdata>,
     ) -> Result<Self, anyhow::Error> {
+        let cbor_auxdata = match cbor_auxdata {
+            Some(cbor_auxdata) => cbor_auxdata,
+            None => return Ok(self),
+        };
+
+        self.has_cbor_auxdata = !cbor_auxdata.is_empty();
+        for (id, cbor_auxdata_value) in cbor_auxdata {
+            let offset = cbor_auxdata_value.offset as usize;
+            let re_compiled_value = cbor_auxdata_value.value.to_vec();
+
+            let range = offset..offset + re_compiled_value.len();
+
+            if self.compiled_code.len() < range.end {
+                return Err(anyhow!("(reason=cbor_auxdata; id={id}) out of range"));
+            }
+
+            let on_chain_value = &self.deployed_code[range.clone()];
+            if on_chain_value != re_compiled_value {
+                self.has_cbor_auxdata_transformation = true;
+                self.compiled_code.as_mut_slice()[range].copy_from_slice(on_chain_value);
+
+                self.transformations
+                    .push(MatchTransformation::auxdata(offset, id));
+                self.values.add_cbor_auxdata(id, on_chain_value.to_vec());
+            }
+        }
+
         Ok(self)
     }
 
