@@ -1,5 +1,4 @@
-use super::CborAuxdata;
-use crate::verifier_alliance::code_artifact_types::ImmutableReferences;
+use super::{CborAuxdata, ImmutableReferences, LinkReferences};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -10,7 +9,7 @@ pub trait ToRuntimeCodeArtifacts {
     fn immutable_references(&self) -> Option<ImmutableReferences> {
         None
     }
-    fn link_references(&self) -> Option<Value> {
+    fn link_references(&self) -> Option<LinkReferences> {
         None
     }
     fn source_map(&self) -> Option<Value> {
@@ -25,7 +24,7 @@ impl<T: ToRuntimeCodeArtifacts> ToRuntimeCodeArtifacts for &T {
     fn immutable_references(&self) -> Option<ImmutableReferences> {
         (*self).immutable_references()
     }
-    fn link_references(&self) -> Option<Value> {
+    fn link_references(&self) -> Option<LinkReferences> {
         (*self).link_references()
     }
     fn source_map(&self) -> Option<Value> {
@@ -38,7 +37,7 @@ impl<T: ToRuntimeCodeArtifacts> ToRuntimeCodeArtifacts for &T {
 pub struct RuntimeCodeArtifacts {
     pub cbor_auxdata: Option<CborAuxdata>,
     pub immutable_references: Option<ImmutableReferences>,
-    pub link_references: Option<Value>,
+    pub link_references: Option<LinkReferences>,
     pub source_map: Option<Value>,
 }
 
