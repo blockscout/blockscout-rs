@@ -3,12 +3,13 @@ use std::ops::Range;
 use crate::{
     data_source::{
         kinds::{
-            data_manipulation::map::MapToString,
+            data_manipulation::map::{MapToString, UnwrapOr},
             local_db::DirectPointLocalDbChartSource,
             remote_db::{PullOne24h, RemoteDatabaseSource, StatementFromRange},
         },
         types::BlockscoutMigrations,
     },
+    gettable_const,
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
     ChartProperties, MissingDatePolicy, Named,
 };
@@ -89,7 +90,8 @@ impl StatementFromRange for TxnsFeeUngroupedStatement {
     }
 }
 
-pub type TxnsFee24hRemote = RemoteDatabaseSource<PullOne24h<TxnsFeeUngroupedStatement, f64>>;
+pub type TxnsFee24hRemote =
+    RemoteDatabaseSource<PullOne24h<TxnsFeeUngroupedStatement, Option<f64>>>;
 
 pub struct Properties;
 
@@ -110,7 +112,10 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type TxnsFee24h = DirectPointLocalDbChartSource<MapToString<TxnsFee24hRemote>, Properties>;
+gettable_const!(Zero: f64 = 0.0);
+
+pub type TxnsFee24h =
+    DirectPointLocalDbChartSource<MapToString<UnwrapOr<TxnsFee24hRemote, Zero>>, Properties>;
 
 #[cfg(test)]
 mod tests {
