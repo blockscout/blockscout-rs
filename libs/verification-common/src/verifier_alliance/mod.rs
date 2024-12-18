@@ -7,7 +7,9 @@ mod code_artifact_types;
 mod verification_match_transformations;
 mod verification_match_values;
 
-pub use code_artifact_types::{CborAuxdata, CborAuxdataValue};
+pub use code_artifact_types::{
+    CborAuxdata, CborAuxdataValue, ImmutableReferences, Offset, Offsets,
+};
 pub use compilation_artifacts::{CompilationArtifacts, SourceId, ToCompilationArtifacts};
 pub use creation_code_artifacts::{CreationCodeArtifacts, ToCreationCodeArtifacts};
 pub use runtime_code_artifacts::{RuntimeCodeArtifacts, ToRuntimeCodeArtifacts};

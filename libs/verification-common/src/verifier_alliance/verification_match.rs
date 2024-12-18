@@ -1,6 +1,8 @@
 use super::{
-    code_artifact_types::CborAuxdata, compilation_artifacts::CompilationArtifacts,
-    creation_code_artifacts::CreationCodeArtifacts, runtime_code_artifacts::RuntimeCodeArtifacts,
+    code_artifact_types::{CborAuxdata, ImmutableReferences},
+    compilation_artifacts::CompilationArtifacts,
+    creation_code_artifacts::CreationCodeArtifacts,
+    runtime_code_artifacts::RuntimeCodeArtifacts,
 };
 pub use super::{
     verification_match_transformations::Transformation as MatchTransformation,
@@ -156,9 +158,41 @@ impl<'a> MatchBuilder<'a> {
     }
 
     fn apply_immutable_transformations(
-        self,
-        _immutable_references: Option<&serde_json::Value>,
+        mut self,
+        immutable_references: Option<&ImmutableReferences>,
     ) -> Result<Self, anyhow::Error> {
+        let immutable_references = match immutable_references {
+            Some(immutable_references) => immutable_references,
+            None => return Ok(self),
+        };
+
+        for (id, offsets) in immutable_references {
+            let mut on_chain_value = None;
+            for offset in offsets {
+                let start = offset.start as usize;
+                let end = start + offset.length as usize;
+                let range = start..end;
+
+                let offset_value = &self.deployed_code[range.clone()];
+                match on_chain_value {
+                    None => {
+                        on_chain_value = Some(offset_value);
+                    }
+                    Some(on_chain_value) if on_chain_value != offset_value => {
+                        return Err(anyhow!(
+                            "(reason=immutable_reference; id={id}) offset values are not consistent"
+                        ))
+                    }
+                    _ => {}
+                }
+
+                self.compiled_code.as_mut_slice()[range].copy_from_slice(offset_value);
+                self.transformations
+                    .push(MatchTransformation::immutable(start, id));
+                self.values.add_immutable(id, offset_value.to_vec());
+            }
+        }
+
         Ok(self)
     }
 
