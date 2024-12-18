@@ -1,5 +1,7 @@
 use super::{
-    compilation_artifacts::CompilationArtifacts, creation_code_artifacts::CreationCodeArtifacts,
+    code_artifact_types::{CborAuxdata, ImmutableReferences, LinkReferences},
+    compilation_artifacts::CompilationArtifacts,
+    creation_code_artifacts::CreationCodeArtifacts,
     runtime_code_artifacts::RuntimeCodeArtifacts,
 };
 pub use super::{
@@ -7,7 +9,7 @@ pub use super::{
     verification_match_values::Values as MatchValues,
 };
 use alloy_dyn_abi::JsonAbiExt;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use bytes::Bytes;
 use serde::Deserialize;
 
@@ -16,6 +18,35 @@ pub struct Match {
     pub metadata_match: bool,
     pub transformations: Vec<MatchTransformation>,
     pub values: MatchValues,
+}
+
+pub fn verify_creation_code(
+    on_chain_code: &[u8],
+    compiled_code: Vec<u8>,
+    creation_code_artifacts: &CreationCodeArtifacts,
+    compilation_artifacts: &CompilationArtifacts,
+) -> Result<Option<Match>, anyhow::Error> {
+    let builder = MatchBuilder::new(on_chain_code, compiled_code);
+    if let Some(builder) = builder {
+        return Ok(builder
+            .apply_creation_code_transformations(creation_code_artifacts, compilation_artifacts)?
+            .verify_and_build());
+    }
+    Ok(None)
+}
+
+pub fn verify_runtime_code(
+    on_chain_code: &[u8],
+    compiled_code: Vec<u8>,
+    runtime_code_artifacts: &RuntimeCodeArtifacts,
+) -> Result<Option<Match>, anyhow::Error> {
+    let builder = MatchBuilder::new(on_chain_code, compiled_code);
+    if let Some(builder) = builder {
+        return Ok(builder
+            .apply_runtime_code_transformations(runtime_code_artifacts)?
+            .verify_and_build());
+    }
+    Ok(None)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,23 +117,117 @@ impl<'a> MatchBuilder<'a> {
     }
 
     fn apply_cbor_auxdata_transformations(
-        self,
-        _cbor_auxdata: Option<&serde_json::Value>,
+        mut self,
+        cbor_auxdata: Option<&CborAuxdata>,
     ) -> Result<Self, anyhow::Error> {
+        let cbor_auxdata = match cbor_auxdata {
+            Some(cbor_auxdata) => cbor_auxdata,
+            None => return Ok(self),
+        };
+
+        self.has_cbor_auxdata = !cbor_auxdata.is_empty();
+        for (id, cbor_auxdata_value) in cbor_auxdata {
+            let offset = cbor_auxdata_value.offset as usize;
+            let re_compiled_value = cbor_auxdata_value.value.to_vec();
+
+            let range = offset..offset + re_compiled_value.len();
+
+            if self.compiled_code.len() < range.end {
+                return Err(anyhow!("(reason=cbor_auxdata; id={id}) out of range"));
+            }
+
+            let on_chain_value = &self.deployed_code[range.clone()];
+            if on_chain_value != re_compiled_value {
+                self.has_cbor_auxdata_transformation = true;
+                self.compiled_code.as_mut_slice()[range].copy_from_slice(on_chain_value);
+
+                self.transformations
+                    .push(MatchTransformation::auxdata(offset, id));
+                self.values.add_cbor_auxdata(id, on_chain_value.to_vec());
+            }
+        }
+
         Ok(self)
     }
 
     fn apply_library_transformations(
-        self,
-        _link_references: Option<&serde_json::Value>,
+        mut self,
+        link_references: Option<&LinkReferences>,
     ) -> Result<Self, anyhow::Error> {
+        let link_references = match link_references {
+            Some(link_references) => link_references,
+            None => return Ok(self),
+        };
+
+        for (file, file_references) in link_references {
+            for (contract, offsets) in file_references {
+                let id = format!("{file}:{contract}");
+                let mut on_chain_value = None;
+                for offset in offsets {
+                    let start = offset.start as usize;
+                    let end = start + offset.length as usize;
+                    let range = start..end;
+
+                    let offset_value = &self.deployed_code[range.clone()];
+                    match on_chain_value {
+                        None => {
+                            on_chain_value = Some(offset_value);
+                        }
+                        Some(on_chain_value) if on_chain_value != offset_value => {
+                            return Err(anyhow!(
+                                "(reason=link_reference; id={id}) offset values are not consistent"
+                            ))
+                        }
+                        _ => {}
+                    }
+
+                    self.compiled_code.as_mut_slice()[range].copy_from_slice(offset_value);
+                    self.transformations
+                        .push(MatchTransformation::library(start, &id));
+                    self.values.add_library(&id, offset_value.to_vec());
+                }
+            }
+        }
+
         Ok(self)
     }
 
     fn apply_immutable_transformations(
-        self,
-        _immutable_references: Option<&serde_json::Value>,
+        mut self,
+        immutable_references: Option<&ImmutableReferences>,
     ) -> Result<Self, anyhow::Error> {
+        let immutable_references = match immutable_references {
+            Some(immutable_references) => immutable_references,
+            None => return Ok(self),
+        };
+
+        for (id, offsets) in immutable_references {
+            let mut on_chain_value = None;
+            for offset in offsets {
+                let start = offset.start as usize;
+                let end = start + offset.length as usize;
+                let range = start..end;
+
+                let offset_value = &self.deployed_code[range.clone()];
+                match on_chain_value {
+                    None => {
+                        on_chain_value = Some(offset_value);
+                    }
+                    Some(on_chain_value) if on_chain_value != offset_value => {
+                        return Err(anyhow!(
+                            "(reason=immutable_reference; id={id}) offset values are not consistent"
+                        ))
+                    }
+                    _ => {}
+                }
+
+                self.compiled_code.as_mut_slice()[range].copy_from_slice(offset_value);
+                self.transformations
+                    .push(MatchTransformation::immutable(start, id));
+                self.values.add_immutable(id, offset_value.to_vec());
+            }
+        }
+
         Ok(self)
     }
 
