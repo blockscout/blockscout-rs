@@ -18,6 +18,35 @@ pub struct Match {
     pub values: MatchValues,
 }
 
+pub fn verify_creation_code(
+    on_chain_code: &[u8],
+    compiled_code: Vec<u8>,
+    creation_code_artifacts: &CreationCodeArtifacts,
+    compilation_artifacts: &CompilationArtifacts,
+) -> Result<Option<Match>, anyhow::Error> {
+    let builder = MatchBuilder::new(on_chain_code, compiled_code);
+    if let Some(builder) = builder {
+        return Ok(builder
+            .apply_creation_code_transformations(creation_code_artifacts, compilation_artifacts)?
+            .verify_and_build());
+    }
+    Ok(None)
+}
+
+pub fn verify_runtime_code(
+    on_chain_code: &[u8],
+    compiled_code: Vec<u8>,
+    runtime_code_artifacts: &RuntimeCodeArtifacts,
+) -> Result<Option<Match>, anyhow::Error> {
+    let builder = MatchBuilder::new(on_chain_code, compiled_code);
+    if let Some(builder) = builder {
+        return Ok(builder
+            .apply_runtime_code_transformations(runtime_code_artifacts)?
+            .verify_and_build());
+    }
+    Ok(None)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatchBuilder<'a> {
     deployed_code: &'a [u8],
