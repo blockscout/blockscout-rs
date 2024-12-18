@@ -1,8 +1,8 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
-    charts::db_interaction::write::insert_data_many,
+    charts::db_interaction::write::{clear_all_chart_data, insert_data_many},
     gettable_const,
     types::{
         timespans::{Month, Week, Year},
@@ -34,8 +34,8 @@ impl<Resolution> BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, St
 where
     Resolution: Timespan + Clone + Send + Sync,
 {
-    async fn batch_update_values_step_with(
-        db: &DatabaseConnection,
+    async fn batch_update_values_step_with<C: ConnectionTrait + TransactionTrait>(
+        db: &C,
         chart_id: i32,
         _update_time: DateTime<Utc>,
         min_blockscout_block: i64,
@@ -58,5 +58,45 @@ where
             .await
             .map_err(ChartError::StatsDB)?;
         Ok(found)
+    }
+}
+
+/// Batch update "step" that clears all data for this chart
+/// and inserts the newly queried data.
+///
+/// Since it removes all data each time, it makes sense to
+/// use it only with max batch size.
+pub struct ClearAllAndPassStep;
+
+impl<Resolution> BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, String>>, ()>
+    for ClearAllAndPassStep
+where
+    Resolution: Timespan + Clone + Send + Sync,
+{
+    async fn batch_update_values_step_with<C: ConnectionTrait + TransactionTrait>(
+        db: &C,
+        chart_id: i32,
+        _update_time: DateTime<Utc>,
+        min_blockscout_block: i64,
+        _last_accurate_point: TimespanValue<Resolution, String>,
+        main_data: Vec<TimespanValue<Resolution, String>>,
+        _resolution_data: (),
+    ) -> Result<usize, ChartError> {
+        let db = db.begin().await.map_err(ChartError::StatsDB)?;
+        clear_all_chart_data(&db, chart_id)
+            .await
+            .map_err(ChartError::StatsDB)?;
+        let result = PassVecStep::batch_update_values_step_with(
+            &db,
+            chart_id,
+            _update_time,
+            min_blockscout_block,
+            _last_accurate_point,
+            main_data,
+            _resolution_data,
+        )
+        .await?;
+        db.commit().await.map_err(ChartError::StatsDB)?;
+        Ok(result)
     }
 }

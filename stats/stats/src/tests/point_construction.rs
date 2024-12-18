@@ -15,6 +15,10 @@ pub fn d(date: &str) -> NaiveDate {
     date.parse().unwrap()
 }
 
+/// Example:
+/// ```
+/// dt("2023-01-01T00:00:00")
+/// ```
 pub fn dt(time: &str) -> NaiveDateTime {
     time.parse().unwrap()
 }

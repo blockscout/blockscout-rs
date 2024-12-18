@@ -69,6 +69,10 @@ async fn test_lines_ok() {
 
     let mut enabled_resolutions = enabled_resolutions(line_charts).await;
 
+    // does not return data for latest dates,
+    // so todo: test later with other main page stuff
+    enabled_resolutions.remove("newTxnsWindow");
+
     for line_name in [
         "accountsGrowth",
         "activeAccounts",
@@ -88,6 +92,7 @@ async fn test_lines_ok() {
         "newBlocks",
         "newNativeCoinTransfers",
         "newTxns",
+        // "newTxnsWindow",
         "txnsFee",
         "txnsGrowth",
         // "newOperationalTxns",
@@ -122,7 +127,7 @@ async fn test_lines_ok() {
 
             assert!(
                 !chart_data.is_empty(),
-                "chart '{line_name}' '{resolution}' is empty"
+                "chart data for '{line_name}' '{resolution}' is empty"
             );
 
             let info = chart

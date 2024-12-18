@@ -2,7 +2,7 @@ use std::{collections::HashSet, ops::Range, str::FromStr, sync::Arc};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DatabaseConnection, DbBackend, Statement};
+use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
 use tokio::sync::Mutex;
 
 use super::{
@@ -209,15 +209,18 @@ struct ContractsGrowthCustomBatchStepBehaviour;
 impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
     for ContractsGrowthCustomBatchStepBehaviour
 {
-    async fn batch_update_values_step_with(
-        _db: &DatabaseConnection,
+    async fn batch_update_values_step_with<C>(
+        _db: &C,
         _chart_id: i32,
         _update_time: DateTime<Utc>,
         _min_blockscout_block: i64,
         _last_accurate_point: DateValue<String>,
         _main_data: Vec<DateValue<String>>,
         _resolution_data: (),
-    ) -> Result<usize, ChartError> {
+    ) -> Result<usize, ChartError>
+    where
+        C: ConnectionTrait + TransactionTrait,
+    {
         // do something (just an example, not intended for running)
         todo!();
         // save data
