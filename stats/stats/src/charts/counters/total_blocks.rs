@@ -2,6 +2,7 @@ use crate::{
     charts::db_interaction::read::query_estimated_table_rows,
     data_source::{
         kinds::{
+            data_manipulation::map::MapParseTo,
             local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
@@ -98,6 +99,7 @@ impl ValueEstimation for TotalBlocksEstimation {
 
 pub type TotalBlocks =
     DirectPointLocalDbChartSourceWithEstimate<TotalBlocksRemote, TotalBlocksEstimation, Properties>;
+pub type TotalBlocksInt = MapParseTo<TotalBlocks, i64>;
 
 #[cfg(test)]
 mod tests {
