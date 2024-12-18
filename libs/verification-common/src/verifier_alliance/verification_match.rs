@@ -1,5 +1,5 @@
 use super::{
-    code_artifact_types::{CborAuxdata, ImmutableReferences},
+    code_artifact_types::{CborAuxdata, ImmutableReferences, LinkReferences},
     compilation_artifacts::CompilationArtifacts,
     creation_code_artifacts::CreationCodeArtifacts,
     runtime_code_artifacts::RuntimeCodeArtifacts,
@@ -151,9 +151,44 @@ impl<'a> MatchBuilder<'a> {
     }
 
     fn apply_library_transformations(
-        self,
-        _link_references: Option<&serde_json::Value>,
+        mut self,
+        link_references: Option<&LinkReferences>,
     ) -> Result<Self, anyhow::Error> {
+        let link_references = match link_references {
+            Some(link_references) => link_references,
+            None => return Ok(self),
+        };
+
+        for (file, file_references) in link_references {
+            for (contract, offsets) in file_references {
+                let id = format!("{file}:{contract}");
+                let mut on_chain_value = None;
+                for offset in offsets {
+                    let start = offset.start as usize;
+                    let end = start + offset.length as usize;
+                    let range = start..end;
+
+                    let offset_value = &self.deployed_code[range.clone()];
+                    match on_chain_value {
+                        None => {
+                            on_chain_value = Some(offset_value);
+                        }
+                        Some(on_chain_value) if on_chain_value != offset_value => {
+                            return Err(anyhow!(
+                                "(reason=link_reference; id={id}) offset values are not consistent"
+                            ))
+                        }
+                        _ => {}
+                    }
+
+                    self.compiled_code.as_mut_slice()[range].copy_from_slice(offset_value);
+                    self.transformations
+                        .push(MatchTransformation::library(start, &id));
+                    self.values.add_library(&id, offset_value.to_vec());
+                }
+            }
+        }
+
         Ok(self)
     }
 

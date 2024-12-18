@@ -18,3 +18,5 @@ pub struct Offset {
 pub type Offsets = Vec<Offset>;
 
 pub type ImmutableReferences = BTreeMap<String, Offsets>;
+
+pub type LinkReferences = BTreeMap<String, BTreeMap<String, Offsets>>;

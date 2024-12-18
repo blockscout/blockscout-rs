@@ -1,4 +1,4 @@
-use super::code_artifact_types::CborAuxdata;
+use super::code_artifact_types::{CborAuxdata, LinkReferences};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -6,7 +6,7 @@ pub trait ToCreationCodeArtifacts {
     fn cbor_auxdata(&self) -> Option<CborAuxdata> {
         None
     }
-    fn link_references(&self) -> Option<Value> {
+    fn link_references(&self) -> Option<LinkReferences> {
         None
     }
     fn source_map(&self) -> Option<Value> {
@@ -18,7 +18,7 @@ impl<T: ToCreationCodeArtifacts> ToCreationCodeArtifacts for &T {
     fn cbor_auxdata(&self) -> Option<CborAuxdata> {
         (*self).cbor_auxdata()
     }
-    fn link_references(&self) -> Option<Value> {
+    fn link_references(&self) -> Option<LinkReferences> {
         (*self).link_references()
     }
     fn source_map(&self) -> Option<Value> {
@@ -30,7 +30,7 @@ impl<T: ToCreationCodeArtifacts> ToCreationCodeArtifacts for &T {
 #[serde(rename_all = "camelCase")]
 pub struct CreationCodeArtifacts {
     pub source_map: Option<Value>,
-    pub link_references: Option<Value>,
+    pub link_references: Option<LinkReferences>,
     pub cbor_auxdata: Option<CborAuxdata>,
 }
 
