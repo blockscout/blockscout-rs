@@ -73,8 +73,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_operational_txns() {
-        // 48 - 13 (txns - blocks)
-        simple_test_counter::<TotalOperationalTxns>("update_total_operational_txns", "35", None)
+        // 47 - 13 (txns - blocks)
+        simple_test_counter::<TotalOperationalTxns>("update_total_operational_txns", "34", None)
             .await;
     }
 }
