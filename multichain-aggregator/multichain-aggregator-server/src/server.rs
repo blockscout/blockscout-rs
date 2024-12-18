@@ -10,7 +10,7 @@ use crate::{
 use blockscout_chains::BlockscoutChainsClient;
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings};
 use migration::Migrator;
-use multichain_aggregator_logic::repository;
+use multichain_aggregator_logic::{dapp_client::DappClient, repository};
 use std::sync::Arc;
 
 const SERVICE_NAME: &str = "multichain_aggregator";
@@ -65,11 +65,21 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .fetch_all()
         .await?
         .into_iter()
-        .map(|(id, chain)| (id as i64, chain).into())
+        .filter_map(|(id, chain)| {
+            let id = id.parse::<i64>().ok()?;
+            Some((id, chain).into())
+        })
         .collect::<Vec<_>>();
     repository::chains::upsert_many(&db, blockscout_chains.clone()).await?;
 
-    let multichain_aggregator = Arc::new(MultichainAggregator::new(db, blockscout_chains));
+    let dapp_client = DappClient::new(settings.service.dapp_client.url);
+
+    let multichain_aggregator = Arc::new(MultichainAggregator::new(
+        db,
+        blockscout_chains,
+        dapp_client,
+        settings.service.api,
+    ));
 
     let router = Router {
         health,

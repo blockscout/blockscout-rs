@@ -7,6 +7,12 @@ option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
 service MultichainAggregatorService {
   rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
   rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
+  rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
+}
+
+message Pagination {
+  string page_token = 1;
+  uint32 page_size = 2;
 }
 
 message Address {
@@ -45,6 +51,13 @@ message Hash {
   HashType hash_type = 2;
 }
 
+message MarketplaceDapp {
+  string id = 1;
+  string title = 2;
+  string logo = 3;
+  string short_description = 4;
+}
+
 message BatchImportRequest {
   string chain_id = 1;
   repeated Address addresses = 2;
@@ -69,7 +82,19 @@ message QuickSearchResponse {
     repeated Hash blocks = 3;
     repeated Hash transactions = 4;
     repeated ChainBlockNumber block_numbers = 5;
+    repeated MarketplaceDapp dapps = 6;
   }
 
   map<string, ChainSearchResult> items = 1;
+}
+
+message ListAddressesRequest {
+  string q = 1;
+  optional uint32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message ListAddressesResponse {
+  repeated Address addresses = 1;
+  Pagination pagination = 2;
 }
