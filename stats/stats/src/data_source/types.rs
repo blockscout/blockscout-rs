@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use blockscout_db::entity::migrations_status;
 use chrono::Utc;
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement};
@@ -129,6 +131,90 @@ impl BlockscoutMigrations {
     }
 }
 
+pub enum CacheValue {
+    ValueString(String),
+    ValueOptionF64(Option<f64>),
+}
+
+pub trait Cacheable {
+    fn from_entry(entry: CacheValue) -> Option<Self>
+    where
+        Self: Sized;
+    fn from_entry_ref(entry: &CacheValue) -> Option<&Self>
+    where
+        Self: Sized;
+    fn into_entry(self) -> CacheValue;
+}
+
+macro_rules! impl_cacheable {
+    ($type: ty, $cache_value_variant:ident) => {
+        impl Cacheable for $type {
+            fn from_entry(entry: CacheValue) -> Option<Self>
+            where
+                Self: Sized,
+            {
+                match entry {
+                    CacheValue::$cache_value_variant(s) => Some(s),
+                    _ => None,
+                }
+            }
+
+            fn from_entry_ref(entry: &CacheValue) -> Option<&Self>
+            where
+                Self: Sized,
+            {
+                match entry {
+                    CacheValue::$cache_value_variant(s) => Some(s),
+                    _ => None,
+                }
+            }
+
+            fn into_entry(self) -> CacheValue {
+                CacheValue::$cache_value_variant(self)
+            }
+        }
+    };
+}
+
+impl_cacheable!(String, ValueString);
+impl_cacheable!(Option<f64>, ValueOptionF64);
+
+pub struct UpdateCache {
+    inner: HashMap<String, CacheValue>,
+}
+
+impl UpdateCache {
+    pub fn new() -> Self {
+        Self {
+            inner: HashMap::new(),
+        }
+    }
+}
+
+pub trait StorageFor<V> {
+    fn insert(&mut self, query: &Statement, value: V) -> Option<V>;
+
+    fn get(&mut self, query: &Statement) -> Option<&V>;
+}
+
+impl UpdateCache {
+    /// If the cache did not have value for this query present, None is returned.
+    ///
+    /// If the cache did have this query present, the value is updated, and the old value is returned.
+    fn insert<V: Cacheable>(&mut self, query: &Statement, value: V) -> Option<V> {
+        self.inner
+            .insert(query.to_string(), value.into_entry())
+            .and_then(|e| V::from_entry(e))
+    }
+
+    /// Returns reference to a value for this query, if present
+    fn get<V: Cacheable>(&mut self, query: &Statement) -> Option<&V> {
+        self.inner
+            .get(&query.to_string())
+            .and_then(|e| V::from_entry_ref(e))
+    }
+}
+
 pub trait Get {
     type Value;
     fn get() -> Self::Value;
@@ -155,4 +241,40 @@ macro_rules! gettable_const {
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+    use sea_orm::DbBackend;
+
+    use super::*;
+
+    #[test]
+    fn cache_works() {
+        let mut cache = UpdateCache::new();
+        let stmt_a = Statement::from_string(DbBackend::Sqlite, "abcde");
+        let stmt_b = Statement::from_string(DbBackend::Sqlite, "edcba");
+
+        let val_1 = Some(1.2);
+        let val_2 = "kekekek".to_string();
+
+        cache.insert::<Option<f64>>(&stmt_a, val_1);
+        assert_eq!(cache.get::<Option<f64>>(&stmt_a), Some(&val_1));
+        assert_eq!(cache.get::<String>(&stmt_a), None);
+
+        cache.insert::<Option<f64>>(&stmt_a, None);
+        assert_eq!(cache.get::<Option<f64>>(&stmt_a), Some(&None));
+        assert_eq!(cache.get::<String>(&stmt_a), None);
+
+        cache.insert::<String>(&stmt_a, val_2.clone());
+        assert_eq!(cache.get::<Option<f64>>(&stmt_a), None);
+        assert_eq!(cache.get::<String>(&stmt_a), Some(&val_2));
+
+        cache.insert::<Option<f64>>(&stmt_b, val_1);
+        assert_eq!(cache.get::<Option<f64>>(&stmt_b), Some(&val_1));
+        assert_eq!(cache.get::<String>(&stmt_b), None);
+        assert_eq!(cache.get::<Option<f64>>(&stmt_a), None);
+        assert_eq!(cache.get::<String>(&stmt_a), Some(&val_2));
+    }
 }
