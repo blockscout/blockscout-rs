@@ -16,9 +16,11 @@ mod new_blocks;
 mod new_contracts;
 mod new_native_coin_holders;
 mod new_native_coin_transfers;
+mod new_operational_txns;
 mod new_txns;
 mod new_txns_window;
 mod new_verified_contracts;
+mod operational_txns_growth;
 mod txns_fee;
 mod txns_growth;
 mod txns_success_rate;
@@ -89,12 +91,20 @@ pub use new_native_coin_transfers::{
     NewNativeCoinTransfers, NewNativeCoinTransfersInt, NewNativeCoinTransfersMonthly,
     NewNativeCoinTransfersWeekly, NewNativeCoinTransfersYearly,
 };
+pub use new_operational_txns::{
+    NewOperationalTxns, NewOperationalTxnsMonthly, NewOperationalTxnsWeekly,
+    NewOperationalTxnsYearly,
+};
 pub(crate) use new_txns::NewTxnsStatement;
 pub use new_txns::{NewTxns, NewTxnsInt, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
 pub use new_txns_window::NewTxnsWindow;
 pub use new_verified_contracts::{
     NewVerifiedContracts, NewVerifiedContractsMonthly, NewVerifiedContractsWeekly,
     NewVerifiedContractsYearly,
+};
+pub use operational_txns_growth::{
+    OperationalTxnsGrowth, OperationalTxnsGrowthMonthly, OperationalTxnsGrowthWeekly,
+    OperationalTxnsGrowthYearly,
 };
 pub use txns_fee::{TxnsFee, TxnsFeeMonthly, TxnsFeeWeekly, TxnsFeeYearly};
 pub use txns_growth::{TxnsGrowth, TxnsGrowthMonthly, TxnsGrowthWeekly, TxnsGrowthYearly};

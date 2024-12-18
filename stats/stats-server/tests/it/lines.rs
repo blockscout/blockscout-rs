@@ -95,6 +95,8 @@ async fn test_lines_ok() {
         // "newTxnsWindow",
         "txnsFee",
         "txnsGrowth",
+        // "newOperationalTxns",
+        // "operationalTxnsGrowth",
         "txnsSuccessRate",
         "newVerifiedContracts",
         "newContracts",

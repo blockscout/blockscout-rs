@@ -1,5 +1,5 @@
 //! Constructors for lower resolutions of average value charts
-use std::{cmp::Ordering, fmt::Debug, marker::PhantomData};
+use std::{fmt::Debug, marker::PhantomData};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
@@ -7,6 +7,7 @@ use itertools::{EitherOrBoth, Itertools};
 use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
+    data_processing::zip_same_timespan,
     data_source::{
         kinds::data_manipulation::resolutions::reduce_each_timespan, DataSource, UpdateContext,
     },
@@ -78,59 +79,6 @@ where
     }
 }
 
-/// "zip" two sorted date/value vectors, combining
-/// values with the same date.
-///
-/// If both vectors contain values for a date, it yields two values via `EitherOrBoth::Both`.
-///
-/// If only one of the vectors contains a value for a date, it yields the value via `EitherOrBoth::Left`
-/// or `EitherOrBoth::Right`.
-fn zip_same_timespan<T, LeftValue, RightValue>(
-    left: Vec<TimespanValue<T, LeftValue>>,
-    right: Vec<TimespanValue<T, RightValue>>,
-) -> Vec<(T, EitherOrBoth<LeftValue, RightValue>)>
-where
-    T: Ord,
-{
-    let mut left = left.into_iter().peekable();
-    let mut right = right.into_iter().peekable();
-    let mut result = vec![];
-    loop {
-        match (left.peek(), right.peek()) {
-            (Some(l), Some(r)) => {
-                let (left_t, right_t) = (&l.timespan, &r.timespan);
-                match left_t.cmp(right_t) {
-                    Ordering::Equal => {
-                        let (l, r) = (
-                            left.next().expect("peek just succeeded"),
-                            right.next().expect("peek just succeeded"),
-                        );
-                        result.push((l.timespan, EitherOrBoth::Both(l.value, r.value)))
-                    }
-                    Ordering::Less => {
-                        let left_point = left.next().expect("peek just succeeded");
-                        result.push((left_point.timespan, EitherOrBoth::Left(left_point.value)))
-                    }
-                    Ordering::Greater => {
-                        let right_point = right.next().expect("peek just succeeded");
-                        result.push((right_point.timespan, EitherOrBoth::Right(right_point.value)))
-                    }
-                }
-            }
-            (Some(_), None) => {
-                result.extend(left.map(|p| (p.timespan, EitherOrBoth::Left(p.value))));
-                break;
-            }
-            (None, Some(_)) => {
-                result.extend(right.map(|p| (p.timespan, EitherOrBoth::Right(p.value))));
-                break;
-            }
-            (None, None) => break,
-        }
-    }
-    result
-}
-
 fn lower_res_average_from<LowerRes, HigherRes>(
     h_res_average: Vec<TimespanValue<HigherRes, f64>>,
     h_res_weight: Vec<TimespanValue<HigherRes, i64>>,
@@ -195,7 +143,7 @@ mod tests {
         data_source::{kinds::data_manipulation::map::MapParseTo, types::BlockscoutMigrations},
         gettable_const,
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
-        tests::point_construction::{d, d_v, d_v_double, d_v_int, dt, w_v_double, week_of},
+        tests::point_construction::{d, d_v_double, d_v_int, dt, w_v_double, week_of},
         types::timespans::{DateValue, Week, WeekValue},
         utils::MarkedDbConnection,
         MissingDatePolicy,
@@ -206,74 +154,6 @@ mod tests {
     use chrono::NaiveDate;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
-
-    #[test]
-    fn zip_same_timespan_works() {
-        assert_eq!(
-            zip_same_timespan::<NaiveDate, i64, String>(vec![], vec![]),
-            vec![]
-        );
-        assert_eq!(
-            zip_same_timespan::<NaiveDate, i64, _>(
-                vec![],
-                vec![
-                    d_v("2024-07-05", "5R"),
-                    d_v("2024-07-07", "7R"),
-                    d_v("2024-07-08", "8R"),
-                    d_v("2024-07-11", "11R"),
-                ]
-            ),
-            vec![
-                (d("2024-07-05"), EitherOrBoth::Right("5R".to_string())),
-                (d("2024-07-07"), EitherOrBoth::Right("7R".to_string())),
-                (d("2024-07-08"), EitherOrBoth::Right("8R".to_string())),
-                (d("2024-07-11"), EitherOrBoth::Right("11R".to_string())),
-            ]
-        );
-        assert_eq!(
-            zip_same_timespan::<NaiveDate, _, i64>(
-                vec![
-                    d_v("2024-07-05", "5L"),
-                    d_v("2024-07-07", "7L"),
-                    d_v("2024-07-08", "8L"),
-                    d_v("2024-07-11", "11L"),
-                ],
-                vec![]
-            ),
-            vec![
-                (d("2024-07-05"), EitherOrBoth::Left("5L".to_string())),
-                (d("2024-07-07"), EitherOrBoth::Left("7L".to_string())),
-                (d("2024-07-08"), EitherOrBoth::Left("8L".to_string())),
-                (d("2024-07-11"), EitherOrBoth::Left("11L".to_string())),
-            ]
-        );
-        assert_eq!(
-            zip_same_timespan(
-                vec![
-                    d_v("2024-07-08", "8L"),
-                    d_v("2024-07-09", "9L"),
-                    d_v("2024-07-10", "10L"),
-                ],
-                vec![
-                    d_v("2024-07-05", "5R"),
-                    d_v("2024-07-07", "7R"),
-                    d_v("2024-07-08", "8R"),
-                    d_v("2024-07-11", "11R"),
-                ]
-            ),
-            vec![
-                (d("2024-07-05"), EitherOrBoth::Right("5R".to_string())),
-                (d("2024-07-07"), EitherOrBoth::Right("7R".to_string())),
-                (
-                    d("2024-07-08"),
-                    EitherOrBoth::Both("8L".to_string(), "8R".to_string())
-                ),
-                (d("2024-07-09"), EitherOrBoth::Left("9L".to_string())),
-                (d("2024-07-10"), EitherOrBoth::Left("10L".to_string())),
-                (d("2024-07-11"), EitherOrBoth::Right("11R".to_string())),
-            ]
-        )
-    }
 
     #[test]
     fn weekly_average_from_works() {

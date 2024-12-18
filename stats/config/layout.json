@@ -12,6 +12,7 @@
         "total_native_coin_transfers",
         "total_tokens",
         "total_txns",
+        "total_operational_txns",
         "total_verified_contracts",
         "yesterday_txns"
     ],
@@ -36,6 +37,8 @@
                 "new_txns",
                 "txns_fee",
                 "txns_growth",
+                "new_operational_txns",
+                "operational_txns_growth",
                 "txns_success_rate",
                 "new_txns_window"
             ]

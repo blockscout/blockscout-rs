@@ -92,6 +92,7 @@ by enabling word wrapping
 | `STATS__CONDITIONAL_​START__INTERNAL_​TRANSACTIONS_RATIO__​THRESHOLD` | | Value for `internal_​transactions_​ratio` threshold | `0.98` |
 | `STATS__IGNORE_​BLOCKSCOUT_API_ABSENCE` | | Disable requirement for blockscout api url setting. Turns off corresponding features if the api setting is not set | `false` |
 | `STATS__DISABLE_​INTERNAL_TRANSACTIONS` | | Disable functionality that utilizes internal transactions. In particular, disable internal transactions ratio check for starting the service and related charts (`newContracts`, `lastNewContracts`, and `contractsGrowth`). It has a higher priority than config files and respective envs. | `false` |
+| `STATS__ENABLE_​ALL_ARBITRUM` | | Enable Arbitrum-specific charts. Variable for convenience only, the same can be done manually in configs. | `false` |
 
 [anchor]: <> (anchors.envs.end.service)
 

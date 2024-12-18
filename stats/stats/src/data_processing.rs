@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use itertools::EitherOrBoth;
 
 use crate::{
     charts::types::timespans::DateValue,
@@ -6,6 +7,7 @@ use crate::{
     ChartError,
 };
 use std::{
+    cmp::Ordering,
     mem,
     ops::{AddAssign, SubAssign},
 };
@@ -83,13 +85,67 @@ pub fn last_point(data: Vec<DateValue<String>>) -> Option<DateValue<String>> {
     data.into_iter().max()
 }
 
+/// "zip" two sorted date/value vectors, combining
+/// values with the same date.
+///
+/// If both vectors contain values for a date, it yields two values via `EitherOrBoth::Both`.
+///
+/// If only one of the vectors contains a value for a date, it yields the value via `EitherOrBoth::Left`
+/// or `EitherOrBoth::Right`.
+pub fn zip_same_timespan<T, LeftValue, RightValue>(
+    left: Vec<TimespanValue<T, LeftValue>>,
+    right: Vec<TimespanValue<T, RightValue>>,
+) -> Vec<(T, EitherOrBoth<LeftValue, RightValue>)>
+where
+    T: Ord,
+{
+    let mut left = left.into_iter().peekable();
+    let mut right = right.into_iter().peekable();
+    let mut result = vec![];
+    loop {
+        match (left.peek(), right.peek()) {
+            (Some(l), Some(r)) => {
+                let (left_t, right_t) = (&l.timespan, &r.timespan);
+                match left_t.cmp(right_t) {
+                    Ordering::Equal => {
+                        let (l, r) = (
+                            left.next().expect("peek just succeeded"),
+                            right.next().expect("peek just succeeded"),
+                        );
+                        result.push((l.timespan, EitherOrBoth::Both(l.value, r.value)))
+                    }
+                    Ordering::Less => {
+                        let left_point = left.next().expect("peek just succeeded");
+                        result.push((left_point.timespan, EitherOrBoth::Left(left_point.value)))
+                    }
+                    Ordering::Greater => {
+                        let right_point = right.next().expect("peek just succeeded");
+                        result.push((right_point.timespan, EitherOrBoth::Right(right_point.value)))
+                    }
+                }
+            }
+            (Some(_), None) => {
+                result.extend(left.map(|p| (p.timespan, EitherOrBoth::Left(p.value))));
+                break;
+            }
+            (None, Some(_)) => {
+                result.extend(right.map(|p| (p.timespan, EitherOrBoth::Right(p.value))));
+                break;
+            }
+            (None, None) => break,
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
+    use itertools::EitherOrBoth;
     use pretty_assertions::assert_eq;
     use rust_decimal_macros::dec;
 
     use super::*;
-    use crate::tests::point_construction::{d_v_decimal, d_v_int};
+    use crate::tests::point_construction::{d, d_v, d_v_decimal, d_v_int};
 
     #[test]
     fn test_deltas_works_int() {
@@ -305,5 +361,73 @@ mod tests {
         for (data, initial_value, expected) in test_cases {
             assert_eq!(cumsum(data, initial_value).unwrap(), expected);
         }
+    }
+
+    #[test]
+    fn zip_same_timespan_works() {
+        assert_eq!(
+            zip_same_timespan::<NaiveDate, i64, String>(vec![], vec![]),
+            vec![]
+        );
+        assert_eq!(
+            zip_same_timespan::<NaiveDate, i64, _>(
+                vec![],
+                vec![
+                    d_v("2024-07-05", "5R"),
+                    d_v("2024-07-07", "7R"),
+                    d_v("2024-07-08", "8R"),
+                    d_v("2024-07-11", "11R"),
+                ]
+            ),
+            vec![
+                (d("2024-07-05"), EitherOrBoth::Right("5R".to_string())),
+                (d("2024-07-07"), EitherOrBoth::Right("7R".to_string())),
+                (d("2024-07-08"), EitherOrBoth::Right("8R".to_string())),
+                (d("2024-07-11"), EitherOrBoth::Right("11R".to_string())),
+            ]
+        );
+        assert_eq!(
+            zip_same_timespan::<NaiveDate, _, i64>(
+                vec![
+                    d_v("2024-07-05", "5L"),
+                    d_v("2024-07-07", "7L"),
+                    d_v("2024-07-08", "8L"),
+                    d_v("2024-07-11", "11L"),
+                ],
+                vec![]
+            ),
+            vec![
+                (d("2024-07-05"), EitherOrBoth::Left("5L".to_string())),
+                (d("2024-07-07"), EitherOrBoth::Left("7L".to_string())),
+                (d("2024-07-08"), EitherOrBoth::Left("8L".to_string())),
+                (d("2024-07-11"), EitherOrBoth::Left("11L".to_string())),
+            ]
+        );
+        assert_eq!(
+            zip_same_timespan(
+                vec![
+                    d_v("2024-07-08", "8L"),
+                    d_v("2024-07-09", "9L"),
+                    d_v("2024-07-10", "10L"),
+                ],
+                vec![
+                    d_v("2024-07-05", "5R"),
+                    d_v("2024-07-07", "7R"),
+                    d_v("2024-07-08", "8R"),
+                    d_v("2024-07-11", "11R"),
+                ]
+            ),
+            vec![
+                (d("2024-07-05"), EitherOrBoth::Right("5R".to_string())),
+                (d("2024-07-07"), EitherOrBoth::Right("7R".to_string())),
+                (
+                    d("2024-07-08"),
+                    EitherOrBoth::Both("8L".to_string(), "8R".to_string())
+                ),
+                (d("2024-07-09"), EitherOrBoth::Left("9L".to_string())),
+                (d("2024-07-10"), EitherOrBoth::Left("10L".to_string())),
+                (d("2024-07-11"), EitherOrBoth::Right("11R".to_string())),
+            ]
+        )
     }
 }
