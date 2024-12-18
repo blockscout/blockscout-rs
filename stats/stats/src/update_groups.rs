@@ -23,6 +23,10 @@ singleton_groups!(
     TotalAddresses,
     TotalBlocks,
     TotalTokens,
+    // Even though it depends on `TotalTxns` and `TotalBlocks`,
+    // it's ok not to update it as frequently.
+    // Granular control over these 2 still seems useful.
+    TotalOperationalTxns,
     // Each of the `ActiveRecurringAccounts*` charts includes quite heavy SQL query,
     // thus it's better to have granular control on update times.
     ActiveRecurringAccountsDailyRecurrence60Days,
@@ -108,6 +112,15 @@ construct_update_group!(NewBlocksGroup {
         NewBlocksWeekly,
         NewBlocksMonthly,
         NewBlocksYearly,
+        // if the following are enabled, then NewTxns is updated as well
+        NewOperationalTxns,
+        NewOperationalTxnsWeekly,
+        NewOperationalTxnsMonthly,
+        NewOperationalTxnsYearly,
+        OperationalTxnsGrowth,
+        OperationalTxnsGrowthWeekly,
+        OperationalTxnsGrowthMonthly,
+        OperationalTxnsGrowthYearly
     ]
 });
 

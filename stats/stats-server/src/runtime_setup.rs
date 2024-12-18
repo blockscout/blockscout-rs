@@ -221,6 +221,7 @@ impl RuntimeSetup {
             Arc::new(TotalAddressesGroup),
             Arc::new(TotalBlocksGroup),
             Arc::new(TotalTokensGroup),
+            Arc::new(TotalOperationalTxnsGroup),
             Arc::new(ActiveRecurringAccountsDailyRecurrence60DaysGroup),
             Arc::new(ActiveRecurringAccountsMonthlyRecurrence60DaysGroup),
             Arc::new(ActiveRecurringAccountsWeeklyRecurrence60DaysGroup),
@@ -310,6 +311,16 @@ impl RuntimeSetup {
             ("AverageGasPriceGroup", vec!["newTxns_DAY", "newTxns_MONTH"]),
             ("AverageTxnFeeGroup", vec!["newTxns_DAY", "newTxns_MONTH"]),
             ("TxnsSuccessRateGroup", vec!["newTxns_DAY", "newTxns_MONTH"]),
+            // total blocks and total txns have their own respective groups
+            (
+                "TotalOperationalTxnsGroup",
+                vec!["totalBlocks_DAY", "totalTxns_DAY"],
+            ),
+            // the operational txns charts that depend on `newTxns_DAY` are
+            // rarely turned on, also `newTxns_DAY` is not that expensive to
+            // compute, therefore this solution is ok (to not introduce
+            // more update groups if not necessary)
+            ("NewBlocksGroup", vec!["newTxns_DAY"]),
         ]
         .map(|(group_name, allowed_missing)| {
             (

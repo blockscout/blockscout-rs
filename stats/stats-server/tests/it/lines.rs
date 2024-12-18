@@ -90,6 +90,8 @@ async fn test_lines_ok() {
         "newTxns",
         "txnsFee",
         "txnsGrowth",
+        // "newOperationalTxns",
+        // "operationalTxnsGrowth",
         "txnsSuccessRate",
         "newVerifiedContracts",
         "newContracts",

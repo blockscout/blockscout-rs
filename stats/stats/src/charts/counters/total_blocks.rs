@@ -3,6 +3,7 @@ use std::ops::Range;
 use crate::{
     data_source::{
         kinds::{
+            data_manipulation::map::MapParseTo,
             local_db::DirectPointLocalDbChartSource,
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
@@ -73,6 +74,7 @@ impl ChartProperties for Properties {
 }
 
 pub type TotalBlocks = DirectPointLocalDbChartSource<TotalBlocksRemote, Properties>;
+pub type TotalBlocksInt = MapParseTo<TotalBlocks, i64>;
 
 #[cfg(test)]
 mod tests {

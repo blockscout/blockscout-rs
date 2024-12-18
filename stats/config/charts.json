@@ -38,6 +38,11 @@
             "title": "Total txns",
             "description": "All transactions including pending, dropped, replaced, failed transactions"
         },
+        "total_operational_txns": {
+            "enabled": false,
+            "title": "Total operational txns",
+            "description": "'Total txns' without block creation transactions"
+        },
         "last_new_contracts": {
             "title": "Number of deployed contracts today",
             "description": "Number of deployed contracts today"
@@ -105,6 +110,16 @@
         "txns_growth": {
             "title": "Number of transactions",
             "description": "Cumulative transaction growth over time"
+        },
+        "new_operational_txns": {
+            "enabled": false,
+            "title": "New operational transactions",
+            "description": "Number of new transactions without block creation"
+        },
+        "operational_txns_growth": {
+            "enabled": false,
+            "title": "Number of operational transactions",
+            "description": "Cumulative transactions growth without block creation"
         },
         "txns_success_rate": {
             "title": "Transaction success rate",
