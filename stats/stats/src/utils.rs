@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use sea_orm::Value;
-use std::{ops::Range, sync::Arc};
+use std::ops::Range;
 
 // this const is not public in `chrono` for some reason
 pub const NANOS_PER_SEC: i32 = 1_000_000_000;
@@ -10,45 +10,6 @@ pub const NANOS_PER_SEC: i32 = 1_000_000_000;
 pub fn day_start(date: &NaiveDate) -> DateTime<Utc> {
     date.and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
         .and_utc()
-}
-
-// todo: remove marked part if not used until May 2025.
-// probably rename to some wrapper of db connection to add some other
-// stuff if necessary (or use UpdateContext as a place to extend the context)
-/// Database connection with a mark of what database it is.
-///
-/// Used to separate caching for different databases to
-/// prevent data clashes when running unit tests concurrently.
-#[derive(Debug, Clone)]
-pub struct MarkedDbConnection {
-    pub connection: Arc<sea_orm::DatabaseConnection>,
-    pub db_name: String,
-}
-
-impl MarkedDbConnection {
-    #[cfg(any(feature = "test-utils", test))]
-    pub fn from_test_db(
-        guard: &blockscout_service_launcher::test_database::TestDbGuard,
-    ) -> Option<Self> {
-        Some(Self {
-            connection: guard.client(),
-            db_name: guard.db_url().split("/").last()?.to_owned(),
-        })
-    }
-
-    pub fn main_connection(inner: Arc<sea_orm::DatabaseConnection>) -> Self {
-        Self {
-            connection: inner,
-            db_name: "main".to_owned(),
-        }
-    }
-
-    pub fn in_memory(inner: Arc<sea_orm::DatabaseConnection>) -> Self {
-        Self {
-            connection: inner,
-            db_name: "in_memory".to_owned(),
-        }
-    }
 }
 
 /// Used inside [`sql_with_range_filter_opt`]

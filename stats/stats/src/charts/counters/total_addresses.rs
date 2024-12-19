@@ -8,13 +8,12 @@ use crate::{
         types::BlockscoutMigrations,
     },
     types::timespans::DateValue,
-    utils::MarkedDbConnection,
     ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 use blockscout_db::entity::addresses;
 use chrono::{NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, EntityName, Statement};
+use sea_orm::{DatabaseConnection, DbBackend, EntityName, Statement};
 
 pub struct TotalAddressesStatement;
 
@@ -64,18 +63,15 @@ impl ChartProperties for Properties {
 pub struct TotalAddressesEstimation;
 
 impl ValueEstimation for TotalAddressesEstimation {
-    async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, ChartError> {
+    async fn estimate(blockscout: &DatabaseConnection) -> Result<DateValue<String>, ChartError> {
         // `now()` is more relevant when taken right before the query rather than
         // `cx.time` measured a bit earlier.
         let now = Utc::now();
-        let value = query_estimated_table_rows(
-            blockscout.connection.as_ref(),
-            addresses::Entity.table_name(),
-        )
-        .await
-        .map_err(ChartError::BlockscoutDB)?
-        .map(|n| u64::try_from(n).unwrap_or(0))
-        .unwrap_or(0);
+        let value = query_estimated_table_rows(blockscout, addresses::Entity.table_name())
+            .await
+            .map_err(ChartError::BlockscoutDB)?
+            .map(|n| u64::try_from(n).unwrap_or(0))
+            .unwrap_or(0);
         Ok(DateValue {
             timespan: now.date_naive(),
             value: value.to_string(),

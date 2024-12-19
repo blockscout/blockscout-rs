@@ -35,7 +35,7 @@ pub trait QuerySerialized {
     /// Retrieve chart data from local storage.
     fn query_data<'a>(
         &self,
-        cx: &UpdateContext<'a>,
+        cx: &'a UpdateContext<'a>,
         range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
@@ -43,7 +43,7 @@ pub trait QuerySerialized {
 
     /// Retrieve chart data from local storage.
     fn query_data_static<'a>(
-        cx: &UpdateContext<'a>,
+        cx: &'a UpdateContext<'a>,
         range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,
@@ -151,7 +151,7 @@ where
 
     fn query_data<'a>(
         &self,
-        cx: &UpdateContext<'a>,
+        cx: &'a UpdateContext<'a>,
         range: UniversalRange<DateTime<Utc>>,
         points_limit: Option<RequestedPointsLimit>,
         fill_missing_dates: bool,

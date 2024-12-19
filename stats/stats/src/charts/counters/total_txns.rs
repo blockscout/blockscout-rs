@@ -10,7 +10,6 @@ use crate::{
     },
     range::UniversalRange,
     types::timespans::DateValue,
-    utils::MarkedDbConnection,
     ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
@@ -18,7 +17,8 @@ use blockscout_db::entity::{blocks, transactions};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{
-    prelude::Expr, ColumnTrait, EntityName, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect,
+    prelude::Expr, ColumnTrait, DatabaseConnection, EntityName, EntityTrait, PaginatorTrait,
+    QueryFilter, QuerySelect,
 };
 
 pub struct TotalTxnsQueryBehaviour;
@@ -30,7 +30,7 @@ impl RemoteQueryBehaviour for TotalTxnsQueryBehaviour {
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, ChartError> {
-        let blockscout = cx.blockscout.connection.as_ref();
+        let blockscout = cx.blockscout;
         let timespan: NaiveDateTime = blocks::Entity::find()
             .select_only()
             .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
@@ -79,18 +79,15 @@ impl ChartProperties for Properties {
 pub struct TotalTxnsEstimation;
 
 impl ValueEstimation for TotalTxnsEstimation {
-    async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, ChartError> {
+    async fn estimate(blockscout: &DatabaseConnection) -> Result<DateValue<String>, ChartError> {
         // `now()` is more relevant when taken right before the query rather than
         // `cx.time` measured a bit earlier.
         let now = Utc::now();
-        let value = query_estimated_table_rows(
-            blockscout.connection.as_ref(),
-            transactions::Entity.table_name(),
-        )
-        .await
-        .map_err(ChartError::BlockscoutDB)?
-        .map(|n| u64::try_from(n).unwrap_or(0))
-        .unwrap_or(0);
+        let value = query_estimated_table_rows(blockscout, transactions::Entity.table_name())
+            .await
+            .map_err(ChartError::BlockscoutDB)?
+            .map(|n| u64::try_from(n).unwrap_or(0))
+            .unwrap_or(0);
         Ok(DateValue {
             timespan: now.date_naive(),
             value: value.to_string(),

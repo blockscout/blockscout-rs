@@ -14,7 +14,7 @@ use anyhow::Context;
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::launcher::{self, LaunchSettings};
 use sea_orm::{ConnectOptions, Database};
-use stats::{metrics, utils::MarkedDbConnection};
+use stats::metrics;
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
     health_server::HealthServer,
@@ -80,9 +80,7 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         settings.run_migrations,
     )
     .await?;
-    let db = MarkedDbConnection::main_connection(Arc::new(
-        Database::connect(opt).await.context("stats DB")?,
-    ));
+    let db = Arc::new(Database::connect(opt).await.context("stats DB")?);
 
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
@@ -92,9 +90,7 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         tracing::log::LevelFilter::Warn,
         Duration::from_secs(3600),
     );
-    let blockscout = MarkedDbConnection::main_connection(Arc::new(
-        Database::connect(opt).await.context("blockscout DB")?,
-    ));
+    let blockscout = Arc::new(Database::connect(opt).await.context("blockscout DB")?);
 
     let charts = Arc::new(RuntimeSetup::new(
         charts_config,
@@ -106,7 +102,7 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     for group_entry in charts.update_groups.values() {
         group_entry
             .group
-            .create_charts_with_mutexes(db.connection.as_ref(), None, &group_entry.enabled_members)
+            .create_charts_with_mutexes(&db, None, &group_entry.enabled_members)
             .await?;
     }
 

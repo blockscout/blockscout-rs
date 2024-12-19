@@ -61,7 +61,7 @@ impl RemoteQueryBehaviour for NewTxnsWindowQuery {
         let update_day = cx.time.date_naive();
         let query = new_txns_window_statement(update_day, &cx.blockscout_applied_migrations);
         let mut data = TimespanValue::<NaiveDate, String>::find_by_statement(query)
-            .all(cx.blockscout.connection.as_ref())
+            .all(cx.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?;
         // linear time for sorted sequences
@@ -117,7 +117,6 @@ mod tests {
             point_construction::dt,
             simple_test::{chart_output_to_expected, map_str_tuple_to_owned, prepare_chart_test},
         },
-        utils::MarkedDbConnection,
     };
 
     #[tokio::test]
@@ -133,8 +132,8 @@ mod tests {
         let current_time = dt("2022-12-01T00:00:00").and_utc();
 
         let mut parameters = UpdateParameters {
-            db: &MarkedDbConnection::from_test_db(&db).unwrap(),
-            blockscout: &MarkedDbConnection::from_test_db(&blockscout).unwrap(),
+            db: &db,
+            blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
             force_full: false,
