@@ -202,7 +202,7 @@ macro_rules! impl_cacheable_wrapped {
 impl_cacheable_wrapped!(WrappedValue<String>, ValueString);
 impl_cacheable_wrapped!(WrappedValue<Option<f64>>, ValueOptionF64);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct UpdateCache {
     inner: Arc<Mutex<HashMap<String, CacheValue>>>,
 }

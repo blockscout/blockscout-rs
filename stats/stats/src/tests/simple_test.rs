@@ -130,8 +130,8 @@ pub async fn dirty_force_update_and_check<C>(
         update_time_override.unwrap_or(DateTime::from_str("2023-03-01T12:00:01Z").unwrap());
 
     let parameters = UpdateParameters {
-        db: &db,
-        blockscout: &blockscout,
+        db,
+        blockscout,
         blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: Some(current_time),
         force_full: true,
