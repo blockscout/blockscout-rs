@@ -83,7 +83,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::{
-        data_source::types::BlockscoutMigrations,
+        data_source::{types::BlockscoutMigrations, UpdateParameters},
         gettable_const,
         lines::PredefinedMockSource,
         range::UniversalRange,
@@ -160,13 +160,13 @@ mod tests {
             sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
         ));
 
-        let context = UpdateContext {
+        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &empty_db,
             blockscout: &empty_db,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: dt("2024-07-30T09:00:00").and_utc(),
+            update_time_override: Some(dt("2024-07-30T09:00:00").and_utc()),
             force_full: false,
-        };
+        });
         assert_eq!(
             <TestedZero as DataSource>::query_data(
                 &context,

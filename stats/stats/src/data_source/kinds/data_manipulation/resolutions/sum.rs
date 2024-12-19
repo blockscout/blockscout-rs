@@ -103,7 +103,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
         gettable_const,
         lines::PredefinedMockSource,
         range::UniversalRange,
@@ -136,13 +136,13 @@ mod tests {
             sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
         ));
 
-        let context = UpdateContext {
+        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &empty_db,
             blockscout: &empty_db,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: dt("2024-07-30T09:00:00").and_utc(),
+            update_time_override: Some(dt("2024-07-30T09:00:00").and_utc()),
             force_full: false,
-        };
+        });
         assert_eq!(
             MockSource::query_data(&context, UniversalRange::full(), &mut AggregateTimer::new())
                 .await

@@ -200,7 +200,7 @@ impl UpdateCache {
     /// If the cache did not have value for this query present, None is returned.
     ///
     /// If the cache did have this query present, the value is updated, and the old value is returned.
-    async fn insert<V: Cacheable>(&mut self, query: &Statement, value: V) -> Option<V> {
+    pub async fn insert<V: Cacheable>(&self, query: &Statement, value: V) -> Option<V> {
         self.inner
             .lock()
             .await
@@ -209,7 +209,7 @@ impl UpdateCache {
     }
 
     /// Returns a value for this query, if present
-    async fn get<V: Cacheable>(&mut self, query: &Statement) -> Option<V> {
+    pub async fn get<V: Cacheable>(&self, query: &Statement) -> Option<V> {
         self.inner
             .lock()
             .await
@@ -255,7 +255,7 @@ mod tests {
 
     #[tokio::test]
     async fn cache_works() {
-        let mut cache = UpdateCache::new();
+        let cache = UpdateCache::new();
         let stmt_a = Statement::from_string(DbBackend::Sqlite, "abcde");
         let stmt_b = Statement::from_string(DbBackend::Sqlite, "edcba");
 

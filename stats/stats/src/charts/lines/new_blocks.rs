@@ -104,7 +104,7 @@ mod tests {
     use super::*;
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
-        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
         query_dispatch::{serialize_line_points, QuerySerialized},
         range::UniversalRange,
         tests::{
@@ -168,13 +168,13 @@ mod tests {
 
         // Note that update is not full, therefore there is no entry with date `2022-11-09` and
         // wrong value is kept
-        let mut cx = UpdateContext {
+        let mut cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: current_time,
+            update_time_override: Some(current_time),
             force_full: false,
-        };
+        });
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
             .await
@@ -244,13 +244,13 @@ mod tests {
             .await
             .unwrap();
 
-        let cx = UpdateContext {
+        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: current_time,
+            update_time_override: Some(current_time),
             force_full: true,
-        };
+        });
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
             .await
@@ -341,13 +341,13 @@ mod tests {
         .await
         .unwrap();
 
-        let cx = UpdateContext {
+        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: current_time,
+            update_time_override: Some(current_time),
             force_full: false,
-        };
+        });
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
             .await

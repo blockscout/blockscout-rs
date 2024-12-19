@@ -140,7 +140,10 @@ mod tests {
     use std::{ops::Range, sync::Arc};
 
     use crate::{
-        data_source::{kinds::data_manipulation::map::MapParseTo, types::BlockscoutMigrations},
+        data_source::{
+            kinds::data_manipulation::map::MapParseTo, types::BlockscoutMigrations,
+            UpdateParameters,
+        },
         gettable_const,
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
         tests::point_construction::{d, d_v_double, d_v_int, dt, w_v_double, week_of},
@@ -204,13 +207,13 @@ mod tests {
             sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
         ));
         let output: Vec<WeekValue<f64>> = TestedAverageSource::query_data(
-            &UpdateContext {
+            &UpdateContext::from_params_now_or_override(UpdateParameters {
                 db: &db,
                 blockscout: &db,
                 blockscout_applied_migrations: BlockscoutMigrations::latest(),
-                time: dt("2024-07-15T09:00:00").and_utc(),
+                update_time_override: Some(dt("2024-07-15T09:00:00").and_utc()),
                 force_full: false,
-            },
+            }),
             (dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()).into(),
             &mut AggregateTimer::new(),
         )
@@ -254,13 +257,13 @@ mod tests {
             sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
         ));
 
-        let context = UpdateContext {
+        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &empty_db,
             blockscout: &empty_db,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: dt("2024-07-30T09:00:00").and_utc(),
+            update_time_override: Some(dt("2024-07-30T09:00:00").and_utc()),
             force_full: false,
-        };
+        });
         let week_1_average = (5.0 * 100.0 + 34.2 * 2.0 + 10.3 * 12.0) / (100.0 + 2.0 + 12.0);
         assert_eq!(
             TestedAverageSource::query_data(
@@ -306,13 +309,13 @@ mod tests {
             sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
         ));
 
-        let context = UpdateContext {
+        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &empty_db,
             blockscout: &empty_db,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: dt("2023-03-30T09:00:00").and_utc(),
+            update_time_override: Some(dt("2023-03-30T09:00:00").and_utc()),
             force_full: false,
-        };
+        });
         assert_eq!(
             TestedAverageSource::query_data(
                 &context,
@@ -354,13 +357,13 @@ mod tests {
             sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
         ));
 
-        let context = UpdateContext {
+        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &empty_db,
             blockscout: &empty_db,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: dt("2023-03-30T09:00:00").and_utc(),
+            update_time_override: Some(dt("2023-03-30T09:00:00").and_utc()),
             force_full: false,
-        };
+        });
         assert_eq!(
             TestedAverageSource::query_data(
                 &context,
