@@ -1,7 +1,7 @@
 use std::marker::{PhantomData, Send};
 
 use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
-use sea_orm::{FromQueryResult, Statement, TryGetable};
+use sea_orm::{FromQueryResult, Statement};
 
 use crate::{
     data_source::{
@@ -55,11 +55,7 @@ where
     }
 }
 
-#[derive(FromQueryResult)]
-struct FromQueryValue<V: TryGetable> {
-    value: V,
-}
-
+// todo: remove unused
 /// Retrieve a single value `Value` for the period of last 24h
 /// according to provided statemnt `S`.
 ///
@@ -67,12 +63,12 @@ struct FromQueryValue<V: TryGetable> {
 pub struct PullOne24h<S, Value>(PhantomData<(S, Value)>)
 where
     S: StatementFromRange,
-    Value: Send + TryGetable;
+    Value: FromQueryResult + Send;
 
 impl<S, Value> RemoteQueryBehaviour for PullOne24h<S, Value>
 where
     S: StatementFromRange,
-    Value: Send + TryGetable,
+    Value: FromQueryResult + Send,
 {
     type Output = TimespanValue<NaiveDate, Value>;
 
@@ -89,7 +85,7 @@ where
             &cx.blockscout_applied_migrations,
         );
 
-        let value = FromQueryValue::<Value>::find_by_statement(query)
+        let value = Value::find_by_statement(query)
             .one(cx.blockscout.connection.as_ref())
             .await
             .map_err(ChartError::BlockscoutDB)?
@@ -97,7 +93,7 @@ where
 
         Ok(TimespanValue {
             timespan: update_time.date_naive(),
-            value: value.value,
+            value,
         })
     }
 }
@@ -107,12 +103,12 @@ where
 pub struct PullOne24hCached<S, Value>(PhantomData<(S, Value)>)
 where
     S: StatementFromRange,
-    Value: Send + TryGetable;
+    Value: FromQueryResult + Cacheable + Clone + Send;
 
 impl<S, Value> RemoteQueryBehaviour for PullOne24hCached<S, Value>
 where
     S: StatementFromRange,
-    Value: Send + TryGetable + Cacheable + Clone,
+    Value: FromQueryResult + Cacheable + Clone + Send,
 {
     type Output = TimespanValue<NaiveDate, Value>;
 
@@ -132,14 +128,14 @@ where
         let value = if let Some(cached) = cx.cache.get::<Value>(&query).await {
             cached
         } else {
-            let value = FromQueryValue::<Value>::find_by_statement(query.clone())
+            let find_by_statement = Value::find_by_statement(query.clone());
+            let value = find_by_statement
                 .one(cx.blockscout.connection.as_ref())
                 .await
                 .map_err(ChartError::BlockscoutDB)?
                 .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
-            let v = value.value;
-            cx.cache.insert(&query, v.clone()).await;
-            v
+            cx.cache.insert(&query, value.clone()).await;
+            value
         };
 
         Ok(TimespanValue {
@@ -160,7 +156,7 @@ mod test {
     use crate::{
         data_source::{
             kinds::remote_db::{RemoteQueryBehaviour, StatementFromRange},
-            types::BlockscoutMigrations,
+            types::{BlockscoutMigrations, WrappedValue},
             UpdateContext, UpdateParameters,
         },
         range::UniversalRange,
@@ -181,17 +177,19 @@ mod test {
         }
     }
 
-    type TestedPullCached = PullOne24hCached<TestStatement, String>;
+    type TestedPullCached = PullOne24hCached<TestStatement, WrappedValue<String>>;
 
     #[tokio::test]
     async fn pull_caching_works() {
-        let expected = "value1".to_string();
+        let expected = WrappedValue {
+            value: "value1".to_string(),
+        };
         let mock_db = MockDatabase::new(DatabaseBackend::Postgres)
             .append_query_results([
                 // First query result
                 vec![BTreeMap::from([(
                     "value",
-                    sea_orm::Value::from(expected.clone()),
+                    sea_orm::Value::from(expected.value.clone()),
                 )])],
                 // Second query result
                 vec![BTreeMap::from([("value", sea_orm::Value::from("value2"))])],

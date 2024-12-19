@@ -3,96 +3,102 @@ use std::ops::Range;
 use crate::{
     data_source::{
         kinds::{
-            data_manipulation::map::{MapToString, UnwrapOr},
+            data_manipulation::map::{Map, MapFunction, MapToString, UnwrapOr},
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOne24h, RemoteDatabaseSource, StatementFromRange},
+            remote_db::{PullOne24hCached, RemoteDatabaseSource, StatementFromRange},
         },
         types::BlockscoutMigrations,
     },
     gettable_const,
-    utils::{produce_filter_and_values, sql_with_range_filter_opt},
+    types::TimespanValue,
     ChartProperties, MissingDatePolicy, Named,
 };
+use blockscout_db::entity::{blocks, transactions};
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use migration::{Alias, Func};
+use sea_orm::{DbBackend, FromQueryResult, IntoSimpleExpr, QuerySelect, QueryTrait, Statement};
 
 const ETHER: i64 = i64::pow(10, 18);
 
-/// `AverageTxnFeeStatement` but without `group by`
-pub struct AverageTxnFeeUngroupedStatement;
+pub struct TxnsStatsStatement;
 
-impl StatementFromRange for AverageTxnFeeUngroupedStatement {
+impl StatementFromRange for TxnsStatsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
-        if completed_migrations.denormalization {
-            // TODO: consider supporting such case in macro ?
-            let mut args = vec![ETHER.into()];
-            let (tx_filter, new_args) =
-                produce_filter_and_values(range.clone(), "t.block_timestamp", args.len() + 1);
-            args.extend(new_args);
-            let (block_filter, new_args) =
-                produce_filter_and_values(range.clone(), "b.timestamp", args.len() + 1);
-            args.extend(new_args);
-            let sql = format!(
-                r#"
-                    SELECT
-                        (AVG(
-                            t_filtered.gas_used *
-                            COALESCE(
-                                t_filtered.gas_price,
-                                b.base_fee_per_gas + LEAST(
-                                    t_filtered.max_priority_fee_per_gas,
-                                    t_filtered.max_fee_per_gas - b.base_fee_per_gas
-                                )
-                            )
-                        ) / $1)::FLOAT as value
-                    FROM (
-                        SELECT * from transactions t
-                        WHERE
-                            t.block_consensus = true AND
-                            t.block_timestamp != to_timestamp(0) {tx_filter}
-                    ) as t_filtered
-                    JOIN blocks       b ON t_filtered.block_hash = b.hash
-                    WHERE
-                        b.timestamp != to_timestamp(0) AND
-                        b.consensus = true {block_filter}
-                "#,
-            );
-            Statement::from_sql_and_values(DbBackend::Postgres, sql, args)
-        } else {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
-                    SELECT
-                        (AVG(
-                            t.gas_used *
-                            COALESCE(
-                                t.gas_price,
-                                b.base_fee_per_gas + LEAST(
-                                    t.max_priority_fee_per_gas,
-                                    t.max_fee_per_gas - b.base_fee_per_gas
-                                )
-                            )
-                        ) / $1)::FLOAT as value
-                    FROM transactions t
-                    JOIN blocks       b ON t.block_hash = b.hash
-                    WHERE
-                        b.timestamp != to_timestamp(0) AND
-                        b.consensus = true {filter}
-                "#,
-                [ETHER.into()],
-                "b.timestamp",
-                range
-            )
+        use sea_orm::prelude::*;
+
+        let fee_query = Expr::cust_with_exprs(
+            "COALESCE($1, $2 + LEAST($3, $4))",
+            [
+                transactions::Column::GasPrice.into_simple_expr(),
+                blocks::Column::BaseFeePerGas.into_simple_expr(),
+                transactions::Column::MaxPriorityFeePerGas.into_simple_expr(),
+                transactions::Column::MaxFeePerGas
+                    .into_simple_expr()
+                    .sub(blocks::Column::BaseFeePerGas.into_simple_expr()),
+            ],
+        )
+        .mul(transactions::Column::GasUsed.into_simple_expr());
+
+        let count_query = Func::count(transactions::Column::Hash.into_simple_expr());
+        let sum_query = Expr::expr(Func::sum(fee_query.clone()))
+            .div(ETHER)
+            .cast_as(Alias::new("FLOAT"));
+        let avg_query = Expr::expr(Func::avg(fee_query))
+            .div(ETHER)
+            .cast_as(Alias::new("FLOAT"));
+
+        let base_query = blocks::Entity::find().inner_join(transactions::Entity);
+        let mut query = base_query
+            .select_only()
+            .expr_as(count_query, "count")
+            .expr_as(sum_query, "fee_sum")
+            .expr_as(avg_query, "fee_average")
+            .to_owned();
+
+        if let Some(r) = range {
+            if completed_migrations.denormalization {
+                query = query
+                    .filter(transactions::Column::BlockTimestamp.lt(r.end))
+                    .filter(transactions::Column::BlockTimestamp.gte(r.start))
+            }
+            query = query
+                .filter(blocks::Column::Timestamp.lt(r.end))
+                .filter(blocks::Column::Timestamp.gte(r.start));
         }
+
+        query.build(DbBackend::Postgres)
     }
 }
 
-pub type AverageTxnFee24hRemote =
-    RemoteDatabaseSource<PullOne24h<AverageTxnFeeUngroupedStatement, Option<f64>>>;
+#[derive(Debug, Clone, FromQueryResult)]
+pub struct TxnsStatsValue {
+    pub count: i64,
+    pub fee_average: Option<f64>,
+    pub fee_sum: Option<f64>,
+}
+
+pub type Txns24hStats = RemoteDatabaseSource<PullOne24hCached<TxnsStatsStatement, TxnsStatsValue>>;
+
+pub struct ExtractAverage;
+
+impl MapFunction<TimespanValue<NaiveDate, TxnsStatsValue>> for ExtractAverage {
+    type Output = TimespanValue<NaiveDate, Option<f64>>;
+
+    fn function(
+        inner_data: TimespanValue<NaiveDate, TxnsStatsValue>,
+    ) -> Result<Self::Output, crate::ChartError> {
+        Ok(TimespanValue {
+            timespan: inner_data.timespan,
+            value: inner_data.value.fee_average,
+        })
+    }
+}
+
+pub type AverageTxnFee24hExtracted = Map<Txns24hStats, ExtractAverage>;
 
 pub struct Properties;
 
@@ -115,8 +121,10 @@ impl ChartProperties for Properties {
 
 gettable_const!(Zero: f64 = 0.0);
 
-pub type AverageTxnFee24h =
-    DirectPointLocalDbChartSource<MapToString<UnwrapOr<AverageTxnFee24hRemote, Zero>>, Properties>;
+pub type AverageTxnFee24h = DirectPointLocalDbChartSource<
+    MapToString<UnwrapOr<AverageTxnFee24hExtracted, Zero>>,
+    Properties,
+>;
 
 #[cfg(test)]
 mod tests {

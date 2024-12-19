@@ -23,6 +23,7 @@ mod mock;
 
 pub use average_block_time::AverageBlockTime;
 pub use average_txn_fee_24h::AverageTxnFee24h;
+pub(crate) use average_txn_fee_24h::TxnsStatsValue;
 pub use completed_txns::CompletedTxns;
 pub use last_new_contracts::LastNewContracts;
 pub use last_new_verified_contracts::LastNewVerifiedContracts;

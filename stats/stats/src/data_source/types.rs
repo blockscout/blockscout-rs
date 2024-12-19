@@ -2,11 +2,13 @@ use std::{collections::HashMap, sync::Arc};
 
 use blockscout_db::entity::migrations_status;
 use chrono::Utc;
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement};
+use sea_orm::{
+    DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement, TryGetable,
+};
 use tokio::sync::Mutex;
 use tracing::warn;
 
-use crate::utils::MarkedDbConnection;
+use crate::{counters::TxnsStatsValue, utils::MarkedDbConnection};
 
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
@@ -138,13 +140,11 @@ impl BlockscoutMigrations {
 pub enum CacheValue {
     ValueString(String),
     ValueOptionF64(Option<f64>),
+    ValueTxnsStats(TxnsStatsValue),
 }
 
 pub trait Cacheable {
     fn from_entry(entry: CacheValue) -> Option<Self>
-    where
-        Self: Sized;
-    fn from_entry_ref(entry: &CacheValue) -> Option<&Self>
     where
         Self: Sized;
     fn into_entry(self) -> CacheValue;
@@ -163,16 +163,6 @@ macro_rules! impl_cacheable {
                 }
             }
 
-            fn from_entry_ref(entry: &CacheValue) -> Option<&Self>
-            where
-                Self: Sized,
-            {
-                match entry {
-                    CacheValue::$cache_value_variant(s) => Some(s),
-                    _ => None,
-                }
-            }
-
             fn into_entry(self) -> CacheValue {
                 CacheValue::$cache_value_variant(self)
             }
@@ -182,6 +172,35 @@ macro_rules! impl_cacheable {
 
 impl_cacheable!(String, ValueString);
 impl_cacheable!(Option<f64>, ValueOptionF64);
+impl_cacheable!(TxnsStatsValue, ValueTxnsStats);
+
+#[derive(Debug, Clone, FromQueryResult, PartialEq, Eq, PartialOrd, Ord)]
+pub struct WrappedValue<V: TryGetable> {
+    pub value: V,
+}
+
+macro_rules! impl_cacheable_wrapped {
+    ($type: ty, $cache_value_variant:ident) => {
+        impl Cacheable for $type {
+            fn from_entry(entry: CacheValue) -> Option<Self>
+            where
+                Self: Sized,
+            {
+                match entry {
+                    CacheValue::$cache_value_variant(s) => Some(WrappedValue { value: s }),
+                    _ => None,
+                }
+            }
+
+            fn into_entry(self) -> CacheValue {
+                CacheValue::$cache_value_variant(self.value)
+            }
+        }
+    };
+}
+
+impl_cacheable_wrapped!(WrappedValue<String>, ValueString);
+impl_cacheable_wrapped!(WrappedValue<Option<f64>>, ValueOptionF64);
 
 #[derive(Clone, Debug)]
 pub struct UpdateCache {

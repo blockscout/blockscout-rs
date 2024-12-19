@@ -1,67 +1,32 @@
-use std::ops::Range;
-
 use crate::{
-    data_source::{
-        kinds::{
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{
-                PullOne24h, RemoteDatabaseSource, StatementFromRange,
-            },
-        },
-        types::BlockscoutMigrations,
+    data_source::kinds::{
+        data_manipulation::map::{Map, MapFunction},
+        local_db::DirectPointLocalDbChartSource,
     },
-    utils::sql_with_range_filter_opt, ChartProperties, MissingDatePolicy, Named,
+    types::TimespanValue,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
 
-/// `NewTxnsStatement` but without `group by`
-pub struct NewTxnsUngroupedStatement;
+use super::{average_txn_fee_24h::Txns24hStats, TxnsStatsValue};
 
-impl StatementFromRange for NewTxnsUngroupedStatement {
-    fn get_statement(
-        range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
-    ) -> Statement {
-        // do not filter by `!= to_timestamp(0)` because
-        // 1. it allows to use index `transactions_block_consensus_index`
-        // 2. there is no reason not to count genesis transactions
-        if completed_migrations.denormalization {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
-                    SELECT
-                        COUNT(*)::TEXT as value
-                    FROM transactions t
-                    WHERE
-                        t.block_consensus = true {filter};
-                "#,
-                [],
-                "t.block_timestamp",
-                range
-            )
-        } else {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
-                    SELECT
-                        COUNT(*)::TEXT as value
-                    FROM transactions t
-                    JOIN blocks       b ON t.block_hash = b.hash
-                    WHERE
-                        b.consensus = true {filter};
-                "#,
-                [],
-                "b.timestamp",
-                range
-            )
-        }
+pub struct ExtractCount;
+
+impl MapFunction<TimespanValue<NaiveDate, TxnsStatsValue>> for ExtractCount {
+    type Output = TimespanValue<NaiveDate, String>;
+
+    fn function(
+        inner_data: TimespanValue<NaiveDate, TxnsStatsValue>,
+    ) -> Result<Self::Output, ChartError> {
+        Ok(TimespanValue {
+            timespan: inner_data.timespan,
+            value: inner_data.value.count.to_string(),
+        })
     }
 }
 
-pub type NewTxns24hRemote = RemoteDatabaseSource<PullOne24h<NewTxnsUngroupedStatement, String>>;
-
+pub type NewTxns24hExtracted = Map<Txns24hStats, ExtractCount>;
 pub struct Properties;
 
 impl Named for Properties {
@@ -81,7 +46,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type NewTxns24h = DirectPointLocalDbChartSource<NewTxns24hRemote, Properties>;
+pub type NewTxns24h = DirectPointLocalDbChartSource<NewTxns24hExtracted, Properties>;
 
 #[cfg(test)]
 mod tests {
