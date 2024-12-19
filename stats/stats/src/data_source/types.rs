@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use blockscout_db::entity::migrations_status;
 use chrono::Utc;
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement};
+use tokio::sync::Mutex;
 use tracing::warn;
 
 use crate::utils::MarkedDbConnection;
@@ -24,6 +25,7 @@ pub struct UpdateContext<'a> {
     pub db: &'a MarkedDbConnection,
     pub blockscout: &'a MarkedDbConnection,
     pub blockscout_applied_migrations: BlockscoutMigrations,
+    pub cache: UpdateCache,
     /// Update time
     pub time: chrono::DateTime<Utc>,
     pub force_full: bool,
@@ -35,6 +37,7 @@ impl<'a> UpdateContext<'a> {
             db: value.db,
             blockscout: value.blockscout,
             blockscout_applied_migrations: value.blockscout_applied_migrations,
+            cache: UpdateCache::new(),
             time: value.update_time_override.unwrap_or_else(Utc::now),
             force_full: value.force_full,
         }
@@ -131,6 +134,7 @@ impl BlockscoutMigrations {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum CacheValue {
     ValueString(String),
     ValueOptionF64(Option<f64>),
@@ -179,39 +183,38 @@ macro_rules! impl_cacheable {
 impl_cacheable!(String, ValueString);
 impl_cacheable!(Option<f64>, ValueOptionF64);
 
+#[derive(Clone, Debug)]
 pub struct UpdateCache {
-    inner: HashMap<String, CacheValue>,
+    inner: Arc<Mutex<HashMap<String, CacheValue>>>,
 }
 
 impl UpdateCache {
     pub fn new() -> Self {
         Self {
-            inner: HashMap::new(),
+            inner: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-}
-
-pub trait StorageFor<V> {
-    fn insert(&mut self, query: &Statement, value: V) -> Option<V>;
-
-    fn get(&mut self, query: &Statement) -> Option<&V>;
 }
 
 impl UpdateCache {
     /// If the cache did not have value for this query present, None is returned.
     ///
     /// If the cache did have this query present, the value is updated, and the old value is returned.
-    fn insert<V: Cacheable>(&mut self, query: &Statement, value: V) -> Option<V> {
+    async fn insert<V: Cacheable>(&mut self, query: &Statement, value: V) -> Option<V> {
         self.inner
+            .lock()
+            .await
             .insert(query.to_string(), value.into_entry())
             .and_then(|e| V::from_entry(e))
     }
 
-    /// Returns reference to a value for this query, if present
-    fn get<V: Cacheable>(&mut self, query: &Statement) -> Option<&V> {
+    /// Returns a value for this query, if present
+    async fn get<V: Cacheable>(&mut self, query: &Statement) -> Option<V> {
         self.inner
+            .lock()
+            .await
             .get(&query.to_string())
-            .and_then(|e| V::from_entry_ref(e))
+            .and_then(|e| V::from_entry(e.clone()))
     }
 }
 
@@ -250,8 +253,8 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn cache_works() {
+    #[tokio::test]
+    async fn cache_works() {
         let mut cache = UpdateCache::new();
         let stmt_a = Statement::from_string(DbBackend::Sqlite, "abcde");
         let stmt_b = Statement::from_string(DbBackend::Sqlite, "edcba");
@@ -259,22 +262,22 @@ mod tests {
         let val_1 = Some(1.2);
         let val_2 = "kekekek".to_string();
 
-        cache.insert::<Option<f64>>(&stmt_a, val_1);
-        assert_eq!(cache.get::<Option<f64>>(&stmt_a), Some(&val_1));
-        assert_eq!(cache.get::<String>(&stmt_a), None);
+        cache.insert::<Option<f64>>(&stmt_a, val_1).await;
+        assert_eq!(cache.get::<Option<f64>>(&stmt_a).await, Some(val_1));
+        assert_eq!(cache.get::<String>(&stmt_a).await, None);
 
-        cache.insert::<Option<f64>>(&stmt_a, None);
-        assert_eq!(cache.get::<Option<f64>>(&stmt_a), Some(&None));
-        assert_eq!(cache.get::<String>(&stmt_a), None);
+        cache.insert::<Option<f64>>(&stmt_a, None).await;
+        assert_eq!(cache.get::<Option<f64>>(&stmt_a).await, Some(None));
+        assert_eq!(cache.get::<String>(&stmt_a).await, None);
 
-        cache.insert::<String>(&stmt_a, val_2.clone());
-        assert_eq!(cache.get::<Option<f64>>(&stmt_a), None);
-        assert_eq!(cache.get::<String>(&stmt_a), Some(&val_2));
+        cache.insert::<String>(&stmt_a, val_2.clone()).await;
+        assert_eq!(cache.get::<Option<f64>>(&stmt_a).await, None);
+        assert_eq!(cache.get::<String>(&stmt_a).await, Some(val_2.clone()));
 
-        cache.insert::<Option<f64>>(&stmt_b, val_1);
-        assert_eq!(cache.get::<Option<f64>>(&stmt_b), Some(&val_1));
-        assert_eq!(cache.get::<String>(&stmt_b), None);
-        assert_eq!(cache.get::<Option<f64>>(&stmt_a), None);
-        assert_eq!(cache.get::<String>(&stmt_a), Some(&val_2));
+        cache.insert::<Option<f64>>(&stmt_b, val_1).await;
+        assert_eq!(cache.get::<Option<f64>>(&stmt_b).await, Some(val_1));
+        assert_eq!(cache.get::<String>(&stmt_b).await, None);
+        assert_eq!(cache.get::<Option<f64>>(&stmt_a).await, None);
+        assert_eq!(cache.get::<String>(&stmt_a).await, Some(val_2));
     }
 }
