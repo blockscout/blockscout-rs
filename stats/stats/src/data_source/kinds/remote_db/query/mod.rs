@@ -4,4 +4,4 @@ mod one;
 
 pub use all::{PullAllWithAndSort, StatementFromRange};
 pub use each::{PullEachWith, StatementFromTimespan};
-pub use one::{PullOne, PullOne24h, PullOne24hCached, StatementForOne};
+pub use one::{PullOne, PullOne24hCached, StatementForOne};
