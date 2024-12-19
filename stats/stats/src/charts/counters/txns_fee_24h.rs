@@ -1,9 +1,8 @@
-
 use crate::{
     data_source::kinds::{
-            data_manipulation::map::{Map, MapFunction, MapToString, UnwrapOr},
-            local_db::DirectPointLocalDbChartSource,
-        },
+        data_manipulation::map::{Map, MapFunction, MapToString, UnwrapOr},
+        local_db::DirectPointLocalDbChartSource,
+    },
     gettable_const,
     types::TimespanValue,
     ChartError, ChartProperties, MissingDatePolicy, Named,
