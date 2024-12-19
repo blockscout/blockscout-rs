@@ -137,7 +137,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{ops::Range, sync::Arc};
+    use std::ops::Range;
 
     use crate::{
         data_source::{
@@ -148,7 +148,6 @@ mod tests {
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
         tests::point_construction::{d, d_v_double, d_v_int, dt, w_v_double, week_of},
         types::timespans::{DateValue, Week, WeekValue},
-        utils::MarkedDbConnection,
         MissingDatePolicy,
     };
 
@@ -203,9 +202,7 @@ mod tests {
         // 8-14, 15-21, 22-28
 
         // db is not used in mock
-        let db = MarkedDbConnection::in_memory(Arc::new(
-            sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
-        ));
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
         let output: Vec<WeekValue<f64>> = TestedAverageSource::query_data(
             &UpdateContext::from_params_now_or_override(UpdateParameters {
                 db: &db,
@@ -253,9 +250,7 @@ mod tests {
             AverageLowerResolution<PredefinedDailyAverage, PredefinedWeights, Week>;
 
         // db is not used in mock
-        let empty_db = MarkedDbConnection::in_memory(Arc::new(
-            sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
-        ));
+        let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
         let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &empty_db,
@@ -305,9 +300,7 @@ mod tests {
             AverageLowerResolution<PredefinedDailyAverage, PredefinedWeights, Week>;
 
         // db is not used in mock
-        let empty_db = MarkedDbConnection::in_memory(Arc::new(
-            sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
-        ));
+        let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
         let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &empty_db,
@@ -353,9 +346,7 @@ mod tests {
             AverageLowerResolution<PredefinedDailyAverage, PredefinedWeights, Week>;
 
         // db is not used in mock
-        let empty_db = MarkedDbConnection::in_memory(Arc::new(
-            sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
-        ));
+        let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
         let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &empty_db,

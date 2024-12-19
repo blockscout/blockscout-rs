@@ -8,12 +8,12 @@ use sea_orm::{
 use tokio::sync::Mutex;
 use tracing::warn;
 
-use crate::{counters::TxnsStatsValue, utils::MarkedDbConnection};
+use crate::counters::TxnsStatsValue;
 
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
-    pub db: &'a MarkedDbConnection,
-    pub blockscout: &'a MarkedDbConnection,
+    pub db: &'a DatabaseConnection,
+    pub blockscout: &'a DatabaseConnection,
     pub blockscout_applied_migrations: BlockscoutMigrations,
     /// If `None`, it will be measured at the start of update
     /// (i.e. after taking mutexes)
@@ -24,8 +24,8 @@ pub struct UpdateParameters<'a> {
 
 #[derive(Clone)]
 pub struct UpdateContext<'a> {
-    pub db: &'a MarkedDbConnection,
-    pub blockscout: &'a MarkedDbConnection,
+    pub db: &'a DatabaseConnection,
+    pub blockscout: &'a DatabaseConnection,
     pub blockscout_applied_migrations: BlockscoutMigrations,
     pub cache: UpdateCache,
     /// Update time

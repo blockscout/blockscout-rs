@@ -657,7 +657,7 @@ impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, ChartError> {
-        let start_timestamp = get_min_date_blockscout(cx.blockscout.connection.as_ref())
+        let start_timestamp = get_min_date_blockscout(cx.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?
             .and_utc();
@@ -683,7 +683,6 @@ mod tests {
             simple_test::get_counter,
         },
         types::timespans::Month,
-        utils::MarkedDbConnection,
         Named,
     };
     use chrono::DateTime;
@@ -829,8 +828,8 @@ mod tests {
     async fn get_counter_mock() {
         let _ = tracing_subscriber::fmt::try_init();
 
-        let db = MarkedDbConnection::from_test_db(&init_db("get_counter_mock").await).unwrap();
-        insert_mock_data(&db.connection).await;
+        let db = init_db("get_counter_mock").await;
+        insert_mock_data(&db).await;
         let current_time = dt("2022-11-12T08:08:08").and_utc();
         let date = current_time.date_naive();
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {

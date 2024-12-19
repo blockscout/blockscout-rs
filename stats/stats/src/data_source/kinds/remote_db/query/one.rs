@@ -47,7 +47,7 @@ where
     ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
         let query = S::get_statement(&cx.blockscout_applied_migrations);
         let data = TimespanValue::<Resolution, Value>::find_by_statement(query)
-            .one(cx.blockscout.connection.as_ref())
+            .one(cx.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
@@ -87,7 +87,7 @@ where
         } else {
             let find_by_statement = Value::find_by_statement(query.clone());
             let value = find_by_statement
-                .one(cx.blockscout.connection.as_ref())
+                .one(cx.blockscout)
                 .await
                 .map_err(ChartError::BlockscoutDB)?
                 .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
@@ -104,7 +104,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, ops::Range, sync::Arc};
+    use std::{collections::BTreeMap, ops::Range};
 
     use chrono::{DateTime, Utc};
     use pretty_assertions::assert_eq;
@@ -119,7 +119,6 @@ mod test {
         range::UniversalRange,
         tests::point_construction::dt,
         types::TimespanValue,
-        utils::MarkedDbConnection,
     };
 
     use super::PullOne24hCached;
@@ -141,7 +140,7 @@ mod test {
         let expected = WrappedValue {
             value: "value1".to_string(),
         };
-        let mock_db = MockDatabase::new(DatabaseBackend::Postgres)
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
             .append_query_results([
                 // First query result
                 vec![BTreeMap::from([(
@@ -152,8 +151,6 @@ mod test {
                 vec![BTreeMap::from([("value", sea_orm::Value::from("value2"))])],
             ])
             .into_connection();
-        let db = MarkedDbConnection::main_connection(Arc::new(mock_db));
-
         let time = dt("2023-01-01T00:00:00").and_utc();
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,

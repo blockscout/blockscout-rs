@@ -100,7 +100,7 @@ mod tests {
         data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
         range::UniversalRange,
         tests::{
-            init_db::init_marked_db_all,
+            init_db::init_db_all,
             mock_blockscout::fill_mock_blockscout_data,
             simple_test::{map_str_tuple_to_owned, simple_test_chart},
         },
@@ -137,13 +137,13 @@ mod tests {
             ("2023-02-01", "1"),
             ("2023-03-01", "1"),
         ]);
-        let (db, blockscout) = init_marked_db_all("update_new_block_rewards_monthly_int").await;
+        let (db, blockscout) = init_db_all("update_new_block_rewards_monthly_int").await;
         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        NewBlockRewardsMonthlyInt::init_recursively(&db.connection, &current_time)
+        NewBlockRewardsMonthlyInt::init_recursively(&db, &current_time)
             .await
             .unwrap();
-        fill_mock_blockscout_data(&blockscout.connection, current_date).await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let parameters = UpdateParameters {
             db: &db,

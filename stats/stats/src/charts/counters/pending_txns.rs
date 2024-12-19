@@ -53,7 +53,7 @@ impl RemoteQueryBehaviour for PendingTxnsQuery {
                 .unwrap_or(DateTime::<Utc>::MIN_UTC),
         );
         let data = Value::find_by_statement(query)
-            .one(cx.blockscout.connection.as_ref())
+            .one(cx.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;

@@ -80,8 +80,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use crate::{
         data_source::{types::BlockscoutMigrations, UpdateParameters},
         gettable_const,
@@ -89,7 +87,6 @@ mod tests {
         range::UniversalRange,
         tests::point_construction::{d_v_double, dt},
         types::timespans::DateValue,
-        utils::MarkedDbConnection,
         MissingDatePolicy, Named,
     };
 
@@ -156,9 +153,7 @@ mod tests {
         type TestedPrevious = FilterDeducible<PredefinedSourcePrevious, PropertiesPrevious>;
 
         // db is not used in mock
-        let empty_db = MarkedDbConnection::in_memory(Arc::new(
-            sea_orm::Database::connect("sqlite::memory:").await.unwrap(),
-        ));
+        let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
         let context = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &empty_db,

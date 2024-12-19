@@ -10,7 +10,6 @@ use crate::{
     },
     range::UniversalRange,
     types::timespans::DateValue,
-    utils::MarkedDbConnection,
     ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
@@ -40,7 +39,7 @@ impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
             .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
             .filter(blocks::Column::Consensus.eq(true))
             .into_model::<TotalBlocksData>()
-            .one(cx.blockscout.connection.as_ref())
+            .one(cx.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
@@ -77,19 +76,18 @@ impl ChartProperties for Properties {
 pub struct TotalBlocksEstimation;
 
 impl ValueEstimation for TotalBlocksEstimation {
-    async fn estimate(blockscout: &MarkedDbConnection) -> Result<DateValue<String>, ChartError> {
+    async fn estimate(blockscout: &DatabaseConnection) -> Result<DateValue<String>, ChartError> {
         // `now()` is more relevant when taken right before the query rather than
         // `cx.time` measured a bit earlier.
         let now = Utc::now();
-        let value =
-            query_estimated_table_rows(blockscout.connection.as_ref(), blocks::Entity.table_name())
-                .await
-                .map_err(ChartError::BlockscoutDB)?
-                .map(|b| {
-                    let b = b as f64 * 0.9;
-                    b as i64
-                })
-                .unwrap_or(0);
+        let value = query_estimated_table_rows(blockscout, blocks::Entity.table_name())
+            .await
+            .map_err(ChartError::BlockscoutDB)?
+            .map(|b| {
+                let b = b as f64 * 0.9;
+                b as i64
+            })
+            .unwrap_or(0);
         Ok(DateValue {
             timespan: now.date_naive(),
             value: value.to_string(),
@@ -107,7 +105,7 @@ mod tests {
     use crate::{
         data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
         tests::{
-            init_db::init_marked_db_all,
+            init_db::init_db_all,
             mock_blockscout::fill_mock_blockscout_data,
             simple_test::{get_counter, test_counter_fallback},
         },
@@ -122,11 +120,11 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_marked_db_all("update_total_blocks_recurrent").await;
+        let (db, blockscout) = init_db_all("update_total_blocks_recurrent").await;
         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
 
-        TotalBlocks::init_recursively(&db.connection, &current_time)
+        TotalBlocks::init_recursively(&db, &current_time)
             .await
             .unwrap();
 
@@ -136,11 +134,11 @@ mod tests {
             value: Set(1.to_string()),
             ..Default::default()
         })
-        .exec(&db.connection as &DatabaseConnection)
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
 
-        fill_mock_blockscout_data(&blockscout.connection, current_date).await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let parameters = UpdateParameters {
             db: &db,
@@ -159,15 +157,15 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_marked_db_all("update_total_blocks_fresh").await;
+        let (db, blockscout) = init_db_all("update_total_blocks_fresh").await;
         let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
 
-        TotalBlocks::init_recursively(&db.connection, &current_time)
+        TotalBlocks::init_recursively(&db, &current_time)
             .await
             .unwrap();
 
-        fill_mock_blockscout_data(&blockscout.connection, current_date).await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let parameters = UpdateParameters {
             db: &db,
@@ -186,11 +184,11 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_marked_db_all("update_total_blocks_last").await;
+        let (db, blockscout) = init_db_all("update_total_blocks_last").await;
         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
 
-        TotalBlocks::init_recursively(&db.connection, &current_time)
+        TotalBlocks::init_recursively(&db, &current_time)
             .await
             .unwrap();
 
@@ -200,11 +198,11 @@ mod tests {
             value: Set(1.to_string()),
             ..Default::default()
         })
-        .exec(&db.connection as &DatabaseConnection)
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
 
-        fill_mock_blockscout_data(&blockscout.connection, current_date).await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let parameters = UpdateParameters {
             db: &db,
