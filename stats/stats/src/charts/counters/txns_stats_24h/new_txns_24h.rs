@@ -9,7 +9,7 @@ use crate::{
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
-use super::{average_txn_fee_24h::Txns24hStats, TxnsStatsValue};
+use super::{Txns24hStats, TxnsStatsValue};
 
 pub struct ExtractCount;
 
