@@ -202,6 +202,11 @@ macro_rules! impl_cacheable_wrapped {
 impl_cacheable_wrapped!(WrappedValue<String>, ValueString);
 impl_cacheable_wrapped!(WrappedValue<Option<f64>>, ValueOptionF64);
 
+/// There is no cache invalidation logic, because the cache is
+/// expected to be constructed from scratch on each group update
+/// and dropped after the update.
+///
+/// Also see a [`crate::construct_update_group!`] implementation
 #[derive(Clone, Debug, Default)]
 pub struct UpdateCache {
     inner: Arc<Mutex<HashMap<String, CacheValue>>>,
