@@ -3,6 +3,7 @@
         "active_accounts_group": "0 0 4 * * * *",
         "average_block_time_group": "0 */10 * * * * *",
         "completed_txns_group": "0 5 */3 * * * *",
+        "pending_txns_group": "0 */5 * * * * *",
         "total_addresses_group": "0 0,30 * * * * *",
         "total_blocks_group": "0 0 */2 * * * *",
         "total_tokens_group": "0 0 18 * * * *",
@@ -37,6 +38,7 @@
         "new_txns_group": "0 10 */3 * * * *",
         "new_verified_contracts_group": "0 30 */3 * * * *",
         "native_coin_holders_growth_group": "0 0 7,17,22 * * * *",
-        "new_native_coin_transfers_group": "0 0 3,13 * * * *"
+        "new_native_coin_transfers_group": "0 0 3,13 * * * *",
+        "txns_stats_24h_group": "0 30 * * * * *"
     }
 }

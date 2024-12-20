@@ -257,6 +257,7 @@ impl RuntimeSetup {
             Arc::new(ActiveAccountsGroup),
             Arc::new(AverageBlockTimeGroup),
             Arc::new(CompletedTxnsGroup),
+            Arc::new(PendingTxnsGroup),
             Arc::new(TotalAddressesGroup),
             Arc::new(TotalBlocksGroup),
             Arc::new(TotalTokensGroup),
@@ -294,6 +295,7 @@ impl RuntimeSetup {
             Arc::new(NewVerifiedContractsGroup),
             Arc::new(NativeCoinHoldersGrowthGroup),
             Arc::new(NewNativeCoinTransfersGroup),
+            Arc::new(TxnsStats24hGroup),
         ]
     }
 

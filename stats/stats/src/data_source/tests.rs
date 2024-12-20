@@ -34,7 +34,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
-    tests::{init_db::init_marked_db_all, mock_blockscout::fill_mock_blockscout_data},
+    tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
@@ -270,10 +270,10 @@ construct_update_group!(ExampleUpdateGroup {
 #[ignore = "needs database to run"]
 async fn update_examples() {
     let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_marked_db_all("update_examples").await;
+    let (db, blockscout) = init_db_all("update_examples").await;
     let current_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
-    fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
+    fill_mock_blockscout_data(&blockscout, current_date).await;
     let enabled = HashSet::from(
         [
             NewContractsChartProperties::key(),
@@ -293,7 +293,7 @@ async fn update_examples() {
         .collect();
     let group = SyncUpdateGroup::new(&mutexes, Arc::new(ExampleUpdateGroup)).unwrap();
     group
-        .create_charts_with_mutexes(db.connection.as_ref(), None, &enabled)
+        .create_charts_with_mutexes(&db, None, &enabled)
         .await
         .unwrap();
 

@@ -20,6 +20,7 @@ singleton_groups!(
     ActiveAccounts,
     AverageBlockTime,
     CompletedTxns,
+    PendingTxns,
     TotalAddresses,
     TotalBlocks,
     TotalTxns,
@@ -139,6 +140,10 @@ construct_update_group!(TxnsSuccessRateGroup {
         TxnsSuccessRateMonthly,
         TxnsSuccessRateYearly,
     ]
+});
+
+construct_update_group!(TxnsStats24hGroup {
+    charts: [AverageTxnFee24h, NewTxns24h, TxnsFee24h,]
 });
 
 construct_update_group!(NewAccountsGroup {

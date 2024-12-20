@@ -118,18 +118,16 @@ pub async fn update_sequentially_with_support_table(
 ) -> Result<(), ChartError> {
     tracing::info!(chart =% Properties::key(), "start sequential update");
     let all_days = match last_accurate_point {
-        Some(last_row) => get_unique_ordered_days(
-            cx.blockscout.connection.as_ref(),
-            Some(last_row.timespan),
-            remote_fetch_timer,
-        )
-        .await
-        .map_err(ChartError::BlockscoutDB)?,
+        Some(last_row) => {
+            get_unique_ordered_days(cx.blockscout, Some(last_row.timespan), remote_fetch_timer)
+                .await
+                .map_err(ChartError::BlockscoutDB)?
+        }
         None => {
-            clear_support_table(cx.db.connection.as_ref())
+            clear_support_table(cx.db)
                 .await
                 .map_err(ChartError::BlockscoutDB)?;
-            get_unique_ordered_days(cx.blockscout.connection.as_ref(), None, remote_fetch_timer)
+            get_unique_ordered_days(cx.blockscout, None, remote_fetch_timer)
                 .await
                 .map_err(ChartError::BlockscoutDB)?
         }
@@ -146,22 +144,14 @@ pub async fn update_sequentially_with_support_table(
         );
         // NOTE: we update support table and chart data in one transaction
         // to support invariant that support table has information about last day in chart data
-        let db_tx = cx
-            .db
-            .connection
-            .begin()
-            .await
-            .map_err(ChartError::StatsDB)?;
-        let data: Vec<entity::chart_data::ActiveModel> = calculate_days_using_support_table(
-            &db_tx,
-            cx.blockscout.connection.as_ref(),
-            days.iter().copied(),
-        )
-        .await
-        .map_err(|e| ChartError::Internal(e.to_string()))?
-        .into_iter()
-        .map(|result| result.active_model(chart_id, Some(min_blockscout_block)))
-        .collect();
+        let db_tx = cx.db.begin().await.map_err(ChartError::StatsDB)?;
+        let data: Vec<entity::chart_data::ActiveModel> =
+            calculate_days_using_support_table(&db_tx, cx.blockscout, days.iter().copied())
+                .await
+                .map_err(|e| ChartError::Internal(e.to_string()))?
+                .into_iter()
+                .map(|result| result.active_model(chart_id, Some(min_blockscout_block)))
+                .collect();
         insert_data_many(&db_tx, data)
             .await
             .map_err(ChartError::StatsDB)?;
