@@ -18,7 +18,11 @@ fn compile(
         .bytes(["."])
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
-        .field_attribute(".blockscout.multichainAggregator.v1.Address.token_type", "#[serde(default)]");
+        .field_attribute(".blockscout.multichainAggregator.v1.Address.token_type", "#[serde(default)]")
+        .field_attribute(".blockscout.multichainAggregator.v1.Address.TokenType.TOKEN_TYPE_ERC_20", "#[serde(rename = \"ERC-20\")]")
+        .field_attribute(".blockscout.multichainAggregator.v1.Address.TokenType.TOKEN_TYPE_ERC_721", "#[serde(rename = \"ERC-721\")]")
+        .field_attribute(".blockscout.multichainAggregator.v1.Address.TokenType.TOKEN_TYPE_ERC_1155", "#[serde(rename = \"ERC-1155\")]")
+        .field_attribute(".blockscout.multichainAggregator.v1.Address.TokenType.TOKEN_TYPE_ERC_404", "#[serde(rename = \"ERC-404\")]");
     config.compile_protos(protos, includes)?;
     Ok(())
 }
