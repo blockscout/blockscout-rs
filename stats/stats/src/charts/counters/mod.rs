@@ -2,6 +2,7 @@ mod average_block_time;
 mod completed_txns;
 mod last_new_contracts;
 mod last_new_verified_contracts;
+mod new_contracts_24h;
 mod pending_txns;
 mod total_accounts;
 mod total_addresses;

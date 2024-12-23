@@ -467,6 +467,16 @@ fn mock_transaction(
     let value = (tx_type.needs_value())
         .then_some(1_000_000_000_000)
         .unwrap_or_default();
+    let created_contract_code_indexed_at = match &tx_type {
+        TxType::ContractCreation(_) => Some(
+            block
+                .timestamp
+                .as_ref()
+                .checked_add_signed(TimeDelta::minutes(10))
+                .unwrap(),
+        ),
+        _ => None,
+    };
     let created_contract_address_hash = match tx_type {
         TxType::ContractCreation(contract_address) => Some(contract_address),
         _ => None,
@@ -495,6 +505,7 @@ fn mock_transaction(
         index: Set(Some(index)),
         status: Set(Some(1)),
         created_contract_address_hash: Set(created_contract_address_hash),
+        created_contract_code_indexed_at: Set(created_contract_code_indexed_at),
         ..Default::default()
     }
 }

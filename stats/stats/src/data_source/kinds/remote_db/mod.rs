@@ -34,8 +34,8 @@ use crate::{
 };
 
 pub use query::{
-    PullAllWithAndSort, PullEachWith, PullOne, PullOne24hCached, StatementForOne,
-    StatementFromRange, StatementFromTimespan,
+    PullAllWithAndSort, PullEachWith, PullOne, PullOne24hCached, PullOneValue, StatementForOne,
+    StatementFromRange, StatementFromTimespan, StatementFromUpdateTime,
 };
 
 /// See [module-level documentation](self)
