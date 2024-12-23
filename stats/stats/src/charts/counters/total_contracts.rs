@@ -28,6 +28,7 @@ impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
         let value = addresses::Entity::find()
             .select_only()
             .filter(addresses::Column::ContractCode.is_not_null())
+            // seems to not introduce a significant performance penalty
             .filter(addresses::Column::InsertedAt.lte(cx.time))
             .count(cx.blockscout)
             .await
