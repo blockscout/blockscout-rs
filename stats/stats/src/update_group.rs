@@ -532,22 +532,21 @@ mod tests {
     use tokio::sync::Mutex;
 
     use crate::{
-        counters::TotalVerifiedContracts,
         data_source::DataSource,
-        lines::{NewVerifiedContracts, VerifiedContractsGrowth},
+        lines::{ContractsGrowth, NewContracts},
         update_group::InitializationError,
     };
 
     use super::SyncUpdateGroup;
 
     construct_update_group!(GroupWithoutDependencies {
-        charts: [TotalVerifiedContracts],
+        charts: [ContractsGrowth],
     });
 
     #[test]
     fn new_checks_mutexes() {
         let mutexes: BTreeMap<String, Arc<Mutex<()>>> = [(
-            TotalVerifiedContracts::mutex_id().unwrap(),
+            ContractsGrowth::mutex_id().unwrap(),
             Arc::new(Mutex::new(())),
         )]
         .into();
@@ -566,10 +565,7 @@ mod tests {
                 .map_err(sorted_init_error)
                 .unwrap_err(),
             sorted_init_error(InitializationError {
-                missing_mutexes: vec![
-                    VerifiedContractsGrowth::mutex_id().unwrap(),
-                    NewVerifiedContracts::mutex_id().unwrap()
-                ]
+                missing_mutexes: vec![NewContracts::mutex_id().unwrap(),]
             })
         );
     }

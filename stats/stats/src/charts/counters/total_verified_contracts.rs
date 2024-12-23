@@ -1,14 +1,40 @@
 use crate::{
-    data_source::kinds::{
-        data_manipulation::{last_point::LastPoint, map::StripExt},
-        local_db::DirectPointLocalDbChartSource,
+    data_source::{
+        kinds::{
+            data_manipulation::map::MapToString,
+            local_db::DirectPointLocalDbChartSource,
+            remote_db::{PullOneValue, RemoteDatabaseSource, StatementFromUpdateTime},
+        },
+        types::BlockscoutMigrations,
     },
-    lines::VerifiedContractsGrowth,
     ChartProperties, MissingDatePolicy, Named,
 };
 
-use chrono::NaiveDate;
+use blockscout_db::entity::smart_contracts;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{
+    sea_query::{Asterisk, Func, IntoColumnRef},
+    ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, QueryTrait, Statement,
+};
+
+pub struct TotalVerifiedContractsStatement;
+
+impl StatementFromUpdateTime for TotalVerifiedContractsStatement {
+    fn get_statement(
+        update_time: DateTime<Utc>,
+        _completed_migrations: &BlockscoutMigrations,
+    ) -> Statement {
+        smart_contracts::Entity::find()
+            .select_only()
+            .filter(smart_contracts::Column::InsertedAt.lte(update_time))
+            .expr_as(Func::count(Asterisk.into_column_ref()), "value")
+            .build(DbBackend::Postgres)
+    }
+}
+
+pub type TotalVerifiedContractsRemote =
+    RemoteDatabaseSource<PullOneValue<TotalVerifiedContractsStatement, NaiveDate, i64>>;
 
 pub struct Properties;
 
@@ -30,7 +56,7 @@ impl ChartProperties for Properties {
 }
 
 pub type TotalVerifiedContracts =
-    DirectPointLocalDbChartSource<LastPoint<StripExt<VerifiedContractsGrowth>>, Properties>;
+    DirectPointLocalDbChartSource<MapToString<TotalVerifiedContractsRemote>, Properties>;
 
 #[cfg(test)]
 mod tests {
