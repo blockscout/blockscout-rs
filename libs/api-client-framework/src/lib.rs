@@ -3,7 +3,7 @@
 mod async_client;
 mod endpoint;
 
-pub use async_client::HttpApiClient;
+pub use async_client::{HttpApiClient, HttpApiClientConfig};
 pub use endpoint::{serialize_query, Endpoint};
 
 /******************** Config definition ********************/
