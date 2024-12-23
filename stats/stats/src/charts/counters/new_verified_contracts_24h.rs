@@ -11,24 +11,23 @@ use crate::{
     ChartProperties, MissingDatePolicy, Named,
 };
 
-use blockscout_db::entity::transactions;
+use blockscout_db::entity::smart_contracts;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use migration::{Asterisk, Func, IntoColumnRef};
 use sea_orm::{prelude::*, DbBackend, IntoSimpleExpr, QuerySelect, QueryTrait};
 
-pub struct NewContracts24hStatement;
+pub struct NewVerifiedContracts24hStatement;
 
-impl StatementFromUpdateTime for NewContracts24hStatement {
+impl StatementFromUpdateTime for NewVerifiedContracts24hStatement {
     fn get_statement(
         update_time: DateTime<Utc>,
         _completed_migrations: &BlockscoutMigrations,
     ) -> sea_orm::Statement {
-        transactions::Entity::find()
+        smart_contracts::Entity::find()
             .select_only()
-            .filter(transactions::Column::Status.eq(1))
             .filter(interval_24h_filter(
-                transactions::Column::CreatedContractCodeIndexedAt.into_simple_expr(),
+                smart_contracts::Column::InsertedAt.into_simple_expr(),
                 update_time,
             ))
             .expr_as(Func::count(Asterisk.into_column_ref()), "value")
@@ -36,14 +35,14 @@ impl StatementFromUpdateTime for NewContracts24hStatement {
     }
 }
 
-pub type NewContracts24hRemote =
-    RemoteDatabaseSource<PullOneValue<NewContracts24hStatement, NaiveDate, i64>>;
+pub type NewVerifiedContracts24hRemote =
+    RemoteDatabaseSource<PullOneValue<NewVerifiedContracts24hStatement, NaiveDate, i64>>;
 
 pub struct Properties;
 
 impl Named for Properties {
     fn name() -> String {
-        "newContracts24h".into()
+        "newVerifiedContracts24h".into()
     }
 }
 
@@ -58,10 +57,8 @@ impl ChartProperties for Properties {
     }
 }
 
-/// Does not include contracts from internal txns
-/// (for performance reasons)
-pub type NewContracts24h =
-    DirectPointLocalDbChartSource<MapToString<NewContracts24hRemote>, Properties>;
+pub type NewVerifiedContracts24h =
+    DirectPointLocalDbChartSource<MapToString<NewVerifiedContracts24hRemote>, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -70,11 +67,11 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_new_contracts_24h() {
-        simple_test_counter::<NewContracts24h>(
-            "update_new_contracts_24h",
-            "8",
-            Some(dt("2022-11-11T16:30:00")),
+    async fn update_new_verified_contracts_24h() {
+        simple_test_counter::<NewVerifiedContracts24h>(
+            "update_new_verified_contracts_24h",
+            "1",
+            Some(dt("2022-11-16T6:30:00")),
         )
         .await;
     }

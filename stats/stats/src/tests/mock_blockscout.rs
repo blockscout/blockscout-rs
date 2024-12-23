@@ -141,7 +141,8 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         "2022-11-14T12:00:00",
         "2022-11-15T15:00:00",
         "2022-11-16T23:59:59",
-        "2022-11-17T00:00:00",
+        // not used
+        // "2022-11-17T00:00:00",
     ]
     .into_iter()
     .map(|val| NaiveDateTime::from_str(val).unwrap());
