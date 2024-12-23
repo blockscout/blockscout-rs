@@ -15,4 +15,5 @@ members = [
     "solidity-metadata",
     "sourcify",
     "verification-common",
+    "api-client-framework",
 ]
