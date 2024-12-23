@@ -12,6 +12,7 @@ use crate::{
 use sea_orm::DatabaseConnection;
 use std::collections::BTreeMap;
 use tokio::join;
+use tracing::instrument;
 
 macro_rules! populate_search_results {
     ($target:expr, $explorers:expr, $from:expr, $field:ident) => {
@@ -28,6 +29,7 @@ macro_rules! populate_search_results {
     };
 }
 
+#[instrument(skip(db, dapp_client, chains), level = "info")]
 pub async fn quick_search(
     db: &DatabaseConnection,
     dapp_client: &DappClient,
