@@ -14,7 +14,7 @@ use crate::{
 use blockscout_db::entity::addresses;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
+use sea_orm::{prelude::*, QuerySelect};
 
 pub struct TotalContractsQueryBehaviour;
 
@@ -26,6 +26,7 @@ impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, ChartError> {
         let value = addresses::Entity::find()
+            .select_only()
             .filter(addresses::Column::ContractCode.is_not_null())
             .filter(addresses::Column::InsertedAt.lte(cx.time))
             .count(cx.blockscout)
