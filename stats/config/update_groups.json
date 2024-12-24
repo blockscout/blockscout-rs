@@ -39,6 +39,7 @@
         "new_verified_contracts_group": "0 30 */3 * * * *",
         "native_coin_holders_growth_group": "0 0 7,17,22 * * * *",
         "new_native_coin_transfers_group": "0 0 3,13 * * * *",
-        "txns_stats_24h_group": "0 30 * * * * *"
+        "txns_stats_24h_group": "0 30 * * * * *",
+        "verified_contracts_page_group": "0 15,45 * * * * *"
     }
 }

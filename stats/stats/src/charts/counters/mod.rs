@@ -25,6 +25,8 @@ pub use average_block_time::AverageBlockTime;
 pub use completed_txns::CompletedTxns;
 pub use last_new_contracts::LastNewContracts;
 pub use last_new_verified_contracts::LastNewVerifiedContracts;
+pub use new_contracts_24h::NewContracts24h;
+pub use new_verified_contracts_24h::NewVerifiedContracts24h;
 pub use pending_txns::PendingTxns;
 pub use total_accounts::TotalAccounts;
 pub use total_addresses::TotalAddresses;
