@@ -7,10 +7,7 @@ pub fn interval_24h_filter(
 ) -> SimpleExpr {
     Expr::cust_with_exprs(
         "$1 - $2 at time zone 'UTC' <= interval '24 hours'",
-        [
-            Expr::value(filter_24h_until.clone()),
-            timestamp_expr.clone(),
-        ],
+        [Expr::value(filter_24h_until), timestamp_expr.clone()],
     )
     .and(Expr::cust_with_exprs(
         "$1 - $2 at time zone 'UTC' >= interval '0 hours'",
