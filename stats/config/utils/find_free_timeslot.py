@@ -8,6 +8,9 @@ import os
 from tkcalendar import Calendar
 from typing import Dict, List, Tuple
 
+DURATION_MENU_MANUAL = "manual"
+DURATION_MENU_CONFIG = "config"
+
 class CronVisualizerGUI:
     def __init__(self, root):
         self.root = root
@@ -19,7 +22,19 @@ class CronVisualizerGUI:
         self.canvas_height = 200
         self.hour_width = self.canvas_width // 24
         self.selected_date = datetime.now()
+        
         self.default_duration = 20  # Duration in minutes
+        self.task_durations = {}    # Will store durations from config
+        self.use_config_durations = tk.BooleanVar(value=False)  # Toggle for duration source
+
+        # Load durations config if exists
+        durations_path = "durations/durations.json"
+        if os.path.exists(durations_path):
+            try:
+                with open(durations_path, 'r') as f:
+                    self.task_durations = json.load(f)
+            except Exception as e:
+                print(f"Failed to load durations file: {str(e)}")
         
         # Add default path
         default_path = "../update_groups.json"
@@ -41,31 +56,54 @@ class CronVisualizerGUI:
         # Top frame for file selection and controls
         top_frame = ttk.Frame(self.root, padding="10")
         top_frame.pack(fill=tk.X)
-        
-        ttk.Button(top_frame, text="Load JSON File", command=self.load_json).pack(side=tk.LEFT, padx=5)
+
+        left_top_frame = ttk.Frame(top_frame, padding="10")
+        left_top_frame.pack(side=tk.LEFT)
+        next_left_top_frame = ttk.Frame(top_frame, padding="10")
+        next_left_top_frame.pack(side=tk.LEFT)
+
+        ttk.Button(left_top_frame, text="Load JSON File", command=self.load_json).pack(side=tk.TOP, fill='x')
+        ttk.Button(left_top_frame, text="Update", command=self.update_visualization).pack(side=tk.TOP, fill='x')
         
         self.ignore_days_var = tk.BooleanVar()
-        ttk.Checkbutton(top_frame, text="Ignore day parameters", 
+        ttk.Checkbutton(left_top_frame, text="Ignore day parameters", 
                        variable=self.ignore_days_var, 
-                       command=self.update_visualization).pack(side=tk.LEFT, padx=5)
+                       command=self.update_visualization).pack(side=tk.TOP)
         
         # Duration control
-        ttk.Label(top_frame, text="Duration (minutes):").pack(side=tk.LEFT, padx=5)
-        self.duration_var = tk.StringVar(value=str(self.default_duration))
-        duration_entry = ttk.Entry(top_frame, textvariable=self.duration_var, width=5)
-        duration_entry.pack(side=tk.LEFT, padx=5)
+        radiobutton_frame_1 = ttk.Frame(next_left_top_frame)
+        radiobutton_frame_1.pack(side=tk.TOP)
+        self.duration_choice = tk.StringVar(value=DURATION_MENU_CONFIG)
+        ttk.Radiobutton(
+            radiobutton_frame_1,
+            text="Fixed duration (minutes):",
+            variable=self.duration_choice,
+            value=DURATION_MENU_MANUAL,
+            command=self.update_visualization
+        ).pack(side=tk.LEFT)
+        self.manual_duration_var = tk.StringVar(value=str(self.default_duration))
+        duration_entry = ttk.Entry(radiobutton_frame_1, textvariable=self.manual_duration_var, width=5)
+        duration_entry.pack(side=tk.LEFT)
         duration_entry.bind('<Return>', lambda e: self.update_visualization())
-        ttk.Button(top_frame, text="Update", command=self.update_visualization).pack(side=tk.LEFT, padx=5)
         
+
+        ttk.Radiobutton(
+            next_left_top_frame,
+            text="Per-task durations from config",
+            variable=self.duration_choice,
+            value=DURATION_MENU_CONFIG,
+            command=self.update_visualization
+        ).pack(side=tk.TOP, fill='x')
+
         # Calendar widget
-        calendar_frame = ttk.Frame(self.root, padding="10")
-        calendar_frame.pack(fill=tk.X)
+        calendar_frame = ttk.Frame(top_frame)
+        calendar_frame.pack(side=tk.RIGHT)
         
         self.calendar = Calendar(calendar_frame, selectmode='day', 
                                year=self.selected_date.year,
                                month=self.selected_date.month,
                                day=self.selected_date.day)
-        self.calendar.pack(side=tk.LEFT)
+        self.calendar.pack(side=tk.RIGHT)
         self.calendar.bind('<<CalendarSelected>>', self.on_date_select)
         
         # Timeline canvas
@@ -157,17 +195,23 @@ class CronVisualizerGUI:
     
     def get_task_overlaps(self) -> List[List[str]]:
         """Calculate overlapping tasks for each minute of the day."""
-        try:
-            duration = int(self.duration_var.get())
-        except ValueError:
-            duration = self.default_duration
-        
-        # Initialize timeline with empty lists for each minute
         timeline = [[] for _ in range(24 * 60)]
+        
+        # Get manual duration if not using config
+        try:
+            manual_duration = int(self.manual_duration_var.get())
+        except ValueError:
+            manual_duration = self.default_duration
         
         # For each schedule, add its task duration to the timeline
         for name, schedule in self.schedules.items():
             start_times = self.parse_cron_schedule(schedule, self.selected_date)
+            
+            # Determine duration for this task
+            if self.duration_choice.get() == DURATION_MENU_CONFIG:
+                duration = self.task_durations.get(name, manual_duration)
+            else:
+                duration = manual_duration
             
             for start_time in start_times:
                 start_minute = start_time.hour * 60 + start_time.minute
