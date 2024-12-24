@@ -6,6 +6,7 @@ use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::Deserialize;
 use std::time::Duration;
 
+#[derive(Clone)]
 pub struct HttpApiClientConfig {
     /// The maximum time limit for an API request. If a request takes longer than this, it will be
     /// cancelled.
@@ -26,6 +27,7 @@ impl Default for HttpApiClientConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct HttpApiClient {
     base_url: url::Url,
     http_client: reqwest_middleware::ClientWithMiddleware,
