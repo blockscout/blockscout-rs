@@ -33,7 +33,7 @@
         "new_blocks_group": "0 0 8 * * * *",
         "txns_fee_group": "0 0 7 * * * *",
         "txns_success_rate_group": "0 0 19 * * * *",
-        "new_accounts_group": "0 0 5 * * * *",
+        "new_accounts_group": "0 0 4 * * * *",
         "new_contracts_group": "0 20 */3 * * * *",
         "new_txns_group": "0 10 */3 * * * *",
         "new_verified_contracts_group": "0 30 */3 * * * *",
