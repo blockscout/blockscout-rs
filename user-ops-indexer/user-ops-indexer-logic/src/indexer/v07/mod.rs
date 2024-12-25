@@ -34,20 +34,14 @@ struct ExtendedUserOperation {
 }
 
 impl IndexerLogic for IndexerV07 {
+    const VERSION: &'static str = "v0.7";
+
+    const USER_OPERATION_EVENT_SIGNATURE: B256 = IEntrypointV07::UserOperationEvent::SIGNATURE_HASH;
+
+    const BEFORE_EXECUTION_SIGNATURE: B256 = IEntrypointV07::BeforeExecution::SIGNATURE_HASH;
+
     fn entry_point(&self) -> Address {
         self.entry_point
-    }
-
-    fn version() -> &'static str {
-        "v0.7"
-    }
-
-    fn user_operation_event_signature() -> B256 {
-        IEntrypointV07::UserOperationEvent::SIGNATURE_HASH
-    }
-
-    fn before_execution_signature() -> B256 {
-        IEntrypointV07::BeforeExecution::SIGNATURE_HASH
     }
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool {

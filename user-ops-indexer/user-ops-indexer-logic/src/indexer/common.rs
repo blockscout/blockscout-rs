@@ -115,7 +115,7 @@ pub fn decode_execute_call_data(call_data: &Bytes) -> (Option<Address>, Option<B
 mod tests {
     use crate::indexer::common::{decode_execute_call_data, extract_user_logs_boundaries};
     use alloy::{
-        primitives::{Address, Bytes, U160},
+        primitives::{Address, Bytes, LogData, U160},
         rpc::types::Log,
     };
     use std::str::FromStr;
@@ -138,7 +138,7 @@ mod tests {
         .map(|(i, a)| Log {
             inner: alloy::primitives::Log {
                 address: a,
-                data: alloy::primitives::LogData::empty(),
+                data: LogData::empty(),
             },
             block_hash: None,
             block_number: None,

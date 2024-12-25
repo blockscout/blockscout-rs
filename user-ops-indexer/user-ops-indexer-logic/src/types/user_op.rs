@@ -2,8 +2,9 @@ use crate::{
     indexer::common::decode_execute_call_data, repository::user_op::ListUserOpDB,
     types::common::u256_to_decimal,
 };
-use alloy::primitives::ruint::UintTryTo;
-use alloy::primitives::{Address, BlockHash, BlockNumber, Bytes, TxHash, B128, B256, U128, U256};
+use alloy::primitives::{
+    ruint::UintTryTo, Address, BlockHash, BlockNumber, Bytes, TxHash, B128, B256, U128, U256,
+};
 pub use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
 use entity::user_operations::Model;
 use num_traits::cast::ToPrimitive;

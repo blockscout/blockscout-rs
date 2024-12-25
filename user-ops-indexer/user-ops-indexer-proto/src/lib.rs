@@ -1,4 +1,8 @@
-#![allow(clippy::derive_partial_eq_without_eq, unused_imports, unreachable_patterns)]
+#![allow(
+    clippy::derive_partial_eq_without_eq,
+    unused_imports,
+    unreachable_patterns
+)]
 
 pub mod blockscout {
     pub mod user_ops_indexer {

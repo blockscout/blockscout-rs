@@ -11,7 +11,9 @@ use alloy::{
     primitives::{Address, BlockHash, Bytes, TxHash, B256},
     providers::Provider,
     rpc::types::{Filter, Log, TransactionReceipt},
+    sol_types,
     sol_types::SolEvent,
+    transports::{TransportError, TransportErrorKind},
 };
 use anyhow::{anyhow, bail};
 use futures::{
@@ -60,12 +62,13 @@ impl TryFrom<Log> for Job {
 }
 
 pub trait IndexerLogic {
+    const VERSION: &'static str;
+
+    const USER_OPERATION_EVENT_SIGNATURE: B256;
+
+    const BEFORE_EXECUTION_SIGNATURE: B256;
+
     fn entry_point(&self) -> Address;
-    fn version() -> &'static str;
-
-    fn user_operation_event_signature() -> B256;
-
-    fn before_execution_signature() -> B256;
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool;
 
@@ -78,15 +81,15 @@ pub trait IndexerLogic {
     ) -> anyhow::Result<Vec<UserOp>>;
     fn user_operation_event_matcher(&self, log: &Log) -> bool {
         log.address() == self.entry_point()
-            && log.topics().first() == Some(&Self::user_operation_event_signature())
+            && log.topic0() == Some(&Self::USER_OPERATION_EVENT_SIGNATURE)
     }
 
     fn before_execution_matcher(&self, log: &Log) -> bool {
         log.address() == self.entry_point()
-            && log.topics().first() == Some(&Self::before_execution_signature())
+            && log.topic0() == Some(&Self::BEFORE_EXECUTION_SIGNATURE)
     }
 
-    fn match_and_parse<T: SolEvent>(&self, log: &Log) -> Option<alloy::sol_types::Result<T>> {
+    fn match_and_parse<T: SolEvent>(&self, log: &Log) -> Option<sol_types::Result<T>> {
         if log.address() == self.entry_point() && log.topic0() == Some(&T::SIGNATURE_HASH) {
             Some(T::decode_log(&log.inner, true).map(|l| l.data))
         } else {
@@ -96,7 +99,7 @@ pub trait IndexerLogic {
     fn base_tx_logs_filter(&self) -> Filter {
         Filter::new()
             .address(self.entry_point())
-            .event_signature(Self::before_execution_signature())
+            .event_signature(Self::BEFORE_EXECUTION_SIGNATURE)
     }
 }
 
@@ -125,7 +128,7 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
         }
     }
 
-    #[instrument(name = "indexer", skip_all, level = "info", fields(version = L::version()))]
+    #[instrument(name = "indexer", skip_all, level = "info", fields(version = L::VERSION))]
     pub async fn start(&self) -> anyhow::Result<()> {
         let trace_client = match self.settings.trace_client {
             Some(client) => client,
@@ -153,9 +156,8 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
                 // That's the only infinite stream in the SelectAll set. If the ws connection
                 // unexpectedly disconnects, this stream will terminate,
                 // so will the whole SelectAll set with for_each_concurrent on it.
-                // ethers-rs does not handle ws reconnects well, neither it can guarantee that no
-                // events would be lost even if reconnect is successful, so it's better to restart
-                // the whole indexer at once instead of trying to reconnect.
+                // alloy-rs will try to reconnect once, and if failed,
+                // the indexer will be restarted with a new rpc provider.
                 stream_jobs.push(Box::pin(realtime_stream_jobs));
             } else {
                 tracing::info!("starting polling of past BeforeExecution logs from rpc");
@@ -176,18 +178,17 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
                 past_db_logs_start_block as u64
             } else {
                 rpc_refetch_block_number.saturating_add_signed(past_db_logs_start_block as i64)
-                    as u64
             };
             let to_block = if past_db_logs_end_block > 0 {
                 past_db_logs_end_block as u64
             } else {
-                rpc_refetch_block_number.saturating_add_signed(past_db_logs_end_block as i64) as u64
+                rpc_refetch_block_number.saturating_add_signed(past_db_logs_end_block as i64)
             };
             tracing::info!(from_block, to_block, "fetching missed tx hashes in db");
             let missed_txs = repository::user_op::stream_unprocessed_logs_tx_hashes(
                 &self.db,
                 self.logic.entry_point(),
-                L::user_operation_event_signature(),
+                L::BEFORE_EXECUTION_SIGNATURE,
                 from_block,
                 to_block,
             )
@@ -228,6 +229,12 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
             .try_for_each_concurrent(Some(self.settings.concurrency as usize), |tx| async move {
                 let mut backoff = vec![5, 20, 120].into_iter().map(Duration::from_secs);
                 while let Err(err) = self.handle_tx(tx, trace_client).await {
+                    // terminate stream if WS connection is closed, indexer will be restarted
+                    if let Some(TransportError::Transport(TransportErrorKind::BackendGone)) = err.downcast_ref::<TransportError>() {
+                        tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, ws connection closed, exiting");
+                        return Err(err);
+                    }
+
                     match backoff.next() {
                         None => {
                             tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, skipping");
@@ -248,7 +255,7 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
         &self,
         from_block: u64,
         to_block: u64,
-    ) -> Result<Vec<Job>, alloy::transports::TransportError> {
+    ) -> Result<Vec<Job>, TransportError> {
         let filter = self
             .logic
             .base_tx_logs_filter()
@@ -285,7 +292,7 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
                 .fetch_jobs_for_block_range(from_block, block_number)
                 .await?;
 
-            Ok::<Vec<Job>, alloy::transports::TransportError>(jobs)
+            Ok::<Vec<Job>, TransportError>(jobs)
         })
         .filter_map(|fut| async {
             fut.await
@@ -398,20 +405,29 @@ mod tests {
         indexer::{settings::EntrypointsSettings, v06, v07},
         repository::tests::get_shared_db,
     };
-    use alloy::{primitives::U256, providers::ProviderBuilder};
+    use alloy::{
+        primitives::U256,
+        providers::{ProviderBuilder, RootProvider},
+        transports::BoxTransport,
+    };
     use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
     use sea_orm::EntityTrait;
     use std::str::FromStr;
 
     const ETH_RPC_URL: &str = "https://eth.drpc.org";
 
+    async fn connect_rpc() -> RootProvider<BoxTransport> {
+        ProviderBuilder::new()
+            .on_builtin(ETH_RPC_URL)
+            .await
+            .expect("can't connect")
+    }
+
     #[tokio::test]
     async fn handle_tx_v06_ok() {
         let db = get_shared_db().await;
         // TODO: use mocked connection, alloy::transports::ipc::MockIpcServer from alloy seems broken at v0.8.3
-        let client = ProviderBuilder::new()
-            .on_http(ETH_RPC_URL.parse().unwrap())
-            .boxed();
+        let client = connect_rpc().await;
 
         // just some random tx from mainnet
         let tx_hash =
@@ -479,9 +495,7 @@ mod tests {
     async fn handle_tx_v06_with_tracing_ok() {
         let db = get_shared_db().await;
         // TODO: use mocked connection, alloy::transports::ipc::MockIpcServer from alloy seems broken at v0.8.3
-        let client = ProviderBuilder::new()
-            .on_http(ETH_RPC_URL.parse().unwrap())
-            .boxed();
+        let client = connect_rpc().await;
 
         // just some random tx from mainnet
         let tx_hash =
@@ -554,9 +568,7 @@ mod tests {
     async fn handle_tx_v07_ok() {
         let db = get_shared_db().await;
         // TODO: use mocked connection, alloy::transports::ipc::MockIpcServer from alloy seems broken at v0.8.3
-        let client = ProviderBuilder::new()
-            .on_http(ETH_RPC_URL.parse().unwrap())
-            .boxed();
+        let client = connect_rpc().await;
 
         // just some random tx from mainnet
         let tx_hash =

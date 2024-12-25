@@ -11,7 +11,7 @@ use alloy::{
         },
         parity::{Action, CallType},
     },
-    transports::{RpcError, TransportErrorKind},
+    transports::{TransportErrorKind, TransportResult},
 };
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -61,7 +61,7 @@ pub trait CallTracer {
         &self,
         tx_hash: TxHash,
         client: TraceClient,
-    ) -> Result<Vec<CommonCallTrace>, RpcError<TransportErrorKind>>;
+    ) -> TransportResult<Vec<CommonCallTrace>>;
 }
 
 #[async_trait]
@@ -70,7 +70,7 @@ impl<T: Provider> CallTracer for T {
         &self,
         tx_hash: TxHash,
         client: TraceClient,
-    ) -> Result<Vec<CommonCallTrace>, RpcError<TransportErrorKind>> {
+    ) -> TransportResult<Vec<CommonCallTrace>> {
         if client == TraceClient::Geth {
             let geth_trace = self
                 .debug_trace_transaction(
