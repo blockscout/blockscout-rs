@@ -1,5 +1,5 @@
 pub mod api_key_manager;
-pub mod dapp_client;
+pub mod clients;
 pub mod error;
 mod import;
 mod proto;

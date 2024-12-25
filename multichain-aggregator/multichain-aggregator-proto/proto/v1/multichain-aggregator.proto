@@ -58,6 +58,13 @@ message MarketplaceDapp {
   string short_description = 4;
 }
 
+message Token {
+  string address = 1;
+  string icon_url = 2;
+  string name = 3;
+  string symbol = 4;
+}
+
 message BatchImportRequest {
   string chain_id = 1;
   repeated Address addresses = 2;
@@ -83,6 +90,7 @@ message QuickSearchResponse {
     repeated Hash transactions = 4;
     repeated ChainBlockNumber block_numbers = 5;
     repeated MarketplaceDapp dapps = 6;
+    repeated Token tokens = 7;
   }
 
   map<string, ChainSearchResult> items = 1;
