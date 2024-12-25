@@ -4,20 +4,21 @@ use crate::{
         common::{
             extract_address, extract_sponsor_type, extract_user_logs_boundaries, none_if_empty,
         },
+        v06::IEntrypointV06::{IEntrypointV06Calls, UserOperation},
     },
     types::user_op::UserOp,
 };
+use alloy::{
+    primitives::{Address, BlockHash, Bytes, B256, U256},
+    rpc::types::{Log, TransactionReceipt},
+    sol,
+    sol_types::{SolCall, SolEvent, SolInterface},
+};
 use anyhow::{anyhow, bail};
 use entity::sea_orm_active_enums::EntryPointVersion;
-use ethers::prelude::{
-    abi::{AbiDecode, Address},
-    abigen,
-    types::{Bytes, Log, TransactionReceipt, H256},
-    BigEndianHash, EthEvent,
-};
 use std::ops::Div;
 
-abigen!(IEntrypointV06, "./src/indexer/v06/abi.json");
+sol!(IEntrypointV06, "./src/indexer/v06/abi.json");
 
 #[derive(Debug, Clone)]
 pub struct IndexerV06 {
@@ -40,16 +41,17 @@ impl IndexerLogic for IndexerV06 {
         "v0.6"
     }
 
-    fn user_operation_event_signature() -> H256 {
-        UserOperationEventFilter::signature()
+    fn user_operation_event_signature() -> B256 {
+        IEntrypointV06::UserOperationEvent::SIGNATURE_HASH
     }
 
-    fn before_execution_signature() -> H256 {
-        BeforeExecutionFilter::signature()
+    fn before_execution_signature() -> B256 {
+        IEntrypointV06::BeforeExecution::SIGNATURE_HASH
     }
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool {
-        HandleOpsCall::decode(calldata).is_ok() || HandleAggregatedOpsCall::decode(calldata).is_ok()
+        IEntrypointV06::handleOpsCall::abi_decode(calldata, true).is_ok()
+            || IEntrypointV06::handleAggregatedOpsCall::abi_decode(calldata, true).is_ok()
     }
 
     fn parse_user_ops(
@@ -59,14 +61,14 @@ impl IndexerLogic for IndexerV06 {
         calldata: &Bytes,
         log_bundle: &[&[Log]],
     ) -> anyhow::Result<Vec<UserOp>> {
-        let decoded_calldata = IEntrypointV06Calls::decode(calldata)?;
+        let decoded_calldata = IEntrypointV06Calls::abi_decode(calldata, true)?;
         let user_ops: Vec<ExtendedUserOperation> = match decoded_calldata {
-            IEntrypointV06Calls::HandleAggregatedOps(cd) => cd
-                .ops_per_aggregator
+            IEntrypointV06Calls::handleAggregatedOps(cd) => cd
+                .opsPerAggregator
                 .into_iter()
                 .flat_map(|agg_ops| {
                     agg_ops
-                        .user_ops
+                        .userOps
                         .into_iter()
                         .map(move |op| ExtendedUserOperation {
                             user_op: op,
@@ -76,7 +78,7 @@ impl IndexerLogic for IndexerV06 {
                         })
                 })
                 .collect(),
-            IEntrypointV06Calls::HandleOps(cd) => cd
+            IEntrypointV06Calls::handleOps(cd) => cd
                 .ops
                 .into_iter()
                 .map(|op| ExtendedUserOperation {
@@ -109,8 +111,7 @@ impl IndexerLogic for IndexerV06 {
                 ) {
                     Ok(model) => Some(model),
                     Err(err) => {
-                        let logs_start_index =
-                            logs.first().and_then(|l| l.log_index).map(|i| i.as_u64());
+                        let logs_start_index = logs.first().and_then(|l| l.log_index);
                         let logs_count = logs.len();
                         tracing::error!(
                             tx_hash = ?receipt.transaction_hash,
@@ -140,65 +141,65 @@ impl IndexerV06 {
     ) -> anyhow::Result<UserOp> {
         let user_op_event = logs
             .last()
-            .and_then(|log| self.match_and_parse::<UserOperationEventFilter>(log))
+            .and_then(|log| self.match_and_parse::<IEntrypointV06::UserOperationEvent>(log))
             .transpose()?
             .ok_or(anyhow!("last log doesn't match UserOperationEvent"))?;
         let revert_event = logs
             .iter()
-            .find_map(|log| self.match_and_parse::<UserOperationRevertReasonFilter>(log))
+            .find_map(|log| self.match_and_parse::<IEntrypointV06::UserOperationRevertReason>(log))
             .transpose()?;
 
         let tx_deposits: Vec<Address> = receipt
-            .logs
+            .inner
+            .logs()
             .iter()
-            .filter_map(|log| self.match_and_parse::<DepositedFilter>(log))
+            .filter_map(|log| self.match_and_parse::<IEntrypointV06::Deposited>(log))
             .filter_map(Result::ok)
             .map(|e| e.account)
             .collect();
 
-        let factory = extract_address(&user_op.user_op.init_code);
-        let paymaster = extract_address(&user_op.user_op.paymaster_and_data);
+        let factory = extract_address(&user_op.user_op.initCode);
+        let paymaster = extract_address(&user_op.user_op.paymasterAndData);
         let sender = user_op.user_op.sender;
         let (user_logs_start_index, user_logs_count) =
             extract_user_logs_boundaries(logs, self.entry_point, paymaster);
         Ok(UserOp {
-            hash: H256::from(user_op_event.user_op_hash),
+            hash: B256::from(user_op_event.userOpHash),
             sender,
-            nonce: H256::from_uint(&user_op.user_op.nonce),
-            init_code: none_if_empty(user_op.user_op.init_code),
-            call_data: user_op.user_op.call_data,
-            call_gas_limit: user_op.user_op.call_gas_limit,
-            verification_gas_limit: user_op.user_op.verification_gas_limit,
-            pre_verification_gas: user_op.user_op.pre_verification_gas,
-            max_fee_per_gas: user_op.user_op.max_fee_per_gas,
-            max_priority_fee_per_gas: user_op.user_op.max_priority_fee_per_gas,
-            paymaster_and_data: none_if_empty(user_op.user_op.paymaster_and_data),
+            nonce: B256::from(user_op.user_op.nonce),
+            init_code: none_if_empty(user_op.user_op.initCode),
+            call_data: user_op.user_op.callData,
+            call_gas_limit: user_op.user_op.callGasLimit,
+            verification_gas_limit: user_op.user_op.verificationGasLimit,
+            pre_verification_gas: user_op.user_op.preVerificationGas,
+            max_fee_per_gas: user_op.user_op.maxFeePerGas,
+            max_priority_fee_per_gas: user_op.user_op.maxPriorityFeePerGas,
+            paymaster_and_data: none_if_empty(user_op.user_op.paymasterAndData),
             signature: user_op.user_op.signature,
             aggregator: user_op.aggregator,
             aggregator_signature: user_op.aggregator_signature,
             entry_point: self.entry_point,
             entry_point_version: EntryPointVersion::V06,
             transaction_hash: receipt.transaction_hash,
-            block_number: receipt.block_number.map_or(0, |n| n.as_u64()),
-            block_hash: receipt.block_hash.unwrap_or(H256::zero()),
+            block_number: receipt.block_number.unwrap_or(0),
+            block_hash: receipt.block_hash.unwrap_or(BlockHash::ZERO),
             bundler: user_op.bundler,
             bundle_index,
             index,
             factory,
             paymaster,
             status: user_op_event.success,
-            revert_reason: revert_event.map(|e| e.revert_reason),
-            gas: user_op.user_op.call_gas_limit
-                + user_op.user_op.verification_gas_limit * if paymaster.is_none() { 1 } else { 3 }
-                + user_op.user_op.pre_verification_gas,
-            gas_price: user_op_event
-                .actual_gas_cost
-                .div(user_op_event.actual_gas_used),
-            gas_used: user_op_event.actual_gas_used,
+            revert_reason: revert_event.map(|e| e.revertReason),
+            gas: user_op.user_op.callGasLimit
+                + user_op.user_op.verificationGasLimit
+                    * U256::from(if paymaster.is_none() { 1 } else { 3 })
+                + user_op.user_op.preVerificationGas,
+            gas_price: user_op_event.actualGasCost.div(user_op_event.actualGasUsed),
+            gas_used: user_op_event.actualGasUsed,
             sponsor_type: extract_sponsor_type(sender, paymaster, &tx_deposits),
             user_logs_start_index,
             user_logs_count,
-            fee: user_op_event.actual_gas_cost,
+            fee: user_op_event.actualGasCost,
 
             consensus: None,
             timestamp: None,

@@ -1,6 +1,6 @@
 use crate::{repository::user_op::user_ops_blocks_rel, types::factory::Factory};
+use alloy::primitives::Address;
 use entity::user_operations::{Column, Entity};
-use ethers::prelude::Address;
 use sea_orm::{
     prelude::Expr, sea_query::IntoCondition, ColumnTrait, DatabaseConnection, EntityTrait,
     FromQueryResult, IntoSimpleExpr, JoinType, QueryFilter, QueryOrder, QuerySelect,
@@ -21,7 +21,7 @@ pub async fn find_factory_by_address(
         .column(Column::Factory)
         .column_as(Column::Factory.count(), "total_accounts")
         .join_rev(JoinType::Join, user_ops_blocks_rel())
-        .filter(Column::Factory.eq(addr.as_bytes()).into_condition())
+        .filter(Column::Factory.eq(addr.as_slice()).into_condition())
         .group_by(Column::Factory)
         .into_model::<FactoryDB>()
         .one(db)
@@ -36,7 +36,7 @@ pub async fn list_factories(
     page_token: Option<(u64, Address)>,
     limit: u64,
 ) -> Result<(Vec<Factory>, Option<(u64, Address)>), anyhow::Error> {
-    let page_token = page_token.unwrap_or((i64::MAX as u64, Address::zero()));
+    let page_token = page_token.unwrap_or((i64::MAX as u64, Address::ZERO));
 
     let factories: Vec<Factory> = Entity::find()
         .select_only()
@@ -47,7 +47,7 @@ pub async fn list_factories(
         .group_by(Column::Factory)
         .having(
             Expr::tuple([Column::Factory.count(), Column::Factory.into_simple_expr()]).lte(
-                Expr::tuple([page_token.0.into(), page_token.1.as_bytes().into()]),
+                Expr::tuple([page_token.0.into(), page_token.1.as_slice().into()]),
             ),
         )
         .order_by_desc(Expr::cust("2"))
@@ -73,17 +73,18 @@ pub async fn list_factories(
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
+    use alloy::primitives::U160;
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
     async fn find_factory_by_address_ok() {
         let db = get_shared_db().await;
 
-        let addr = Address::from_low_u64_be(0xf3);
+        let addr = Address::from(U160::from(0xf3));
         let item = find_factory_by_address(&db, addr).await.unwrap();
         assert_eq!(item, None);
 
-        let addr = Address::from_low_u64_be(0xf1);
+        let addr = Address::from(U160::from(0xf1));
         let item = find_factory_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,

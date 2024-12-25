@@ -1,9 +1,42 @@
-use async_trait::async_trait;
-use ethers::prelude::{
-    Action, Address, Bytes, CallFrame, CallType, GethDebugBuiltInTracerType, GethDebugTracerType,
-    GethDebugTracingOptions, GethTrace, GethTraceFrame, JsonRpcClient, Middleware, NodeClient,
-    Provider, ProviderError, TxHash,
+use alloy::{
+    primitives::{Address, Bytes, TxHash},
+    providers::{
+        ext::{DebugApi, TraceApi},
+        Provider,
+    },
+    rpc::types::trace::{
+        geth::{
+            CallFrame, GethDebugBuiltInTracerType, GethDebugTracerConfig, GethDebugTracerType,
+            GethDebugTracingOptions, GethDefaultTracingOptions, GethTrace,
+        },
+        parity::{Action, CallType},
+    },
+    transports::{RpcError, TransportErrorKind},
 };
+use async_trait::async_trait;
+use serde::Deserialize;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize)]
+pub enum TraceClient {
+    Geth,
+    Parity,
+}
+
+impl From<String> for TraceClient {
+    fn from(value: String) -> Self {
+        if value.contains("Geth/") {
+            Self::Geth
+        } else {
+            Self::Parity
+        }
+    }
+}
+
+impl Default for TraceClient {
+    fn default() -> Self {
+        Self::Parity
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum TraceType {
@@ -27,75 +60,76 @@ pub trait CallTracer {
     async fn common_trace_transaction(
         &self,
         tx_hash: TxHash,
-        variant: NodeClient,
-    ) -> Result<Vec<CommonCallTrace>, ProviderError>;
+        client: TraceClient,
+    ) -> Result<Vec<CommonCallTrace>, RpcError<TransportErrorKind>>;
 }
 
 #[async_trait]
-impl<T: JsonRpcClient> CallTracer for Provider<T> {
+impl<T: Provider> CallTracer for T {
     async fn common_trace_transaction(
         &self,
         tx_hash: TxHash,
-        variant: NodeClient,
-    ) -> Result<Vec<CommonCallTrace>, ProviderError> {
-        match variant {
-            NodeClient::Geth => {
-                let geth_trace = self
-                    .debug_trace_transaction(
-                        tx_hash,
-                        GethDebugTracingOptions {
-                            disable_storage: Some(true),
-                            disable_stack: Some(true),
+        client: TraceClient,
+    ) -> Result<Vec<CommonCallTrace>, RpcError<TransportErrorKind>> {
+        if client == TraceClient::Geth {
+            let geth_trace = self
+                .debug_trace_transaction(
+                    tx_hash,
+                    GethDebugTracingOptions {
+                        config: GethDefaultTracingOptions {
                             enable_memory: Some(false),
+                            disable_memory: Some(true),
+                            disable_stack: Some(true),
+                            disable_storage: Some(true),
                             enable_return_data: Some(false),
-                            tracer: Some(GethDebugTracerType::BuiltInTracer(
-                                GethDebugBuiltInTracerType::CallTracer,
-                            )),
-                            tracer_config: None,
-                            timeout: Some("60s".to_string()),
+                            disable_return_data: Some(true),
+                            debug: None,
+                            limit: None,
                         },
-                    )
-                    .await?;
+                        tracer: Some(GethDebugTracerType::BuiltInTracer(
+                            GethDebugBuiltInTracerType::CallTracer,
+                        )),
+                        tracer_config: GethDebugTracerConfig::default(),
+                        timeout: Some("60s".to_string()),
+                    },
+                )
+                .await?;
 
-                match geth_trace {
-                    GethTrace::Known(GethTraceFrame::CallTracer(root)) => {
-                        Ok(flatten_geth_trace(root))
-                    }
-                    _ => Err(ProviderError::CustomError(
-                        "can't parse geth trace result".to_string(),
-                    )),
-                }
+            match geth_trace {
+                GethTrace::CallTracer(root) => Ok(flatten_geth_trace(root)),
+                _ => Err(TransportErrorKind::custom_str(
+                    "can't parse geth trace result",
+                )),
             }
-            _ => {
-                let traces = self
-                    .trace_transaction(tx_hash)
-                    .await?
-                    .into_iter()
-                    .filter_map(|t| match t.action {
-                        Action::Call(call) => Some(CommonCallTrace {
-                            typ: match call.call_type {
-                                CallType::Call => TraceType::Call,
-                                CallType::CallCode => TraceType::CallCode,
-                                CallType::DelegateCall => TraceType::DelegateCall,
-                                CallType::StaticCall => TraceType::StaticCall,
-                                CallType::None => TraceType::Other,
-                            },
-                            from: call.from,
-                            to: Some(call.to),
-                            input: call.input,
-                        }),
-                        Action::Create(create) => Some(CommonCallTrace {
-                            typ: TraceType::Create,
-                            from: create.from,
-                            to: None,
-                            input: create.init,
-                        }),
-                        _ => None,
-                    })
-                    .collect();
+        } else {
+            let traces = self
+                .trace_transaction(tx_hash)
+                .await?
+                .into_iter()
+                .filter_map(|t| match t.trace.action {
+                    Action::Call(call) => Some(CommonCallTrace {
+                        typ: match call.call_type {
+                            CallType::Call => TraceType::Call,
+                            CallType::CallCode => TraceType::CallCode,
+                            CallType::DelegateCall => TraceType::DelegateCall,
+                            CallType::StaticCall => TraceType::StaticCall,
+                            _ => TraceType::Other,
+                        },
+                        from: call.from,
+                        to: Some(call.to),
+                        input: call.input,
+                    }),
+                    Action::Create(create) => Some(CommonCallTrace {
+                        typ: TraceType::Create,
+                        from: create.from,
+                        to: None,
+                        input: create.init,
+                    }),
+                    _ => None,
+                })
+                .collect();
 
-                Ok(traces)
-            }
+            Ok(traces)
         }
     }
 }
@@ -117,38 +151,25 @@ fn flatten_geth_trace(root: CallFrame) -> Vec<CommonCallTrace> {
                     _ => TraceType::Other,
                 },
                 from: frame.from,
-                to: frame.to.as_ref().and_then(|to| to.as_address().cloned()),
+                to: frame.to,
                 input: frame.input.clone(),
             });
         }
-        if let Some(calls) = &frame.calls {
-            if calls.len() > idx {
-                path.push((frame, idx + 1));
-                path.push((&calls[idx], 0));
-            }
+        if frame.calls.len() > idx {
+            path.push((frame, idx + 1));
+            path.push((&frame.calls[idx], 0));
         }
     }
 
     res
 }
 
-pub fn to_string(node_client: NodeClient) -> String {
-    match node_client {
-        NodeClient::Geth => "geth",
-        NodeClient::Erigon => "erigon",
-        NodeClient::OpenEthereum => "openethereum",
-        NodeClient::Nethermind => "nethermind",
-        NodeClient::Besu => "besu",
-    }
-    .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use crate::indexer::rpc_utils::{flatten_geth_trace, TraceType};
-    use ethers::{
-        prelude::{Address, Bytes, CallFrame},
-        utils::to_checksum,
+    use alloy::{
+        primitives::{Address, Bytes},
+        rpc::types::trace::geth::CallFrame,
     };
     use std::str::FromStr;
 
@@ -172,7 +193,7 @@ mod tests {
 
         assert_eq!(
             res.iter()
-                .map(|t| to_checksum(&t.from, None).to_lowercase())
+                .map(|t| t.from.to_string().to_lowercase())
                 .collect::<Vec<String>>(),
             [
                 "0x42fdd562221741a1db62a0f69a5a680367f07e33",

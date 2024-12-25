@@ -344,6 +344,7 @@ definitions:
       details:
         type: array
         items:
+          type: object
           $ref: '#/definitions/protobufAny'
   v1Account:
     type: object
@@ -409,6 +410,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Account'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -418,6 +420,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Bundler'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -427,6 +430,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Bundle'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -436,6 +440,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Factory'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -445,6 +450,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Paymaster'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -476,6 +482,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1ListUserOp'
       next_page_params:
         $ref: '#/definitions/v1Pagination'

@@ -1,12 +1,15 @@
-use entity::sea_orm_active_enums::SponsorType;
-use ethers::prelude::{
-    abi::{decode, parse_abi, ParamType, Token},
-    Address, Bytes, Log, U256,
+use alloy::{
+    json_abi::JsonAbi,
+    primitives::{Address, Bytes, Selector, U256},
+    rpc::types::Log,
+    sol_types,
+    sol_types::SolValue,
 };
+use entity::sea_orm_active_enums::SponsorType;
 use lazy_static::lazy_static;
 
 lazy_static! {
-    pub static ref EXECUTE_SELECTORS: Vec<[u8; 4]> = parse_abi(&[
+    pub static ref EXECUTE_SELECTORS: Vec<Selector> = JsonAbi::parse([
         "function execute(address,uint256,bytes,uint8) external",
         "function execute(address,uint256,bytes) external",
         "function execute_ncC(address,uint256,bytes) external",
@@ -16,8 +19,7 @@ lazy_static! {
         "function execTransactionFromEntrypoint(address,uint256,bytes,uint8,address,address,uint256)",
         "function executeCall(address,uint256,bytes)",
         "function executeUserOp(address,uint256,bytes,uint8)",
-        "struct ExecStruct { address arg1; address arg2; uint256 arg3;}",
-        "function execFromEntryPointWithFee(address,uint256,bytes,ExecStruct)",
+        "function execFromEntryPointWithFee(address,uint256,bytes,tuple(address,address,uint256))",
         "function execTransactionFromEntrypoint(address,uint256,bytes,uint8)",
         "function send(address,uint256,bytes)",
         "function execute(address,uint256,bytes,bytes)",
@@ -26,7 +28,7 @@ lazy_static! {
     ])
     .unwrap()
     .functions()
-    .map(|f| f.short_signature())
+    .map(|f| f.selector())
     .collect();
 }
 
@@ -59,24 +61,24 @@ pub fn extract_user_logs_boundaries(
     paymaster: Option<Address>,
 ) -> (u32, u32) {
     let (mut l, mut r) = (0usize, logs.len());
-    while l < r && (logs[r - 1].address == entry_point || Some(logs[r - 1].address) == paymaster) {
+    while l < r
+        && (logs[r - 1].address() == entry_point || Some(logs[r - 1].address()) == paymaster)
+    {
         r -= 1
     }
-    while l < r && logs[l].address == entry_point {
+    while l < r && logs[l].address() == entry_point {
         l += 1
     }
     (
-        logs.get(l)
-            .and_then(|l| l.log_index)
-            .map_or(0, |v| v.as_u32()),
+        logs.get(l).and_then(|l| l.log_index).unwrap_or(0) as u32,
         (r - l) as u32,
     )
 }
 
 pub fn unpack_uints(data: &[u8]) -> (U256, U256) {
     (
-        U256::from_big_endian(&data[..16]),
-        U256::from_big_endian(&data[16..]),
+        U256::from_be_slice(&data[..16]),
+        U256::from_be_slice(&data[16..]),
     )
 }
 
@@ -91,24 +93,13 @@ pub fn none_if_empty(b: Bytes) -> Option<Bytes> {
 pub fn decode_execute_call_data(call_data: &Bytes) -> (Option<Address>, Option<Bytes>) {
     if EXECUTE_SELECTORS
         .iter()
-        .any(|sig| call_data.starts_with(sig))
+        .any(|sig| call_data.starts_with(sig.as_slice()))
     {
-        match decode(
-            &[ParamType::Address, ParamType::Uint(256), ParamType::Bytes],
-            &call_data[4..],
-        )
-        .as_deref()
-        {
-            Ok([Token::Address(execute_target), _, Token::Bytes(execute_call_data)]) => (
-                Some(*execute_target),
-                Some(Bytes::from(execute_call_data.clone())),
-            ),
-            Ok(_) => {
-                tracing::warn!(
-                    call_data = call_data.to_string(),
-                    "failed to match call_data parsing result"
-                );
-                (None, None)
+        let res: sol_types::Result<(Address, U256, Bytes)> =
+            SolValue::abi_decode_params(&call_data[4..], false);
+        match res {
+            Ok((execute_target, _, execute_call_data)) => {
+                (Some(execute_target), Some(execute_call_data))
             }
             Err(err) => {
                 tracing::warn!(error = ?err, call_data = call_data.to_string(), "failed to parse call_data");
@@ -123,15 +114,17 @@ pub fn decode_execute_call_data(call_data: &Bytes) -> (Option<Address>, Option<B
 #[cfg(test)]
 mod tests {
     use crate::indexer::common::{decode_execute_call_data, extract_user_logs_boundaries};
-    use ethers::prelude::{types::Log, Address, U256};
-    use ethers_core::types::Bytes;
+    use alloy::{
+        primitives::{Address, Bytes, U160},
+        rpc::types::Log,
+    };
     use std::str::FromStr;
 
     #[test]
     fn test_extract_user_logs_boundaries() {
-        let entry_point = Address::from_low_u64_be(1);
-        let paymaster = Address::from_low_u64_be(2);
-        let other = Address::from_low_u64_be(3);
+        let entry_point = Address::from(U160::from(1));
+        let paymaster = Address::from(U160::from(2));
+        let other = Address::from(U160::from(3));
         let logs = vec![
             entry_point,
             entry_point,
@@ -143,17 +136,17 @@ mod tests {
         .into_iter()
         .enumerate()
         .map(|(i, a)| Log {
-            address: a,
-            topics: vec![],
-            data: Default::default(),
+            inner: alloy::primitives::Log {
+                address: a,
+                data: alloy::primitives::LogData::empty(),
+            },
             block_hash: None,
             block_number: None,
+            block_timestamp: None,
             transaction_hash: None,
             transaction_index: None,
-            log_index: Some(U256::from(i + 10)),
-            transaction_log_index: None,
-            log_type: None,
-            removed: None,
+            log_index: Some((i + 10) as u64),
+            removed: false,
         })
         .collect::<Vec<_>>();
 

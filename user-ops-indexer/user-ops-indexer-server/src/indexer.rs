@@ -1,11 +1,12 @@
 use crate::settings::Settings;
-use ethers::{prelude::Provider, utils::to_checksum};
+use alloy::{
+    providers::{ProviderBuilder, RootProvider, WsConnect},
+    transports::{BoxTransport, TransportError, TransportErrorKind},
+};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::time::sleep;
-use user_ops_indexer_logic::indexer::{
-    common_transport::CommonTransport, settings::IndexerSettings, v06, v07, Indexer, IndexerLogic,
-};
+use user_ops_indexer_logic::indexer::{settings::IndexerSettings, v06, v07, Indexer, IndexerLogic};
 
 pub async fn run(
     settings: Settings,
@@ -49,16 +50,14 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
 ) -> anyhow::Result<()> {
     tracing::info!(
         version = L::version(),
-        entry_point = to_checksum(&logic.entry_point(), None),
+        entry_point = logic.entry_point().to_string(),
         "connecting to rpc"
     );
 
     // If the first connect fails, the function will return an error immediately.
     // All subsequent reconnects are done inside tokio task and will not propagate to above.
-    let transport = CommonTransport::new(settings.rpc_url.clone()).await?;
-    let client = Provider::new(transport);
     let mut indexer = Indexer::new(
-        client,
+        connect(settings.rpc_url.clone()).await?,
         db_connection.clone(),
         settings.clone(),
         logic.clone(),
@@ -98,8 +97,8 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
 
                 tracing::info!(version = L::version(), "re-connecting to rpc");
 
-                let transport = match CommonTransport::new(settings.rpc_url.clone()).await {
-                    Ok(transport) => transport,
+                let provider = match connect(settings.rpc_url.clone()).await {
+                    Ok(provider) => provider,
                     Err(err) => {
                         tracing::error!(
                             error = ?err,
@@ -110,9 +109,8 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
                         continue;
                     }
                 };
-                let client = Provider::new(transport);
                 indexer = Indexer::new(
-                    client,
+                    provider,
                     db_connection.clone(),
                     settings.clone(),
                     logic.clone(),
@@ -123,4 +121,16 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
     });
 
     Ok(())
+}
+
+async fn connect(rpc_url: String) -> Result<RootProvider<BoxTransport>, TransportError> {
+    if rpc_url.starts_with("ws") {
+        let ws = WsConnect::new(rpc_url);
+        Ok(ProviderBuilder::new().on_ws(ws).await?.boxed())
+    } else {
+        let http = rpc_url
+            .parse()
+            .map_err(|_| TransportErrorKind::custom_str("invalid http url"))?;
+        Ok(ProviderBuilder::new().on_http(http).boxed())
+    }
 }
