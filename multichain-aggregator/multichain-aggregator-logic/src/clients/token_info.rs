@@ -20,7 +20,13 @@ pub struct TokenInfo {
 #[derive(Debug, Deserialize)]
 pub struct TokenInfoSearchResponse {
     pub token_infos: Vec<TokenInfo>,
-    pub next_page_params: Option<String>,
+    pub next_page_params: Option<Pagination>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Pagination {
+    pub page_token: String,
+    pub page_size: u32,
 }
 
 impl TokenInfoClient {

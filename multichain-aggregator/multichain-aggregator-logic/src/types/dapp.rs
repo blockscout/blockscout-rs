@@ -31,6 +31,7 @@ impl From<MarketplaceDapp> for proto::MarketplaceDapp {
             title: v.title,
             logo: v.logo,
             short_description: v.short_description,
+            chain_id: v.chain_id.to_string(),
         }
     }
 }
