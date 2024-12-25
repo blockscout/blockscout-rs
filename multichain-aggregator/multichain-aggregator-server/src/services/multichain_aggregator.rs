@@ -7,7 +7,10 @@ use crate::{
     settings::ApiSettings,
 };
 use multichain_aggregator_logic::{
-    self as logic, api_key_manager::ApiKeyManager, dapp_client::DappClient, error::ServiceError,
+    self as logic,
+    api_key_manager::ApiKeyManager,
+    clients::{dapp::DappClient, token_info::TokenInfoClient},
+    error::ServiceError,
     Chain,
 };
 use sea_orm::DatabaseConnection;
@@ -20,6 +23,7 @@ pub struct MultichainAggregator {
     // Cached chains
     chains: Vec<Chain>,
     dapp_client: DappClient,
+    token_info_client: TokenInfoClient,
     api_settings: ApiSettings,
 }
 
@@ -28,6 +32,7 @@ impl MultichainAggregator {
         db: DatabaseConnection,
         chains: Vec<Chain>,
         dapp_client: DappClient,
+        token_info_client: TokenInfoClient,
         api_settings: ApiSettings,
     ) -> Self {
         Self {
@@ -35,6 +40,7 @@ impl MultichainAggregator {
             api_key_manager: ApiKeyManager::new(db),
             chains,
             dapp_client,
+            token_info_client,
             api_settings,
         }
     }
@@ -112,13 +118,18 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<QuickSearchResponse>, Status> {
         let inner = request.into_inner();
 
-        let results =
-            logic::search::quick_search(&self.db, &self.dapp_client, inner.q, &self.chains)
-                .await
-                .map_err(|err| {
-                    tracing::error!(error = ?err, "failed to quick search");
-                    Status::internal("failed to quick search")
-                })?;
+        let results = logic::search::quick_search(
+            &self.db,
+            &self.dapp_client,
+            &self.token_info_client,
+            inner.q,
+            &self.chains,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error = ?err, "failed to quick search");
+            Status::internal("failed to quick search")
+        })?;
 
         Ok(Response::new(results.into()))
     }

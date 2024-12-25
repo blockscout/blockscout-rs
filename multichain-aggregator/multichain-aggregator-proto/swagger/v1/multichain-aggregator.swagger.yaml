@@ -163,6 +163,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1MarketplaceDapp'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
   protobufAny:
     type: object
     properties:
@@ -285,3 +290,14 @@ definitions:
         type: object
         additionalProperties:
           $ref: '#/definitions/QuickSearchResponseChainSearchResult'
+  v1Token:
+    type: object
+    properties:
+      address:
+        type: string
+      icon_url:
+        type: string
+      name:
+        type: string
+      symbol:
+        type: string

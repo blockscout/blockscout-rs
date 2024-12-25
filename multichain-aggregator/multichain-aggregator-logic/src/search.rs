@@ -1,11 +1,12 @@
 use crate::{
-    dapp_client::DappClient,
+    clients::{dapp::DappClient, token_info::TokenInfoClient},
     error::ServiceError,
     repository::{addresses, block_ranges, hashes},
     types::{
         chains::Chain,
         dapp::MarketplaceDapp,
         search_results::{ChainSearchResult, SearchResults},
+        token_info::Token,
         ChainId,
     },
 };
@@ -29,20 +30,22 @@ macro_rules! populate_search_results {
     };
 }
 
-#[instrument(skip(db, dapp_client, chains), level = "info")]
+#[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
     db: &DatabaseConnection,
     dapp_client: &DappClient,
+    token_info_client: &TokenInfoClient,
     query: String,
     chains: &[Chain],
 ) -> Result<SearchResults, ServiceError> {
     let raw_query = query.trim();
 
-    let (hashes, block_numbers, addresses, dapps) = join!(
+    let (hashes, block_numbers, addresses, dapps, token_infos) = join!(
         hashes::search_by_query(db, raw_query),
         block_ranges::search_by_query(db, raw_query),
         addresses::search_by_query(db, raw_query),
         dapp_client.search_dapps(raw_query),
+        token_info_client.search_tokens(raw_query, None, Some(100), None),
     );
 
     let explorers: BTreeMap<ChainId, String> = chains
@@ -90,6 +93,20 @@ pub async fn quick_search(
         }
         Err(err) => {
             tracing::error!(error = ?err, "failed to search dapps");
+        }
+    }
+
+    match token_infos {
+        Ok(token_infos) => {
+            let tokens: Vec<Token> = token_infos
+                .token_infos
+                .into_iter()
+                .filter_map(|t| t.try_into().ok())
+                .collect();
+            populate_search_results!(results, explorers, tokens, tokens);
+        }
+        Err(err) => {
+            tracing::error!(error = ?err, "failed to search token infos");
         }
     }
 
