@@ -54,7 +54,7 @@ pub async fn offchain_resolve(
     convert = r#"{
             format!("{}-{}",  from_user.deployed_protocol.protocol.info.slug, from_user.inner.id)
         }"#,
-    time = 14400, // 4 * 60 * 60 seconds = 4 hours
+    time = 900, // 15 * 60 seconds = 15 minutes
     size = 500,
     sync_writes = true,
     with_cached_flag = true,
