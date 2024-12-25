@@ -3,7 +3,7 @@ on:
     branches:
       - 'main'
     tags:
-      - 'blockscout-ens/v*'
+      - 'bens/v*'
     paths:
       - blockscout-ens/**
       - .github/workflows/bens.yml
@@ -124,7 +124,9 @@ jobs:
       (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
     uses: ./.github/workflows/_docker-build-push.yml
     with:
-      service-name: blockscout-ens
+      service-name: bens
+      docker-context-path: "blockscout-ens"
+      dockerfile-path: "blockscout-ens/Dockerfile"
     secrets:
       ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
       ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
