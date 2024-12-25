@@ -30,6 +30,27 @@ enum Resolution {
   YEAR = 4;
 }
 
+message GetLineChartsRequest {}
+
+// todo: replace LineChartInfo::resolutions with enum when supported
+// (probably this https://github.com/blockscout/actix-prost/pull/24/files)
+
+message LineChartInfo {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  optional string units = 4;
+  repeated string resolutions = 5;
+}
+
+message LineChartSection {
+  string id = 1;
+  string title = 2;
+  repeated LineChartInfo charts = 3;
+}
+
+message LineCharts { repeated LineChartSection sections = 1; }
+
 message GetLineChartRequest {
   string name = 1;
   // Default is first data point
@@ -51,24 +72,3 @@ message LineChart {
   repeated Point chart = 1;
   LineChartInfo info = 2;
 }
-
-message GetLineChartsRequest {}
-
-// todo: replace LineChartInfo::resolutions with enum when supported
-// (probably this https://github.com/blockscout/actix-prost/pull/24/files)
-
-message LineChartInfo {
-  string id = 1;
-  string title = 2;
-  string description = 3;
-  optional string units = 4;
-  repeated string resolutions = 5;
-}
-
-message LineChartSection {
-  string id = 1;
-  string title = 2;
-  repeated LineChartInfo charts = 3;
-}
-
-message LineCharts { repeated LineChartSection sections = 1; }
