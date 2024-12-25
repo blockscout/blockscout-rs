@@ -75,7 +75,7 @@ impl HttpApiClient {
 async fn process_api_response<T: for<'a> Deserialize<'a>>(response: Response) -> Result<T, Error> {
     let status = response.status();
     match status {
-        StatusCode::OK => (),
+        status if status.is_success() => (),
         StatusCode::NOT_FOUND => return Err(Error::NotFound),
         status => {
             return Err(Error::InvalidStatusCode {
