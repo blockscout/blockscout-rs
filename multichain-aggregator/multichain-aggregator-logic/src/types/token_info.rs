@@ -35,6 +35,7 @@ impl From<Token> for proto::Token {
             name: v.name,
             symbol: v.symbol,
             icon_url: v.icon_url,
+            chain_id: v.chain_id.to_string(),
         }
     }
 }

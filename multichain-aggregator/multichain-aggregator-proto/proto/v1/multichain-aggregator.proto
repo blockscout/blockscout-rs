@@ -8,6 +8,7 @@ service MultichainAggregatorService {
   rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
   rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
   rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
 }
 
 message Pagination {
@@ -33,11 +34,13 @@ message Address {
   optional bool is_contract = 6;
   optional bool is_verified_contract = 7;
   optional bool is_token = 8;
+  string chain_id = 9;
 }
 
 message BlockRange {
   uint64 min_block_number = 1;
   uint64 max_block_number = 2;
+  string chain_id = 3;
 }
 
 message Hash {
@@ -49,6 +52,7 @@ message Hash {
   }
 
   HashType hash_type = 2;
+  string chain_id = 3;
 }
 
 message MarketplaceDapp {
@@ -56,6 +60,7 @@ message MarketplaceDapp {
   string title = 2;
   string logo = 3;
   string short_description = 4;
+  string chain_id = 5;
 }
 
 message Token {
@@ -63,6 +68,7 @@ message Token {
   string icon_url = 2;
   string name = 3;
   string symbol = 4;
+  string chain_id = 5;
 }
 
 message BatchImportRequest {
@@ -98,11 +104,24 @@ message QuickSearchResponse {
 
 message ListAddressesRequest {
   string q = 1;
-  optional uint32 page_size = 2;
-  optional string page_token = 3;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
 }
 
 message ListAddressesResponse {
   repeated Address addresses = 1;
+  Pagination pagination = 2;
+}
+
+message ListTokensRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListTokensResponse {
+  repeated Token tokens = 1;
   Pagination pagination = 2;
 }

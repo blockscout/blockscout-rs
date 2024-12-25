@@ -27,6 +27,10 @@ paths:
           in: query
           required: false
           type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
         - name: page_size
           in: query
           required: false
@@ -72,6 +76,38 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/tokens:
+    get:
+      operationId: MultichainAggregatorService_ListTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
           in: query
           required: false
           type: string
@@ -206,6 +242,8 @@ definitions:
         type: boolean
       is_token:
         type: boolean
+      chain_id:
+        type: string
   v1BatchImportRequest:
     type: object
     properties:
@@ -242,6 +280,8 @@ definitions:
       max_block_number:
         type: string
         format: uint64
+      chain_id:
+        type: string
   v1Hash:
     type: object
     properties:
@@ -249,6 +289,8 @@ definitions:
         type: string
       hash_type:
         $ref: '#/definitions/HashHashType'
+      chain_id:
+        type: string
   v1HealthCheckResponse:
     type: object
     properties:
@@ -264,6 +306,16 @@ definitions:
           $ref: '#/definitions/v1Address'
       pagination:
         $ref: '#/definitions/v1Pagination'
+  v1ListTokensResponse:
+    type: object
+    properties:
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+      pagination:
+        $ref: '#/definitions/v1Pagination'
   v1MarketplaceDapp:
     type: object
     properties:
@@ -274,6 +326,8 @@ definitions:
       logo:
         type: string
       short_description:
+        type: string
+      chain_id:
         type: string
   v1Pagination:
     type: object
@@ -300,4 +354,6 @@ definitions:
       name:
         type: string
       symbol:
+        type: string
+      chain_id:
         type: string

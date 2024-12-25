@@ -37,6 +37,7 @@ impl From<Hash> for proto::Hash {
         Self {
             hash: v.hash.to_string(),
             hash_type: db_hash_type_to_proto_hash_type(v.hash_type).into(),
+            chain_id: v.chain_id.to_string(),
         }
     }
 }

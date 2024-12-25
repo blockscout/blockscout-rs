@@ -66,6 +66,7 @@ impl From<Address> for proto::Address {
             is_contract: Some(v.is_contract),
             is_verified_contract: Some(v.is_verified_contract),
             is_token: Some(v.is_token),
+            chain_id: v.chain_id.to_string(),
         }
     }
 }
