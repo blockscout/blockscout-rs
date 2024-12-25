@@ -192,6 +192,9 @@ pub fn exclusive_range_to_inclusive<Idx: Incrementable + Decrementable + Ord>(
     start..=end
 }
 
+/// Note: databases usually don't operate with sub-millisecond precision (as does
+/// [`chrono::DateTime`], for example), so the result of this conversion might
+/// not be actually accurate, as the endpoint will get excluded on query.
 pub fn inclusive_range_to_exclusive<Idx: Incrementable>(r: RangeInclusive<Idx>) -> Range<Idx> {
     let (start, end) = r.into_inner();
     // impossible to include max value in exclusive range,
@@ -305,6 +308,7 @@ where
     };
     Ok(range)
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

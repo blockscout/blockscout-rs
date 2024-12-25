@@ -37,7 +37,7 @@ impl RemoteQueryBehaviour for YesterdayTxnsQuery {
             &cx.blockscout_applied_migrations,
         );
         let data = Self::Output::find_by_statement(query)
-            .one(cx.blockscout.connection.as_ref())
+            .one(cx.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?
             // no transactions for yesterday

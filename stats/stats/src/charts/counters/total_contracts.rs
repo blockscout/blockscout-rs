@@ -28,7 +28,7 @@ impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
         let value = addresses::Entity::find()
             .filter(addresses::Column::ContractCode.is_not_null())
             .filter(addresses::Column::InsertedAt.lte(cx.time))
-            .count(cx.blockscout.connection.as_ref())
+            .count(cx.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?;
         let timespan = cx.time.date_naive();

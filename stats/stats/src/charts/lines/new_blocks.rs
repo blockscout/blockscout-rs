@@ -104,11 +104,11 @@ mod tests {
     use super::*;
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
-        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
         query_dispatch::{serialize_line_points, QuerySerialized},
         range::UniversalRange,
         tests::{
-            init_db::init_marked_db_all, mock_blockscout::fill_mock_blockscout_data,
+            init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data,
             point_construction::dt, simple_test::simple_test_chart,
         },
         types::ExtendedTimespanValue,
@@ -117,25 +117,23 @@ mod tests {
     use chrono::{NaiveDate, Utc};
     use entity::{chart_data, charts};
     use pretty_assertions::assert_eq;
-    use sea_orm::{EntityTrait, Set};
+    use sea_orm::{DatabaseConnection, EntityTrait, Set};
     use std::str::FromStr;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_blocks_recurrent() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_marked_db_all("update_new_blocks_recurrent").await;
+        let (db, blockscout) = init_db_all("update_new_blocks_recurrent").await;
         let current_time = chrono::DateTime::<Utc>::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        NewBlocks::init_recursively(db.connection.as_ref(), &current_time)
+        NewBlocks::init_recursively(&db, &current_time)
             .await
             .unwrap();
 
-        let min_blockscout_block = get_min_block_blockscout(blockscout.connection.as_ref())
-            .await
-            .unwrap();
+        let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
         // set wrong value and check, that it was rewritten
         chart_data::Entity::insert_many([
             chart_data::ActiveModel {
@@ -153,7 +151,7 @@ mod tests {
                 ..Default::default()
             },
         ])
-        .exec(db.connection.as_ref())
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
         // set corresponding `last_updated_at` for successful partial update
@@ -162,19 +160,19 @@ mod tests {
             last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
             ..Default::default()
         })
-        .exec(db.connection.as_ref())
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
 
         // Note that update is not full, therefore there is no entry with date `2022-11-09` and
         // wrong value is kept
-        let mut cx = UpdateContext {
+        let mut cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: current_time,
+            update_time_override: Some(current_time),
             force_full: false,
-        };
+        });
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
             .await
@@ -235,22 +233,22 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_new_blocks_fresh() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_marked_db_all("update_new_blocks_fresh").await;
+        let (db, blockscout) = init_db_all("update_new_blocks_fresh").await;
         let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        NewBlocks::init_recursively(db.connection.as_ref(), &current_time)
+        NewBlocks::init_recursively(&db, &current_time)
             .await
             .unwrap();
 
-        let cx = UpdateContext {
+        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: current_time,
+            update_time_override: Some(current_time),
             force_full: true,
-        };
+        });
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
             .await
@@ -284,18 +282,16 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_new_blocks_last() {
         let _ = tracing_subscriber::fmt::try_init();
-        let (db, blockscout) = init_marked_db_all("update_new_blocks_last").await;
+        let (db, blockscout) = init_db_all("update_new_blocks_last").await;
         let current_time = chrono::DateTime::from_str("2022-11-12T12:00:00Z").unwrap();
         let current_date = current_time.date_naive();
-        fill_mock_blockscout_data(blockscout.connection.as_ref(), current_date).await;
+        fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        NewBlocks::init_recursively(db.connection.as_ref(), &current_time)
+        NewBlocks::init_recursively(&db, &current_time)
             .await
             .unwrap();
 
-        let min_blockscout_block = get_min_block_blockscout(blockscout.connection.as_ref())
-            .await
-            .unwrap();
+        let min_blockscout_block = get_min_block_blockscout(&blockscout).await.unwrap();
         // set wrong values and check, that they weren't rewritten
         // except the last one
         chart_data::Entity::insert_many([
@@ -328,7 +324,7 @@ mod tests {
                 ..Default::default()
             },
         ])
-        .exec(db.connection.as_ref())
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
         // set corresponding `last_updated_at` for successful partial update
@@ -337,17 +333,17 @@ mod tests {
             last_updated_at: Set(Some(dt("2022-11-12T11:00:00").and_utc().fixed_offset())),
             ..Default::default()
         })
-        .exec(db.connection.as_ref())
+        .exec(&db as &DatabaseConnection)
         .await
         .unwrap();
 
-        let cx = UpdateContext {
+        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            time: current_time,
+            update_time_override: Some(current_time),
             force_full: false,
-        };
+        });
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
             .await

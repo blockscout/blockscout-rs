@@ -1,7 +1,4 @@
-use super::{
-    init_db::{init_db_all, init_marked_db_all},
-    mock_blockscout::fill_mock_blockscout_data,
-};
+use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use crate::{
     data_source::{
         source::DataSource,
@@ -10,13 +7,12 @@ use crate::{
     query_dispatch::QuerySerialized,
     range::UniversalRange,
     types::{timespans::DateValue, Timespan},
-    utils::MarkedDbConnection,
     ChartProperties,
 };
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use pretty_assertions::assert_eq;
-use sea_orm::{ConnectionTrait, DbBackend, Statement};
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use stats_proto::blockscout::stats::v1::Point;
 use std::{fmt::Debug, str::FromStr};
 
@@ -84,8 +80,8 @@ where
     fill_mock_blockscout_data(&blockscout, current_date).await;
 
     let mut parameters = UpdateParameters {
-        db: &MarkedDbConnection::from_test_db(&db).unwrap(),
-        blockscout: &MarkedDbConnection::from_test_db(&blockscout).unwrap(),
+        db: &db,
+        blockscout: &blockscout,
         blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,
@@ -119,8 +115,8 @@ where
 ///
 /// Tests that force update with existing data works correctly
 pub async fn dirty_force_update_and_check<C>(
-    db: &TestDbGuard,
-    blockscout: &TestDbGuard,
+    db: &DatabaseConnection,
+    blockscout: &DatabaseConnection,
     expected: Vec<(&str, &str)>,
     update_time_override: Option<DateTime<Utc>>,
 ) where
@@ -134,8 +130,8 @@ pub async fn dirty_force_update_and_check<C>(
         update_time_override.unwrap_or(DateTime::from_str("2023-03-01T12:00:01Z").unwrap());
 
     let parameters = UpdateParameters {
-        db: &MarkedDbConnection::from_test_db(db).unwrap(),
-        blockscout: &MarkedDbConnection::from_test_db(blockscout).unwrap(),
+        db,
+        blockscout,
         blockscout_applied_migrations: BlockscoutMigrations::latest(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -224,15 +220,13 @@ async fn ranged_test_chart_inner<C>(
 {
     let _ = tracing_subscriber::fmt::try_init();
     let expected = map_str_tuple_to_owned(expected);
-    let (db, blockscout) = init_marked_db_all(test_name).await;
+    let (db, blockscout) = init_db_all(test_name).await;
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
     let max_date = max_time.date_naive();
     let range = { from.into_time_range().start..to.into_time_range().end };
-    C::init_recursively(db.connection.as_ref(), &current_time)
-        .await
-        .unwrap();
-    fill_mock_blockscout_data(blockscout.connection.as_ref(), max_date).await;
+    C::init_recursively(&db, &current_time).await.unwrap();
+    fill_mock_blockscout_data(&blockscout, max_date).await;
 
     let mut parameters = UpdateParameters {
         db: &db,
@@ -316,8 +310,8 @@ async fn simple_test_counter_inner<C>(
     fill_mock_blockscout_data(&blockscout, max_date).await;
 
     let mut parameters = UpdateParameters {
-        db: &MarkedDbConnection::from_test_db(&db).unwrap(),
-        blockscout: &MarkedDbConnection::from_test_db(&blockscout).unwrap(),
+        db: &db,
+        blockscout: &blockscout,
         blockscout_applied_migrations: migrations,
         update_time_override: Some(current_time),
         force_full: true,
@@ -339,20 +333,17 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
 {
     let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_marked_db_all(test_name).await;
+    let (db, blockscout) = init_db_all(test_name).await;
     let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
 
-    C::init_recursively(&db.connection, &current_time)
-        .await
-        .unwrap();
+    C::init_recursively(&db, &current_time).await.unwrap();
 
-    fill_mock_blockscout_data(&blockscout.connection, current_date).await;
+    fill_mock_blockscout_data(&blockscout, current_date).await;
 
     // need to analyze or vacuum for `reltuples` to be updated.
     // source: https://www.postgresql.org/docs/9.3/planner-stats.html
     let _ = blockscout
-        .connection
         .execute(Statement::from_string(DbBackend::Postgres, "ANALYZE;"))
         .await
         .unwrap();

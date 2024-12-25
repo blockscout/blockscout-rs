@@ -13,13 +13,13 @@ use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
 use futures::{stream::FuturesOrdered, StreamExt};
 use proto_v1::stats_service_server::StatsService;
-use sea_orm::DbErr;
+use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
     data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
     query_dispatch::{CounterHandle, LineHandle, QuerySerializedDyn},
     range::UniversalRange,
     types::Timespan,
-    utils::{day_start, MarkedDbConnection},
+    utils::day_start,
     ChartError, RequestedPointsLimit, ResolutionKind,
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
@@ -27,16 +27,16 @@ use tonic::{Request, Response, Status};
 
 #[derive(Clone)]
 pub struct ReadService {
-    db: MarkedDbConnection,
-    blockscout: MarkedDbConnection,
+    db: Arc<DatabaseConnection>,
+    blockscout: Arc<DatabaseConnection>,
     charts: Arc<RuntimeSetup>,
     limits: ReadLimits,
 }
 
 impl ReadService {
     pub async fn new(
-        db: MarkedDbConnection,
-        blockscout: MarkedDbConnection,
+        db: Arc<DatabaseConnection>,
+        blockscout: Arc<DatabaseConnection>,
         charts: Arc<RuntimeSetup>,
         limits: ReadLimits,
     ) -> Result<Self, DbErr> {
@@ -104,7 +104,7 @@ impl ReadService {
         points_limit: Option<RequestedPointsLimit>,
         query_time: DateTime<Utc>,
     ) -> Result<Data, ChartError> {
-        let migrations = BlockscoutMigrations::query_from_db(self.blockscout.connection.as_ref())
+        let migrations = BlockscoutMigrations::query_from_db(&self.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?;
         let context = UpdateContext::from_params_now_or_override(UpdateParameters {

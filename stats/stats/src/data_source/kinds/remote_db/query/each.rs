@@ -63,7 +63,7 @@ where
         for point_range in points {
             let query = S::get_statement(point_range.clone(), &cx.blockscout_applied_migrations);
             let point_value = ValueWrapper::<Value>::find_by_statement(query)
-                .one(cx.blockscout.connection.as_ref())
+                .one(cx.blockscout)
                 .await
                 .map_err(ChartError::BlockscoutDB)?;
             if let Some(ValueWrapper { value }) = point_value {

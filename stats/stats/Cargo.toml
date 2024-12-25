@@ -34,7 +34,7 @@ rust_decimal = "1.27"
 # Dependencies for test-utils only
 pretty_assertions = { version= "1.2", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
-blockscout-service-launcher = { version = "0.13.1", features = [ "database-0_12", "test-database" ], optional = true }
+blockscout-service-launcher = { workspace = true, features = [ "database-0_12", "test-database" ], optional = true }
 wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -42,6 +42,7 @@ sea-orm = { version = "0.12", features = [
     "sqlx-postgres",
     "sqlx-sqlite",
     "runtime-tokio-rustls",
+    "mock"
 ] }
 rust_decimal = "1.27"
 rust_decimal_macros = "1.27"
@@ -49,7 +50,7 @@ rust_decimal_macros = "1.27"
 # test-utils
 pretty_assertions = "1.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-blockscout-service-launcher = { version = "0.13.1", features = [ "database-0_12", "test-database" ] }
+blockscout-service-launcher = { workspace = true, features = [ "database-0_12", "test-database" ] }
 wiremock = { workspace = true }
 
 [features]
