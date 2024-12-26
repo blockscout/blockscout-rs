@@ -19,7 +19,7 @@ serde = "1.0"
 tokio = { version = "1.23", features = ["rt-multi-thread", "macros"] }
 tonic = "0.8"
 tracing = "0.1"
-alloy = { version = "0.8.2", features = ["full", "provider-debug-api", "provider-trace-api"] }
+alloy = { version = "0.8.3", features = ["provider-ws", "provider-http"] }
 
 [dev-dependencies]
 sea-orm = { version = "*", features = ["sqlx-sqlite"] }
