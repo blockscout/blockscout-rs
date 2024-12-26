@@ -1,5 +1,5 @@
 pub mod api_key_manager;
-pub mod dapp_client;
+pub mod clients;
 pub mod error;
 mod import;
 mod proto;
@@ -9,5 +9,6 @@ mod types;
 
 pub use import::batch_import;
 pub use types::{
-    api_keys::ApiKey, batch_import_request::BatchImportRequest, chains::Chain, ChainId,
+    api_keys::ApiKey, batch_import_request::BatchImportRequest, chains::Chain, token_info::Token,
+    ChainId,
 };

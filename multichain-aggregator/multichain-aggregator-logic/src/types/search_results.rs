@@ -1,7 +1,9 @@
-use super::{block_ranges::ChainBlockNumber, ChainId};
 use crate::{
     proto,
-    types::{addresses::Address, dapp::MarketplaceDapp, hashes::Hash},
+    types::{
+        addresses::Address, block_ranges::ChainBlockNumber, dapp::MarketplaceDapp, hashes::Hash,
+        token_info::Token, ChainId,
+    },
 };
 use std::collections::BTreeMap;
 
@@ -13,6 +15,7 @@ pub struct ChainSearchResult {
     pub transactions: Vec<Hash>,
     pub block_numbers: Vec<ChainBlockNumber>,
     pub dapps: Vec<MarketplaceDapp>,
+    pub tokens: Vec<Token>,
 }
 
 impl From<ChainSearchResult> for proto::quick_search_response::ChainSearchResult {
@@ -24,6 +27,7 @@ impl From<ChainSearchResult> for proto::quick_search_response::ChainSearchResult
             transactions: v.transactions.into_iter().map(|t| t.into()).collect(),
             block_numbers: v.block_numbers.into_iter().map(|b| b.into()).collect(),
             dapps: v.dapps.into_iter().map(|d| d.into()).collect(),
+            tokens: v.tokens.into_iter().map(|t| t.into()).collect(),
         }
     }
 }
