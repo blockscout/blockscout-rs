@@ -14,9 +14,12 @@
 //!     new charts to integration tests (`tests` folder).
 //!
 
-use crate::config::{
-    self,
-    types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
+use crate::{
+    config::{
+        self,
+        types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
+    },
+    ReadService,
 };
 use cron::Schedule;
 use itertools::Itertools;
@@ -137,6 +140,7 @@ impl RuntimeSetup {
         update_groups: config::update_groups::Config,
     ) -> anyhow::Result<Self> {
         let charts_info = Self::build_charts_info(charts)?;
+        Self::check_all_enabled_charts_have_endpoints(charts_info.keys().collect(), &layout);
         let update_groups = Self::init_update_groups(update_groups, &charts_info)?;
         Ok(Self {
             lines_layout: layout.line_chart_categories,
@@ -248,6 +252,47 @@ impl RuntimeSetup {
 
         combine_disjoint_maps(counters, line_charts)
             .map_err(|duplicate_name| anyhow::anyhow!("duplicate chart name: {duplicate_name:?}",))
+    }
+
+    /// Warns charts that are both enabled and will be updated,
+    /// but which are not returned by any endpoint (making the updates
+    /// very likely useless).
+    ///
+    /// In other words, any enabled chart should be accessible from
+    /// the outside.
+    fn check_all_enabled_charts_have_endpoints<'a>(
+        mut enabled_names: HashSet<&'a String>,
+        layout: &'a config::layout::Config,
+    ) {
+        // general stats handles
+        for counter in &layout.counters_order {
+            enabled_names.remove(&counter);
+        }
+        for line_chart in layout
+            .line_chart_categories
+            .iter()
+            .flat_map(|cat| cat.charts_order.iter())
+        {
+            enabled_names.remove(&line_chart);
+        }
+        // pages
+        let charts_in_pages = [
+            ReadService::main_page_charts(),
+            ReadService::contracts_page_charts(),
+            ReadService::transactions_page_charts(),
+        ]
+        .concat();
+        for chart in charts_in_pages {
+            enabled_names.remove(&chart);
+        }
+
+        if !enabled_names.is_empty() {
+            tracing::warn!(
+                endpointless_charts =? enabled_names,
+                "Some charts are updated but not returned \
+                by any endpoint. This is likely a bug, please report it."
+            );
+        }
     }
 
     fn all_update_groups() -> Vec<ArcUpdateGroup> {

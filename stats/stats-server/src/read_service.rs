@@ -137,6 +137,60 @@ fn get_counter_query_handle(name: &str, counter: &EnabledChartEntry) -> Option<C
 }
 
 impl ReadService {
+    pub fn main_page_charts() -> Vec<String> {
+        // ensure that changes to api are reflected here
+        proto_v1::MainPageStats {
+            average_block_time: None,
+            total_addresses: None,
+            total_blocks: None,
+            total_txns: None,
+            yesterday_txns: None,
+            transactions: None,
+        };
+        vec![
+            AverageBlockTime::name(),
+            TotalAddresses::name(),
+            TotalBlocks::name(),
+            TotalTxns::name(),
+            YesterdayTxns::name(),
+            NewTxnsWindow::name(),
+        ]
+    }
+
+    pub fn contracts_page_charts() -> Vec<String> {
+        // ensure that changes to api are reflected here
+        proto_v1::ContractsPageStats {
+            total_contracts: None,
+            new_contracts_24h: None,
+            total_verified_contracts: None,
+            new_verified_contracts_24h: None,
+        };
+        vec![
+            TotalContracts::name(),
+            NewContracts24h::name(),
+            TotalVerifiedContracts::name(),
+            NewVerifiedContracts24h::name(),
+        ]
+    }
+
+    pub fn transactions_page_charts() -> Vec<String> {
+        // ensure that changes to api are reflected here
+        proto_v1::TransactionsPageStats {
+            pending_txns: None,
+            txns_fee_24h: None,
+            average_txn_fee_24h: None,
+            total_txns: None,
+        };
+        vec![
+            PendingTxns::name(),
+            TxnsFee24h::name(),
+            AverageTxnFee24h::name(),
+            TotalTxns::name(),
+        ]
+    }
+}
+
+impl ReadService {
     async fn query_with_handle<Data: Send>(
         &self,
         query_handle: QuerySerializedDyn<Data>,
