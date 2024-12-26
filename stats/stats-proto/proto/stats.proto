@@ -8,6 +8,9 @@ service StatsService {
   rpc GetCounters(GetCountersRequest) returns (Counters);
   rpc GetLineCharts(GetLineChartsRequest) returns (LineCharts);
   rpc GetLineChart(GetLineChartRequest) returns (LineChart);
+  rpc GetMainPageStats(GetMainPageStatsRequest) returns (MainPageStats);
+  rpc GetTransactionsPageStats(GetTransactionsPageStatsRequest) returns (TransactionsPageStats);
+  rpc GetContractsPageStats(GetContractsPageStatsRequest) returns (ContractsPageStats);
 }
 
 message GetCountersRequest {}
@@ -71,4 +74,34 @@ message Point {
 message LineChart {
   repeated Point chart = 1;
   LineChartInfo info = 2;
+}
+
+message GetMainPageStatsRequest {}
+
+message MainPageStats {
+  optional Counter average_block_time = 1;
+  optional Counter total_addresses = 2;
+  optional Counter total_blocks = 3;
+  optional Counter total_txns = 4;
+  optional Counter yesterday_txns = 5;
+
+  optional LineChart transactions = 6;
+}
+
+message GetTransactionsPageStatsRequest {}
+
+message TransactionsPageStats {
+  optional Counter pending_txns = 1;
+  optional Counter txns_fee_24h = 2;
+  optional Counter average_txn_fee_24h = 3;
+  optional Counter total_txns = 4;
+}
+
+message GetContractsPageStatsRequest {}
+
+message ContractsPageStats {
+  optional Counter total_contracts = 1;
+  optional Counter new_contracts_24h = 2;
+  optional Counter total_verified_contracts = 3;
+  optional Counter new_verified_contracts_24h = 4;
 }
