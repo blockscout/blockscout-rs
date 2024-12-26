@@ -29,6 +29,8 @@ mod verified_contracts_growth;
 #[cfg(test)]
 mod mock;
 
+pub use new_txns_window::WINDOW as NEW_TXNS_WINDOW_RANGE;
+
 pub use accounts_growth::{
     AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };

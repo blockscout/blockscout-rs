@@ -97,6 +97,7 @@ pub struct RuntimeSetup {
     pub lines_layout: Vec<LineChartCategory>,
     pub counters_layout: Vec<String>,
     pub update_groups: BTreeMap<String, UpdateGroupEntry>,
+    /// chart name -> entry
     pub charts_info: BTreeMap<String, EnabledChartEntry>,
 }
 
