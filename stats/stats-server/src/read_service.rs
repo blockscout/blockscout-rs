@@ -2,7 +2,7 @@ use std::{clone::Clone, collections::BTreeMap, fmt::Debug, str::FromStr, sync::A
 
 use crate::{
     config::{
-        layout::sorted_items_according_to_layout,
+        layout::placed_items_according_to_layout,
         types::{self, EnabledChartSettings},
     },
     runtime_setup::{EnabledChartEntry, RuntimeSetup},
@@ -314,7 +314,7 @@ impl StatsService for ReadService {
             .collect()
             .await;
         let counters_sorted =
-            sorted_items_according_to_layout(counters, &self.charts.counters_layout, |c| &c.id);
+            placed_items_according_to_layout(counters, &self.charts.counters_layout, |c| &c.id);
         let counters = proto_v1::Counters {
             counters: counters_sorted,
         };
