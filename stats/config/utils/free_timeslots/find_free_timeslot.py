@@ -7,9 +7,12 @@ import colorsys
 import os
 from tkcalendar import Calendar
 from typing import Dict, List, Tuple
+from enum import Enum
 
-DURATION_MENU_MANUAL = "manual"
-DURATION_MENU_CONFIG = "config"
+
+class DurationMenu(Enum):
+    MANUAL = "manual"
+    CONFIG = "config"
 
 
 class CronVisualizerGUI:
@@ -83,12 +86,12 @@ class CronVisualizerGUI:
         # Duration control
         radiobutton_frame_1 = ttk.Frame(next_left_top_frame)
         radiobutton_frame_1.pack(side=tk.TOP)
-        self.duration_choice = tk.StringVar(value=DURATION_MENU_CONFIG)
+        self.duration_choice = tk.StringVar(value=DurationMenu.CONFIG.value)
         ttk.Radiobutton(
             radiobutton_frame_1,
             text="Fixed duration (minutes):",
             variable=self.duration_choice,
-            value=DURATION_MENU_MANUAL,
+            value=DurationMenu.MANUAL.value,
             command=self.update_visualization,
         ).pack(side=tk.LEFT)
         self.manual_duration_var = tk.StringVar(value=str(self.default_duration))
@@ -102,7 +105,7 @@ class CronVisualizerGUI:
             next_left_top_frame,
             text="Per-task durations from config",
             variable=self.duration_choice,
-            value=DURATION_MENU_CONFIG,
+            value=DurationMenu.CONFIG.value,
             command=self.update_visualization,
         ).pack(side=tk.TOP, fill="x")
 
@@ -225,7 +228,7 @@ class CronVisualizerGUI:
             start_times = self.parse_cron_schedule(schedule, self.selected_date)
 
             # Determine duration for this task
-            if self.duration_choice.get() == DURATION_MENU_CONFIG:
+            if self.duration_choice.get() == DurationMenu.CONFIG.value:
                 duration = self.task_durations.get(name, manual_duration)
             else:
                 duration = manual_duration
