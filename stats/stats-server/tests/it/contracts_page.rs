@@ -43,13 +43,13 @@ async fn test_contracts_page_ok() {
         new_verified_contracts_24h,
     } = send_get_request(&base, "/api/v1/pages/contracts").await;
     let counters = [
-        total_contracts,
-        new_contracts_24h,
-        total_verified_contracts,
-        new_verified_contracts_24h,
+        ("total_contracts", total_contracts),
+        ("new_contracts_24h", new_contracts_24h),
+        ("total_verified_contracts", total_verified_contracts),
+        ("new_verified_contracts_24h", new_verified_contracts_24h),
     ];
-    for counter in counters {
-        let counter = counter.expect("page counter must be available");
+    for (name, counter) in counters {
+        let counter = counter.expect(&format!("page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
