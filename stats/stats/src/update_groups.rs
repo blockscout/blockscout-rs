@@ -225,11 +225,12 @@ construct_update_group!(NewNativeCoinTransfersGroup {
     ],
 });
 
-// Charts displayed in `/verified-contracts`.
+// Charts returned in contracts endpoint.
 //
 // They don't depend on each other, but single group
 // will make scheduling simpler + ensure they update
-// as close to each other as possible without overloading DB.
+// as close to each other as possible without overloading DB
+// by running concurrently.
 construct_update_group!(VerifiedContractsPageGroup {
     charts: [
         TotalContracts,
