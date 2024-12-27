@@ -14,7 +14,7 @@ use wiremock::ResponseTemplate;
 
 use std::{path::PathBuf, str::FromStr};
 
-use crate::{common::send_arbitrary_request, lines::enabled_resolutions};
+use crate::common::{enabled_resolutions, send_arbitrary_request};
 
 #[tokio::test]
 #[ignore = "needs database"]

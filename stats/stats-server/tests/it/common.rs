@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use reqwest::{RequestBuilder, Response};
 
 pub async fn send_arbitrary_request(request: RequestBuilder) -> Response {
@@ -12,4 +14,15 @@ pub async fn send_arbitrary_request(request: RequestBuilder) -> Response {
         panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
     }
     response
+}
+
+pub async fn enabled_resolutions(
+    line_charts: stats_proto::blockscout::stats::v1::LineCharts,
+) -> HashMap<String, Vec<String>> {
+    line_charts
+        .sections
+        .iter()
+        .flat_map(|sec| sec.charts.clone())
+        .map(|l| (l.id, l.resolutions))
+        .collect()
 }
