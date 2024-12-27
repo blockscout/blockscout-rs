@@ -166,7 +166,7 @@ def main(
         readable=True,
     ),
     output_path: Path = typer.Option(
-        Path("durations.json"),
+        Path("durations/durations.json"),
         "--output",
         "-o",
         help="Path for output JSON file",
