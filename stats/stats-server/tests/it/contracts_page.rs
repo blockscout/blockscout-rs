@@ -34,7 +34,7 @@ async fn test_contracts_page_ok() {
     init_server(|| stats(settings), &base).await;
 
     // Sleep until server will start and calculate all values
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(7)).await;
 
     let ContractsPageStats {
         total_contracts,

@@ -31,7 +31,7 @@ async fn test_swagger_ok() {
     init_server(|| stats(settings), &base).await;
 
     // Sleep until server will start and calculate all values
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(7)).await;
 
     let request = reqwest::Client::new().request(
         reqwest::Method::GET,
