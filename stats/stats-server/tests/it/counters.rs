@@ -49,6 +49,8 @@ async fn test_counters_ok() {
         "completedTxns",
         "lastNewContracts",
         "lastNewVerifiedContracts",
+        "newContracts24h",
+        "newVerifiedContracts24h",
         "totalAccounts",
         "totalAddresses",
         "totalBlocks",

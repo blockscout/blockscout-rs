@@ -69,6 +69,10 @@
             "title": "Number of deployed contracts today",
             "description": "Number of deployed contracts today"
         },
+        "new_contracts_24h": {
+            "title": "Contracts indexed within last 24h",
+            "description": "(24h)"
+        },
         "total_contracts": {
             "title": "Total contracts",
             "description": "Number of contracts"
@@ -76,6 +80,10 @@
         "last_new_verified_contracts": {
             "title": "Number of verified contracts today",
             "description": "Number of contracts verified today"
+        },
+        "new_verified_contracts_24h": {
+            "title": "Number of verified contracts within last 24h",
+            "description": "(24h)"
         },
         "total_verified_contracts": {
             "title": "Total verified contracts",

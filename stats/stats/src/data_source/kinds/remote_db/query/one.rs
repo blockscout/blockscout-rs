@@ -1,15 +1,15 @@
 use std::marker::{PhantomData, Send};
 
 use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
-use sea_orm::{FromQueryResult, Statement};
+use sea_orm::{FromQueryResult, Statement, TryGetable};
 
 use crate::{
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
-        types::{BlockscoutMigrations, Cacheable, UpdateContext},
+        types::{BlockscoutMigrations, Cacheable, UpdateContext, WrappedValue},
     },
     range::{inclusive_range_to_exclusive, UniversalRange},
-    types::TimespanValue,
+    types::{Timespan, TimespanValue},
     ChartError,
 };
 
@@ -52,6 +52,44 @@ where
             .map_err(ChartError::BlockscoutDB)?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
         Ok(data)
+    }
+}
+
+pub trait StatementFromUpdateTime {
+    fn get_statement(
+        update_time: DateTime<Utc>,
+        completed_migrations: &BlockscoutMigrations,
+    ) -> Statement;
+}
+
+/// Just like `PullOne` but timespan is taken from update time
+pub struct PullOneValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
+where
+    S: StatementFromUpdateTime,
+    Resolution: Timespan + Ord + Send,
+    Value: Send + TryGetable;
+
+impl<S, Resolution, Value> RemoteQueryBehaviour for PullOneValue<S, Resolution, Value>
+where
+    S: StatementFromUpdateTime,
+    Resolution: Timespan + Ord + Send,
+    Value: Send + TryGetable,
+{
+    type Output = TimespanValue<Resolution, Value>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        _range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
+        let query = S::get_statement(cx.time, &cx.blockscout_applied_migrations);
+        let timespan = Resolution::from_date(cx.time.date_naive());
+        let value = WrappedValue::<Value>::find_by_statement(query)
+            .one(cx.blockscout)
+            .await
+            .map_err(ChartError::BlockscoutDB)?
+            .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?
+            .value;
+        Ok(TimespanValue { timespan, value })
     }
 }
 

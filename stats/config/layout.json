@@ -4,6 +4,8 @@
         "completed_txns",
         "last_new_contracts",
         "last_new_verified_contracts",
+        "new_contracts_24h",
+        "new_verified_contracts_24h",
         "total_accounts",
         "total_addresses",
         "total_blocks",
