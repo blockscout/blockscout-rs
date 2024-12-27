@@ -5,9 +5,9 @@ use blockscout_service_launcher::{
 use chrono::NaiveDate;
 
 use stats::tests::{
-        init_db::init_db_all,
-        mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data},
-    };
+    init_db::init_db_all,
+    mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data},
+};
 use stats_proto::blockscout::stats::v1::TransactionsPageStats;
 use stats_server::{stats, Settings};
 
@@ -42,9 +42,14 @@ async fn test_transactions_page_ok() {
         average_txn_fee_24h,
         total_txns,
     } = send_get_request(&base, "/api/v1/pages/transactions").await;
-    let counters = [pending_txns, txns_fee_24h, average_txn_fee_24h, total_txns];
-    for counter in counters {
-        let counter = counter.expect("page counter must be available");
+    let counters = [
+        ("pending_txns", pending_txns),
+        ("txns_fee_24h", txns_fee_24h),
+        ("average_txn_fee_24h", average_txn_fee_24h),
+        ("total_txns", total_txns),
+    ];
+    for (name, counter) in counters {
+        let counter = counter.expect(&format!("page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }

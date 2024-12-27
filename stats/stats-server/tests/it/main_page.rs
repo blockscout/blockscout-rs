@@ -51,14 +51,14 @@ async fn test_main_page_ok() {
         transactions,
     } = main_page;
     let counters = [
-        average_block_time,
-        total_addresses,
-        total_blocks,
-        total_txns,
-        yesterday_txns,
+        ("average_block_time", average_block_time),
+        ("total_addresses", total_addresses),
+        ("total_blocks", total_blocks),
+        ("total_txns", total_txns),
+        ("yesterday_txns", yesterday_txns),
     ];
-    for counter in counters {
-        let counter = counter.expect("page counter must be available");
+    for (name, counter) in counters {
+        let counter = counter.expect(&format!("page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
