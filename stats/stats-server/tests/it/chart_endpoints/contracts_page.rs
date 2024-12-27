@@ -17,6 +17,7 @@ pub async fn test_contracts_page_ok(base: Url) {
         ("new_verified_contracts_24h", new_verified_contracts_24h),
     ];
     for (name, counter) in counters {
+        #[allow(clippy::expect_fun_call)]
         let counter = counter.expect(&format!("page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
