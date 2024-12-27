@@ -17,6 +17,7 @@ pub async fn test_transactions_page_ok(base: Url) {
         ("total_txns", total_txns),
     ];
     for (name, counter) in counters {
+        #[allow(clippy::expect_fun_call)]
         let counter = counter.expect(&format!("page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());

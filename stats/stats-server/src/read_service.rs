@@ -139,6 +139,7 @@ fn get_counter_query_handle(name: &str, counter: &EnabledChartEntry) -> Option<C
 impl ReadService {
     pub fn main_page_charts() -> Vec<String> {
         // ensure that changes to api are reflected here
+        #[allow(clippy::no_effect)]
         proto_v1::MainPageStats {
             average_block_time: None,
             total_addresses: None,
@@ -159,6 +160,7 @@ impl ReadService {
 
     pub fn contracts_page_charts() -> Vec<String> {
         // ensure that changes to api are reflected here
+        #[allow(clippy::no_effect)]
         proto_v1::ContractsPageStats {
             total_contracts: None,
             new_contracts_24h: None,
@@ -175,6 +177,7 @@ impl ReadService {
 
     pub fn transactions_page_charts() -> Vec<String> {
         // ensure that changes to api are reflected here
+        #[allow(clippy::no_effect)]
         proto_v1::TransactionsPageStats {
             pending_txns: None,
             txns_fee_24h: None,
