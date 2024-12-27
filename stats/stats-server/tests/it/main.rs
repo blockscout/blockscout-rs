@@ -1,9 +1,5 @@
 mod common;
 
-mod contracts_page;
-mod counters;
+mod chart_endpoints;
 mod indexing_status;
-mod lines;
-mod main_page;
 mod swagger;
-mod transactions_page;
