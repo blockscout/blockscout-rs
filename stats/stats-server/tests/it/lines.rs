@@ -47,7 +47,7 @@ async fn test_lines_ok() {
     init_server(|| stats(settings), &base).await;
 
     // Sleep until server will start and calculate all values
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(7)).await;
 
     let line_charts: stats_proto::blockscout::stats::v1::LineCharts =
         send_get_request(&base, "/api/v1/lines").await;

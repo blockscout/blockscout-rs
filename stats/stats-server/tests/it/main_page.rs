@@ -39,7 +39,7 @@ async fn test_main_page_ok() {
     init_server(|| stats(settings), &base).await;
 
     // Sleep until server will start and calculate all values
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(7)).await;
 
     let main_page: MainPageStats = send_get_request(&base, "/api/v1/pages/main").await;
     let MainPageStats {

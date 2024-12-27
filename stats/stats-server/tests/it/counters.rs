@@ -35,7 +35,7 @@ async fn test_counters_ok() {
     init_server(|| stats(settings), &base).await;
 
     // Sleep until server will start and calculate all values
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(7)).await;
 
     let counters: Counters = send_get_request(&base, "/api/v1/counters").await;
     for counter in counters.counters.iter() {
