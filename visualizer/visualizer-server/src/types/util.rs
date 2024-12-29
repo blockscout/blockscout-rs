@@ -148,7 +148,7 @@ mod tests {
         let actual =
             fix_sources_paths(serde_json::from_value(input).expect("invalid input: not map"));
         assert_eq!(
-            serde_json::to_value(actual).expect("BTree map should be valud Value"),
+            serde_json::to_value(actual).expect("BTree map should be valid Value"),
             expected
         );
     }

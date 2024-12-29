@@ -127,7 +127,7 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
 /// though the implementation allows batching. The batching was done
 /// to simplify interface of the data source.
 ///
-/// Thus, use max batch size in the dependant data sources.
+/// Thus, use max batch size in the dependent data sources.
 pub type NewAccountsRemote = RemoteDatabaseSource<NewAccountsQueryBehaviour>;
 
 pub struct Properties;
