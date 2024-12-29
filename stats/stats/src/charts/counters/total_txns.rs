@@ -101,7 +101,7 @@ impl ValueEstimation for TotalTxnsEstimation {
 // Separate query not reliant on previous computation helps this counter to work in such
 // environments.
 //
-// todo: make it dependant again if #845 is resolved
+// todo: make it dependent again if #845 is resolved
 pub type TotalTxns =
     DirectPointLocalDbChartSourceWithEstimate<TotalTxnsRemote, TotalTxnsEstimation, Properties>;
 pub type TotalTxnsInt = MapParseTo<TotalTxns, i64>;

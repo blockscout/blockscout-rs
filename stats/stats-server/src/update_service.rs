@@ -38,7 +38,7 @@ impl UpdateService {
     }
 
     /// Perform initial update and run the service in infinite loop.
-    /// Terminates dependant threads if one fails.
+    /// Terminates dependent threads if one fails.
     pub async fn force_async_update_and_run(
         self: Arc<Self>,
         concurrent_tasks: usize,

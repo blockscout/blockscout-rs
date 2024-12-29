@@ -184,7 +184,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// Therefore, to make working with updates easier, it is highly recommended to include all
 /// dependencies into the group. Later this check might be included into the macro.
 ///
-/// Similarly, it makes sense to include all dependants (unless they have some other heavy dependencies),
+/// Similarly, it makes sense to include all dependents (unless they have some other heavy dependencies),
 /// since it should be very lightweight to update them together.
 ///
 /// ## Reasoning for macro
