@@ -104,7 +104,7 @@ just deploy-subgraph --prod <protocol_name>
 
 Developing subgraph for protocol based on space-id contracts requires providing additional information.
 
-SpaceID protocol has constant variable called `identifier` which unique describes protocol accross multiple chains.
+SpaceID protocol has constant variable called `identifier` which unique describes protocol across multiple chains.
 This values is used during calculation of [namehash](https://docs.ens.domains/resolution/names#algorithm), therefore subgraph should know this value.
 
 Actually blockscout-ens needs two values that can be calculated from `identifier`: `empty_label_hash` and `empty_label_hash`
