@@ -14,7 +14,7 @@ You can take a look at that subgraph and understand structure of our project mor
     just init
     ```
 
-1. Now you have to create file inside `protocols` directory decribing your procol. Use `example.protocol.yaml` as template.
+1. Now you have to create file inside `protocols` directory describing your procol. Use `example.protocol.yaml` as template.
 
     **[EXPEREMENTAL]** You can try to generate protocol desription file using `protocol-extractor`. This script will try to extract verified   contracts from etherscan and determine their affiliation with the protocol:
 
