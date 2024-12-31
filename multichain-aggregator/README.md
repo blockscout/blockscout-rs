@@ -5,7 +5,7 @@ This service is responsible for aggregating data from multiple Blockscout instan
 ## Dev
 
 - Install [just](https://github.com/casey/just) cli. Just is like make but better.
-- Execute `just` to see avaliable dev commands
+- Execute `just` to see available dev commands
 
 ```bash
 just
