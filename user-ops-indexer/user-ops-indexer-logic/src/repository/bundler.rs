@@ -78,18 +78,18 @@ LIMIT $3"#,
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
-    use alloy::primitives::U160;
+    use alloy::primitives::address;
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
     async fn find_bundler_by_address_ok() {
         let db = get_shared_db().await;
 
-        let addr = Address::from(U160::from(0xffff));
+        let addr = address!("000000000000000000000000000000000000ffff");
         let item = find_bundler_by_address(&db, addr).await.unwrap();
         assert_eq!(item, None);
 
-        let addr = Address::from(U160::from(0x0105));
+        let addr = address!("0000000000000000000000000000000000000105");
         let item = find_bundler_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,
@@ -100,7 +100,7 @@ mod tests {
             })
         );
 
-        let addr = Address::from(U160::from(0x0505));
+        let addr = address!("0000000000000000000000000000000000000505");
         let item = find_bundler_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,

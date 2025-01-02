@@ -177,7 +177,7 @@ impl IndexerV07 {
         let (user_logs_start_index, user_logs_count) =
             extract_user_logs_boundaries(logs, self.entry_point, paymaster);
         Ok(UserOp {
-            hash: B256::from(user_op_event.userOpHash),
+            hash: user_op_event.userOpHash,
             sender,
             nonce: B256::from(user_op.user_op.nonce),
             init_code: none_if_empty(user_op.user_op.initCode),

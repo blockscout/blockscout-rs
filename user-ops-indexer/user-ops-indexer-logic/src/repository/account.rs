@@ -100,18 +100,18 @@ FROM accounts_cte
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
-    use alloy::primitives::{B256, U160, U256};
+    use alloy::primitives::{address, B256, U256};
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
     async fn find_account_by_address_ok() {
         let db = get_shared_db().await;
 
-        let addr = Address::from(U160::from(0xffff));
+        let addr = address!("000000000000000000000000000000000000ffff");
         let item = find_account_by_address(&db, addr).await.unwrap();
         assert_eq!(item, None);
 
-        let addr = Address::from(U160::from(0x0102));
+        let addr = address!("0000000000000000000000000000000000000102");
         let item = find_account_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,
@@ -125,13 +125,13 @@ mod tests {
             })
         );
 
-        let addr = Address::from(U160::from(0x3202));
+        let addr = address!("0000000000000000000000000000000000003202");
         let item = find_account_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,
             Some(Account {
                 address: addr,
-                factory: Some(Address::from(U160::from(0xf1))),
+                factory: Some(address!("00000000000000000000000000000000000000f1")),
                 creation_transaction_hash: Some(B256::from(U256::from(0x3204))),
                 creation_op_hash: Some(B256::from(U256::from(0x3201))),
                 creation_timestamp: Some("2024-01-01T00:01:00.000000Z".to_string()),
@@ -152,7 +152,7 @@ mod tests {
         assert_eq!(items.len(), 40);
         assert_eq!(next_page_token, None);
 
-        let factory = Some(Address::from(U160::from(0xf1)));
+        let factory = Some(address!("00000000000000000000000000000000000000f1"));
         let (items, next_page_token) = list_accounts(&db, factory, None, 60).await.unwrap();
         assert_eq!(items.len(), 10);
         assert_eq!(next_page_token, None);

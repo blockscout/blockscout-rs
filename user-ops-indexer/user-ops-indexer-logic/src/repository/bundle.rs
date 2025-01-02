@@ -61,9 +61,8 @@ LIMIT $6"#,
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
-    use alloy::primitives::U160;
+    use alloy::primitives::address;
     use pretty_assertions::assert_eq;
-    use std::str::FromStr;
 
     #[tokio::test]
     async fn list_bundles_ok() {
@@ -73,9 +72,8 @@ mod tests {
         assert_eq!(items.len(), 100);
         assert_ne!(next_page_token, None);
 
-        let entrypoint =
-            Some(Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap());
-        let bundler = Some(Address::from(U160::from(0x0105)));
+        let entrypoint = Some(address!("5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"));
+        let bundler = Some(address!("0000000000000000000000000000000000000105"));
 
         let (items, next_page_token) = list_bundles(&db, None, entrypoint, None, 100)
             .await

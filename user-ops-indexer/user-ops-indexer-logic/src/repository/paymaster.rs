@@ -78,18 +78,18 @@ pub async fn list_paymasters(
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
-    use alloy::primitives::U160;
+    use alloy::primitives::address;
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
     async fn find_paymaster_by_address_ok() {
         let db = get_shared_db().await;
 
-        let addr = Address::from(U160::from(0xe3));
+        let addr = address!("00000000000000000000000000000000000000e3");
         let item = find_paymaster_by_address(&db, addr).await.unwrap();
         assert_eq!(item, None);
 
-        let addr = Address::from(U160::from(0xe1));
+        let addr = address!("00000000000000000000000000000000000000e1");
         let item = find_paymaster_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,

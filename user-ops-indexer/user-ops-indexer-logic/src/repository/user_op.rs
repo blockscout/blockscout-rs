@@ -239,9 +239,8 @@ WHERE logs.address_hash    = $1
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
-    use alloy::primitives::{U160, U256};
+    use alloy::primitives::{address, b256, U256};
     use pretty_assertions::assert_eq;
-    use std::str::FromStr;
 
     #[tokio::test]
     async fn find_user_op_by_op_hash_ok() {
@@ -276,7 +275,6 @@ mod tests {
     #[tokio::test]
     async fn list_user_ops_ok() {
         let db = get_shared_db().await;
-        let entrypoint = Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap();
 
         let (items, next_page_token) = list_user_ops(
             &db, None, None, None, None, None, None, None, None, None, 5000,
@@ -312,7 +310,7 @@ mod tests {
 
         let (items, next_page_token) = list_user_ops(
             &db,
-            Some(Address::from(U160::from(0x0502))),
+            Some(address!("0000000000000000000000000000000000000502")),
             None,
             None,
             None,
@@ -331,10 +329,10 @@ mod tests {
             [
                 ListUserOp {
                     hash: B256::from(U256::from(0x6901)),
-                    entry_point: entrypoint,
+                    entry_point: address!("5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"),
                     entry_point_version: EntryPointVersion::V06,
                     block_number: 0,
-                    sender: Address::from(U160::from(0x0502)),
+                    sender: address!("0000000000000000000000000000000000000502"),
                     transaction_hash: B256::from(U256::from(0x0504)),
                     timestamp: "2024-01-01T00:00:00.000000Z".to_string(),
                     status: true,
@@ -342,10 +340,10 @@ mod tests {
                 },
                 ListUserOp {
                     hash: B256::from(U256::from(0x0501)),
-                    entry_point: entrypoint,
+                    entry_point: address!("5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"),
                     entry_point_version: EntryPointVersion::V06,
                     block_number: 0,
-                    sender: Address::from(U160::from(0x0502)),
+                    sender: address!("0000000000000000000000000000000000000502"),
                     transaction_hash: B256::from(U256::from(0x0504)),
                     timestamp: "2024-01-01T00:00:00.000000Z".to_string(),
                     status: true,
@@ -359,10 +357,8 @@ mod tests {
     async fn find_unprocessed_logs_tx_hashes_ok() {
         let db = get_shared_db().await;
 
-        let entrypoint = Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap();
-        let topic =
-            B256::from_str("0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f")
-                .unwrap();
+        let entrypoint = address!("5FF137D4b0FDCD49DcA30c7CF57E578a026d2789");
+        let topic = b256!("49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f");
         let items: Vec<B256> = stream_unprocessed_logs_tx_hashes(&db, entrypoint, topic, 100, 150)
             .await
             .unwrap()
