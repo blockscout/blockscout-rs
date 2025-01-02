@@ -1,9 +1,5 @@
 use crate::{proto::user_ops_service_server::UserOpsService as UserOps, settings::ApiSettings};
-use ethers::{
-    abi::{AbiEncode, Address},
-    prelude::H256,
-    utils::to_checksum,
-};
+use alloy::primitives::{Address, B256};
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
@@ -157,7 +153,7 @@ impl UserOps for UserOpsService {
         let res = ListAccountsResponse {
             items: accounts.into_iter().map(|acc| acc.into()).collect(),
             next_page_params: next_page_token.map(|a| Pagination {
-                page_token: to_checksum(&a, None),
+                page_token: a.to_string(),
                 page_size,
             }),
         };
@@ -174,7 +170,7 @@ impl UserOps for UserOpsService {
         let bundler_filter = inner.bundler.map(parse_filter).transpose()?;
         let entry_point_filter = inner.entry_point.map(parse_filter).transpose()?;
 
-        let page_token: Option<(u64, H256, u32)> =
+        let page_token: Option<(u64, B256, u32)> =
             inner.page_token.map(parse_filter_3).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
@@ -194,7 +190,7 @@ impl UserOps for UserOpsService {
         let res = ListBundlesResponse {
             items: bundles.into_iter().map(|b| b.into()).collect(),
             next_page_params: next_page_token.map(|(b, t, i)| Pagination {
-                page_token: format!("{},{},{}", b, t.encode_hex(), i),
+                page_token: format!("{},{},{}", b, t, i),
                 page_size,
             }),
         };
@@ -217,7 +213,7 @@ impl UserOps for UserOpsService {
         let bundle_index_filter = inner.bundle_index;
         let block_number_filter = inner.block_number;
 
-        let page_token: Option<(u64, H256)> = inner.page_token.map(parse_filter_2).transpose()?;
+        let page_token: Option<(u64, B256)> = inner.page_token.map(parse_filter_2).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (ops, next_page_token) = repository::user_op::list_user_ops(
@@ -242,7 +238,7 @@ impl UserOps for UserOpsService {
         let res = ListUserOpsResponse {
             items: ops.into_iter().map(|acc| acc.into()).collect(),
             next_page_params: next_page_token.map(|(b, o)| Pagination {
-                page_token: format!("{},{}", b, o.encode_hex()),
+                page_token: format!("{},{}", b, o),
                 page_size,
             }),
         };
@@ -271,7 +267,7 @@ impl UserOps for UserOpsService {
         let res = ListBundlersResponse {
             items: bundlers.into_iter().map(|b| b.into()).collect(),
             next_page_params: next_page_token.map(|(t, f)| Pagination {
-                page_token: format!("{},{}", t, to_checksum(&f, None)),
+                page_token: format!("{},{}", t, f),
                 page_size,
             }),
         };
@@ -300,7 +296,7 @@ impl UserOps for UserOpsService {
         let res = ListPaymastersResponse {
             items: paymasters.into_iter().map(|b| b.into()).collect(),
             next_page_params: next_page_token.map(|(t, f)| Pagination {
-                page_token: format!("{},{}", t, to_checksum(&f, None)),
+                page_token: format!("{},{}", t, f),
                 page_size,
             }),
         };
@@ -329,7 +325,7 @@ impl UserOps for UserOpsService {
         let res = ListFactoriesResponse {
             items: factories.into_iter().map(|b| b.into()).collect(),
             next_page_params: next_page_token.map(|(t, f)| Pagination {
-                page_token: format!("{},{}", t, to_checksum(&f, None)),
+                page_token: format!("{},{}", t, f),
                 page_size,
             }),
         };

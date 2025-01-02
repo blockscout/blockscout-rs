@@ -1,4 +1,5 @@
-use ethers::prelude::Address;
+use crate::indexer::rpc_utils::TraceClient;
+use alloy::primitives::{address, Address};
 use serde::Deserialize;
 use serde_with::serde_as;
 use std::time;
@@ -29,6 +30,8 @@ pub struct IndexerSettings {
     #[serde(default = "default_restart_delay")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub restart_delay: time::Duration,
+
+    pub trace_client: Option<TraceClient>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -115,6 +118,7 @@ impl Default for IndexerSettings {
             deduplication_cache_size: default_deduplication_cache_size(),
             deduplication_interval: default_deduplication_interval(),
             restart_delay: default_restart_delay(),
+            trace_client: None,
         }
     }
 }
@@ -123,13 +127,9 @@ impl Default for EntrypointsSettings {
     fn default() -> Self {
         Self {
             v06: true,
-            v06_entry_point: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
-                .parse()
-                .unwrap(),
+            v06_entry_point: address!("5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"),
             v07: true,
-            v07_entry_point: "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
-                .parse()
-                .unwrap(),
+            v07_entry_point: address!("0000000071727De22E5E9d8BAf0edAc6f37da032"),
         }
     }
 }

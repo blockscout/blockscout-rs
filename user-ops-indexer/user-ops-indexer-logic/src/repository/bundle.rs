@@ -1,5 +1,5 @@
 use crate::types::bundle::Bundle;
-use ethers::prelude::{Address, H256};
+use alloy::primitives::{Address, B256};
 use sea_orm::{prelude::DateTime, ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
 
 #[derive(FromQueryResult)]
@@ -16,10 +16,10 @@ pub async fn list_bundles(
     db: &DatabaseConnection,
     bundler_filter: Option<Address>,
     entry_point_filter: Option<Address>,
-    page_token: Option<(u64, H256, u32)>,
+    page_token: Option<(u64, B256, u32)>,
     limit: u64,
-) -> Result<(Vec<Bundle>, Option<(u64, H256, u32)>), anyhow::Error> {
-    let page_token = page_token.unwrap_or((i64::MAX as u64, H256::zero(), 0));
+) -> Result<(Vec<Bundle>, Option<(u64, B256, u32)>), anyhow::Error> {
+    let page_token = page_token.unwrap_or((i64::MAX as u64, B256::ZERO, 0));
     let bundles: Vec<Bundle> = BundleDB::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
@@ -34,10 +34,10 @@ GROUP BY transaction_hash, bundle_index, block_number, bundler, blocks.timestamp
 ORDER BY block_number DESC, transaction_hash DESC, bundle_index DESC
 LIMIT $6"#,
         [
-            bundler_filter.map(|f| f.as_bytes().to_vec()).into(),
-            entry_point_filter.map(|f| f.as_bytes().to_vec()).into(),
+            bundler_filter.map(|f| f.to_vec()).into(),
+            entry_point_filter.map(|f| f.to_vec()).into(),
             page_token.0.into(),
-            page_token.1.as_bytes().into(),
+            page_token.1.as_slice().into(),
             page_token.2.into(),
             (limit + 1).into(),
         ],
@@ -61,8 +61,8 @@ LIMIT $6"#,
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
+    use alloy::primitives::address;
     use pretty_assertions::assert_eq;
-    use std::str::FromStr;
 
     #[tokio::test]
     async fn list_bundles_ok() {
@@ -72,9 +72,8 @@ mod tests {
         assert_eq!(items.len(), 100);
         assert_ne!(next_page_token, None);
 
-        let entrypoint =
-            Some(Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap());
-        let bundler = Some(Address::from_low_u64_be(0x0105));
+        let entrypoint = Some(address!("5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"));
+        let bundler = Some(address!("0000000000000000000000000000000000000105"));
 
         let (items, next_page_token) = list_bundles(&db, None, entrypoint, None, 100)
             .await

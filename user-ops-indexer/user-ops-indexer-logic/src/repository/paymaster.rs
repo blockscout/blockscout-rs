@@ -1,6 +1,6 @@
 use crate::{repository::user_op::user_ops_blocks_rel, types::paymaster::Paymaster};
+use alloy::primitives::Address;
 use entity::user_operations::{Column, Entity};
-use ethers::prelude::Address;
 use sea_orm::{
     prelude::Expr, sea_query::IntoCondition, ColumnTrait, DatabaseConnection, EntityTrait,
     FromQueryResult, IntoSimpleExpr, JoinType, QueryFilter, QueryOrder, QuerySelect,
@@ -21,7 +21,7 @@ pub async fn find_paymaster_by_address(
         .column(Column::Paymaster)
         .column_as(Column::Paymaster.count(), "total_ops")
         .join_rev(JoinType::Join, user_ops_blocks_rel())
-        .filter(Column::Paymaster.eq(addr.as_bytes()).into_condition())
+        .filter(Column::Paymaster.eq(addr.as_slice()).into_condition())
         .group_by(Column::Paymaster)
         .into_model::<PaymasterDB>()
         .one(db)
@@ -36,7 +36,7 @@ pub async fn list_paymasters(
     page_token: Option<(u64, Address)>,
     limit: u64,
 ) -> Result<(Vec<Paymaster>, Option<(u64, Address)>), anyhow::Error> {
-    let page_token = page_token.unwrap_or((i64::MAX as u64, Address::zero()));
+    let page_token = page_token.unwrap_or((i64::MAX as u64, Address::ZERO));
 
     let paymasters: Vec<Paymaster> = Entity::find()
         .select_only()
@@ -52,7 +52,7 @@ pub async fn list_paymasters(
             ])
             .lte(Expr::tuple([
                 page_token.0.into(),
-                page_token.1.as_bytes().into(),
+                page_token.1.as_slice().into(),
             ])),
         )
         .order_by_desc(Expr::cust("2"))
@@ -78,17 +78,18 @@ pub async fn list_paymasters(
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
+    use alloy::primitives::address;
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
     async fn find_paymaster_by_address_ok() {
         let db = get_shared_db().await;
 
-        let addr = Address::from_low_u64_be(0xe3);
+        let addr = address!("00000000000000000000000000000000000000e3");
         let item = find_paymaster_by_address(&db, addr).await.unwrap();
         assert_eq!(item, None);
 
-        let addr = Address::from_low_u64_be(0xe1);
+        let addr = address!("00000000000000000000000000000000000000e1");
         let item = find_paymaster_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,

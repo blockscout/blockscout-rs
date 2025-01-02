@@ -1,11 +1,9 @@
 use crate::settings::Settings;
-use ethers::{prelude::Provider, utils::to_checksum};
+use alloy::providers::ProviderBuilder;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::time::sleep;
-use user_ops_indexer_logic::indexer::{
-    common_transport::CommonTransport, settings::IndexerSettings, v06, v07, Indexer, IndexerLogic,
-};
+use user_ops_indexer_logic::indexer::{settings::IndexerSettings, v06, v07, Indexer, IndexerLogic};
 
 pub async fn run(
     settings: Settings,
@@ -48,31 +46,30 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
     logic: L,
 ) -> anyhow::Result<()> {
     tracing::info!(
-        version = L::version(),
-        entry_point = to_checksum(&logic.entry_point(), None),
+        version = L::VERSION,
+        entry_point = logic.entry_point().to_string(),
         "connecting to rpc"
     );
-
     // If the first connect fails, the function will return an error immediately.
     // All subsequent reconnects are done inside tokio task and will not propagate to above.
-    let transport = CommonTransport::new(settings.rpc_url.clone()).await?;
-    let client = Provider::new(transport);
-    let mut indexer = Indexer::new(
-        client,
-        db_connection.clone(),
-        settings.clone(),
-        logic.clone(),
-    );
-
-    let delay = settings.restart_delay;
+    let mut client = ProviderBuilder::new().on_builtin(&settings.rpc_url).await?;
 
     tokio::spawn(async move {
+        let delay = settings.restart_delay;
+
         loop {
+            let indexer = Indexer::new(
+                client.clone(),
+                db_connection.clone(),
+                settings.clone(),
+                logic.clone(),
+            );
+
             match indexer.start().await {
                 Err(err) => {
                     tracing::error!(
                         error = ?err,
-                        version = L::version(),
+                        version = L::VERSION,
                         ?delay,
                         "indexer stream ended with error, retrying"
                     );
@@ -80,13 +77,13 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
                 Ok(_) => {
                     if !settings.realtime.enabled {
                         tracing::info!(
-                            version = L::version(),
+                            version = L::VERSION,
                             "indexer stream ended without error, exiting"
                         );
                         return;
                     }
                     tracing::error!(
-                        version = L::version(),
+                        version = L::VERSION,
                         ?delay,
                         "indexer stream ended unexpectedly, retrying"
                     );
@@ -96,27 +93,20 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
             loop {
                 sleep(delay).await;
 
-                tracing::info!(version = L::version(), "re-connecting to rpc");
+                tracing::info!(version = L::VERSION, "re-connecting to rpc");
 
-                let transport = match CommonTransport::new(settings.rpc_url.clone()).await {
-                    Ok(transport) => transport,
+                client = match ProviderBuilder::new().on_builtin(&settings.rpc_url).await {
+                    Ok(client) => client,
                     Err(err) => {
                         tracing::error!(
                             error = ?err,
-                            version = L::version(),
+                            version = L::VERSION,
                             ?delay,
                             "failed to reconnect to the rpc, retrying"
                         );
                         continue;
                     }
                 };
-                let client = Provider::new(transport);
-                indexer = Indexer::new(
-                    client,
-                    db_connection.clone(),
-                    settings.clone(),
-                    logic.clone(),
-                );
                 break;
             }
         }

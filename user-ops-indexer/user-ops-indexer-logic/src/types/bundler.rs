@@ -1,5 +1,5 @@
 use crate::repository::bundler::BundlerDB;
-use ethers::{prelude::Address, utils::to_checksum};
+use alloy::primitives::Address;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Bundler {
@@ -21,7 +21,7 @@ impl From<BundlerDB> for Bundler {
 impl From<Bundler> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::Bundler {
     fn from(v: Bundler) -> Self {
         Self {
-            address: to_checksum(&v.bundler, None),
+            address: v.bundler.to_string(),
             total_bundles: v.total_bundles,
             total_ops: v.total_ops,
         }
