@@ -31,12 +31,11 @@ impl From<json::layout::Config> for Config {
     }
 }
 
-/// Arranges the items `to_sort` according to order in `layout`.
+/// Arranges the items `to_arrange` according to order in `layout`.
 ///
-/// Items not present in `layout` are placed at the end of the
-/// vector in their original relative order.
-pub fn sorted_items_according_to_layout<Item, Key, F>(
-    to_sort: Vec<Item>,
+/// Items with keys not in `layout` will be excluded from the result.
+pub fn placed_items_according_to_layout<Item, Key, F>(
+    to_arrange: Vec<Item>,
     layout: &[Key],
     get_key: F,
 ) -> Vec<Item>
@@ -49,14 +48,11 @@ where
         .enumerate()
         .map(|(pos, key)| (key, pos))
         .collect();
-    let mut result: Vec<_> = to_sort
+    let mut result: Vec<_> = to_arrange
         .into_iter()
-        .map(|item| {
-            let position = assigned_positions
-                .get(get_key(&item))
-                .copied()
-                .unwrap_or(usize::MAX);
-            (item, position)
+        .filter_map(|item| {
+            let position = assigned_positions.get(get_key(&item)).copied()?;
+            Some((item, position))
         })
         .collect();
     result.sort_by_key(|p| p.1);

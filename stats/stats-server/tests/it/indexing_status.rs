@@ -14,14 +14,14 @@ use wiremock::ResponseTemplate;
 
 use std::{path::PathBuf, str::FromStr};
 
-use crate::{common::send_arbitrary_request, lines::enabled_resolutions};
+use crate::common::{enabled_resolutions, send_arbitrary_request};
 
 #[tokio::test]
 #[ignore = "needs database"]
 async fn test_not_indexed_ok() {
     // check that when the blockscout is not indexed, the healthcheck still succeeds and
     // charts don't have any points (i.e. they are not updated)
-    let (stats_db, blockscout_db) = init_db_all("test_healthcheck_ok").await;
+    let (stats_db, blockscout_db) = init_db_all("test_not_indexed_ok").await;
     let blockscout_api = mock_blockscout_api(ResponseTemplate::new(200).set_body_string(
         r#"{
             "finished_indexing": false,
@@ -45,8 +45,8 @@ async fn test_not_indexed_ok() {
 
     init_server(|| stats(settings), &base).await;
 
-    // Sleep until server will start and calculate all values
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    // No update happens so we can wait less
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     // healthcheck is verified in `init_server`, but we double-check it just in case
     let request =

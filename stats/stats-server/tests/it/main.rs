@@ -1,6 +1,5 @@
 mod common;
 
-mod counters;
+mod chart_endpoints;
 mod indexing_status;
-mod lines;
 mod swagger;
