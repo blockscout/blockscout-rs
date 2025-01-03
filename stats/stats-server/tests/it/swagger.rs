@@ -30,8 +30,8 @@ async fn test_swagger_ok() {
 
     init_server(|| stats(settings), &base).await;
 
-    // Sleep until server will start and calculate all values
-    tokio::time::sleep(std::time::Duration::from_secs(7)).await;
+    // Wait to make sure the server started
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let request = reqwest::Client::new().request(
         reqwest::Method::GET,
