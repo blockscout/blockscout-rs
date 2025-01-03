@@ -222,7 +222,7 @@ impl ReadService {
         settings: EnabledChartSettings,
         query_handle: CounterHandle,
         query_time: DateTime<Utc>,
-    ) -> anyhow::Result<proto_v1::Counter> {
+    ) -> Result<proto_v1::Counter, ChartError> {
         let point = self
             .query_with_handle(query_handle, UniversalRange::full(), None, query_time)
             .await?;
