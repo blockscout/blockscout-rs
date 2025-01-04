@@ -6,6 +6,10 @@ mod endpoint;
 pub use async_client::{HttpApiClient, HttpApiClientConfig};
 pub use endpoint::{serialize_query, Endpoint};
 
+pub use reqwest;
+pub use reqwest_middleware;
+pub use url;
+
 /******************** Config definition ********************/
 
 #[derive(Debug, thiserror::Error)]
@@ -23,8 +27,6 @@ pub enum Error {
         status_code: reqwest::StatusCode,
         message: String,
     },
-    #[error("{0:#?}")]
-    CustomError(anyhow::Error),
 }
 
 impl From<reqwest_middleware::Error> for Error {
