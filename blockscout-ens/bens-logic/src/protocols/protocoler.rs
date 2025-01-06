@@ -347,7 +347,6 @@ impl Protocoler {
         Ok(names_with_protocols)
     }
 
-    
     pub fn main_name_in_network(
         &self,
         name: &str,
