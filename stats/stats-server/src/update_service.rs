@@ -69,7 +69,9 @@ impl UpdateService {
                         if let Some(mut status_listener) = status_listener {
                             let wait_result = status_listener
                                 .wait_until_status_at_least(
-                                    group_entry.indexing_status_requirement(),
+                                    group_entry.group.dependency_indexing_status_requirement(
+                                        &group_entry.enabled_members,
+                                    ),
                                 )
                                 .await;
                             if wait_result.is_err() {

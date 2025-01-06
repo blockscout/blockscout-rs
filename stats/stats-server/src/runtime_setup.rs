@@ -27,7 +27,7 @@ use stats::{
     entity::sea_orm_active_enums::ChartType,
     query_dispatch::ChartTypeSpecifics,
     update_group::{ArcUpdateGroup, SyncUpdateGroup},
-    ChartKey, ChartObject, IndexingStatus, ResolutionKind,
+    ChartKey, ChartObject, ResolutionKind,
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
@@ -94,19 +94,6 @@ pub struct UpdateGroupEntry {
     pub group: SyncUpdateGroup,
     /// Members that are enabled in the charts config
     pub enabled_members: HashSet<ChartKey>,
-}
-
-impl UpdateGroupEntry {
-    pub fn indexing_status_requirement(&self) -> IndexingStatus {
-        let enabled_charts = &self.enabled_members;
-        let enabled_charts_requirements = self
-            .group
-            .list_charts()
-            .into_iter()
-            .filter(|c| enabled_charts.contains(&c.properties.key))
-            .map(|c| c.properties.indexing_status_requirement);
-        IndexingStatus::most_restrictive_from(enabled_charts_requirements)
-    }
 }
 
 pub struct RuntimeSetup {

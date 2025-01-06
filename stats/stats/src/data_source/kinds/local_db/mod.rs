@@ -35,7 +35,7 @@ use crate::{
     data_source::{DataSource, UpdateContext},
     metrics,
     range::UniversalRange,
-    ChartError,
+    ChartError, IndexingStatus,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -223,6 +223,10 @@ where
 
     fn mutex_id() -> Option<String> {
         Some(ChartProps::key().into())
+    }
+
+    fn indexing_status_self_requirement() -> IndexingStatus {
+        ChartProps::indexing_status_requirement()
     }
 
     async fn init_itself(db: &DatabaseConnection, init_time: &DateTime<Utc>) -> Result<(), DbErr> {

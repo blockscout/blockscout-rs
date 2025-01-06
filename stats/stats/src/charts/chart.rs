@@ -189,10 +189,7 @@ pub trait ChartProperties: Sync + Named {
     /// Indexing status at least required by this data source.
     ///
     /// Note that in current implementation this requirement
-    /// might get weakened. For example, some chart that
-    /// depends on this one can have weaker requirement,
-    /// which will result in this chart getting updated as its
-    /// dependency.
+    /// is propagated to its dependants.
     fn indexing_status_requirement() -> IndexingStatus {
         // most of the charts need indexed blocks
         IndexingStatus::BlocksIndexed
@@ -326,7 +323,7 @@ impl ChartPropertiesObject {
 
 #[cfg(test)]
 mod tests {
-    use crate::charts::IndexingStatus;
+    use crate::IndexingStatus;
 
     #[test]
     fn indexing_status_requirements_are_combined_correctly() {
@@ -339,7 +336,7 @@ mod tests {
                 ]
                 .into_iter()
             ),
-            IndexingStatus::BlocksIndexed
+            IndexingStatus::InternalTransactionsIndexed
         );
 
         assert_eq!(
@@ -350,7 +347,7 @@ mod tests {
                 ]
                 .into_iter()
             ),
-            IndexingStatus::NoneIndexed
+            IndexingStatus::InternalTransactionsIndexed
         );
 
         assert_eq!(
