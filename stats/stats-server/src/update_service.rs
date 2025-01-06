@@ -4,10 +4,10 @@ use crate::{
 };
 use chrono::Utc;
 use cron::Schedule;
+use futures::{stream::FuturesUnordered, StreamExt};
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::data_source::types::{BlockscoutMigrations, UpdateParameters};
 use std::sync::Arc;
-use tokio::task::JoinHandle;
 
 const FAILED_UPDATERS_UNTIL_PANIC: u64 = 3;
 
@@ -53,8 +53,9 @@ impl UpdateService {
         default_schedule: Schedule,
         force_update_on_start: Option<bool>,
     ) {
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_tasks));
-        let (tasks, mut updaters) = self
+        let semaphore: Arc<tokio::sync::Semaphore> =
+            Arc::new(tokio::sync::Semaphore::new(concurrent_tasks));
+        let mut group_updaters: FuturesUnordered<_> = self
             .charts
             .update_groups
             .values()
@@ -64,52 +65,49 @@ impl UpdateService {
                 let default_schedule = default_schedule.clone();
                 let status_listener = self.status_listener.clone();
                 let sema = semaphore.clone();
-                (
-                    async move {
-                        if let Some(mut status_listener) = status_listener {
-                            let wait_result = status_listener
-                                .wait_until_status_at_least(
-                                    group_entry.group.dependency_indexing_status_requirement(
-                                        &group_entry.enabled_members,
-                                    ),
-                                )
-                                .await;
-                            if wait_result.is_err() {
-                                panic!("Indexing status listener channel closed");
-                            }
+                async move {
+                    if let Some(mut status_listener) = status_listener {
+                        let wait_result = status_listener
+                            .wait_until_status_at_least(
+                                group_entry.group.dependency_indexing_status_requirement(
+                                    &group_entry.enabled_members,
+                                ),
+                            )
+                            .await;
+                        if wait_result.is_err() {
+                            panic!("Indexing status listener channel closed");
                         }
+                    }
 
-                        let _permit = sema.acquire().await.expect("failed to acquire permit");
-                        if let Some(force_full) = force_update_on_start {
-                            this.clone().update(group_entry.clone(), force_full).await
-                        };
-                    },
-                    // todo: wait until initial update is finished
-                    self.spawn_group_updater(group.clone(), &default_schedule),
-                )
+                    let _permit = sema.acquire().await.expect("failed to acquire permit");
+                    if let Some(force_full) = force_update_on_start {
+                        this.clone().update(group_entry.clone(), force_full).await
+                    };
+                    tracing::info!(
+                        update_group = group_entry.group.name(),
+                        "initial update is done"
+                    );
+                    this.run_recurrent_update(group_entry, &default_schedule)
+                        .await
+                }
             })
-            .collect::<(Vec<_>, Vec<_>)>();
-        futures::future::join_all(tasks).await;
-        tracing::info!("initial update is done");
+            .collect();
 
         let mut failed = 0;
-        while !updaters.is_empty() {
-            let (res, _, others) = futures::future::select_all(updaters).await;
-            updaters = others;
-            tracing::error!("updater stopped: {:?}", res);
-
+        while let Some(()) = group_updaters.next().await {
+            tracing::error!("updater stopped unexpectedly");
             failed += 1;
             if failed >= FAILED_UPDATERS_UNTIL_PANIC {
-                panic!("too many critically failed updaters");
+                panic!("too many unexpectedly failed updaters");
             }
         }
     }
 
-    fn spawn_group_updater(
+    async fn run_recurrent_update(
         self: &Arc<Self>,
         group_entry: UpdateGroupEntry,
         default_schedule: &Schedule,
-    ) -> JoinHandle<()> {
+    ) {
         let this = self.clone();
         let chart = group_entry.clone();
         let schedule = group_entry
@@ -117,7 +115,7 @@ impl UpdateService {
             .as_ref()
             .unwrap_or(default_schedule)
             .clone();
-        tokio::spawn(this.run_cron(chart, schedule))
+        this.run_cron(chart, schedule).await
     }
 
     async fn update(self: Arc<Self>, group_entry: UpdateGroupEntry, force_full: bool) {
