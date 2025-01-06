@@ -159,7 +159,7 @@ pub fn init(
     api_config: blockscout_client::Configuration,
     wait_config: StartConditionSettings,
 ) -> (IndexingStatusAggregator, IndexingStatusListener) {
-    let (sender, receiver) = watch::channel(IndexingStatus::NoneIndexed);
+    let (sender, receiver) = watch::channel(IndexingStatus::LEAST_RESTRICTIVE);
     (
         IndexingStatusAggregator {
             api_config,

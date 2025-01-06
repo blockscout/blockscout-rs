@@ -150,10 +150,12 @@ pub enum IndexingStatus {
 }
 
 impl IndexingStatus {
-    pub fn most_restrictive_requirement(
+    pub const LEAST_RESTRICTIVE: IndexingStatus = IndexingStatus::NoneIndexed;
+
+    pub fn most_restrictive_from(
         requrements: impl Iterator<Item = IndexingStatus>,
     ) -> IndexingStatus {
-        requrements.max().unwrap_or(IndexingStatus::NoneIndexed)
+        requrements.max().unwrap_or(Self::LEAST_RESTRICTIVE)
     }
 }
 
@@ -329,7 +331,7 @@ mod tests {
     #[test]
     fn indexing_status_requirements_are_combined_correctly() {
         assert_eq!(
-            IndexingStatus::most_restrictive_requirement(
+            IndexingStatus::most_restrictive_from(
                 vec![
                     IndexingStatus::BlocksIndexed,
                     IndexingStatus::InternalTransactionsIndexed,
@@ -341,7 +343,7 @@ mod tests {
         );
 
         assert_eq!(
-            IndexingStatus::most_restrictive_requirement(
+            IndexingStatus::most_restrictive_from(
                 vec![
                     IndexingStatus::NoneIndexed,
                     IndexingStatus::InternalTransactionsIndexed,
@@ -352,7 +354,7 @@ mod tests {
         );
 
         assert_eq!(
-            IndexingStatus::most_restrictive_requirement(
+            IndexingStatus::most_restrictive_from(
                 vec![
                     IndexingStatus::InternalTransactionsIndexed,
                     IndexingStatus::InternalTransactionsIndexed,
@@ -363,7 +365,7 @@ mod tests {
         );
 
         assert_eq!(
-            IndexingStatus::most_restrictive_requirement(vec![].into_iter()),
+            IndexingStatus::most_restrictive_from(vec![].into_iter()),
             IndexingStatus::NoneIndexed
         );
     }

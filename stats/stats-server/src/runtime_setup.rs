@@ -105,7 +105,7 @@ impl UpdateGroupEntry {
             .into_iter()
             .filter(|c| enabled_charts.contains(&c.properties.key))
             .map(|c| c.properties.indexing_status_requirement);
-        IndexingStatus::most_restrictive_requirement(enabled_charts_requirements)
+        IndexingStatus::most_restrictive_from(enabled_charts_requirements)
     }
 }
 
