@@ -1,18 +1,26 @@
-mod charts;
-mod missing_date;
+#![recursion_limit = "256"]
 
+mod charts;
+pub mod data_processing;
+pub mod data_source;
 pub mod metrics;
-#[cfg(feature = "test-utils")]
+mod missing_date;
+pub mod range;
+pub mod update_group;
+pub mod update_groups;
+pub mod utils;
+
+#[cfg(any(feature = "test-utils", test))]
 pub mod tests;
 
 pub use entity;
 pub use migration;
 
 pub use charts::{
-    cache, counters,
-    db_interaction::{
-        read::{get_chart_data, get_counters, ReadError},
-        types::{DateValue, ExtendedDateValue},
+    counters,
+    db_interaction::read::{
+        ApproxUnsignedDiff, QueryAllBlockTimestampRange, ReadError, RequestedPointsLimit,
     },
-    lines, Chart, ChartUpdater, MissingDatePolicy, UpdateError,
+    lines, query_dispatch, types, ChartError, ChartKey, ChartObject, ChartProperties,
+    ChartPropertiesObject, MissingDatePolicy, Named, ResolutionKind,
 };

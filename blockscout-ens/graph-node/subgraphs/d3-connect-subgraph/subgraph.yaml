@@ -1,0 +1,34 @@
+specVersion: 0.0.4
+description: Subgraph to index D3 Connect Subgraph
+repository: https://github.com/blockscout/blockscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: Registry
+    network: shibarium
+    source:
+      abi: Registry
+      address: "0xDe74799371Ceac11A0F52BA2694392A391D0dA18"
+      startBlock: 3473390
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Registry.ts
+      entities:
+        - Domain
+        - Account
+        - Resolver
+      abis:
+        - name: Registry
+          file: ./abis/Registry.json
+      eventHandlers:
+        - event: SLDMinted(indexed uint256,address,string,string,uint256)
+          handler: handleSLDMinted
+        - event: SLDMintedForOrder(indexed uint256,address,string,string,uint256,string)
+          handler: handleSLDMintedForOrder
+        - event: SLDRenewed(indexed uint256,uint256,string)
+          handler: handleSLDRenewed
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer

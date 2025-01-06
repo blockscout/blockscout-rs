@@ -167,7 +167,7 @@ impl<'a> VerifierAllianceDbAction<'a> {
     }
 }
 
-impl<'a> VerifierAllianceDbAction<'a> {
+impl VerifierAllianceDbAction<'_> {
     fn contract_address(&self) -> Option<blockscout_display_bytes::Bytes> {
         match self {
             VerifierAllianceDbAction::IgnoreDb => None,

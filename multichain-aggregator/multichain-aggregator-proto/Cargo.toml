@@ -1,0 +1,18 @@
+[package]
+name = "multichain-aggregator-proto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = { workspace = true }
+actix-prost = { workspace = true }
+actix-prost-macros = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true }
+serde_with = { workspace = true }
+tonic = { workspace = true }
+
+[build-dependencies]
+actix-prost-build = { workspace = true }
+prost-build = { workspace = true }
+tonic-build = { workspace = true }

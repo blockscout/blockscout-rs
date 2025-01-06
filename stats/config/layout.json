@@ -1,0 +1,89 @@
+{
+    "counters_order": [
+        "average_block_time",
+        "completed_txns",
+        "last_new_contracts",
+        "last_new_verified_contracts",
+        "total_accounts",
+        "total_addresses",
+        "total_blocks",
+        "total_contracts",
+        "total_native_coin_holders",
+        "total_native_coin_transfers",
+        "total_tokens",
+        "total_txns",
+        "total_operational_txns",
+        "total_verified_contracts",
+        "yesterday_txns",
+        "new_txns_24h",
+        "pending_txns",
+        "txns_fee_24h",
+        "average_txn_fee_24h"
+    ],
+    "line_chart_categories": [
+        {
+            "id": "accounts",
+            "title": "Accounts",
+            "charts_order": [
+                "accounts_growth",
+                "active_accounts",
+                "new_accounts",
+                "active_recurring_accounts_60_days",
+                "active_recurring_accounts_90_days",
+                "active_recurring_accounts_120_days"
+            ]
+        },
+        {
+            "id": "transactions",
+            "title": "Transactions",
+            "charts_order": [
+                "average_txn_fee",
+                "new_txns",
+                "txns_fee",
+                "txns_growth",
+                "new_operational_txns",
+                "operational_txns_growth",
+                "txns_success_rate",
+                "new_txns_window"
+            ]
+        },
+        {
+            "id": "blocks",
+            "title": "Blocks",
+            "charts_order": [
+                "average_block_rewards",
+                "average_block_size",
+                "new_blocks"
+            ]
+        },
+        {
+            "id": "tokens",
+            "title": "Tokens",
+            "charts_order": [
+                "native_coin_holders_growth",
+                "native_coin_supply",
+                "new_native_coin_holders",
+                "new_native_coin_transfers"
+            ]
+        },
+        {
+            "id": "gas",
+            "title": "Gas",
+            "charts_order": [
+                "average_gas_limit",
+                "average_gas_price",
+                "gas_used_growth"
+            ]
+        },
+        {
+            "id": "contracts",
+            "title": "Contracts",
+            "charts_order": [
+                "contracts_growth",
+                "new_contracts",
+                "new_verified_contracts",
+                "verified_contracts_growth"
+            ]
+        }
+    ]
+}

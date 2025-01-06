@@ -7,7 +7,7 @@ use anyhow::Context;
 use bens_logic::{
     blockscout::BlockscoutClient,
     protocols::{Network, ProtocolInfo},
-    subgraphs_reader::SubgraphReader,
+    subgraph::SubgraphReader,
 };
 use bens_proto::blockscout::bens::v1::{
     domains_extractor_actix::route_domains_extractor,
@@ -46,11 +46,10 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
-    blockscout_service_launcher::tracing::init_logs::<_>(
+    blockscout_service_launcher::tracing::init_logs(
         SERVICE_NAME,
         &settings.tracing,
         &settings.jaeger,
-        Some(tracing_subscriber::filter::filter_fn(|_| true)),
     )?;
 
     let health = Arc::new(HealthService::default());
@@ -63,6 +62,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .await
             .context("database connect")?,
     );
+    if settings.database.run_migrations {
+        tracing::info!("running migrations");
+        bens_logic::migrations::run(&pool).await?;
+    }
     let networks = settings
         .subgraphs_reader
         .networks
@@ -78,16 +81,17 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                 Network {
                     blockscout_client,
                     use_protocols: network.use_protocols,
+                    rpc_url: network.rpc_url,
                 },
             )
         })
         .collect::<HashMap<_, _>>();
     tracing::info!(
-        "networks from config: {:?}",
-        networks
+        "networks from config: {}",
+        serde_json::json!(networks
             .iter()
             .map(|(id, n)| (id, n.use_protocols.iter().collect::<Vec<_>>()))
-            .collect::<Vec<_>>()
+            .collect::<HashMap<_, _>>())
     );
     let protocols = settings
         .subgraphs_reader
@@ -102,9 +106,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     tld_list: p.tld_list,
                     subgraph_name: p.subgraph_name,
                     address_resolve_technique: p.address_resolve_technique,
-                    empty_label_hash: p.empty_label_hash,
-                    native_token_contract: p.native_token_contract,
                     meta: p.meta.0,
+                    protocol_specific: p.protocol_specific.0,
                 },
             )
         })
@@ -115,11 +118,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         protocols.keys().collect::<Vec<_>>()
     );
 
-    let subgraph_reader = Arc::new(
-        SubgraphReader::initialize(pool, networks, protocols)
-            .await
-            .context("failed to initialize subgraph-reader")?,
-    );
+    let subgraph_reader = SubgraphReader::initialize(pool, networks, protocols)
+        .await
+        .context("failed to initialize subgraph-reader")?;
+    let subgraph_reader = Arc::new(subgraph_reader);
     let domains_extractor = Arc::new(DomainsExtractorService::new(subgraph_reader.clone()));
 
     let scheduler = JobScheduler::new().await?;
@@ -129,6 +131,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             subgraph_reader.clone(),
         )?)
         .await?;
+    tracing::info!("starting job scheduler");
     scheduler.start().await?;
 
     let router = Router {
@@ -145,5 +148,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
     };
 
+    tracing::info!("launching web service");
     launcher::launch(&launch_settings, http_router, grpc_router).await
 }

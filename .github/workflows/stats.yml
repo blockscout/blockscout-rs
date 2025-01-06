@@ -7,18 +7,16 @@ on:
     paths:
       - stats/**
       - .github/workflows/stats.yml
-      - .github/actions/deps/**
+      - .github/workflows/_*.yml
+      - .github/actions/**
   pull_request:
     paths:
       - stats/**
       - .github/workflows/stats.yml
-      - .github/actions/deps/**
+      - .github/workflows/_*.yml
+      - .github/actions/**
 
 name: Test, lint and docker (stats)
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: blockscout/stats
 
 defaults:
   run:
@@ -45,21 +43,10 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Setup
+        uses: ./.github/actions/setup
         with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: stats -> target
+          working-directory: stats
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
@@ -68,6 +55,11 @@ jobs:
       - name: Doc tests
         run: cargo test --locked --workspace --all-features --doc
         if: success() || failure()
+
+      - name: ENVs in documentation
+        run: cargo run --bin env-docs-generation
+        env:
+          VALIDATE_ONLY: true
 
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
@@ -81,34 +73,11 @@ jobs:
 
   lint:
     name: Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
+    uses: ./.github/workflows/_linting.yml
+    with:
+      working-directory: stats
 
-      - name: Install deps
-        uses: ./.github/actions/deps
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt, clippy
-          override: true
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: stats -> target
-
-      - name: cargo fmt
-        run: cargo fmt --all -- --check --config imports_granularity=Crate
-
-      - name: cargo clippy
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
-
-  push:
+  docker:
     name: Docker build and docker push
     needs:
       - test
@@ -117,47 +86,29 @@ jobs:
       always() &&
       (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
       (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
-    timeout-minutes: 30
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    uses: ./.github/workflows/_docker-build-push.yml
+    with:
+      service-name: stats
+    secrets:
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
 
-      - uses: actions-ecosystem/action-regex-match@v2
-        id: regex
-        with:
-          text: ${{ github.ref }}
-          regex: '^(refs\/tags\/stats\/(v\d+\.\d+\.\d+))|(refs\/heads\/(main))$'
+  publish_types_package:
+    name: Publish types package
+    uses: './.github/workflows/npm-publisher.yml'
+    needs: docker
+    if: needs.docker.outputs.tag-value != ''
+    secrets: inherit
+    with:
+      version: ${{ needs.docker.outputs.tag-value }}
+      project_name: stats
 
-      - name: Extract tag name
-        id: tags_extractor
-        run: |
-          t=${{ steps.regex.outputs.group2 }}
-          m=${{ steps.regex.outputs.group4 }}
-          (if ! [[ "$t" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$t, ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: "stats"
-          file: "stats/Dockerfile"
-          push: ${{ steps.tags_extractor.outputs.tags != '' }}
-          tags: ${{ steps.tags_extractor.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
-          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: 'stats'
+      swagger_path: 'stats/stats-proto/swagger/stats.swagger.yaml'
+    secrets:
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}

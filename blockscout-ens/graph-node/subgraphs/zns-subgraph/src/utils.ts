@@ -50,3 +50,8 @@ export function concat(a: ByteArray, b: ByteArray): ByteArray {
 function keccakFromStr(s: string): ByteArray {
   return crypto.keccak256(Bytes.fromUTF8(s));
 }
+
+export function domainNameIsCorrect(name: string): boolean {
+  const labelName = name.split(".")[0];
+  return labelName != null && labelName != ''
+}

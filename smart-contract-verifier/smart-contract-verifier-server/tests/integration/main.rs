@@ -41,7 +41,7 @@ async fn test_setup<Request: TestCaseRequest>(test_case: &Request) -> ServiceRes
 
     TestRequest::post()
         .uri(Request::route())
-        .set_json(&test_case.to_request())
+        .set_json(test_case.to_request())
         .send_request(&app)
         .await
 }

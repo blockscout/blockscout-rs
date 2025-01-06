@@ -58,8 +58,8 @@ async fn test_setup<T: TestCase>(test_case: &T) -> ServiceResponse {
         .await
 }
 
-async fn test_success(test_case: impl TestCase) {
-    let response = test_setup(&test_case).await;
+async fn get_verification_response<T: TestCase>(test_case: &T) -> VerifyResponse {
+    let response = test_setup(test_case).await;
     if !response.status().is_success() {
         let status = response.status();
         let body = read_body(response).await;
@@ -79,9 +79,19 @@ async fn test_success(test_case: impl TestCase) {
         "Verification extra_data is absent"
     );
 
-    let verification_result = verification_response
-        .source
-        .expect("Verification source is absent");
+    assert!(
+        verification_response.source.is_some(),
+        "Verification source is absent"
+    );
+
+    verification_response
+}
+
+fn validate_verification_response<T: TestCase>(
+    test_case: &T,
+    verification_response: VerifyResponse,
+) {
+    let verification_result = verification_response.source.unwrap();
 
     // Vyper always results in partial matches, as currently there is no way to
     // check if the source code is exact.
@@ -241,6 +251,11 @@ async fn test_success(test_case: impl TestCase) {
     }
 }
 
+async fn test_success(test_case: impl TestCase) {
+    let verification_response = get_verification_response(&test_case).await;
+    validate_verification_response(&test_case, verification_response);
+}
+
 async fn test_failure(test_case: impl TestCase, expected_message: &str) {
     let response = test_setup(&test_case).await;
 
@@ -289,7 +304,10 @@ async fn test_error(test_case: impl TestCase, expected_status: StatusCode, expec
 }
 
 mod flattened {
-    use super::{test_error, test_failure, test_success, vyper_types};
+    use super::{
+        get_verification_response, test_error, test_failure, test_success,
+        validate_verification_response, vyper_types,
+    };
     use actix_web::http::StatusCode;
     use vyper_types::Flattened;
 
@@ -366,6 +384,28 @@ mod flattened {
         test_case.use_deployed_bytecode = true;
         test_success(test_case).await;
     }
+
+    #[tokio::test]
+    async fn accepts_partially_matching_compiler_version_commit_hashes() {
+        let initial_test_case = vyper_types::from_file::<Flattened>("simple");
+        // provided commit hash is a prefix of the one used in the list
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.pop();
+            test_case
+        };
+        let verification_response = get_verification_response(&test_case).await;
+        validate_verification_response(&initial_test_case, verification_response);
+
+        // the commit hash from the list is a prefix of the provided one
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.push_str("1234");
+            test_case
+        };
+        let verification_response = get_verification_response(&test_case).await;
+        validate_verification_response(&initial_test_case, verification_response);
+    }
 }
 
 mod multi_part {
@@ -402,7 +442,9 @@ mod multi_part {
 }
 
 mod standard_json {
-    use super::{test_success, vyper_types};
+    use super::{
+        get_verification_response, test_success, validate_verification_response, vyper_types,
+    };
     use crate::{test_error, test_failure};
     use actix_web::http::StatusCode;
     use vyper_types::StandardJson;
@@ -471,5 +513,28 @@ mod standard_json {
         let test_case =
             vyper_types::from_file::<StandardJson>("standard_json_interfaces_in_sources");
         test_success(test_case.clone()).await;
+    }
+
+    #[tokio::test]
+    async fn accepts_partially_matching_compiler_version_commit_hashes() {
+        let initial_test_case =
+            vyper_types::from_file::<StandardJson>("standard_json_interfaces_in_sources");
+        // provided commit hash is a prefix of the one used in the list
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.pop();
+            test_case
+        };
+        let verification_response = get_verification_response(&test_case).await;
+        validate_verification_response(&initial_test_case, verification_response);
+
+        // the commit hash from the list is a prefix of the provided one
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.push_str("1234");
+            test_case
+        };
+        let verification_response = get_verification_response(&test_case).await;
+        validate_verification_response(&initial_test_case, verification_response);
     }
 }

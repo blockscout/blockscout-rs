@@ -64,7 +64,7 @@ impl<'a, Request> From<&'a Request> for RequestWrapper<'a, Request> {
     }
 }
 
-impl<'a, Request> RequestWrapper<'a, Request> {
+impl<Request> RequestWrapper<'_, Request> {
     pub fn header(&mut self, key: &str, value: &str) {
         let key = reqwest::header::HeaderName::from_str(key)
             .expect("Error converting key string into header name");

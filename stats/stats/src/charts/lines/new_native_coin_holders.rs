@@ -1,92 +1,74 @@
-use super::NativeCoinHoldersGrowth;
 use crate::{
-    charts::{
-        create_chart,
-        db_interaction::{
-            chart_updaters::{ChartDependentUpdater, ChartUpdater},
-            types::{DateValue, DateValueInt},
+    charts::ChartProperties,
+    data_source::kinds::{
+        data_manipulation::{
+            delta::Delta,
+            map::{MapParseTo, MapToString, StripExt},
+            resolutions::sum::SumLowerResolution,
         },
-        Chart,
+        local_db::{
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
+        },
     },
-    UpdateError,
+    define_and_impl_resolution_properties,
+    lines::native_coin_holders_growth::NativeCoinHoldersGrowthInt,
+    types::timespans::{Month, Week, Year},
+    Named,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
-use std::sync::Arc;
 
-pub struct NewNativeCoinHolders {
-    parent: Arc<NativeCoinHoldersGrowth>,
-}
+pub struct Properties;
 
-impl NewNativeCoinHolders {
-    pub fn new(parent: Arc<NativeCoinHoldersGrowth>) -> Self {
-        Self { parent }
+impl Named for Properties {
+    fn name() -> String {
+        "newNativeCoinHolders".into()
     }
 }
 
-#[async_trait]
-impl ChartDependentUpdater<NativeCoinHoldersGrowth> for NewNativeCoinHolders {
-    fn parent(&self) -> Arc<NativeCoinHoldersGrowth> {
-        self.parent.clone()
-    }
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
 
-    async fn get_values(
-        &self,
-        mut parent_data: Vec<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        parent_data.sort();
-        let data: Result<Vec<_>, _> = parent_data
-            .into_iter()
-            .map(DateValueInt::try_from)
-            .scan(0, |prev, point| {
-                Some(point.map(|mut point| {
-                    let new = point.value;
-                    point.value -= *prev;
-                    *prev = new;
-                    point
-                }))
-            })
-            .map(|point| point.map(DateValue::from))
-            .collect();
-        Ok(data.map_err(|e| {
-            let parent_name = self.parent.name();
-            UpdateError::Internal(format!(
-                "failed to parse values in chart '{parent_name}': {e}",
-            ))
-        })?)
-    }
-}
-
-#[async_trait]
-impl Chart for NewNativeCoinHolders {
-    fn name(&self) -> &str {
-        "newNativeCoinHolders"
-    }
-
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
-
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        self.parent.create(db).await?;
-        create_chart(db, self.name().into(), self.chart_type()).await
-    }
 }
 
-#[async_trait]
-impl ChartUpdater for NewNativeCoinHolders {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type NewNativeCoinHolders = DirectVecLocalDbChartSource<
+    MapToString<Delta<NativeCoinHoldersGrowthInt>>,
+    Batch30Days,
+    Properties,
+>;
+pub type NewNativeCoinHoldersInt = MapParseTo<StripExt<NewNativeCoinHolders>, i64>;
+pub type NewNativeCoinHoldersWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewNativeCoinHoldersInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewNativeCoinHoldersMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewNativeCoinHoldersInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewNativeCoinHoldersMonthlyInt = MapParseTo<StripExt<NewNativeCoinHoldersMonthly>, i64>;
+pub type NewNativeCoinHoldersYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewNativeCoinHoldersMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
@@ -96,17 +78,43 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_native_coin_holders() {
-        let chart = NewNativeCoinHolders::new(Arc::new(NativeCoinHoldersGrowth::default()));
-
-        simple_test_chart(
+        simple_test_chart::<NewNativeCoinHolders>(
             "update_new_native_coin_holders",
-            chart,
             vec![
-                ("2022-11-08", "0"),
                 ("2022-11-09", "8"),
                 ("2022-11-10", "0"),
                 ("2022-11-11", "-1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_native_coin_holders_weekly() {
+        simple_test_chart::<NewNativeCoinHoldersWeekly>(
+            "update_new_native_coin_holders_weekly",
+            vec![("2022-11-07", "7")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_native_coin_holders_monthly() {
+        simple_test_chart::<NewNativeCoinHoldersMonthly>(
+            "update_new_native_coin_holders_monthly",
+            vec![("2022-11-01", "7")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_native_coin_holders_yearly() {
+        simple_test_chart::<NewNativeCoinHoldersYearly>(
+            "update_new_native_coin_holders_yearly",
+            vec![("2022-01-01", "7")],
         )
         .await;
     }

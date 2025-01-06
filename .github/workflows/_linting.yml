@@ -1,0 +1,29 @@
+name: Linting (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: true
+        type: string
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          components: rustfmt, clippy
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check --config imports_granularity=Crate
+        working-directory: ${{ inputs.working-directory }}
+
+      - name: cargo clippy
+        run: cargo clippy --all --all-targets --all-features -- -D warnings
+        working-directory: ${{ inputs.working-directory }}

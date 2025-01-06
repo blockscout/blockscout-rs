@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package blockscout.multichainAggregator.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
+
+service MultichainAggregatorService {
+  rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
+  rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
+  rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
+}
+
+message Pagination {
+  string page_token = 1;
+  uint32 page_size = 2;
+}
+
+message Address {
+  string hash = 1;
+  optional string ens_name = 2;
+  optional string contract_name = 3;
+  optional string token_name = 4;
+
+  enum TokenType {
+    TOKEN_TYPE_UNSPECIFIED = 0;
+    TOKEN_TYPE_ERC_20 = 1;
+    TOKEN_TYPE_ERC_721 = 2;
+    TOKEN_TYPE_ERC_1155 = 3;
+    TOKEN_TYPE_ERC_404 = 4;
+  }
+
+  TokenType token_type = 5;
+  optional bool is_contract = 6;
+  optional bool is_verified_contract = 7;
+  optional bool is_token = 8;
+}
+
+message BlockRange {
+  uint64 min_block_number = 1;
+  uint64 max_block_number = 2;
+}
+
+message Hash {
+  string hash = 1;
+
+  enum HashType {
+    HASH_TYPE_BLOCK = 0;
+    HASH_TYPE_TRANSACTION = 1;
+  }
+
+  HashType hash_type = 2;
+}
+
+message MarketplaceDapp {
+  string id = 1;
+  string title = 2;
+  string logo = 3;
+  string short_description = 4;
+}
+
+message BatchImportRequest {
+  string chain_id = 1;
+  repeated Address addresses = 2;
+  repeated BlockRange block_ranges = 3;
+  repeated Hash hashes = 4;
+  string api_key = 5;
+}
+
+message BatchImportResponse { string status = 1; }
+
+message QuickSearchRequest { string q = 1; }
+
+message QuickSearchResponse {
+  message ChainBlockNumber {
+    int64 chain_id = 1;
+    uint64 block_number = 2;
+  }
+
+  message ChainSearchResult {
+    string explorer_url = 1;
+    repeated Address addresses = 2;
+    repeated Hash blocks = 3;
+    repeated Hash transactions = 4;
+    repeated ChainBlockNumber block_numbers = 5;
+    repeated MarketplaceDapp dapps = 6;
+  }
+
+  map<string, ChainSearchResult> items = 1;
+}
+
+message ListAddressesRequest {
+  string q = 1;
+  optional uint32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message ListAddressesResponse {
+  repeated Address addresses = 1;
+  Pagination pagination = 2;
+}

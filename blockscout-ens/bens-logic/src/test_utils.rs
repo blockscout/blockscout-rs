@@ -1,9 +1,9 @@
 use crate::{
     blockscout::BlockscoutClient,
     protocols::{Network, ProtocolInfo, Tld},
-    subgraphs_reader::SubgraphReader,
+    subgraph::SubgraphReader,
 };
-use ethers::types::TxHash;
+use alloy::primitives::TxHash;
 use nonempty::nonempty;
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc};
@@ -83,7 +83,7 @@ pub async fn mocked_blockscout_client() -> BlockscoutClient {
     let mock_server = MockServer::start().await;
     for (tx_hash, tx) in TXNS.iter() {
         let mock =
-            Mock::given(method("GET")).and(path(&format!("/api/v2/transactions/{tx_hash:#x}")));
+            Mock::given(method("GET")).and(path(format!("/api/v2/transactions/{tx_hash:#x}")));
         mock.respond_with(ResponseTemplate::new(200).set_body_json(tx))
             .mount(&mock_server)
             .await;
@@ -100,7 +100,8 @@ pub async fn mocked_networks_and_protocols(
         1,
         Network {
             blockscout_client: Arc::new(client),
-            use_protocols: nonempty!["ens".to_string()],
+            use_protocols: vec!["ens".to_string()],
+            rpc_url: None,
         },
     )]);
 

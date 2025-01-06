@@ -508,13 +508,10 @@ definitions:
         type: string
       call_gas_limit:
         type: string
-        format: uint64
       verification_gas_limit:
         type: string
-        format: uint64
       pre_verification_gas:
         type: string
-        format: uint64
       max_fee_per_gas:
         type: string
       max_priority_fee_per_gas:
@@ -539,7 +536,6 @@ definitions:
         title: call_gas_limit + verification_gas_limit
       pre_verification_gas:
         type: string
-        format: uint64
       gas_fees:
         type: string
         title: max_fee_per_gas + max_priority_fee_per_gas
@@ -561,13 +557,10 @@ definitions:
         type: string
       call_gas_limit:
         type: string
-        format: uint64
       verification_gas_limit:
         type: string
-        format: uint64
       pre_verification_gas:
         type: string
-        format: uint64
       max_fee_per_gas:
         type: string
       max_priority_fee_per_gas:
@@ -611,12 +604,10 @@ definitions:
         type: string
       gas:
         type: string
-        format: uint64
       gas_price:
         type: string
       gas_used:
         type: string
-        format: uint64
       sponsor_type:
         type: string
       user_logs_start_index:

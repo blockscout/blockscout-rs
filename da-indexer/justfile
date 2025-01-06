@@ -31,9 +31,12 @@ test-with-db *args:
 
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
-run:
-    DA_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} DA_INDEXER__CONFIG=./da-indexer-server/config/base.toml cargo run --bin da-indexer-server
 
+run:
+    DA_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} DA_INDEXER__CONFIG=./da-indexer-server/config/celestia.toml cargo run --bin da-indexer-server
+
+run-celestia-router:
+    DA_INDEXER__CONFIG=./da-indexer-server/config/celestia_standalone_router.toml cargo run --bin da-indexer-server
 
 
 generate-entities:

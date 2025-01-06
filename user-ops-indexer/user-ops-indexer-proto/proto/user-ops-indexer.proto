@@ -156,9 +156,9 @@ message RawUserOpV06 {
   string nonce = 2;
   string init_code = 3;
   string call_data = 4;
-  uint64 call_gas_limit = 5;
-  uint64 verification_gas_limit = 6;
-  uint64 pre_verification_gas = 7;
+  string call_gas_limit = 5;
+  string verification_gas_limit = 6;
+  string pre_verification_gas = 7;
   string max_fee_per_gas = 8;
   string max_priority_fee_per_gas = 9;
   string paymaster_and_data = 10;
@@ -171,7 +171,7 @@ message RawUserOpV07 {
   string init_code = 3;
   string call_data = 4;
   string account_gas_limits = 5; // call_gas_limit + verification_gas_limit
-  uint64 pre_verification_gas = 6;
+  string pre_verification_gas = 6;
   string gas_fees = 7; // max_fee_per_gas + max_priority_fee_per_gas
   string paymaster_and_data = 8; // paymaster + paymaster_verification_gas_limit + post_op_gas_limit + paymaster_data
   string signature = 9;
@@ -182,9 +182,9 @@ message UserOp {
   string sender = 2;
   string nonce = 3;
   string call_data = 4;
-  uint64 call_gas_limit = 5;
-  uint64 verification_gas_limit = 6;
-  uint64 pre_verification_gas = 7;
+  string call_gas_limit = 5;
+  string verification_gas_limit = 6;
+  string pre_verification_gas = 7;
   string max_fee_per_gas = 8;
   string max_priority_fee_per_gas = 9;
   string signature = 10;
@@ -206,9 +206,9 @@ message UserOp {
   optional string paymaster = 23;
   bool status = 24;
   optional string revert_reason = 25;
-  uint64 gas = 26;
+  string gas = 26;
   string gas_price = 27;
-  uint64 gas_used = 28;
+  string gas_used = 28;
   string sponsor_type = 29;
   uint32 user_logs_start_index = 30;
   uint32 user_logs_count = 31;

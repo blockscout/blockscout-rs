@@ -1,95 +1,185 @@
+use std::ops::Range;
+
 use crate::{
-    charts::db_interaction::chart_updaters::{ChartBatchUpdater, ChartUpdater},
-    UpdateError,
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString, StripExt},
+                resolutions::sum::SumLowerResolution,
+            },
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        },
+        types::BlockscoutMigrations,
+    },
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
+    utils::{produce_filter_and_values, sql_with_range_filter_opt},
+    ChartProperties, Named,
 };
-use async_trait::async_trait;
-use chrono::NaiveDate;
+
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct NewContracts {}
+pub struct NewContractsStatement;
 
-#[async_trait]
-impl ChartBatchUpdater for NewContracts {
-    fn get_query(&self, from: NaiveDate, to: NaiveDate) -> Statement {
-        Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            r#"SELECT day AS date, COUNT(*)::text AS value
-                FROM (
-                    SELECT 
-                        DISTINCT ON (txns_plus_internal_txns.hash)
-                        txns_plus_internal_txns.day
+impl StatementFromRange for NewContractsStatement {
+    fn get_statement(
+        range: Option<Range<DateTime<Utc>>>,
+        completed_migrations: &BlockscoutMigrations,
+    ) -> Statement {
+        if completed_migrations.denormalization {
+            // TODO: consider supporting such case in macro ?
+            let mut args = vec![];
+            let (tx_filter, new_args) =
+                produce_filter_and_values(range.clone(), "t.block_timestamp", args.len() + 1);
+            args.extend(new_args);
+            let (block_filter, new_args) =
+                produce_filter_and_values(range.clone(), "b.timestamp", args.len() + 1);
+            args.extend(new_args);
+            let sql = format!(
+                r#"
+                    SELECT day AS date, COUNT(*)::text AS value
                     FROM (
-                        SELECT
-                            t.created_contract_address_hash AS hash,
-                            b.timestamp::date AS day
-                        FROM transactions t
-                            JOIN blocks b ON b.hash = t.block_hash
-                        WHERE
-                            t.created_contract_address_hash NOTNULL AND
-                            b.consensus = TRUE AND
-                            b.timestamp != to_timestamp(0) AND
-                            b.timestamp::date < $2 AND
-                            b.timestamp::date >= $1
-                        UNION
-                        SELECT
-                            it.created_contract_address_hash AS hash,
-                            b.timestamp::date AS day
-                        FROM internal_transactions it
-                            JOIN blocks b ON b.hash = it.block_hash
-                        WHERE
-                            it.created_contract_address_hash NOTNULL AND
-                            b.consensus = TRUE AND
-                            b.timestamp != to_timestamp(0) AND
-                            b.timestamp::date < $2 AND
-                            b.timestamp::date >= $1
-                    ) txns_plus_internal_txns
-                ) sub
-                GROUP BY sub.day;
+                        SELECT 
+                            DISTINCT ON (txns_plus_internal_txns.hash)
+                            txns_plus_internal_txns.day
+                        FROM (
+                            SELECT
+                                t.created_contract_address_hash AS hash,
+                                t.block_timestamp::date AS day
+                            FROM transactions t
+                            WHERE
+                                t.created_contract_address_hash NOTNULL AND
+                                t.block_consensus = TRUE AND
+                                t.block_timestamp != to_timestamp(0) {tx_filter}
+                            UNION
+                            SELECT
+                                it.created_contract_address_hash AS hash,
+                                b.timestamp::date AS day
+                            FROM internal_transactions it
+                                JOIN blocks b ON b.hash = it.block_hash
+                            WHERE
+                                it.created_contract_address_hash NOTNULL AND
+                                b.consensus = TRUE AND
+                                b.timestamp != to_timestamp(0) {block_filter}
+                        ) txns_plus_internal_txns
+                    ) sub
+                    GROUP BY sub.day;
                 "#,
-            vec![from.into(), to.into()],
-        )
+            );
+            Statement::from_sql_and_values(DbBackend::Postgres, sql, args)
+        } else {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT day AS date, COUNT(*)::text AS value
+                    FROM (
+                        SELECT 
+                            DISTINCT ON (txns_plus_internal_txns.hash)
+                            txns_plus_internal_txns.day
+                        FROM (
+                            SELECT
+                                t.created_contract_address_hash AS hash,
+                                b.timestamp::date AS day
+                            FROM transactions t
+                                JOIN blocks b ON b.hash = t.block_hash
+                            WHERE
+                                t.created_contract_address_hash NOTNULL AND
+                                b.consensus = TRUE AND
+                                b.timestamp != to_timestamp(0) {filter}
+                            UNION
+                            SELECT
+                                it.created_contract_address_hash AS hash,
+                                b.timestamp::date AS day
+                            FROM internal_transactions it
+                                JOIN blocks b ON b.hash = it.block_hash
+                            WHERE
+                                it.created_contract_address_hash NOTNULL AND
+                                b.consensus = TRUE AND
+                                b.timestamp != to_timestamp(0) {filter}
+                        ) txns_plus_internal_txns
+                    ) sub
+                    GROUP BY sub.day;
+                "#,
+                [],
+                "b.timestamp",
+                range,
+            )
+        }
     }
 }
 
-#[async_trait]
-impl crate::Chart for NewContracts {
-    fn name(&self) -> &str {
-        "newContracts"
-    }
+pub type NewContractsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<NewContractsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
-    fn chart_type(&self) -> ChartType {
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "newContracts".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for NewContracts {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type NewContracts = DirectVecLocalDbChartSource<NewContractsRemote, Batch30Days, Properties>;
+pub type NewContractsInt = MapParseTo<StripExt<NewContracts>, i64>;
+pub type NewContractsWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewContractsInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type NewContractsMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewContractsInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+pub type NewContractsMonthlyInt = MapParseTo<StripExt<NewContractsMonthly>, i64>;
+pub type NewContractsYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewContractsMonthlyInt, Year>>,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::NewContracts;
-    use crate::tests::simple_test::simple_test_chart;
+    use super::*;
+    use crate::tests::{
+        point_construction::{d, dt},
+        simple_test::{
+            ranged_test_chart_with_migration_variants, simple_test_chart_with_migration_variants,
+        },
+    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_contracts() {
-        let chart = NewContracts::default();
-        simple_test_chart(
+        simple_test_chart_with_migration_variants::<NewContracts>(
             "update_new_contracts",
-            chart,
             vec![
                 ("2022-11-09", "3"),
                 ("2022-11-10", "6"),
@@ -99,6 +189,63 @@ mod tests {
                 ("2023-01-01", "1"),
                 ("2023-02-01", "1"),
             ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_contracts_weekly() {
+        simple_test_chart_with_migration_variants::<NewContractsWeekly>(
+            "update_new_contracts_weekly",
+            vec![
+                ("2022-11-07", "19"),
+                ("2022-11-28", "2"),
+                ("2022-12-26", "1"),
+                ("2023-01-30", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_contracts_monthly() {
+        simple_test_chart_with_migration_variants::<NewContractsMonthly>(
+            "update_new_contracts_monthly",
+            vec![
+                ("2022-11-01", "19"),
+                ("2022-12-01", "2"),
+                ("2023-01-01", "1"),
+                ("2023-02-01", "1"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_contracts_yearly() {
+        simple_test_chart_with_migration_variants::<NewContractsYearly>(
+            "update_new_contracts_yearly",
+            vec![("2022-01-01", "21"), ("2023-01-01", "2")],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn ranged_update_new_contracts() {
+        ranged_test_chart_with_migration_variants::<NewContracts>(
+            "ranged_update_new_contracts",
+            vec![
+                ("2022-11-11", "8"),
+                ("2022-11-12", "2"),
+                ("2022-12-01", "2"),
+            ],
+            d("2022-11-11"),
+            d("2022-12-01"),
+            Some(dt("2022-12-01T12:00:00")),
         )
         .await;
     }

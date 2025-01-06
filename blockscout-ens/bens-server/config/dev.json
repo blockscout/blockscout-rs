@@ -1,13 +1,31 @@
 {
   "subgraphs_reader": {
     "networks": {
-      "5": {
+      "1": {
         "blockscout": {
-          "url": "https://eth-goerli.blockscout.com"
+          "url": "https://eth.blockscout.com"
         },
         "use_protocols": [
           "ens"
+        ],
+        "rpc_url": "https://ethereum-rpc.publicnode.com"
+      },
+      "11155111": {
+        "blockscout": {
+          "url": "https://eth-sepolia.blockscout.com"
+        },
+        "use_protocols": [
+          "ens-sepolia"
         ]
+      },
+      "109": {
+        "blockscout": {
+          "url": "https://shibariumscan.io"
+        },
+        "use_protocols": [
+          "d3_connect"
+        ],
+        "rpc_url": "https://www.shibrpc.com"
       }
     },
     "protocols": {
@@ -15,13 +33,58 @@
         "tld_list": [
           "eth"
         ],
+        "network_id": 1,
         "subgraph_name": "ens-subgraph",
         "address_resolve_technique": "reverse_registry",
-        "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
         "meta": {
           "short_name": "ENS",
           "title": "Ethereum Name Service",
-          "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain."
+          "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
+          "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
+          "docs_url": "https://docs.ens.domains/"
+        },
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+          "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
+          "try_offchain_resolve": true
+        }
+      },
+      "ens-sepolia": {
+        "tld_list": ["eth"],
+        "network_id": 11155111,
+        "subgraph_name": "ens-sepolia-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+          "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
+          "try_offchain_resolve": true
+        },
+        "meta": {
+          "short_name": "ENS (Testnet)",
+          "title": "Ethereum Name Service (Testnet)",
+          "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
+          "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
+          "docs_url": "https://docs.ens.domains/"
+        }
+      },
+      "d3_connect": {
+        "tld_list": ["shib"],
+        "network_id": 109,
+        "subgraph_name": "d3-connect-shib-subgraph",
+        "address_resolve_technique": "addr2name",
+        "specific": {
+          "type": "d3_connect",
+          "native_token_contract": "0xDe74799371Ceac11A0F52BA2694392A391D0dA18",
+          "resolver_contract": "0xD60D40674E678F0089736D6381071973a75B4B6f"
+        },
+        "meta": {
+          "short_name": "D3 Connect",
+          "title": "D3 Connect",
+          "description": "D3 Connect is a platform for connecting to the Shibarium network.",
+          "icon_url": "https://i.imgur.com/cD6VIXk.png",
+          "docs_url": "https://docs.d3.app/"
         }
       }
     }

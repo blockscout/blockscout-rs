@@ -23,7 +23,7 @@ pub enum Error {
     #[error("{0}")]
     Initialization(anyhow::Error),
     #[error("Compiler version not found: {0}")]
-    VersionNotFound(compiler::Version),
+    VersionNotFound(String),
     #[error("Compilation error: {0:?}")]
     Compilation(Vec<String>),
     #[error("{0}")]
@@ -54,7 +54,7 @@ impl From<compiler::Error> for Error {
 #[derive(Clone, Debug)]
 pub struct Success {
     pub compiler_output: CompilerOutput,
-    pub compiler_version: compiler::Version,
+    pub compiler_version: compiler::DetailedVersion,
     pub file_path: String,
     pub contract_name: String,
     pub abi: Option<serde_json::Value>,
@@ -69,7 +69,7 @@ pub struct Success {
 
 pub struct ContractVerifier<'a, C> {
     compilers: &'a Compilers<C>,
-    compiler_version: &'a compiler::Version,
+    compiler_version: &'a compiler::DetailedVersion,
     verifier: Box<
         dyn base::Verifier<
             Input = (
@@ -86,7 +86,7 @@ pub struct ContractVerifier<'a, C> {
 impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
     pub fn new(
         compilers: &'a Compilers<C>,
-        compiler_version: &'a compiler::Version,
+        compiler_version: &'a compiler::DetailedVersion,
         creation_tx_input: Option<Bytes>,
         deployed_bytecode: Bytes,
         chain_id: Option<String>,

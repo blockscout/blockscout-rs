@@ -1,231 +1,223 @@
 {
     "template_values": {
-        "native_coin_symbol": "ETH"
+        "native_coin_symbol": "ETH",
+        "active_recurring_accounts_title": "Active recurring accounts",
+        "active_recurring_accounts_description": "Accounts active this period and within a prior"
     },
     "counters": {
         "total_blocks": {
             "title": "Total blocks",
-            "description": "Number of blocks over all time",
-            "update_schedule": "0 0 */3 * * * *"
+            "description": "Number of blocks over all time"
         },
         "total_addresses": {
             "title": "Total addresses",
-            "description": "Number of addresses that participated in the blockchain",
-            "update_schedule": "0 0 */3 * * * *"
+            "description": "Number of addresses that participated in the blockchain"
         },
         "average_block_time": {
             "title": "Average block time",
             "description": "Average time taken in seconds for a block to be included in the blockchain",
-            "units": "s",
-            "update_schedule": "0 0 15 * * * *"
+            "units": "s"
+        },
+        "new_txns_24h": {
+            "title": "Transactions",
+            "description": "Number of new transactions within last 24 hours"
+        },
+        "pending_txns": {
+            "title": "Pending transactions",
+            "description": " "
+        },
+        "txns_fee_24h": {
+            "title": "Transactions fees",
+            "description": "Sum of {{native_coin_symbol}} spent on gas fees within last 24 hours",
+            "units": "{{native_coin_symbol}}"
+        },
+        "average_txn_fee_24h": {
+            "title": "Avg. transaction fee",
+            "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction within last 24 hours",
+            "units": "{{native_coin_symbol}}"
         },
         "completed_txns": {
             "title": "Completed txns",
-            "description": "Number of transactions with success status",
-            "update_schedule": "0 5 */3 * * * *"
+            "description": "Number of transactions with success status"
         },
         "total_accounts": {
             "title": "Total accounts",
-            "description": "Number of EOAs that sent at least 1 transaction",
-            "update_schedule": "0 0 16 * * * *"
+            "description": "Number of EOAs that sent at least 1 transaction"
         },
         "total_native_coin_transfers": {
             "title": "Total {{native_coin_symbol}} transfers",
-            "description": "Number of transactions with the transfer of the {{native_coin_symbol}}",
-            "update_schedule": "0 0 13 * * * *"
+            "description": "Number of transactions with the transfer of the {{native_coin_symbol}}"
         },
         "total_tokens": {
             "title": "Total tokens",
-            "description": "Number of all token contracts",
-            "update_schedule": "0 0 18 * * * *"
+            "description": "Number of all token contracts"
         },
         "total_txns": {
             "title": "Total txns",
-            "description": "All transactions including pending, dropped, replaced, failed transactions",
-            "update_schedule": "0 10 */3 * * * *"
+            "description": "All transactions including pending, dropped, replaced, failed transactions"
+        },
+        "total_operational_txns": {
+            "enabled": false,
+            "title": "Total operational txns",
+            "description": "'Total txns' without block creation transactions"
+        },
+        "yesterday_txns": {
+            "title": "Yesterday transactions",
+            "description": "Number of transactions yesterday (0:00 - 23:59 UTC)"
         },
         "last_new_contracts": {
             "title": "Number of deployed contracts today",
-            "description": "Number of deployed contracts today",
-            "update_schedule": "0 15 */3 * * * *"
+            "description": "Number of deployed contracts today"
         },
         "total_contracts": {
             "title": "Total contracts",
-            "description": "Number of contracts",
-            "update_schedule": "0 20 */3 * * * *"
+            "description": "Number of contracts"
         },
         "last_new_verified_contracts": {
             "title": "Number of verified contracts today",
-            "description": "Number of contracts verified today",
-            "update_schedule": "0 25 */3 * * * *"
+            "description": "Number of contracts verified today"
         },
         "total_verified_contracts": {
             "title": "Total verified contracts",
-            "description": "Number of verified contracts",
-            "update_schedule": "0 30 */3 * * * *"
+            "description": "Number of verified contracts"
         },
         "total_native_coin_holders": {
             "enabled": false,
             "title": "Total {{native_coin_symbol}} holders",
-            "description": "Number of accounts with {{native_coin_symbol}}",
-            "update_schedule": "0 0 17 * * * *"
+            "description": "Number of accounts with {{native_coin_symbol}}"
         }
     },
-    "lines": {
-        "accounts": {
-            "title": "Accounts",
-            "order": 1,
-            "charts": {
-                "active_accounts": {
-                    "title": "Active accounts",
-                    "description": "Active accounts number per period",
-                    "update_schedule": "0 0 4 * * * *"
-                },
-                "accounts_growth": {
-                    "title": "Accounts growth",
-                    "description": "Cumulative accounts number per period",
-                    "update_schedule": "0 0 5 * * * *"
-                },
-                "new_accounts": {
-                    "title": "New accounts",
-                    "description": "New accounts number per day",
-                    "update_schedule": "0 0 21 * * * *"
-                }
-            }
+    "line_charts": {
+        "active_accounts": {
+            "title": "Active accounts",
+            "description": "Active accounts number per period"
         },
-        "transactions": {
-            "title": "Transactions",
-            "order": 2,
-            "charts": {
-                "average_txn_fee": {
-                    "title": "Average transaction fee",
-                    "description": "The average amount in {{native_coin_symbol}} spent per transaction",
-                    "units": "{{native_coin_symbol}}",
-                    "update_schedule": "0 0 6 * * * *"
-                },
-                "txns_fee": {
-                    "title": "Transactions fees",
-                    "description": "Amount of tokens paid as fees",
-                    "units": "{{native_coin_symbol}}",
-                    "update_schedule": "0 0 7 * * * *"
-                },
-                "new_txns": {
-                    "title": "New transactions",
-                    "description": "New transactions number",
-                    "update_schedule": "0 0 1 * * * *"
-                },
-                "txns_growth": {
-                    "title": "Transactions growth",
-                    "description": "Cumulative transactions number",
-                    "update_schedule": "0 0 2 * * * *"
-                },
-                "txns_success_rate": {
-                    "title": "Transactions success rate",
-                    "description": "Successful transactions rate per day",
-                    "update_schedule": "0 0 19 * * * *"
-                }
-            }
+        "active_recurring_accounts_60_days": {
+            "enabled": false,
+            "title": "{{active_recurring_accounts_title}} - 60 days window",
+            "description": "{{active_recurring_accounts_description}} 60-day timespan"
         },
-        "blocks": {
-            "title": "Blocks",
-            "order": 3,
-            "charts": {
-                "new_blocks": {
-                    "title": "New blocks",
-                    "description": "New blocks number",
-                    "update_schedule": "0 0 8 * * * *"
-                },
-                "average_block_size": {
-                    "title": "Average block size",
-                    "description": "Average size of blocks in bytes",
-                    "units": "Bytes",
-                    "update_schedule": "0 0 9 * * * *"
-                },
-                "average_block_rewards": {
-                    "title": "Average block rewards",
-                    "description": "Average amount of distributed reward in tokens per day",
-                    "units": "{{native_coin_symbol}}",
-                    "update_schedule": "0 0 20 * * * *"
-                }
-            }
+        "active_recurring_accounts_90_days": {
+            "enabled": false,
+            "title": "{{active_recurring_accounts_title}} - 90 days window",
+            "description": "{{active_recurring_accounts_description}} 90-day timespan"
         },
-        "tokens": {
-            "title": "Tokens",
-            "order": 4,
-            "charts": {
-                "new_native_coin_transfers": {
-                    "title": "New {{native_coin_symbol}} transfers",
-                    "description": "New token transfers number for the period",
-                    "update_schedule": "0 0 3 * * * *"
-                },
-                "native_coin_holders_growth": {
-                    "enabled": false,
-                    "title": "{{native_coin_symbol}} holders growth",
-                    "description": "Cumulative token holders number for the period",
-                    "update_schedule": "0 0 10 * * * *"
-                },
-                "new_native_coin_holders": {
-                    "enabled": false,
-                    "title": "New {{native_coin_symbol}} holders",
-                    "description": "New token holders number per day",
-                    "update_schedule": "0 0 22 * * * *"
-                },
-                "native_coin_supply": {
-                    "enabled": false,
-                    "title": "{{native_coin_symbol}} circulating supply",
-                    "description": "Amount of token circulating supply for the period",
-                    "units": "{{native_coin_symbol}}",
-                    "update_schedule": "0 0 11 * * * *"
-                }
-            }
+        "active_recurring_accounts_120_days": {
+            "enabled": false,
+            "title": "{{active_recurring_accounts_title}} - 120 days window",
+            "description": "{{active_recurring_accounts_description}} 120-day timespan"
         },
-        "gas": {
-            "title": "Gas",
-            "order": 5,
-            "charts": {
-                "average_gas_limit": {
-                    "title": "Average gas limit",
-                    "description": "Average gas limit per block for the period",
-                    "update_schedule": "0 0 12 * * * *"
-                },
-                "gas_used_growth": {
-                    "title": "Gas used growth",
-                    "description": "Cumulative gas used for the period",
-                    "update_schedule": "0 0 13 * * * *"
-                },
-                "average_gas_price": {
-                    "title": "Average gas price",
-                    "description": "Average gas price for the period (Gwei)",
-                    "units": "Gwei",
-                    "update_schedule": "0 0 14 * * * *"
-                }
-            }
+        "accounts_growth": {
+            "title": "Number of accounts",
+            "description": "Cumulative account growth over time"
         },
-        "contracts": {
-            "title": "Contracts",
-            "order": 6,
-            "charts": {
-                "new_verified_contracts": {
-                    "title": "New verified contracts",
-                    "description": "New verified contracts number for the period",
-                    "update_schedule": "0 0 15 * * * *"
-                },
-                "verified_contracts_growth": {
-                    "title": "Verified contracts growth",
-                    "description": "Cumulative number verified contracts for the period",
-                    "update_schedule": "0 0 7 * * * *"
-                },
-                "new_contracts": {
-                    "title": "New contracts",
-                    "description": "New contracts number for the period",
-                    "update_schedule": "0 0 16 * * * *"
-                },
-                "contracts_growth": {
-                    "title": "Contracts growth",
-                    "description": "Cumulative number of contracts for the period",
-                    "update_schedule": "0 0 8 * * * *"
-                }
-            }
+        "new_accounts": {
+            "title": "New accounts",
+            "description": "Number of newly added accounts"
+        },
+        "average_txn_fee": {
+            "title": "Average transaction fee",
+            "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction",
+            "units": "{{native_coin_symbol}}"
+        },
+        "txns_fee": {
+            "title": "Transaction fees",
+            "description": "Sum of {{native_coin_symbol}} spent on gas fees",
+            "units": "{{native_coin_symbol}}"
+        },
+        "new_txns": {
+            "title": "New transactions",
+            "description": "Number of new transactions"
+        },
+        "new_txns_window": {
+            "title": "Daily transactions",
+            "description": "Number of transactions yesterday (0:00 - 23:59 UTC). The chart displays daily transactions for the past 30 days."
+        },
+        "txns_growth": {
+            "title": "Number of transactions",
+            "description": "Cumulative transaction growth over time"
+        },
+        "new_operational_txns": {
+            "enabled": false,
+            "title": "New operational transactions",
+            "description": "Number of new transactions without block creation"
+        },
+        "operational_txns_growth": {
+            "enabled": false,
+            "title": "Number of operational transactions",
+            "description": "Cumulative transactions growth without block creation"
+        },
+        "txns_success_rate": {
+            "title": "Transaction success rate",
+            "description": "Success rate for all included transactions"
+        },
+        "new_block_rewards": {
+            "enabled": false,
+            "title": "New block rewards",
+            "description": "New block rewards number"
+        },
+        "new_blocks": {
+            "title": "New blocks",
+            "description": "Number of new blocks added to the chain"
+        },
+        "average_block_size": {
+            "title": "Average block size",
+            "description": "Space (in bytes) taken up by all block fields",
+            "units": "Bytes"
+        },
+        "average_block_rewards": {
+            "title": "Average block rewards",
+            "description": "Average amount of reward",
+            "units": "{{native_coin_symbol}}"
+        },
+        "new_native_coin_transfers": {
+            "title": "Number of {{native_coin_symbol}} transfers",
+            "description": "Completed token transfers"
+        },
+        "native_coin_holders_growth": {
+            "enabled": false,
+            "title": "{{native_coin_symbol}} holders",
+            "description": "Number of accounts holding {{native_coin_symbol}}"
+        },
+        "new_native_coin_holders": {
+            "enabled": false,
+            "title": "New {{native_coin_symbol}} holders",
+            "description": "Number of new accounts holding {{native_coin_symbol}}"
+        },
+        "native_coin_supply": {
+            "enabled": false,
+            "title": "{{native_coin_symbol}} circulating supply",
+            "description": "Amount of publicly available {{native_coin_symbol}}",
+            "units": "{{native_coin_symbol}}"
+        },
+        "average_gas_limit": {
+            "title": "Average gas limit",
+            "description": "Average block gas limit"
+        },
+        "gas_used_growth": {
+            "title": "Total gas usage",
+            "description": "Cumulative gas used over time"
+        },
+        "average_gas_price": {
+            "title": "Average gas price",
+            "description": "Average price (Gwei) per unit of gas",
+            "units": "Gwei"
+        },
+        "new_verified_contracts": {
+            "title": "New verified contracts",
+            "description": "Number of newly verified contracts"
+        },
+        "verified_contracts_growth": {
+            "title": "Number of verified contracts",
+            "description": "Cumulative verified contract growth over time"
+        },
+        "new_contracts": {
+            "title": "New contracts",
+            "description": "Number of new contracts in the network"
+        },
+        "contracts_growth": {
+            "title": "Number of contracts",
+            "description": "Cumulative contract growth over time"
         }
     }
 }

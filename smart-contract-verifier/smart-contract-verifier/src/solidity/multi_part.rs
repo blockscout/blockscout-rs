@@ -1,6 +1,6 @@
 use super::{client::Client, types::Success};
 use crate::{
-    compiler::Version,
+    compiler::DetailedVersion,
     verifier::{ContractVerifier, Error},
     BatchError, BatchVerificationResult, Contract,
 };
@@ -16,7 +16,7 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
     pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: Version,
+    pub compiler_version: DetailedVersion,
 
     pub content: MultiFileContent,
 
@@ -110,7 +110,7 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
 /// have to iterate through all possible options.
 ///
 /// See "settings_metadata" (https://docs.soliditylang.org/en/v0.8.15/using-the-compiler.html?highlight=compiler%20input#input-description)
-fn settings_metadata(compiler_version: &Version) -> Vec<Option<SettingsMetadata>> {
+fn settings_metadata(compiler_version: &DetailedVersion) -> Vec<Option<SettingsMetadata>> {
     // Options are sorted by their probability of occurring
     const BYTECODE_HASHES: [BytecodeHash; 3] =
         [BytecodeHash::Ipfs, BytecodeHash::None, BytecodeHash::Bzzr1];
@@ -160,7 +160,7 @@ fn input_from_sources(sources: Sources) -> Vec<CompilerInput> {
 
 pub struct BatchVerificationRequest {
     pub contracts: Vec<Contract>,
-    pub compiler_version: Version,
+    pub compiler_version: DetailedVersion,
     pub content: MultiFileContent,
 }
 

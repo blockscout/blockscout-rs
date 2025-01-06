@@ -1,81 +1,125 @@
 use crate::{
-    charts::{
-        create_chart,
-        db_interaction::{
-            chart_updaters::{parse_and_sum, ChartDependentUpdater, ChartUpdater},
-            types::DateValue,
+    charts::db_interaction::read::query_estimated_table_rows,
+    data_source::{
+        kinds::{
+            data_manipulation::map::MapParseTo,
+            local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
+        UpdateContext,
     },
-    lines::NewTxns,
-    Chart, UpdateError,
+    range::UniversalRange,
+    types::timespans::DateValue,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
-use async_trait::async_trait;
+
+use blockscout_db::entity::{blocks, transactions};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
-use std::sync::Arc;
+use sea_orm::{
+    prelude::Expr, ColumnTrait, DatabaseConnection, EntityName, EntityTrait, PaginatorTrait,
+    QueryFilter, QuerySelect,
+};
 
-#[derive(Debug)]
-pub struct TotalTxns {
-    parent: Arc<NewTxns>,
-}
+pub struct TotalTxnsQueryBehaviour;
 
-impl TotalTxns {
-    pub fn new(parent: Arc<NewTxns>) -> Self {
-        Self { parent }
+impl RemoteQueryBehaviour for TotalTxnsQueryBehaviour {
+    type Output = DateValue<String>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        _range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Self::Output, ChartError> {
+        let blockscout = cx.blockscout;
+        let timespan: NaiveDateTime = blocks::Entity::find()
+            .select_only()
+            .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
+            .filter(blocks::Column::Consensus.eq(true))
+            .into_tuple()
+            .one(blockscout)
+            .await
+            .map_err(ChartError::BlockscoutDB)?
+            .ok_or_else(|| ChartError::Internal("no block timestamps in database".into()))?;
+
+        let value = transactions::Entity::find()
+            .select_only()
+            .count(blockscout)
+            .await
+            .map_err(ChartError::BlockscoutDB)?;
+
+        let data = DateValue::<String> {
+            timespan: timespan.date(),
+            value: value.to_string(),
+        };
+        Ok(data)
     }
 }
 
-#[async_trait]
-impl ChartDependentUpdater<NewTxns> for TotalTxns {
-    fn parent(&self) -> Arc<NewTxns> {
-        self.parent.clone()
-    }
+pub type TotalTxnsRemote = RemoteDatabaseSource<TotalTxnsQueryBehaviour>;
 
-    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        let sum = parse_and_sum::<i64>(parent_data, self.name(), self.parent.name())?;
-        Ok(sum.into_iter().collect())
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "totalTxns".into()
     }
 }
 
-#[async_trait]
-impl crate::Chart for TotalTxns {
-    fn name(&self) -> &str {
-        "totalTxns"
-    }
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
 
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
-
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        self.parent.create(db).await?;
-        create_chart(db, self.name().into(), self.chart_type()).await
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 }
 
-#[async_trait]
-impl ChartUpdater for TotalTxns {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
+pub struct TotalTxnsEstimation;
+
+impl ValueEstimation for TotalTxnsEstimation {
+    async fn estimate(blockscout: &DatabaseConnection) -> Result<DateValue<String>, ChartError> {
+        // `now()` is more relevant when taken right before the query rather than
+        // `cx.time` measured a bit earlier.
+        let now = Utc::now();
+        let value = query_estimated_table_rows(blockscout, transactions::Entity.table_name())
             .await
+            .map_err(ChartError::BlockscoutDB)?
+            .map(|n| u64::try_from(n).unwrap_or(0))
+            .unwrap_or(0);
+        Ok(DateValue {
+            timespan: now.date_naive(),
+            value: value.to_string(),
+        })
     }
 }
+
+// We will need it to update on not fully indexed data soon, therefore this counter is
+// separated from `NewTxns`.
+//
+// Separate query not reliant on previous computation helps this counter to work in such
+// environments.
+//
+// todo: make it dependant again if #845 is resolved
+pub type TotalTxns =
+    DirectPointLocalDbChartSourceWithEstimate<TotalTxnsRemote, TotalTxnsEstimation, Properties>;
+pub type TotalTxnsInt = MapParseTo<TotalTxns, i64>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_counter;
+    use crate::tests::simple_test::{simple_test_counter, test_counter_fallback};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_txns() {
-        let counter = TotalTxns::new(Default::default());
-        simple_test_counter("update_total_txns", counter, "47").await;
+        simple_test_counter::<TotalTxns>("update_total_txns", "48", None).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn total_txns_fallback() {
+        test_counter_fallback::<TotalTxns>("total_txns_fallback").await;
     }
 }

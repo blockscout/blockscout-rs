@@ -1,0 +1,2 @@
+tkcalendar>=1.6.1
+croniter>=2.0.3

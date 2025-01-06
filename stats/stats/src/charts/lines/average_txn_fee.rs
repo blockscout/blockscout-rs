@@ -1,108 +1,177 @@
-use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::{DateValue, DateValueDouble},
-    },
-    UpdateError,
-};
-use async_trait::async_trait;
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+//! Average fee per transaction
 
-#[derive(Default, Debug)]
-pub struct AverageTxnFee {}
+use std::ops::Range;
+
+use crate::{
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString, StripExt},
+                resolutions::average::AverageLowerResolution,
+            },
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        },
+        types::BlockscoutMigrations,
+    },
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
+    utils::{produce_filter_and_values, sql_with_range_filter_opt},
+    ChartProperties, Named,
+};
+
+use chrono::{DateTime, NaiveDate, Utc};
+use entity::sea_orm_active_enums::ChartType;
+use sea_orm::{DbBackend, Statement};
+
+use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
 const ETHER: i64 = i64::pow(10, 18);
 
-#[async_trait]
-impl ChartPartialUpdater for AverageTxnFee {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(b.timestamp) as date, 
-                    (AVG(t.gas_used * t.gas_price) / $1)::FLOAT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE
-                    b.timestamp != to_timestamp(0) AND
-                    DATE(b.timestamp) > $2 AND
-                    b.consensus = true
-                GROUP BY DATE(b.timestamp)
-                "#,
-                vec![ETHER.into(), row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT 
-                    DATE(b.timestamp) as date, 
-                    (AVG(t.gas_used * t.gas_price) / $1)::FLOAT as value
-                FROM transactions t
-                JOIN blocks       b ON t.block_hash = b.hash
-                WHERE 
-                    b.timestamp != to_timestamp(0) AND
-                    b.consensus = true
-                GROUP BY DATE(b.timestamp)
-                "#,
-                vec![ETHER.into()],
-            ),
-        };
+pub struct AverageTxnFeeStatement;
 
-        let data = DateValueDouble::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?
-            .into_iter()
-            .map(DateValue::from)
-            .collect::<Vec<_>>();
-        Ok(data)
+impl StatementFromRange for AverageTxnFeeStatement {
+    fn get_statement(
+        range: Option<Range<DateTime<Utc>>>,
+        completed_migrations: &BlockscoutMigrations,
+    ) -> Statement {
+        if completed_migrations.denormalization {
+            // TODO: consider supporting such case in macro ?
+            let mut args = vec![ETHER.into()];
+            let (tx_filter, new_args) =
+                produce_filter_and_values(range.clone(), "t.block_timestamp", args.len() + 1);
+            args.extend(new_args);
+            let (block_filter, new_args) =
+                produce_filter_and_values(range.clone(), "b.timestamp", args.len() + 1);
+            args.extend(new_args);
+            let sql = format!(
+                r#"
+                    SELECT
+                        DATE(b.timestamp) as date,
+                        (AVG(
+                            t_filtered.gas_used *
+                            COALESCE(
+                                t_filtered.gas_price,
+                                b.base_fee_per_gas + LEAST(
+                                    t_filtered.max_priority_fee_per_gas,
+                                    t_filtered.max_fee_per_gas - b.base_fee_per_gas
+                                )
+                            )
+                        ) / $1)::FLOAT as value
+                    FROM (
+                        SELECT * from transactions t
+                        WHERE
+                            t.block_consensus = true AND
+                            t.block_timestamp != to_timestamp(0) {tx_filter}
+                    ) as t_filtered
+                    JOIN blocks       b ON t_filtered.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true {block_filter}
+                    GROUP BY DATE(b.timestamp)
+                "#,
+            );
+            Statement::from_sql_and_values(DbBackend::Postgres, sql, args)
+        } else {
+            sql_with_range_filter_opt!(
+                DbBackend::Postgres,
+                r#"
+                    SELECT
+                        DATE(b.timestamp) as date,
+                        (AVG(
+                            t.gas_used *
+                            COALESCE(
+                                t.gas_price,
+                                b.base_fee_per_gas + LEAST(
+                                    t.max_priority_fee_per_gas,
+                                    t.max_fee_per_gas - b.base_fee_per_gas
+                                )
+                            )
+                        ) / $1)::FLOAT as value
+                    FROM transactions t
+                    JOIN blocks       b ON t.block_hash = b.hash
+                    WHERE
+                        b.timestamp != to_timestamp(0) AND
+                        b.consensus = true {filter}
+                    GROUP BY DATE(b.timestamp)
+                "#,
+                [ETHER.into()],
+                "b.timestamp",
+                range
+            )
+        }
     }
 }
 
-#[async_trait]
-impl crate::Chart for AverageTxnFee {
-    fn name(&self) -> &str {
-        "averageTxnFee"
-    }
+pub type AverageTxnFeeRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<AverageTxnFeeStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+>;
 
-    fn chart_type(&self) -> ChartType {
+pub type AverageTxnFeeRemoteString = MapToString<AverageTxnFeeRemote>;
+
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "averageTxnFee".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for AverageTxnFee {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type AverageTxnFee =
+    DirectVecLocalDbChartSource<AverageTxnFeeRemoteString, Batch30Days, Properties>;
+type AverageTxnFeeS = StripExt<AverageTxnFee>;
+pub type AverageTxnFeeWeekly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFeeS, f64>, NewTxnsInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type AverageTxnFeeMonthly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageTxnFeeS, f64>, NewTxnsInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+type AverageTxnFeeMonthlyS = StripExt<AverageTxnFeeMonthly>;
+pub type AverageTxnFeeYearly = DirectVecLocalDbChartSource<
+    MapToString<
+        AverageLowerResolution<MapParseTo<AverageTxnFeeMonthlyS, f64>, NewTxnsMonthlyInt, Year>,
+    >,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::AverageTxnFee;
-    use crate::tests::simple_test::simple_test_chart;
+    use super::*;
+    use crate::tests::simple_test::simple_test_chart_with_migration_variants;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_average_txn_fee() {
-        let chart = AverageTxnFee::default();
-        simple_test_chart(
+        simple_test_chart_with_migration_variants::<AverageTxnFee>(
             "update_average_txn_fee",
-            chart,
             vec![
                 ("2022-11-09", "0.0000094370370276"),
                 ("2022-11-10", "0.00004128703699575"),
@@ -112,6 +181,51 @@ mod tests {
                 ("2023-01-01", "0.000023592592569"),
                 ("2023-02-01", "0.0002005370368365"),
                 ("2023-03-01", "0.000023592592569"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_txn_fee_weekly() {
+        simple_test_chart_with_migration_variants::<AverageTxnFeeWeekly>(
+            "update_average_txn_fee_weekly",
+            vec![
+                ("2022-11-07", "0.00005898148142249999"),
+                ("2022-11-28", "0.0001368370369002"),
+                ("2022-12-26", "0.000023592592569"),
+                ("2023-01-30", "0.0002005370368365"),
+                ("2023-02-27", "0.000023592592569"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_txn_fee_monthly() {
+        simple_test_chart_with_migration_variants::<AverageTxnFeeMonthly>(
+            "update_average_txn_fee_monthly",
+            vec![
+                ("2022-11-01", "0.00005898148142249999"),
+                ("2022-12-01", "0.0001368370369002"),
+                ("2023-01-01", "0.000023592592569"),
+                ("2023-02-01", "0.0002005370368365"),
+                ("2023-03-01", "0.000023592592569"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_txn_fee_yearly() {
+        simple_test_chart_with_migration_variants::<AverageTxnFeeYearly>(
+            "update_average_txn_fee_yearly",
+            vec![
+                ("2022-01-01", "0.00006847606135880486"),
+                ("2023-01-01", "0.000141555555414"),
             ],
         )
         .await;

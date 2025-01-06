@@ -3,7 +3,7 @@ pub mod solidity {
     use foundry_compilers::{CompilerInput, EvmVersion};
     use smart_contract_verifier::{
         solidity::{multi_part, standard_json},
-        Version as CompilerVersion,
+        DetailedVersion as CompilerVersion,
     };
     use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
@@ -95,7 +95,7 @@ pub mod solidity {
 pub mod vyper {
     use bytes::Bytes;
     use foundry_compilers::EvmVersion;
-    use smart_contract_verifier::{vyper::multi_part, Version as CompilerVersion};
+    use smart_contract_verifier::{vyper::multi_part, DetailedVersion as CompilerVersion};
     use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
     pub struct VerificationRequest {

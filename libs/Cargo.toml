@@ -2,14 +2,18 @@
 resolver = "2"
 members = [
     "blockscout-auth",
+    "blockscout-chains",
     "blockscout-client/crate",
     "blockscout-db",
+    "endpoints/swagger",
     "blockscout-service-launcher",
     "display-bytes",
     "env-collector",
+    "metrics-tools",
     "mismatch",
     "reqwest-rate-limiter",
     "solidity-metadata",
     "sourcify",
     "verification-common",
+    "api-client-framework",
 ]

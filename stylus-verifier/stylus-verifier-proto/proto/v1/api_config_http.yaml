@@ -1,0 +1,18 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    #################### Stylus-sdk-rs Verifier ####################
+
+    - selector: blockscout.stylusVerifier.v1.StylusSdkRsVerifier.VerifyGithubRepository
+      post: /api/v1/stylus-sdk-rs:verify-github-repository
+      body: "*"
+
+    - selector: blockscout.stylusVerifier.v1.StylusSdkRsVerifier.ListCargoStylusVersions
+      get: /api/v1/stylus-sdk-rs/cargo-stylus-versions
+
+    #################### Health ####################
+
+    - selector: grpc.health.v1.Health.Check
+      get: /health

@@ -6,44 +6,50 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
-anyhow = "1"
-ethers = "2"
-hex = "0.4"
-chrono = "0.4"
-tera = "1.19"
-thiserror = "1"
-serde = "1"
-serde_json = {version = "1", features = ["raw_value"]}
-url = "2.4"
-reqwest = "0.11"
-reqwest-middleware = "0.2"
-reqwest-retry = "0.3"
-lazy_static = "1.4"
-tracing = "0.1"
-futures = "0.3"
-cached = { version = "0.46.1", features = ["proc_macro", "tokio", "async", "async_tokio_rt_multi_thread"] }
-wiremock = {version = "0.5", optional = true }
-sea-query = "0.30.5"
-bigdecimal = "0.4"
-async-trait = "0.1"
-nonempty = { version = "0.10.0", features = ["serde", "serialize"] }
-itertools = "0.11.0"
-
-[dependencies.sqlx]
-version = "0.7"
-features = [
-  "bigdecimal", 
-  "postgres", 
-  "runtime-tokio", 
+alloy = { workspace = true, features = ["full"] }
+alloy-ccip-read = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bigdecimal = { workspace = true }
+cached = { workspace = true, features = [
+  "proc_macro",
+  "tokio",
+  "async",
+  "async_tokio_rt_multi_thread",
+] }
+chrono = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+idna = { workspace = true }
+itertools = { workspace = true }
+lazy_static = { workspace = true }
+nonempty = { workspace = true, features = ["serde", "serialize"] }
+prometheus = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
+sea-query = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
+sqlx = { workspace = true, features = [
+  "bigdecimal",
+  "postgres",
+  "runtime-tokio",
   "tls-rustls",
   "migrate",
-  "chrono"
-]
+  "chrono",
+  "macros",
+] }
+tera = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing = { workspace = true }
+url = { workspace = true }
+wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
-pretty_assertions = "1.4.0"
-tracing-subscriber = {version = "0.3", features = ["env-filter"]}
+pretty_assertions = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [[example]]
 name = "resolve_benchmark"

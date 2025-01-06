@@ -1,0 +1,94 @@
+name: Copy Swagger
+
+on:
+  workflow_call:
+    secrets:
+      api_token_github:
+        description: 'GitHub API token'
+        required: true
+    inputs:
+      user_name:
+        description: 'Commit username'
+        required: false
+        default: 'blockscout-bot'
+        type: string
+      user_email:
+        description: 'Commit user email'
+        required: false
+        type: string
+        default: 'bot@blockscout.com'
+      service_name:
+        description: 'Service name (e.g., smart-contract-verifier)'
+        required: true
+        type: string
+      swagger_path:
+        description: 'Path to the swagger file'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      user_name:
+        description: 'Commit username'
+        required: false
+        default: 'blockscout-bot'
+        type: string
+      user_email:
+        description: 'Commit user email'
+        required: false
+        default: 'bot@blockscout.com'
+        type: string
+      service_name:
+        description: 'Service name (e.g., smart-contract-verifier)'
+        required: true
+        type: string
+      swagger_path:
+        description: 'Path to the swagger file'
+        required: true
+        type: string
+      version:
+        description: 'Version to set if manually triggered'
+        required: true
+        type: string
+
+jobs:
+  copy-swagger:
+    name: Copy swagger
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get the current tag, branch, or commit hash
+        id: git_info
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ ! -z "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_ENV
+          else
+            if [[ "${GITHUB_REF}" =~ refs/tags/${{ inputs.service_name }}/v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              version=$(echo "${GITHUB_REF}" | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+')
+              echo "version=${version}" >> $GITHUB_ENV
+
+            # If it's the main branch
+            elif [ "${GITHUB_REF#refs/heads/}" = "main" ]; then
+              echo "version=main" >> $GITHUB_ENV
+
+            # Otherwise, use the first 8 characters of the commit hash
+            else
+              echo "version=${GITHUB_SHA:0:8}" >> $GITHUB_ENV
+            fi
+          fi
+          echo "version=${version}"
+
+      - name: Push swagger to another repo
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.api_token_github || secrets.BLOCKSCOUT_BOT_TOKEN }}
+        with:
+          source_file: ${{ inputs.swagger_path }}
+          rename: 'swagger.yaml'
+          commit_message: '[BOT] [CREATE-SWAGGER] [SKIP-GH-PAGES] create swagger for "${{ inputs.service_name }}" of version ${{ env.version }}'
+          destination_repo: 'blockscout/swaggers'
+          destination_folder: "services/${{ inputs.service_name }}/${{ env.version }}"
+          user_email: ${{ inputs.user_email }}
+          user_name: ${{ inputs.user_name }}
+          destination_branch: 'master'

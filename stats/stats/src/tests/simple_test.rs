@@ -1,159 +1,382 @@
 use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
 use crate::{
-    charts::db_interaction::chart_updaters::ChartUpdater, get_chart_data, get_counters, Chart,
-    MissingDatePolicy,
+    data_source::{
+        source::DataSource,
+        types::{BlockscoutMigrations, UpdateContext, UpdateParameters},
+    },
+    query_dispatch::QuerySerialized,
+    range::UniversalRange,
+    types::{timespans::DateValue, Timespan},
+    ChartProperties,
 };
-use chrono::{DateTime, NaiveDate};
-use sea_orm::DatabaseConnection;
-use std::{assert_eq, str::FromStr};
+use blockscout_service_launcher::test_database::TestDbGuard;
+use chrono::{DateTime, NaiveDateTime, Utc};
+use pretty_assertions::assert_eq;
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
+use stats_proto::blockscout::stats::v1::Point;
+use std::{fmt::Debug, str::FromStr};
 
-pub async fn simple_test_chart(
-    test_name: &str,
-    chart: impl ChartUpdater,
-    expected: Vec<(&str, &str)>,
-) {
-    let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
-    let current_date = current_time.date_naive();
-    chart.create(&db).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, current_date).await;
-    let approximate_trailing_points = chart.approximate_trailing_points();
-
-    chart
-        .update(&db, &blockscout, current_time, true)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
-        &db,
-        &chart,
-        &expected,
-        None,
-        None,
-        None,
-        approximate_trailing_points,
-    )
-    .await;
-
-    chart
-        .update(&db, &blockscout, current_time, false)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
-        &db,
-        &chart,
-        &expected,
-        None,
-        None,
-        None,
-        approximate_trailing_points,
-    )
-    .await;
+pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
+    l.into_iter()
+        .map(|t| (t.0.to_string(), t.1.to_string()))
+        .collect()
 }
 
-pub async fn ranged_test_chart(
+const MIGRATIONS_VARIANTS: [BlockscoutMigrations; 2] = [
+    BlockscoutMigrations::empty(),
+    BlockscoutMigrations::latest(),
+];
+
+/// `test_name` must be unique to avoid db clashes
+///
+/// returns db handles to continue testing if needed
+pub async fn simple_test_chart<C>(
     test_name: &str,
-    chart: impl ChartUpdater,
     expected: Vec<(&str, &str)>,
-    from: NaiveDate,
-    to: NaiveDate,
-) {
-    let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_db_all(test_name).await;
-    let current_time = DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
-    let current_date = current_time.date_naive();
-    chart.create(&db).await.unwrap();
-    fill_mock_blockscout_data(&blockscout, current_date).await;
-    let policy = chart.missing_date_policy();
-    let approximate_trailing_points = chart.approximate_trailing_points();
-
-    chart
-        .update(&db, &blockscout, current_time, true)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
-        &db,
-        &chart,
-        &expected,
-        Some(from),
-        Some(to),
-        Some(policy),
-        approximate_trailing_points,
-    )
-    .await;
-
-    chart
-        .update(&db, &blockscout, current_time, false)
-        .await
-        .unwrap();
-    get_chart_and_assert_eq(
-        &db,
-        &chart,
-        &expected,
-        Some(from),
-        Some(to),
-        Some(policy),
-        approximate_trailing_points,
-    )
-    .await;
+) -> (TestDbGuard, TestDbGuard)
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    simple_test_chart_inner::<C>(test_name, expected, BlockscoutMigrations::latest()).await
 }
 
-async fn get_chart_and_assert_eq(
+/// tests all statement kinds for different migrations combinations.
+/// NOTE: everything is tested with only one version of DB (probably latest),
+/// so statements incompatible with the current mock DB setup are going to break.
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
+pub async fn simple_test_chart_with_migration_variants<C>(
+    test_name_base: &str,
+    expected: Vec<(&str, &str)>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations).await;
+    }
+}
+
+pub fn chart_output_to_expected(output: Vec<Point>) -> Vec<(String, String)> {
+    output.into_iter().map(|p| (p.date, p.value)).collect()
+}
+
+async fn simple_test_chart_inner<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+    migrations: BlockscoutMigrations,
+) -> (TestDbGuard, TestDbGuard)
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let (current_time, db, blockscout) = prepare_chart_test::<C>(test_name, None).await;
+    let expected = map_str_tuple_to_owned(expected);
+    let current_date = current_time.date_naive();
+    fill_mock_blockscout_data(&blockscout, current_date).await;
+
+    let mut parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        blockscout_applied_migrations: migrations,
+        update_time_override: Some(current_time),
+        force_full: true,
+    };
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &chart_output_to_expected(
+            C::query_data_static(&cx, UniversalRange::full(), None, false)
+                .await
+                .unwrap()
+        ),
+        &expected
+    );
+
+    parameters.force_full = false;
+    let cx = UpdateContext::from_params_now_or_override(parameters);
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &chart_output_to_expected(
+            C::query_data_static(&cx, UniversalRange::full(), None, false)
+                .await
+                .unwrap()
+        ),
+        &expected
+    );
+    (db, blockscout)
+}
+
+/// Expects to have `test_name` db's initialized (e.g. by [`simple_test_chart`]).
+///
+/// Tests that force update with existing data works correctly
+pub async fn dirty_force_update_and_check<C>(
     db: &DatabaseConnection,
-    chart: &impl Chart,
-    expected: &Vec<(&str, &str)>,
-    from: Option<NaiveDate>,
-    to: Option<NaiveDate>,
-    policy: Option<MissingDatePolicy>,
-    approximate_trailing_points: u64,
-) {
-    let data = get_chart_data(
+    blockscout: &DatabaseConnection,
+    expected: Vec<(&str, &str)>,
+    update_time_override: Option<DateTime<Utc>>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let _ = tracing_subscriber::fmt::try_init();
+    let expected = map_str_tuple_to_owned(expected);
+    // some later time so that the update is not skipped
+    let current_time =
+        update_time_override.unwrap_or(DateTime::from_str("2023-03-01T12:00:01Z").unwrap());
+
+    let parameters = UpdateParameters {
         db,
-        chart.name(),
+        blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        update_time_override: Some(current_time),
+        force_full: true,
+    };
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &chart_output_to_expected(
+            C::query_data_static(&cx, UniversalRange::full(), None, false)
+                .await
+                .unwrap()
+        ),
+        &expected
+    );
+}
+
+/// tests only case with all migrations applied, to
+/// test statements for different migrations combinations
+/// use [`ranged_test_chart_with_migration_variants`]
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
+pub async fn ranged_test_chart<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+    from: C::Resolution,
+    to: C::Resolution,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    ranged_test_chart_inner::<C>(
+        test_name,
+        expected,
         from,
         to,
-        None,
-        policy,
-        approximate_trailing_points,
+        update_time,
+        BlockscoutMigrations::latest(),
     )
     .await
-    .unwrap();
-    let data: Vec<_> = data
-        .into_iter()
-        .map(|p| (p.date.to_string(), p.value))
-        .collect();
-    let data: Vec<(&str, &str)> = data
-        .iter()
-        .map(|(date, value)| (date.as_str(), value.as_str()))
-        .collect();
-    assert_eq!(expected, &data);
 }
 
-pub async fn simple_test_counter(test_name: &str, counter: impl ChartUpdater, expected: &str) {
+/// tests all statement kinds for different migrations combinations.
+/// NOTE: everything is tested with only one version of DB (probably latest),
+/// so statements incompatible with the current mock DB setup are going to break.
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
+pub async fn ranged_test_chart_with_migration_variants<C>(
+    test_name_base: &str,
+    expected: Vec<(&str, &str)>,
+    from: C::Resolution,
+    to: C::Resolution,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        ranged_test_chart_inner::<C>(
+            &test_name,
+            expected.clone(),
+            from.clone(),
+            to.clone(),
+            update_time,
+            migrations,
+        )
+        .await;
+    }
+}
+
+async fn ranged_test_chart_inner<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+    from: C::Resolution,
+    to: C::Resolution,
+    update_time: Option<NaiveDateTime>,
+    migrations: BlockscoutMigrations,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let _ = tracing_subscriber::fmt::try_init();
+    let expected = map_str_tuple_to_owned(expected);
+    let (db, blockscout) = init_db_all(test_name).await;
+    let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+    let current_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
+    let max_date = max_time.date_naive();
+    let range = { from.into_time_range().start..to.into_time_range().end };
+    C::init_recursively(&db, &current_time).await.unwrap();
+    fill_mock_blockscout_data(&blockscout, max_date).await;
+
+    let mut parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        blockscout_applied_migrations: migrations,
+        update_time_override: Some(current_time),
+        force_full: true,
+    };
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &chart_output_to_expected(
+            C::query_data_static(&cx, range.clone().into(), None, false)
+                .await
+                .unwrap()
+        ),
+        &expected
+    );
+
+    parameters.force_full = false;
+    let cx = UpdateContext::from_params_now_or_override(parameters);
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(
+        &chart_output_to_expected(
+            C::query_data_static(&cx, range.into(), None, false)
+                .await
+                .unwrap()
+        ),
+        &expected
+    );
+}
+
+/// `test_name` must be unique to avoid db clashes
+pub async fn simple_test_counter<C>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    simple_test_counter_inner::<C>(
+        test_name,
+        expected,
+        update_time,
+        BlockscoutMigrations::latest(),
+    )
+    .await
+}
+
+/// tests all statement kinds for different migrations combinations.
+/// NOTE: everything is tested with only one version of DB (probably latest),
+/// so statements incompatible with the current mock DB setup are going to break.
+///
+/// - db is going to be initialized separately for each variant
+/// - `_N` will be added to `test_name_base` for each variant
+/// - the resulting test name must be unique to avoid db clashes
+pub async fn simple_test_counter_with_migration_variants<C>(
+    test_name_base: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
+        let test_name = format!("{test_name_base}_{i}");
+        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations).await
+    }
+}
+
+async fn simple_test_counter_inner<C>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+    migrations: BlockscoutMigrations,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    let (current_time, db, blockscout) = prepare_chart_test::<C>(test_name, update_time).await;
+    let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
+    let max_date = max_time.date_naive();
+    fill_mock_blockscout_data(&blockscout, max_date).await;
+
+    let mut parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        blockscout_applied_migrations: migrations,
+        update_time_override: Some(current_time),
+        force_full: true,
+    };
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(expected, get_counter::<C>(&cx).await.value);
+    parameters.force_full = false;
+    let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+    C::update_recursively(&cx).await.unwrap();
+    assert_eq!(expected, get_counter::<C>(&cx).await.value);
+}
+
+/// Test that the counter returns non-zero fallback value when both
+/// - Blockscout data is populated
+/// - Update is not called on the counter
+pub async fn test_counter_fallback<C>(test_name: &str)
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
     let _ = tracing_subscriber::fmt::try_init();
     let (db, blockscout) = init_db_all(test_name).await;
     let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
     let current_date = current_time.date_naive();
 
-    counter.create(&db).await.unwrap();
+    C::init_recursively(&db, &current_time).await.unwrap();
+
     fill_mock_blockscout_data(&blockscout, current_date).await;
 
-    counter
-        .update(&db, &blockscout, current_time, true)
+    // need to analyze or vacuum for `reltuples` to be updated.
+    // source: https://www.postgresql.org/docs/9.3/planner-stats.html
+    let _ = blockscout
+        .execute(Statement::from_string(DbBackend::Postgres, "ANALYZE;"))
         .await
         .unwrap();
-    get_counter_and_assert_eq(&db, &counter, expected).await;
 
-    counter
-        .update(&db, &blockscout, current_time, false)
-        .await
-        .unwrap();
-    get_counter_and_assert_eq(&db, &counter, expected).await;
+    let parameters = UpdateParameters {
+        db: &db,
+        blockscout: &blockscout,
+        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        update_time_override: Some(current_time),
+        force_full: false,
+    };
+    let cx: UpdateContext<'_> = UpdateContext::from_params_now_or_override(parameters.clone());
+    let data = get_counter::<C>(&cx).await;
+    assert_ne!("0", data.value);
 }
 
-async fn get_counter_and_assert_eq(db: &DatabaseConnection, counter: &impl Chart, expected: &str) {
-    let data = get_counters(db).await.unwrap();
-    let data = &data[counter.name()];
-    let value = &data.value;
-    assert_eq!(expected, value);
+pub async fn prepare_chart_test<C: DataSource + ChartProperties>(
+    test_name: &str,
+    init_time: Option<NaiveDateTime>,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
+    let _ = tracing_subscriber::fmt::try_init();
+    let (db, blockscout) = init_db_all(test_name).await;
+    let init_time = init_time
+        .map(|t| t.and_utc())
+        .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
+    C::init_recursively(&db, &init_time).await.unwrap();
+    (init_time, db, blockscout)
+}
+
+pub async fn get_counter<C: QuerySerialized<Output = DateValue<String>>>(
+    cx: &UpdateContext<'_>,
+) -> DateValue<String> {
+    C::query_data_static(cx, UniversalRange::full(), None, false)
+        .await
+        .unwrap()
 }

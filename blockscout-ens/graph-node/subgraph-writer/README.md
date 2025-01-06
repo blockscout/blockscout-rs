@@ -10,6 +10,7 @@ You can take a look at that subgraph and understand structure of our project mor
 1. Install python3 and install deps:
   
     ```bash
+    # running in this directory
     just init
     ```
 
@@ -34,7 +35,7 @@ You can take a look at that subgraph and understand structure of our project mor
 1. Move to recently created directory and run
 
     ```bash
-    just init && just codegen
+    yarn install && yarn codegen
     ```
 
     In case of any error, adjust typescript code of subgraph. Also make sure subgraph handles events properly.
@@ -51,7 +52,8 @@ You can take a look at that subgraph and understand structure of our project mor
 1. Now build subgraph code
   
     ```bash
-    just build
+    yarn build
     ```
 
-1. Now you should run your subgraph by submitting it to graph-node: read [deploy subgraphs to graph-node](../subgraphs/README.md#deploy-subgraph-to-graph-node)
+1. Now you should run your subgraph by submitting it to graph-node: read [deploy subgraphs to graph-node](../README.md#deploy-subgraph-to-graph-node)
+
