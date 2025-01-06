@@ -1,4 +1,7 @@
-use crate::runtime_setup::{RuntimeSetup, UpdateGroupEntry};
+use crate::{
+    blockscout_waiter::IndexingStatusListener,
+    runtime_setup::{RuntimeSetup, UpdateGroupEntry},
+};
 use chrono::Utc;
 use cron::Schedule;
 use sea_orm::{DatabaseConnection, DbErr};
@@ -10,8 +13,9 @@ const FAILED_UPDATERS_UNTIL_PANIC: u64 = 3;
 
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
-    blockscout: Arc<DatabaseConnection>,
+    blockscout_db: Arc<DatabaseConnection>,
     charts: Arc<RuntimeSetup>,
+    status_listener: Option<IndexingStatusListener>,
 }
 
 fn time_till_next_call(schedule: &Schedule) -> std::time::Duration {
@@ -27,19 +31,23 @@ fn time_till_next_call(schedule: &Schedule) -> std::time::Duration {
 impl UpdateService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
-        blockscout: Arc<DatabaseConnection>,
+        blockscout_db: Arc<DatabaseConnection>,
         charts: Arc<RuntimeSetup>,
+        status_listener: Option<IndexingStatusListener>,
     ) -> Result<Self, DbErr> {
         Ok(Self {
             db,
-            blockscout,
+            blockscout_db,
             charts,
+            status_listener,
         })
     }
 
+    /// The main function of the service.
+    ///
     /// Perform initial update and run the service in infinite loop.
     /// Terminates dependant threads if one fails.
-    pub async fn force_async_update_and_run(
+    pub async fn run(
         self: Arc<Self>,
         concurrent_tasks: usize,
         default_schedule: Schedule,
@@ -54,14 +62,27 @@ impl UpdateService {
                 let this = self.clone();
                 let group_entry = group.clone();
                 let default_schedule = default_schedule.clone();
+                let status_listener = self.status_listener.clone();
                 let sema = semaphore.clone();
                 (
                     async move {
+                        if let Some(mut status_listener) = status_listener {
+                            let wait_result = status_listener
+                                .wait_until_status_at_least(
+                                    group_entry.indexing_status_requirement(),
+                                )
+                                .await;
+                            if wait_result.is_err() {
+                                panic!("Indexing status listener channel closed");
+                            }
+                        }
+
                         let _permit = sema.acquire().await.expect("failed to acquire permit");
                         if let Some(force_full) = force_update_on_start {
                             this.clone().update(group_entry.clone(), force_full).await
                         };
                     },
+                    // todo: wait until initial update is finished
                     self.spawn_group_updater(group.clone(), &default_schedule),
                 )
             })
@@ -77,7 +98,7 @@ impl UpdateService {
 
             failed += 1;
             if failed >= FAILED_UPDATERS_UNTIL_PANIC {
-                panic!("too many failed updaters");
+                panic!("too many critically failed updaters");
             }
         }
     }
@@ -104,7 +125,7 @@ impl UpdateService {
             force_update = force_full,
             "updating group of charts"
         );
-        let Ok(active_migrations) = BlockscoutMigrations::query_from_db(&self.blockscout)
+        let Ok(active_migrations) = BlockscoutMigrations::query_from_db(&self.blockscout_db)
             .await
             .inspect_err(|err| {
                 tracing::error!("error during blockscout migrations detection: {:?}", err)
@@ -114,7 +135,7 @@ impl UpdateService {
         };
         let update_parameters = UpdateParameters {
             db: &self.db,
-            blockscout: &self.blockscout,
+            blockscout: &self.blockscout_db,
             blockscout_applied_migrations: active_migrations,
             update_time_override: None,
             force_full,

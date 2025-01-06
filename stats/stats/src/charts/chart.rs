@@ -141,8 +141,26 @@ impl Display for ChartKey {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum IndexingStatus {
+    NoneIndexed,
+    BlocksIndexed,
+    /// It means that blocks are indexed as well
+    InternalTransactionsIndexed,
+}
+
+impl IndexingStatus {
+    pub fn most_restrictive_requirement(
+        requrements: impl Iterator<Item = IndexingStatus>,
+    ) -> IndexingStatus {
+        requrements.max().unwrap_or(IndexingStatus::NoneIndexed)
+    }
+}
+
 #[portrait::make(import(
-    crate::charts::chart::{MissingDatePolicy, ResolutionKind, ChartKey},
+    crate::charts::chart::{
+        MissingDatePolicy, IndexingStatus, ResolutionKind, ChartKey
+    },
     entity::sea_orm_active_enums::ChartType,
 ))]
 pub trait ChartProperties: Sync + Named {
@@ -165,6 +183,13 @@ pub trait ChartProperties: Sync + Named {
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillZero
     }
+
+    /// Indexing status at least required by this data source.
+    fn indexing_status_requirement() -> IndexingStatus {
+        // most of the charts need indexed blocks
+        IndexingStatus::BlocksIndexed
+    }
+
     /// Number of last values that are considered approximate.
     /// (ordered by time)
     ///
@@ -274,6 +299,7 @@ pub struct ChartPropertiesObject {
     pub name: String,
     pub resolution: ResolutionKind,
     pub missing_date_policy: MissingDatePolicy,
+    pub indexing_status_requirement: IndexingStatus,
     pub approximate_trailing_points: u64,
 }
 
@@ -284,7 +310,55 @@ impl ChartPropertiesObject {
             name: T::name(),
             resolution: T::resolution(),
             missing_date_policy: T::missing_date_policy(),
+            indexing_status_requirement: T::indexing_status_requirement(),
             approximate_trailing_points: T::approximate_trailing_points(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::charts::IndexingStatus;
+
+    #[test]
+    fn indexing_status_requirements_are_combined_correctly() {
+        assert_eq!(
+            IndexingStatus::most_restrictive_requirement(
+                vec![
+                    IndexingStatus::BlocksIndexed,
+                    IndexingStatus::InternalTransactionsIndexed,
+                    IndexingStatus::BlocksIndexed
+                ]
+                .into_iter()
+            ),
+            IndexingStatus::BlocksIndexed
+        );
+
+        assert_eq!(
+            IndexingStatus::most_restrictive_requirement(
+                vec![
+                    IndexingStatus::NoneIndexed,
+                    IndexingStatus::InternalTransactionsIndexed,
+                ]
+                .into_iter()
+            ),
+            IndexingStatus::NoneIndexed
+        );
+
+        assert_eq!(
+            IndexingStatus::most_restrictive_requirement(
+                vec![
+                    IndexingStatus::InternalTransactionsIndexed,
+                    IndexingStatus::InternalTransactionsIndexed,
+                ]
+                .into_iter()
+            ),
+            IndexingStatus::InternalTransactionsIndexed
+        );
+
+        assert_eq!(
+            IndexingStatus::most_restrictive_requirement(vec![].into_iter()),
+            IndexingStatus::NoneIndexed
+        );
     }
 }
