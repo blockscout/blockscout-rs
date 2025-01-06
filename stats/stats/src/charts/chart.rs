@@ -185,6 +185,12 @@ pub trait ChartProperties: Sync + Named {
     }
 
     /// Indexing status at least required by this data source.
+    ///
+    /// Note that in current implementation this requirement
+    /// might get weakened. For example, some chart that
+    /// depends on this one can have weaker requirement,
+    /// which will result in this chart getting updated as its
+    /// dependency.
     fn indexing_status_requirement() -> IndexingStatus {
         // most of the charts need indexed blocks
         IndexingStatus::BlocksIndexed
