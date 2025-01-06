@@ -27,6 +27,8 @@ pub enum Error {
         status_code: reqwest::StatusCode,
         message: String,
     },
+    #[error("{0:#?}")]
+    CustomError(anyhow::Error),
 }
 
 impl From<reqwest_middleware::Error> for Error {
