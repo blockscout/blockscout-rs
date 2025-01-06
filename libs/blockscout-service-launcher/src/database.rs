@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "database-0_12")] {
+    if #[cfg(feature = "database-1_0")] {
+        pub use sea_orm_1_0::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
+        pub use sea_orm_migration_1_0::MigratorTrait;
+    } else if #[cfg(feature = "database-0_12")] {
         pub use sea_orm_0_12::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
         pub use sea_orm_migration_0_12::MigratorTrait;
     } else if #[cfg(feature = "database-0_11")] {

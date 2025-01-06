@@ -1,101 +1,124 @@
+use std::ops::Range;
+
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartPartialUpdater, ChartUpdater},
-        types::DateValue,
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    data_source::{
+        kinds::{
+            data_manipulation::{
+                map::{MapParseTo, MapToString, StripExt},
+                resolutions::average::AverageLowerResolution,
+            },
+            local_db::{
+                parameters::update::batching::parameters::{
+                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+                },
+                DirectVecLocalDbChartSource,
+            },
+            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+        },
+        types::BlockscoutMigrations,
     },
-    UpdateError,
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
+    utils::sql_with_range_filter_opt,
+    ChartProperties, Named,
 };
-use async_trait::async_trait;
+
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct AverageBlockSize {}
+use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
-#[async_trait]
-impl ChartPartialUpdater for AverageBlockSize {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-        last_updated_row: Option<DateValue>,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let stmnt = match last_updated_row {
-            Some(row) => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
+pub struct AverageBlockSizeStatement;
+
+impl StatementFromRange for AverageBlockSizeStatement {
+    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
                 SELECT
                     DATE(blocks.timestamp) as date,
                     ROUND(AVG(blocks.size))::TEXT as value
                 FROM blocks
                 WHERE
                     blocks.timestamp != to_timestamp(0) AND
-                    DATE(blocks.timestamp) > $1 AND 
-                    consensus = true
+                    consensus = true {filter}
                 GROUP BY date
-                "#,
-                vec![row.date.into()],
-            ),
-            None => Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"
-                SELECT
-                    DATE(blocks.timestamp) as date,
-                    ROUND(AVG(blocks.size))::TEXT as value
-                FROM blocks
-                WHERE 
-                    blocks.timestamp != to_timestamp(0) AND 
-                    consensus = true
-                GROUP BY date
-                "#,
-                vec![],
-            ),
-        };
-
-        let data = DateValue::find_by_statement(stmnt)
-            .all(blockscout)
-            .await
-            .map_err(UpdateError::BlockscoutDB)?;
-        Ok(data)
+            "#,
+            [],
+            "blocks.timestamp",
+            range,
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for AverageBlockSize {
-    fn name(&self) -> &str {
-        "averageBlockSize"
-    }
+pub type AverageBlockSizeRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<AverageBlockSizeStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+>;
 
-    fn chart_type(&self) -> ChartType {
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "averageBlockSize".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Line
     }
 }
 
-#[async_trait]
-impl ChartUpdater for AverageBlockSize {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
-    }
-}
+define_and_impl_resolution_properties!(
+    define_and_impl: {
+        WeeklyProperties: Week,
+        MonthlyProperties: Month,
+        YearlyProperties: Year,
+    },
+    base_impl: Properties
+);
+
+pub type AverageBlockSize =
+    DirectVecLocalDbChartSource<AverageBlockSizeRemote, Batch30Days, Properties>;
+type AverageBlockSizeS = StripExt<AverageBlockSize>;
+
+pub type AverageBlockSizeWeekly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSizeS, f64>, NewBlocksInt, Week>>,
+    Batch30Weeks,
+    WeeklyProperties,
+>;
+pub type AverageBlockSizeMonthly = DirectVecLocalDbChartSource<
+    MapToString<AverageLowerResolution<MapParseTo<AverageBlockSizeS, f64>, NewBlocksInt, Month>>,
+    Batch36Months,
+    MonthlyProperties,
+>;
+type AverageBlockSizeMonthlyS = StripExt<AverageBlockSizeMonthly>;
+pub type AverageBlockSizeYearly = DirectVecLocalDbChartSource<
+    MapToString<
+        AverageLowerResolution<
+            MapParseTo<AverageBlockSizeMonthlyS, f64>,
+            NewBlocksMonthlyInt,
+            Year,
+        >,
+    >,
+    Batch30Years,
+    YearlyProperties,
+>;
 
 #[cfg(test)]
 mod tests {
-    use super::AverageBlockSize;
+    use super::*;
     use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_average_block_size() {
-        let chart = AverageBlockSize::default();
-        simple_test_chart(
+        simple_test_chart::<AverageBlockSize>(
             "update_average_block_size",
-            chart,
             vec![
                 ("2022-11-09", "1000"),
                 ("2022-11-10", "2726"),
@@ -105,6 +128,51 @@ mod tests {
                 ("2023-01-01", "4630"),
                 ("2023-02-01", "5493"),
                 ("2023-03-01", "1356"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_block_size_weekly() {
+        simple_test_chart::<AverageBlockSizeWeekly>(
+            "update_average_block_size_weekly",
+            vec![
+                ("2022-11-07", "2785.5555555555557"),
+                ("2022-11-28", "3767"),
+                ("2022-12-26", "4630"),
+                ("2023-01-30", "5493"),
+                ("2023-02-27", "1356"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_block_size_monthly() {
+        simple_test_chart::<AverageBlockSizeMonthly>(
+            "update_average_block_size_monthly",
+            vec![
+                ("2022-11-01", "2785.5555555555557"),
+                ("2022-12-01", "3767"),
+                ("2023-01-01", "4630"),
+                ("2023-02-01", "5493"),
+                ("2023-03-01", "1356"),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_average_block_size_yearly() {
+        simple_test_chart::<AverageBlockSizeYearly>(
+            "update_average_block_size_yearly",
+            vec![
+                ("2022-01-01", "2883.7"),
+                ("2023-01-01", "3826.3333333333335"),
             ],
         )
         .await;

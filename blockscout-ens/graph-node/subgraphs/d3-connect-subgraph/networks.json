@@ -1,0 +1,16 @@
+{
+  "shibarium": {
+    "Registry": {
+      "address": "0xDe74799371Ceac11A0F52BA2694392A391D0dA18",
+      "startBlock": 3473390
+    },
+    "": ""
+  },
+  "shibarium-testnet": {
+    "Registry": {
+      "address": "0x91c2d22ca1028B2E55e3097096494Eb34b7fc81c",
+      "startBlock": 4555130
+    },
+    "": ""
+  }
+}

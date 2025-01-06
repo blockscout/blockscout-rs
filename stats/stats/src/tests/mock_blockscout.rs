@@ -1,10 +1,39 @@
+#![cfg(any(feature = "test-utils", test))]
+
 use blockscout_db::entity::{
     address_coin_balances_daily, addresses, block_rewards, blocks, internal_transactions,
-    smart_contracts, tokens, transactions,
+    migrations_status, smart_contracts, tokens, transactions,
 };
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
+use rand::{Rng, SeedableRng};
 use sea_orm::{prelude::Decimal, ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
+use wiremock::{
+    matchers::{method, path},
+    Mock, MockServer, ResponseTemplate,
+};
+
+pub async fn default_mock_blockscout_api() -> MockServer {
+    mock_blockscout_api(ResponseTemplate::new(200).set_body_string(
+        r#"{
+            "finished_indexing": true,
+            "finished_indexing_blocks": true,
+            "indexed_blocks_ratio": "1.00",
+            "indexed_internal_transactions_ratio": "1.00"
+        }"#,
+    ))
+    .await
+}
+
+pub async fn mock_blockscout_api(indexing_status_response: ResponseTemplate) -> MockServer {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v2/main-page/indexing-status"))
+        .respond_with(indexing_status_response)
+        .mount(&mock_server)
+        .await;
+    mock_server
+}
 
 pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date: NaiveDate) {
     addresses::Entity::insert_many([
@@ -25,34 +54,13 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
     .await
     .unwrap();
 
-    let blocks = vec![
-        "2022-11-09T23:59:59",
-        "2022-11-10T00:00:00",
-        "2022-11-10T12:00:00",
-        "2022-11-10T23:59:59",
-        "2022-11-11T00:00:00",
-        "2022-11-11T12:00:00",
-        "2022-11-11T15:00:00",
-        "2022-11-11T23:59:59",
-        "2022-11-12T00:00:00",
-        "2022-12-01T10:00:00",
-        "2023-01-01T10:00:00",
-        "2023-02-01T10:00:00",
-        "2023-03-01T10:00:00",
-    ]
-    .into_iter()
-    .filter(|val| NaiveDateTime::from_str(val).unwrap().date() <= max_date)
-    .enumerate()
-    .map(|(ind, ts)| mock_block(ind as i64, ts, true))
-    .collect::<Vec<_>>();
+    let blocks = mock_blocks(max_date);
     blocks::Entity::insert_many(blocks.clone())
         .exec(blockscout)
         .await
         .unwrap();
 
-    let accounts = (1..9)
-        .map(|seed| mock_address(seed, false, false))
-        .collect::<Vec<_>>();
+    let accounts = mock_addresses();
     addresses::Entity::insert_many(accounts.clone())
         .exec(blockscout)
         .await
@@ -85,39 +93,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
 
     let failed_block = blocks.last().unwrap();
 
-    let txns = blocks[0..blocks.len() - 1]
-        .iter()
-        // make 1/3 of blocks empty
-        .filter(|b| b.number.as_ref() % 3 != 1)
-        // add 3 transactions to block
-        .flat_map(|b| {
-            [
-                mock_transaction(
-                    b,
-                    21_000,
-                    (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
-                    &accounts,
-                    0,
-                    TxType::Transfer,
-                ),
-                mock_transaction(
-                    b,
-                    21_000,
-                    (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
-                    &accounts,
-                    1,
-                    TxType::Transfer,
-                ),
-                mock_transaction(
-                    b,
-                    21_000,
-                    (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
-                    &accounts,
-                    2,
-                    TxType::ContractCall,
-                ),
-            ]
-        });
+    let txns = mock_transactions(&blocks, &accounts);
     transactions::Entity::insert_many(txns)
         .exec(blockscout)
         .await
@@ -199,7 +175,13 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
     .into_iter()
     .filter(|val| NaiveDateTime::from_str(val).unwrap().date() <= max_date)
     .enumerate()
-    .map(|(ind, ts)| mock_block((ind + blocks.len()) as i64, ts, false));
+    .map(|(ind, ts)| {
+        mock_block(
+            (ind + blocks.len()) as i64,
+            NaiveDateTime::from_str(ts).unwrap(),
+            false,
+        )
+    });
     blocks::Entity::insert_many(useless_blocks)
         .exec(blockscout)
         .await
@@ -251,31 +233,95 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
-    let rewards = blocks.iter().enumerate().map(|(i, block)| {
-        mock_block_rewards(
-            accounts
-                .get(i % (accounts.len() / 2))
-                .unwrap()
-                .hash
-                .as_ref()
-                .to_vec(),
-            block.hash.as_ref().to_vec(),
-            Some(Decimal::from(i % 5) * Decimal::try_from(1e18).unwrap()),
-        )
+    let rewards = blocks.iter().enumerate().flat_map(|(i, block)| {
+        mock_block_rewards(i as u8, block.hash.as_ref().to_vec(), &accounts, None)
     });
+
     block_rewards::Entity::insert_many(rewards)
+        .exec(blockscout)
+        .await
+        .unwrap();
+
+    let migrations = vec![
+        ("denormalization", Some(true)),
+        ("ctb_token_type", Some(false)),
+        ("tb_token_type", None),
+    ]
+    .into_iter()
+    .map(|(name, status)| mock_migration(name, status));
+
+    migrations_status::Entity::insert_many(migrations)
         .exec(blockscout)
         .await
         .unwrap();
 }
 
-fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
-    let size = 1000 + (index as i32 * 15485863) % 5000;
+/// Expected `max_date` to be the same that was passed to `fill_mock_blockscout_data`
+pub async fn imitate_reindex(blockscout: &DatabaseConnection, max_date: NaiveDate) {
+    let existing_blocks = mock_blocks(max_date);
+    let existing_accounts = mock_addresses();
+    let new_txns: Vec<_> = reindexing_mock_txns(&existing_blocks, &existing_accounts);
+    transactions::Entity::insert_many(new_txns)
+        .exec(blockscout)
+        .await
+        .unwrap();
+}
+
+/// `block_times` - block time for each block from the 2nd to the latest.
+///
+/// `<number of block times> = <number of inserted blocks> + 1`
+pub async fn fill_many_blocks(
+    blockscout: &DatabaseConnection,
+    latest_block_time: NaiveDateTime,
+    block_times: &[TimeDelta],
+) {
+    let mut blocks_timestamps_reversed = Vec::with_capacity(block_times.len() + 1);
+    blocks_timestamps_reversed.push(latest_block_time);
+    for time_diff in block_times.iter().rev() {
+        let next_timestamp = *blocks_timestamps_reversed.last().unwrap() - *time_diff;
+        blocks_timestamps_reversed.push(next_timestamp);
+    }
+    let blocks_timestamps = blocks_timestamps_reversed.into_iter().rev();
+    let blocks = blocks_timestamps
+        .enumerate()
+        .map(|(ind, ts)| mock_block(ind as i64, ts, true))
+        .collect::<Vec<_>>();
+    blocks::Entity::insert_many(blocks.clone())
+        .exec(blockscout)
+        .await
+        .unwrap();
+}
+
+fn mock_blocks(max_date: NaiveDate) -> Vec<blocks::ActiveModel> {
+    vec![
+        "2022-11-09T23:59:59",
+        "2022-11-10T00:00:00",
+        "2022-11-10T12:00:00",
+        "2022-11-10T23:59:59",
+        "2022-11-11T00:00:00",
+        "2022-11-11T12:00:00",
+        "2022-11-11T15:00:00",
+        "2022-11-11T23:59:59",
+        "2022-11-12T00:00:00",
+        "2022-12-01T10:00:00",
+        "2023-01-01T10:00:00",
+        "2023-02-01T10:00:00",
+        "2023-03-01T10:00:00",
+    ]
+    .into_iter()
+    .filter(|val| NaiveDateTime::from_str(val).unwrap().date() <= max_date)
+    .enumerate()
+    .map(|(ind, ts)| mock_block(ind as i64, NaiveDateTime::from_str(ts).unwrap(), true))
+    .collect::<Vec<_>>()
+}
+
+fn mock_block(index: i64, ts: NaiveDateTime, consensus: bool) -> blocks::ActiveModel {
+    let size = (1000 + (index * 15485863) % 5000) as i32;
     let gas_limit = if index <= 3 { 12_500_000 } else { 30_000_000 };
     blocks::ActiveModel {
         number: Set(index),
         hash: Set(index.to_le_bytes().to_vec()),
-        timestamp: Set(NaiveDateTime::from_str(ts).unwrap()),
+        timestamp: Set(ts),
         consensus: Set(consensus),
         gas_limit: Set(Decimal::new(gas_limit, 0)),
         gas_used: Set(Decimal::from(size * 10)),
@@ -287,6 +333,12 @@ fn mock_block(index: i64, ts: &str, consensus: bool) -> blocks::ActiveModel {
         size: Set(Some(size)),
         ..Default::default()
     }
+}
+
+fn mock_addresses() -> Vec<addresses::ActiveModel> {
+    (1..9)
+        .map(|seed| mock_address(seed, false, false))
+        .collect::<Vec<_>>()
 }
 
 fn mock_address(seed: i64, is_contract: bool, is_verified: bool) -> addresses::ActiveModel {
@@ -320,6 +372,80 @@ impl TxType {
     }
 }
 
+fn mock_transactions(
+    blocks: &[blocks::ActiveModel],
+    accounts: &[addresses::ActiveModel],
+) -> Vec<transactions::ActiveModel> {
+    blocks[0..blocks.len() - 1]
+        .iter()
+        // make 1/3 of blocks empty
+        .filter(|b| b.number.as_ref() % 3 != 1)
+        // add 3 transactions to block
+        .flat_map(|b| {
+            [
+                mock_transaction(
+                    b,
+                    21_000,
+                    (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
+                    accounts,
+                    0,
+                    TxType::Transfer,
+                ),
+                mock_transaction(
+                    b,
+                    21_000,
+                    (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
+                    accounts,
+                    1,
+                    TxType::Transfer,
+                ),
+                mock_transaction(
+                    b,
+                    21_000,
+                    (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
+                    accounts,
+                    2,
+                    TxType::ContractCall,
+                ),
+            ]
+        })
+        .collect()
+}
+
+fn reindexing_mock_txns(
+    blocks: &[blocks::ActiveModel],
+    accounts: &[addresses::ActiveModel],
+) -> Vec<transactions::ActiveModel> {
+    // not sure if can actually happen in blockscout, but let's
+    // say empty blocks got their own transactions
+    blocks[0..blocks.len() - 1]
+        .iter()
+        // fill in the empty blocks
+        .filter(|b| b.number.as_ref() % 3 == 1)
+        // add 2 transactions to block
+        .flat_map(|b| {
+            [
+                mock_transaction(
+                    b,
+                    23_000,
+                    (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
+                    accounts,
+                    0,
+                    TxType::Transfer,
+                ),
+                mock_transaction(
+                    b,
+                    23_000,
+                    (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
+                    accounts,
+                    1,
+                    TxType::Transfer,
+                ),
+            ]
+        })
+        .collect()
+}
+
 fn mock_transaction(
     block: &blocks::ActiveModel,
     gas: i64,
@@ -349,8 +475,10 @@ fn mock_transaction(
     transactions::ActiveModel {
         block_number: Set(Some(block_number)),
         block_hash: Set(Some(block.hash.as_ref().to_vec())),
+        block_timestamp: Set(Some(*block.timestamp.as_ref())),
+        block_consensus: Set(Some(*block.consensus.as_ref())),
         hash: Set(hash),
-        gas_price: Set(Decimal::new(gas_price, 0)),
+        gas_price: Set(Some(Decimal::new(gas_price, 0))),
         gas: Set(Decimal::new(gas, 0)),
         input: Set(input),
         nonce: Set(Default::default()),
@@ -380,12 +508,14 @@ fn mock_failed_transaction(
     transactions::ActiveModel {
         block_number: Set(block.map(|block| *block.number.as_ref() as i32)),
         block_hash: Set(block.map(|block| block.hash.as_ref().to_vec())),
+        block_timestamp: Set(block.map(|b| *b.timestamp.as_ref())),
+        block_consensus: Set(block.map(|b| *b.consensus.as_ref())),
         cumulative_gas_used: Set(block.map(|_| Default::default())),
         gas_used: Set(block.map(|_| gas)),
         index: Set(block.map(|_| Default::default())),
         error: Set(error),
         hash: Set(hash),
-        gas_price: Set(Decimal::new(1_123_456_789, 0)),
+        gas_price: Set(Some(Decimal::new(1_123_456_789, 0))),
         gas: Set(gas),
         input: Set(Default::default()),
         nonce: Set(Default::default()),
@@ -426,18 +556,36 @@ fn mock_token(hash: Vec<u8>) -> tokens::ActiveModel {
 }
 
 fn mock_block_rewards(
-    address: Vec<u8>,
+    random_seed: u8,
     block_hash: Vec<u8>,
-    reward: Option<Decimal>,
-) -> block_rewards::ActiveModel {
-    block_rewards::ActiveModel {
-        address_hash: Set(address),
-        address_type: Set("".into()),
-        block_hash: Set(block_hash),
-        reward: Set(reward),
-        inserted_at: Set(Default::default()),
-        updated_at: Set(Default::default()),
+    addresses_pool: &[addresses::ActiveModel],
+    amount_overwrite: Option<Decimal>,
+) -> Vec<block_rewards::ActiveModel> {
+    // `Vec` because it's possible to have multiple rewards for a single
+    // block in some chains.
+    // E.g. in presence of additional rewards
+    let mut rewards = vec![];
+    let seed = [random_seed; 32];
+    let mut rng = rand::prelude::StdRng::from_seed(seed);
+    let n_rewards = rng.gen_range(1..=3);
+    for i in 0..n_rewards {
+        let amount = amount_overwrite
+            .unwrap_or(Decimal::from(rng.gen_range(0..10)) * Decimal::try_from(5e17).unwrap());
+        rewards.push(block_rewards::ActiveModel {
+            address_hash: Set(addresses_pool
+                .get(i % (addresses_pool.len() / 2))
+                .unwrap()
+                .hash
+                .as_ref()
+                .to_vec()),
+            address_type: Set("".into()),
+            block_hash: Set(block_hash.clone()),
+            reward: Set(Some(amount)),
+            inserted_at: Set(Default::default()),
+            updated_at: Set(Default::default()),
+        });
     }
+    rewards
 }
 
 fn mock_smart_contract(
@@ -480,5 +628,53 @@ fn mock_internal_transaction(
         block_hash: Set(tx.block_hash.as_ref().clone().unwrap()),
         block_index: Set((*tx.index.as_ref()).unwrap()),
         ..Default::default()
+    }
+}
+
+fn mock_migration(name: &str, completed: Option<bool>) -> migrations_status::ActiveModel {
+    let status = completed
+        .map(|done| if done { "completed" } else { "started" })
+        .map(|s| s.to_string());
+    migrations_status::ActiveModel {
+        migration_name: Set(name.to_string()),
+        status: Set(status),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use itertools::Itertools;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    fn assert_block_hashes_do_not_overlap(
+        existing_txns: &[transactions::ActiveModel],
+        new_txns: &[transactions::ActiveModel],
+    ) {
+        let existing_blocks: HashSet<_> = existing_txns
+            .iter()
+            .map(|t| t.block_hash.clone().unwrap().unwrap())
+            .collect();
+        let new_blocks: HashSet<_> = new_txns
+            .iter()
+            .map(|t| t.block_hash.clone().unwrap().unwrap())
+            .collect();
+        let overlapping_blocks: Vec<&Vec<u8>> =
+            new_blocks.intersection(&existing_blocks).collect_vec();
+        assert_eq!(overlapping_blocks, Vec::<&Vec<u8>>::new());
+    }
+
+    #[test]
+    fn reindexing_does_not_produce_overlapping_txns() {
+        let existing_blocks = mock_blocks(NaiveDate::MAX);
+        let existing_accounts = mock_addresses();
+        let existing_txns = mock_transactions(&existing_blocks, &existing_accounts);
+        let new_txns: Vec<_> = reindexing_mock_txns(&existing_blocks, &existing_accounts);
+        assert_block_hashes_do_not_overlap(&existing_txns, &new_txns);
     }
 }

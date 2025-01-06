@@ -263,7 +263,9 @@ CREATE TABLE sgd1.domain (
     owner text NOT NULL,
     registrant text,
     wrapped_owner text,
-    expiry_date numeric
+    expiry_date numeric,
+    stored_offchain BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_with_wildcard BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 

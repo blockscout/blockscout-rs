@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   db-init:
-    image: postgres:15
+    image: postgres:16
     volumes:
       - ./data/blockscout-db:/var/lib/postgresql/data
     entrypoint:
@@ -15,7 +15,7 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
-    image: postgres:15
+    image: postgres:16
     user: 2000:2000
     shm_size: 256m
     restart: always
@@ -40,7 +40,7 @@ services:
   backend:
     depends_on:
       - db
-    image: blockscout/blockscout:6.4.0
+    image: blockscout/blockscout:6.8.0
     links:
       - db:database
     # extra_hosts:
@@ -48,22 +48,20 @@ services:
     environment:
       DATABASE_URL: postgresql://blockscout:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout
       ETHEREUM_JSONRPC_VARIANT: erigon
+      # set to some working ethereum node
       ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:8545/
       ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:8545/
-      FIRST_BLOCK: 5660029
+      # preferrably set to some relatively recent block (e.g. few days before running)
+      # for quicker start and less disk usage
+      FIRST_BLOCK: 6153000
       ECTO_USE_SSL: false
       PORT: 4000
     ports:
       - 80:4000
-    command:
-      [
-        "/bin/sh",
-        "-c",
-        "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start"
-      ]
+    command: [ "/bin/sh", "-c", "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start" ]
 
   stats-db-init:
-    image: postgres:15
+    image: postgres:16
     volumes:
       - ./data/stats-db:/var/lib/postgresql/data
     entrypoint:
@@ -76,7 +74,7 @@ services:
     depends_on:
       stats-db-init:
         condition: service_completed_successfully
-    image: postgres:15
+    image: postgres:16
     user: 2000:2000
     shm_size: 256m
     restart: always
@@ -117,6 +115,8 @@ services:
       - STATS__SERVER__HTTP__ENABLED=true
       - STATS__SERVER__HTTP__ADDR=0.0.0.0:8050
       - STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152
+      - STATS__BLOCKSCOUT_API_URL=http://backend:4000
+      # - STATS__FORCE_UPDATE_ON_START=true
       - RUST_BACKTRACE=1
     ports:
       - 8080:8050

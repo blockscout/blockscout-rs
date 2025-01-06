@@ -23,31 +23,29 @@ A set of services used by [Blockscout](https://blockscout.com/) blockchain explo
 
 1. [blockscout-ens](blockscout-ens) - indexed data of domain name service for blockscout instances.
 
-1. [da-indexer](da-indexer) - collects blobs from different DA solutions (e.g, Celestia) 
+2. [da-indexer](da-indexer) - collects blobs from different DA solutions (e.g, Celestia) 
 
-2. [eth-bytecode-db](eth-bytecode-db/) - Ethereum Bytecode Database. Cross-chain smart-contracts database used for automatic contracts verification
+3. [eth-bytecode-db](eth-bytecode-db/) - Ethereum Bytecode Database. Cross-chain smart-contracts database used for automatic contracts verification
 
-1. [proxy-verifier](proxy-verifier) - backend for the standalone multi-chain verification service
+4. [proxy-verifier](proxy-verifier) - backend for the standalone multi-chain verification service
 
-1. [scoutcloud](scoutcloud) - API to deploy and manage blockscout instances
+5. [sig-provider](sig-provider/) - aggregator of ethereum signatures for transactions and events
 
-2. [sig-provider](sig-provider/) - aggregator of ethereum signatures for transactions and events
+6. [smart-contract-verifier](smart-contract-verifier/) - smart-contracts verification
 
-3. [smart-contract-verifier](smart-contract-verifier/) - smart-contracts verification
+7. [stats](stats) - service designed to calculate and present statistical information from a Blockscout instance
 
-1. [stats](stats) - service designed to calculate and present statistical information from a Blockscout instance
+8. [user-ops-indexer](user-ops-indexer) - service designed to index, decode and serve user operations as per the ERC-4337 standard
 
-1. [user-ops-indexer](user-ops-indexer) - service designed to index, decode and serve user operations as per the ERC-4337 standard
-
-4. [visualizer](visualizer/) - service for evm visualization such as:
+9. [visualizer](visualizer/) - service for evm visualization such as:
    1. Solidity contract visualization using [sol2uml](https://www.npmjs.com/package/sol2uml)
 
 ## Running and configuring services
 
-Services are distributed as docker images. For each service you can find information about packages and their recent releases
+Services are distributed as docker images. For each service, you can find information about packages and their recent releases
 inside service directories.
 
-You can configure your app by passing necessary environment variables when starting the container. 
+You can configure your app by passing the necessary environment variables when starting the container. 
 Configuration variables common for all services can be found [here](docs/common-envs.md).
 See full list of ENVs and their description inside service directories.
 
@@ -75,13 +73,13 @@ The separation on "logic" and "server" crates is designed to separate functional
 For now, "server" crates contain gRPC and HTTP as the transport layer. 
 It was assumed, that users may want to implement their own APIs, for which the library with functional logic might be used.
 
-Crates that require database connection may also have additional sea-orm defined crates:
+Crates that require database connection may also have additional `sea-orm`-defined crates:
 1. `{service-name}-migration` - contains migrations for the database
 2. `{service-name}-entity` - contains the entity files generated from the schema 
 
 ## Contributing
 
-We appreciate your support. Before writing code and submiting pull request, please read contributing [instructions](CONTRIBUTING.md).
+We appreciate your support. Before writing code and submitting a pull request, please read contributing [instructions](CONTRIBUTING.md).
 
 
 ## License

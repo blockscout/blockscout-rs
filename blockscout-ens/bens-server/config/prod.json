@@ -6,17 +6,14 @@
         "blockscout": {
           "url": "https://eth.blockscout.com"
         },
-        "use_protocols": [
-          "ens"
-        ]
+        "use_protocols": ["ens"],
+        "rpc_url": "http://91.210.101.45:8545"
       },
       "10": {
         "blockscout": {
           "url": "https://optimism.blockscout.com/"
         },
-        "use_protocols": [
-          "ens"
-        ]
+        "use_protocols": ["ens"]
       },
       "30": {
         "blockscout": {
@@ -26,6 +23,14 @@
           "rns"
         ]
       },
+      "31": {
+        "blockscout": {
+          "url": "https://rootstock-testnet.blockscout.com"
+        },
+        "use_protocols": [
+          "rns-testnet"
+        ]
+      },
       "100": {
         "blockscout": {
           "url": "https://gnosis.blockscout.com/"
@@ -33,6 +38,15 @@
         "use_protocols": [
           "genome"
         ]
+      },
+      "109": {
+        "blockscout": {
+          "url": "https://shibariumscan.io"
+        },
+        "use_protocols": [
+          "d3_connect"
+        ],
+        "rpc_url": "https://www.shibrpc.com"
       },
       "137": {
         "blockscout": {
@@ -50,6 +64,14 @@
           "ens"
         ]
       },
+      "10200": {
+        "blockscout": {
+          "url": "https://gnosis-chiado.blockscout.com"
+        },
+        "use_protocols": [
+          "genome-chiado"
+        ]
+      },
       "17069": {
         "blockscout": {
           "url": "https://explorer.garnetchain.com/"
@@ -63,7 +85,7 @@
           "url": "https://base.blockscout.com"
         },
         "use_protocols": [
-          "base-name-service"
+          "base-name-service", "ens"
         ]
       },
       "34443": {
@@ -72,6 +94,14 @@
         },
         "use_protocols": [
           "mode"
+        ]
+      },
+      "919": {
+        "blockscout": {
+          "url": "https://sepolia.explorer.mode.network"
+        },
+        "use_protocols": [
+          "mode-sepolia"
         ]
       },
       "1890": {
@@ -89,6 +119,30 @@
         "use_protocols": [
           "ens"
         ]
+      },
+      "11155111": {
+        "blockscout": {
+          "url": "https://eth-sepolia.blockscout.com"
+        },
+        "use_protocols": [
+          "ens-sepolia"
+        ]
+      },
+      "7777777": {
+        "blockscout": {
+          "url": "https://explorer.zora.energy/"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "81457": {
+        "blockscout": {
+          "url": "https://blast.blockscout.com/"
+        },
+        "use_protocols": [
+          "zns-blast"
+        ]
       }
     },
     "protocols": {
@@ -99,10 +153,32 @@
         "network_id": 1,
         "subgraph_name": "ens-subgraph",
         "address_resolve_technique": "reverse_registry",
-        "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+        "specific": {
+          "type": "ens_like",
+          "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
+          "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+          "try_offchain_resolve": true
+        },
         "meta": {
           "short_name": "ENS",
           "title": "Ethereum Name Service",
+          "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
+          "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
+          "docs_url": "https://docs.ens.domains/"
+        }
+      },
+      "ens-sepolia": {
+        "tld_list": ["eth"],
+        "network_id": 11155111,
+        "subgraph_name": "ens-sepolia-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
+        },
+        "meta": {
+          "short_name": "ENS (Testnet)",
+          "title": "Ethereum Name Service (Testnet)",
           "description": "The Ethereum Name Service (ENS) is a distributed, open, and extensible naming system based on the Ethereum blockchain.",
           "icon_url": "https://i.imgur.com/GOfUwCb.jpeg",
           "docs_url": "https://docs.ens.domains/"
@@ -115,11 +191,32 @@
         "network_id": 100,
         "subgraph_name": "genome-subgraph",
         "address_resolve_technique": "reverse_registry",
-        "empty_label_hash": "0xc4a8c56f9b0096f720f38bd557d30306dbd78f7751d277e05f062d1b85912a63",
-        "native_token_contract": "0x942fcaf68a0c264d5447b03a2011b395a899f2d3",
+        "specific": {
+          "type": "ens_like",
+          "empty_label_hash": "0xc4a8c56f9b0096f720f38bd557d30306dbd78f7751d277e05f062d1b85912a63",
+          "native_token_contract": "0x942fcaf68a0c264d5447b03a2011b395a899f2d3"
+        },
         "meta": {
           "short_name": "Genome",
           "title": "Genome Domains",
+          "description": "GNO Domains Connecting gnosis chain",
+          "icon_url": "https://i.imgur.com/xlDoPfF.png",
+          "docs_url": "https://genomedomains.com/"
+        }
+      },
+      "genome-chiado": {
+        "tld_list": ["gno"],
+        "network_id": 10200,
+        "subgraph_name": "genome-chiado-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "empty_label_hash": "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
+          "native_token_contract": "0xfd3d666dB2557983F3F04d61f90E35cc696f6D60"
+        },
+        "meta": {
+          "short_name": "Genome (Testnet)",
+          "title": "Genome Domains (Testnet)",
           "description": "GNO Domains Connecting gnosis chain",
           "icon_url": "https://i.imgur.com/xlDoPfF.png",
           "docs_url": "https://genomedomains.com/"
@@ -132,10 +229,30 @@
         "network_id": 30,
         "subgraph_name": "rns-subgraph",
         "address_resolve_technique": "all_domains",
-        "native_token_contract": "0x45d3E4fB311982a06ba52359d44cB4f5980e0ef1",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x45d3E4fB311982a06ba52359d44cB4f5980e0ef1"
+        },
         "meta": {
           "short_name": "RNS",
           "title": "Rootstock Name Service",
+          "description": "Rootstock Name Service (RNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/o0MATMs.png",
+          "docs_url": "https://dev.rootstock.io/rif/rns/"
+        }
+      },
+      "rns-testnet": {
+        "tld_list": ["rsk"],
+        "network_id": 31,
+        "subgraph_name": "rns-testnet-subgraph",
+        "address_resolve_technique": "all_domains",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xca0a477e19bac7e0e172ccfd2e3c28a7200bdb71"
+        },
+        "meta": {
+          "short_name": "RNS (Testnet)",
+          "title": "Rootstock Name Service (Testnet)",
           "description": "Rootstock Name Service (RNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
           "icon_url": "https://i.imgur.com/o0MATMs.png",
           "docs_url": "https://dev.rootstock.io/rif/rns/"
@@ -148,7 +265,10 @@
         "network_id": 8453,
         "subgraph_name": "base-name-service-subgraph",
         "address_resolve_technique": "reverse_registry",
-        "native_token_contract": "0xaCe5602d169Edeb874bfE584a651801B8ac67093",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xaCe5602d169Edeb874bfE584a651801B8ac67093"
+        },
         "meta": {
           "short_name": "BNS",
           "title": "Base Name Service",
@@ -164,11 +284,32 @@
         "network_id": 34443,
         "subgraph_name": "mode-subgraph",
         "address_resolve_technique": "reverse_registry",
-        "native_token_contract": "0x2ad86eeec513ac16804bb05310214c3fd496835b",
-        "empty_label_hash": "0x2fd69f9e5bec9de9ebf3468dafc549eca0bc7d17dfbc09869c2cfc3997d5d038",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x2ad86eeec513ac16804bb05310214c3fd496835b",
+          "empty_label_hash": "0x2fd69f9e5bec9de9ebf3468dafc549eca0bc7d17dfbc09869c2cfc3997d5d038"
+        },
         "meta": {
           "short_name": "MNS",
           "title": "Mode Name Service",
+          "description": "Mode Name Service (MNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
+          "icon_url": "https://i.imgur.com/6QXp70g.png",
+          "docs_url": "https://docs.modedomains.xyz/"
+        }
+      },
+      "mode-sepolia": {
+        "tld_list": ["mode"],
+        "network_id": 919,
+        "subgraph_name": "mode-sepolia-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xCa3a57e014937C29526De98e4A8A334a7D04792b",
+          "empty_label_hash": "0xea1eb1136f380e6643b69866632ce3b493100790c9c84416f2769d996a1c38b1"
+        },
+        "meta": {
+          "short_name": "MNS (Testnet)",
+          "title": "Mode Name Service (Testnet)",
           "description": "Mode Name Service (MNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
           "icon_url": "https://i.imgur.com/6QXp70g.png",
           "docs_url": "https://docs.modedomains.xyz/"
@@ -181,8 +322,11 @@
         "network_id": 1890,
         "subgraph_name": "lightlink-subgraph",
         "address_resolve_technique": "reverse_registry",
-        "native_token_contract": "0x5183ba1dee9770760360533cf00b9d8e26495927",
-        "empty_label_hash": "0xd00bb4a08bb99b28b4c1d80951b62b654e4d2688242da2d2c7f98ed6c9caaaad",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x5183ba1dee9770760360533cf00b9d8e26495927",
+          "empty_label_hash": "0xd00bb4a08bb99b28b4c1d80951b62b654e4d2688242da2d2c7f98ed6c9caaaad"
+        },
         "meta": {
           "short_name": "LNS",
           "title": "LightLink Name Service",
@@ -198,12 +342,51 @@
         "network_id": 137,
         "subgraph_name": "zns-subgraph",
         "address_resolve_technique": "all_domains",
+        "specific": {
+          "type": "ens_like"
+        },
         "meta": {
           "short_name": "ZNS",
           "title": "ZNS Connect Domains",
           "description": "ZNS Connect is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
           "icon_url": "https://i.imgur.com/c7QnsBF.png",
           "docs_url": "https://docs.znsconnect.io/"
+        }
+      },
+      "zns-blast": {
+        "tld_list": [
+          "blast"
+        ],
+        "network_id": 81457,
+        "subgraph_name": "zns-blast-subgraph",
+        "address_resolve_technique": "all_domains",
+        "specific": {
+          "type": "ens_like"
+        },
+        "meta": {
+          "short_name": "ZNS",
+          "title": "ZNS Connect Domains",
+          "description": "ZNS Blast is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "docs_url": "https://docs.znsconnect.io/"
+        }
+      },
+      "d3_connect": {
+        "tld_list": ["shib"],
+        "network_id": 109,
+        "subgraph_name": "d3-connect-shib-subgraph",
+        "address_resolve_technique": "addr2name",
+        "specific": {
+          "type": "d3_connect",
+          "native_token_contract": "0xDe74799371Ceac11A0F52BA2694392A391D0dA18",
+          "resolver_contract": "0xD60D40674E678F0089736D6381071973a75B4B6f"
+        },
+        "meta": {
+          "short_name": "D3",
+          "title": "D3 Connect",
+          "description": "D3 Connect is official identity service for top web3 communities.",
+          "icon_url": "https://i.imgur.com/cD6VIXk.png",
+          "docs_url": "https://docs.d3.app/"
         }
       }
     }

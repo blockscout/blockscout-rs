@@ -1,5 +1,5 @@
 use super::artifacts::CompilerInput;
-use crate::compiler::{self, EvmCompiler, Version};
+use crate::compiler::{self, DetailedVersion, EvmCompiler};
 use ethers_solc::{error::SolcError, CompilerOutput, Solc};
 use foundry_compilers::artifacts::output_selection::OutputSelection;
 use std::path::Path;
@@ -28,7 +28,7 @@ impl compiler::CompilerInput for CompilerInput {
     // as some of them may be interfaces, which should not be compiled.
     // Thus, we start specifying required outputs only for those files
     // that already exists in the provided output_selection.
-    fn normalize_output_selection(&mut self, version: &Version) {
+    fn normalize_output_selection(&mut self, version: &DetailedVersion) {
         // v0.3.10 was the latest release prior to v0.4.0 pre-releases
         if version.version() > &semver::Version::new(0, 3, 10) {
             let default_output_selection = vec![
@@ -53,7 +53,7 @@ impl EvmCompiler for VyperCompiler {
     async fn compile(
         &self,
         path: &Path,
-        _ver: &Version,
+        _ver: &DetailedVersion,
         input: &Self::CompilerInput,
     ) -> Result<(serde_json::Value, CompilerOutput), SolcError> {
         let raw = Solc::from(path).async_compile_output(input).await?;
@@ -232,7 +232,7 @@ def getUserName() -> String[100]:
         let compilers = global_compilers().await;
         let input: CompilerInput = input_with_source(source_code.into());
         let version =
-            compiler::Version::from_str("0.3.6+commit.4a2124d0").expect("Compiler version");
+            compiler::DetailedVersion::from_str("0.3.6+commit.4a2124d0").expect("Compiler version");
 
         let (_raw, result) = compilers
             .compile(&version, &input, None)
@@ -250,8 +250,8 @@ def getUserName() -> String[100]:
     #[tokio::test]
     async fn compile_failed() {
         let compilers = global_compilers().await;
-        let version =
-            compiler::Version::from_str("v0.2.11+commit.5db35ef").expect("Compiler version");
+        let version = compiler::DetailedVersion::from_str("v0.2.11+commit.5db35ef")
+            .expect("Compiler version");
 
         for sources in [
             BTreeMap::from_iter([("source.vy".into(), "some wrong vyper code".into())]),

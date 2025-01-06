@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-db-migration"
-version = "4.1.8"
+version = "0.2.0+blockscout.6.8.0"
 edition = "2021"
 publish = false
 
@@ -12,7 +12,7 @@ path = "src/lib.rs"
 async-std = { version = "^1", features = ["attributes", "tokio1"] }
 
 [dependencies.sea-orm-migration]
-version = "0.12"
+version = "~1.0"
 features = [
   # Enable at least one `ASYNC_RUNTIME` and `DATABASE_DRIVER` feature if you want to run migration via CLI.
   # View the list of supported features at https://www.sea-ql.org/SeaORM/docs/install-and-config/database-and-async-runtime.

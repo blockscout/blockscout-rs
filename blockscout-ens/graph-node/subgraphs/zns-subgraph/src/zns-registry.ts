@@ -11,7 +11,7 @@ import {
   ExpiryExtended,
 } from "../generated/schema";
 import { crypto, Bytes } from "@graphprotocol/graph-ts";
-import { hashByName } from "./utils";
+import {domainNameIsCorrect, hashByName} from "./utils";
 
 export function handleMintedDomain(event: MintedDomainEvent): void {
   // let domain = new Domain(hashByName(event.params.domainName).toHex());
@@ -73,6 +73,9 @@ export function handleRenewedDomain(event: RenewedDomainEvent): void {
 }
 
 export function handleTransfer(event: TransferEvent): void {
+  if (!domainNameIsCorrect(event.params.domainName)) {
+    return;
+  }
   let domain = Domain.load(hashByName(event.params.domainName).toHex());
   if (!domain) {
     domain = new Domain(hashByName(event.params.domainName).toHex());

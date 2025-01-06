@@ -21,6 +21,21 @@ pub struct Model {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::celestia_blocks::Entity",
+        from = "Column::Height",
+        to = "super::celestia_blocks::Column::Height",
+        on_update = "NoAction",
+        on_delete = "NoAction"
+    )]
+    CelestiaBlocks,
+}
+
+impl Related<super::celestia_blocks::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CelestiaBlocks.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}

@@ -5,7 +5,7 @@ use crate::{
     },
     Error, SourcifyError, VerifyFromEtherscanError,
 };
-use blockscout_display_bytes::Bytes as DisplayBytes;
+use blockscout_display_bytes::ToHex;
 use bytes::Bytes;
 use reqwest::{Response, StatusCode};
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
@@ -126,9 +126,14 @@ impl Client {
         chain_id: &str,
         contract_address: Bytes,
     ) -> Result<GetSourceFilesResponse, Error<EmptyCustomError>> {
-        let contract_address = DisplayBytes::from(contract_address);
-        let url =
-            self.generate_url(format!("files/any/{}/{}", chain_id, contract_address).as_str());
+        let url = self.generate_url(
+            format!(
+                "files/any/{}/{}",
+                chain_id,
+                ToHex::to_hex(&contract_address)
+            )
+            .as_str(),
+        );
 
         let response = self
             .reqwest_client
@@ -148,7 +153,6 @@ impl Client {
         chain_id: &str,
         contract_address: Bytes,
     ) -> Result<VerifyFromEtherscanResponse, Error<VerifyFromEtherscanError>> {
-        let contract_address = DisplayBytes::from(contract_address);
         let url = self.generate_url("verify/etherscan");
 
         #[derive(Serialize)]
@@ -160,7 +164,7 @@ impl Client {
 
         let request = Request {
             chain_id,
-            address: contract_address.to_string(),
+            address: ToHex::to_hex(&contract_address),
         };
 
         let response = self
@@ -251,6 +255,7 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use blockscout_display_bytes::decode_hex;
     use governor::{
         clock::DefaultClock,
         middleware::NoOpMiddleware,
@@ -263,7 +268,7 @@ mod tests {
     use std::num::NonZeroU32;
 
     fn parse_contract_address(contract_address: &str) -> Bytes {
-        DisplayBytes::from_str(contract_address).unwrap().0
+        decode_hex(contract_address).unwrap().into()
     }
 
     static RATE_LIMITER_MIDDLEWARE: OnceCell<
@@ -305,6 +310,11 @@ mod tests {
                     "content": "library Lib {\n    function sum(uint256 a, uint256 b) external returns (uint256) {\n        return a + b;\n    }\n}\n\ncontract A {\n    function sum(uint256 a, uint256 b) external returns (uint256) {\n        return Lib.sum(a, b);\n    }\n}\n"
                 },
                 {
+                    "name": "metadata.json",
+                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/metadata.json",
+                    "content": "{\"compiler\":{\"version\":\"0.8.20+commit.a1b79de6\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"a\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"b\",\"type\":\"uint256\"}],\"name\":\"sum\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/Example.sol\":\"A\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"contracts/Example.sol\":{\"keccak256\":\"0x74f0b08e915377a73ed19a56ae3bfce73f4a75c2b9c76ce3c450c2e3f35ad730\",\"urls\":[\"bzz-raw://57df7d0de4fd2c829d638021ea6ed9845fe04c6ad68ed9bd516ca82295ffbfea\",\"dweb:/ipfs/QmR8QjtWYAW2RuyvZVKJMNS3Wp38rRQP33FxviuRdf1Vek\"]}},\"version\":1}"
+                },
+                {
                     "name": "creator-tx-hash.txt",
                     "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/creator-tx-hash.txt",
                     "content": "0x4b511e8d9bcd56407bc348631d04a673b39c859a036e5cd49df7526a8de29b93"
@@ -313,11 +323,6 @@ mod tests {
                     "name": "library-map.json",
                     "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/library-map.json",
                     "content": "{\"__$50698f9fab9190debff1c0247749d3c3d0$__\":\"0xf145e3a26c6706f64d95dc8d9d45022d8b3d676b\"}"
-                },
-                {
-                    "name": "metadata.json",
-                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/metadata.json",
-                    "content": "{\"compiler\":{\"version\":\"0.8.20+commit.a1b79de6\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"a\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"b\",\"type\":\"uint256\"}],\"name\":\"sum\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/Example.sol\":\"A\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"contracts/Example.sol\":{\"keccak256\":\"0x74f0b08e915377a73ed19a56ae3bfce73f4a75c2b9c76ce3c450c2e3f35ad730\",\"urls\":[\"bzz-raw://57df7d0de4fd2c829d638021ea6ed9845fe04c6ad68ed9bd516ca82295ffbfea\",\"dweb:/ipfs/QmR8QjtWYAW2RuyvZVKJMNS3Wp38rRQP33FxviuRdf1Vek\"]}},\"version\":1}"
                 }
             ]
         })).unwrap();

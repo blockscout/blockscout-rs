@@ -37,7 +37,7 @@ addr = "0.0.0.0:8051"
 enabled = true
 # A directory where compilers would be downloaded to
 compilers_dir = "/tmp/solidity-compilers"
-# List of avaialble solidity versions updates cron formatted schedule 
+# List of available solidity versions updates cron formatted schedule 
 refresh_versions_schedule = "0 0 * * * * *"
 
 [solidity.fetcher.list]
@@ -53,7 +53,7 @@ compilers_dir = "/tmp/vyper-compilers"
 refresh_versions_schedule = "0 0 * * * * *"
 
 [vyper.fetcher.list]
-# List of all availaable vyper compilers and information about them
+# List of all available vyper compilers and information about them
 list_url = "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.list.json"
 
 [sourcify]
@@ -75,7 +75,7 @@ max_threads = 8
 enabled = false
 # IP address and port number metrics related endpoint should listen to
 addr = "0.0.0.0:6060"
-# A route at which metrics related endpoint is avaialable
+# A route at which metrics related endpoint is available
 route = "/metrics"
 
 [jaeger]
@@ -89,7 +89,7 @@ agent_endpoint = "localhost:6831"
 
 Besides configuration file, one could use environment variables
 to configure the service. If case of overlapping, those values
-overwrites values from configuration file.
+overwrite values from configuration file.
 Variables have a hierarchical nature which
 corresponds to the hierarchy in configuration file.
 Double underscore (`__`) is used as a separator. All variables should use
@@ -344,7 +344,7 @@ Below is the description of settings from [Solidity docs](https://docs.solidityl
   // Addresses of the libraries. If not all libraries are given here,
   // it can result in unlinked objects whose output data is different.
   "libraries": {
-    // The top level key is the the name of the source file where the library is used.
+    // The top level key is the name of the source file where the library is used.
     // If remappings are used, this source file should match the global path
     // after remappings were applied.
     // If this key is an empty string, that refers to a global level.

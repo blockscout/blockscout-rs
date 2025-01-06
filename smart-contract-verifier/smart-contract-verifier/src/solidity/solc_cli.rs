@@ -268,7 +268,7 @@ pub async fn compile_using_cli(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::{Fetcher, ListFetcher, Version};
+    use crate::compiler::{DetailedVersion, Fetcher, ListFetcher};
     use ethers_solc::Artifact;
     use foundry_compilers::artifacts::{Settings, Source};
     use hex::ToHex;
@@ -461,7 +461,7 @@ mod tests {
         }
     }
 
-    async fn get_solc(ver: &Version) -> PathBuf {
+    async fn get_solc(ver: &DetailedVersion) -> PathBuf {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/"))
@@ -489,7 +489,7 @@ mod tests {
     #[tokio::test]
     async fn compile() {
         for ver in &["v0.4.8+commit.60cc1668", "v0.4.10+commit.f0d539ae"] {
-            let version = Version::from_str(ver).expect("valid version");
+            let version = DetailedVersion::from_str(ver).expect("valid version");
             let solc = get_solc(&version).await;
 
             let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();

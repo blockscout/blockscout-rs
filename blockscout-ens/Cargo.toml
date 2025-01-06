@@ -8,4 +8,50 @@ members = [
 ]
 
 [workspace.dependencies]
-blockscout-service-launcher = "0.11.1"
+bens-proto = { path = "./bens-proto" }
+bens-logic = { path = "./bens-logic" }
+
+actix-prost = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost" }
+actix-web = { version = "4" }
+alloy = { version = "0.5.4", default-features = false }
+alloy-ccip-read = { version = "0.3.0" }
+anyhow = { version = "1" }
+async-trait = { version = "0.1" }
+bigdecimal = { version = "0.4" }
+blockscout-display-bytes = { version = "1.0" }
+blockscout-service-launcher = { version = "0.14.0" }
+cached = { version = "0.54.0", default-features = false }
+chrono = "0.4"
+config = { version = "0.14" }
+env-collector = { git = "https://github.com/blockscout/blockscout-rs" }
+futures = { version = "0.3" }
+hex = { version = "0.4" }
+idna = { version = "1.0.2" }
+itertools = { version = "0.13.0" }
+lazy_static = { version = "1.4" }
+nonempty = { version = "0.10.0", default-features = false }
+pretty_assertions = { version = "1.4.0" }
+prometheus = { version = "0.13.4" }
+prost = { version = "0.11" }
+prost-build = { version = "0.11" }
+reqwest = { version = "0.12" }
+reqwest-middleware = { version = "0.4" }
+reqwest-retry = { version = "0.7" }
+sea-query = { version = "0.32" }
+serde = { version = "1" }
+serde_json = { version = "1", default-features = false }
+serde_with = { version = "3.11" }
+sqlx = { version = "0.8", default-features = false }
+tera = { version = "1.19" }
+thiserror = { version = "2" }
+tokio = { version = "1.23", default-features = false }
+tokio-cron-scheduler = { version = "0.13" }
+tonic = { version = "0.8" }
+tonic-build = { version = "0.8" }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", default-features = false }
+url = { version = "2.4" }
+wiremock = { version = "0.6" }
+

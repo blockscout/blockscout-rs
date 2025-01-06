@@ -2,12 +2,13 @@ use crate::{
     blockscout::BlockscoutClient,
     protocols::{DomainNameOnProtocol, ProtocolError},
 };
+use alloy::primitives::{Address, B256};
 use anyhow::anyhow;
-use ethers::{addressbook::Address, prelude::Bytes};
-use nonempty::NonEmpty;
+use nonempty::{nonempty, NonEmpty};
 use sea_query::{Alias, IntoTableRef, TableRef};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, sync::Arc};
+use url::Url;
 
 #[derive(Debug, Clone)]
 pub struct Protocoler {
@@ -18,7 +19,20 @@ pub struct Protocoler {
 #[derive(Debug, Clone)]
 pub struct Network {
     pub blockscout_client: Arc<BlockscoutClient>,
-    pub use_protocols: NonEmpty<String>,
+    pub use_protocols: Vec<String>,
+    pub rpc_url: Option<Url>,
+}
+
+impl Network {
+    pub fn rpc_url(&self) -> Url {
+        self.rpc_url.as_ref().cloned().unwrap_or_else(|| {
+            self.blockscout_client
+                .as_ref()
+                .url()
+                .join("/api/eth-rpc")
+                .expect("valid url")
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -34,15 +48,78 @@ pub struct DeployedProtocol<'a> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ProtocolInfo {
     pub network_id: i64,
     pub slug: String,
     pub tld_list: NonEmpty<Tld>,
     pub subgraph_name: String,
     pub address_resolve_technique: AddressResolveTechnique,
-    pub empty_label_hash: Option<Bytes>,
-    pub native_token_contract: Option<Address>,
     pub meta: ProtocolMeta,
+    pub protocol_specific: ProtocolSpecific,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[serde(tag = "type")]
+pub enum ProtocolSpecific {
+    EnsLike(EnsLikeProtocol),
+    D3Connect(D3ConnectProtocol),
+}
+
+impl Default for ProtocolSpecific {
+    fn default() -> Self {
+        Self::EnsLike(Default::default())
+    }
+}
+
+impl ProtocolSpecific {
+    pub fn try_offchain_resolve(&self) -> bool {
+        match self {
+            ProtocolSpecific::EnsLike(ens) => ens.try_offchain_resolve,
+            ProtocolSpecific::D3Connect(d3) => !d3.disable_offchain_resolve,
+        }
+    }
+
+    pub fn empty_label_hash(&self) -> Option<B256> {
+        match self {
+            ProtocolSpecific::EnsLike(ens) => ens.empty_label_hash,
+            ProtocolSpecific::D3Connect(_) => None,
+        }
+    }
+
+    pub fn native_token_contract(&self) -> Option<Address> {
+        match self {
+            ProtocolSpecific::EnsLike(ens) => ens.native_token_contract,
+            ProtocolSpecific::D3Connect(d3) => Some(d3.native_token_contract),
+        }
+    }
+
+    pub fn registry_contract(&self) -> Option<Address> {
+        match self {
+            ProtocolSpecific::EnsLike(ens) => ens.registry_contract,
+            ProtocolSpecific::D3Connect(_) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct EnsLikeProtocol {
+    pub registry_contract: Option<Address>,
+    pub empty_label_hash: Option<B256>,
+    pub native_token_contract: Option<Address>,
+    #[serde(default)]
+    pub try_offchain_resolve: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct D3ConnectProtocol {
+    pub resolver_contract: Address,
+    pub native_token_contract: Address,
+    #[serde(default)]
+    pub disable_offchain_resolve: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -65,6 +142,8 @@ pub enum AddressResolveTechnique {
     #[default]
     ReverseRegistry,
     AllDomains,
+    #[serde(rename = "addr2name")]
+    Addr2Name,
 }
 const MAX_NAMES_LIMIT: usize = 5;
 
@@ -78,6 +157,10 @@ impl Tld {
             .next()
             .filter(|c| !c.is_empty())
             .map(Self::new)
+    }
+
+    pub fn reverse() -> Self {
+        Self("reverse".to_string())
     }
 }
 
@@ -156,22 +239,22 @@ impl Protocoler {
             })
             .collect::<Vec<_>>();
         let net_protocols = if let Some(filter) = maybe_filter {
-            NonEmpty::collect(
-                filter
-                    .into_iter()
-                    .map(|f| {
-                        net_protocols
-                            .iter()
-                            .find(|&p| p.protocol.info.slug == f)
-                            .copied()
-                            .ok_or_else(|| ProtocolError::ProtocolNotFound(f))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-            )
-            .expect("build from nonempty iterator")
+            filter
+                .into_iter()
+                .map(|f| {
+                    net_protocols
+                        .iter()
+                        .find(|&p| p.protocol.info.slug == f)
+                        .copied()
+                        .ok_or_else(|| ProtocolError::ProtocolNotFound(f))
+                })
+                .collect::<Result<Vec<_>, _>>()?
         } else {
-            NonEmpty::from_vec(net_protocols).expect("build from nonempty iterator")
+            net_protocols
         };
+        let net_protocols = NonEmpty::from_vec(net_protocols).ok_or_else(|| {
+            ProtocolError::ProtocolNotFound("no protocols found for network".to_string())
+        })?;
         Ok(net_protocols)
     }
 
@@ -189,12 +272,15 @@ impl Protocoler {
         network_id: i64,
         tld: Tld,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<Vec<DeployedProtocol<'_>>, ProtocolError> {
-        let protocols = self.protocols_of_network(network_id, maybe_filter)?;
-        let protocols = protocols
-            .into_iter()
+    ) -> Result<NonEmpty<DeployedProtocol<'_>>, ProtocolError> {
+        let net_protocols = self.protocols_of_network(network_id, maybe_filter)?;
+        let protocols = net_protocols
+            .iter()
             .filter(|p| p.protocol.info.tld_list.contains(&tld))
-            .collect();
+            .cloned()
+            .collect::<Vec<DeployedProtocol>>();
+        let protocols =
+            NonEmpty::from_vec(protocols).unwrap_or_else(|| nonempty![net_protocols.head]);
         Ok(protocols)
     }
 
@@ -271,7 +357,10 @@ impl Protocoler {
         let maybe_name = self
             .names_options_in_network(name, network_id, maybe_filter)
             .map(|mut names| names.pop())?;
-        let name = maybe_name.ok_or_else(|| ProtocolError::InvalidName(name.to_string()))?;
+        let name = maybe_name.ok_or_else(|| ProtocolError::InvalidName {
+            name: name.to_string(),
+            reason: "no protocol found".to_string(),
+        })?;
         Ok(name)
     }
 

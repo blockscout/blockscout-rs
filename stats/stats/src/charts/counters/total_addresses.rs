@@ -1,79 +1,104 @@
 use crate::{
-    charts::db_interaction::{
-        chart_updaters::{ChartFullUpdater, ChartUpdater},
-        types::DateValue,
+    charts::db_interaction::read::query_estimated_table_rows,
+    data_source::{
+        kinds::{
+            local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
+            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
+        },
+        types::BlockscoutMigrations,
     },
-    UpdateError,
+    types::timespans::DateValue,
+    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
-use async_trait::async_trait;
+use blockscout_db::entity::addresses;
+use chrono::{NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{DatabaseConnection, DbBackend, EntityName, Statement};
 
-#[derive(Default, Debug)]
-pub struct TotalAddresses {}
+pub struct TotalAddressesStatement;
 
-#[async_trait]
-impl ChartFullUpdater for TotalAddresses {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let data = DateValue::find_by_statement(Statement::from_string(
+impl StatementForOne for TotalAddressesStatement {
+    fn get_statement(_: &BlockscoutMigrations) -> Statement {
+        Statement::from_string(
             DbBackend::Postgres,
-            r#"SELECT date, value FROM ( 
-                SELECT (
-                    SELECT COUNT(*)::TEXT as value FROM addresses
-                ), (
-                    SELECT MAX(b.timestamp)::DATE AS date
-                    FROM blocks b
-                    WHERE b.consensus = true
-                )
-            ) as sub"#
-                .into(),
-        ))
-        .one(blockscout)
-        .await
-        .map_err(UpdateError::BlockscoutDB)?
-        .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
-
-        Ok(vec![data])
+            r#"
+                SELECT
+                    date, value
+                FROM ( 
+                    SELECT (
+                        SELECT COUNT(*)::TEXT as value FROM addresses
+                    ), (
+                        SELECT MAX(b.timestamp)::DATE AS date
+                        FROM blocks b
+                        WHERE b.consensus = true
+                    )
+                ) as sub
+            "#,
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for TotalAddresses {
-    fn name(&self) -> &str {
-        "totalAddresses"
-    }
+pub type TotalAddressesRemote =
+    RemoteDatabaseSource<PullOne<TotalAddressesStatement, NaiveDate, String>>;
 
-    fn chart_type(&self) -> ChartType {
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "totalAddresses".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
-}
-
-#[async_trait]
-impl ChartUpdater for TotalAddresses {
-    async fn update_values(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        current_time: chrono::DateTime<chrono::Utc>,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, current_time, force_full)
-            .await
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
 }
+
+pub struct TotalAddressesEstimation;
+
+impl ValueEstimation for TotalAddressesEstimation {
+    async fn estimate(blockscout: &DatabaseConnection) -> Result<DateValue<String>, ChartError> {
+        // `now()` is more relevant when taken right before the query rather than
+        // `cx.time` measured a bit earlier.
+        let now = Utc::now();
+        let value = query_estimated_table_rows(blockscout, addresses::Entity.table_name())
+            .await
+            .map_err(ChartError::BlockscoutDB)?
+            .map(|n| u64::try_from(n).unwrap_or(0))
+            .unwrap_or(0);
+        Ok(DateValue {
+            timespan: now.date_naive(),
+            value: value.to_string(),
+        })
+    }
+}
+
+pub type TotalAddresses = DirectPointLocalDbChartSourceWithEstimate<
+    TotalAddressesRemote,
+    TotalAddressesEstimation,
+    Properties,
+>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_counter;
+    use crate::tests::simple_test::{simple_test_counter, test_counter_fallback};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_addresses() {
-        let counter = TotalAddresses::default();
-        simple_test_counter("update_total_addresses", counter, "33").await;
+        simple_test_counter::<TotalAddresses>("update_total_addresses", "33", None).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn total_addresses_fallback() {
+        test_counter_fallback::<TotalAddresses>("total_addresses_fallback").await;
     }
 }

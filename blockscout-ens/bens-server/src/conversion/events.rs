@@ -1,7 +1,7 @@
 use bens_logic::{
     entity::subgraph::domain_event::DomainEvent,
     hex,
-    subgraphs_reader::{EventSort, GetDomainHistoryInput},
+    subgraph::{EventSort, GetDomainHistoryInput},
 };
 use bens_proto::blockscout::bens::v1 as proto;
 

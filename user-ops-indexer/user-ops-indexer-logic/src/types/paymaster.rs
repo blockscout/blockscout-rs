@@ -1,6 +1,5 @@
 use crate::repository::paymaster::PaymasterDB;
-use ethers::prelude::Address;
-use ethers_core::utils::to_checksum;
+use ethers::{prelude::Address, utils::to_checksum};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Paymaster {

@@ -102,7 +102,7 @@ mod json {
     pub struct SigTypes {
         pub function: Option<SigMap>,
         pub event: Option<SigMap>,
-        pub error: Option<SigMap>,
+        pub _error: Option<SigMap>,
     }
 
     #[derive(Debug, Deserialize)]

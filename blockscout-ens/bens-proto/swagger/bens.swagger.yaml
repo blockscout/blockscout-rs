@@ -427,6 +427,12 @@ definitions:
       protocol:
         $ref: '#/definitions/v1ProtocolInfo'
         title: Information about protocol that domain belongs to
+      stored_offchain:
+        type: boolean
+      resolved_with_wildcard:
+        type: boolean
+      resolver_address:
+        $ref: '#/definitions/v1Address'
   v1Domain:
     type: object
     properties:

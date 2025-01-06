@@ -9,6 +9,7 @@ message ConvertOptions {
   string type = 1;
   string override = 2;
   bool required = 3;
+  repeated string attributes = 4;
 }
 
 message ExtraFieldOptions {
@@ -24,5 +25,6 @@ message DeriveOptions {
 extend google.protobuf.MessageOptions {
   repeated ExtraFieldOptions extra_fields = 50000;
   repeated DeriveOptions derive = 50001;
+  repeated string attributes = 50002;
 }
 extend google.protobuf.FieldOptions { optional ConvertOptions convert = 50002; }

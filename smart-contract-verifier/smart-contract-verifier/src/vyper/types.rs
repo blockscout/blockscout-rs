@@ -11,7 +11,7 @@ use ethers_solc::CompilerOutput;
 pub struct Success {
     pub compiler_input: CompilerInput,
     pub compiler_output: CompilerOutput,
-    pub compiler_version: compiler::Version,
+    pub compiler_version: compiler::DetailedVersion,
     pub file_path: String,
     pub contract_name: String,
     pub abi: Option<serde_json::Value>,

@@ -7,6 +7,7 @@ mod sourcify_from_etherscan;
 mod verify_response;
 mod vyper_multi_part;
 mod vyper_standard_json;
+pub mod zksolc_standard_json;
 
 pub mod batch_verification;
 mod lookup_methods;

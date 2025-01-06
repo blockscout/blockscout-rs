@@ -1,10 +1,9 @@
-use bens_logic::protocols::{AddressResolveTechnique, ProtocolMeta, Tld};
+use bens_logic::protocols::{AddressResolveTechnique, ProtocolMeta, ProtocolSpecific, Tld};
 use blockscout_service_launcher::{
     database::{DatabaseConnectSettings, DatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
-use ethers::{addressbook::Address, prelude::Bytes};
 use nonempty::NonEmpty;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -64,20 +63,25 @@ pub struct ProtocolSettings {
     #[serde(default)]
     pub address_resolve_technique: AddressResolveTechnique,
     #[serde(default)]
-    pub empty_label_hash: Option<Bytes>,
-    pub native_token_contract: Option<Address>,
     pub meta: ProtocolSettingsMeta,
+    #[serde(default, rename = "specific")]
+    pub protocol_specific: ProtocolSettingsSpecific,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ProtocolSettingsMeta(pub ProtocolMeta);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ProtocolSettingsSpecific(pub ProtocolSpecific);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkSettings {
     pub blockscout: BlockscoutSettings,
     #[serde(default)]
-    pub use_protocols: NonEmpty<String>,
+    pub use_protocols: Vec<String>,
+    #[serde(default)]
+    pub rpc_url: Option<Url>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

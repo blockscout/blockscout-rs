@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package blockscout.stylusVerifier.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/stylus-verifier";
+
+service StylusSdkRsVerifier {
+  rpc VerifyGithubRepository(VerifyGithubRepositoryRequest) returns (VerifyResponse) {}
+
+  rpc ListCargoStylusVersions(ListCargoStylusVersionsRequest) returns (CargoStylusVersions) {}
+}
+
+message VerifyGithubRepositoryRequest {
+  string deployment_transaction = 1;
+  string rpc_endpoint = 2;
+  string cargo_stylus_version = 3;
+  string repository_url = 4;
+  string commit = 5;
+  string path_prefix = 6;
+}
+
+message VerificationSuccess {
+  optional string abi = 1;
+  optional string contract_name = 2;
+  map<string, string> files = 3;
+  string package_name = 4;
+
+  string cargo_stylus_version = 5;
+
+  message GithubRepositoryMetadata {
+    string repository_url = 1;
+    string commit = 2;
+    string path_prefix = 3;
+  }
+  /// Metadata added in case `VerifyGithubRepository` endpoint was used for verification
+  optional GithubRepositoryMetadata github_repository_metadata = 6;
+}
+
+message VerificationFailure {
+  string message = 1;
+}
+
+message VerifyResponse {
+  oneof verify_response {
+    VerificationFailure verification_failure = 1;
+    VerificationSuccess verification_success = 2;
+  }
+}
+
+message CargoStylusVersion {
+  string version = 1;
+}
+
+message CargoStylusVersions {
+  repeated CargoStylusVersion versions = 1;
+}
+
+message ListCargoStylusVersionsRequest {}

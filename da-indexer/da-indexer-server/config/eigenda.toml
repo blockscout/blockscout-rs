@@ -1,0 +1,43 @@
+[server.http]
+enabled = true
+addr = "0.0.0.0:8050"
+max_body_size = 2097152
+
+[server.grpc]
+enabled = false
+addr = "0.0.0.0:8051"
+
+[database]
+connect.url = "postgres://postgres:admin@127.0.0.1:9432/blockscout" # (required) no default value available
+create_database = true
+run_migrations = true
+
+[metrics]
+enabled = true
+addr = "0.0.0.0:6060"
+route = "/metrics"
+
+[jaeger]
+enabled = false
+agent_endpoint = "localhost:6831"
+
+[tracing]
+enabled = true
+format = "default"
+
+[indexer]
+concurrency = 5
+retry_interval = 180
+polling_interval = 12
+
+[indexer.da]
+type = "EigenDA"
+disperser_url = "https://disperser-holesky.eigenda.xyz:443"
+eigenda_address = "0xD4A7E1Bd8015057293f0D0A557088c286942e84b"
+eigenda_creation_block = 1168412
+save_batch_size = 20
+pruning_block_threshold = 1000 
+
+[indexer.da.rpc]
+url = "https://ethereum-holesky-rpc.publicnode.com"
+batch_size = 1000

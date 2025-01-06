@@ -10,7 +10,7 @@ actix-web = "4"
 prost = "0.11"
 tonic = "0.8"
 serde = { version = "1", features = ["derive"] }
-serde_with = { version = "2.0", features = ["hex", "base64"] }
+serde_with = { version = "3", features = ["hex", "base64"] }
 async-trait = "0.1"
 
 [dev-dependencies]

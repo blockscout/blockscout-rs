@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-service-launcher"
-version = "0.12.0"
+version = "0.15.0"
 description = "Allows to launch blazingly fast blockscout rust services"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
@@ -46,9 +46,13 @@ sea-orm-migration-0_11 = { package = "sea-orm-migration", version = "0.11", opti
 sea-orm-0_12 = { package = "sea-orm", version = "0.12.2", optional = true }
 sea-orm-migration-0_12 = { package = "sea-orm-migration", version = "0.12.2", optional = true }
 
+sea-orm-1_0 = { package = "sea-orm", version = "1.0", optional = true }
+sea-orm-migration-1_0 = { package = "sea-orm-migration", version = "1.0", optional = true }
+
 [dev-dependencies]
 pretty_assertions = "1.4.0"
 tempfile = "3.10.1"
+regex = { version = "1", features = ["std"], default-features = false }
 
 
 [features]
@@ -85,8 +89,14 @@ tracing = [
 database = [
     "dep:anyhow",
     "dep:cfg-if",
+    "dep:serde",
     "dep:tracing",
     "dep:url",
+]
+database-1_0 = [
+    "database",
+    "dep:sea-orm-1_0",
+    "dep:sea-orm-migration-1_0",
 ]
 database-0_12 = [
     "database",

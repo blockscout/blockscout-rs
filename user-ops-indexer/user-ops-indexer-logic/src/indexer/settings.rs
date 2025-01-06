@@ -1,3 +1,4 @@
+use ethers::prelude::Address;
 use serde::Deserialize;
 use serde_with::serde_as;
 use std::time;
@@ -31,10 +32,12 @@ pub struct IndexerSettings {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct EntrypointsSettings {
     pub v06: bool,
+    pub v06_entry_point: Address,
     pub v07: bool,
+    pub v07_entry_point: Address,
 }
 
 #[serde_as]
@@ -94,10 +97,7 @@ impl Default for IndexerSettings {
         Self {
             rpc_url: "ws://127.0.0.1:8546".to_string(),
             concurrency: 10,
-            entrypoints: EntrypointsSettings {
-                v06: true,
-                v07: true,
-            },
+            entrypoints: Default::default(),
             realtime: RealtimeIndexerSettings {
                 enabled: true,
                 polling_interval: default_polling_interval(),
@@ -115,6 +115,21 @@ impl Default for IndexerSettings {
             deduplication_cache_size: default_deduplication_cache_size(),
             deduplication_interval: default_deduplication_interval(),
             restart_delay: default_restart_delay(),
+        }
+    }
+}
+
+impl Default for EntrypointsSettings {
+    fn default() -> Self {
+        Self {
+            v06: true,
+            v06_entry_point: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
+                .parse()
+                .unwrap(),
+            v07: true,
+            v07_entry_point: "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
+                .parse()
+                .unwrap(),
         }
     }
 }
