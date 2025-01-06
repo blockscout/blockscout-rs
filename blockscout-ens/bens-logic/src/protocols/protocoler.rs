@@ -217,30 +217,35 @@ impl Protocoler {
             })
             .flatten()
             .collect::<Vec<Tld>>();
-    
+
         if name.contains('.') {
             return self.find_names_with_tld(name, network_id, maybe_filter);
         }
-    
+
         let mut all_names_with_protocols = Vec::new();
         for tld in tlds {
             if all_names_with_protocols.len() >= MAX_NAMES_LIMIT {
                 break;
             }
             let name_with_tld = format!("{}.{}", name, tld.0);
-            if let Ok(mut names) = self.find_names_with_tld(&name_with_tld, network_id, maybe_filter.clone()) {
+            if let Ok(mut names) =
+                self.find_names_with_tld(&name_with_tld, network_id, maybe_filter.clone())
+            {
                 all_names_with_protocols.append(&mut names);
             }
         }
-    
+
         if all_names_with_protocols.is_empty() {
             return Err(ProtocolError::InvalidName(name.to_string()));
         }
-    
-        Ok(all_names_with_protocols.into_iter().take(MAX_NAMES_LIMIT).collect())
+
+        Ok(all_names_with_protocols
+            .into_iter()
+            .take(MAX_NAMES_LIMIT)
+            .collect())
     }
-    
-    fn find_names_with_tld(
+
+    pub fn find_names_with_tld(
         &self,
         name_with_tld: &str,
         network_id: i64,
@@ -255,8 +260,8 @@ impl Protocoler {
             .collect();
         Ok(names_with_protocols)
     }
-    
 
+    
     pub fn main_name_in_network(
         &self,
         name: &str,
