@@ -198,8 +198,6 @@ impl Protocoler {
         Ok(protocols)
     }
 
-    
-
     pub fn names_options_in_network(
         &self,
         name: &str,
