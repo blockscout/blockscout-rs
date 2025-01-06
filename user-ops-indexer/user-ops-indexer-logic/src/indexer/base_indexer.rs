@@ -136,7 +136,7 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
                 tracing::debug!("fetching node client");
                 let client_version = self.client.get_client_version().await?;
                 tracing::info!(client_version, "fetched node client");
-                client_version.into()
+                TraceClient::default_for(client_version.into())
             }
         };
 
@@ -439,7 +439,7 @@ mod tests {
             v06::IndexerV06 { entry_point },
         );
         indexer
-            .handle_tx(tx_hash, TraceClient::Parity)
+            .handle_tx(tx_hash, TraceClient::Trace)
             .await
             .unwrap();
 
@@ -503,7 +503,7 @@ mod tests {
             Default::default(),
             v06::IndexerV06 { entry_point },
         );
-        for trace_client in [TraceClient::Geth, TraceClient::Parity] {
+        for trace_client in [TraceClient::Debug, TraceClient::Trace] {
             entity::user_operations::Entity::delete_by_id(op_hash.to_vec())
                 .exec(db.as_ref())
                 .await
@@ -572,7 +572,7 @@ mod tests {
             v07::IndexerV07 { entry_point },
         );
         indexer
-            .handle_tx(tx_hash, TraceClient::Parity)
+            .handle_tx(tx_hash, TraceClient::Trace)
             .await
             .unwrap();
 
