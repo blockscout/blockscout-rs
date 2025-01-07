@@ -296,6 +296,7 @@ impl RuntimeSetup {
             Arc::new(NativeCoinHoldersGrowthGroup),
             Arc::new(NewNativeCoinTransfersGroup),
             Arc::new(TxnsStats24hGroup),
+            Arc::new(VerifiedContractsPageGroup),
         ]
     }
 
