@@ -65,11 +65,13 @@ async fn test_chart_endpoints_ok() {
     .collect();
     let mut failed = 0;
     let total = tests.len();
+    println!("running {total} endpoint tests");
     while let Some(test_result) = tests.join_next().await {
+        let result_string_start = "(endpoint tests) stats endpoint test ... ";
         match test_result {
-            Ok(()) => println!("test for chart endpoint ... ok"),
+            Ok(()) => println!("{result_string_start}ok"),
             Err(e) => {
-                println!("test for chart endpoint ... fail\n{}", e);
+                println!("{result_string_start}fail\nerror: {e}",);
                 failed += 1;
             }
         }
