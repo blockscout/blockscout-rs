@@ -26,3 +26,34 @@ pub async fn enabled_resolutions(
         .map(|l| (l.id, l.resolutions))
         .collect()
 }
+
+#[macro_export]
+macro_rules! array_of_variables_with_names {
+    ([
+        $($var:ident),+ $(,)?
+    ]) => {
+        [
+            $((stringify!($var), $var)),+
+        ]
+    };
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn array_of_variables_with_names_works() {
+        let (var1, var2, var3, var4, var5) = (1, 2, 3, 4, 5);
+        assert_eq!(
+            array_of_variables_with_names!([var1, var2, var3, var4, var5]),
+            [
+                ("var1", var1),
+                ("var2", var2),
+                ("var3", var3),
+                ("var4", var4),
+                ("var5", var5),
+            ]
+        )
+    }
+}

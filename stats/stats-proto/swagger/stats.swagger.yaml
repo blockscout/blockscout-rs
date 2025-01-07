@@ -262,9 +262,9 @@ definitions:
         $ref: '#/definitions/v1Counter'
       total_blocks:
         $ref: '#/definitions/v1Counter'
-      total_txns:
+      total_transactions:
         $ref: '#/definitions/v1Counter'
-      yesterday_txns:
+      yesterday_transactions:
         $ref: '#/definitions/v1Counter'
       transactions:
         $ref: '#/definitions/v1LineChart'
@@ -292,11 +292,11 @@ definitions:
   v1TransactionsPageStats:
     type: object
     properties:
-      pending_txns:
+      pending_transactions:
         $ref: '#/definitions/v1Counter'
-      txns_fee_24h:
+      transactions_fee_24h:
         $ref: '#/definitions/v1Counter'
-      average_txn_fee_24h:
+      average_transactions_fee_24h:
         $ref: '#/definitions/v1Counter'
-      total_txns:
+      transactions_24h:
         $ref: '#/definitions/v1Counter'

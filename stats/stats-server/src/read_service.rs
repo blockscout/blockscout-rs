@@ -144,8 +144,8 @@ impl ReadService {
             average_block_time: None,
             total_addresses: None,
             total_blocks: None,
-            total_txns: None,
-            yesterday_txns: None,
+            total_transactions: None,
+            yesterday_transactions: None,
             transactions: None,
         };
         vec![
@@ -179,10 +179,10 @@ impl ReadService {
         // ensure that changes to api are reflected here
         #[allow(clippy::no_effect)]
         proto_v1::TransactionsPageStats {
-            pending_txns: None,
-            txns_fee_24h: None,
-            average_txn_fee_24h: None,
-            total_txns: None,
+            pending_transactions: None,
+            transactions_fee_24h: None,
+            average_transactions_fee_24h: None,
+            transactions_24h: None,
         };
         vec![
             PendingTxns::name(),
@@ -423,7 +423,13 @@ impl StatsService for ReadService {
     ) -> Result<Response<proto_v1::MainPageStats>, Status> {
         let now = Utc::now();
 
-        let (average_block_time, total_addresses, total_blocks, total_txns, yesterday_txns) = join!(
+        let (
+            average_block_time,
+            total_addresses,
+            total_blocks,
+            total_transactions,
+            yesterday_transactions,
+        ) = join!(
             self.query_counter(AverageBlockTime::name(), now),
             self.query_counter(TotalAddresses::name(), now),
             self.query_counter(TotalBlocks::name(), now),
@@ -437,8 +443,8 @@ impl StatsService for ReadService {
             average_block_time,
             total_addresses,
             total_blocks,
-            total_txns,
-            yesterday_txns,
+            total_transactions,
+            yesterday_transactions,
             transactions,
         }))
     }
@@ -448,17 +454,22 @@ impl StatsService for ReadService {
         _request: Request<proto_v1::GetTransactionsPageStatsRequest>,
     ) -> Result<Response<proto_v1::TransactionsPageStats>, Status> {
         let now = Utc::now();
-        let (pending_txns, txns_fee_24h, average_txn_fee_24h, total_txns) = join!(
+        let (
+            pending_transactions,
+            transactions_fee_24h,
+            average_transactions_fee_24h,
+            transactions_24h,
+        ) = join!(
             self.query_counter(PendingTxns::name(), now),
             self.query_counter(TxnsFee24h::name(), now),
             self.query_counter(AverageTxnFee24h::name(), now),
             self.query_counter(TotalTxns::name(), now),
         );
         Ok(Response::new(proto_v1::TransactionsPageStats {
-            pending_txns,
-            txns_fee_24h,
-            average_txn_fee_24h,
-            total_txns,
+            pending_transactions,
+            transactions_fee_24h,
+            average_transactions_fee_24h,
+            transactions_24h,
         }))
     }
 

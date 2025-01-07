@@ -82,8 +82,8 @@ message MainPageStats {
   optional Counter average_block_time = 1;
   optional Counter total_addresses = 2;
   optional Counter total_blocks = 3;
-  optional Counter total_txns = 4;
-  optional Counter yesterday_txns = 5;
+  optional Counter total_transactions = 4;
+  optional Counter yesterday_transactions = 5;
 
   optional LineChart transactions = 6;
 }
@@ -91,10 +91,10 @@ message MainPageStats {
 message GetTransactionsPageStatsRequest {}
 
 message TransactionsPageStats {
-  optional Counter pending_txns = 1;
-  optional Counter txns_fee_24h = 2;
-  optional Counter average_txn_fee_24h = 3;
-  optional Counter total_txns = 4;
+  optional Counter pending_transactions = 1;
+  optional Counter transactions_fee_24h = 2;
+  optional Counter average_transactions_fee_24h = 3;
+  optional Counter transactions_24h = 4;
 }
 
 message GetContractsPageStatsRequest {}

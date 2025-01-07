@@ -8,23 +8,25 @@ use stats::{
 use stats_proto::blockscout::stats::v1::MainPageStats;
 use url::Url;
 
+use crate::array_of_variables_with_names;
+
 pub async fn test_main_page_ok(base: Url) {
     let main_page: MainPageStats = send_get_request(&base, "/api/v1/pages/main").await;
     let MainPageStats {
         average_block_time,
         total_addresses,
         total_blocks,
-        total_txns,
-        yesterday_txns,
+        total_transactions,
+        yesterday_transactions,
         transactions,
     } = main_page;
-    let counters = [
-        ("average_block_time", average_block_time),
-        ("total_addresses", total_addresses),
-        ("total_blocks", total_blocks),
-        ("total_txns", total_txns),
-        ("yesterday_txns", yesterday_txns),
-    ];
+    let counters = array_of_variables_with_names!([
+        average_block_time,
+        total_addresses,
+        total_blocks,
+        total_transactions,
+        yesterday_transactions,
+    ]);
     for (name, counter) in counters {
         #[allow(clippy::expect_fun_call)]
         let counter = counter.expect(&format!("page counter {} must be available", name));
