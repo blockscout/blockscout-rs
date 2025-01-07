@@ -188,7 +188,7 @@ impl ReadService {
             PendingTxns::name(),
             TxnsFee24h::name(),
             AverageTxnFee24h::name(),
-            TotalTxns::name(),
+            NewTxns24h::name(),
         ]
     }
 }
