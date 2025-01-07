@@ -63,17 +63,19 @@ async fn test_chart_endpoints_ok() {
     ]
     .into_iter()
     .collect();
-    let mut some_failed = false;
+    let mut failed = 0;
+    let total = tests.len();
     while let Some(test_result) = tests.join_next().await {
         match test_result {
             Ok(()) => println!("test for chart endpoint ... ok"),
             Err(e) => {
                 println!("test for chart endpoint ... fail\n{}", e);
-                some_failed = true;
+                failed += 1;
             }
         }
     }
-    if some_failed {
-        panic!("some tests failed")
+    if failed > 0 {
+        let passed = total - failed;
+        panic!("{passed}/{total} endpoint tests passed")
     }
 }
