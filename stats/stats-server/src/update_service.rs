@@ -45,16 +45,16 @@ impl UpdateService {
 
     /// The main function of the service.
     ///
-    /// Perform initial update and run the service in infinite loop.
-    /// Terminates dependant threads if one fails.
+    /// Run the service in infinite loop.
+    /// Terminates dependant threads if enough fail.
     pub async fn run(
         self: Arc<Self>,
-        concurrent_tasks: usize,
+        concurrent_initial_tasks: usize,
         default_schedule: Schedule,
         force_update_on_start: Option<bool>,
     ) {
-        let semaphore: Arc<tokio::sync::Semaphore> =
-            Arc::new(tokio::sync::Semaphore::new(concurrent_tasks));
+        let initial_update_semaphore: Arc<tokio::sync::Semaphore> =
+            Arc::new(tokio::sync::Semaphore::new(concurrent_initial_tasks));
         let mut group_updaters: FuturesUnordered<_> = self
             .charts
             .update_groups
@@ -64,7 +64,7 @@ impl UpdateService {
                 let group_entry = group.clone();
                 let default_schedule = default_schedule.clone();
                 let status_listener = self.status_listener.clone();
-                let sema = semaphore.clone();
+                let initial_update_semaphore = initial_update_semaphore.clone();
                 async move {
                     if let Some(mut status_listener) = status_listener {
                         let wait_result = status_listener
@@ -79,10 +79,15 @@ impl UpdateService {
                         }
                     }
 
-                    let _permit = sema.acquire().await.expect("failed to acquire permit");
-                    if let Some(force_full) = force_update_on_start {
-                        this.clone().update(group_entry.clone(), force_full).await
-                    };
+                    {
+                        let _init_update_permit = initial_update_semaphore
+                            .acquire()
+                            .await
+                            .expect("failed to acquire permit");
+                        if let Some(force_full) = force_update_on_start {
+                            this.clone().update(group_entry.clone(), force_full).await
+                        };
+                    }
                     tracing::info!(
                         update_group = group_entry.group.name(),
                         "initial update is done"
