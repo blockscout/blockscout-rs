@@ -82,14 +82,13 @@ impl IndexingStatusAggregator {
                     consecutive_errors += 1;
                 }
             }
-            info!(
-                "Rechecking indexing status in {} secs",
+            let wait_time = if let IndexingStatus::MAX = *self.sender.borrow() {
+                self.wait_config.check_period_secs * 100
+            } else {
                 self.wait_config.check_period_secs
-            );
-            sleep(Duration::from_secs(
-                self.wait_config.check_period_secs.into(),
-            ))
-            .await;
+            };
+            info!("Rechecking indexing status in {} secs", wait_time);
+            sleep(Duration::from_secs(wait_time.into())).await;
         }
     }
 }

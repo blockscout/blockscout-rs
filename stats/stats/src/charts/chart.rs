@@ -150,7 +150,12 @@ pub enum IndexingStatus {
 }
 
 impl IndexingStatus {
-    pub const LEAST_RESTRICTIVE: IndexingStatus = IndexingStatus::NoneIndexed;
+    // constants for status itself
+    pub const MIN: IndexingStatus = IndexingStatus::NoneIndexed;
+    pub const MAX: IndexingStatus = IndexingStatus::InternalTransactionsIndexed;
+    // constants corresponding to status requirement
+    pub const LEAST_RESTRICTIVE: IndexingStatus = Self::MIN;
+    pub const MOST_RESTRICTIVE: IndexingStatus = Self::MAX;
 
     pub fn most_restrictive_from(
         requrements: impl Iterator<Item = IndexingStatus>,
