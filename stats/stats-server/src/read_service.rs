@@ -16,9 +16,9 @@ use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
     counters::{
-        AverageBlockTime, AverageTxnFee24h, NewContracts24h, NewVerifiedContracts24h, PendingTxns,
-        TotalAddresses, TotalBlocks, TotalContracts, TotalTxns, TotalVerifiedContracts, TxnsFee24h,
-        YesterdayTxns,
+        AverageBlockTime, AverageTxnFee24h, NewContracts24h, NewTxns24h, NewVerifiedContracts24h,
+        PendingTxns, TotalAddresses, TotalBlocks, TotalContracts, TotalTxns,
+        TotalVerifiedContracts, TxnsFee24h, YesterdayTxns,
     },
     data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
     lines::{NewTxnsWindow, NEW_TXNS_WINDOW_RANGE},
@@ -463,7 +463,7 @@ impl StatsService for ReadService {
             self.query_counter(PendingTxns::name(), now),
             self.query_counter(TxnsFee24h::name(), now),
             self.query_counter(AverageTxnFee24h::name(), now),
-            self.query_counter(TotalTxns::name(), now),
+            self.query_counter(NewTxns24h::name(), now),
         );
         Ok(Response::new(proto_v1::TransactionsPageStats {
             pending_transactions,
