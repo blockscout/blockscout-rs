@@ -72,24 +72,22 @@ impl From<Address> for proto::Address {
 }
 
 pub fn proto_token_type_to_db_token_type(
-    token_type: proto::address::TokenType,
+    token_type: proto::TokenType,
 ) -> Option<db_enum::TokenType> {
     match token_type {
-        proto::address::TokenType::Erc20 => Some(db_enum::TokenType::Erc20),
-        proto::address::TokenType::Erc1155 => Some(db_enum::TokenType::Erc1155),
-        proto::address::TokenType::Erc721 => Some(db_enum::TokenType::Erc721),
-        proto::address::TokenType::Erc404 => Some(db_enum::TokenType::Erc404),
-        proto::address::TokenType::Unspecified => None,
+        proto::TokenType::Erc20 => Some(db_enum::TokenType::Erc20),
+        proto::TokenType::Erc1155 => Some(db_enum::TokenType::Erc1155),
+        proto::TokenType::Erc721 => Some(db_enum::TokenType::Erc721),
+        proto::TokenType::Erc404 => Some(db_enum::TokenType::Erc404),
+        proto::TokenType::Unspecified => None,
     }
 }
 
-pub fn db_token_type_to_proto_token_type(
-    token_type: db_enum::TokenType,
-) -> proto::address::TokenType {
+pub fn db_token_type_to_proto_token_type(token_type: db_enum::TokenType) -> proto::TokenType {
     match token_type {
-        db_enum::TokenType::Erc20 => proto::address::TokenType::Erc20,
-        db_enum::TokenType::Erc1155 => proto::address::TokenType::Erc1155,
-        db_enum::TokenType::Erc721 => proto::address::TokenType::Erc721,
-        db_enum::TokenType::Erc404 => proto::address::TokenType::Erc404,
+        db_enum::TokenType::Erc20 => proto::TokenType::Erc20,
+        db_enum::TokenType::Erc1155 => proto::TokenType::Erc1155,
+        db_enum::TokenType::Erc721 => proto::TokenType::Erc721,
+        db_enum::TokenType::Erc404 => proto::TokenType::Erc404,
     }
 }

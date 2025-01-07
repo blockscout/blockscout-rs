@@ -11,6 +11,19 @@ service MultichainAggregatorService {
   rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
 }
 
+enum TokenType {
+  TOKEN_TYPE_UNSPECIFIED = 0;
+  TOKEN_TYPE_ERC_20 = 1;
+  TOKEN_TYPE_ERC_721 = 2;
+  TOKEN_TYPE_ERC_1155 = 3;
+  TOKEN_TYPE_ERC_404 = 4;
+}
+
+enum HashType {
+  HASH_TYPE_BLOCK = 0;
+  HASH_TYPE_TRANSACTION = 1;
+}
+
 message Pagination {
   string page_token = 1;
   uint32 page_size = 2;
@@ -21,15 +34,6 @@ message Address {
   optional string ens_name = 2;
   optional string contract_name = 3;
   optional string token_name = 4;
-
-  enum TokenType {
-    TOKEN_TYPE_UNSPECIFIED = 0;
-    TOKEN_TYPE_ERC_20 = 1;
-    TOKEN_TYPE_ERC_721 = 2;
-    TOKEN_TYPE_ERC_1155 = 3;
-    TOKEN_TYPE_ERC_404 = 4;
-  }
-
   TokenType token_type = 5;
   optional bool is_contract = 6;
   optional bool is_verified_contract = 7;
@@ -45,12 +49,6 @@ message BlockRange {
 
 message Hash {
   string hash = 1;
-
-  enum HashType {
-    HASH_TYPE_BLOCK = 0;
-    HASH_TYPE_TRANSACTION = 1;
-  }
-
   HashType hash_type = 2;
   string chain_id = 3;
 }
@@ -72,10 +70,31 @@ message Token {
 }
 
 message BatchImportRequest {
+  message AddressImport {
+    string hash = 1;
+    optional string ens_name = 2;
+    optional string contract_name = 3;
+    optional string token_name = 4;
+    TokenType token_type = 5;
+    optional bool is_contract = 6;
+    optional bool is_verified_contract = 7;
+    optional bool is_token = 8;
+  }
+
+  message HashImport {
+    string hash = 1;
+    HashType hash_type = 2;
+  }
+
+  message BlockRangeImport {
+    uint64 min_block_number = 1;
+    uint64 max_block_number = 2;
+  }
+
   string chain_id = 1;
-  repeated Address addresses = 2;
-  repeated BlockRange block_ranges = 3;
-  repeated Hash hashes = 4;
+  repeated AddressImport addresses = 2;
+  repeated BlockRangeImport block_ranges = 3;
+  repeated HashImport hashes = 4;
   string api_key = 5;
 }
 

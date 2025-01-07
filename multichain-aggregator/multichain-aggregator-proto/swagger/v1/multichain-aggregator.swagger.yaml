@@ -136,21 +136,41 @@ paths:
       tags:
         - Health
 definitions:
-  AddressTokenType:
-    type: string
-    enum:
-      - TOKEN_TYPE_UNSPECIFIED
-      - TOKEN_TYPE_ERC_20
-      - TOKEN_TYPE_ERC_721
-      - TOKEN_TYPE_ERC_1155
-      - TOKEN_TYPE_ERC_404
-    default: TOKEN_TYPE_UNSPECIFIED
-  HashHashType:
-    type: string
-    enum:
-      - HASH_TYPE_BLOCK
-      - HASH_TYPE_TRANSACTION
-    default: HASH_TYPE_BLOCK
+  BatchImportRequestAddressImport:
+    type: object
+    properties:
+      hash:
+        type: string
+      ens_name:
+        type: string
+      contract_name:
+        type: string
+      token_name:
+        type: string
+      token_type:
+        $ref: '#/definitions/v1TokenType'
+      is_contract:
+        type: boolean
+      is_verified_contract:
+        type: boolean
+      is_token:
+        type: boolean
+  BatchImportRequestBlockRangeImport:
+    type: object
+    properties:
+      min_block_number:
+        type: string
+        format: uint64
+      max_block_number:
+        type: string
+        format: uint64
+  BatchImportRequestHashImport:
+    type: object
+    properties:
+      hash:
+        type: string
+      hash_type:
+        $ref: '#/definitions/v1HashType'
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -235,7 +255,7 @@ definitions:
       token_name:
         type: string
       token_type:
-        $ref: '#/definitions/AddressTokenType'
+        $ref: '#/definitions/v1TokenType'
       is_contract:
         type: boolean
       is_verified_contract:
@@ -253,17 +273,17 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Address'
+          $ref: '#/definitions/BatchImportRequestAddressImport'
       block_ranges:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1BlockRange'
+          $ref: '#/definitions/BatchImportRequestBlockRangeImport'
       hashes:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Hash'
+          $ref: '#/definitions/BatchImportRequestHashImport'
       api_key:
         type: string
   v1BatchImportResponse:
@@ -271,26 +291,21 @@ definitions:
     properties:
       status:
         type: string
-  v1BlockRange:
-    type: object
-    properties:
-      min_block_number:
-        type: string
-        format: uint64
-      max_block_number:
-        type: string
-        format: uint64
-      chain_id:
-        type: string
   v1Hash:
     type: object
     properties:
       hash:
         type: string
       hash_type:
-        $ref: '#/definitions/HashHashType'
+        $ref: '#/definitions/v1HashType'
       chain_id:
         type: string
+  v1HashType:
+    type: string
+    enum:
+      - HASH_TYPE_BLOCK
+      - HASH_TYPE_TRANSACTION
+    default: HASH_TYPE_BLOCK
   v1HealthCheckResponse:
     type: object
     properties:
@@ -357,3 +372,12 @@ definitions:
         type: string
       chain_id:
         type: string
+  v1TokenType:
+    type: string
+    enum:
+      - TOKEN_TYPE_UNSPECIFIED
+      - TOKEN_TYPE_ERC_20
+      - TOKEN_TYPE_ERC_721
+      - TOKEN_TYPE_ERC_1155
+      - TOKEN_TYPE_ERC_404
+    default: TOKEN_TYPE_UNSPECIFIED
