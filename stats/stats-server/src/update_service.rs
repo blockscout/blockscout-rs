@@ -7,7 +7,7 @@ use cron::Schedule;
 use futures::{stream::FuturesUnordered, StreamExt};
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::data_source::types::{BlockscoutMigrations, UpdateParameters};
-use std::sync::Arc;
+use std::sync::{atomic::AtomicU64, Arc};
 
 const FAILED_UPDATERS_UNTIL_PANIC: u64 = 3;
 
@@ -55,16 +55,16 @@ impl UpdateService {
     ) {
         let initial_update_semaphore: Arc<tokio::sync::Semaphore> =
             Arc::new(tokio::sync::Semaphore::new(concurrent_initial_tasks));
-        let mut group_updaters: FuturesUnordered<_> = self
-            .charts
-            .update_groups
-            .values()
+        let groups = self.charts.update_groups.values();
+        let init_update_tracker = InitialUpdateTracker::new(groups.len() as u64);
+        let mut group_update_jobs: FuturesUnordered<_> = groups
             .map(|group| {
                 let this = self.clone();
                 let group_entry = group.clone();
                 let default_schedule = default_schedule.clone();
                 let status_listener = self.status_listener.clone();
                 let initial_update_semaphore = initial_update_semaphore.clone();
+                let init_update_tracker = &init_update_tracker;
                 async move {
                     if let Some(mut status_listener) = status_listener {
                         let wait_result = status_listener
@@ -90,8 +90,10 @@ impl UpdateService {
                     }
                     tracing::info!(
                         update_group = group_entry.group.name(),
-                        "initial update is done"
+                        "initial update for group is done"
                     );
+                    init_update_tracker.mark_updated();
+                    init_update_tracker.report();
                     this.run_recurrent_update(group_entry, &default_schedule)
                         .await
                 }
@@ -99,11 +101,11 @@ impl UpdateService {
             .collect();
 
         let mut failed = 0;
-        while let Some(()) = group_updaters.next().await {
-            tracing::error!("updater stopped unexpectedly");
+        while let Some(()) = group_update_jobs.next().await {
+            tracing::error!("update job unexpectedly");
             failed += 1;
             if failed >= FAILED_UPDATERS_UNTIL_PANIC {
-                panic!("too many unexpectedly failed updaters");
+                panic!("too many unexpectedly failed update jobs");
             }
         }
     }
@@ -174,5 +176,33 @@ impl UpdateService {
             tokio::time::sleep(sleep_duration).await;
             self.clone().update(group_entry.clone(), false).await;
         }
+    }
+}
+
+struct InitialUpdateTracker {
+    updated_groups: AtomicU64,
+    total_groups: u64,
+}
+
+impl InitialUpdateTracker {
+    pub fn new(total_groups: u64) -> Self {
+        Self {
+            updated_groups: AtomicU64::new(0),
+            total_groups,
+        }
+    }
+
+    pub fn mark_updated(&self) {
+        self.updated_groups
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn report(&self) {
+        tracing::info!(
+            "{}/{} of initial updates are finished",
+            self.updated_groups
+                .load(std::sync::atomic::Ordering::Relaxed),
+            self.total_groups
+        );
     }
 }
