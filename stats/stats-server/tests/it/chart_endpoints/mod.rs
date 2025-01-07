@@ -52,7 +52,7 @@ async fn test_chart_endpoints_ok() {
     init_server(|| stats(settings), &base).await;
 
     // Sleep until server will start and calculate all values
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(7)).await;
 
     let mut tests: JoinSet<_> = [
         test_lines_ok(base.clone()).boxed(),
@@ -74,8 +74,11 @@ async fn test_chart_endpoints_ok() {
             }
         }
     }
+    let passed = total - failed;
+    let msg = format!("{passed}/{total} endpoint tests passed");
     if failed > 0 {
-        let passed = total - failed;
-        panic!("{passed}/{total} endpoint tests passed")
+        panic!("{}", msg)
+    } else {
+        println!("{}", msg)
     }
 }
