@@ -6,10 +6,11 @@ use crate::{
     },
     settings::ApiSettings,
 };
+use api_client_framework::HttpApiClient;
 use multichain_aggregator_logic::{
     self as logic,
     api_key_manager::ApiKeyManager,
-    clients::{dapp::DappClient, token_info::TokenInfoClient},
+    clients::token_info::{SearchTokenInfos, SearchTokenInfosParams},
     error::ServiceError,
     Chain, Token,
 };
@@ -25,8 +26,8 @@ pub struct MultichainAggregator {
     api_key_manager: ApiKeyManager,
     // Cached chains
     chains: Vec<Chain>,
-    dapp_client: DappClient,
-    token_info_client: TokenInfoClient,
+    dapp_client: HttpApiClient,
+    token_info_client: HttpApiClient,
     api_settings: ApiSettings,
 }
 
@@ -34,8 +35,8 @@ impl MultichainAggregator {
     pub fn new(
         db: DatabaseConnection,
         chains: Vec<Chain>,
-        dapp_client: DappClient,
-        token_info_client: TokenInfoClient,
+        dapp_client: HttpApiClient,
+        token_info_client: HttpApiClient,
         api_settings: ApiSettings,
     ) -> Self {
         Self {
@@ -121,12 +122,23 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
+
+        let token_info_search_endpoint = SearchTokenInfos {
+            params: SearchTokenInfosParams {
+                query: inner.q.to_string(),
+                chain_id,
+                page_size: inner.page_size,
+                page_token: inner.page_token,
+            },
+        };
+
         let res = self
             .token_info_client
-            .search_tokens(&inner.q, chain_id, inner.page_size, inner.page_token)
+            .request(&token_info_search_endpoint)
             .await
-            .inspect_err(|err| {
+            .map_err(|err| {
                 tracing::error!(error = ?err, "failed to list tokens");
+                Status::internal("failed to list tokens")
             })?;
 
         let tokens = res

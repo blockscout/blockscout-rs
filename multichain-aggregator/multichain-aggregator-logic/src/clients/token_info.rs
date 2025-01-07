@@ -1,10 +1,43 @@
-use crate::{error::ServiceError, ChainId};
-use serde::Deserialize;
+use crate::ChainId;
+use api_client_framework::{
+    serialize_query, Endpoint, Error, HttpApiClient as Client, HttpApiClientConfig,
+};
+use reqwest::Method;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
-pub struct TokenInfoClient {
-    http: reqwest::Client,
-    url: Url,
+pub fn new_client(url: Url) -> Result<Client, Error> {
+    let config = HttpApiClientConfig::default();
+    Client::new(url, config)
+}
+
+pub struct SearchTokenInfos {
+    pub params: SearchTokenInfosParams,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct SearchTokenInfosParams {
+    pub query: String,
+    pub chain_id: Option<ChainId>,
+    pub page_size: Option<u32>,
+    pub page_token: Option<String>,
+}
+
+impl Endpoint for SearchTokenInfos {
+    type Response = TokenInfoSearchResponse;
+
+    fn method(&self) -> Method {
+        Method::GET
+    }
+
+    fn path(&self) -> String {
+        "/api/v1/token-infos:search".to_string()
+    }
+
+    fn query(&self) -> Option<String> {
+        serialize_query(&self.params)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -27,44 +60,4 @@ pub struct TokenInfoSearchResponse {
 pub struct Pagination {
     pub page_token: String,
     pub page_size: u32,
-}
-
-impl TokenInfoClient {
-    pub fn new(url: Url) -> Self {
-        let http = reqwest::Client::new();
-        Self { http, url }
-    }
-
-    pub async fn search_tokens(
-        &self,
-        query: &str,
-        chain_id: Option<ChainId>,
-        page_size: Option<u32>,
-        page_token: Option<String>,
-    ) -> Result<TokenInfoSearchResponse, ServiceError> {
-        let mut url = self.url.clone();
-        url.set_path("/api/v1/token-infos:search");
-        url.query_pairs_mut().append_pair("query", query);
-
-        if let Some(chain_id) = chain_id {
-            url.query_pairs_mut()
-                .append_pair("chain_id", &chain_id.to_string());
-        }
-        if let Some(page_size) = page_size {
-            url.query_pairs_mut()
-                .append_pair("page_size", &page_size.to_string());
-        }
-        if let Some(page_token) = page_token {
-            url.query_pairs_mut().append_pair("page_token", &page_token);
-        }
-
-        self.http
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))?
-            .json::<TokenInfoSearchResponse>()
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))
-    }
 }

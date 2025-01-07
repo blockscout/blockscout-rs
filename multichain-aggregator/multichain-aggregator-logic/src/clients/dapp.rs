@@ -1,19 +1,38 @@
-use crate::error::ServiceError;
-use serde::Deserialize;
+use api_client_framework::{
+    serialize_query, Endpoint, Error, HttpApiClient as Client, HttpApiClientConfig,
+};
+use reqwest::Method;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
-pub struct DappClient {
-    http: reqwest::Client,
-    url: Url,
+pub fn new_client(url: Url) -> Result<Client, Error> {
+    let config = HttpApiClientConfig::default();
+    Client::new(url, config)
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Dapp {
-    pub id: String,
-    pub title: String,
-    pub logo: String,
-    pub short_description: String,
+pub struct SearchDapps {
+    pub params: SearchDappsParams,
+}
+
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct SearchDappsParams {
+    pub query: String,
+}
+
+impl Endpoint for SearchDapps {
+    type Response = Vec<DappWithChainId>;
+
+    fn method(&self) -> Method {
+        Method::GET
+    }
+
+    fn path(&self) -> String {
+        "/api/v1/marketplace/dapps:search".to_string()
+    }
+
+    fn query(&self) -> Option<String> {
+        serialize_query(&self.params)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -23,24 +42,11 @@ pub struct DappWithChainId {
     pub chain_id: String,
 }
 
-impl DappClient {
-    pub fn new(url: Url) -> Self {
-        let http = reqwest::Client::new();
-        Self { http, url }
-    }
-
-    pub async fn search_dapps(&self, query: &str) -> Result<Vec<DappWithChainId>, ServiceError> {
-        let mut url = self.url.clone();
-        url.set_path("/api/v1/marketplace/dapps:search");
-        url.query_pairs_mut().append_pair("query", query);
-
-        self.http
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))?
-            .json::<Vec<DappWithChainId>>()
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))
-    }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Dapp {
+    pub id: String,
+    pub title: String,
+    pub logo: String,
+    pub short_description: String,
 }

@@ -1,5 +1,8 @@
 use crate::{
-    clients::{dapp::DappClient, token_info::TokenInfoClient},
+    clients::{
+        dapp::{SearchDapps, SearchDappsParams},
+        token_info::{SearchTokenInfos, SearchTokenInfosParams},
+    },
     error::ServiceError,
     repository::{addresses, block_ranges, hashes},
     types::{
@@ -10,6 +13,7 @@ use crate::{
         ChainId,
     },
 };
+use api_client_framework::HttpApiClient;
 use sea_orm::DatabaseConnection;
 use std::collections::BTreeMap;
 use tokio::join;
@@ -33,19 +37,34 @@ macro_rules! populate_search_results {
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
     db: &DatabaseConnection,
-    dapp_client: &DappClient,
-    token_info_client: &TokenInfoClient,
+    dapp_client: &HttpApiClient,
+    token_info_client: &HttpApiClient,
     query: String,
     chains: &[Chain],
 ) -> Result<SearchResults, ServiceError> {
     let raw_query = query.trim();
 
+    let dapp_search_endpoint = SearchDapps {
+        params: SearchDappsParams {
+            query: raw_query.to_string(),
+        },
+    };
+
+    let token_info_search_endpoint = SearchTokenInfos {
+        params: SearchTokenInfosParams {
+            query: raw_query.to_string(),
+            chain_id: None,
+            page_size: Some(100),
+            page_token: None,
+        },
+    };
+
     let (hashes, block_numbers, addresses, dapps, token_infos) = join!(
         hashes::search_by_query(db, raw_query),
         block_ranges::search_by_query(db, raw_query),
         addresses::search_by_query(db, raw_query),
-        dapp_client.search_dapps(raw_query),
-        token_info_client.search_tokens(raw_query, None, Some(100), None),
+        dapp_client.request(&dapp_search_endpoint),
+        token_info_client.request(&token_info_search_endpoint),
     );
 
     let explorers: BTreeMap<ChainId, String> = chains

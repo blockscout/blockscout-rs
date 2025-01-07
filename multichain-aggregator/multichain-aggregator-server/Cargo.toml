@@ -11,6 +11,7 @@ multichain-aggregator-migration = { workspace = true }
 actix-web = { workspace = true }
 alloy-primitives = { workspace = true }
 anyhow = { workspace = true }
+api-client-framework = { workspace = true }
 async-trait = { workspace = true }
 blockscout-service-launcher = { workspace = true }
 blockscout-chains = { workspace = true }
