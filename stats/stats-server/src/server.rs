@@ -108,14 +108,19 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
 
     let blockscout_api_config = init_blockscout_api_client(&settings).await?;
 
-    let (waiter, listener) = blockscout_api_config
-        .clone()
+    let (status_waiter, status_listener) = blockscout_api_config
         .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone()))
         .unzip();
-    let waiter_handle = waiter.map(|w| tokio::spawn(async move { w.run().await }));
+    let status_waiter_handle = status_waiter.map(|w| tokio::spawn(async move { w.run().await }));
 
     let update_service = Arc::new(
-        UpdateService::new(db.clone(), blockscout.clone(), charts.clone(), listener).await?,
+        UpdateService::new(
+            db.clone(),
+            blockscout.clone(),
+            charts.clone(),
+            status_listener,
+        )
+        .await?,
     );
 
     let update_service_handle = tokio::spawn(async move {
@@ -156,8 +161,8 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
             async move { launcher::launch(&launch_settings, http_router, grpc_router).await },
         ),
     ];
-    if let Some(waiter_handle) = waiter_handle {
-        futures.push(waiter_handle);
+    if let Some(status_waiter_handle) = status_waiter_handle {
+        futures.push(status_waiter_handle);
     }
     let (res, _, others) = futures::future::select_all(futures).await;
     for future in others.into_iter() {
