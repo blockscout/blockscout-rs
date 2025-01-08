@@ -102,7 +102,7 @@ impl UpdateService {
 
         let mut failed = 0;
         while let Some(()) = group_update_jobs.next().await {
-            tracing::error!("update job unexpectedly");
+            tracing::error!("update job stopped unexpectedly");
             failed += 1;
             if failed >= FAILED_UPDATERS_UNTIL_PANIC {
                 panic!("too many unexpectedly failed update jobs");
