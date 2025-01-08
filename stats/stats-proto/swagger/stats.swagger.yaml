@@ -266,7 +266,7 @@ definitions:
         $ref: '#/definitions/v1Counter'
       yesterday_transactions:
         $ref: '#/definitions/v1Counter'
-      transactions:
+      daily_new_transactions:
         $ref: '#/definitions/v1LineChart'
   v1Point:
     type: object
@@ -292,7 +292,7 @@ definitions:
   v1TransactionsPageStats:
     type: object
     properties:
-      pending_transactions:
+      pending_transactions_30m:
         $ref: '#/definitions/v1Counter'
       transactions_fee_24h:
         $ref: '#/definitions/v1Counter'

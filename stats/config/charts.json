@@ -22,7 +22,7 @@
             "title": "Transactions",
             "description": "Number of new transactions within last 24 hours"
         },
-        "pending_txns": {
+        "pending_txns_30m": {
             "title": "Pending transactions",
             "description": " "
         },

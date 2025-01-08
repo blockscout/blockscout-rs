@@ -303,7 +303,7 @@ impl RuntimeSetup {
             Arc::new(ActiveAccountsGroup),
             Arc::new(AverageBlockTimeGroup),
             Arc::new(CompletedTxnsGroup),
-            Arc::new(PendingTxnsGroup),
+            Arc::new(PendingTxns30mGroup),
             Arc::new(TotalAddressesGroup),
             Arc::new(TotalBlocksGroup),
             Arc::new(TotalTokensGroup),

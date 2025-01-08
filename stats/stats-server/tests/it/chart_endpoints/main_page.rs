@@ -18,7 +18,7 @@ pub async fn test_main_page_ok(base: Url) {
         total_blocks,
         total_transactions,
         yesterday_transactions,
-        transactions,
+        daily_new_transactions,
     } = main_page;
     let counters = array_of_variables_with_names!([
         average_block_time,
@@ -34,9 +34,13 @@ pub async fn test_main_page_ok(base: Url) {
         assert!(!counter.title.is_empty());
     }
 
-    let transactions = transactions.expect("daily transactions chart must be available");
-    let transactions_info = transactions.info.unwrap();
+    let daily_new_transactions =
+        daily_new_transactions.expect("daily new transactions chart must be available");
+    let transactions_info = daily_new_transactions.info.unwrap();
     assert_eq!(transactions_info.id, NewTxnsWindow::name());
     assert_eq!(transactions_info.resolutions, vec!["DAY"]);
-    assert_eq!(transactions.chart.len(), NEW_TXNS_WINDOW_RANGE as usize);
+    assert_eq!(
+        daily_new_transactions.chart.len(),
+        NEW_TXNS_WINDOW_RANGE as usize
+    );
 }

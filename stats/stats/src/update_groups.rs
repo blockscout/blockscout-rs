@@ -20,7 +20,7 @@ singleton_groups!(
     ActiveAccounts,
     AverageBlockTime,
     CompletedTxns,
-    PendingTxns,
+    PendingTxns30m,
     TotalAddresses,
     TotalBlocks,
     TotalTxns,

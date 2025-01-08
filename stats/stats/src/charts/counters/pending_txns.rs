@@ -37,9 +37,9 @@ struct Value {
     value: i64,
 }
 
-pub struct PendingTxnsQuery;
+pub struct PendingTxns30mQuery;
 
-impl RemoteQueryBehaviour for PendingTxnsQuery {
+impl RemoteQueryBehaviour for PendingTxns30mQuery {
     type Output = TimespanValue<NaiveDate, String>;
 
     async fn query_data(
@@ -64,13 +64,13 @@ impl RemoteQueryBehaviour for PendingTxnsQuery {
     }
 }
 
-pub type PendingTxnsRemote = RemoteDatabaseSource<PendingTxnsQuery>;
+pub type PendingTxns30mRemote = RemoteDatabaseSource<PendingTxns30mQuery>;
 
 pub struct Properties;
 
 impl Named for Properties {
     fn name() -> String {
-        "pendingTxns".into()
+        "pendingTxns30m".into()
     }
 }
 
@@ -85,7 +85,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type PendingTxns = DirectPointLocalDbChartSource<PendingTxnsRemote, Properties>;
+pub type PendingTxns30m = DirectPointLocalDbChartSource<PendingTxns30mRemote, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -94,9 +94,9 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_pending_txns() {
-        simple_test_counter_with_migration_variants::<PendingTxns>(
-            "update_pending_txns",
+    async fn update_pending_txns_30m() {
+        simple_test_counter_with_migration_variants::<PendingTxns30m>(
+            "update_pending_txns_30m",
             "0",
             None,
         )
