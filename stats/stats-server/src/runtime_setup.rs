@@ -27,7 +27,7 @@ use stats::{
     entity::sea_orm_active_enums::ChartType,
     query_dispatch::ChartTypeSpecifics,
     update_group::{ArcUpdateGroup, SyncUpdateGroup},
-    ChartKey, ChartObject, ResolutionKind,
+    ChartKey, ChartObject, IndexingStatus, ResolutionKind,
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
@@ -539,5 +539,27 @@ impl RuntimeSetup {
             }
         }
         members
+    }
+
+    /// Recursive indexing status requirements for all group members.
+    ///
+    /// 'Recursive' means that their dependencies' requirements are also
+    /// considered.
+    ///
+    /// Both enabled and disabled memebers are included.
+    pub fn all_members_indexing_status_requirements() -> BTreeMap<ChartKey, IndexingStatus> {
+        Self::all_update_groups()
+            .into_iter()
+            .flat_map(|g| {
+                g.list_charts()
+                    .into_iter()
+                    .map(|c| {
+                        let key = c.properties.key;
+                        let enabled_key = &HashSet::from([key.clone()]);
+                        (key, g.dependency_indexing_status_requirement(enabled_key))
+                    })
+                    .collect_vec()
+            })
+            .collect()
     }
 }

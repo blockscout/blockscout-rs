@@ -119,6 +119,10 @@ impl ChartKey {
         &self.name
     }
 
+    pub fn into_name(self) -> String {
+        self.name
+    }
+
     pub fn resolution(&self) -> &ResolutionKind {
         &self.resolution
     }
