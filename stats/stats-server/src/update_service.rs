@@ -179,6 +179,7 @@ impl UpdateService {
     }
 }
 
+/// Reports progress of inital updates to logs
 struct InitialUpdateTracker {
     updated_groups: AtomicU64,
     total_groups: u64,

@@ -145,16 +145,23 @@ impl Display for ChartKey {
 pub enum IndexingStatus {
     NoneIndexed,
     BlocksIndexed,
-    /// It means that blocks are indexed as well
+    /// Implies that blocks are also indexed
     InternalTransactionsIndexed,
 }
 
 impl IndexingStatus {
     // constants for status itself
+
+    /// Indexing status at the start of blockscout
     pub const MIN: IndexingStatus = IndexingStatus::NoneIndexed;
+    /// Finished indexing everything
     pub const MAX: IndexingStatus = IndexingStatus::InternalTransactionsIndexed;
+
     // constants corresponding to status requirement
+
+    /// The most relaxed requirement
     pub const LEAST_RESTRICTIVE: IndexingStatus = Self::MIN;
+    /// The hardest to achieve requirement
     pub const MOST_RESTRICTIVE: IndexingStatus = Self::MAX;
 
     pub fn most_restrictive_from(
@@ -194,7 +201,8 @@ pub trait ChartProperties: Sync + Named {
     /// Indexing status at least required by this data source.
     ///
     /// Note that in current implementation this requirement
-    /// is propagated to its dependants.
+    /// is propagated to its dependants with
+    /// [`DataSource::indexing_status_requirement_recursive`](crate::data_source::DataSource::indexing_status_requirement_recursive).
     fn indexing_status_requirement() -> IndexingStatus {
         // most of the charts need indexed blocks
         IndexingStatus::BlocksIndexed

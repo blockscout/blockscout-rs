@@ -10,6 +10,14 @@ use tracing::{info, warn};
 
 const RETRIES: u64 = 10;
 
+/// Checks blockscout indexing status and translates it to
+/// a `tokio`'s `watch` channel in a convenient form.
+///
+/// The [`IndexingStatusListener`] contains the other end of
+/// the channel. It should be used to actually wait for the
+/// status.
+///
+/// Can be created with [`init`]
 pub struct IndexingStatusAggregator {
     api_config: blockscout_client::Configuration,
     wait_config: StartConditionSettings,
@@ -93,6 +101,10 @@ impl IndexingStatusAggregator {
     }
 }
 
+/// A convenient way to wait for a particular indexing status.
+///
+/// Requires [`IndexingStatusAggregator`] to run at the same time.
+/// Both are created with [`init`].
 #[derive(Clone)]
 pub struct IndexingStatusListener {
     receiver: watch::Receiver<IndexingStatus>,
