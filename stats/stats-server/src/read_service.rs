@@ -429,15 +429,15 @@ impl StatsService for ReadService {
             total_blocks,
             total_transactions,
             yesterday_transactions,
+            transactions,
         ) = join!(
             self.query_counter(AverageBlockTime::name(), now),
             self.query_counter(TotalAddresses::name(), now),
             self.query_counter(TotalBlocks::name(), now),
             self.query_counter(TotalTxns::name(), now),
             self.query_counter(YesterdayTxns::name(), now),
+            self.query_new_txns_window(now)
         );
-
-        let transactions = self.query_new_txns_window(now).await;
 
         Ok(Response::new(proto_v1::MainPageStats {
             average_block_time,
