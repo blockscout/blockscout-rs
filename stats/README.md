@@ -85,7 +85,7 @@ by enabling word wrapping
 | `STATS__DEFAULT_SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
 | `STATS__LIMITS__REQUESTED_POINTS_LIMIT` | | Maximum allowed number of requested points | `182500` |
 | `STATS__BLOCKSCOUT_API_URL` | Required unless `STATS__​IGNORE_​BLOCKSCOUT_​API_​ABSENCE`  is set to `true` *(zero-width spaces in the name, careful when copying)*. | URL to Blockscout API. Used for [conditional update start](#conditional-start). | `null` |
-| `STATS__CONDITIONAL_START__CHECK_PERIOD_SECS` | | Time between start condition checking (if they are not satisfied) | `5` |
+| `STATS__CONDITIONAL_START__CHECK_PERIOD_SECS` | | Base time between start condition checking | `5` |
 | `STATS__CONDITIONAL_START__BLOCKS_RATIO__ENABLED` | | Enable `blocks_ratio` threshold | `true` |
 | `STATS__CONDITIONAL_START__BLOCKS_RATIO__THRESHOLD` | | Value for `blocks_ratio` threshold | `0.98` |
 | `STATS__CONDITIONAL_START__INTERNAL_TRANSACTIONS_RATIO__ENABLED` | | Enable `internal_transactions_ratio` threshold | `true` |
