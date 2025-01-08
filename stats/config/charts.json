@@ -24,7 +24,7 @@
         },
         "pending_txns_30m": {
             "title": "Pending transactions",
-            "description": " "
+            "description": "Transactions in the past 30 minutes waiting to be processed by the network"
         },
         "txns_fee_24h": {
             "title": "Transactions fees",
