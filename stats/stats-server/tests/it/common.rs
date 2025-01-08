@@ -1,6 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
+use blockscout_service_launcher::{
+    launcher::ConfigSettings, test_database::TestDbGuard, test_server::get_test_server_settings,
+};
 use reqwest::{RequestBuilder, Response};
+use stats_server::Settings;
+use url::Url;
+use wiremock::MockServer;
 
 pub async fn send_arbitrary_request(request: RequestBuilder) -> Response {
     let response = request
@@ -25,6 +31,23 @@ pub async fn enabled_resolutions(
         .flat_map(|sec| sec.charts.clone())
         .map(|l| (l.id, l.resolutions))
         .collect()
+}
+
+pub fn get_test_stats_settings(
+    stats_db: &TestDbGuard,
+    blockscout_db: &TestDbGuard,
+    blockscout_api: &MockServer,
+) -> (Settings, Url) {
+    let mut settings = Settings::build().expect("Failed to build settings");
+    let (server_settings, base) = get_test_server_settings();
+    settings.server = server_settings;
+    settings.charts_config = PathBuf::from_str("../config/charts.json").unwrap();
+    settings.layout_config = PathBuf::from_str("../config/layout.json").unwrap();
+    settings.update_groups_config = PathBuf::from_str("../config/update_groups.json").unwrap();
+    settings.db_url = stats_db.db_url();
+    settings.blockscout_db_url = blockscout_db.db_url();
+    settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());
+    (settings, base)
 }
 
 #[macro_export]
