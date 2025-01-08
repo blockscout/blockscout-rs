@@ -64,7 +64,7 @@ Syntax for schedules specified in the config is parsed by rust `cron` crate, so 
 Some variables are hidden in a disclosure widget below the table.
 
 <!--
-There are zero-width spaces added here and there to prevent too wide tables
+There are zero-width spaces added sometimes to prevent too wide columns
 by enabling word wrapping
 -->
 
@@ -84,7 +84,7 @@ by enabling word wrapping
 | `STATS__CONCURRENT_START_UPDATES` | | Amount of concurrent charts update on start | `3` |
 | `STATS__DEFAULT_SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
 | `STATS__LIMITS__REQUESTED_POINTS_LIMIT` | | Maximum allowed number of requested points | `182500` |
-| `STATS__BLOCKSCOUT_API_URL` | Required unless `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE` is set to `true`. | URL to Blockscout API. Used for [conditional update start](#conditional-start). | `null` |
+| `STATS__BLOCKSCOUT_API_URL` | Required unless `STATS__​IGNORE_​BLOCKSCOUT_​API_​ABSENCE`  is set to `true` *(zero-width spaces in the name, careful when copying)*. | URL to Blockscout API. Used for [conditional update start](#conditional-start). | `null` |
 | `STATS__CONDITIONAL_START__CHECK_PERIOD_SECS` | | Time between start condition checking (if they are not satisfied) | `5` |
 | `STATS__CONDITIONAL_START__BLOCKS_RATIO__ENABLED` | | Enable `blocks_ratio` threshold | `true` |
 | `STATS__CONDITIONAL_START__BLOCKS_RATIO__THRESHOLD` | | Value for `blocks_ratio` threshold | `0.98` |
