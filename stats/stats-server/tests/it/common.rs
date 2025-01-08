@@ -5,6 +5,7 @@ use blockscout_service_launcher::{
 };
 use reqwest::{RequestBuilder, Response};
 use stats_server::Settings;
+use tokio::task::JoinSet;
 use url::Url;
 use wiremock::MockServer;
 
@@ -59,6 +60,29 @@ macro_rules! array_of_variables_with_names {
             $((stringify!($var), $var)),+
         ]
     };
+}
+
+pub async fn run_consolidated_tests(mut tests: JoinSet<()>, log_prefix: &str) {
+    let mut failed = 0;
+    let total = tests.len();
+    println!("[{log_prefix}]: running {total} tests");
+    while let Some(test_result) = tests.join_next().await {
+        let result_string_start = format!("[{log_prefix}]: stats endpoint test ... ");
+        match test_result {
+            Ok(()) => println!("{result_string_start}ok"),
+            Err(e) => {
+                println!("{result_string_start}fail\nerror: {e}",);
+                failed += 1;
+            }
+        }
+    }
+    let passed = total - failed;
+    let msg = format!("[{log_prefix}]: {passed}/{total} not fully indexed endpoint tests passed");
+    if failed > 0 {
+        panic!("{}", msg)
+    } else {
+        println!("{}", msg)
+    }
 }
 
 #[cfg(test)]
