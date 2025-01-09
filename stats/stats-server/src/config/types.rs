@@ -10,7 +10,7 @@ use stats_proto::blockscout::stats::v1 as proto_v1;
 
 use crate::runtime_setup::EnabledChartEntry;
 
-use super::layout::sorted_items_according_to_layout;
+use super::layout::placed_items_according_to_layout;
 
 /// `None` means 'enable if present'
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -200,7 +200,7 @@ impl LineChartCategory {
             .filter(|(id, _)| category_charts.contains(id))
             .map(|(id, e)| e.build_proto_line_chart_info(id.to_string()))
             .collect();
-        let charts = sorted_items_according_to_layout(
+        let charts = placed_items_according_to_layout(
             category_infos_alphabetic_order,
             &self.charts_order,
             |chart_info| &chart_info.id,

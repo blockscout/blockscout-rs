@@ -2,7 +2,7 @@
     "active_accounts_group": 1,
     "average_block_time_group": 1,
     "completed_txns_group": 19,
-    "pending_txns_group": 1,
+    "pending_txns_30m_group": 1,
     "total_addresses_group": 3,
     "total_blocks_group": 1,
     "total_txns_group": 1,

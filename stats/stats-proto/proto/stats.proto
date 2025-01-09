@@ -8,6 +8,9 @@ service StatsService {
   rpc GetCounters(GetCountersRequest) returns (Counters);
   rpc GetLineCharts(GetLineChartsRequest) returns (LineCharts);
   rpc GetLineChart(GetLineChartRequest) returns (LineChart);
+  rpc GetMainPageStats(GetMainPageStatsRequest) returns (MainPageStats);
+  rpc GetTransactionsPageStats(GetTransactionsPageStatsRequest) returns (TransactionsPageStats);
+  rpc GetContractsPageStats(GetContractsPageStatsRequest) returns (ContractsPageStats);
 }
 
 message GetCountersRequest {}
@@ -29,6 +32,27 @@ enum Resolution {
   MONTH = 3;
   YEAR = 4;
 }
+
+message GetLineChartsRequest {}
+
+// todo: replace LineChartInfo::resolutions with enum when supported
+// (probably this https://github.com/blockscout/actix-prost/pull/24/files)
+
+message LineChartInfo {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  optional string units = 4;
+  repeated string resolutions = 5;
+}
+
+message LineChartSection {
+  string id = 1;
+  string title = 2;
+  repeated LineChartInfo charts = 3;
+}
+
+message LineCharts { repeated LineChartSection sections = 1; }
 
 message GetLineChartRequest {
   string name = 1;
@@ -52,23 +76,32 @@ message LineChart {
   LineChartInfo info = 2;
 }
 
-message GetLineChartsRequest {}
+message GetMainPageStatsRequest {}
 
-// todo: replace LineChartInfo::resolutions with enum when supported
-// (probably this https://github.com/blockscout/actix-prost/pull/24/files)
+message MainPageStats {
+  optional Counter average_block_time = 1;
+  optional Counter total_addresses = 2;
+  optional Counter total_blocks = 3;
+  optional Counter total_transactions = 4;
+  optional Counter yesterday_transactions = 5;
 
-message LineChartInfo {
-  string id = 1;
-  string title = 2;
-  string description = 3;
-  optional string units = 4;
-  repeated string resolutions = 5;
+  optional LineChart daily_new_transactions = 6;
 }
 
-message LineChartSection {
-  string id = 1;
-  string title = 2;
-  repeated LineChartInfo charts = 3;
+message GetTransactionsPageStatsRequest {}
+
+message TransactionsPageStats {
+  optional Counter pending_transactions_30m = 1;
+  optional Counter transactions_fee_24h = 2;
+  optional Counter average_transactions_fee_24h = 3;
+  optional Counter transactions_24h = 4;
 }
 
-message LineCharts { repeated LineChartSection sections = 1; }
+message GetContractsPageStatsRequest {}
+
+message ContractsPageStats {
+  optional Counter total_contracts = 1;
+  optional Counter new_contracts_24h = 2;
+  optional Counter total_verified_contracts = 3;
+  optional Counter new_verified_contracts_24h = 4;
+}

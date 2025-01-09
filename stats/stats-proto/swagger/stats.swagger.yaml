@@ -78,6 +78,48 @@ paths:
           default: RESOLUTION_UNSPECIFIED
       tags:
         - StatsService
+  /api/v1/pages/contracts:
+    get:
+      operationId: StatsService_GetContractsPageStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ContractsPageStats'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
+  /api/v1/pages/main:
+    get:
+      operationId: StatsService_GetMainPageStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1MainPageStats'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
+  /api/v1/pages/transactions:
+    get:
+      operationId: StatsService_GetTransactionsPageStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1TransactionsPageStats'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
   /health:
     get:
       summary: |-
@@ -129,6 +171,17 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1ContractsPageStats:
+    type: object
+    properties:
+      total_contracts:
+        $ref: '#/definitions/v1Counter'
+      new_contracts_24h:
+        $ref: '#/definitions/v1Counter'
+      total_verified_contracts:
+        $ref: '#/definitions/v1Counter'
+      new_verified_contracts_24h:
+        $ref: '#/definitions/v1Counter'
   v1Counter:
     type: object
     properties:
@@ -200,6 +253,21 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1LineChartSection'
+  v1MainPageStats:
+    type: object
+    properties:
+      average_block_time:
+        $ref: '#/definitions/v1Counter'
+      total_addresses:
+        $ref: '#/definitions/v1Counter'
+      total_blocks:
+        $ref: '#/definitions/v1Counter'
+      total_transactions:
+        $ref: '#/definitions/v1Counter'
+      yesterday_transactions:
+        $ref: '#/definitions/v1Counter'
+      daily_new_transactions:
+        $ref: '#/definitions/v1LineChart'
   v1Point:
     type: object
     properties:
@@ -221,3 +289,14 @@ definitions:
       - MONTH
       - YEAR
     default: RESOLUTION_UNSPECIFIED
+  v1TransactionsPageStats:
+    type: object
+    properties:
+      pending_transactions_30m:
+        $ref: '#/definitions/v1Counter'
+      transactions_fee_24h:
+        $ref: '#/definitions/v1Counter'
+      average_transactions_fee_24h:
+        $ref: '#/definitions/v1Counter'
+      transactions_24h:
+        $ref: '#/definitions/v1Counter'
