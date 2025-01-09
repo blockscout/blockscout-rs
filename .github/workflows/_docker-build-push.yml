@@ -30,7 +30,7 @@ on:
     outputs:
       tag-value:
         description: 'A semver compatible version retrieved from the tag'
-        value: ${{ jobs.build-and-push.tag-value }}
+        value: ${{ jobs.build-and-push.outputs.tag-value }}
 
 jobs:
   build-and-push:
