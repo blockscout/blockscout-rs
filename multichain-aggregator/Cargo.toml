@@ -53,6 +53,7 @@ tracing-subscriber = "0.3.18"
 # misc
 alloy-primitives = "0.8"
 anyhow = "1.0"
+api-client-framework = { git = "https://github.com/blockscout/blockscout-rs", rev = "d60c1d8" }
 async-std = { version = "1", features = ["attributes", "tokio1"] }
 async-trait = "0.1"
 blockscout-chains = { git = "https://github.com/blockscout/blockscout-rs", version = "0.2.0" }

@@ -26,6 +26,7 @@ pub struct Settings {
 #[serde(deny_unknown_fields)]
 pub struct ServiceSettings {
     pub dapp_client: DappClientSettings,
+    pub token_info_client: TokenInfoClientSettings,
     #[serde(default)]
     pub api: ApiSettings,
 }
@@ -54,6 +55,12 @@ pub struct DappClientSettings {
     pub url: Url,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct TokenInfoClientSettings {
+    pub url: Url,
+}
+
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "MULTICHAIN_AGGREGATOR";
 }
@@ -73,6 +80,9 @@ impl Settings {
             service: ServiceSettings {
                 dapp_client: DappClientSettings {
                     url: Url::parse("http://localhost:8050").unwrap(),
+                },
+                token_info_client: TokenInfoClientSettings {
+                    url: Url::parse("http://localhost:8051").unwrap(),
                 },
                 api: ApiSettings {
                     default_page_size: default_default_page_size(),
