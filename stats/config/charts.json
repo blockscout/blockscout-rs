@@ -62,16 +62,16 @@
             "description": "'Total txns' without block creation transactions"
         },
         "yesterday_txns": {
-            "title": "Yesterday transactions",
+            "title": "Yesterday txns",
             "description": "Number of transactions yesterday (0:00 - 23:59 UTC)"
         },
         "last_new_contracts": {
-            "title": "Number of deployed contracts today",
-            "description": "Number of deployed contracts today"
+            "title": "Number of contracts today",
+            "description": "Number of deployed contracts today (UTC)"
         },
         "new_contracts_24h": {
-            "title": "Contracts indexed within last 24h",
-            "description": "(24h)"
+            "title": "Number of contracts",
+            "description": "Number of deployed contracts within the last 24 hours"
         },
         "total_contracts": {
             "title": "Total contracts",
@@ -79,11 +79,11 @@
         },
         "last_new_verified_contracts": {
             "title": "Number of verified contracts today",
-            "description": "Number of contracts verified today"
+            "description": "Number of contracts verified today (UTC)"
         },
         "new_verified_contracts_24h": {
-            "title": "Number of verified contracts within last 24h",
-            "description": "(24h)"
+            "title": "Number of verified contracts",
+            "description": "Number of contracts verified within the last 24 hours"
         },
         "total_verified_contracts": {
             "title": "Total verified contracts",
@@ -139,7 +139,7 @@
         },
         "new_txns_window": {
             "title": "Daily transactions",
-            "description": "The chart displays daily transactions for the past 30 days."
+            "description": "The chart displays daily transactions for the past 30 days"
         },
         "txns_growth": {
             "title": "Number of transactions",
