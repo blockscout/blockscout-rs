@@ -19,20 +19,20 @@
             "units": "s"
         },
         "new_txns_24h": {
-            "title": "Transactions",
+            "title": "Transactions (24h)",
             "description": "Number of new transactions within last 24 hours"
         },
         "pending_txns_30m": {
-            "title": "Pending transactions",
+            "title": "Pending transactions (30m)",
             "description": "Transactions in the past 30 minutes waiting to be processed by the network"
         },
         "txns_fee_24h": {
-            "title": "Transactions fees",
+            "title": "Transactions fees (24h)",
             "description": "Sum of {{native_coin_symbol}} spent on gas fees within last 24 hours",
             "units": "{{native_coin_symbol}}"
         },
         "average_txn_fee_24h": {
-            "title": "Avg. transaction fee",
+            "title": "Avg. transaction fee (24h)",
             "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction within last 24 hours",
             "units": "{{native_coin_symbol}}"
         },
@@ -70,7 +70,7 @@
             "description": "Number of deployed contracts today (UTC)"
         },
         "new_contracts_24h": {
-            "title": "Number of contracts",
+            "title": "Number of contracts (24h)",
             "description": "Number of deployed contracts within the last 24 hours"
         },
         "total_contracts": {
@@ -82,7 +82,7 @@
             "description": "Number of contracts verified today (UTC)"
         },
         "new_verified_contracts_24h": {
-            "title": "Number of verified contracts",
+            "title": "Number of verified contracts (24h)",
             "description": "Number of contracts verified within the last 24 hours"
         },
         "total_verified_contracts": {
