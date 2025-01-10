@@ -530,7 +530,7 @@ impl SyncUpdateGroup {
     }
 
     /// Ignores unknown names
-    pub async fn create_charts_with_mutexes<'a>(
+    pub async fn create_charts_with_mutexes(
         &self,
         db: &DatabaseConnection,
         creation_time_override: Option<chrono::DateTime<Utc>>,
@@ -544,9 +544,9 @@ impl SyncUpdateGroup {
     }
 
     /// Ignores unknown names
-    pub async fn update_charts_with_mutexes<'a>(
+    pub async fn update_charts_with_mutexes(
         &self,
-        params: UpdateParameters<'a>,
+        params: UpdateParameters<'_>,
         enabled_charts: &HashSet<ChartKey>,
     ) -> Result<(), ChartError> {
         let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
