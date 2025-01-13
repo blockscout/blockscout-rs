@@ -1,19 +1,21 @@
 use crate::{
     indexer::{
-        common_transport::CommonTransport,
-        rpc_utils::{to_string, CallTracer, TraceType},
+        rpc_utils::{CallTracer, TraceClient, TraceType},
         settings::IndexerSettings,
     },
     repository,
     types::user_op::UserOp,
 };
-use anyhow::{anyhow, bail};
-use ethers::prelude::{
-    abi::{AbiEncode, Error},
-    parse_log,
-    types::{Address, Bytes, Filter, Log, TransactionReceipt},
-    EthEvent, Middleware, NodeClient, Provider, ProviderError, WsClientError, H256,
+use alloy::{
+    consensus::Transaction,
+    primitives::{Address, BlockHash, Bytes, TxHash, B256},
+    providers::Provider,
+    rpc::types::{Filter, Log, TransactionReceipt},
+    sol_types,
+    sol_types::SolEvent,
+    transports::{TransportError, TransportErrorKind},
 };
+use anyhow::{anyhow, bail};
 use futures::{
     stream,
     stream::{repeat_with, BoxStream},
@@ -26,15 +28,15 @@ use tracing::instrument;
 
 #[derive(Hash, Eq, PartialEq)]
 struct Job {
-    tx_hash: H256,
-    block_hash: H256,
+    tx_hash: TxHash,
+    block_hash: BlockHash,
 }
 
-impl From<H256> for Job {
-    fn from(hash: H256) -> Self {
+impl From<TxHash> for Job {
+    fn from(hash: TxHash) -> Self {
         Self {
             tx_hash: hash,
-            block_hash: H256::zero(),
+            block_hash: BlockHash::ZERO,
         }
     }
 }
@@ -43,7 +45,7 @@ impl TryFrom<Log> for Job {
     type Error = anyhow::Error;
 
     fn try_from(log: Log) -> Result<Self, Self::Error> {
-        if log.removed == Some(true) {
+        if log.removed {
             bail!("unexpected pending log")
         }
         let tx_hash = log
@@ -60,12 +62,13 @@ impl TryFrom<Log> for Job {
 }
 
 pub trait IndexerLogic {
+    const VERSION: &'static str;
+
+    const USER_OPERATION_EVENT_SIGNATURE: B256;
+
+    const BEFORE_EXECUTION_SIGNATURE: B256;
+
     fn entry_point(&self) -> Address;
-    fn version() -> &'static str;
-
-    fn user_operation_event_signature() -> H256;
-
-    fn before_execution_signature() -> H256;
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool;
 
@@ -77,18 +80,18 @@ pub trait IndexerLogic {
         log_bundle: &[&[Log]],
     ) -> anyhow::Result<Vec<UserOp>>;
     fn user_operation_event_matcher(&self, log: &Log) -> bool {
-        log.address == self.entry_point()
-            && log.topics.first() == Some(&Self::user_operation_event_signature())
+        log.address() == self.entry_point()
+            && log.topic0() == Some(&Self::USER_OPERATION_EVENT_SIGNATURE)
     }
 
     fn before_execution_matcher(&self, log: &Log) -> bool {
-        log.address == self.entry_point()
-            && log.topics.first() == Some(&Self::before_execution_signature())
+        log.address() == self.entry_point()
+            && log.topic0() == Some(&Self::BEFORE_EXECUTION_SIGNATURE)
     }
 
-    fn match_and_parse<T: EthEvent>(&self, log: &Log) -> Option<Result<T, Error>> {
-        if log.address == self.entry_point() && log.topics.first() == Some(&T::signature()) {
-            Some(parse_log::<T>(log.clone()))
+    fn match_and_parse<T: SolEvent>(&self, log: &Log) -> Option<sol_types::Result<T>> {
+        if log.address() == self.entry_point() && log.topic0() == Some(&T::SIGNATURE_HASH) {
+            Some(T::decode_log(&log.inner, true).map(|l| l.data))
         } else {
             None
         }
@@ -96,12 +99,12 @@ pub trait IndexerLogic {
     fn base_tx_logs_filter(&self) -> Filter {
         Filter::new()
             .address(self.entry_point())
-            .topic0(Self::before_execution_signature())
+            .event_signature(Self::BEFORE_EXECUTION_SIGNATURE)
     }
 }
 
-pub struct Indexer<L: IndexerLogic + Sync> {
-    client: Provider<CommonTransport>,
+pub struct Indexer<P: Provider, L: IndexerLogic + Sync> {
+    client: P,
 
     db: Arc<DatabaseConnection>,
 
@@ -110,9 +113,9 @@ pub struct Indexer<L: IndexerLogic + Sync> {
     logic: L,
 }
 
-impl<L: IndexerLogic + Sync> Indexer<L> {
+impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
     pub fn new(
-        client: Provider<CommonTransport>,
+        client: P,
         db: Arc<DatabaseConnection>,
         settings: IndexerSettings,
         logic: L,
@@ -125,30 +128,36 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
         }
     }
 
-    #[instrument(name = "indexer", skip_all, level = "info", fields(version = L::version()))]
+    #[instrument(name = "indexer", skip_all, level = "info", fields(version = L::VERSION))]
     pub async fn start(&self) -> anyhow::Result<()> {
-        tracing::debug!("fetching node client");
-        let variant = self.client.node_client().await.unwrap_or(NodeClient::Geth);
-        tracing::info!(variant = to_string(variant), "fetched node client");
+        let trace_client = match self.settings.trace_client {
+            Some(client) => client,
+            None => {
+                tracing::debug!("fetching node client");
+                let client_version = self.client.get_client_version().await?;
+                tracing::info!(client_version, "fetched node client");
+                TraceClient::default_for(client_version.into())
+            }
+        };
 
         let mut stream_jobs = stream::SelectAll::<BoxStream<Job>>::new();
 
         if self.settings.realtime.enabled {
-            if self.client.as_ref().supports_subscriptions() {
+            if self.client.client().pubsub_frontend().is_some() {
                 // subscribe to a stream of new logs starting at the current block
                 tracing::info!("subscribing to BeforeExecution logs from rpc");
                 let realtime_stream_jobs = self
                     .client
                     .subscribe_logs(&self.logic.base_tx_logs_filter())
                     .await?
+                    .into_stream()
                     .filter_map(|log| async { Job::try_from(log).ok() });
 
                 // That's the only infinite stream in the SelectAll set. If the ws connection
                 // unexpectedly disconnects, this stream will terminate,
                 // so will the whole SelectAll set with for_each_concurrent on it.
-                // ethers-rs does not handle ws reconnects well, neither it can guarantee that no
-                // events would be lost even if reconnect is successful, so it's better to restart
-                // the whole indexer at once instead of trying to reconnect.
+                // alloy-rs will try to reconnect once, and if failed,
+                // the indexer will be restarted with a new rpc provider.
                 stream_jobs.push(Box::pin(realtime_stream_jobs));
             } else {
                 tracing::info!("starting polling of past BeforeExecution logs from rpc");
@@ -157,29 +166,29 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
         }
 
         tracing::debug!("fetching latest block number");
-        let block_number = self.client.get_block_number().await?.as_u32();
+        let block_number = self.client.get_block_number().await?;
         tracing::info!(block_number, "latest block number");
 
         let rpc_refetch_block_number =
-            block_number.saturating_sub(self.settings.past_rpc_logs_indexer.block_range);
+            block_number.saturating_sub(self.settings.past_rpc_logs_indexer.block_range as u64);
         if self.settings.past_db_logs_indexer.enabled {
             let past_db_logs_start_block = self.settings.past_db_logs_indexer.start_block;
             let past_db_logs_end_block = self.settings.past_db_logs_indexer.end_block;
             let from_block = if past_db_logs_start_block > 0 {
                 past_db_logs_start_block as u64
             } else {
-                rpc_refetch_block_number.saturating_add_signed(past_db_logs_start_block) as u64
+                rpc_refetch_block_number.saturating_add_signed(past_db_logs_start_block as i64)
             };
             let to_block = if past_db_logs_end_block > 0 {
                 past_db_logs_end_block as u64
             } else {
-                rpc_refetch_block_number.saturating_add_signed(past_db_logs_end_block) as u64
+                rpc_refetch_block_number.saturating_add_signed(past_db_logs_end_block as i64)
             };
             tracing::info!(from_block, to_block, "fetching missed tx hashes in db");
             let missed_txs = repository::user_op::stream_unprocessed_logs_tx_hashes(
                 &self.db,
                 self.logic.entry_point(),
-                L::user_operation_event_signature(),
+                L::BEFORE_EXECUTION_SIGNATURE,
                 from_block,
                 to_block,
             )
@@ -219,9 +228,9 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
             .map(Ok)
             .try_for_each_concurrent(Some(self.settings.concurrency as usize), |tx| async move {
                 let mut backoff = vec![5, 20, 120].into_iter().map(Duration::from_secs);
-                while let Err(err) = self.handle_tx(tx, variant).await {
+                while let Err(err) = self.handle_tx(tx, trace_client).await {
                     // terminate stream if WS connection is closed, indexer will be restarted
-                    if self.client.as_ref().supports_subscriptions() && err.to_string() == WsClientError::UnexpectedClose.to_string() {
+                    if let Some(TransportError::Transport(TransportErrorKind::BackendGone)) = err.downcast_ref::<TransportError>() {
                         tracing::error!(error = ?err, tx_hash = ?tx, "tx handler failed, ws connection closed, exiting");
                         return Err(err);
                     }
@@ -244,9 +253,9 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
 
     async fn fetch_jobs_for_block_range(
         &self,
-        from_block: u32,
-        to_block: u32,
-    ) -> Result<Vec<Job>, ProviderError> {
+        from_block: u64,
+        to_block: u64,
+    ) -> Result<Vec<Job>, TransportError> {
         let filter = self
             .logic
             .base_tx_logs_filter()
@@ -274,16 +283,16 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
         repeat_with(|| async {
             sleep(self.settings.realtime.polling_interval).await;
             tracing::debug!("fetching latest block number");
-            let block_number = self.client.get_block_number().await?.as_u32();
+            let block_number = self.client.get_block_number().await?;
             tracing::info!(block_number, "latest block number");
 
             let from_block =
-                block_number.saturating_sub(self.settings.realtime.polling_block_range);
+                block_number.saturating_sub(self.settings.realtime.polling_block_range as u64);
             let jobs = self
                 .fetch_jobs_for_block_range(from_block, block_number)
                 .await?;
 
-            Ok::<Vec<Job>, ProviderError>(jobs)
+            Ok::<Vec<Job>, TransportError>(jobs)
         })
         .filter_map(|fut| async {
             fut.await
@@ -293,11 +302,11 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
         .flat_map(stream::iter)
     }
 
-    #[instrument(name = "indexer::handle_tx", skip(self, variant), level = "info")]
-    async fn handle_tx(&self, tx_hash: H256, variant: NodeClient) -> anyhow::Result<()> {
+    #[instrument(name = "indexer::handle_tx", skip(self, trace_client), level = "info")]
+    async fn handle_tx(&self, tx_hash: TxHash, trace_client: TraceClient) -> anyhow::Result<()> {
         let tx = self
             .client
-            .get_transaction(tx_hash)
+            .get_transaction_by_hash(tx_hash)
             .await?
             .ok_or(anyhow!("empty transaction returned from rpc"))?;
 
@@ -310,7 +319,8 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
         // we split by bundles using BeforeExecution event as a beacon, almost all transaction will contain a single bundle only
         // then we split each bundle into logs batches for respective user operations
         let log_bundles: Vec<Vec<&[Log]>> = receipt
-            .logs
+            .inner
+            .logs()
             .split(|log| self.logic.before_execution_matcher(log))
             .skip(1)
             .map(|logs| {
@@ -325,14 +335,14 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
         tracing::info!(bundles_count = log_bundles.len(), "found user op bundles");
 
         let calldatas: Vec<Bytes> =
-            if log_bundles.len() == 1 && tx.to == Some(self.logic.entry_point()) {
-                vec![tx.input]
+            if log_bundles.len() == 1 && tx.to() == Some(self.logic.entry_point()) {
+                vec![tx.input().clone()]
             } else {
                 tracing::info!(
                     "tx contains more than one bundle or was sent indirectly, fetching tx trace"
                 );
                 self.client
-                    .common_trace_transaction(tx_hash, variant)
+                    .common_trace_transaction(tx_hash, trace_client)
                     .await?
                     .into_iter()
                     .filter_map(|t| {
@@ -351,7 +361,7 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
         if calldatas.len() != log_bundles.len() {
             bail!(
                 "number of calls to entrypoint and log batches don't match for {}: {} != {}",
-                tx_hash.encode_hex(),
+                tx_hash,
                 calldatas.len(),
                 log_bundles.len()
             )
@@ -392,66 +402,73 @@ impl<L: IndexerLogic + Sync> Indexer<L> {
 mod tests {
     use super::*;
     use crate::{
-        indexer::{v06, v07},
+        indexer::{settings::EntrypointsSettings, v06, v07},
         repository::tests::get_shared_db,
     };
+    use alloy::{
+        primitives::{address, b256, bytes, U256},
+        providers::{ProviderBuilder, RootProvider},
+        transports::BoxTransport,
+    };
     use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
-    use ethers::prelude::{MockProvider, Provider};
-    use ethers_core::types::{Transaction, TransactionReceipt, U256};
-    use std::str::FromStr;
+    use sea_orm::EntityTrait;
+
+    const ETH_RPC_URL: &str = "https://eth.drpc.org";
+
+    async fn connect_rpc() -> RootProvider<BoxTransport> {
+        ProviderBuilder::new()
+            .on_builtin(ETH_RPC_URL)
+            .await
+            .expect("can't connect")
+    }
 
     #[tokio::test]
     async fn handle_tx_v06_ok() {
         let db = get_shared_db().await;
-        let client = MockProvider::new();
+        // TODO: use mocked connection, alloy::transports::ipc::MockIpcServer from alloy seems broken at v0.8.3
+        let client = connect_rpc().await;
 
         // just some random tx from mainnet
-        let tx_hash =
-            H256::from_str("0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e")
-                .unwrap();
-        let tx: Transaction = serde_json::from_str(r#"{"accessList":[],"blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","chainId":"0x1","from":"0x2df993cd76bb8dbda50546eef00eee2e6331a2c8","gas":"0x64633","gasPrice":"0x8b539dcf3","hash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","input":"0x1fad948c00000000000000000000000000000000000000000000000000000000000000400000000000000000000000002df993cd76bb8dbda50546eef00eee2e6331a2c800000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000eae4d85f7733ad522f601ce7ad4f595704a2d67700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000169b7000000000000000000000000000000000000000000000000000000000001546d000000000000000000000000000000000000000000000000000000000000c2ec0000000000000000000000000000000000000000000000000000000c88385240000000000000000000000000000000000000000000000000000000001dcd650000000000000000000000000000000000000000000000000000000000000002a000000000000000000000000000000000000000000000000000000000000002c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e470641a22000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001e0049783f008a0085193e00003d00cd54003c71ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000062000000000000000000000000000000000000000000000000000000000065793a092c25c7a7c5e4bc46467324e2845caf1ccae767786e07806ca720f8a6b83356bc7d43a63a96b34507cfe7c424db37f351d71851ae9318e8d5c3d9f17c8bdb744c1c000000000000000000000000000000000000000000000000000000000000","maxFeePerGas":"0xc88385240","maxPriorityFeePerGas":"0x1dcd6500","nonce":"0x143","r":"0x1c2b5eb48f71d803de3557309428decfa63f639a97ab98ab6b52667b9c415aa0","s":"0x54a110c5f7db8ce7a488080249d3eab77e426300cd36b78cf82156ded86b26ee","to":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","transactionIndex":"0x63","type":"0x2","v":"0x0","value":"0x0","yParity":"0x0"}"#).unwrap();
-        let receipt: TransactionReceipt = serde_json::from_str(r#"{"blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","contractAddress":null,"cumulativeGasUsed":"0xca9e14","effectiveGasPrice":"0x8b539dcf3","from":"0x2df993cd76bb8dbda50546eef00eee2e6331a2c8","gasUsed":"0x27a21","logs":[{"address":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","data":"0x000000000000000000000000000000000000000000000000002bea15dbb76400","logIndex":"0x10a","removed":false,"topics":["0x2da466a7b24304f47e87fa2e1e5a81b9831ce54fec19055ce277ca2f39ba42c4","0x000000000000000000000000eae4d85f7733ad522f601ce7ad4f595704a2d677"],"transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63"},{"address":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","data":"0x","logIndex":"0x10b","removed":false,"topics":["0xbb47ee3e183a558b1a2ff0874b079f3fc5478b7454eacf2bfc5af2ff5878f972"],"transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63"},{"address":"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","data":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","logIndex":"0x10c","removed":false,"topics":["0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925","0x000000000000000000000000eae4d85f7733ad522f601ce7ad4f595704a2d677","0x0000000000000000000000001e0049783f008a0085193e00003d00cd54003c71"],"transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63"},{"address":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","blockHash":"0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4","blockNumber":"0x11e7bd0","data":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000015ed8b1358919200000000000000000000000000000000000000000000000000000000000284a6","logIndex":"0x10d","removed":false,"topics":["0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f","0x2d5f7a884e9a99cfe2445db2af140a8851fbd860852b668f2f199190f68adf87","0x000000000000000000000000eae4d85f7733ad522f601ce7ad4f595704a2d677","0x0000000000000000000000000000000000000000000000000000000000000000"],"transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63"}],"logsBloom":"0x000000000400000000000000000000000000000000000000000000000000000000080000000000000002000100000000021000000800000000000200002000000000008000000000200000000000000020000000000000000000000000002000000000000a0000000000000000000800000000000000000000000000000200000000000000002000000000000000000000000000000000000000000000000000020001000000400000400000000000000000000020000000000002000000000000000000000000000001000000000000000000000000000000000000000020000050200000000000000000000000000000000000000000000010000000000000","status":"0x1","to":"0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789","transactionHash":"0xf9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e","transactionIndex":"0x63","type":"0x2"}"#).unwrap();
-        let entry_point = Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap();
-
-        client.push(receipt).unwrap();
-        client.push(tx).unwrap();
+        let tx_hash = b256!("f9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e");
+        let entry_point = EntrypointsSettings::default().v06_entry_point;
 
         let indexer = Indexer::new(
-            Provider::new(CommonTransport::Mock(client)),
+            client,
             db.clone(),
             Default::default(),
             v06::IndexerV06 { entry_point },
         );
-        indexer.handle_tx(tx_hash, NodeClient::Geth).await.unwrap();
+        indexer
+            .handle_tx(tx_hash, TraceClient::Trace)
+            .await
+            .unwrap();
 
-        let op_hash =
-            H256::from_str("0x2d5f7a884e9a99cfe2445db2af140a8851fbd860852b668f2f199190f68adf87")
-                .unwrap();
+        let op_hash = b256!("2d5f7a884e9a99cfe2445db2af140a8851fbd860852b668f2f199190f68adf87");
         let user_op = repository::user_op::find_user_op_by_op_hash(&db, op_hash)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(user_op, UserOp {
             hash: op_hash,
-            sender: Address::from_str("0xeae4d85f7733ad522f601ce7ad4f595704a2d677").unwrap(),
-            nonce: H256::zero(),
+            sender: address!("eae4d85f7733ad522f601ce7ad4f595704a2d677"),
+            nonce: B256::ZERO,
             init_code: None,
-            call_data: Bytes::from_str("0x70641a22000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001e0049783f008a0085193e00003d00cd54003c71ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000").unwrap(),
+            call_data: bytes!("70641a22000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001e0049783f008a0085193e00003d00cd54003c71ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000"),
             call_gas_limit: U256::from(92599),
             verification_gas_limit: U256::from(87149),
             pre_verification_gas: U256::from(49900),
             max_fee_per_gas: U256::from(53825000000u64),
             max_priority_fee_per_gas: U256::from(500000000u64),
             paymaster_and_data: None,
-            signature: Bytes::from_str("0x000000000000000000000000000000000000000000000000000000000065793a092c25c7a7c5e4bc46467324e2845caf1ccae767786e07806ca720f8a6b83356bc7d43a63a96b34507cfe7c424db37f351d71851ae9318e8d5c3d9f17c8bdb744c1c").unwrap(),
+            signature: bytes!("000000000000000000000000000000000000000000000000000000000065793a092c25c7a7c5e4bc46467324e2845caf1ccae767786e07806ca720f8a6b83356bc7d43a63a96b34507cfe7c424db37f351d71851ae9318e8d5c3d9f17c8bdb744c1c"),
             aggregator: None,
             aggregator_signature: None,
             entry_point,
             entry_point_version: EntryPointVersion::V06,
             transaction_hash: tx_hash,
             block_number: 18774992,
-            block_hash: H256::from_str("0xe90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4").unwrap(),
-            bundler: Address::from_str("0x2df993cd76bb8dbda50546eef00eee2e6331a2c8").unwrap(),
+            block_hash: b256!("e90aa1d6038c87b029a0666148ac2058ab8397f9c53594cc5a38c0113a48eab4"),
+            bundler: address!("2df993cd76bb8dbda50546eef00eee2e6331a2c8"),
             bundle_index: 0,
             index: 0,
             factory: None,
@@ -469,72 +486,135 @@ mod tests {
             timestamp: None,
         })
     }
+    #[tokio::test]
+    async fn handle_tx_v06_with_tracing_ok() {
+        let db = get_shared_db().await;
+        // TODO: use mocked connection, alloy::transports::ipc::MockIpcServer from alloy seems broken at v0.8.3
+        let client = connect_rpc().await;
+
+        // just some random tx from mainnet
+        let tx_hash = b256!("d69a2233e7ff9034d21f588ffde16ef30dee6ddc4814fa4ecd4a1355630b1730");
+        let entry_point = EntrypointsSettings::default().v06_entry_point;
+        let op_hash = b256!("e5df829d25b3b0a043a658eb460cf74898eb0ad72a526dba0cd509ed2b83f796");
+
+        let indexer = Indexer::new(
+            client,
+            db.clone(),
+            Default::default(),
+            v06::IndexerV06 { entry_point },
+        );
+        for trace_client in [TraceClient::Debug, TraceClient::Trace] {
+            entity::user_operations::Entity::delete_by_id(op_hash.to_vec())
+                .exec(db.as_ref())
+                .await
+                .expect("failed to delete");
+
+            indexer.handle_tx(tx_hash, trace_client).await.unwrap();
+
+            let user_op = repository::user_op::find_user_op_by_op_hash(&db, op_hash)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(user_op, UserOp {
+                hash: op_hash,
+                sender: address!("c09521aa72df1f93e36c776d5464f8bf2ae7b37d"),
+                nonce: b256!("0000000000000000000000000000000000000000000021050000000000000002"),
+                init_code: None,
+                call_data: bytes!("2c2abd1e00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000240f0f3f240000000000000000000000005ecd0d3a7f69c73d86f634b52cb9a4c0eb4df7ae00000000000000000000000000000000000000000000000000000000"),
+                call_gas_limit: U256::from(89016),
+                verification_gas_limit: U256::from(578897),
+                pre_verification_gas: U256::from(107592),
+                max_fee_per_gas: U256::ZERO,
+                max_priority_fee_per_gas: U256::ZERO,
+                paymaster_and_data: None,
+                signature: bytes!("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000001700000000000000000000000000000000000000000000000000000000000000013259e664945ba8945c3198dfbfc83dd1c654a7d284dd48b3f4c80544a281938960d7a8386af33457c88801d6e59aa95f374978f0cf400952eea08a15ad68aa7d0000000000000000000000000000000000000000000000000000000000000025f198086b2db17256731bc456673b96bcef23f51d1fbacdd7c4379ef65465572f1d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008a7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a224d624230784b7177593773684c3461574c31714f5f315668794c4773433632764354682d544342464c704d222c226f726967696e223a2268747470733a2f2f6b6579732e636f696e626173652e636f6d222c2263726f73734f726967696e223a66616c73657d00000000000000000000000000000000000000000000"),
+                aggregator: None,
+                aggregator_signature: None,
+                entry_point,
+                entry_point_version: EntryPointVersion::V06,
+                transaction_hash: tx_hash,
+                block_number: 21478047,
+                block_hash: b256!("2389d13b5294f5c38f5120671adf870468d892e60e637cb65e0eb47c455160f9"),
+                bundler: address!("c09521aa72df1f93e36c776d5464f8bf2ae7b37d"),
+                bundle_index: 0,
+                index: 0,
+                factory: None,
+                paymaster: None,
+                status: true,
+                revert_reason: None,
+                gas: U256::from(775505),
+                gas_price: U256::ZERO,
+                gas_used: U256::from(428635),
+                sponsor_type: SponsorType::WalletBalance,
+                user_logs_start_index: 126,
+                user_logs_count: 1,
+                fee: U256::from(0),
+                consensus: None,
+                timestamp: None,
+            })
+        }
+    }
 
     #[tokio::test]
     async fn handle_tx_v07_ok() {
         let db = get_shared_db().await;
-        let client = MockProvider::new();
+        // TODO: use mocked connection, alloy::transports::ipc::MockIpcServer from alloy seems broken at v0.8.3
+        let client = connect_rpc().await;
 
-        // just some random tx from sepolia
-        let tx_hash =
-            H256::from_str("0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12")
-                .unwrap();
-        let tx: Transaction = serde_json::from_str(r#"{"blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","blockNumber":"0x519c6b","from":"0x43d1089285a94bf481e1f6b1a7a114acbc833796","gas":"0x4c4b40","gasPrice":"0xbb3e00f1","maxPriorityFeePerGas":"0xb2d05e00","maxFeePerGas":"0xc20d353e","hash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","input":"0x765e827f000000000000000000000000000000000000000000000000000000000000004000000000000000000000000043d1089285a94bf481e1f6b1a7a114acbc83379600000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001200000000000000000000000000000000000000000000000000000000000000420000000000000000000000000000f4240000000000000000000000000001e8480000000000000000000000000000000000000000000000000000000000007a120000000000000000000000000000000010000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000005a0000000000000000000000000000000000000000000000000000000000000064000000000000000000000000000000000000000000000000000000000000002d81f5806eafab78028b6e29ab65208f54cfdd4ce45a1aafc9e0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000244ac27308a000000000000000000000000000000000000000000000000000000000000008000000000000000000000000080ee560d57f4b1d2acfeb2174d09d54879c7408800000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000002200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000598991c9d726cbac7eb023ca974fe6e7e7a57ce80000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000003479096622cf141e3cc93126bbccc3ef10b952c1ef000000000000000000000000000000000000000000000000000000000002a3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000074115cff9c5b847b402c382f066cf275ab6440b75aaa1b881c164e5d43131cfb3895759573bc597baf526002f8d1943f1aaa67dbf7fa99cd30d12a235169eef4f3d5c96fc1619c60bc9d8028dfea0f89c7ec5e3f27000000000000000000000000000000000000000000000000000000000002a3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000014434fcd5be00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000000000000000000000000000000002540be400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000741b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000061a8000000000000000000000000000061a8000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c800000000000000000000000000000000000000000000000000000002540be400000000000000000000000000000000000000000000000000000000000000000000000000000000000000005a89d0e2cdece3d2f2e2497f2b68c5f96ef073c1800000004200775c0e5049afa24e5370a754faade91452b89dfc97907588ac49b441bcf43d06067f220a252454360907199ae8dfdc7fef2caf6c2aae03e4e0676b2c1ae351601b000000000000","nonce":"0x6","to":"0x0000000071727de22e5e9d8baf0edac6f37da032","transactionIndex":"0x6b","value":"0x0","type":"0x2","accessList":[],"chainId":"0xaa36a7","v":"0x0","r":"0x708c8520e17da32765f6270908ec9961023380a115f6c2a3bbf100f7ef39b68a","s":"0x4730c2959f785391db89cb2cc23db9782054db7d650e7a8df04836e954271d5e"}"#).unwrap();
-        let receipt: TransactionReceipt = serde_json::from_str(r#"{"blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","blockNumber":"0x519c6b","contractAddress":null,"cumulativeGasUsed":"0x43e83a","effectiveGasPrice":"0xbb3e00f1","from":"0x43d1089285a94bf481e1f6b1a7a114acbc833796","gasUsed":"0xd0fbb","logs":[{"address":"0xf098c91823f1ef080f22645d030a7196e72d31eb","topics":["0x76329674d4361897f3154af54261c4cc05a0d5964509aeedce71949fa0d34725","0x000000000000000000000000598991c9d726cbac7eb023ca974fe6e7e7a57ce8"],"data":"0x","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x1f","removed":false},{"address":"0xf098c91823f1ef080f22645d030a7196e72d31eb","topics":["0xf80f6dfd1cac76f4ebc9005d547d88739ba90991e2c432ac74b18536c9e72af2"],"data":"0x00000000000000000000000089d0e2cdece3d2f2e2497f2b68c5f96ef073c180","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x20","removed":false},{"address":"0x79096622cf141e3cc93126bbccc3ef10b952c1ef","topics":["0xcdddfb4e53d2f7d725fae607b33383443789359047546dbdbd01f85d21adf61c","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb"],"data":"0x","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x21","removed":false},{"address":"0xf098c91823f1ef080f22645d030a7196e72d31eb","topics":["0xb4a437488482177b2d124ce7c50e57d8f8d42a9896b525c9c497ee0d533a95de"],"data":"0x00000000000000000000000079096622cf141e3cc93126bbccc3ef10b952c1ef","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x22","removed":false},{"address":"0x115cff9c5b847b402c382f066cf275ab6440b75a","topics":["0x18c5105ca36f183d9b8ee510786b13e3e58916d2525c72884d40ada1a6112e74","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb"],"data":"0xaa1b881c164e5d43131cfb3895759573bc597baf526002f8d1943f1aaa67dbf7fa99cd30d12a235169eef4f3d5c96fc1619c60bc9d8028dfea0f89c7ec5e3f27000000000000000000000000000000000000000000000000000000000002a300","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x23","removed":false},{"address":"0x115cff9c5b847b402c382f066cf275ab6440b75a","topics":["0xcdddfb4e53d2f7d725fae607b33383443789359047546dbdbd01f85d21adf61c","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb"],"data":"0x","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x24","removed":false},{"address":"0xf098c91823f1ef080f22645d030a7196e72d31eb","topics":["0xb4a437488482177b2d124ce7c50e57d8f8d42a9896b525c9c497ee0d533a95de"],"data":"0x000000000000000000000000115cff9c5b847b402c382f066cf275ab6440b75a","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x25","removed":false},{"address":"0xf098c91823f1ef080f22645d030a7196e72d31eb","topics":["0xc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d2"],"data":"0x0000000000000000000000000000000000000000000000000000000000000001","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x26","removed":false},{"address":"0x1f5806eafab78028b6e29ab65208f54cfdd4ce45","topics":["0x48df5b960943935df47b5ee244b72a9ea791c73f9d518287bf46d17c8bbe1259","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb"],"data":"0x","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x27","removed":false},{"address":"0x0000000071727de22e5e9d8baf0edac6f37da032","topics":["0xd51a9c61267aa6196961883ecf5ff2da6619c37dac0fa92122513fb32c032d2d","0x02bfece5db8c1bd400049c14e20ee988e62c057d296e9aefa34bd9b7f146033e","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb"],"data":"0x0000000000000000000000001f5806eafab78028b6e29ab65208f54cfdd4ce450000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x28","removed":false},{"address":"0x0000000071727de22e5e9d8baf0edac6f37da032","topics":["0xbb47ee3e183a558b1a2ff0874b079f3fc5478b7454eacf2bfc5af2ff5878f972"],"data":"0x","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x29","removed":false},{"address":"0x94a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8","topics":["0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb","0x0000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e"],"data":"0x00000000000000000000000000000000000000000000000000000002540be400","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x2a","removed":false},{"address":"0x94a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8","topics":["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb","0x0000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e"],"data":"0x0000000000000000000000000000000000000000000000000000000000000000","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x2b","removed":false},{"address":"0x94a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8","topics":["0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb","0x0000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e"],"data":"0x00000000000000000000000000000000000000000000000000000002540be400","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x2c","removed":false},{"address":"0x1b637a3008dc1f86d92031a97fc4b5ac0803329e","topics":["0x17ffde6359ce255c678a17b62fba7f276b9187996206563daaab42c2d836d675","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb"],"data":"0x00000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c80000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012f4e9","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x2d","removed":false},{"address":"0x0000000071727de22e5e9d8baf0edac6f37da032","topics":["0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f","0x02bfece5db8c1bd400049c14e20ee988e62c057d296e9aefa34bd9b7f146033e","0x000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb","0x0000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e"],"data":"0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000001768630000000000000000000000000000000000000000000000000000000000176863","blockNumber":"0x519c6b","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","blockHash":"0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b","logIndex":"0x2e","removed":false}],"logsBloom":"0x02000400001000000200000000010000000180800030000000040000008000000008008801200000004000010000000090000001000000000000020000240000000900080000000000000008000000000040000000000000000008000000900280000000000800000000001000000000000000000000200000000010000002000000000000000000000800404000000000000200000480000000000000000001020000000100400000404000000000000000000004000000000002000010000000002002000000400001008000100400000000040004010000000000000000000010400010100000000000000000000000000000000000000000040000000010","status":"0x1","to":"0x0000000071727de22e5e9d8baf0edac6f37da032","transactionHash":"0xfce54378732b4fdf41a3c65b3b93c6bdabcd0b841bc24969d3593f65ca730f12","transactionIndex":"0x6b","type":"0x2"}"#).unwrap();
-        let entry_point = Address::from_str("0x0000000071727De22E5E9d8BAf0edAc6f37da032").unwrap();
-
-        client.push(receipt).unwrap();
-        client.push(tx).unwrap();
+        // just some random tx from mainnet
+        let tx_hash = b256!("4a6702f8ef5b7754f5b54dfb00ccba181603e3a6fff77c93e7d0d40148f09ad0");
+        let entry_point = EntrypointsSettings::default().v07_entry_point;
 
         let indexer = Indexer::new(
-            Provider::new(CommonTransport::Mock(client)),
+            client,
             db.clone(),
             Default::default(),
             v07::IndexerV07 { entry_point },
         );
-        indexer.handle_tx(tx_hash, NodeClient::Geth).await.unwrap();
+        indexer
+            .handle_tx(tx_hash, TraceClient::Trace)
+            .await
+            .unwrap();
 
-        let op_hash =
-            H256::from_str("0x02bfece5db8c1bd400049c14e20ee988e62c057d296e9aefa34bd9b7f146033e")
-                .unwrap();
+        let op_hash = b256!("bd48a68e7dd39891fe7f139fe11bfb82d934a5deceb98f0c6fc4ebc7eeca58da");
         let user_op = repository::user_op::find_user_op_by_op_hash(&db, op_hash)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(user_op, UserOp {
             hash: op_hash,
-            sender: Address::from_str("0xf098c91823f1ef080f22645d030a7196e72d31eb").unwrap(),
-            nonce: H256::zero(),
-            init_code: Some(Bytes::from_str("0x1f5806eafab78028b6e29ab65208f54cfdd4ce45a1aafc9e0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000244ac27308a000000000000000000000000000000000000000000000000000000000000008000000000000000000000000080ee560d57f4b1d2acfeb2174d09d54879c7408800000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000002200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000598991c9d726cbac7eb023ca974fe6e7e7a57ce80000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000003479096622cf141e3cc93126bbccc3ef10b952c1ef000000000000000000000000000000000000000000000000000000000002a3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000074115cff9c5b847b402c382f066cf275ab6440b75aaa1b881c164e5d43131cfb3895759573bc597baf526002f8d1943f1aaa67dbf7fa99cd30d12a235169eef4f3d5c96fc1619c60bc9d8028dfea0f89c7ec5e3f27000000000000000000000000000000000000000000000000000000000002a300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap()),
-            call_data: Bytes::from_str("0x34fcd5be00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000").unwrap(),
-            call_gas_limit: U256::from(2000000),
-            verification_gas_limit: U256::from(1000000),
-            pre_verification_gas: U256::from(500000),
-            max_fee_per_gas: U256::from(1),
-            max_priority_fee_per_gas: U256::from(1),
-            paymaster_and_data: Some(Bytes::from_str("0x1b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000061a8000000000000000000000000000061a8000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c800000000000000000000000000000000000000000000000000000002540be400").unwrap()),
-            signature: Bytes::from_str("0x89d0e2cdece3d2f2e2497f2b68c5f96ef073c1800000004200775c0e5049afa24e5370a754faade91452b89dfc97907588ac49b441bcf43d06067f220a252454360907199ae8dfdc7fef2caf6c2aae03e4e0676b2c1ae351601b").unwrap(),
+            sender: address!("4a7EFb490b2D34D1962f365C5647D84FAdD3Bd6A"),
+            nonce: b256!("00005c97aa67ba578e3c54ec5942a7563ea9130e4f5f4c300000000000000000"),
+            init_code: None,
+            call_data: bytes!("e9ae5c530100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000006c0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000005a00000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c599000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae00000000000000000000000000000000000000000000000000000000000027d9000000000000000000000000000000000000000000000000000000000000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000003c44666fc80394356b4034c6f447b20899cff26af1d6d4520e9e3d7616ac0408daeb3cba94a00000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000001000000000000000000000000003c170744609c21c313473e3811563073c850c9f500000000000000000000000000000000000000000000000000000000009032d20000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000000b44656669417070486f6d65000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002a30783030303030303030303030303030303030303030303030303030303030303030303030303030303000000000000000000000000000000000000000000000000000000000000000000000f2614a233c7c3e7f08b1f887ba133a13f1eb2c55000000000000000000000000f2614a233c7c3e7f08b1f887ba133a13f1eb2c550000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c599000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb4800000000000000000000000000000000000000000000000000000000000027d900000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000001442646478b0000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c59900000000000000000000000000000000000000000000000000000000000027d9000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb4800000000000000000000000000000000000000000000000000000000009032d20000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae00000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000045022260fac5e5542a773aa44fbcfedf7c193bc2c59901ffff00004375dff511095cc5a197a54140a24efef3a416011231deb6f5749ef6ce6943a275a1d3e7486f4eae000bb800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c599000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb00000000000000000000000056eb4bf8b7510323b89fde249d1fb660ae30d2ee00000000000000000000000000000000000000000000000000000000000e7e2700000000000000000000000000000000000000000000000000000000"),
+            call_gas_limit: U256::from(375068),
+            verification_gas_limit: U256::from(166784),
+            pre_verification_gas: U256::from(69185),
+            max_fee_per_gas: U256::from(1000000),
+            max_priority_fee_per_gas: U256::from(5095252459u64),
+            paymaster_and_data: Some(bytes!("0000000000000039cd5e8ae05257ce51c473ddd10000000000000000000000000001440600000000000000000000000000000001000000676b732f000000000000bc8f0c8fbbdaa38053b974afd0fe66cc7be40c0941f4ac58304ddda97ee5ba6e14c11f01cbd2c7c46401448bb9615bf29449ead5da1c4755989910524828a2461c")),
+            signature: bytes!("f59f5f4d934312578dbd0c7a8a464cd8c73c1cbbb267b1dcae103d0e2d8f3971314b169eac449874652d7f6cb83de63422c762c4dfbca02629f94fc3a478141d1c"),
             aggregator: None,
             aggregator_signature: None,
             entry_point,
             entry_point_version: EntryPointVersion::V07,
             transaction_hash: tx_hash,
-            block_number: 5348459,
-            block_hash: H256::from_str("0x65940368797f7f65885f86fdb367467b2c942aee60ddf9a3fb149a8924ac073b").unwrap(),
-            bundler: Address::from_str("0x43d1089285A94bf481E1F6B1a7A114aCBC833796").unwrap(),
+            block_number: 21476573,
+            block_hash: b256!("54f26503211219a84c1c25d8f5c61d6e1a2f253b97508fb88a6e2e13bffee0b3"),
+            bundler: address!("4337003fcD2F56DE3977cCb806383E9161628D0E"),
             bundle_index: 0,
             index: 0,
-            factory: Some(Address::from_str("0x1f5806eAFab78028B6E29Ab65208F54CFdD4ce45").unwrap()),
-            paymaster: Some(Address::from_str("0x1b637a3008dc1f86d92031a97FC4B5aC0803329e").unwrap()),
+            factory: None,
+            paymaster: Some(address!("0000000000000039cd5e8aE05257CE51C473ddd1")),
             status: true,
             revert_reason: None,
-            gas: U256::from(4300000),
-            gas_price: U256::from(1),
-            gas_used: U256::from(1534051),
+            gas: U256::from(693988),
+            gas_price: U256::from(3582831922u64),
+            gas_used: U256::from(442171),
             sponsor_type: SponsorType::PaymasterSponsor,
-            user_logs_start_index: 42,
-            user_logs_count: 3,
-            fee: U256::from(1534051),
+            user_logs_start_index: 458,
+            user_logs_count: 11,
+            fee: U256::from(1584224373782662u64),
             consensus: None,
             timestamp: None,
         })
