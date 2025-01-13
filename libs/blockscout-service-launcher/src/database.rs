@@ -31,14 +31,11 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
     settings: &DatabaseSettings,
 ) -> anyhow::Result<DatabaseConnection> {
     let db_url = settings.connect.clone().url();
-    let connect_options = ConnectOptions::new(db_url);
-    let connect_options = settings.connect_options.apply_to(connect_options);
 
     // Create database if not exists
     if settings.create_database {
-        let db_url = connect_options.get_url();
         let (db_base_url, db_name) = {
-            let mut db_url = url::Url::from_str(db_url).context("invalid database url")?;
+            let mut db_url: url::Url = db_url.parse().context("invalid database url")?;
             let db_name = db_url
                 .path_segments()
                 .and_then(|mut segments| segments.next())
@@ -53,8 +50,7 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
         tracing::info!("creating database '{db_name}'");
         let db_base_url = format!("{db_base_url}/{DEFAULT_DB}");
 
-        let create_database_options = ConnectOptions::new(db_base_url);
-        let create_database_options = settings.connect_options.apply_to(create_database_options);
+        let create_database_options = settings.connect_options.apply_to(db_base_url.into());
         let db = Database::connect(create_database_options).await?;
 
         let result = db
@@ -77,6 +73,7 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
         };
     }
 
+    let connect_options = settings.connect_options.apply_to(db_url.into());
     let db = Database::connect(connect_options).await?;
     if settings.run_migrations {
         Migrator::up(&db, None).await?;
