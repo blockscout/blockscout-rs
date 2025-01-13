@@ -1,7 +1,8 @@
 use anyhow::Context;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use std::{str::FromStr, time::Duration};
+use tracing::log::LevelFilter;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "database-1_0")] {
@@ -161,45 +162,23 @@ pub struct DatabaseConnectOptionsSettings {
     pub max_lifetime: Option<Duration>,
     /// Enable SQLx statement logging
     pub sqlx_logging: bool,
+    #[serde(
+        deserialize_with = "string_to_level_filter",
+        serialize_with = "level_filter_to_string"
+    )]
     /// SQLx statement logging level (ignored if `sqlx_logging` is false)
     pub sqlx_logging_level: LevelFilter,
     #[cfg(feature = "database-1_0")]
+    #[serde(
+        deserialize_with = "string_to_level_filter",
+        serialize_with = "level_filter_to_string"
+    )]
     /// SQLx slow statements logging level (ignored if `sqlx_logging` is false)
     pub sqlx_slow_statements_logging_level: LevelFilter,
     #[cfg(feature = "database-1_0")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     /// SQLx slow statements duration threshold (ignored if `sqlx_logging` is false)
     pub sqlx_slow_statements_logging_threshold: Duration,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields, rename_all = "lowercase")]
-pub enum LevelFilter {
-    /// A level lower than all log levels.
-    Off,
-    /// Corresponds to the `Error` log level.
-    Error,
-    /// Corresponds to the `Warn` log level.
-    Warn,
-    /// Corresponds to the `Info` log level.
-    Info,
-    /// Corresponds to the `Debug` log level.
-    Debug,
-    /// Corresponds to the `Trace` log level.
-    Trace,
-}
-
-impl From<LevelFilter> for tracing::log::LevelFilter {
-    fn from(value: LevelFilter) -> Self {
-        match value {
-            LevelFilter::Off => Self::Off,
-            LevelFilter::Error => Self::Error,
-            LevelFilter::Warn => Self::Warn,
-            LevelFilter::Info => Self::Info,
-            LevelFilter::Debug => Self::Debug,
-            LevelFilter::Trace => Self::Trace,
-        }
-    }
 }
 
 impl Default for DatabaseConnectOptionsSettings {
@@ -242,12 +221,27 @@ impl DatabaseConnectOptionsSettings {
             options.max_lifetime(value);
         }
         options.sqlx_logging(self.sqlx_logging);
-        options.sqlx_logging_level(self.sqlx_logging_level.into());
+        options.sqlx_logging_level(self.sqlx_logging_level);
         #[cfg(feature = "database-1_0")]
         options.sqlx_slow_statements_logging_settings(
-            self.sqlx_slow_statements_logging_level.into(),
+            self.sqlx_slow_statements_logging_level,
             self.sqlx_slow_statements_logging_threshold,
         );
         options
     }
+}
+
+fn string_to_level_filter<'de, D>(deserializer: D) -> Result<LevelFilter, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let string = String::deserialize(deserializer)?;
+    LevelFilter::from_str(&string).map_err(<D::Error as serde::de::Error>::custom)
+}
+
+pub fn level_filter_to_string<S>(x: &LevelFilter, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    s.serialize_str(x.as_str().to_lowercase().as_str())
 }
