@@ -4,7 +4,7 @@
 default:
     just --list --unsorted
 
-blockscout-version := env_var_or_default('BLOCKSCOUT_VERSION', "6.10.0")
+blockscout-version := env_var_or_default('BLOCKSCOUT_VERSION', "6.10.1")
 user-ops-indexer-version := env_var_or_default('USER_OPS_INDEXER_VERSION', "1.3.0")
 
 start-postgres:
