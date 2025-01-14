@@ -17,7 +17,8 @@ pub struct Model {
     pub blob_gas_price: Decimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
     pub blob_gas_used: Decimal,
-    pub blob_versioned_hashes: Vec<Vec<u8>>,
+    // removed: sea-orm can't compile with Vec<Vec<u8>>
+    // pub blob_versioned_hashes: Vec<Vec<u8>>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
 }

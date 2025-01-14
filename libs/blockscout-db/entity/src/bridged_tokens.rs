@@ -13,7 +13,13 @@ pub struct Model {
     pub lp_token: Option<bool>,
     pub custom_cap: Option<Decimal>,
     pub r#type: Option<String>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", unique)]
+    #[sea_orm(
+        column_type = "VarBinary(StringLen::None)",
+        unique,
+        // changed: fix no key columns
+        primary_key,
+        auto_increment = false
+    )]
     pub home_token_contract_address_hash: Vec<u8>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
