@@ -1,6 +1,6 @@
 {
   "subgraphs_reader": {
-    "refresh_cache_schedule": "0 0 * * * *",
+    "refresh_cache_schedule": "0 0 */5 * * *",
     "networks": {
       "1": {
         "blockscout": {
@@ -36,7 +36,7 @@
           "url": "https://gnosis.blockscout.com/"
         },
         "use_protocols": [
-          "genome"
+          "genome", "ens"
         ]
       },
       "109": {
@@ -151,6 +151,14 @@
         },
         "use_protocols": [
           "zns-blast"
+        ]
+      },
+      "57073": {
+        "blockscout": {
+          "url": "https://explorer.inkonchain.com/"
+        },
+        "use_protocols": [
+          "ens"
         ]
       }
     },
