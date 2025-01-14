@@ -652,6 +652,7 @@ fn mock_migration(name: &str, completed: Option<bool>) -> migrations_status::Act
         status: Set(status),
         inserted_at: Set(Default::default()),
         updated_at: Set(Default::default()),
+        meta: Set(None),
     }
 }
 
