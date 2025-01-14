@@ -88,6 +88,15 @@
           "base-name-service", "ens"
         ]
       },
+      "33139": {
+        "blockscout": {
+          "url": "https://apechain.calderaexplorer.xyz"
+        },
+        "use_protocols": [
+          "d3-connect-ape"
+        ],
+        "rpc_url": "https://rpc.apechain.com"
+      },
       "34443": {
         "blockscout": {
           "url": "https://explorer.mode.network"
@@ -380,6 +389,24 @@
           "type": "d3_connect",
           "native_token_contract": "0xDe74799371Ceac11A0F52BA2694392A391D0dA18",
           "resolver_contract": "0xD60D40674E678F0089736D6381071973a75B4B6f"
+        },
+        "meta": {
+          "short_name": "D3",
+          "title": "D3 Connect",
+          "description": "D3 Connect is official identity service for top web3 communities.",
+          "icon_url": "https://i.imgur.com/cD6VIXk.png",
+          "docs_url": "https://docs.d3.app/"
+        }
+      },
+      "d3-connect-ape": {
+        "tld_list": ["ape"],
+        "network_id": 33139,
+        "subgraph_name": "d3-connect-ape-subgraph",
+        "address_resolve_technique": "addr2name",
+        "specific": {
+          "type": "d3_connect",
+          "native_token_contract": "0x0D435A6c16045Abeaf6A442Bf162fd52597B4Ed3",
+          "resolver_contract": "0xeA54b0E40E956383C95e28cb407FF35235Aa31fE"
         },
         "meta": {
           "short_name": "D3",
