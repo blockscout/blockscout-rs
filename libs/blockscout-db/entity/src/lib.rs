@@ -59,6 +59,8 @@ pub mod transaction_forks;
 pub mod transaction_stats;
 pub mod transactions;
 pub mod user_contacts;
+pub mod user_operations;
+pub mod user_ops_indexer_migrations;
 pub mod users;
 pub mod validators;
 pub mod withdrawals;

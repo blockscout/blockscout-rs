@@ -45,5 +45,7 @@ pub use super::{
     transaction_actions::Entity as TransactionActions,
     transaction_forks::Entity as TransactionForks, transaction_stats::Entity as TransactionStats,
     transactions::Entity as Transactions, user_contacts::Entity as UserContacts,
-    users::Entity as Users, validators::Entity as Validators, withdrawals::Entity as Withdrawals,
+    user_operations::Entity as UserOperations,
+    user_ops_indexer_migrations::Entity as UserOpsIndexerMigrations, users::Entity as Users,
+    validators::Entity as Validators, withdrawals::Entity as Withdrawals,
 };
