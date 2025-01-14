@@ -1,6 +1,8 @@
 use anyhow::Context;
-use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_with::serde_as;
+use std::{str::FromStr, time::Duration};
+use tracing::log::LevelFilter;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "database-1_0")] {
@@ -17,7 +19,7 @@ cfg_if::cfg_if! {
         pub use sea_orm_migration_0_10::MigratorTrait;
     } else {
         compile_error!(
-            "one of the features ['database-0_12', 'database-0_11', 'database-0_10'] \
+            "one of the features ['database-1_0', 'database-0_12', 'database-0_11', 'database-0_10'] \
              must be enabled"
         );
     }
@@ -26,17 +28,14 @@ cfg_if::cfg_if! {
 const DEFAULT_DB: &str = "postgres";
 
 pub async fn initialize_postgres<Migrator: MigratorTrait>(
-    connect_options: impl Into<ConnectOptions>,
-    create_database: bool,
-    run_migrations: bool,
+    settings: &DatabaseSettings,
 ) -> anyhow::Result<DatabaseConnection> {
-    let connect_options = connect_options.into();
+    let db_url = settings.connect.clone().url();
 
     // Create database if not exists
-    if create_database {
-        let db_url = connect_options.get_url();
+    if settings.create_database {
         let (db_base_url, db_name) = {
-            let mut db_url = url::Url::from_str(db_url).context("invalid database url")?;
+            let mut db_url: url::Url = db_url.parse().context("invalid database url")?;
             let db_name = db_url
                 .path_segments()
                 .and_then(|mut segments| segments.next())
@@ -51,7 +50,7 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
         tracing::info!("creating database '{db_name}'");
         let db_base_url = format!("{db_base_url}/{DEFAULT_DB}");
 
-        let create_database_options = with_connect_options(db_base_url, &connect_options);
+        let create_database_options = settings.connect_options.apply_to(db_base_url.into());
         let db = Database::connect(create_database_options).await?;
 
         let result = db
@@ -74,43 +73,21 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
         };
     }
 
+    let connect_options = settings.connect_options.apply_to(db_url.into());
     let db = Database::connect(connect_options).await?;
-    if run_migrations {
+    if settings.run_migrations {
         Migrator::up(&db, None).await?;
     }
 
     Ok(db)
 }
 
-fn with_connect_options(url: impl Into<String>, source_options: &ConnectOptions) -> ConnectOptions {
-    let mut options = ConnectOptions::new(url.into());
-    if let Some(value) = source_options.get_max_connections() {
-        options.max_connections(value);
-    }
-    if let Some(value) = source_options.get_min_connections() {
-        options.min_connections(value);
-    }
-    if let Some(value) = source_options.get_connect_timeout() {
-        options.connect_timeout(value);
-    }
-    if let Some(value) = source_options.get_idle_timeout() {
-        options.idle_timeout(value);
-    }
-    if let Some(value) = source_options.get_acquire_timeout() {
-        options.acquire_timeout(value);
-    }
-    if let Some(value) = source_options.get_max_lifetime() {
-        options.max_lifetime(value);
-    }
-    options.sqlx_logging(source_options.get_sqlx_logging());
-    options.sqlx_logging_level(source_options.get_sqlx_logging_level());
-    options
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DatabaseSettings {
     pub connect: DatabaseConnectSettings,
+    #[serde(default)]
+    pub connect_options: DatabaseConnectOptionsSettings,
     #[serde(default)]
     pub create_database: bool,
     #[serde(default)]
@@ -161,4 +138,107 @@ impl DatabaseKvConnection {
             self.user, self.password, self.host, self.port, dbname, options
         )
     }
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct DatabaseConnectOptionsSettings {
+    /// Maximum number of connections for a pool
+    pub max_connections: Option<u32>,
+    /// Minimum number of connections for a pool
+    pub min_connections: Option<u32>,
+    /// The connection timeout for a packet connection
+    pub connect_timeout: Option<Duration>,
+    /// Maximum idle time for a particular connection to prevent
+    /// network resource exhaustion
+    pub idle_timeout: Option<Duration>,
+    /// Set the maximum amount of time to spend waiting for acquiring a connection
+    pub acquire_timeout: Option<Duration>,
+    /// Set the maximum lifetime of individual connections
+    pub max_lifetime: Option<Duration>,
+    /// Enable SQLx statement logging
+    pub sqlx_logging: bool,
+    #[serde(
+        deserialize_with = "string_to_level_filter",
+        serialize_with = "level_filter_to_string"
+    )]
+    /// SQLx statement logging level (ignored if `sqlx_logging` is false)
+    pub sqlx_logging_level: LevelFilter,
+    #[cfg(feature = "database-1_0")]
+    #[serde(
+        deserialize_with = "string_to_level_filter",
+        serialize_with = "level_filter_to_string"
+    )]
+    /// SQLx slow statements logging level (ignored if `sqlx_logging` is false)
+    pub sqlx_slow_statements_logging_level: LevelFilter,
+    #[cfg(feature = "database-1_0")]
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    /// SQLx slow statements duration threshold (ignored if `sqlx_logging` is false)
+    pub sqlx_slow_statements_logging_threshold: Duration,
+}
+
+impl Default for DatabaseConnectOptionsSettings {
+    fn default() -> Self {
+        Self {
+            max_connections: None,
+            min_connections: None,
+            connect_timeout: None,
+            idle_timeout: None,
+            acquire_timeout: None,
+            max_lifetime: None,
+            sqlx_logging: true,
+            sqlx_logging_level: LevelFilter::Debug,
+            #[cfg(feature = "database-1_0")]
+            sqlx_slow_statements_logging_level: LevelFilter::Off,
+            #[cfg(feature = "database-1_0")]
+            sqlx_slow_statements_logging_threshold: Duration::from_secs(1),
+        }
+    }
+}
+
+impl DatabaseConnectOptionsSettings {
+    fn apply_to(&self, mut options: ConnectOptions) -> ConnectOptions {
+        if let Some(value) = self.max_connections {
+            options.max_connections(value);
+        }
+        if let Some(value) = self.min_connections {
+            options.min_connections(value);
+        }
+        if let Some(value) = self.connect_timeout {
+            options.connect_timeout(value);
+        }
+        if let Some(value) = self.idle_timeout {
+            options.idle_timeout(value);
+        }
+        if let Some(value) = self.acquire_timeout {
+            options.acquire_timeout(value);
+        }
+        if let Some(value) = self.max_lifetime {
+            options.max_lifetime(value);
+        }
+        options.sqlx_logging(self.sqlx_logging);
+        options.sqlx_logging_level(self.sqlx_logging_level);
+        #[cfg(feature = "database-1_0")]
+        options.sqlx_slow_statements_logging_settings(
+            self.sqlx_slow_statements_logging_level,
+            self.sqlx_slow_statements_logging_threshold,
+        );
+        options
+    }
+}
+
+fn string_to_level_filter<'de, D>(deserializer: D) -> Result<LevelFilter, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let string = String::deserialize(deserializer)?;
+    LevelFilter::from_str(&string).map_err(<D::Error as serde::de::Error>::custom)
+}
+
+pub fn level_filter_to_string<S>(x: &LevelFilter, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    s.serialize_str(x.as_str().to_lowercase().as_str())
 }

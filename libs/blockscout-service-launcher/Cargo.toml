@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-service-launcher"
-version = "0.15.0"
+version = "0.16.0"
 description = "Allows to launch blazingly fast blockscout rust services"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
@@ -26,6 +26,7 @@ prometheus = { version = "0.13", optional = true }
 reqwest = { version = "0.11", features = ["json"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = {version = "1", optional = true }
+serde_with = {version = "3", optional = true }
 tokio = { version = "1", optional = true }
 tonic = { version = "0.8", optional = true }
 tracing = { version = "0.1", optional = true }
@@ -90,6 +91,7 @@ database = [
     "dep:anyhow",
     "dep:cfg-if",
     "dep:serde",
+    "dep:serde_with",
     "dep:tracing",
     "dep:url",
 ]
