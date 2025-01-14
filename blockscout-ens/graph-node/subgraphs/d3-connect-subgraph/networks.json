@@ -3,18 +3,29 @@
     "Registry": {
       "address": "0xDe74799371Ceac11A0F52BA2694392A391D0dA18",
       "startBlock": 3473390
-    }
-  },
-  "shibarium-testnet": {
-    "Registry": {
-      "address": "0x91c2d22ca1028B2E55e3097096494Eb34b7fc81c",
-      "startBlock": 4555130
-    }
+    },
+    "Resolver": {
+      "address": "0x8b9d58e6915A71Dd782F5111c886377Df1d5cBe5",
+      "startBlock": 8954971
+    },
+    "": ""
   },
   "ape-mainnet": {
     "Registry": {
       "address": "0x0D435A6c16045Abeaf6A442Bf162fd52597B4Ed3",
       "startBlock": 36550
-    }
+    },
+    "": ""
+  },
+  "shibarium-testnet": {
+    "Registry": {
+      "address": "0x1443bC2bBAB07437BCF9C577b647523A736bB33E",
+      "startBlock": 1927346
+    },
+    "Resolver": {
+      "address": "0xae6Bdf6e9edA0bA60F97390e70a545e91B5E8bf2",
+      "startBlock": 6806860
+    },
+    "": ""
   }
 }

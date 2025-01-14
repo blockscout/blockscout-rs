@@ -82,7 +82,7 @@
         "tld_list": ["shib"],
         "network_id": 109,
         "subgraph_name": "d3-connect-shib-subgraph",
-        "address_resolve_technique": "addr2name",
+        "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "d3_connect",
           "native_token_contract": "0xDe74799371Ceac11A0F52BA2694392A391D0dA18",
@@ -103,8 +103,8 @@
         "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "d3_connect",
-          "native_token_contract": "0x4F3775dfd49db0BBcd47eB6f45CEb6E6E9e15CD8",
-          "resolver_contract": "0x51B4894B45A764d2bF48aE5D7F9e70Ac70e28875"
+          "native_token_contract": "0x1443bC2bBAB07437BCF9C577b647523A736bB33E",
+          "resolver_contract": "0xae6Bdf6e9edA0bA60F97390e70a545e91B5E8bf2"
         },
         "meta": {
           "short_name": "D3 Connect",
