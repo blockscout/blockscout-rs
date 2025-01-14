@@ -12,11 +12,11 @@ pub struct Model {
     pub block_number: i64,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub token_contract_address_hash: Vec<u8>,
-    pub value: Option<BigDecimal>,
+    pub value: Option<Decimal>,
     pub value_fetched_at: Option<DateTime>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
-    pub old_value: Option<BigDecimal>,
+    pub old_value: Option<Decimal>,
     #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
     pub token_id: Option<Decimal>,
     pub token_type: Option<String>,

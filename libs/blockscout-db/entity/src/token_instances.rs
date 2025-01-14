@@ -28,6 +28,11 @@ pub struct Model {
     pub owner_updated_at_log_index: Option<i32>,
     pub refetch_after: Option<DateTime>,
     pub retries_count: i16,
+    #[sea_orm(column_type = "JsonBinary", nullable)]
+    pub thumbnails: Option<Json>,
+    pub media_type: Option<String>,
+    pub cdn_upload_error: Option<String>,
+    pub is_banned: Option<bool>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

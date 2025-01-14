@@ -38,6 +38,7 @@ pub struct Model {
     pub verified_via_verifier_alliance: Option<bool>,
     pub certified: Option<bool>,
     pub is_blueprint: Option<bool>,
+    pub language: Option<i16>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

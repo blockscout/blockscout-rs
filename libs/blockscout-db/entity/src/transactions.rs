@@ -6,14 +6,14 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "transactions")]
 pub struct Model {
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub cumulative_gas_used: Option<BigDecimal>,
+    pub cumulative_gas_used: Option<Decimal>,
     pub error: Option<String>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub gas: BigDecimal,
+    pub gas: Decimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub gas_price: Option<BigDecimal>,
+    pub gas_price: Option<Decimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub gas_used: Option<BigDecimal>,
+    pub gas_used: Option<Decimal>,
     #[sea_orm(
         primary_key,
         auto_increment = false,
@@ -25,14 +25,14 @@ pub struct Model {
     pub input: Vec<u8>,
     pub nonce: i32,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub r: BigDecimal,
+    pub r: Decimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub s: BigDecimal,
+    pub s: Decimal,
     pub status: Option<i32>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub v: BigDecimal,
+    pub v: Decimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub value: BigDecimal,
+    pub value: Decimal,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
@@ -51,17 +51,19 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     pub revert_reason: Option<String>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub max_priority_fee_per_gas: Option<BigDecimal>,
+    pub max_priority_fee_per_gas: Option<Decimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub max_fee_per_gas: Option<BigDecimal>,
+    pub max_fee_per_gas: Option<Decimal>,
     pub r#type: Option<i32>,
-    pub has_error_in_internal_txs: Option<bool>,
-    pub block_timestamp: Option<DateTime>,
+    pub has_error_in_internal_transactions: Option<bool>,
     pub block_consensus: Option<bool>,
+    pub block_timestamp: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_one = "super::beacon_blobs_transactions::Entity")]
+    BeaconBlobsTransactions,
     #[sea_orm(
         belongs_to = "super::blocks::Entity",
         from = "Column::BlockHash",
@@ -74,12 +76,20 @@ pub enum Relation {
     InternalTransactions,
     #[sea_orm(has_many = "super::logs::Entity")]
     Logs,
+    #[sea_orm(has_many = "super::signed_authorizations::Entity")]
+    SignedAuthorizations,
     #[sea_orm(has_many = "super::token_transfers::Entity")]
     TokenTransfers,
     #[sea_orm(has_many = "super::transaction_actions::Entity")]
     TransactionActions,
     #[sea_orm(has_many = "super::transaction_forks::Entity")]
     TransactionForks,
+}
+
+impl Related<super::beacon_blobs_transactions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::BeaconBlobsTransactions.def()
+    }
 }
 
 impl Related<super::blocks::Entity> for Entity {
@@ -97,6 +107,12 @@ impl Related<super::internal_transactions::Entity> for Entity {
 impl Related<super::logs::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Logs.def()
+    }
+}
+
+impl Related<super::signed_authorizations::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SignedAuthorizations.def()
     }
 }
 

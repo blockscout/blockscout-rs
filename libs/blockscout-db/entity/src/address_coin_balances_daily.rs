@@ -14,7 +14,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub day: Date,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub value: Option<BigDecimal>,
+    pub value: Option<Decimal>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
 }

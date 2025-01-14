@@ -7,11 +7,11 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     pub consensus: bool,
     #[sea_orm(column_type = "Decimal(Some((50, 0)))", nullable)]
-    pub difficulty: Option<BigDecimal>,
+    pub difficulty: Option<Decimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub gas_limit: BigDecimal,
+    pub gas_limit: Decimal,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub gas_used: BigDecimal,
+    pub gas_used: Decimal,
     #[sea_orm(
         primary_key,
         auto_increment = false,
@@ -29,13 +29,17 @@ pub struct Model {
     pub size: Option<i32>,
     pub timestamp: DateTime,
     #[sea_orm(column_type = "Decimal(Some((50, 0)))", nullable)]
-    pub total_difficulty: Option<BigDecimal>,
+    pub total_difficulty: Option<Decimal>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
     pub refetch_needed: Option<bool>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub base_fee_per_gas: Option<BigDecimal>,
+    pub base_fee_per_gas: Option<Decimal>,
     pub is_empty: Option<bool>,
+    #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
+    pub blob_gas_used: Option<Decimal>,
+    #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
+    pub excess_blob_gas: Option<Decimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
