@@ -120,17 +120,20 @@ export function hashByName(name: string): ByteArray {
       )
     )
   }
+}
+
+function splitStringOnce(input: string, separator: string): string[] {
+  const separatorIndex = input.indexOf(separator)
+
+  if (separatorIndex === -1) {
+    return [input, ''];
   }
 
-  function splitStringOnce(input: string, separator: string): string[] {
-    const splitArray = input.split(separator, 2);
-    
-    if (splitArray.length === 2) {
-      return [splitArray[0], splitArray[1]];
-    } else {
-      return [input, ''];
-    }
-  }
+  return [
+    input.slice(0, separatorIndex),
+    input.slice(separatorIndex + separator.length)
+  ]
+}
 
 function labelFromName(name: string): string {
   const labels = splitStringOnce(name, '.');

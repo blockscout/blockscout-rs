@@ -8,8 +8,12 @@
   },
   "shibarium-testnet": {
     "Registry": {
-      "address": "0x91c2d22ca1028B2E55e3097096494Eb34b7fc81c",
-      "startBlock": 4555130
+      "address": "0x1443bC2bBAB07437BCF9C577b647523A736bB33E",
+      "startBlock": 1927346
+    },
+    "Resolver": {
+      "address": "0xae6Bdf6e9edA0bA60F97390e70a545e91B5E8bf2.",
+      "startBlock": 6806860
     },
     "": ""
   }
