@@ -43,3 +43,9 @@ provider = [
     { label = "shibarium", url = "https://www.shibrpc.com", features = [] }
 ]
 shard = "primary"
+
+[chains.shibarium-testnet]
+provider = [
+    { label = "shibarium-testnet", url = "https://puppynet.shibrpc.com", features = [] }
+]
+shard = "primary"
