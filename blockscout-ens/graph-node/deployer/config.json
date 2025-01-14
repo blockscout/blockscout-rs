@@ -69,6 +69,11 @@
       "subgraph_path": "../subgraphs/d3-connect-subgraph",
       "subgraph_name": "d3-connect-ape-subgraph",
       "network": "ape-mainnet"
+    },
+    "d3-connect-shib-testnet": {
+        "subgraph_path": "../subgraphs/d3-connect-subgraph",
+        "subgraph_name": "d3-connect-shib-subgraph",
+        "network": "shibarium-testnet"
     }
   }
 }
