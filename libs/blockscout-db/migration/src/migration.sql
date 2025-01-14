@@ -73,6 +73,18 @@ COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching
 
 
 --
+-- Name: entry_point_version; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.entry_point_version AS ENUM (
+    'v0.6',
+    'v0.7'
+);
+
+
+ALTER TYPE public.entry_point_version OWNER TO postgres;
+
+--
 -- Name: log_id; Type: TYPE; Schema: public; Owner: postgres
 --
 
@@ -118,6 +130,20 @@ CREATE TYPE public.proxy_type AS ENUM (
 
 
 ALTER TYPE public.proxy_type OWNER TO postgres;
+
+--
+-- Name: sponsor_type; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.sponsor_type AS ENUM (
+    'wallet_deposit',
+    'wallet_balance',
+    'paymaster_sponsor',
+    'paymaster_hybrid'
+);
+
+
+ALTER TYPE public.sponsor_type OWNER TO postgres;
 
 --
 -- Name: transaction_actions_protocol; Type: TYPE; Schema: public; Owner: postgres
@@ -1820,6 +1846,62 @@ ALTER SEQUENCE public.user_contacts_id_seq OWNED BY public.user_contacts.id;
 
 
 --
+-- Name: user_operations; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.user_operations (
+    hash bytea NOT NULL,
+    sender bytea NOT NULL,
+    nonce bytea NOT NULL,
+    init_code bytea,
+    call_data bytea NOT NULL,
+    call_gas_limit numeric(100,0) NOT NULL,
+    verification_gas_limit numeric(100,0) NOT NULL,
+    pre_verification_gas numeric(100,0) NOT NULL,
+    max_fee_per_gas numeric(100,0) NOT NULL,
+    max_priority_fee_per_gas numeric(100,0) NOT NULL,
+    paymaster_and_data bytea,
+    signature bytea NOT NULL,
+    aggregator bytea,
+    aggregator_signature bytea,
+    entry_point bytea NOT NULL,
+    transaction_hash bytea NOT NULL,
+    block_number integer NOT NULL,
+    block_hash bytea NOT NULL,
+    bundle_index integer NOT NULL,
+    index integer NOT NULL,
+    user_logs_start_index integer NOT NULL,
+    user_logs_count integer NOT NULL,
+    bundler bytea NOT NULL,
+    factory bytea,
+    paymaster bytea,
+    status boolean NOT NULL,
+    revert_reason bytea,
+    gas numeric(100,0) NOT NULL,
+    gas_price numeric(100,0) NOT NULL,
+    gas_used numeric(100,0) NOT NULL,
+    sponsor_type public.sponsor_type NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    entry_point_version public.entry_point_version DEFAULT 'v0.6'::public.entry_point_version NOT NULL
+);
+
+
+ALTER TABLE public.user_operations OWNER TO postgres;
+
+--
+-- Name: user_ops_indexer_migrations; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.user_ops_indexer_migrations (
+    version character varying NOT NULL,
+    applied_at bigint NOT NULL
+);
+
+
+ALTER TABLE public.user_ops_indexer_migrations OWNER TO postgres;
+
+--
 -- Name: users; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2578,6 +2660,22 @@ ALTER TABLE ONLY public.transactions
 
 ALTER TABLE ONLY public.user_contacts
     ADD CONSTRAINT user_contacts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_operations user_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_operations
+    ADD CONSTRAINT user_operations_pkey PRIMARY KEY (hash);
+
+
+--
+-- Name: user_ops_indexer_migrations user_ops_indexer_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_ops_indexer_migrations
+    ADD CONSTRAINT user_ops_indexer_migrations_pkey PRIMARY KEY (version);
 
 
 --
@@ -3582,6 +3680,55 @@ CREATE UNIQUE INDEX unique_username ON public.users USING btree (username);
 --
 
 CREATE UNIQUE INDEX unique_watchlist_id_address_hash_hash_index ON public.account_watchlist_addresses USING btree (watchlist_id, address_hash_hash) WHERE (user_created = true);
+
+
+--
+-- Name: user_operations_block_number_hash_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_block_number_hash_index ON public.user_operations USING btree (block_number DESC, hash DESC);
+
+
+--
+-- Name: user_operations_block_number_transaction_hash_bundle_index_inde; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_block_number_transaction_hash_bundle_index_inde ON public.user_operations USING btree (block_number DESC, transaction_hash DESC, bundle_index DESC);
+
+
+--
+-- Name: user_operations_bundler_transaction_hash_bundle_index_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_bundler_transaction_hash_bundle_index_index ON public.user_operations USING btree (bundler, transaction_hash, bundle_index);
+
+
+--
+-- Name: user_operations_factory_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_factory_index ON public.user_operations USING btree (factory);
+
+
+--
+-- Name: user_operations_paymaster_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_paymaster_index ON public.user_operations USING btree (paymaster);
+
+
+--
+-- Name: user_operations_sender_factory_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_sender_factory_index ON public.user_operations USING btree (sender, factory);
+
+
+--
+-- Name: user_operations_transaction_hash_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_transaction_hash_index ON public.user_operations USING btree (transaction_hash);
 
 
 --
