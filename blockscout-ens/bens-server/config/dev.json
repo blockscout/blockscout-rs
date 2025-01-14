@@ -23,9 +23,18 @@
           "url": "https://shibariumscan.io"
         },
         "use_protocols": [
-          "d3_connect"
+          "d3_connect_shib"
         ],
         "rpc_url": "https://www.shibrpc.com"
+      },
+      "157": {
+        "blockscout": {
+          "url": "https://puppyscan.shib.io/"
+        },
+        "use_protocols": [
+          "d3_connect_shib_testnet"
+        ],
+        "rpc_url": "https://puppynet.shibrpc.com"
       }
     },
     "protocols": {
@@ -69,7 +78,7 @@
           "docs_url": "https://docs.ens.domains/"
         }
       },
-      "d3_connect": {
+      "d3_connect_shib": {
         "tld_list": ["shib"],
         "network_id": 109,
         "subgraph_name": "d3-connect-shib-subgraph",
@@ -78,6 +87,24 @@
           "type": "d3_connect",
           "native_token_contract": "0xDe74799371Ceac11A0F52BA2694392A391D0dA18",
           "resolver_contract": "0xD60D40674E678F0089736D6381071973a75B4B6f"
+        },
+        "meta": {
+          "short_name": "D3 Connect",
+          "title": "D3 Connect",
+          "description": "D3 Connect is a platform for connecting to the Shibarium network.",
+          "icon_url": "https://i.imgur.com/cD6VIXk.png",
+          "docs_url": "https://docs.d3.app/"
+        }
+      },
+      "d3_connect_shib_testnet": {
+        "tld_list": ["shib"],
+        "network_id": 157,
+        "subgraph_name": "d3-connect-shib-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "d3_connect",
+          "native_token_contract": "0x4F3775dfd49db0BBcd47eB6f45CEb6E6E9e15CD8",
+          "resolver_contract": "0x51B4894B45A764d2bF48aE5D7F9e70Ac70e28875"
         },
         "meta": {
           "short_name": "D3 Connect",
