@@ -4,7 +4,7 @@
 default:
     just --list --unsorted
 
-blockscout-version := env_var_or_default('BLOCKSCOUT_VERSION', "6.8.0")
+blockscout-version := env_var_or_default('BLOCKSCOUT_VERSION', "6.10.0")
 
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping

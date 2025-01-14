@@ -36,10 +36,6 @@ pub struct Model {
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
     pub base_fee_per_gas: Option<Decimal>,
     pub is_empty: Option<bool>,
-    #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub blob_gas_used: Option<Decimal>,
-    #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub excess_blob_gas: Option<Decimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

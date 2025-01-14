@@ -2,6 +2,16 @@
 
 pub mod prelude;
 
+pub mod account_api_keys;
+pub mod account_api_plans;
+pub mod account_custom_abis;
+pub mod account_identities;
+pub mod account_public_tags_requests;
+pub mod account_tag_addresses;
+pub mod account_tag_transactions;
+pub mod account_watchlist_addresses;
+pub mod account_watchlist_notifications;
+pub mod account_watchlists;
 pub mod address_coin_balances;
 pub mod address_coin_balances_daily;
 pub mod address_contract_code_fetch_attempts;
@@ -12,12 +22,9 @@ pub mod address_to_tags;
 pub mod address_token_balances;
 pub mod addresses;
 pub mod administrators;
-pub mod beacon_blobs;
-pub mod beacon_blobs_transactions;
 pub mod block_rewards;
 pub mod block_second_degree_relations;
 pub mod blocks;
-pub mod bridged_tokens;
 pub mod constants;
 pub mod contract_methods;
 pub mod contract_verification_status;
@@ -52,8 +59,6 @@ pub mod transaction_forks;
 pub mod transaction_stats;
 pub mod transactions;
 pub mod user_contacts;
-pub mod user_operations;
-pub mod user_ops_indexer_migrations;
 pub mod users;
 pub mod validators;
 pub mod withdrawals;

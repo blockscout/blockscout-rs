@@ -56,14 +56,12 @@ pub struct Model {
     pub max_fee_per_gas: Option<Decimal>,
     pub r#type: Option<i32>,
     pub has_error_in_internal_transactions: Option<bool>,
-    pub block_consensus: Option<bool>,
     pub block_timestamp: Option<DateTime>,
+    pub block_consensus: Option<bool>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_one = "super::beacon_blobs_transactions::Entity")]
-    BeaconBlobsTransactions,
     #[sea_orm(
         belongs_to = "super::blocks::Entity",
         from = "Column::BlockHash",
@@ -84,12 +82,6 @@ pub enum Relation {
     TransactionActions,
     #[sea_orm(has_many = "super::transaction_forks::Entity")]
     TransactionForks,
-}
-
-impl Related<super::beacon_blobs_transactions::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::BeaconBlobsTransactions.def()
-    }
 }
 
 impl Related<super::blocks::Entity> for Entity {

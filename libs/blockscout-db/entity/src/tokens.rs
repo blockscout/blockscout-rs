@@ -29,22 +29,13 @@ pub struct Model {
     pub total_supply_updated_at_block: Option<i64>,
     pub icon_url: Option<String>,
     pub is_verified_via_admin_panel: Option<bool>,
-    pub bridged: Option<bool>,
     pub volume_24h: Option<Decimal>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_one = "super::bridged_tokens::Entity")]
-    BridgedTokens,
     #[sea_orm(has_many = "super::token_instances::Entity")]
     TokenInstances,
-}
-
-impl Related<super::bridged_tokens::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::BridgedTokens.def()
-    }
 }
 
 impl Related<super::token_instances::Entity> for Entity {
