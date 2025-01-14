@@ -148,13 +148,17 @@ pub struct DatabaseConnectOptionsSettings {
     pub max_connections: Option<u32>,
     /// Minimum number of connections for a pool
     pub min_connections: Option<u32>,
+    #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
     /// The connection timeout for a packet connection
     pub connect_timeout: Option<Duration>,
+    #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
     /// Maximum idle time for a particular connection to prevent
     /// network resource exhaustion
     pub idle_timeout: Option<Duration>,
+    #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
     /// Set the maximum amount of time to spend waiting for acquiring a connection
     pub acquire_timeout: Option<Duration>,
+    #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
     /// Set the maximum lifetime of individual connections
     pub max_lifetime: Option<Duration>,
     /// Enable SQLx statement logging
