@@ -7643,14 +7643,13 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 [[package]]
 name = "verification-common"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=1164e09#1164e093cb45afd9b9445428d178f759c1e0ab74"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=3892914#3892914d5d334699a92cd90f571988e86c7c9b2b"
 dependencies = [
  "alloy-dyn-abi",
  "alloy-json-abi",
  "anyhow",
  "blockscout-display-bytes",
  "bytes",
- "readonly",
  "serde",
  "serde_json",
  "serde_with 3.11.0",
@@ -7659,13 +7658,14 @@ dependencies = [
 [[package]]
 name = "verification-common"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=3892914#3892914d5d334699a92cd90f571988e86c7c9b2b"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=5481500#5481500910217806d23f420782a203b2debfa5be"
 dependencies = [
  "alloy-dyn-abi",
  "alloy-json-abi",
  "anyhow",
  "blockscout-display-bytes",
  "bytes",
+ "readonly",
  "serde",
  "serde_json",
  "serde_with 3.11.0",
@@ -7688,7 +7688,7 @@ dependencies = [
  "sha3",
  "strum",
  "tokio",
- "verification-common 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=1164e09)",
+ "verification-common 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=5481500)",
  "verifier-alliance-entity 0.1.0",
  "verifier-alliance-migration 0.1.0",
 ]
