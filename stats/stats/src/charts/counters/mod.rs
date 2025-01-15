@@ -14,6 +14,7 @@ mod total_native_coin_transfers;
 mod total_operational_txns;
 mod total_tokens;
 mod total_txns;
+mod total_user_ops;
 mod total_verified_contracts;
 mod txns_stats_24h;
 mod yesterday_txns;
