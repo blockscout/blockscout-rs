@@ -478,26 +478,76 @@ async fn check_code_matches(
     database_source: &DatabaseReadySource,
     contract_deployment: &contract_deployments::Model,
 ) -> Result<(CodeMatch, CodeMatch), anyhow::Error> {
-    let (deployed_creation_code, deployed_runtime_code) =
+    let (on_chain_creation_code, on_chain_runtime_code) =
         db::verifier_alliance_db::retrieve_contract_codes(db_client, contract_deployment)
             .await
             .context("retrieve deployment contract codes")?;
 
-    let creation_code_match = super::verifier_alliance::verify_creation_code(
-        contract_deployment,
-        deployed_creation_code.code.clone(),
-        database_source.raw_creation_code.clone(),
-        database_source.creation_code_artifacts.clone(),
-    )
-    .context("verify if creation code match")?;
+    let compilation_artifacts_value = database_source
+        .compilation_artifacts
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("compilation_artifacts are missing"))?;
+    let compilation_artifacts: verification_common::verifier_alliance::CompilationArtifacts =
+        serde::Deserialize::deserialize(compilation_artifacts_value)?;
 
-    let runtime_code_match = super::verifier_alliance::verify_runtime_code(
-        contract_deployment,
-        deployed_runtime_code.code.clone(),
-        database_source.raw_runtime_code.clone(),
-        database_source.runtime_code_artifacts.clone(),
-    )
-    .context("verify if creation code match")?;
+    let creation_code_artifacts_value = database_source
+        .creation_code_artifacts
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("creation_code_artifacts are missing"))?;
+    let creation_code_artifacts: verification_common::verifier_alliance::CreationCodeArtifacts =
+        serde::Deserialize::deserialize(creation_code_artifacts_value)?;
+
+    let runtime_code_artifacts_value = database_source
+        .runtime_code_artifacts
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("runtime_code_artifacts are missing"))?;
+    let runtime_code_artifacts: verification_common::verifier_alliance::RuntimeCodeArtifacts =
+        serde::Deserialize::deserialize(runtime_code_artifacts_value)?;
+
+    let creation_code_match = match on_chain_creation_code.code {
+        None => None,
+        Some(code) => verification_common::verifier_alliance::verify_creation_code(
+            &code,
+            database_source.raw_creation_code.clone(),
+            &creation_code_artifacts,
+            &compilation_artifacts,
+        )
+        .context("verify if creation code match")?,
+    };
+    let runtime_code_match = match on_chain_runtime_code.code {
+        None => None,
+        Some(code) => verification_common::verifier_alliance::verify_runtime_code(
+            &code,
+            database_source.raw_runtime_code.clone(),
+            &runtime_code_artifacts,
+        )
+        .context("verify if runtime code match")?,
+    };
+
+    let creation_code_match = match creation_code_match {
+        None => CodeMatch {
+            does_match: false,
+            values: None,
+            transformations: None,
+        },
+        Some(code_match) => CodeMatch {
+            does_match: true,
+            values: Some(code_match.values.into()),
+            transformations: Some(code_match.transformations.into()),
+        },
+    };
+    let runtime_code_match = match runtime_code_match {
+        None => CodeMatch {
+            does_match: false,
+            values: None,
+            transformations: None,
+        },
+        Some(code_match) => CodeMatch {
+            does_match: true,
+            values: Some(code_match.values.into()),
+            transformations: Some(code_match.transformations.into()),
+        },
+    };
 
     if !(creation_code_match.does_match || runtime_code_match.does_match) {
         return Err(anyhow::anyhow!(
