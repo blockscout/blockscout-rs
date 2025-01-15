@@ -2132,7 +2132,6 @@ dependencies = [
  "url",
  "verification-common",
  "verifier-alliance-entity 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=ec1c755)",
- "verifier-alliance-migration 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=ec1c755)",
 ]
 
 [[package]]

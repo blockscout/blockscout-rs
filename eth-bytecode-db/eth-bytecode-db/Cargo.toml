@@ -49,7 +49,6 @@ smart-contract-verifier-proto = { workspace = true, features = ["mock"] }
 tokio = { workspace = true }
 tonic = { workspace = true }
 url = { workspace = true }
-verifier-alliance-migration = { workspace = true }
 
 [features]
 # When activated includes helper methods for tests and benchmarking
