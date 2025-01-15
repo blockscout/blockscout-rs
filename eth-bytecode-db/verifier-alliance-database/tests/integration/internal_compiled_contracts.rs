@@ -1,7 +1,7 @@
 use crate::from_json;
 use blockscout_service_launcher::test_database::database;
 use std::collections::BTreeMap;
-use verification_common_v1::verifier_alliance::{
+use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts, SourceId,
 };
 use verifier_alliance_database::{

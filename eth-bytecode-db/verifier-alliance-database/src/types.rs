@@ -1,6 +1,6 @@
 use sea_orm::prelude::Uuid;
 use std::collections::BTreeMap;
-use verification_common_v1::verifier_alliance::{
+use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts,
 };
 use verifier_alliance_entity_v1::contract_deployments;

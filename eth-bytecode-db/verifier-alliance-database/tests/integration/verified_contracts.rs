@@ -3,7 +3,7 @@ use blockscout_display_bytes::decode_hex;
 use blockscout_service_launcher::test_database::database;
 use sea_orm::{prelude::Uuid, DatabaseConnection};
 use std::collections::BTreeMap;
-use verification_common_v1::verifier_alliance::{
+use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation, MatchValues,
     RuntimeCodeArtifacts, SourceId,
 };

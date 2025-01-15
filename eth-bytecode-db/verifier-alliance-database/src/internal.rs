@@ -9,7 +9,7 @@ use sea_orm::{
 use sha2::{Digest, Sha256};
 use sha3::Keccak256;
 use std::collections::BTreeMap;
-use verification_common_v1::verifier_alliance::Match;
+use verification_common::verifier_alliance::Match;
 use verifier_alliance_entity_v1::{
     code, compiled_contracts, compiled_contracts_sources, contract_deployments, contracts, sources,
     verified_contracts,

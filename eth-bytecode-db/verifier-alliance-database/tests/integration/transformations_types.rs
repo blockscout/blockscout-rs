@@ -3,7 +3,7 @@ use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, str::FromStr};
-use verification_common_v1::verifier_alliance::{
+use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation, MatchValues,
     RuntimeCodeArtifacts,
 };
