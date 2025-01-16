@@ -321,14 +321,12 @@ impl Protocoler {
                     .into_iter()
                     .map(|tld| format!("{}.{}", name, tld.0))
                     .flat_map(|name_with_tld| {
-                        match self.names_options_in_network_with_suggestions(
+                        self.names_options_in_network_with_suggestions(
                             &name_with_tld,
                             network_id,
                             maybe_filter.clone(),
-                        ) {
-                            Ok(vec) => vec,
-                            Err(_) => Vec::new(),
-                        }
+                        )
+                        .unwrap_or_default()
                     })
                     .take(MAX_NAMES_LIMIT)
                     .collect();
