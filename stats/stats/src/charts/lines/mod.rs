@@ -102,7 +102,9 @@ pub use new_operational_txns::{
 pub(crate) use new_txns::NewTxnsStatement;
 pub use new_txns::{NewTxns, NewTxnsInt, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
 pub use new_txns_window::NewTxnsWindow;
-pub use new_user_ops::{NewUserOps, NewUserOpsInt};
+pub use new_user_ops::{
+    NewUserOps, NewUserOpsInt, NewUserOpsMonthly, NewUserOpsWeekly, NewUserOpsYearly,
+};
 pub use new_verified_contracts::{
     NewVerifiedContracts, NewVerifiedContractsMonthly, NewVerifiedContractsWeekly,
     NewVerifiedContractsYearly,
@@ -116,7 +118,9 @@ pub use txns_growth::{TxnsGrowth, TxnsGrowthMonthly, TxnsGrowthWeekly, TxnsGrowt
 pub use txns_success_rate::{
     TxnsSuccessRate, TxnsSuccessRateMonthly, TxnsSuccessRateWeekly, TxnsSuccessRateYearly,
 };
-pub use user_ops_growth::UserOpsGrowth;
+pub use user_ops_growth::{
+    UserOpsGrowth, UserOpsGrowthMonthly, UserOpsGrowthWeekly, UserOpsGrowthYearly,
+};
 pub use verified_contracts_growth::{
     VerifiedContractsGrowth, VerifiedContractsGrowthMonthly, VerifiedContractsGrowthWeekly,
     VerifiedContractsGrowthYearly,
