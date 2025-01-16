@@ -413,3 +413,40 @@ impl Protocol {
             })
     }
 }
+
+#[cfg(test)]
+mod tld_tests {
+    use super::Tld;
+
+    #[test]
+    fn tld_new_trims_dot() {
+        let tld = Tld::new(".eth");
+        assert_eq!(tld.0, "eth");
+    }
+
+    #[test]
+    fn tld_new_no_dot() {
+        let tld = Tld::new("eth");
+        assert_eq!(tld.0, "eth");
+    }
+
+    #[test]
+    fn from_domain_name_works() {
+        let domain = "vitalik.eth";
+        let tld = Tld::from_domain_name(domain).unwrap();
+        assert_eq!(tld.0, "eth");
+    }
+
+    #[test]
+    fn from_domain_name_empty() {
+        let domain = ".";
+        let tld = Tld::from_domain_name(domain);
+        assert!(tld.is_none());
+    }
+
+    #[test]
+    fn reverse_works() {
+        let rev = Tld::reverse();
+        assert_eq!(rev.0, "reverse");
+    }
+}
