@@ -1187,9 +1187,9 @@ dependencies = [
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.15.0"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98faf66096af3a77362da42c2861e59427187b8f1687f482cb4d04465176d3d0"
+checksum = "8fb9859602937cce1d32a8e6042deadc9d3011687ea0b5d2ce7b7209b850d84a"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -1209,6 +1209,7 @@ dependencies = [
  "sea-orm-migration",
  "serde",
  "serde_json",
+ "serde_with 3.11.0",
  "tokio",
  "tonic",
  "tracing",
@@ -2194,7 +2195,10 @@ dependencies = [
  "tonic",
  "tracing",
  "url",
+ "verifier-alliance-database",
+ "verifier-alliance-entity 0.1.0",
  "verifier-alliance-entity 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=ec1c755)",
+ "verifier-alliance-migration 0.1.0",
  "verifier-alliance-migration 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=ec1c755)",
 ]
 
@@ -7672,6 +7676,24 @@ dependencies = [
  "sha3",
  "strum",
  "tokio",
+ "verification-common",
+ "verifier-alliance-database-tests",
+ "verifier-alliance-entity 0.1.0",
+ "verifier-alliance-migration 0.1.0",
+]
+
+[[package]]
+name = "verifier-alliance-database-tests"
+version = "0.1.0"
+dependencies = [
+ "blockscout-display-bytes",
+ "blockscout-service-launcher",
+ "paste",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "serde_with 3.11.0",
+ "sha3",
  "verification-common",
  "verifier-alliance-entity 0.1.0",
  "verifier-alliance-migration 0.1.0",

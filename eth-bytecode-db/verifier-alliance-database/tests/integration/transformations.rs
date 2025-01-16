@@ -1,48 +1,87 @@
-use crate::transformations_types::TestCase;
-use blockscout_service_launcher::test_database::database;
+use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 use verifier_alliance_database::{insert_contract_deployment, insert_verified_contract};
-use verifier_alliance_migration_v1::Migrator;
+use verifier_alliance_database_tests::build_all_tests;
 
-macro_rules! build_test {
-    ($test_name:ident) => {
-        #[tokio::test]
-        async fn $test_name() {
-            const TEST_CASE_CONTENT: &str = include_str!(std::concat!(
-                "../test_cases/",
-                stringify!($test_name),
-                ".json"
-            ));
+async fn initialization(
+    database_connection: Arc<DatabaseConnection>,
+    test_case: verifier_alliance_database_tests::TestCase,
+) {
+    let contract_deployment_data = helpers::contract_deployment_data(&test_case);
+    let inserted_contract_deployment =
+        insert_contract_deployment(&database_connection, contract_deployment_data)
+            .await
+            .expect("error while inserting contract deployment");
 
-            let database_guard = database!(Migrator);
-            let database_connection = database_guard.client();
-
-            let test_case = TestCase::from_content(TEST_CASE_CONTENT);
-
-            let contract_deployment_data = test_case.contract_deployment_data();
-            let inserted_contract_deployment =
-                insert_contract_deployment(&database_connection, contract_deployment_data)
-                    .await
-                    .expect("error while inserting contract deployment");
-
-            let verified_contract_data =
-                test_case.verified_contract_data(inserted_contract_deployment.id);
-            let _inserted_verified_contract =
-                insert_verified_contract(&database_connection, verified_contract_data)
-                    .await
-                    .expect("error while inserting verified contract");
-
-            test_case
-                .validate_final_database_state(&database_connection)
-                .await;
-        }
-    };
+    let verified_contract_data =
+        helpers::verified_contract_data(&test_case, inserted_contract_deployment.id);
+    insert_verified_contract(&database_connection, verified_contract_data)
+        .await
+        .expect("error while inserting verified contract");
 }
 
-build_test!(constructor_arguments);
-build_test!(full_match);
-build_test!(immutables);
-build_test!(libraries_linked_by_compiler);
-build_test!(libraries_manually_linked);
-build_test!(metadata_hash_absent);
-build_test!(partial_match);
-build_test!(partial_match_double_auxdata);
+build_all_tests!(initialization);
+
+mod helpers {
+    use sea_orm::prelude::Uuid;
+    use std::str::FromStr;
+    use verification_common::verifier_alliance::Match;
+    use verifier_alliance_database::{
+        CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
+        InsertContractDeployment, VerifiedContract, VerifiedContractMatches,
+    };
+
+    pub fn contract_deployment_data(
+        test_case: &verifier_alliance_database_tests::TestCase,
+    ) -> InsertContractDeployment {
+        InsertContractDeployment::Regular {
+            chain_id: test_case.chain_id,
+            address: test_case.address.clone(),
+            transaction_hash: test_case.transaction_hash.clone(),
+            block_number: test_case.block_number,
+            transaction_index: test_case.transaction_index,
+            deployer: test_case.deployer.clone(),
+            creation_code: test_case.deployed_creation_code.clone(),
+            runtime_code: test_case.deployed_runtime_code.clone(),
+        }
+    }
+
+    pub fn verified_contract_data(
+        test_case: &verifier_alliance_database_tests::TestCase,
+        contract_deployment_id: Uuid,
+    ) -> VerifiedContract {
+        let compiler = CompiledContractCompiler::from_str(&test_case.compiler.to_lowercase())
+            .expect("invalid compiler");
+        let language = CompiledContractLanguage::from_str(&test_case.language.to_lowercase())
+            .expect("invalid language");
+        VerifiedContract {
+            contract_deployment_id,
+            compiled_contract: CompiledContract {
+                compiler,
+                version: test_case.version.clone(),
+                language,
+                name: test_case.name.clone(),
+                fully_qualified_name: test_case.fully_qualified_name.clone(),
+                sources: test_case.sources.clone(),
+                compiler_settings: test_case.compiler_settings.clone(),
+                compilation_artifacts: test_case.compilation_artifacts.clone(),
+                creation_code: test_case.compiled_creation_code.clone(),
+                creation_code_artifacts: test_case.creation_code_artifacts.clone(),
+                runtime_code: test_case.compiled_runtime_code.clone(),
+                runtime_code_artifacts: test_case.runtime_code_artifacts.clone(),
+            },
+            matches: VerifiedContractMatches::Complete {
+                creation_match: Match {
+                    metadata_match: test_case.creation_metadata_match,
+                    transformations: test_case.creation_transformations.clone(),
+                    values: test_case.creation_values.clone(),
+                },
+                runtime_match: Match {
+                    metadata_match: test_case.runtime_metadata_match,
+                    transformations: test_case.runtime_transformations.clone(),
+                    values: test_case.runtime_values.clone(),
+                },
+            },
+        }
+    }
+}
