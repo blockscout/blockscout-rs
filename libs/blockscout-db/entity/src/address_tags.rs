@@ -5,9 +5,9 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "address_tags")]
 pub struct Model {
-    #[sea_orm(unique, primary_key, auto_increment = false)] // changed: fix no key column
+    #[sea_orm(unique)]
     pub id: i32,
-    #[sea_orm(unique, primary_key, auto_increment = false)] // changed: fix no key columns
+    #[sea_orm(primary_key, auto_increment = false, unique)]
     pub label: String,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,

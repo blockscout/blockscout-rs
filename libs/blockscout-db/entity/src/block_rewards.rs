@@ -20,7 +20,7 @@ pub struct Model {
     )]
     pub block_hash: Vec<u8>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub reward: Option<BigDecimal>,
+    pub reward: Option<Decimal>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
 }

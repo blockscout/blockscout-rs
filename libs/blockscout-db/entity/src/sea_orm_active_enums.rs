@@ -3,6 +3,18 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(
+    rs_type = "String",
+    db_type = "Enum",
+    enum_name = "entry_point_version"
+)]
+pub enum EntryPointVersion {
+    #[sea_orm(string_value = "v0.6")]
+    V06,
+    #[sea_orm(string_value = "v0.7")]
+    V07,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "proxy_type")]
 pub enum ProxyType {
     #[sea_orm(string_value = "basic_get_implementation")]
@@ -21,12 +33,26 @@ pub enum ProxyType {
     Eip1967,
     #[sea_orm(string_value = "eip2535")]
     Eip2535,
+    #[sea_orm(string_value = "eip7702")]
+    Eip7702,
     #[sea_orm(string_value = "eip930")]
     Eip930,
     #[sea_orm(string_value = "master_copy")]
     MasterCopy,
     #[sea_orm(string_value = "unknown")]
     Unknown,
+}
+#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "sponsor_type")]
+pub enum SponsorType {
+    #[sea_orm(string_value = "paymaster_hybrid")]
+    PaymasterHybrid,
+    #[sea_orm(string_value = "paymaster_sponsor")]
+    PaymasterSponsor,
+    #[sea_orm(string_value = "wallet_balance")]
+    WalletBalance,
+    #[sea_orm(string_value = "wallet_deposit")]
+    WalletDeposit,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(

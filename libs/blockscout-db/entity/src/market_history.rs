@@ -8,10 +8,10 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     pub date: Date,
-    pub closing_price: Option<BigDecimal>,
-    pub opening_price: Option<BigDecimal>,
-    pub market_cap: Option<BigDecimal>,
-    pub tvl: Option<BigDecimal>,
+    pub closing_price: Option<Decimal>,
+    pub opening_price: Option<Decimal>,
+    pub market_cap: Option<Decimal>,
+    pub tvl: Option<Decimal>,
     pub secondary_coin: Option<bool>,
 }
 
