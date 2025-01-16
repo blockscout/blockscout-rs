@@ -2,9 +2,13 @@
 
 use blockscout_db::entity::{
     address_coin_balances_daily, addresses, block_rewards, blocks, internal_transactions,
-    migrations_status, smart_contracts, tokens, transactions,
+    migrations_status,
+    sea_orm_active_enums::{EntryPointVersion, SponsorType},
+    smart_contracts, tokens, transactions, user_operations,
 };
 use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
+use hex_literal::hex;
+use itertools::Itertools;
 use rand::{Rng, SeedableRng};
 use sea_orm::{prelude::Decimal, ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 use std::str::FromStr;
@@ -99,6 +103,17 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
 
+    let user_ops_with_txns = mock_user_operations(&blocks, &accounts);
+    let (user_ops_txns, user_ops): (Vec<_>, Vec<_>) = user_ops_with_txns.into_iter().unzip();
+    transactions::Entity::insert_many(user_ops_txns)
+        .exec(blockscout)
+        .await
+        .unwrap();
+    user_operations::Entity::insert_many(user_ops)
+        .exec(blockscout)
+        .await
+        .unwrap();
+
     let contract_creation_txns = contracts
         .iter()
         .chain(verified_contracts.iter())
@@ -109,7 +124,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
                 21_000,
                 1_123_456_789,
                 &accounts,
-                (3 + i) as i32,
+                (4 + i) as i32,
                 TxType::ContractCreation(contract.hash.as_ref().clone()),
             )
         })
@@ -171,7 +186,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
     let useless_blocks = [
         "1970-01-01T00:00:00",
         "2010-11-01T23:59:59",
-        "2022-11-08T12:00:00",
+        "2022-11-13T12:00:00",
     ]
     .into_iter()
     .filter(|val| NaiveDateTime::from_str(val).unwrap().date() <= max_date)
@@ -182,11 +197,25 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
             NaiveDateTime::from_str(ts).unwrap(),
             false,
         )
-    });
-    blocks::Entity::insert_many(useless_blocks)
+    })
+    .collect_vec();
+    blocks::Entity::insert_many(useless_blocks.clone())
         .exec(blockscout)
         .await
         .unwrap();
+
+    if let Some(last_useless_block) = useless_blocks.last() {
+        let (useless_txn, useless_user_op) =
+            mock_user_operation(last_useless_block, 21_000, 1_123_456_789, &accounts, 0);
+        transactions::Entity::insert(useless_txn)
+            .exec(blockscout)
+            .await
+            .unwrap();
+        user_operations::Entity::insert(useless_user_op)
+            .exec(blockscout)
+            .await
+            .unwrap();
+    }
 
     // 10000 eth
     let sum = 10_000_000_000_000_000_000_000_i128;
@@ -641,6 +670,118 @@ fn mock_internal_transaction(
         block_index: Set((*tx.index.as_ref()).unwrap()),
         ..Default::default()
     }
+}
+
+fn mock_user_operations(
+    blocks: &[blocks::ActiveModel],
+    accounts: &[addresses::ActiveModel],
+) -> Vec<(transactions::ActiveModel, user_operations::ActiveModel)> {
+    blocks[0..blocks.len() - 1]
+        .iter()
+        // leave 1/3 of blocks empty
+        .filter(|b| b.number.as_ref() % 3 != 1)
+        // add 1 (user op + transaction) to block
+        .map(|b| {
+            mock_user_operation(
+                b,
+                21_000,
+                (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
+                &accounts,
+                // 0-2 are created at the same blocks in `mock_transactions`
+                3,
+            )
+        })
+        .collect_vec()
+}
+
+fn mock_user_operation(
+    block: &blocks::ActiveModel,
+    gas: i64,
+    gas_price: i64,
+    address_list: &[addresses::ActiveModel],
+    index: i32,
+) -> (transactions::ActiveModel, user_operations::ActiveModel) {
+    // tranasction for the user operation
+    let block_number = block.number.as_ref().to_owned() as i32;
+    let block_hash = block.hash.as_ref().to_vec();
+    let txn_hash = vec![0, 0, 0, 0, block_number as u8, index as u8];
+    let address_index = (block_number as usize) % address_list.len();
+    let from_address_hash = address_list[address_index].hash.as_ref().to_vec();
+    let address_index = (block_number as usize + 1) % address_list.len();
+    let to_address_hash = address_list[address_index].hash.as_ref().to_vec();
+
+    // user operation
+    let bundler = from_address_hash.clone();
+    let entry_point = to_address_hash.clone();
+    let op_index = index;
+
+    // data is from some random tx in sepolia;
+    // taken from user ops indexer unit tests
+    let txn = transactions::ActiveModel {
+        block_number: Set(Some(block_number)),
+        block_hash: Set(Some(block_hash.clone())),
+        block_timestamp: Set(Some(*block.timestamp.as_ref())),
+        block_consensus: Set(Some(*block.consensus.as_ref())),
+        hash: Set(txn_hash.clone()),
+        gas_price: Set(Some(Decimal::new(gas_price, 0))),
+        gas: Set(Decimal::new(gas, 0)),
+        input: Set(hex!("765e827f000000000000000000000000000000000000000000000000000000000000004000000000000000000000000043d1089285a94bf481e1f6b1a7a114acbc83379600000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000f098c91823f1ef080f22645d030a7196e72d31eb000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001200000000000000000000000000000000000000000000000000000000000000420000000000000000000000000000f4240000000000000000000000000001e8480000000000000000000000000000000000000000000000000000000000007a120000000000000000000000000000000010000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000005a0000000000000000000000000000000000000000000000000000000000000064000000000000000000000000000000000000000000000000000000000000002d81f5806eafab78028b6e29ab65208f54cfdd4ce45a1aafc9e0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000244ac27308a000000000000000000000000000000000000000000000000000000000000008000000000000000000000000080ee560d57f4b1d2acfeb2174d09d54879c7408800000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000002200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000598991c9d726cbac7eb023ca974fe6e7e7a57ce80000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000003479096622cf141e3cc93126bbccc3ef10b952c1ef000000000000000000000000000000000000000000000000000000000002a3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000074115cff9c5b847b402c382f066cf275ab6440b75aaa1b881c164e5d43131cfb3895759573bc597baf526002f8d1943f1aaa67dbf7fa99cd30d12a235169eef4f3d5c96fc1619c60bc9d8028dfea0f89c7ec5e3f27000000000000000000000000000000000000000000000000000000000002a3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000014434fcd5be00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000000000000000000000000000000002540be400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000741b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000061a8000000000000000000000000000061a8000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c800000000000000000000000000000000000000000000000000000002540be400000000000000000000000000000000000000000000000000000000000000000000000000000000000000005a89d0e2cdece3d2f2e2497f2b68c5f96ef073c1800000004200775c0e5049afa24e5370a754faade91452b89dfc97907588ac49b441bcf43d06067f220a252454360907199ae8dfdc7fef2caf6c2aae03e4e0676b2c1ae351601b000000000000").to_vec()),
+        nonce: Set(Default::default()),
+        r: Set(Default::default()),
+        s: Set(Default::default()),
+        v: Set(Default::default()),
+        value: Set(Decimal::new(0, 0)),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
+        from_address_hash: Set(from_address_hash),
+        to_address_hash: Set(Some(to_address_hash)),
+        cumulative_gas_used: Set(Some(Default::default())),
+        gas_used: Set(Some(Decimal::new(gas, 0))),
+        index: Set(Some(index)),
+        status: Set(Some(1)),
+        created_contract_address_hash: Set(None),
+        created_contract_code_indexed_at: Set(None),
+        r#type: Set(Some(2)),
+        ..Default::default()
+    };
+
+    let op = user_operations::ActiveModel {
+        hash: Set(vec![0, 0, 0, 123, block_number as u8, index as u8]),
+        sender: Set(hex!("f098c91823f1ef080f22645d030a7196e72d31eb").to_vec()),
+        nonce: Set(vec![0u8; 32]),
+        init_code: Set(Some(hex!("1f5806eafab78028b6e29ab65208f54cfdd4ce45a1aafc9e0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000244ac27308a000000000000000000000000000000000000000000000000000000000000008000000000000000000000000080ee560d57f4b1d2acfeb2174d09d54879c7408800000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000002200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000598991c9d726cbac7eb023ca974fe6e7e7a57ce80000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000003479096622cf141e3cc93126bbccc3ef10b952c1ef000000000000000000000000000000000000000000000000000000000002a3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000074115cff9c5b847b402c382f066cf275ab6440b75aaa1b881c164e5d43131cfb3895759573bc597baf526002f8d1943f1aaa67dbf7fa99cd30d12a235169eef4f3d5c96fc1619c60bc9d8028dfea0f89c7ec5e3f27000000000000000000000000000000000000000000000000000000000002a300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").to_vec())),
+        call_data: Set(hex!("34fcd5be00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000001b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000000000000000000000000000000002540be40000000000000000000000000000000000000000000000000000000000").to_vec()),
+        call_gas_limit: Set(Decimal::new(2000000, 0)),
+        verification_gas_limit: Set(Decimal::new(1000000, 0)),
+        pre_verification_gas: Set(Decimal::new(500000, 0)),
+        max_fee_per_gas: Set(Decimal::new(1, 0)),
+        max_priority_fee_per_gas: Set(Decimal::new(1, 0)),
+        paymaster_and_data: Set(Some(hex!("1b637a3008dc1f86d92031a97fc4b5ac0803329e00000000000000000000000000061a8000000000000000000000000000061a8000000000000000000000000094a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c800000000000000000000000000000000000000000000000000000002540be400").to_vec())),
+        signature: Set(hex!("89d0e2cdece3d2f2e2497f2b68c5f96ef073c1800000004200775c0e5049afa24e5370a754faade91452b89dfc97907588ac49b441bcf43d06067f220a252454360907199ae8dfdc7fef2caf6c2aae03e4e0676b2c1ae351601b").to_vec()),
+        aggregator: Set(None),
+        aggregator_signature: Set(None),
+        entry_point: Set(entry_point),
+        entry_point_version: Set(EntryPointVersion::V07),
+        transaction_hash: Set(txn_hash),
+        block_number: Set(block_number),
+        block_hash: Set(block_hash),
+        bundle_index: Set(0),
+        index: Set(op_index),
+        user_logs_start_index: Set(42),
+        user_logs_count: Set(3),
+        bundler: Set(bundler),
+        factory: Set(Some(hex!("1f5806eAFab78028B6E29Ab65208F54CFdD4ce45").to_vec())),
+        paymaster: Set(Some(hex!("1b637a3008dc1f86d92031a97FC4B5aC0803329e").to_vec())),
+        status: Set(true),
+        revert_reason: Set(None),
+        gas: Set(Decimal::new(4300000, 0)),
+        gas_price: Set(Decimal::new(1, 0)),
+        gas_used: Set(Decimal::new(1534051, 0)),
+        sponsor_type: Set(SponsorType::PaymasterSponsor),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
+    };
+    (txn, op)
 }
 
 fn mock_migration(name: &str, completed: Option<bool>) -> migrations_status::ActiveModel {

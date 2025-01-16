@@ -32,17 +32,23 @@ itertools = "0.13.0"
 rust_decimal = "1.27"
 
 # Dependencies for test-utils only
-pretty_assertions = { version= "1.2", optional = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
-blockscout-service-launcher = { workspace = true, features = [ "database-1_0", "test-database" ], optional = true }
+pretty_assertions = { version = "1.2", optional = true }
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+], optional = true }
+blockscout-service-launcher = { workspace = true, features = [
+    "database-1_0",
+    "test-database",
+], optional = true }
 wiremock = { workspace = true, optional = true }
+hex-literal = { version = "0.4.1", optional = true }
 
 [dev-dependencies]
 sea-orm = { version = "~1.0", features = [
     "sqlx-postgres",
     "sqlx-sqlite",
     "runtime-tokio-rustls",
-    "mock"
+    "mock",
 ] }
 rust_decimal = "1.27"
 rust_decimal_macros = "1.27"
@@ -50,9 +56,19 @@ rust_decimal_macros = "1.27"
 # test-utils
 pretty_assertions = "1.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-blockscout-service-launcher = { workspace = true, features = [ "database-1_0", "test-database" ] }
+blockscout-service-launcher = { workspace = true, features = [
+    "database-1_0",
+    "test-database",
+] }
 wiremock = { workspace = true }
+hex-literal = "0.4.1"
 
 [features]
 default = []
-test-utils = ["dep:tracing-subscriber", "dep:blockscout-service-launcher", "dep:pretty_assertions", "dep:wiremock"]
+test-utils = [
+    "dep:tracing-subscriber",
+    "dep:blockscout-service-launcher",
+    "dep:pretty_assertions",
+    "dep:wiremock",
+    "dep:hex-literal",
+]

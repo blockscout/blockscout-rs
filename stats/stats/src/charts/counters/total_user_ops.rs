@@ -40,6 +40,6 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_user_ops() {
-        simple_test_counter::<TotalUserOps>("update_total_user_ops", "48", None).await;
+        simple_test_counter::<TotalUserOps>("update_total_user_ops", "8", None).await;
     }
 }

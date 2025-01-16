@@ -26,8 +26,11 @@ use crate::{
 use blockscout_db::entity::{blocks, user_operations};
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use migration::{Alias, Asterisk, Expr, Func, IntoColumnRef, IntoIden};
-use sea_orm::{EntityTrait, IntoIdentity, IntoSimpleExpr, QuerySelect, QueryTrait, Statement};
+use migration::{Alias, Asterisk, Expr, Func, IntoColumnRef, IntoIden, SimpleExpr};
+use sea_orm::{
+    ColumnTrait, EntityTrait, IntoIdentity, IntoSimpleExpr, Order, QueryFilter, QueryOrder,
+    QuerySelect, QueryTrait, Statement,
+};
 
 pub struct NewUserOpsStatement;
 
@@ -52,8 +55,14 @@ impl StatementFromRange for NewUserOpsStatement {
                     .cast_as(Alias::new("date")),
                 date_intermediate_col.clone(),
             )
-            .expr_as(Func::count(Asterisk.into_column_ref()), "value")
-            .group_by(Expr::col(date_intermediate_col.into_iden()));
+            .expr_as(
+                SimpleExpr::from(Func::count(Asterisk.into_column_ref()))
+                    .cast_as(Alias::new("text")),
+                "value",
+            )
+            .filter(blocks::Column::Consensus.eq(true))
+            .group_by(Expr::col(date_intermediate_col.clone().into_iden()))
+            .order_by(Expr::col(date_intermediate_col.into_iden()), Order::Asc);
         if let Some(range) = range {
             query = datetime_range_filter(query, blocks::Column::Timestamp, &range);
         }
@@ -111,25 +120,22 @@ pub type NewUserOpsYearly = DirectVecLocalDbChartSource<
 
 #[cfg(test)]
 mod tests {
+    use crate::tests::simple_test::{ranged_test_chart, simple_test_chart};
+
     use super::*;
-    use crate::tests::simple_test::{
-        ranged_test_chart_with_migration_variants, simple_test_chart_with_migration_variants,
-    };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_user_ops() {
-        simple_test_chart_with_migration_variants::<NewUserOps>(
+        simple_test_chart::<NewUserOps>(
             "update_new_user_ops",
             vec![
-                ("2022-11-09", "5"),
-                ("2022-11-10", "12"),
-                ("2022-11-11", "14"),
-                ("2022-11-12", "5"),
-                ("2022-12-01", "5"),
-                ("2023-01-01", "1"),
-                ("2023-02-01", "4"),
-                ("2023-03-01", "1"),
+                ("2022-11-09", "1"),
+                ("2022-11-10", "2"),
+                ("2022-11-11", "2"),
+                ("2022-11-12", "1"),
+                ("2022-12-01", "1"),
+                ("2023-02-01", "1"),
             ],
         )
         .await;
@@ -138,14 +144,12 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_user_ops_weekly() {
-        simple_test_chart_with_migration_variants::<NewUserOpsWeekly>(
+        simple_test_chart::<NewUserOpsWeekly>(
             "update_new_user_ops_weekly",
             vec![
-                ("2022-11-07", "36"),
-                ("2022-11-28", "5"),
-                ("2022-12-26", "1"),
-                ("2023-01-30", "4"),
-                ("2023-02-27", "1"),
+                ("2022-11-07", "6"),
+                ("2022-11-28", "1"),
+                ("2023-01-30", "1"),
             ],
         )
         .await;
@@ -154,14 +158,12 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_user_ops_monthly() {
-        simple_test_chart_with_migration_variants::<NewUserOpsMonthly>(
+        simple_test_chart::<NewUserOpsMonthly>(
             "update_new_user_ops_monthly",
             vec![
-                ("2022-11-01", "36"),
-                ("2022-12-01", "5"),
-                ("2023-01-01", "1"),
-                ("2023-02-01", "4"),
-                ("2023-03-01", "1"),
+                ("2022-11-01", "6"),
+                ("2022-12-01", "1"),
+                ("2023-02-01", "1"),
             ],
         )
         .await;
@@ -170,9 +172,9 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_user_ops_yearly() {
-        simple_test_chart_with_migration_variants::<NewUserOpsYearly>(
+        simple_test_chart::<NewUserOpsYearly>(
             "update_new_user_ops_yearly",
-            vec![("2022-01-01", "41"), ("2023-01-01", "6")],
+            vec![("2022-01-01", "7"), ("2023-01-01", "1")],
         )
         .await;
     }
@@ -180,14 +182,14 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn ranged_update_new_user_ops() {
-        ranged_test_chart_with_migration_variants::<NewUserOps>(
+        ranged_test_chart::<NewUserOps>(
             "ranged_update_new_user_ops",
             vec![
-                ("2022-11-09", "5"),
-                ("2022-11-10", "12"),
-                ("2022-11-11", "14"),
-                ("2022-11-12", "5"),
-                ("2022-12-01", "5"),
+                ("2022-11-09", "1"),
+                ("2022-11-10", "2"),
+                ("2022-11-11", "2"),
+                ("2022-11-12", "1"),
+                ("2022-12-01", "1"),
             ],
             "2022-11-08".parse().unwrap(),
             "2022-12-01".parse().unwrap(),
