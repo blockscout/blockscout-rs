@@ -6,7 +6,6 @@ use anyhow::Context;
 use blockscout_service_launcher::launcher::ConfigSettings;
 use stats::IndexingStatus;
 use tokio::{sync::watch, time::sleep};
-use tracing::{info, warn};
 
 const RETRIES: u64 = 10;
 
@@ -72,9 +71,9 @@ impl IndexingStatusAggregator {
                                 }
                             });
                             if modified {
-                                info!("Observed new indexing status: {:?}", status);
+                                tracing::info!("Observed new indexing status: {:?}", status);
                             } else {
-                                info!("Indexing status is unchanged");
+                                tracing::info!("Indexing status is unchanged");
                             }
                         }
                         Err(e) => tracing::error!("{}", e),
@@ -84,7 +83,7 @@ impl IndexingStatusAggregator {
                     if consecutive_errors >= RETRIES {
                         return Err(e).context("Requesting indexing status");
                     }
-                    warn!(
+                    tracing::warn!(
                         "Error ({consecutive_errors}/{RETRIES}) requesting indexing status: {e:?}"
                     );
                     consecutive_errors += 1;
@@ -95,7 +94,7 @@ impl IndexingStatusAggregator {
             } else {
                 self.wait_config.check_period_secs
             };
-            info!("Rechecking indexing status in {} secs", wait_time);
+            tracing::info!("Rechecking indexing status in {} secs", wait_time);
             sleep(Duration::from_secs(wait_time.into())).await;
         }
     }
@@ -146,18 +145,18 @@ fn is_threshold_passed(
         .transpose()
         .context(format!("Parsing `{value_name}`"))?;
     let value = value.unwrap_or_else(|| {
-        info!("Treating `{value_name}=null` as zero.",);
+        tracing::info!("Treating `{value_name}=null` as zero.",);
         0.0
     });
     if value < threshold {
-        info!(
+        tracing::info!(
             threshold = threshold,
             current_value = value,
             "Threshold for `{value_name}` is not satisfied"
         );
         Ok(false)
     } else {
-        info!(
+        tracing::info!(
             threshold = threshold,
             current_value = value,
             "Threshold for `{value_name}` is satisfied"
@@ -187,7 +186,7 @@ pub async fn init_blockscout_api_client(
     match (settings.ignore_blockscout_api_absence, &settings.blockscout_api_url) {
         (_, Some(blockscout_api_url)) => Ok(Some(blockscout_client::Configuration::new(blockscout_api_url.clone()))),
         (true, None) => {
-            info!(
+            tracing::info!(
                 "Blockscout API URL has not been provided and `IGNORE_BLOCKSCOUT_API_ABSENCE` setting is \
                 set to `true`. Disabling API-related functionality."
             );

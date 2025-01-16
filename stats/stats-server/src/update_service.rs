@@ -101,6 +101,8 @@ impl UpdateService {
             .collect();
 
         let mut failed = 0;
+        // These futures should never complete because they run in infinite loop.
+        // If any completes, it means something went wrong.
         while let Some(()) = group_update_jobs.next().await {
             tracing::error!("update job stopped unexpectedly");
             failed += 1;

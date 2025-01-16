@@ -63,11 +63,6 @@ Syntax for schedules specified in the config is parsed by rust `cron` crate, so 
 
 Some variables are hidden in a disclosure widget below the table.
 
-<!--
-There are zero-width spaces added sometimes to prevent too wide columns
-by enabling word wrapping
--->
-
 [anchor]: <> (anchors.envs.start.service)
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
