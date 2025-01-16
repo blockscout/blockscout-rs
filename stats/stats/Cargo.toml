@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 entity = { path = "./entity" }
-blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "8558040" }
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "d5125c0" }
 blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "980634e" }
 sea-orm = { version = "~1.0", features = [
     "sqlx-postgres",
