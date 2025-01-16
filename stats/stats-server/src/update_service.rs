@@ -8,6 +8,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::data_source::types::{BlockscoutMigrations, UpdateParameters};
 use std::sync::{atomic::AtomicU64, Arc};
+use tokio::sync::Semaphore;
 
 const FAILED_UPDATERS_UNTIL_PANIC: u64 = 3;
 
@@ -53,8 +54,8 @@ impl UpdateService {
         default_schedule: Schedule,
         force_update_on_start: Option<bool>,
     ) {
-        let initial_update_semaphore: Arc<tokio::sync::Semaphore> =
-            Arc::new(tokio::sync::Semaphore::new(concurrent_initial_tasks));
+        let initial_update_semaphore: Arc<Semaphore> =
+            Arc::new(Semaphore::new(concurrent_initial_tasks));
         let groups = self.charts.update_groups.values();
         let init_update_tracker = InitialUpdateTracker::new(groups.len() as u64);
         let mut group_update_jobs: FuturesUnordered<_> = groups
@@ -66,34 +67,15 @@ impl UpdateService {
                 let initial_update_semaphore = initial_update_semaphore.clone();
                 let init_update_tracker = &init_update_tracker;
                 async move {
-                    if let Some(mut status_listener) = status_listener {
-                        let wait_result = status_listener
-                            .wait_until_status_at_least(
-                                group_entry.group.dependency_indexing_status_requirement(
-                                    &group_entry.enabled_members,
-                                ),
-                            )
-                            .await;
-                        if wait_result.is_err() {
-                            panic!("Indexing status listener channel closed");
-                        }
-                    }
-
-                    {
-                        let _init_update_permit = initial_update_semaphore
-                            .acquire()
-                            .await
-                            .expect("failed to acquire permit");
-                        if let Some(force_full) = force_update_on_start {
-                            this.clone().update(group_entry.clone(), force_full).await
-                        };
-                    }
-                    tracing::info!(
-                        update_group = group_entry.group.name(),
-                        "initial update for group is done"
-                    );
-                    init_update_tracker.mark_updated();
-                    init_update_tracker.report();
+                    Self::wait_for_start_condition(&group_entry, status_listener).await;
+                    this.clone()
+                        .run_initial_update(
+                            &group_entry,
+                            force_update_on_start,
+                            &initial_update_semaphore,
+                            init_update_tracker,
+                        )
+                        .await;
                     this.run_recurrent_update(group_entry, &default_schedule)
                         .await
                 }
@@ -110,6 +92,48 @@ impl UpdateService {
                 panic!("too many unexpectedly failed update jobs");
             }
         }
+    }
+
+    async fn wait_for_start_condition(
+        group_entry: &UpdateGroupEntry,
+        status_listener: Option<IndexingStatusListener>,
+    ) {
+        if let Some(mut status_listener) = status_listener {
+            let wait_result = status_listener
+                .wait_until_status_at_least(
+                    group_entry
+                        .group
+                        .dependency_indexing_status_requirement(&group_entry.enabled_members),
+                )
+                .await;
+            if wait_result.is_err() {
+                panic!("Indexing status listener channel closed");
+            }
+        }
+    }
+
+    async fn run_initial_update(
+        self: Arc<Self>,
+        group_entry: &UpdateGroupEntry,
+        force_update_on_start: Option<bool>,
+        initial_update_semaphore: &Semaphore,
+        init_update_tracker: &InitialUpdateTracker,
+    ) {
+        {
+            let _init_update_permit = initial_update_semaphore
+                .acquire()
+                .await
+                .expect("failed to acquire permit");
+            if let Some(force_full) = force_update_on_start {
+                self.update(group_entry.clone(), force_full).await
+            };
+        }
+        tracing::info!(
+            update_group = group_entry.group.name(),
+            "initial update for group is done"
+        );
+        init_update_tracker.mark_updated();
+        init_update_tracker.report();
     }
 
     async fn run_recurrent_update(
