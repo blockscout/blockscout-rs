@@ -1,6 +1,6 @@
 use crate::{
     blockscout::BlockscoutClient,
-    protocols::{DomainNameOnProtocol, ProtocolError, DomainName},
+    protocols::{DomainName, DomainNameOnProtocol, ProtocolError},
 };
 use alloy::primitives::{Address, B256};
 use anyhow::anyhow;
@@ -303,10 +303,11 @@ impl Protocoler {
             })
             .flatten()
             .collect::<Vec<Tld>>();
-    
+
         match name.contains('.') {
             true => {
-                let direct = self.names_options_in_network_with_suggestions(name, network_id, maybe_filter)?;
+                let direct =
+                    self.names_options_in_network_with_suggestions(name, network_id, maybe_filter)?;
                 match direct.is_empty() {
                     true => Err(ProtocolError::InvalidName {
                         name: name.to_string(),
@@ -320,14 +321,18 @@ impl Protocoler {
                     .into_iter()
                     .map(|tld| format!("{}.{}", name, tld.0))
                     .flat_map(|name_with_tld| {
-                        match self.names_options_in_network_with_suggestions(&name_with_tld, network_id, maybe_filter.clone()) {
+                        match self.names_options_in_network_with_suggestions(
+                            &name_with_tld,
+                            network_id,
+                            maybe_filter.clone(),
+                        ) {
                             Ok(vec) => vec,
                             Err(_) => Vec::new(),
                         }
                     })
                     .take(MAX_NAMES_LIMIT)
                     .collect();
-    
+
                 match all_names_with_protocols.is_empty() {
                     true => Err(ProtocolError::InvalidName {
                         name: name.to_string(),
@@ -338,7 +343,7 @@ impl Protocoler {
             }
         }
     }
-    
+
     fn names_options_in_network_with_suggestions(
         &self,
         name_with_tld: &str,
@@ -346,20 +351,20 @@ impl Protocoler {
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
         let domain_name = DomainName::new(name_with_tld, None)?;
-        let tld = Tld::from_domain_name(&domain_name.name).ok_or_else(|| ProtocolError::InvalidName {
-            name: name_with_tld.to_string(),
-            reason: "Invalid TLD".to_string(),
-        })?;
-    
+        let tld =
+            Tld::from_domain_name(&domain_name.name).ok_or_else(|| ProtocolError::InvalidName {
+                name: name_with_tld.to_string(),
+                reason: "Invalid TLD".to_string(),
+            })?;
+
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
         let names_with_protocols = protocols
             .into_iter()
             .map(|p| DomainNameOnProtocol::new(domain_name.clone(), p))
             .collect();
-    
+
         Ok(names_with_protocols)
     }
-    
     pub fn main_name_in_network(
         &self,
         name: &str,
