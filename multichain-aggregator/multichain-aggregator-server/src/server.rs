@@ -52,14 +52,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let mut connect_options = sea_orm::ConnectOptions::new(settings.database.connect.clone().url());
-    connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    let db = database::initialize_postgres::<Migrator>(
-        connect_options,
-        settings.database.create_database,
-        settings.database.run_migrations,
-    )
-    .await?;
+    let db = database::initialize_postgres::<Migrator>(&settings.database).await?;
 
     // Initialize/update Blockscout chains
     let blockscout_chains = BlockscoutChainsClient::builder()

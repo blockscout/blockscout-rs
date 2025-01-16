@@ -960,9 +960,9 @@ dependencies = [
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.14.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a63d6b6e01527cefc2c82f2ef1b874817d4d6cb51f9bacffd116a94917387dc6"
+checksum = "b8e45f89da573b06db372454bdabe7fd3efb96ce12a1d27fffe042ef032177be"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -982,6 +982,7 @@ dependencies = [
  "sea-orm-migration",
  "serde",
  "serde_json",
+ "serde_with 3.12.0",
  "tokio",
  "tonic",
  "tracing",

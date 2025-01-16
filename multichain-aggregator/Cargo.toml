@@ -21,7 +21,7 @@ actix-prost-build = { git = "https://github.com/blockscout/actix-prost", tag = "
 ] }
 actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.2" }
 actix-web = "4.2"
-blockscout-service-launcher = { version = "0.14.0", features = [
+blockscout-service-launcher = { version = "0.16.1", features = [
     "database-1_0",
 ] }
 prost = "0.11"
