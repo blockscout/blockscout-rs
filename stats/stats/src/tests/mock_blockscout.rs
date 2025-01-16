@@ -686,7 +686,7 @@ fn mock_user_operations(
                 b,
                 21_000,
                 (b.number.as_ref() * 1_123_456_789) % 70_000_000_000,
-                &accounts,
+                accounts,
                 // 0-2 are created at the same blocks in `mock_transactions`
                 3,
             )

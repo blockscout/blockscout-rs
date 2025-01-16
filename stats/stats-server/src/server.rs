@@ -75,11 +75,9 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         &mut settings.conditional_start,
         &mut charts_config,
     );
-    let mut opt = DatabaseConnectOptionsSettings::default();
-    opt.sqlx_slow_statements_logging_level = tracing::log::LevelFilter::Debug;
     let database_settings = DatabaseSettings {
         connect: DatabaseConnectSettings::Url(settings.db_url.clone()),
-        connect_options: opt,
+        connect_options: DatabaseConnectOptionsSettings::default(),
         create_database: settings.create_database,
         run_migrations: settings.run_migrations,
     };
