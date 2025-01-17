@@ -10,21 +10,21 @@ async-trait = "0.1"
 actix-web = "4"
 reqwest = "0.12"
 tonic = "0.8"
-serde = { version = "1", features = ["derive"] }
-serde_with = { version = "3", features = ["hex", "base64"] }
+serde = { version = "1", features = [ "derive" ] }
+serde_with = { version = "3", features = [ "hex", "base64" ] }
 bytes = "1.2"
-tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio = { version = "1", features = [ "rt-multi-thread" ] }
 config = "0.13"
 tracing = "0.1"
 futures = "0.3"
 anyhow = "1.0"
 chrono = "0.4"
-sea-orm = { version = "~1.0", features = [
+sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
 ] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-blockscout-service-launcher = { workspace = true, features = ["database-1_0"] }
+tracing-subscriber = { version = "0.3", features = [ "env-filter" ] }
+blockscout-service-launcher = { workspace = true, features = [ "database-1_0" ] }
 blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "0d01bdf7" }
 blockscout-client = { workspace = true }
 cron = "0.12"
@@ -33,10 +33,10 @@ itertools = "0.13.0"
 liquid-json = "0.5.0"
 serde_json = "1.0"
 paste = "1.0"
-url = { version = "2.5", features = ["serde"] }
+url = { version = "2.5", features = [ "serde" ] }
 
 [dev-dependencies]
-stats = { path = "../stats", features = ["test-utils"] }
+stats = { path = "../stats", features = [ "test-utils" ] }
 blockscout-service-launcher = { workspace = true, features = [
     "database-1_0",
     "test-server",
