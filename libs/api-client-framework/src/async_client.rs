@@ -1,28 +1,27 @@
 use super::endpoint::Endpoint;
 use crate::Error;
 use reqwest::{header::HeaderMap, Response, StatusCode};
-use reqwest_middleware::ClientBuilder;
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use reqwest_middleware::{ClientBuilder, Middleware};
 use serde::Deserialize;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 #[derive(Clone)]
 pub struct HttpApiClientConfig {
     /// The maximum time limit for an API request. If a request takes longer than this, it will be
     /// cancelled.
     pub http_timeout: Duration,
-    /// Maximum number of allowed retries attempts. Defaults to 1.
-    pub max_retries: u32,
     /// A default set of HTTP headers which will be sent with each API request.
     pub default_headers: HeaderMap,
+    /// Middlewares that will process each API request before the request is actually sent.
+    pub middlewares: Vec<Arc<dyn Middleware>>,
 }
 
 impl Default for HttpApiClientConfig {
     fn default() -> Self {
         Self {
             http_timeout: Duration::from_secs(30),
-            max_retries: 1,
             default_headers: HeaderMap::default(),
+            middlewares: Vec::new(),
         }
     }
 }
@@ -35,14 +34,16 @@ pub struct HttpApiClient {
 
 impl HttpApiClient {
     pub fn new(base_url: url::Url, config: HttpApiClientConfig) -> Result<Self, Error> {
-        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(config.max_retries);
         let reqwest_client = reqwest::Client::builder()
             .default_headers(config.default_headers)
             .timeout(config.http_timeout)
             .build()?;
-        let client = ClientBuilder::new(reqwest_client)
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
+        let mut client_builder = ClientBuilder::new(reqwest_client);
+        for middleware in config.middlewares {
+            client_builder = client_builder.with_arc(middleware);
+        }
+        let client = client_builder.build();
+
         Ok(Self {
             base_url,
             http_client: client,
@@ -65,6 +66,10 @@ impl HttpApiClient {
                 reqwest::header::CONTENT_TYPE,
                 endpoint.content_type().as_ref(),
             );
+        }
+
+        if let Some(headers) = endpoint.headers() {
+            request = request.headers(headers);
         }
 
         let response = request.send().await?;

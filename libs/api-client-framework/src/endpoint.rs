@@ -23,6 +23,14 @@ pub trait Endpoint {
         None
     }
 
+    /// The set of headers to be sent with request. Defaults to `None`.
+    ///
+    /// Implementors should inline this.
+    #[inline]
+    fn headers(&self) -> Option<reqwest::header::HeaderMap> {
+        None
+    }
+
     /// The HTTP body associated with this endpoint. If not implemented, defaults to `None`.
     ///
     /// Implementors should inline this.
