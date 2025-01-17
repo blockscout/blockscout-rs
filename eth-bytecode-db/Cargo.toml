@@ -69,6 +69,7 @@ smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscou
 solidity-metadata = { version = "1.0" }
 sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "457af68" }
 strum = { version = "0.26.3", default-features = false, features = ["derive"] }
+test-log = { version = "0.2.16" }
 thiserror = { version = "1" }
 tokio = { version = "1" }
 tokio-stream = { version = "0.1" }

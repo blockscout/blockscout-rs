@@ -1,6 +1,6 @@
 mod test_case;
 
-use std::{future::Future, sync::Arc};
+pub use blockscout_service_launcher::test_database::TestDbGuard;
 pub use test_case::TestCase;
 
 pub use paste;
@@ -8,21 +8,20 @@ pub use paste;
 /*************** public test cases ***************/
 
 use blockscout_service_launcher::database;
-use sea_orm::DatabaseConnection;
+use std::future::Future;
 use verifier_alliance_migration_v1::Migrator;
 
 pub async fn test<F, Fut>(test_case: TestCase, initialization: F)
 where
-    F: FnOnce(Arc<DatabaseConnection>, TestCase) -> Fut,
+    F: FnOnce(TestDbGuard, TestCase) -> Fut,
     Fut: Future<Output = ()>,
 {
     let database_guard = database!(Migrator, &test_case.test_case_name);
-    let database_connection = database_guard.client();
 
-    initialization(database_connection.clone(), test_case.clone()).await;
+    initialization(database_guard.clone(), test_case.clone()).await;
 
     test_case
-        .validate_final_database_state(&database_connection)
+        .validate_final_database_state(&database_guard.client())
         .await;
 }
 
@@ -50,6 +49,7 @@ build_test_case!(partial_match_double_auxdata);
 #[macro_export]
 macro_rules! build_test {
     ($test_name:ident, $initialization:ident) => {
+        // #[test_log::test(tokio::test)]
         #[tokio::test]
         pub async fn $test_name() {
             $crate::paste::paste! {

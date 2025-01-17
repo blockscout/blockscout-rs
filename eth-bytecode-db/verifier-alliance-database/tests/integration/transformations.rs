@@ -1,10 +1,8 @@
-use sea_orm::DatabaseConnection;
-use std::sync::Arc;
 use verifier_alliance_database::{insert_contract_deployment, insert_verified_contract};
-use verifier_alliance_database_tests::build_all_tests;
+use verifier_alliance_database_tests::{build_all_tests, TestDbGuard};
 
 async fn initialization(
-    database_connection: Arc<DatabaseConnection>,
+    database_connection: TestDbGuard,
     test_case: verifier_alliance_database_tests::TestCase,
 ) {
     let contract_deployment_data = helpers::contract_deployment_data(&test_case);
