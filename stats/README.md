@@ -63,41 +63,36 @@ Syntax for schedules specified in the config is parsed by rust `cron` crate, so 
 
 Some variables are hidden in a disclosure widget below the table.
 
-<!--
-There are zero-width spaces added here and there to prevent too wide tables
-by enabling word wrapping
--->
-
 [anchor]: <> (anchors.envs.start.service)
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
 | `STATS__DB_URL` | | Postgres URL to stats db | `""` |
-| `STATS__​BLOCKSCOUT_DB_URL` | | Postgres URL to blockscout db | `""` |
+| `STATS__BLOCKSCOUT_DB_URL` | | Postgres URL to blockscout db | `""` |
 | `STATS__CREATE_DATABASE` | | Create database on start | `false` |
 | `STATS__RUN_MIGRATIONS` | | Run migrations on start | `false` |
 | `STATS__CHARTS_CONFIG` | | Path to config file for charts | `"config/charts.json"` |
 | `STATS__LAYOUT_CONFIG` | | Path to config file for chart layout | `"config/layout.json"` |
-| `STATS__UPDATE_​GROUPS_CONFIG` | | Path to config file for update groups | `"config/​update_groups.json"` |
-| `STATS__SWAGGER_FILE` | | Path of the swagger file to serve in the swagger endpoint | `"../stats-proto/​swagger/stats.​swagger.yaml"` |
-| `STATS__FORCE_​UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
-| `STATS__CONCURRENT_​START_UPDATES` | | Amount of concurrent charts update on start | `3` |
-| `STATS__​DEFAULT_​SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
-| `STATS__LIMITS__​REQUESTED_POINTS_​LIMIT` | | Maximum allowed number of requested points | `182500` |
-| `STATS__BLOCKSCOUT_​API_URL` | Required unless `STATS__​IGNORE_​​BLOCKSCOUT_​API_​ABSENCE` is set to `true`. | URL to Blockscout API. Used for [conditional update start](#conditional-start). | `null` |
-| `STATS__CONDITIONAL_​START__​CHECK_PERIOD_SECS` | | Time between start condition checking (if they are not satisfied) | `5` |
-| `STATS__CONDITIONAL_​START__BLOCKS_RATIO__​ENABLED` | | Enable `blocks_​ratio` threshold | `true` |
-| `STATS__CONDITIONAL_​START__BLOCKS_RATIO__​THRESHOLD` | | Value for `blocks_​ratio` threshold | `0.98` |
-| `STATS__CONDITIONAL_​START__INTERNAL_​TRANSACTIONS_RATIO__​ENABLED` | | Enable `internal_​transactions_​ratio` threshold | `true` |
-| `STATS__CONDITIONAL_​START__INTERNAL_​TRANSACTIONS_RATIO__​THRESHOLD` | | Value for `internal_​transactions_​ratio` threshold | `0.98` |
-| `STATS__IGNORE_​BLOCKSCOUT_API_ABSENCE` | | Disable requirement for blockscout api url setting. Turns off corresponding features if the api setting is not set | `false` |
-| `STATS__DISABLE_​INTERNAL_TRANSACTIONS` | | Disable functionality that utilizes internal transactions. In particular, disable internal transactions ratio check for starting the service and related charts (`newContracts`, `lastNewContracts`, and `contractsGrowth`). It has a higher priority than config files and respective envs. | `false` |
-| `STATS__ENABLE_​ALL_ARBITRUM` | | Enable Arbitrum-specific charts. Variable for convenience only, the same can be done manually in configs. | `false` |
+| `STATS__UPDATE_GROUPS_CONFIG` | | Path to config file for update groups | `"config/update_groups.json"` |
+| `STATS__SWAGGER_FILE` | | Path of the swagger file to serve in the swagger endpoint | `"../stats-proto/swagger/stats.swagger.yaml"` |
+| `STATS__FORCE_UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
+| `STATS__CONCURRENT_START_UPDATES` | | Amount of concurrent charts update on start | `3` |
+| `STATS__DEFAULT_SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
+| `STATS__LIMITS__REQUESTED_POINTS_LIMIT` | | Maximum allowed number of requested points | `182500` |
+| `STATS__BLOCKSCOUT_API_URL` | see descri​ption | URL to Blockscout API. Used for [conditional update start](#conditional-start). Required unless `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE`  is set to `true`. | `null` |
+| `STATS__CONDITIONAL_START__CHECK_PERIOD_SECS` | | Base time between start condition checking | `5` |
+| `STATS__CONDITIONAL_START__BLOCKS_RATIO__ENABLED` | | Enable `blocks_ratio` threshold | `true` |
+| `STATS__CONDITIONAL_START__BLOCKS_RATIO__THRESHOLD` | | Value for `blocks_ratio` threshold | `0.98` |
+| `STATS__CONDITIONAL_START__INTERNAL_TRANSACTIONS_RATIO__ENABLED` | | Enable `internal_transactions_ratio` threshold | `true` |
+| `STATS__CONDITIONAL_START__INTERNAL_TRANSACTIONS_RATIO__THRESHOLD` | | Value for `internal_transactions_ratio` threshold | `0.98` |
+| `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE` | | Disable requirement for blockscout api url setting. Turns off corresponding features if the api setting is not set | `false` |
+| `STATS__DISABLE_INTERNAL_TRANSACTIONS` | | Disable functionality that utilizes internal transactions. In particular, disable internal transactions ratio check for starting the service and related charts (`newContracts`, `lastNewContracts`, and `contractsGrowth`). It has a higher priority than config files and respective envs. | `false` |
+| `STATS__ENABLE_ALL_ARBITRUM` | | Enable Arbitrum-specific charts. Variable for convenience only, the same can be done manually in configs. | `false` |
 
 [anchor]: <> (anchors.envs.end.service)
 
 ##### Conditional start
-In order to prevent incorrect statistics from being collected, there is an option to automatically delay chart update. This is controlled by `STATS_CONDITIONAL_​START_*` environmental variables. 
+In order to prevent incorrect statistics from being collected, there is an option to automatically delay chart update. This is controlled by `STATS_CONDITIONAL_START_*` environmental variables. 
 
 The service will periodically check the enabled start conditions and start updating charts once they are satisfied.
 
@@ -108,18 +103,18 @@ The service will periodically check the enabled start conditions and start updat
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS__SERVER__​GRPC__ADDR` | | Address for the gRPC server to listen on | `"0.0.0.0:8051"` |
-| `STATS__SERVER__​GRPC__ENABLED` | | Enable the gRPC server | `false` |
-| `STATS__SERVER__​HTTP__ADDR` | | Address for the HTTP server to listen on | `"0.0.0.0:8050"` |
-| `STATS__SERVER__​HTTP__CORS__​ALLOWED_CREDENTIALS` | | Allow credentials in CORS requests | `true` |
-| `STATS__SERVER__​HTTP__CORS__​ALLOWED_METHODS` | | List of allowed HTTP methods for CORS | `"PUT, GET, POST, OPTIONS, DELETE, PATCH"` |
-| `STATS__SERVER__​HTTP__CORS__​ALLOWED_ORIGIN` | | Allowed origin for CORS requests | `""` |
-| `STATS__SERVER__​HTTP__CORS__​BLOCK_ON_ORIGIN_MISMATCH` | | Block requests if origin does not match | `false` |
-| `STATS__SERVER__​HTTP__CORS__​ENABLED` | | Enable CORS | `false` |
-| `STATS__SERVER__​HTTP__CORS__​MAX_AGE` | | Max age for CORS preflight request caching (in seconds) | `3600` |
-| `STATS__SERVER__​HTTP__CORS__​SEND_WILDCARD` | | Send wildcard for allowed origins in CORS | `false` |
-| `STATS__SERVER__​HTTP__ENABLED` | | Enable the HTTP server | `true` |
-| `STATS__SERVER__​HTTP__MAX_BODY_SIZE` | | Maximum allowed size for HTTP request bodies (in bytes) | `2097152` |
+| `STATS__SERVER__GRPC__ADDR` | | Address for the gRPC server to listen on | `"0.0.0.0:8051"` |
+| `STATS__SERVER__GRPC__ENABLED` | | Enable the gRPC server | `false` |
+| `STATS__SERVER__HTTP__ADDR` | | Address for the HTTP server to listen on | `"0.0.0.0:8050"` |
+| `STATS__SERVER__HTTP__CORS__ALLOWED_CREDENTIALS` | | Allow credentials in CORS requests | `true` |
+| `STATS__SERVER__HTTP__CORS__ALLOWED_METHODS` | | List of allowed HTTP methods for CORS | `"PUT, GET, POST, OPTIONS, DELETE, PATCH"` |
+| `STATS__SERVER__HTTP__CORS__ALLOWED_ORIGIN` | | Allowed origin for CORS requests | `""` |
+| `STATS__SERVER__HTTP__CORS__BLOCK_ON_ORIGIN_MISMATCH` | | Block requests if origin does not match | `false` |
+| `STATS__SERVER__HTTP__CORS__ENABLED` | | Enable CORS | `false` |
+| `STATS__SERVER__HTTP__CORS__MAX_AGE` | | Max age for CORS preflight request caching (in seconds) | `3600` |
+| `STATS__SERVER__HTTP__CORS__SEND_WILDCARD` | | Send wildcard for allowed origins in CORS | `false` |
+| `STATS__SERVER__HTTP__ENABLED` | | Enable the HTTP server | `true` |
+| `STATS__SERVER__HTTP__MAX_BODY_SIZE` | | Maximum allowed size for HTTP request bodies (in bytes) | `2097152` |
 
 [anchor]: <> (anchors.envs.end.server)
 
@@ -165,19 +160,19 @@ The service will periodically check the enabled start conditions and start updat
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​DESCRIPTION` | | Counter `<COUNTER_NAME>` description, e.g. `"Some description"` | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​ENABLED` | | Enable counter `<COUNTER_NAME>`, e.g. `true` | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​TITLE` | | Displayed name of `<COUNTER_NAME>`, e.g. `"Some title with {{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__​COUNTERS__<COUNTER_NAME>__​UNITS` | | Measurement units for the counter, e.g. `"Bytes"` | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​DESCRIPTION` | | Line chart `<LINE_CHART_NAME>` description, e.g. `"Some description with {{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​ENABLED` | | Enable `<LINE_CHART_NAME>`, e.g. `true` | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__DAY` | | Enable daily data for the chart, e.g. `true` | `true` if the resolution is defined |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__WEEK` | | Enable weekly data | `true` if defined |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__MONTH` | | Enable monthly data | `true` if defined |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​RESOLUTIONS__YEAR` | | Enable yearly data | `true` if defined |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​TITLE` | | Displayed name of `<LINE_CHART_NAME>`, e.g. `"Some line chart title"` | `null` |
-| `STATS_CHARTS__​LINE_CHARTS__​<LINE_CHART_NAME>__​UNITS` | | Measurement units, e.g. `"{{<variable_name>}}"` | `null` |
-| `STATS_CHARTS__​TEMPLATE_VALUES__​<VARIABLE_NAME>` | | Value to substitute instead of `{{<variable_name>}}`, e.g. `STATS_CHARTS__​TEMPLATE_VALUES__​NATIVE_COIN_SYMBOL​="some_value"`. See full list of variables in charts config file (`charts.json`). | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__DESCRIPTION` | | Counter `<COUNTER_NAME>` description, e.g. `"Some description"` | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__ENABLED` | | Enable counter `<COUNTER_NAME>`, e.g. `true` | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__TITLE` | | Displayed name of `<COUNTER_NAME>`, e.g. `"Some title with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__COUNTERS__<COUNTER_NAME>__UNITS` | | Measurement units for the counter, e.g. `"Bytes"` | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__DESCRIPTION` | | Line chart `<LINE_CHART_NAME>` description, e.g. `"Some description with {{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__ENABLED` | | Enable `<LINE_CHART_NAME>`, e.g. `true` | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__DAY` | | Enable daily data for the chart, e.g. `true` | `true` if the resolution is defined |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__WEEK` | | Enable weekly data | `true` if defined |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__MONTH` | | Enable monthly data | `true` if defined |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__RESOLUTIONS__YEAR` | | Enable yearly data | `true` if defined |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__TITLE` | | Displayed name of `<LINE_CHART_NAME>`, e.g. `"Some line chart title"` | `null` |
+| `STATS_CHARTS__LINE_CHARTS__<LINE_CHART_NAME>__UNITS` | | Measurement units, e.g. `"{{<variable_name>}}"` | `null` |
+| `STATS_CHARTS__TEMPLATE_VALUES__<VARIABLE_NAME>` | | Value to substitute instead of `{{<variable_name>}}`, e.g. `STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL="some_value"`. See full list of variables in charts config file (`charts.json`). | `null` |
 
 [anchor]: <> (anchors.envs.end.charts)
 
@@ -187,10 +182,10 @@ The service will periodically check the enabled start conditions and start updat
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_LAYOUT__​COUNTERS_ORDER__​<COUNTER_NAME>` | | Override position of `<COUNTER_NAME>` in the layout; `0` will place it first and `N` will place it Nth in the layout | `null` |
-| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__ORDER` | | Override position of `<CATEGORY_NAME>` in the layout | `null` |
-| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__​CHARTS_ORDER__​<LINE_CHART_NAME>` | | Override position of `<LINE_CHART_NAME>` within its category | `null` |
-| `STATS_LAYOUT__​LINE_CHART_CATEGORIES__​<CATEGORY_NAME>__TITLE` | | Displayed name of the category, e.g. `"Accounts"` | `null` |
+| `STATS_LAYOUT__COUNTERS_ORDER__<COUNTER_NAME>` | | Override position of `<COUNTER_NAME>` in the layout; `0` will place it first and `N` will place it Nth in the layout | `null` |
+| `STATS_LAYOUT__LINE_CHART_CATEGORIES__<CATEGORY_NAME>__ORDER` | | Override position of `<CATEGORY_NAME>` in the layout | `null` |
+| `STATS_LAYOUT__LINE_CHART_CATEGORIES__<CATEGORY_NAME>__CHARTS_ORDER__<LINE_CHART_NAME>` | | Override position of `<LINE_CHART_NAME>` within its category | `null` |
+| `STATS_LAYOUT__LINE_CHART_CATEGORIES__<CATEGORY_NAME>__TITLE` | | Displayed name of the category, e.g. `"Accounts"` | `null` |
 
 [anchor]: <> (anchors.envs.end.layout)
 
@@ -200,7 +195,7 @@ The service will periodically check the enabled start conditions and start updat
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `STATS_UPDATE_GROUPS__​SCHEDULES__<UPDATE_GROUP_NAME>` | | Override update schedule of the group, e.g. `"0 0 */3 * * * *"` for update each 3 hours | `null` |
+| `STATS_UPDATE_GROUPS__SCHEDULES__<UPDATE_GROUP_NAME>` | | Override update schedule of the group, e.g. `"0 0 */3 * * * *"` for update each 3 hours | `null` |
 
 [anchor]: <> (anchors.envs.end.groups)
 

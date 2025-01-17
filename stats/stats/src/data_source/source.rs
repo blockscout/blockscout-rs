@@ -7,7 +7,7 @@ use sea_orm::{DatabaseConnection, DbErr};
 use tracing::instrument;
 use tynm::type_name;
 
-use crate::{range::UniversalRange, ChartError};
+use crate::{range::UniversalRange, ChartError, IndexingStatus};
 
 use super::types::UpdateContext;
 
@@ -108,6 +108,24 @@ pub trait DataSource {
         ids
     }
 
+    /// Indexing status requirement considering all dependencies
+    fn indexing_status_requirement_recursive() -> IndexingStatus {
+        IndexingStatus::most_restrictive_from(
+            [
+                Self::MainDependencies::indexing_status_requirement_recursive(),
+                Self::ResolutionDependencies::indexing_status_requirement_recursive(),
+                Self::indexing_status_self_requirement(),
+            ]
+            .into_iter(),
+        )
+    }
+
+    /// Is indexing status requirement solely for this source.
+    /// In practice combined with all dependants' requirements
+    fn indexing_status_self_requirement() -> IndexingStatus {
+        IndexingStatus::LEAST_RESTRICTIVE
+    }
+
     /// Update dependencies' and this source's data (values + metadata).
     ///
     /// Should be idempontent with regards to `current_time` (in `cx`).
@@ -194,6 +212,11 @@ impl DataSource for () {
 
     fn all_dependencies_mutex_ids() -> HashSet<String> {
         HashSet::new()
+    }
+
+    fn indexing_status_requirement_recursive() -> IndexingStatus {
+        // stop recursion
+        Self::indexing_status_self_requirement()
     }
 
     async fn update_recursively(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
@@ -286,6 +309,17 @@ macro_rules! impl_data_source_for_tuple {
                     ids.extend($element_generic_name::all_dependencies_mutex_ids());
                 )+
                 ids
+            }
+
+            fn indexing_status_requirement_recursive() -> IndexingStatus {
+                IndexingStatus::most_restrictive_from(
+                    [
+                        $(
+                            $element_generic_name::indexing_status_requirement_recursive(),
+                        )+
+                    ]
+                    .into_iter(),
+                )
             }
         }
     };

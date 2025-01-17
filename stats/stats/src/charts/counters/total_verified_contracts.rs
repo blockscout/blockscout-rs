@@ -7,7 +7,7 @@ use crate::{
         },
         types::BlockscoutMigrations,
     },
-    ChartProperties, MissingDatePolicy, Named,
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::smart_contracts;
@@ -52,6 +52,9 @@ impl ChartProperties for Properties {
     }
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
     }
 }
 

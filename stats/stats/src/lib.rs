@@ -22,5 +22,5 @@ pub use charts::{
         ApproxUnsignedDiff, QueryAllBlockTimestampRange, ReadError, RequestedPointsLimit,
     },
     lines, query_dispatch, types, ChartError, ChartKey, ChartObject, ChartProperties,
-    ChartPropertiesObject, MissingDatePolicy, Named, ResolutionKind,
+    ChartPropertiesObject, IndexingStatus, MissingDatePolicy, Named, ResolutionKind,
 };

@@ -26,7 +26,7 @@ use crate::{
     range::UniversalRange,
     types::{Timespan, TimespanDuration, TimespanValue},
     utils::day_start,
-    ChartError, ChartProperties, Named,
+    ChartError, ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -85,6 +85,9 @@ impl ChartProperties for Properties {
 
     fn chart_type() -> ChartType {
         ChartType::Line
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
     }
 }
 

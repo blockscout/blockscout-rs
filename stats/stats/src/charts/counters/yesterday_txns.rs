@@ -10,7 +10,7 @@ use crate::{
     range::UniversalRange,
     types::TimespanValue,
     utils::day_start,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::{DateTime, Days, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
@@ -64,6 +64,9 @@ impl ChartProperties for Properties {
     }
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
     }
 }
 
