@@ -65,6 +65,10 @@
             "title": "Yesterday txns",
             "description": "Number of transactions yesterday (0:00 - 23:59 UTC)"
         },
+        "total_user_ops": {
+            "title": "Total user operations",
+            "description": "Number of user operations as per the ERC-4337 standard"
+        },
         "last_new_contracts": {
             "title": "Number of contracts today",
             "description": "Number of deployed contracts today (UTC)"
@@ -158,6 +162,14 @@
         "txns_success_rate": {
             "title": "Transaction success rate",
             "description": "Success rate for all included transactions"
+        },
+        "new_user_ops": {
+            "title": "New user operations",
+            "description": "Number of new user operations as per the ERC-4337 standard"
+        },
+        "user_ops_growth": {
+            "title": "Number of user operations",
+            "description": "Cumulative user operation (ERC-4337) growth over time"
         },
         "new_block_rewards": {
             "enabled": false,

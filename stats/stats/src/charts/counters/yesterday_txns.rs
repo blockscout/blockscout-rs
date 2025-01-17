@@ -85,7 +85,7 @@ mod tests {
     async fn update_yesterday_txns_2() {
         simple_test_counter::<YesterdayTxns>(
             "update_yesterday_txns_2",
-            "12",
+            "14",
             Some(dt("2022-11-11T00:00:00")),
         )
         .await;

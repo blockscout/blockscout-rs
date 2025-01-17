@@ -195,7 +195,7 @@ mod tests {
     async fn update_txns_success_rate_yearly() {
         simple_test_chart_with_migration_variants::<TxnsSuccessRateYearly>(
             "update_txns_success_rate_yearly",
-            vec![("2022-01-01", "1"), ("2023-01-01", "0.8333333333333334")],
+            vec![("2022-01-01", "1"), ("2023-01-01", "0.8571428571428571")],
         )
         .await;
     }

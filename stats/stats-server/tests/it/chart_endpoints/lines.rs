@@ -21,6 +21,7 @@ pub async fn test_lines_ok(base: Url) {
         "tokens",
         "gas",
         "contracts",
+        "user_ops",
     ];
     assert_eq!(section_ids, expected_section_ids, "wrong sections response");
 
@@ -55,6 +56,8 @@ pub async fn test_lines_ok(base: Url) {
         // "newOperationalTxns",
         // "operationalTxnsGrowth",
         "txnsSuccessRate",
+        "newUserOps",
+        "userOpsGrowth",
         "newVerifiedContracts",
         "newContracts",
         "verifiedContractsGrowth",

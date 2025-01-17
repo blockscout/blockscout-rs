@@ -187,6 +187,20 @@ construct_update_group!(NewTxnsGroup {
     ],
 });
 
+construct_update_group!(NewUserOpsGroup {
+    charts: [
+        NewUserOps,
+        NewUserOpsWeekly,
+        NewUserOpsMonthly,
+        NewUserOpsYearly,
+        UserOpsGrowth,
+        UserOpsGrowthWeekly,
+        UserOpsGrowthMonthly,
+        UserOpsGrowthYearly,
+        TotalUserOps,
+    ],
+});
+
 construct_update_group!(NewVerifiedContractsGroup {
     charts: [
         NewVerifiedContracts,

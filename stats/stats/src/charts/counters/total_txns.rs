@@ -114,7 +114,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_txns() {
-        simple_test_counter::<TotalTxns>("update_total_txns", "48", None).await;
+        simple_test_counter::<TotalTxns>("update_total_txns", "57", None).await;
     }
 
     #[tokio::test]
