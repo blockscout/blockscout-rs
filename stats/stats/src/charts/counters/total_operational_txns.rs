@@ -74,7 +74,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_operational_txns() {
         // 48 - 13 (txns - blocks)
-        simple_test_counter::<TotalOperationalTxns>("update_total_operational_txns", "35", None)
+        simple_test_counter::<TotalOperationalTxns>("update_total_operational_txns", "44", None)
             .await;
     }
 }

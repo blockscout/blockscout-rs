@@ -11,10 +11,12 @@ members = [
 
 [workspace.dependencies]
 blockscout-client = { git = "https://github.com/blockscout/blockscout-rs/", rev = "506b821" }
-blockscout-service-launcher = { version = "0.15.0" }
+blockscout-service-launcher = { version = "0.16.1" }
 rstest = "0.23.0"
 trait-variant = "0.1.2"
 wiremock = "0.6.2"
+sea-orm = "~1.0"
+sea-orm-migration = "~1.0"
 
 # todo: update version after https://github.com/chronotope/chrono/pull/1600
 # and remove patch

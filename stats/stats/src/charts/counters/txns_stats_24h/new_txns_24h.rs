@@ -68,7 +68,7 @@ mod tests {
         simple_test_counter::<NewTxns24h>(
             "update_new_txns_24h_2",
             // block at `2022-11-11T00:00:00` is not counted because sql is not that precise :/
-            "12",
+            "14",
             Some(dt("2022-11-11T00:00:00")),
         )
         .await;

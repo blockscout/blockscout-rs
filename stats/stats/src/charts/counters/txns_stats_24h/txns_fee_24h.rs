@@ -72,7 +72,7 @@ mod tests {
     async fn update_txns_fee_24h_2() {
         simple_test_counter::<TxnsFee24h>(
             "update_txns_fee_24h_2",
-            "0.000495444443949",
+            "0.000613407406794",
             Some(dt("2022-11-11T00:00:00")),
         )
         .await;

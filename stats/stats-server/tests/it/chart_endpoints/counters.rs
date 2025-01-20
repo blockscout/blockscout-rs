@@ -17,9 +17,6 @@ pub async fn test_counters_ok(base: Url) {
         "completedTxns",
         "lastNewContracts",
         "lastNewVerifiedContracts",
-        // on a different page
-        // "newContracts24h",
-        // "newVerifiedContracts24h",
         "totalAccounts",
         "totalAddresses",
         "totalBlocks",
@@ -28,13 +25,18 @@ pub async fn test_counters_ok(base: Url) {
         "totalNativeCoinTransfers",
         "totalTokens",
         "totalTxns",
+        "totalUserOps",
         "totalVerifiedContracts",
-        // on a different page
-        // "yesterdayTxns",
         "newTxns24h",
         "pendingTxns30m",
         "txnsFee24h",
         "averageTxnFee24h",
+        // on a different page; they are checked by other endpoint tests and
+        // `check_all_enabled_charts_have_endpoints`
+
+        // "newContracts24h",
+        // "newVerifiedContracts24h",
+        // "yesterdayTxns",
     ]
     .into_iter()
     .collect();

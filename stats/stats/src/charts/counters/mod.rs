@@ -14,6 +14,7 @@ mod total_native_coin_transfers;
 mod total_operational_txns;
 mod total_tokens;
 mod total_txns;
+mod total_user_ops;
 mod total_verified_contracts;
 mod txns_stats_24h;
 mod yesterday_txns;
@@ -37,6 +38,7 @@ pub use total_native_coin_transfers::TotalNativeCoinTransfers;
 pub use total_operational_txns::TotalOperationalTxns;
 pub use total_tokens::TotalTokens;
 pub use total_txns::{TotalTxns, TotalTxnsInt};
+pub use total_user_ops::TotalUserOps;
 pub use total_verified_contracts::TotalVerifiedContracts;
 pub(crate) use txns_stats_24h::TxnsStatsValue;
 pub use txns_stats_24h::{

@@ -12,7 +12,10 @@ use crate::{
 
 use anyhow::Context;
 use blockscout_endpoint_swagger::route_swagger;
-use blockscout_service_launcher::launcher::{self, LaunchSettings};
+use blockscout_service_launcher::{
+    database::{DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings},
+    launcher::{self, LaunchSettings},
+};
 use sea_orm::{ConnectOptions, Database};
 use stats::metrics;
 use stats_proto::blockscout::stats::v1::{
@@ -72,15 +75,19 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         &mut settings.conditional_start,
         &mut charts_config,
     );
-    let mut opt = ConnectOptions::new(settings.db_url.clone());
-    opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
-        opt.clone(),
-        settings.create_database,
-        settings.run_migrations,
-    )
-    .await?;
-    let db = Arc::new(Database::connect(opt).await.context("stats DB")?);
+    let database_settings = DatabaseSettings {
+        connect: DatabaseConnectSettings::Url(settings.db_url.clone()),
+        connect_options: DatabaseConnectOptionsSettings::default(),
+        create_database: settings.create_database,
+        run_migrations: settings.run_migrations,
+    };
+    let db = Arc::new(
+        blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
+            &database_settings,
+        )
+        .await
+        .context("stats DB")?,
+    );
 
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
