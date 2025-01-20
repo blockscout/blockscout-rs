@@ -19,6 +19,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
+    lines::{new_txns::NewTxnsMonthlyInt, NewTxnsInt},
     types::timespans::{Month, Week, Year},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
     ChartProperties, Named,
@@ -27,8 +28,6 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
-
-use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
 const GWEI: i64 = 1_000_000_000;
 

@@ -13,6 +13,7 @@ use crate::{
         },
     },
     define_and_impl_resolution_properties,
+    lines::{new_blocks::NewBlocksInt, NewTxnsInt},
     types::{
         timespans::{Month, Week, Year},
         Timespan, TimespanValue,
@@ -23,8 +24,6 @@ use crate::{
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
-
-use super::{new_blocks::NewBlocksInt, NewTxnsInt};
 
 pub struct Properties;
 

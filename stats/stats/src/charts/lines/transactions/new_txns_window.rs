@@ -23,6 +23,7 @@ use crate::{
         types::BlockscoutMigrations,
         UpdateContext,
     },
+    lines::NewTxnsStatement,
     range::UniversalRange,
     types::{Timespan, TimespanDuration, TimespanValue},
     utils::day_start,
@@ -32,8 +33,6 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{FromQueryResult, Statement};
-
-use super::NewTxnsStatement;
 
 pub const WINDOW: u64 = 30;
 
