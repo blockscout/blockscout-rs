@@ -82,7 +82,7 @@ impl UpdateService {
 
         // These futures should never complete because they run in infinite loop.
         // If any completes, it means something went terribly wrong.
-        while let Some(()) = group_update_jobs.next().await {
+        if let Some(()) = group_update_jobs.next().await {
             tracing::error!("update job stopped unexpectedly");
             panic!("update job stopped unexpectedly");
         }
