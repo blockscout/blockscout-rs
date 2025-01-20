@@ -15,6 +15,10 @@
       "address": "0x0D435A6c16045Abeaf6A442Bf162fd52597B4Ed3",
       "startBlock": 36550
     },
+    "Resolver": {
+      "address": "0x3698485B8079FBDCc86Eb4f69Ebb9349DF1fc6f4",
+      "startBlock": 8241883
+    },
     "": ""
   },
   "shibarium-testnet": {
