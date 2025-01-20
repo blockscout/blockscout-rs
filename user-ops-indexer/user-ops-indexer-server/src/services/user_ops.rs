@@ -2,8 +2,10 @@ use crate::{proto::user_ops_service_server::UserOpsService as UserOps, settings:
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
-use user_ops_indexer_logic::repository;
-use user_ops_indexer_logic::repository::page_token::{PageTokenFormat, PageTokenParsingError};
+use user_ops_indexer_logic::{
+    repository,
+    repository::page_token::{PageTokenFormat, PageTokenParsingError},
+};
 use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::*;
 
 const DEFAULT_PAGE_SIZE: u32 = 50;
