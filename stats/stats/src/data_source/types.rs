@@ -13,6 +13,7 @@ use crate::counters::TxnsStatsValue;
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
     pub db: &'a DatabaseConnection,
+    /// Blockscout database
     pub blockscout: &'a DatabaseConnection,
     pub blockscout_applied_migrations: BlockscoutMigrations,
     /// If `None`, it will be measured at the start of update

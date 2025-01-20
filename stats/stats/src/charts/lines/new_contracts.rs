@@ -21,7 +21,7 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartProperties, Named,
+    ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -134,6 +134,9 @@ impl ChartProperties for Properties {
 
     fn chart_type() -> ChartType {
         ChartType::Line
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::InternalTransactionsIndexed
     }
 }
 

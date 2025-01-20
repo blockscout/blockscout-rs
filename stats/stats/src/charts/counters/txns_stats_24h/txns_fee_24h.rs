@@ -5,7 +5,7 @@ use crate::{
     },
     gettable_const,
     types::TimespanValue,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -45,6 +45,9 @@ impl ChartProperties for Properties {
     }
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
     }
 }
 
