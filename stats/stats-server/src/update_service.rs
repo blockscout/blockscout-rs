@@ -10,8 +10,6 @@ use stats::data_source::types::{BlockscoutMigrations, UpdateParameters};
 use std::sync::{atomic::AtomicU64, Arc};
 use tokio::sync::Semaphore;
 
-const FAILED_UPDATERS_UNTIL_PANIC: u64 = 3;
-
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     blockscout_db: Arc<DatabaseConnection>,
@@ -82,15 +80,11 @@ impl UpdateService {
             })
             .collect();
 
-        let mut failed = 0;
         // These futures should never complete because they run in infinite loop.
-        // If any completes, it means something went wrong.
+        // If any completes, it means something went terribly wrong.
         while let Some(()) = group_update_jobs.next().await {
             tracing::error!("update job stopped unexpectedly");
-            failed += 1;
-            if failed >= FAILED_UPDATERS_UNTIL_PANIC {
-                panic!("too many unexpectedly failed update jobs");
-            }
+            panic!("update job stopped unexpectedly");
         }
     }
 
