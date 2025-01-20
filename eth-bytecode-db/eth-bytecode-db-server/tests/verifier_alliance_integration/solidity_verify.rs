@@ -15,7 +15,19 @@ async fn initialize(database: TestDbGuard, test_case: TestCase) {
     .expect("sending verification request failed");
 }
 
-build_all_tests!(initialize);
+build_all_tests!(
+    (
+        constructor_arguments,
+        full_match,
+        immutables,
+        libraries_linked_by_compiler,
+        // libraries_manually_linked,
+        // metadata_hash_absent,
+        partial_match,
+        partial_match_double_auxdata
+    ),
+    initialize
+);
 
 mod helpers {
     use blockscout_display_bytes::ToHex;

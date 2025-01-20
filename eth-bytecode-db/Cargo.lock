@@ -2153,6 +2153,8 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "verification-common",
+ "verifier-alliance-database",
+ "verifier-alliance-entity 0.1.0",
  "verifier-alliance-entity 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=ec1c755)",
 ]
 
@@ -7733,6 +7735,7 @@ dependencies = [
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "paste",
+ "pretty_assertions",
  "sea-orm",
  "serde",
  "serde_json",

@@ -31,7 +31,7 @@ pub async fn init_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
 
 pub async fn init_alliance_db(test_suite_name: &str, test_name: &str) -> TestDbGuard {
     let test_name = format!("{test_name}_alliance");
-    init_db_raw::<verifier_alliance_migration::Migrator>(test_suite_name, &test_name).await
+    init_db_raw::<verifier_alliance_migration_v1::Migrator>(test_suite_name, &test_name).await
 }
 
 pub async fn init_db_raw<Migrator: MigratorTrait>(

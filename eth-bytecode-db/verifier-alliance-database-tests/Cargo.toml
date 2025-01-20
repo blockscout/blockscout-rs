@@ -7,6 +7,7 @@ edition = "2021"
 blockscout-display-bytes = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = ["test-database"] }
 paste = { workspace = true }
+pretty_assertions = { workspace = true }
 sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

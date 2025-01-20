@@ -4,7 +4,6 @@ mod errors;
 mod handlers;
 mod smart_contract_verifier;
 mod types;
-mod verifier_alliance;
 
 pub use client::Client;
 pub use errors::Error;
