@@ -171,6 +171,14 @@
             "title": "Number of user operations",
             "description": "Cumulative user operation (ERC-4337) growth over time"
         },
+        "active_bundlers": {
+            "title": "Active bundlers",
+            "description": "Active user ops bundlers number per period"
+        },
+        "active_paymasters": {
+            "title": "Active paymasters",
+            "description": "Active user ops paymasters number per period"
+        },
         "new_block_rewards": {
             "enabled": false,
             "title": "New block rewards",

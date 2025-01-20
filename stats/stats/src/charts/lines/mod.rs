@@ -39,6 +39,8 @@ pub use accounts_growth::{
     AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };
 pub use active_accounts::ActiveAccounts;
+pub use active_bundlers::ActiveBundlers;
+pub use active_paymasters::ActivePaymasters;
 #[rustfmt::skip]
 pub use active_recurring_accounts::{
     ActiveRecurringAccountsDailyRecurrence120Days, ActiveRecurringAccountsMonthlyRecurrence120Days,

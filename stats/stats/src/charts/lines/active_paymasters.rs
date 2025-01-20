@@ -64,20 +64,6 @@ mod tests {
 
     use super::ActivePaymasters;
 
-    #[test]
-    fn update_active_paymasters_print_stmt() {
-        println!(
-            "{}",
-            <crate::lines::active_paymasters::ActivePaymastersStatement as crate::data_source::kinds::remote_db::StatementFromRange>::get_statement(
-                Some(
-                    crate::tests::point_construction::dt("2025-01-01T00:00:00").and_utc()
-                        ..crate::tests::point_construction::dt("2025-01-02T00:00:00").and_utc()
-                ),
-                &crate::data_source::types::BlockscoutMigrations::latest(),
-            )
-        )
-    }
-
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_active_paymasters() {

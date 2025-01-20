@@ -58,6 +58,8 @@ pub async fn test_lines_ok(base: Url) {
         "txnsSuccessRate",
         "newUserOps",
         "userOpsGrowth",
+        "activeBundlers",
+        "activePaymasters",
         "newVerifiedContracts",
         "newContracts",
         "verifiedContractsGrowth",
