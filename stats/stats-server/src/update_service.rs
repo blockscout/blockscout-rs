@@ -101,7 +101,10 @@ impl UpdateService {
                 )
                 .await;
             if wait_result.is_err() {
-                panic!("Indexing status listener channel closed");
+                panic!(
+                    "Indexing status listener channel closed unexpectedly. \
+                    This indicates that the status aggregator has stopped running."
+                );
             }
         }
     }
