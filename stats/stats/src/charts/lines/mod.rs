@@ -1,5 +1,7 @@
 mod accounts_growth;
 mod active_accounts;
+mod active_bundlers;
+mod active_paymasters;
 mod active_recurring_accounts;
 mod average_block_rewards;
 mod average_block_size;
