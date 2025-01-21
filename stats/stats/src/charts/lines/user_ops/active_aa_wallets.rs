@@ -1,4 +1,4 @@
-//! Active account_abstraction_wallets on each day.
+//! Active account abstraction wallets on each day.
 
 use std::ops::Range;
 
