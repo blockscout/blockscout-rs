@@ -30,6 +30,7 @@ pub use last_new_verified_contracts::LastNewVerifiedContracts;
 pub use new_contracts_24h::NewContracts24h;
 pub use new_verified_contracts_24h::NewVerifiedContracts24h;
 pub use pending_txns::PendingTxns30m;
+pub use total_aa_wallets::TotalAccountAbstractionWallets;
 pub use total_accounts::TotalAccounts;
 pub use total_addresses::TotalAddresses;
 pub use total_blocks::{TotalBlocks, TotalBlocksInt};

@@ -18,9 +18,10 @@ singleton_groups!(
     // Active accounts is left without resolutions because the chart is non-trivial
     // to calculate somewhat-optimally
     ActiveAccounts,
-    // Same^ for bundlers & paymasters
+    // Same ^ for bundlers, paymasters, and aa wallets
     ActiveBundlers,
     ActivePaymasters,
+    ActiveAccountAbstractionWallets,
     AverageBlockTime,
     CompletedTxns,
     PendingTxns30m,
@@ -160,6 +161,20 @@ construct_update_group!(NewAccountsGroup {
         AccountsGrowthMonthly,
         AccountsGrowthYearly,
         TotalAccounts,
+    ]
+});
+
+construct_update_group!(NewAccountAbstractionWalletsGroup {
+    charts: [
+        NewAccountAbstractionWallets,
+        NewAccountAbstractionWalletsWeekly,
+        NewAccountAbstractionWalletsMonthly,
+        NewAccountAbstractionWalletsYearly,
+        AccountAbstractionWalletsGrowth,
+        AccountAbstractionWalletsGrowthWeekly,
+        AccountAbstractionWalletsGrowthMonthly,
+        AccountAbstractionWalletsGrowthYearly,
+        TotalAccountAbstractionWallets,
     ]
 });
 

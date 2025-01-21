@@ -19,13 +19,21 @@ mod mock;
 
 pub use new_txns_window::WINDOW as NEW_TXNS_WINDOW_RANGE;
 
-pub use aa_wallets_growth::AccountAbstractionWalletsGrowth;
+pub use aa_wallets_growth::{
+    AccountAbstractionWalletsGrowth, AccountAbstractionWalletsGrowthMonthly,
+    AccountAbstractionWalletsGrowthWeekly, AccountAbstractionWalletsGrowthYearly,
+};
 pub use accounts_growth::{
     AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };
+pub use active_aa_wallets::ActiveAccountAbstractionWallets;
 pub use active_accounts::ActiveAccounts;
 pub use active_bundlers::ActiveBundlers;
 pub use active_paymasters::ActivePaymasters;
+pub use new_aa_wallets::{
+    NewAccountAbstractionWallets, NewAccountAbstractionWalletsMonthly,
+    NewAccountAbstractionWalletsWeekly, NewAccountAbstractionWalletsYearly,
+};
 #[rustfmt::skip]
 pub use active_recurring_accounts::{
     ActiveRecurringAccountsDailyRecurrence120Days, ActiveRecurringAccountsMonthlyRecurrence120Days,
