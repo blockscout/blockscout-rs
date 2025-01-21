@@ -21,7 +21,7 @@ fn hex_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"^(0x)?[0-9a-fA-F]{3,40}$").unwrap())
 }
 
-pub async fn upsert_many<C>(db: &C, addresses: Vec<Address>) -> Result<(), DbErr>
+pub async fn upsert_many<C>(db: &C, mut addresses: Vec<Address>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {
@@ -29,6 +29,7 @@ where
         return Ok(());
     }
 
+    addresses.sort_by(|a, b| (a.hash, a.chain_id).cmp(&(b.hash, b.chain_id)));
     let addresses = addresses.into_iter().map(|address| {
         let model: Model = address.into();
         let mut active: ActiveModel = model.into();
