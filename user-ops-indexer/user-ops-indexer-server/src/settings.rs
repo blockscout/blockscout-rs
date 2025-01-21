@@ -20,6 +20,7 @@ pub struct Settings {
 
     pub database: DatabaseSettings,
 
+    #[serde(default)]
     pub api: ApiSettings,
 
     pub indexer: IndexerSettings,
@@ -30,9 +31,15 @@ impl ConfigSettings for Settings {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct ApiSettings {
     pub max_page_size: u32,
+}
+
+impl Default for ApiSettings {
+    fn default() -> Self {
+        Self { max_page_size: 100 }
+    }
 }
 
 impl Settings {
@@ -48,7 +55,7 @@ impl Settings {
                 create_database: false,
                 run_migrations: false,
             },
-            api: ApiSettings { max_page_size: 100 },
+            api: Default::default(),
             indexer: Default::default(),
         }
     }

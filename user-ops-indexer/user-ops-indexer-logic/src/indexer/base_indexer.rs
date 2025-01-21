@@ -11,14 +11,12 @@ use alloy::{
     primitives::{Address, BlockHash, Bytes, TxHash, B256},
     providers::Provider,
     rpc::types::{Filter, Log, TransactionReceipt},
-    sol_types,
-    sol_types::SolEvent,
+    sol_types::{self, SolEvent},
     transports::{TransportError, TransportErrorKind},
 };
 use anyhow::{anyhow, bail};
 use futures::{
-    stream,
-    stream::{repeat_with, BoxStream},
+    stream::{self, unfold, BoxStream},
     Stream, StreamExt, TryStreamExt,
 };
 use sea_orm::DatabaseConnection;
@@ -140,6 +138,10 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
             }
         };
 
+        tracing::debug!("fetching latest block number");
+        let block_number = self.client.get_block_number().await?;
+        tracing::info!(block_number, "latest block number");
+
         let mut stream_jobs = stream::SelectAll::<BoxStream<Job>>::new();
 
         if self.settings.realtime.enabled {
@@ -161,13 +163,9 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
                 stream_jobs.push(Box::pin(realtime_stream_jobs));
             } else {
                 tracing::info!("starting polling of past BeforeExecution logs from rpc");
-                stream_jobs.push(Box::pin(self.poll_for_jobs()));
+                stream_jobs.push(Box::pin(self.poll_for_realtime_jobs(block_number)));
             }
         }
-
-        tracing::debug!("fetching latest block number");
-        let block_number = self.client.get_block_number().await?;
-        tracing::info!(block_number, "latest block number");
 
         let rpc_refetch_block_number =
             block_number.saturating_sub(self.settings.past_rpc_logs_indexer.block_range as u64);
@@ -279,26 +277,40 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
         Ok(jobs)
     }
 
-    fn poll_for_jobs(&self) -> impl Stream<Item = Job> + '_ {
-        repeat_with(|| async {
-            sleep(self.settings.realtime.polling_interval).await;
-            tracing::debug!("fetching latest block number");
-            let block_number = self.client.get_block_number().await?;
-            tracing::info!(block_number, "latest block number");
+    fn poll_for_realtime_jobs(&self, start_block: u64) -> impl Stream<Item = Job> + '_ {
+        unfold(
+            (start_block, start_block),
+            move |(from_block, current_block)| async move {
+                async {
+                    if current_block <= from_block {
+                        sleep(self.settings.realtime.polling_interval).await;
+                        tracing::debug!("fetching latest block number");
+                        let current_block = self.client.get_block_number().await?;
+                        tracing::info!(current_block, "latest block number");
+                        return Ok((vec![], (from_block, current_block)));
+                    }
 
-            let from_block =
-                block_number.saturating_sub(self.settings.realtime.polling_block_range as u64);
-            let jobs = self
-                .fetch_jobs_for_block_range(from_block, block_number)
-                .await?;
+                    let from_block = from_block
+                        .saturating_sub(self.settings.realtime.polling_block_range as u64);
+                    let to_block = (from_block + self.settings.realtime.max_block_range as u64)
+                        .min(current_block);
 
-            Ok::<Vec<Job>, TransportError>(jobs)
-        })
-        .filter_map(|fut| async {
-            fut.await
-                .map_err(|err| tracing::error!(error = ?err, "failed to poll for logs"))
-                .ok()
-        })
+                    let jobs = self
+                        .fetch_jobs_for_block_range(from_block, to_block)
+                        .await?;
+
+                    Ok((jobs, (to_block + 1, current_block)))
+                }
+                .await
+                .map_or_else(
+                    |err: TransportError| {
+                        tracing::error!(error = ?err, "failed to poll for logs");
+                        Some((vec![], (from_block, current_block)))
+                    },
+                    Some,
+                )
+            },
+        )
         .flat_map(stream::iter)
     }
 
