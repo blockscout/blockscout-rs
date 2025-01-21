@@ -5,6 +5,7 @@ mod last_new_verified_contracts;
 mod new_contracts_24h;
 mod new_verified_contracts_24h;
 mod pending_txns;
+mod total_aa_wallets;
 mod total_accounts;
 mod total_addresses;
 mod total_blocks;

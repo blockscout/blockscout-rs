@@ -19,6 +19,7 @@ mod mock;
 
 pub use new_txns_window::WINDOW as NEW_TXNS_WINDOW_RANGE;
 
+pub use aa_wallets_growth::AccountAbstractionWalletsGrowth;
 pub use accounts_growth::{
     AccountsGrowth, AccountsGrowthMonthly, AccountsGrowthWeekly, AccountsGrowthYearly,
 };

@@ -1,3 +1,8 @@
+//! Stats for user-ops-indexer.
+//! In other words, about account abstraction as per ERC 4337.
+
+pub mod aa_wallets_growth;
+pub mod active_aa_wallets;
 pub mod active_bundlers;
 pub mod active_paymasters;
 pub mod new_aa_wallets;
