@@ -1,3 +1,5 @@
+//! Essentially the same logic as with `NewAccounts`
+//! but for account abstraction wallets.
 use std::ops::Range;
 
 use crate::{
