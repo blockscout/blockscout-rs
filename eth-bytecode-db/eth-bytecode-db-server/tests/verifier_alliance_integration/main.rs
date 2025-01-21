@@ -1,8 +1,9 @@
+mod solidity_batch_import;
 mod solidity_verify;
 
 /****************************************/
 
-use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
+use blockscout_service_launcher::{database, test_database::TestDbGuard, test_server};
 use eth_bytecode_db_proto::http_client;
 use eth_bytecode_db_server::Settings;
 use url::Url;
@@ -15,9 +16,13 @@ pub struct SetupResult {
 }
 
 async fn setup(test_case_name: &str, alliance_database: TestDbGuard) -> SetupResult {
-    let bytecode_database =
-        TestDbGuard::new::<migration::Migrator>(&format!("verifier_alliance_{test_case_name}"))
-            .await;
+    let bytecode_database_prefix = format!(
+        "{}_{}",
+        std::backtrace::Backtrace::force_capture(),
+        test_case_name
+    )
+    .replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+    let bytecode_database = database!(migration::Migrator, bytecode_database_prefix);
 
     let (settings, base) = {
         let verifier_url =

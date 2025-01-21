@@ -27,6 +27,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+async-backtrace = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = [ "test-server", "test-database" ] }
 bytes = { workspace = true }
 entity = { workspace = true }

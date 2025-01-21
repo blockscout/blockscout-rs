@@ -16,7 +16,13 @@ where
     F: FnOnce(TestDbGuard, TestCase) -> Fut,
     Fut: Future<Output = ()>,
 {
-    let database_guard = database!(Migrator, &test_case.test_case_name);
+    let database_prefix = format!(
+        "{}_{}",
+        std::backtrace::Backtrace::force_capture(),
+        test_case.test_case_name
+    )
+    .replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+    let database_guard = database!(Migrator, &database_prefix);
 
     initialization(database_guard.clone(), test_case.clone()).await;
 
@@ -77,7 +83,7 @@ macro_rules! build_all_tests {
             $initialization
         );
     };
-    (($($test_name:ident),+), $initialization:ident) => {
+    (($($test_name:ident),+ $(,)?), $initialization:ident) => {
         $(
             $crate::build_test!($test_name, $initialization);
 
