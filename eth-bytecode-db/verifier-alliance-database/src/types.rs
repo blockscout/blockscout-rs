@@ -1,4 +1,4 @@
-use sea_orm::prelude::Uuid;
+use sea_orm::prelude::{DateTimeWithTimeZone, Uuid};
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts,
@@ -161,4 +161,13 @@ pub struct VerifiedContract {
     pub contract_deployment_id: Uuid,
     pub compiled_contract: CompiledContract,
     pub matches: VerifiedContractMatches,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RetrievedVerifiedContract {
+    pub verified_contract: VerifiedContract,
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
+    pub created_by: String,
+    pub updated_by: String,
 }

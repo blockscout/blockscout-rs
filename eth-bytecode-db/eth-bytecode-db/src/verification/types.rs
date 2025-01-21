@@ -135,6 +135,16 @@ impl From<SourceType> for smart_contract_verifier::SourceType {
     }
 }
 
+impl From<CompiledContractLanguage> for SourceType {
+    fn from(value: CompiledContractLanguage) -> Self {
+        match value {
+            CompiledContractLanguage::Solidity => SourceType::Solidity,
+            CompiledContractLanguage::Yul => SourceType::Yul,
+            CompiledContractLanguage::Vyper => SourceType::Vyper,
+        }
+    }
+}
+
 /********** Match Type **********/
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

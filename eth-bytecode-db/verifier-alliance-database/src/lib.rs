@@ -11,8 +11,8 @@ mod types;
 
 pub use types::{
     CompiledContract, CompiledContractCompiler, CompiledContractLanguage, ContractCode,
-    ContractDeployment, InsertContractDeployment, RetrieveContractDeployment, VerifiedContract,
-    VerifiedContractMatches,
+    ContractDeployment, InsertContractDeployment, RetrieveContractDeployment,
+    RetrievedVerifiedContract, VerifiedContract, VerifiedContractMatches,
 };
 
 /************************ Public methods **************************/
@@ -129,4 +129,86 @@ pub async fn find_contract_deployment(
     }
 
     Ok(None)
+}
+
+pub async fn find_verified_contracts(
+    database_connection: &DatabaseConnection,
+    chain_id: u128,
+    contract_address: Vec<u8>,
+) -> Result<Vec<RetrievedVerifiedContract>, Error> {
+    let database_connection = database_connection
+        .begin()
+        .await
+        .context("begin transaction")?;
+    let mut contract_deployment_models =
+        internal::retrieve_contract_deployments_by_chain_id_and_address(
+            &database_connection,
+            chain_id,
+            contract_address,
+        )
+        .await?;
+    contract_deployment_models.sort_by_key(|model| model.updated_at);
+
+    let mut verified_contracts = Vec::new();
+    if let Some(contract_deployment_model) = contract_deployment_models.pop() {
+        let contract_deployment_id = contract_deployment_model.id;
+        let verified_contract_models = internal::retrieve_verified_contracts_by_deployment_id(
+            &database_connection,
+            contract_deployment_id,
+        )
+        .await?;
+        for verified_contract_model in verified_contract_models {
+            let compiled_contract_model = internal::retrieve_compiled_contract_by_id(&database_connection, verified_contract_model.compilation_id)
+                .await?
+                .ok_or_else(|| anyhow!("compiled contract does not exist in the database; verified_contracts.id={}, compiled_contracts.id={}", verified_contract_model.id, verified_contract_model.compilation_id))?;
+
+            let creation_code_model = internal::retrieve_code_by_id(
+                &database_connection,
+                compiled_contract_model.creation_code_hash.clone(),
+            )
+            .await?;
+            let creation_code = creation_code_model
+                .code
+                .ok_or(anyhow!("compiled contract does not have creation code"))?;
+
+            let runtime_code_model = internal::retrieve_code_by_id(
+                &database_connection,
+                compiled_contract_model.runtime_code_hash.clone(),
+            )
+            .await?;
+            let runtime_code = runtime_code_model
+                .code
+                .ok_or(anyhow!("compiled contract does not have runtime code"))?;
+
+            let created_at = verified_contract_model.created_at;
+            let updated_at = verified_contract_model.updated_at;
+            let created_by = verified_contract_model.created_by.clone();
+            let updated_by = verified_contract_model.updated_by.clone();
+
+            let sources = internal::retrieve_sources_by_compilation_id(
+                &database_connection,
+                compiled_contract_model.id,
+            )
+            .await?;
+
+            let verified_contract = internal::try_models_into_verified_contract(
+                contract_deployment_id,
+                compiled_contract_model,
+                creation_code,
+                runtime_code,
+                sources,
+                verified_contract_model,
+            )?;
+
+            verified_contracts.push(RetrievedVerifiedContract {
+                verified_contract,
+                created_at,
+                updated_at,
+                created_by,
+                updated_by,
+            });
+        }
+    }
+
+    Ok(verified_contracts)
 }
