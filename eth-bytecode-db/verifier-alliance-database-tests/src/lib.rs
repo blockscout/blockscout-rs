@@ -9,7 +9,7 @@ pub use paste;
 
 use blockscout_service_launcher::database;
 use std::future::Future;
-use verifier_alliance_migration_v1::Migrator;
+use verifier_alliance_migration::Migrator;
 
 pub async fn test<F, Fut>(test_case: TestCase, initialization: F)
 where

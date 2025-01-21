@@ -7,7 +7,7 @@ use verification_common::verifier_alliance::{
 use verifier_alliance_database::{
     internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
 };
-use verifier_alliance_migration_v1::Migrator;
+use verifier_alliance_migration::Migrator;
 
 #[tokio::test]
 async fn insert_compiled_contract_works() {

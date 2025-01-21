@@ -11,7 +11,7 @@ use verifier_alliance_database::{
     CompiledContract, CompiledContractCompiler, CompiledContractLanguage, InsertContractDeployment,
     VerifiedContract, VerifiedContractMatches,
 };
-use verifier_alliance_migration_v1::Migrator;
+use verifier_alliance_migration::Migrator;
 
 #[tokio::test]
 async fn insert_verified_contract_with_complete_matches_work() {

@@ -14,7 +14,7 @@ sha2 = { workspace = true }
 sha3 = { workspace = true }
 strum = { workspace = true }
 verification-common = { workspace = true }
-verifier-alliance-entity-v1 = { workspace = true }
+verifier-alliance-entity = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = ["test-database"] }
@@ -23,4 +23,4 @@ serde_json = { workspace = true }
 serde_with = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 verifier-alliance-database-tests = { workspace = true }
-verifier-alliance-migration-v1 = { workspace = true }
+verifier-alliance-migration = { workspace = true }

@@ -8,7 +8,7 @@ use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, MatchTransformation, MatchValues,
     RuntimeCodeArtifacts,
 };
-use verifier_alliance_entity_v1::{
+use verifier_alliance_entity::{
     code, compiled_contracts, compiled_contracts_sources, contract_deployments, contracts, sources,
     verified_contracts,
 };

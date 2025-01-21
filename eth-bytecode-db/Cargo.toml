@@ -18,13 +18,10 @@ eth-bytecode-db = { path = "eth-bytecode-db" }
 eth-bytecode-db-proto = { path = "eth-bytecode-db-proto" }
 eth-bytecode-db-server = { path = "eth-bytecode-db-server" }
 migration = { path = "eth-bytecode-db/migration" }
-verifier-alliance-entity = { git = "https://github.com/blockscout/blockscout-rs", rev = "ec1c755" }
+verifier-alliance-entity = { path = "eth-bytecode-db/verifier-alliance-entity" }
 verifier-alliance-database = { path = "verifier-alliance-database" }
 verifier-alliance-database-tests = { path = "verifier-alliance-database-tests" }
-verifier-alliance-migration = { git = "https://github.com/blockscout/blockscout-rs", rev = "ec1c755" }
-
-verifier-alliance-entity-v1 = { path = "eth-bytecode-db/verifier-alliance-entity", package = "verifier-alliance-entity" }
-verifier-alliance-migration-v1 = { path = "eth-bytecode-db/verifier-alliance-migration", package = "verifier-alliance-migration" }
+verifier-alliance-migration = { path = "eth-bytecode-db/verifier-alliance-migration" }
 
 actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
 actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }

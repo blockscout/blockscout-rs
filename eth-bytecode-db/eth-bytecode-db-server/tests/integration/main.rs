@@ -5,9 +5,9 @@
 // mod solidity_sources_verify_multi_part;
 // mod solidity_sources_verify_standard_json;
 
-mod routes;
-mod test_cases;
-mod types;
+// mod routes;
+// mod test_cases;
+// mod types;
 
 /************************************************/
 

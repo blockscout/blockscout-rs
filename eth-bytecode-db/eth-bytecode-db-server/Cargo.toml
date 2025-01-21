@@ -40,8 +40,6 @@ reqwest = { workspace = true }
 rstest = { workspace = true }
 smart-contract-verifier-proto = { workspace = true, features = ["mock"] }
 test-log = { workspace = true }
-verifier-alliance-database-tests = { workspace = true }
 verifier-alliance-entity = { workspace = true }
+verifier-alliance-database-tests = { workspace = true }
 verifier-alliance-migration = { workspace = true }
-verifier-alliance-entity-v1 = { workspace = true }
-verifier-alliance-migration-v1 = { workspace = true }

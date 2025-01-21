@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts,
 };
-use verifier_alliance_entity_v1::contract_deployments;
+use verifier_alliance_entity::contract_deployments;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ContractDeployment {
