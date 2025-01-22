@@ -495,7 +495,7 @@ pub fn try_models_into_verified_contract(
 
     let compiler = CompiledContractCompiler::from_str(&compiled_contract.compiler.to_lowercase())
         .context("parsing compiler")?;
-    let language = CompiledContractLanguage::from_str(&compiled_contract.language)
+    let language = CompiledContractLanguage::from_str(&compiled_contract.language.to_lowercase())
         .context("parsing language")?;
 
     // We can safely unwrap thanks to `verified_contracts_creation_match_integrity` and `verified_contracts_runtime_match_integrity` database constraints
