@@ -4,7 +4,7 @@ DA Indexer Service
 The DA Indexer service collects blobs from different DA solutions (currently only Celestia and EigenDA) and provides a convenient API for fetching blob data. In addition to indexing blobs, this service can be configured to fetch L2 batch metadata corresponding to a specific blob (currently only available for Celestia).
 
 ## Celestia
-The Celestia indexer runs on top of the [Celestia light node](https://docs.celestia.org/nodes/light-node). It is worth noting that the indexer collects only blobs and some block metadata, it does not collect full blocks, transactions, etc.
+The Celestia indexer runs on top of the [Celestia light node](https://docs.celestia.org/how-to-guides/light-node). It is worth noting that the indexer collects only blobs and some block metadata, it does not collect full blocks, transactions, etc.
 
 ## EigenDA
 The EigenDA indexer runs on top of the EigenDA disperser. It is worth mentioning that the disperser does not store blobs older than two weeks, so these blobs will be unavailable.
