@@ -147,7 +147,7 @@ pub async fn find_verified_contracts(
             contract_address,
         )
         .await?;
-    contract_deployment_models.sort_by_key(|model| model.updated_at);
+    contract_deployment_models.sort_by_key(|model| (model.block_number, model.updated_at));
 
     let mut verified_contracts = Vec::new();
     if let Some(contract_deployment_model) = contract_deployment_models.pop() {
