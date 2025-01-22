@@ -90,7 +90,9 @@
             "title": "User operations",
             "charts_order": [
                 "user_ops_growth",
-                "new_user_ops"
+                "new_user_ops",
+                "active_bundlers",
+                "active_paymasters"
             ]
         }
     ]

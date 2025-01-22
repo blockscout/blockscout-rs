@@ -19,6 +19,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
+    lines::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
     ChartProperties, Named,
@@ -27,8 +28,6 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
-
-use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
 pub struct AverageGasLimitStatement;
 

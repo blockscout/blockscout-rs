@@ -301,6 +301,8 @@ impl RuntimeSetup {
         vec![
             // actual singletons
             Arc::new(ActiveAccountsGroup),
+            Arc::new(ActiveBundlersGroup),
+            Arc::new(ActivePaymastersGroup),
             Arc::new(AverageBlockTimeGroup),
             Arc::new(CompletedTxnsGroup),
             Arc::new(PendingTxns30mGroup),

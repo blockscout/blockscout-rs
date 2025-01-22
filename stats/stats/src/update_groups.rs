@@ -18,6 +18,9 @@ singleton_groups!(
     // Active accounts is left without resolutions because the chart is non-trivial
     // to calculate somewhat-optimally
     ActiveAccounts,
+    // Same^ for bundlers & paymasters
+    ActiveBundlers,
+    ActivePaymasters,
     AverageBlockTime,
     CompletedTxns,
     PendingTxns30m,
