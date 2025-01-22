@@ -55,11 +55,11 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     let context = utils::settings_context(settings);
 
     // get detailed domain
-    let request: Value = send_get_request(&base, "/api/v1/1/domains/vitalik.eth").await;
+    let request: Value = send_get_request(&base, "/api/v1/1/domains/vitalik").await;
     let vitalik_detailed_json = data_file_as_json!("domains/vitalik_eth/detailed.json", &context);
     assert_eq!(request, vitalik_detailed_json.clone());
     // get detailed domain with emojied name and with wrapped token
-    let request: Value = send_get_request(&base, "/api/v1/1/domains/wa🇬🇲i.eth").await;
+    let request: Value = send_get_request(&base, "/api/v1/1/domains/wa🇬🇲i").await;
     assert_eq!(
         request,
         data_file_as_json!("domains/wai_eth/detailed.json", &context)
@@ -70,7 +70,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     let expected_events = expected_events.as_array().unwrap().clone();
     let (actual, expected) = check_list_result(
         &base,
-        "/api/v1/1/domains/vitalik.eth/events",
+        "/api/v1/1/domains/vitalik/events",
         Default::default(),
         expected_events.clone(),
         None,
@@ -79,7 +79,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     assert_eq!(actual, expected);
     let (actual, expected) = check_list_result(
         &base,
-        "/api/v1/1/domains/vitalik.eth/events",
+        "/api/v1/1/domains/vitalik/events",
         HashMap::from_iter([("sort".to_owned(), "timestamp".to_owned())]),
         expected_events.clone(),
         None,
@@ -265,7 +265,7 @@ async fn genome_protocol_scenario(base: Url, settings: &Settings) {
 
 async fn different_protocols_scenario(base: Url, settings: &Settings) {
     let context = utils::settings_context(settings);
-    let request: Value = send_get_request(&base, "/api/v1/1337/domains/levvv.gno").await;
+    let request: Value = send_get_request(&base, "/api/v1/1337/domains/levvv").await;
     assert_eq!(
         request,
         data_file_as_json!("domains/levvv_gno/detailed.json", &context)

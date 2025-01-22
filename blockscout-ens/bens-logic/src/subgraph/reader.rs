@@ -214,11 +214,13 @@ impl SubgraphReader {
             input.network_id,
             input.protocol_id.clone().map(|p| nonempty![p]),
         )?;
+        println!("name: {:?},", name);
         self.patcher
             .handle_user_domain_names(self.pool.as_ref(), &name)
             .await?;
         let maybe_domain: Option<DetailedDomain> =
             sql::get_domain(self.pool.as_ref(), &name, input.only_active).await?;
+        println!("maybe_domain: {:?}", maybe_domain);
         if let Some(domain) = maybe_domain {
             let domain = self
                 .patcher
