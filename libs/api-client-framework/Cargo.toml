@@ -14,12 +14,3 @@ serde_path_to_error = { version = "0.1.16", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 thiserror = { version = "2", default-features = false }
 url = { version = "2", default-features = false }
-
-reqwest-retry = { version = "0.7.0", default-features = false, optional = true }
-
-[features]
-"blockscout" = [
-    "dep:reqwest-retry",
-    "serde/derive",
-    "url/serde"
-]
