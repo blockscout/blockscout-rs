@@ -113,7 +113,7 @@ just run
 
 To fix this error, update the tonic dependency in [`blockscout-service-launcher/Cargo.toml`](../libs/blockscout-service-launcher/Cargo.toml#L31):
 
-```
+```toml
 [dependencies]
 tonic = "0.8"
 ```
