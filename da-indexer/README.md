@@ -111,6 +111,11 @@ just run
 `Router` and `Router` have similar names, but are actually distinct types
 ```
 
-To fix this error you need to change tonic version of `tonic` in `blockscout-service-launcer` to `0.8`
+To fix this error, update the tonic dependency in [`blockscout-service-launcher/Cargo.toml`](../libs/blockscout-service-launcher/Cargo.toml#L31):
 
-For now you can only change in `Cargo.lock`
+```
+[dependencies]
+tonic = "0.8"
+```
+
+Then run `cargo update -p tonic` to update the lockfile.
