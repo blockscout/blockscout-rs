@@ -25,8 +25,14 @@ async fn setup(test_case_name: &str, alliance_database: TestDbGuard) -> SetupRes
     let bytecode_database = database!(migration::Migrator, bytecode_database_prefix);
 
     let (settings, base) = {
-        let verifier_url =
-            Url::parse("https://http.sc-verifier-test.k8s-dev.blockscout.com/").unwrap();
+        let verifier_url = Url::parse(
+            std::env::var("VERIFIER_URL")
+                .unwrap_or_else(|_| {
+                    "https://http.sc-verifier-test.k8s-dev.blockscout.com/".to_string()
+                })
+                .as_str(),
+        )
+        .expect("Invalid verifier URL provided");
         let mut settings = Settings::default(bytecode_database.db_url(), verifier_url);
         let (server_settings, base) = test_server::get_test_server_settings();
         settings.server = server_settings;

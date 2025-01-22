@@ -342,6 +342,8 @@ impl TryFrom<DatabaseReadySource> for verifier_alliance_database::CompiledContra
                 CompiledContractLanguage::Yul,
             ),
         };
+        validate_name_part(&source.file_name, "file_name")?;
+        validate_name_part(&source.contract_name, "contract_name")?;
         let fully_qualified_name = format!("{}:{}", source.file_name, source.contract_name);
         let compilation_artifacts = source
             .compilation_artifacts
@@ -371,6 +373,13 @@ impl TryFrom<DatabaseReadySource> for verifier_alliance_database::CompiledContra
                 .context("deserializing runtime_code_artifacts")?,
         })
     }
+}
+
+fn validate_name_part(name: &str, part: &str) -> Result<(), anyhow::Error> {
+    if name.contains(':') {
+        return Err(anyhow::anyhow!("{} cannot contain ':': '{}'", part, name));
+    }
+    Ok(())
 }
 
 impl TryFrom<AllianceContractImportSuccess> for DatabaseReadySource {

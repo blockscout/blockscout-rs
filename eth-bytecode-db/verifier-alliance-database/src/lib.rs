@@ -210,5 +210,11 @@ pub async fn find_verified_contracts(
         }
     }
 
+    // At the end of the function
+    database_connection
+        .rollback()
+        .await
+        .context("rollback transaction")?;
+
     Ok(verified_contracts)
 }
