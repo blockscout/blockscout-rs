@@ -1,10 +1,14 @@
 use crate::{proto::user_ops_service_server::UserOpsService as UserOps, settings::ApiSettings};
 use sea_orm::DatabaseConnection;
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
+use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 use user_ops_indexer_logic::{
-    repository,
-    repository::page_token::{PageTokenFormat, PageTokenParsingError},
+    indexer::status,
+    repository::{
+        self,
+        page_token::{PageTokenFormat, PageTokenParsingError},
+    },
 };
 use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::*;
 
@@ -32,11 +36,21 @@ pub struct UserOpsService {
     db: DatabaseConnection,
 
     settings: ApiSettings,
+
+    status: Arc<RwLock<status::IndexerStatus>>,
 }
 
 impl UserOpsService {
-    pub fn new(db: DatabaseConnection, settings: ApiSettings) -> Self {
-        Self { db, settings }
+    pub fn new(
+        db: DatabaseConnection,
+        settings: ApiSettings,
+        status: Arc<RwLock<status::IndexerStatus>>,
+    ) -> Self {
+        Self {
+            db,
+            settings,
+            status,
+        }
     }
 
     fn normalize_page_size(&self, size: Option<u32>) -> u32 {
@@ -321,6 +335,14 @@ impl UserOps for UserOpsService {
         };
 
         Ok(Response::new(res))
+    }
+
+    async fn get_status(
+        &self,
+        _request: Request<GetStatusRequest>,
+    ) -> Result<Response<IndexerStatus>, Status> {
+        let status = self.status.read().await;
+        Ok(Response::new(status.clone().into()))
     }
 }
 

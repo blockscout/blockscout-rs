@@ -218,6 +218,20 @@ paths:
           type: string
       tags:
         - UserOpsService
+  /api/v1/status:
+    get:
+      operationId: UserOpsService_GetStatus
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1IndexerStatus'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - UserOpsService
   /api/v1/userOps:
     get:
       operationId: UserOpsService_ListUserOps
@@ -391,6 +405,17 @@ definitions:
       total_ops:
         type: integer
         format: int64
+  v1EntryPointIndexerStatus:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+      live:
+        type: boolean
+      past_db_logs_indexing_finished:
+        type: boolean
+      past_rpc_logs_indexing_finished:
+        type: boolean
   v1Factory:
     type: object
     properties:
@@ -404,6 +429,15 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1IndexerStatus:
+    type: object
+    properties:
+      finished_past_indexing:
+        type: boolean
+      v06:
+        $ref: '#/definitions/v1EntryPointIndexerStatus'
+      v07:
+        $ref: '#/definitions/v1EntryPointIndexerStatus'
   v1ListAccountsResponse:
     type: object
     properties:

@@ -2,6 +2,7 @@ use crate::{
     indexer::{
         rpc_utils::{CallTracer, TraceClient, TraceType},
         settings::IndexerSettings,
+        status::{EntryPointIndexerStatusMessage, IndexerStatusMessage},
     },
     repository,
     types::user_op::UserOp,
@@ -17,14 +18,19 @@ use alloy::{
 use anyhow::{anyhow, bail};
 use futures::{
     stream::{self, unfold, BoxStream},
-    Stream, StreamExt, TryStreamExt,
+    FutureExt, Stream, StreamExt, TryStreamExt,
 };
 use sea_orm::DatabaseConnection;
-use std::{future, num::NonZeroUsize, sync::Arc, time, time::Duration};
-use tokio::time::sleep;
+use std::{
+    future::{self, Future},
+    num::NonZeroUsize,
+    sync::Arc,
+    time::{self, Duration},
+};
+use tokio::{sync::mpsc, time::sleep};
 use tracing::instrument;
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Hash, Default, Eq, PartialEq)]
 struct Job {
     tx_hash: TxHash,
     block_hash: BlockHash,
@@ -101,7 +107,7 @@ pub trait IndexerLogic {
     }
 }
 
-pub struct Indexer<P: Provider, L: IndexerLogic + Sync> {
+pub struct Indexer<P: Provider, L: IndexerLogic + Sync + Send> {
     client: P,
 
     db: Arc<DatabaseConnection>,
@@ -109,20 +115,24 @@ pub struct Indexer<P: Provider, L: IndexerLogic + Sync> {
     settings: IndexerSettings,
 
     logic: L,
+
+    tx: mpsc::Sender<IndexerStatusMessage>,
 }
 
-impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
+impl<P: Provider, L: IndexerLogic + Sync + Send> Indexer<P, L> {
     pub fn new(
         client: P,
         db: Arc<DatabaseConnection>,
         settings: IndexerSettings,
         logic: L,
+        tx: mpsc::Sender<IndexerStatusMessage>,
     ) -> Self {
         Self {
             client,
             db,
             settings,
             logic,
+            tx,
         }
     }
 
@@ -190,9 +200,15 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
                 from_block,
                 to_block,
             )
-            .await?;
+            .await?
+            .map(Job::from);
 
-            stream_jobs.push(Box::pin(missed_txs.map(Job::from)));
+            stream_jobs.push(Box::pin(missed_txs.do_after(self.tx.send(
+                IndexerStatusMessage::new(
+                    L::VERSION,
+                    EntryPointIndexerStatusMessage::PastDbLogsIndexingFinished,
+                ),
+            ))));
         }
 
         if self.settings.past_rpc_logs_indexer.enabled {
@@ -200,7 +216,12 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
                 .fetch_jobs_for_block_range(rpc_refetch_block_number + 1, block_number)
                 .await?;
 
-            stream_jobs.push(Box::pin(stream::iter(jobs)));
+            stream_jobs.push(Box::pin(stream::iter(jobs).do_after(self.tx.send(
+                IndexerStatusMessage::new(
+                    L::VERSION,
+                    EntryPointIndexerStatusMessage::PastRpcLogsIndexingFinished,
+                ),
+            ))));
         }
 
         let cache_size =
@@ -221,6 +242,13 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
                 }
             })
             .filter_map(|tx_hash| async move { tx_hash });
+
+        self.tx
+            .send(IndexerStatusMessage::new(
+                L::VERSION,
+                EntryPointIndexerStatusMessage::IndexerStarted,
+            ))
+            .await?;
 
         stream_txs
             .map(Ok)
@@ -410,6 +438,21 @@ impl<P: Provider, L: IndexerLogic + Sync> Indexer<P, L> {
     }
 }
 
+trait StreamEndHook: Stream + Sized
+where
+    Self::Item: Default,
+{
+    fn do_after<Fut: Future>(self, f: Fut) -> impl Stream<Item = Self::Item> {
+        self.chain(
+            f.into_stream()
+                .map(|_| Self::Item::default())
+                .filter(|_| async { false }),
+        )
+    }
+}
+
+impl<S: Stream> StreamEndHook for S where S::Item: Default {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -444,11 +487,13 @@ mod tests {
         let tx_hash = b256!("f9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e");
         let entry_point = EntrypointsSettings::default().v06_entry_point;
 
+        let (tx, _) = mpsc::channel(100);
         let indexer = Indexer::new(
             client,
             db.clone(),
             Default::default(),
             v06::IndexerV06 { entry_point },
+            tx,
         );
         indexer
             .handle_tx(tx_hash, TraceClient::Trace)
@@ -509,11 +554,13 @@ mod tests {
         let entry_point = EntrypointsSettings::default().v06_entry_point;
         let op_hash = b256!("e5df829d25b3b0a043a658eb460cf74898eb0ad72a526dba0cd509ed2b83f796");
 
+        let (tx, _) = mpsc::channel(100);
         let indexer = Indexer::new(
             client,
             db.clone(),
             Default::default(),
             v06::IndexerV06 { entry_point },
+            tx,
         );
         for trace_client in [TraceClient::Debug, TraceClient::Trace] {
             entity::user_operations::Entity::delete_by_id(op_hash.to_vec())
@@ -577,11 +624,13 @@ mod tests {
         let tx_hash = b256!("4a6702f8ef5b7754f5b54dfb00ccba181603e3a6fff77c93e7d0d40148f09ad0");
         let entry_point = EntrypointsSettings::default().v07_entry_point;
 
+        let (tx, _) = mpsc::channel(100);
         let indexer = Indexer::new(
             client,
             db.clone(),
             Default::default(),
             v07::IndexerV07 { entry_point },
+            tx,
         );
         indexer
             .handle_tx(tx_hash, TraceClient::Trace)
