@@ -3,7 +3,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::db_interaction::{read::QueryAllBlockTimestampRange, utils::datetime_range_filter},
+    charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             local_db::{
@@ -16,48 +16,13 @@ use crate::{
     ChartProperties, Named,
 };
 
-use blockscout_db::entity::{blocks, user_operations};
+use blockscout_db::entity::user_operations;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use migration::{Alias, Expr, Func, IntoColumnRef, IntoIden, SimpleExpr};
-use sea_orm::{
-    ColumnTrait, EntityTrait, IntoIdentity, IntoSimpleExpr, Order, QueryFilter, QueryOrder,
-    QuerySelect, QueryTrait, Statement,
-};
+use migration::IntoColumnRef;
+use sea_orm::Statement;
 
-pub(crate) fn count_distinct_in_user_ops(
-    distinct: impl Into<SimpleExpr>,
-    range: Option<Range<DateTime<Utc>>>,
-) -> Statement {
-    let date_intermediate_col = "date".into_identity();
-    let mut query = user_operations::Entity::find()
-        .select_only()
-        .join(
-            sea_orm::JoinType::InnerJoin,
-            user_operations::Entity::belongs_to(blocks::Entity)
-                .from(user_operations::Column::BlockHash)
-                .to(blocks::Column::Hash)
-                .into(),
-        )
-        .expr_as(
-            blocks::Column::Timestamp
-                .into_simple_expr()
-                .cast_as(Alias::new("date")),
-            date_intermediate_col.clone(),
-        )
-        .expr_as(
-            SimpleExpr::from(Func::count_distinct(distinct)).cast_as(Alias::new("text")),
-            "value",
-        )
-        .filter(blocks::Column::Consensus.eq(true))
-        .filter(blocks::Column::Timestamp.ne(DateTime::UNIX_EPOCH))
-        .group_by(Expr::col(date_intermediate_col.clone().into_iden()))
-        .order_by(Expr::col(date_intermediate_col.into_iden()), Order::Asc);
-    if let Some(range) = range {
-        query = datetime_range_filter(query, blocks::Column::Timestamp, &range);
-    }
-    query.build(sea_orm::DatabaseBackend::Postgres)
-}
+use super::count_distinct_in_user_ops;
 
 pub struct ActiveBundlersStatement;
 

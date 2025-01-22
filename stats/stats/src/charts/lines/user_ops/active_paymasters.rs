@@ -22,7 +22,7 @@ use entity::sea_orm_active_enums::ChartType;
 use migration::IntoColumnRef;
 use sea_orm::Statement;
 
-use super::active_bundlers::count_distinct_in_user_ops;
+use super::count_distinct_in_user_ops;
 
 pub struct ActivePaymastersStatement;
 
