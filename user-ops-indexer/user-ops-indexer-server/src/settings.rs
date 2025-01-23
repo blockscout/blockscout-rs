@@ -28,6 +28,13 @@ pub struct Settings {
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "USER_OPS_INDEXER";
+
+    fn validate(&self) -> anyhow::Result<()> {
+        if self.indexer.realtime.polling_block_range >= self.indexer.realtime.max_block_range {
+            anyhow::bail!("polling_block_range must be less than max_block_range");
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
