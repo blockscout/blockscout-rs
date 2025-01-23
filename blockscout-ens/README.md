@@ -23,36 +23,31 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 
 ## Envs
 
-| Variable                                         | Req&#x200B;uir&#x200B;ed | Description                                                  | Default value  |
-| ------------------------------------------------ | ------------------------ | ------------------------------------------------------------ | -------------- |
-| `BENS__DATABASE__CONNECT__URL`                   | true                     | e.g.`postgresql://postgres:postgres@localhost:5432/postgres` |                |
-| `BENS__DATABASE__CREATE_DATABASE`                |                          |                                                              | `false`        |
-| `BENS__DATABASE__RUN_MIGRATIONS`                 |                          |                                                              | `false`        |
-| `BENS__SERVER__HTTP__ADDR`                       |                          |                                                              | `0.0.0.0:8050` |
-| `BENS__SERVER__HTTP__ENABLED`                    |                          |                                                              | `true`         |
-| `BENS__SERVER__HTTP__MAX_BODY_SIZE`              |                          |                                                              | `2097152`      |
-| `BENS__SUBGRAPHS_READER__REFRESH_CACHE_SCHEDULE` |                          |                                                              | `0 0 * * * *`  |
-| `BENS__TRACING__ENABLED`                         |                          |                                                              | `true`         |
-| `BENS__TRACING__FORMAT`                          |                          |                                                              | `default`      |
+[anchor]: <> (anchors.envs.start.envs_main)
+
+| Variable                                         | Req&#x200B;uir&#x200B;ed | Description                                                   | Default value  |
+| ------------------------------------------------ | ------------------------ | ------------------------------------------------------------- | -------------- |
+| `BENS__DATABASE__CONNECT__URL`                   | true                     | e.g. `postgresql://postgres:postgres@localhost:5432/postgres` |                |
+| `BENS__DATABASE__CREATE_DATABASE`                |                          |                                                               | `false`        |
+| `BENS__DATABASE__RUN_MIGRATIONS`                 |                          |                                                               | `false`        |
+| `BENS__SERVER__HTTP__ADDR`                       |                          |                                                               | `0.0.0.0:8050` |
+| `BENS__SERVER__HTTP__ENABLED`                    |                          |                                                               | `true`         |
+| `BENS__SERVER__HTTP__MAX_BODY_SIZE`              |                          |                                                               | `2097152`      |
+| `BENS__SUBGRAPHS_READER__REFRESH_CACHE_SCHEDULE` |                          |                                                               | `0 0 * * * *`  |
+| `BENS__TRACING__ENABLED`                         |                          |                                                               | `true`         |
+| `BENS__TRACING__FORMAT`                          |                          |                                                               | `default`      |
+
+[anchor]: <> (anchors.envs.end.envs_main)
 
 ## Quickstart developer run
 
 1. Install [just](https://github.com/casey/just), [dotenv-cli](https://www.npmjs.com/package/dotenv-cli)
-2. Run commands:
 
+2. Run commands:
    ```bash
    just graph-node-start
    just deploy-subgraph ens-sepolia
    just run-dev
-   ```
-
-## Quickstart test run
-
-1. Install [just](https://github.com/casey/just)
-2. Run command:
-
-   ```bash
-   just test-with-db
    ```
 
 ## Contribute
@@ -82,13 +77,13 @@ If you want to add your name service procol to blockscout you should:
    ```
 
 8. Check that `bens-server` responses with valid domains. You can find swagger docs at [https://blockscout.github.io/swaggers/services/bens/main/index.html](https://blockscout.github.io/swaggers/services/bens/main/index.html)
-9. Add your protocol to list of [supported domains](#current-supported-domains)
-10. Update default config of BENS server for [production](./bens-server/config/prod.json) and [staging](./bens-server/config/staging.json)
-11. Finally, create PR with:
 
+9. Add your protocol to list of [supported domains](#current-supported-domains)
+
+10. Update default config of BENS server for [production](./bens-server/config/prod.json) and [staging](./bens-server/config/staging.json)
+
+11. Finally, create PR with:
     - New directory inside `blockscout-ens/graph-node/subgraphs` with your subgraph code
     - Updated BENS config
     - Updated supported domains list
     - Result of indexed data: proof that your indexed subgraph contains correct amount of domains, resolved_addresses and so on
-
-[anchor]: [anchor]:
