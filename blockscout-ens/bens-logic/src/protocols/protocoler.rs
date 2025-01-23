@@ -325,6 +325,10 @@ impl Protocoler {
                         network_id,
                         maybe_filter.clone(),
                     )
+                    .map_err(|e| {
+                        log::debug!("Failed to get suggestions for {}: {}", name_with_tld, e);
+                        e
+                    })
                     .unwrap_or_default()
                 })
                 .take(MAX_NAMES_LIMIT)
@@ -358,7 +362,7 @@ impl Protocoler {
         for deployed_protocol in protocols {
             let empty_label_hash = match &deployed_protocol.protocol.info.protocol_specific {
                 ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
-                ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash, 
+                ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash,
             };
 
             println!(
@@ -397,7 +401,7 @@ impl Protocoler {
         for deployed_protocol in protocols {
             let empty_label_hash = match &deployed_protocol.protocol.info.protocol_specific {
                 ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
-                ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash, 
+                ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash,
             };
 
             println!(
