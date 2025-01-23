@@ -19,9 +19,9 @@ async fn main() -> Result<(), anyhow::Error> {
     connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     let db_connection = database::initialize_postgres::<Migrator>(&settings.database).await?;
 
-    run_indexer(settings.clone(), db_connection).await?;
+    let status = run_indexer(settings.clone(), db_connection).await?;
 
     let db_connection = database::initialize_postgres::<Migrator>(&settings.database).await?;
 
-    run_server(settings, db_connection).await
+    run_server(settings, db_connection, status).await
 }
