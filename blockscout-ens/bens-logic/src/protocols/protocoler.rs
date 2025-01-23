@@ -325,10 +325,6 @@ impl Protocoler {
                         network_id,
                         maybe_filter.clone(),
                     )
-                    .map_err(|e| {
-                        log::debug!("Failed to get suggestions for {}: {}", name_with_tld, e);
-                        e
-                    })
                     .unwrap_or_default()
                 })
                 .take(MAX_NAMES_LIMIT)
