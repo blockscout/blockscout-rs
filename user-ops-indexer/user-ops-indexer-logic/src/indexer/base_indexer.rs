@@ -196,7 +196,7 @@ impl<P: Provider, L: IndexerLogic + Sync + Send> Indexer<P, L> {
             let missed_txs = repository::user_op::stream_unprocessed_logs_tx_hashes(
                 &self.db,
                 self.logic.entry_point(),
-                L::BEFORE_EXECUTION_SIGNATURE,
+                L::USER_OPERATION_EVENT_SIGNATURE,
                 from_block,
                 to_block,
             )
