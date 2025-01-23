@@ -10,7 +10,10 @@ use crate::{
 use blockscout_chains::BlockscoutChainsClient;
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings};
 use migration::Migrator;
-use multichain_aggregator_logic::{dapp_client::DappClient, repository};
+use multichain_aggregator_logic::{
+    clients::{dapp, token_info},
+    repository,
+};
 use std::sync::Arc;
 
 const SERVICE_NAME: &str = "multichain_aggregator";
@@ -49,14 +52,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let mut connect_options = sea_orm::ConnectOptions::new(settings.database.connect.clone().url());
-    connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    let db = database::initialize_postgres::<Migrator>(
-        connect_options,
-        settings.database.create_database,
-        settings.database.run_migrations,
-    )
-    .await?;
+    let db = database::initialize_postgres::<Migrator>(&settings.database).await?;
 
     // Initialize/update Blockscout chains
     let blockscout_chains = BlockscoutChainsClient::builder()
@@ -72,12 +68,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>();
     repository::chains::upsert_many(&db, blockscout_chains.clone()).await?;
 
-    let dapp_client = DappClient::new(settings.service.dapp_client.url);
+    let dapp_client = dapp::new_client(settings.service.dapp_client.url)?;
+    let token_info_client = token_info::new_client(settings.service.token_info_client.url)?;
 
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
         db,
         blockscout_chains,
         dapp_client,
+        token_info_client,
         settings.service.api,
     ));
 

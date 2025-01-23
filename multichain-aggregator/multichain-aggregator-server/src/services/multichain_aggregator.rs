@@ -6,9 +6,16 @@ use crate::{
     },
     settings::ApiSettings,
 };
+use api_client_framework::HttpApiClient;
 use multichain_aggregator_logic::{
-    self as logic, api_key_manager::ApiKeyManager, dapp_client::DappClient, error::ServiceError,
-    Chain,
+    self as logic,
+    api_key_manager::ApiKeyManager,
+    clients::token_info::{SearchTokenInfos, SearchTokenInfosParams},
+    error::ServiceError,
+    Chain, Token,
+};
+use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
+    ListTokensRequest, ListTokensResponse,
 };
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
@@ -19,7 +26,8 @@ pub struct MultichainAggregator {
     api_key_manager: ApiKeyManager,
     // Cached chains
     chains: Vec<Chain>,
-    dapp_client: DappClient,
+    dapp_client: HttpApiClient,
+    token_info_client: HttpApiClient,
     api_settings: ApiSettings,
 }
 
@@ -27,7 +35,8 @@ impl MultichainAggregator {
     pub fn new(
         db: DatabaseConnection,
         chains: Vec<Chain>,
-        dapp_client: DappClient,
+        dapp_client: HttpApiClient,
+        token_info_client: HttpApiClient,
         api_settings: ApiSettings,
     ) -> Self {
         Self {
@@ -35,6 +44,7 @@ impl MultichainAggregator {
             api_key_manager: ApiKeyManager::new(db),
             chains,
             dapp_client,
+            token_info_client,
             api_settings,
         }
     }
@@ -65,9 +75,8 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         logic::batch_import(&self.db, import_request)
             .await
-            .map_err(|err| {
+            .inspect_err(|err| {
                 tracing::error!(error = ?err, "failed to batch import");
-                Status::internal("failed to batch import")
             })?;
 
         Ok(Response::new(BatchImportResponse {
@@ -84,17 +93,17 @@ impl MultichainAggregatorService for MultichainAggregator {
         let page_token: Option<(alloy_primitives::Address, logic::ChainId)> =
             inner.page_token.map(parse_query_2).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-
+        let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let (addresses, next_page_token) = logic::repository::addresses::search_by_query_paginated(
             &self.db,
             &inner.q,
+            chain_id,
             page_token,
             page_size as u64,
         )
         .await
-        .map_err(|err| {
+        .inspect_err(|err| {
             tracing::error!(error = ?err, "failed to list addresses");
-            Status::internal("failed to list addresses")
         })?;
 
         Ok(Response::new(ListAddressesResponse {
@@ -106,19 +115,65 @@ impl MultichainAggregatorService for MultichainAggregator {
         }))
     }
 
+    async fn list_tokens(
+        &self,
+        request: Request<ListTokensRequest>,
+    ) -> Result<Response<ListTokensResponse>, Status> {
+        let inner = request.into_inner();
+
+        let chain_id = inner.chain_id.map(parse_query).transpose()?;
+
+        let token_info_search_endpoint = SearchTokenInfos {
+            params: SearchTokenInfosParams {
+                query: inner.q.to_string(),
+                chain_id,
+                page_size: inner.page_size,
+                page_token: inner.page_token,
+            },
+        };
+
+        let res = self
+            .token_info_client
+            .request(&token_info_search_endpoint)
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "failed to list tokens");
+                Status::internal("failed to list tokens")
+            })?;
+
+        let tokens = res
+            .token_infos
+            .into_iter()
+            .map(|t| Token::try_from(t).map(|t| t.into()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ServiceError::from)?;
+
+        Ok(Response::new(ListTokensResponse {
+            tokens,
+            pagination: res.next_page_params.map(|p| Pagination {
+                page_token: p.page_token,
+                page_size: p.page_size,
+            }),
+        }))
+    }
+
     async fn quick_search(
         &self,
         request: Request<QuickSearchRequest>,
     ) -> Result<Response<QuickSearchResponse>, Status> {
         let inner = request.into_inner();
 
-        let results =
-            logic::search::quick_search(&self.db, &self.dapp_client, inner.q, &self.chains)
-                .await
-                .map_err(|err| {
-                    tracing::error!(error = ?err, "failed to quick search");
-                    Status::internal("failed to quick search")
-                })?;
+        let results = logic::search::quick_search(
+            &self.db,
+            &self.dapp_client,
+            &self.token_info_client,
+            inner.q,
+            &self.chains,
+        )
+        .await
+        .inspect_err(|err| {
+            tracing::error!(error = ?err, "failed to quick search");
+        })?;
 
         Ok(Response::new(results.into()))
     }

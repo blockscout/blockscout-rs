@@ -44,12 +44,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
 
     {% if database and migrations %}
-    let _db_connection = database::initialize_postgres::<Migrator>(
-        &settings.database.connect.url(),
-        settings.database.create_database,
-        settings.database.run_migrations,
-    )
-    .await?;
+    let _db_connection = database::initialize_postgres::<Migrator>(&settings.database).await?;
     {% endif %}
 
     // TODO: init services here

@@ -35,7 +35,7 @@
         "sourceMap": "141:390:0:-:0;;;;;;;;;;;;;;;;;;;",
         "linkReferences": {},
         "cborAuxdata": {
-            "0": {
+            "1": {
                 "offset": 315,
                 "value": "0xa164736f6c6343000812000a"
             }
@@ -46,7 +46,7 @@
         "linkReferences": {},
         "immutableReferences": {},
         "cborAuxdata": {
-            "0": {
+            "1": {
                 "offset": 283,
                 "value": "0xa164736f6c6343000812000a"
             }

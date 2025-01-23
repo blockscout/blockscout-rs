@@ -30,6 +30,7 @@ pub struct Model {
     pub address_hash: Option<Vec<u8>>,
     pub watch_erc_404_input: Option<bool>,
     pub watch_erc_404_output: Option<bool>,
+    pub user_created: Option<bool>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -6,4 +6,5 @@ pub mod chains;
 pub mod dapp;
 pub mod hashes;
 pub mod search_results;
+pub mod token_info;
 pub type ChainId = i64;

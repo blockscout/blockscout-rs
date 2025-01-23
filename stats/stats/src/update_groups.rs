@@ -18,9 +18,12 @@ singleton_groups!(
     // Active accounts is left without resolutions because the chart is non-trivial
     // to calculate somewhat-optimally
     ActiveAccounts,
+    // Same^ for bundlers & paymasters
+    ActiveBundlers,
+    ActivePaymasters,
     AverageBlockTime,
     CompletedTxns,
-    PendingTxns,
+    PendingTxns30m,
     TotalAddresses,
     TotalBlocks,
     TotalTxns,
@@ -170,10 +173,6 @@ construct_update_group!(NewContractsGroup {
         ContractsGrowthWeekly,
         ContractsGrowthMonthly,
         ContractsGrowthYearly,
-        // currently can be in a separate group but after #845
-        // it's expected to join this group. placing it here to avoid
-        // updating config after the fix (todo: remove (#845))
-        TotalContracts,
         LastNewContracts,
     ],
 });
@@ -191,6 +190,20 @@ construct_update_group!(NewTxnsGroup {
     ],
 });
 
+construct_update_group!(NewUserOpsGroup {
+    charts: [
+        NewUserOps,
+        NewUserOpsWeekly,
+        NewUserOpsMonthly,
+        NewUserOpsYearly,
+        UserOpsGrowth,
+        UserOpsGrowthWeekly,
+        UserOpsGrowthMonthly,
+        UserOpsGrowthYearly,
+        TotalUserOps,
+    ],
+});
+
 construct_update_group!(NewVerifiedContractsGroup {
     charts: [
         NewVerifiedContracts,
@@ -201,7 +214,6 @@ construct_update_group!(NewVerifiedContractsGroup {
         VerifiedContractsGrowthWeekly,
         VerifiedContractsGrowthMonthly,
         VerifiedContractsGrowthYearly,
-        TotalVerifiedContracts,
         LastNewVerifiedContracts,
     ],
 });
@@ -227,5 +239,20 @@ construct_update_group!(NewNativeCoinTransfersGroup {
         NewNativeCoinTransfersMonthly,
         NewNativeCoinTransfersYearly,
         TotalNativeCoinTransfers,
+    ],
+});
+
+// Charts returned in contracts endpoint.
+//
+// They don't depend on each other, but single group
+// will make scheduling simpler + ensure they update
+// as close to each other as possible without overloading DB
+// by running concurrently.
+construct_update_group!(VerifiedContractsPageGroup {
+    charts: [
+        TotalContracts,
+        NewContracts24h,
+        TotalVerifiedContracts,
+        NewVerifiedContracts24h,
     ],
 });

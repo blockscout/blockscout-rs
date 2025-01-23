@@ -19,20 +19,20 @@
             "units": "s"
         },
         "new_txns_24h": {
-            "title": "Transactions",
+            "title": "Transactions (24h)",
             "description": "Number of new transactions within last 24 hours"
         },
-        "pending_txns": {
-            "title": "Pending transactions",
-            "description": " "
+        "pending_txns_30m": {
+            "title": "Pending transactions (30m)",
+            "description": "Transactions in the past 30 minutes waiting to be processed by the network"
         },
         "txns_fee_24h": {
-            "title": "Transactions fees",
+            "title": "Transactions fees (24h)",
             "description": "Sum of {{native_coin_symbol}} spent on gas fees within last 24 hours",
             "units": "{{native_coin_symbol}}"
         },
         "average_txn_fee_24h": {
-            "title": "Avg. transaction fee",
+            "title": "Avg. transaction fee (24h)",
             "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction within last 24 hours",
             "units": "{{native_coin_symbol}}"
         },
@@ -62,12 +62,20 @@
             "description": "'Total txns' without block creation transactions"
         },
         "yesterday_txns": {
-            "title": "Yesterday transactions",
+            "title": "Yesterday txns",
             "description": "Number of transactions yesterday (0:00 - 23:59 UTC)"
         },
+        "total_user_ops": {
+            "title": "Total user operations",
+            "description": "Number of user operations as per the ERC-4337 standard"
+        },
         "last_new_contracts": {
-            "title": "Number of deployed contracts today",
-            "description": "Number of deployed contracts today"
+            "title": "Number of contracts today",
+            "description": "Number of deployed contracts today (UTC)"
+        },
+        "new_contracts_24h": {
+            "title": "Number of contracts (24h)",
+            "description": "Number of deployed contracts within the last 24 hours"
         },
         "total_contracts": {
             "title": "Total contracts",
@@ -75,7 +83,11 @@
         },
         "last_new_verified_contracts": {
             "title": "Number of verified contracts today",
-            "description": "Number of contracts verified today"
+            "description": "Number of contracts verified today (UTC)"
+        },
+        "new_verified_contracts_24h": {
+            "title": "Number of verified contracts (24h)",
+            "description": "Number of contracts verified within the last 24 hours"
         },
         "total_verified_contracts": {
             "title": "Total verified contracts",
@@ -131,7 +143,7 @@
         },
         "new_txns_window": {
             "title": "Daily transactions",
-            "description": "Number of transactions yesterday (0:00 - 23:59 UTC). The chart displays daily transactions for the past 30 days."
+            "description": "The chart displays daily transactions for the past 30 days"
         },
         "txns_growth": {
             "title": "Number of transactions",
@@ -150,6 +162,22 @@
         "txns_success_rate": {
             "title": "Transaction success rate",
             "description": "Success rate for all included transactions"
+        },
+        "new_user_ops": {
+            "title": "New user operations",
+            "description": "Number of new user operations as per the ERC-4337 standard"
+        },
+        "user_ops_growth": {
+            "title": "Number of user operations",
+            "description": "Cumulative user operation (ERC-4337) growth over time"
+        },
+        "active_bundlers": {
+            "title": "Active bundlers",
+            "description": "Active user ops bundlers number per period"
+        },
+        "active_paymasters": {
+            "title": "Active paymasters",
+            "description": "Active user ops paymasters number per period"
         },
         "new_block_rewards": {
             "enabled": false,

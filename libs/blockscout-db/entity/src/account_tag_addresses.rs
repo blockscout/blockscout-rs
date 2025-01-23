@@ -16,6 +16,7 @@ pub struct Model {
     pub name: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub address_hash: Option<Vec<u8>>,
+    pub user_created: Option<bool>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

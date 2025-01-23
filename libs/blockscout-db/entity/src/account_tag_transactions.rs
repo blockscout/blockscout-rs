@@ -11,11 +11,12 @@ pub struct Model {
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
-    pub tx_hash_hash: Option<Vec<u8>>,
+    pub transaction_hash_hash: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub name: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
-    pub tx_hash: Option<Vec<u8>>,
+    pub transaction_hash: Option<Vec<u8>>,
+    pub user_created: Option<bool>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

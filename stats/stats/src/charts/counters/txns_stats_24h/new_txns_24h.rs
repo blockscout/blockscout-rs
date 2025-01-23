@@ -4,7 +4,7 @@ use crate::{
         local_db::DirectPointLocalDbChartSource,
     },
     types::TimespanValue,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -44,6 +44,9 @@ impl ChartProperties for Properties {
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
+    }
 }
 
 pub type NewTxns24h = DirectPointLocalDbChartSource<NewTxns24hExtracted, Properties>;
@@ -65,7 +68,7 @@ mod tests {
         simple_test_counter::<NewTxns24h>(
             "update_new_txns_24h_2",
             // block at `2022-11-11T00:00:00` is not counted because sql is not that precise :/
-            "12",
+            "14",
             Some(dt("2022-11-11T00:00:00")),
         )
         .await;

@@ -218,6 +218,20 @@ paths:
           type: string
       tags:
         - UserOpsService
+  /api/v1/status:
+    get:
+      operationId: UserOpsService_GetStatus
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1IndexerStatus'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - UserOpsService
   /api/v1/userOps:
     get:
       operationId: UserOpsService_ListUserOps
@@ -344,6 +358,7 @@ definitions:
       details:
         type: array
         items:
+          type: object
           $ref: '#/definitions/protobufAny'
   v1Account:
     type: object
@@ -390,6 +405,17 @@ definitions:
       total_ops:
         type: integer
         format: int64
+  v1EntryPointIndexerStatus:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+      live:
+        type: boolean
+      past_db_logs_indexing_finished:
+        type: boolean
+      past_rpc_logs_indexing_finished:
+        type: boolean
   v1Factory:
     type: object
     properties:
@@ -403,12 +429,22 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1IndexerStatus:
+    type: object
+    properties:
+      finished_past_indexing:
+        type: boolean
+      v06:
+        $ref: '#/definitions/v1EntryPointIndexerStatus'
+      v07:
+        $ref: '#/definitions/v1EntryPointIndexerStatus'
   v1ListAccountsResponse:
     type: object
     properties:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Account'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -418,6 +454,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Bundler'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -427,6 +464,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Bundle'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -436,6 +474,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Factory'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -445,6 +484,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1Paymaster'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
@@ -476,6 +516,7 @@ definitions:
       items:
         type: array
         items:
+          type: object
           $ref: '#/definitions/v1ListUserOp'
       next_page_params:
         $ref: '#/definitions/v1Pagination'

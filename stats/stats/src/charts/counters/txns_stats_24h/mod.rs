@@ -1,8 +1,11 @@
 use std::ops::Range;
 
-use crate::data_source::{
-    kinds::remote_db::{PullOne24hCached, RemoteDatabaseSource, StatementFromRange},
-    types::BlockscoutMigrations,
+use crate::{
+    charts::db_interaction::utils::datetime_range_filter,
+    data_source::{
+        kinds::remote_db::{PullOne24hCached, RemoteDatabaseSource, StatementFromRange},
+        types::BlockscoutMigrations,
+    },
 };
 use blockscout_db::entity::{blocks, transactions};
 use chrono::{DateTime, Utc};
@@ -55,13 +58,9 @@ impl StatementFromRange for TxnsStatsStatement {
 
         if let Some(r) = range {
             if completed_migrations.denormalization {
-                query = query
-                    .filter(transactions::Column::BlockTimestamp.lt(r.end))
-                    .filter(transactions::Column::BlockTimestamp.gte(r.start))
+                query = datetime_range_filter(query, transactions::Column::BlockTimestamp, &r);
             }
-            query = query
-                .filter(blocks::Column::Timestamp.lt(r.end))
-                .filter(blocks::Column::Timestamp.gte(r.start));
+            query = datetime_range_filter(query, blocks::Column::Timestamp, &r);
         }
 
         query.build(DbBackend::Postgres)

@@ -14,9 +14,12 @@
 //!     new charts to integration tests (`tests` folder).
 //!
 
-use crate::config::{
-    self,
-    types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
+use crate::{
+    config::{
+        self,
+        types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
+    },
+    ReadService,
 };
 use cron::Schedule;
 use itertools::Itertools;
@@ -24,7 +27,7 @@ use stats::{
     entity::sea_orm_active_enums::ChartType,
     query_dispatch::ChartTypeSpecifics,
     update_group::{ArcUpdateGroup, SyncUpdateGroup},
-    ChartKey, ChartObject, ResolutionKind,
+    ChartKey, ChartObject, IndexingStatus, ResolutionKind,
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
@@ -97,6 +100,7 @@ pub struct RuntimeSetup {
     pub lines_layout: Vec<LineChartCategory>,
     pub counters_layout: Vec<String>,
     pub update_groups: BTreeMap<String, UpdateGroupEntry>,
+    /// chart name -> entry
     pub charts_info: BTreeMap<String, EnabledChartEntry>,
 }
 
@@ -136,6 +140,7 @@ impl RuntimeSetup {
         update_groups: config::update_groups::Config,
     ) -> anyhow::Result<Self> {
         let charts_info = Self::build_charts_info(charts)?;
+        Self::check_all_enabled_charts_have_endpoints(charts_info.keys().collect(), &layout);
         let update_groups = Self::init_update_groups(update_groups, &charts_info)?;
         Ok(Self {
             lines_layout: layout.line_chart_categories,
@@ -249,15 +254,58 @@ impl RuntimeSetup {
             .map_err(|duplicate_name| anyhow::anyhow!("duplicate chart name: {duplicate_name:?}",))
     }
 
+    /// Warns charts that are both enabled and will be updated,
+    /// but which are not returned by any endpoint (making the updates
+    /// very likely useless).
+    ///
+    /// In other words, any enabled chart should be accessible from
+    /// the outside.
+    fn check_all_enabled_charts_have_endpoints<'a>(
+        mut enabled_names: HashSet<&'a String>,
+        layout: &'a config::layout::Config,
+    ) {
+        // general stats handles
+        for counter in &layout.counters_order {
+            enabled_names.remove(&counter);
+        }
+        for line_chart in layout
+            .line_chart_categories
+            .iter()
+            .flat_map(|cat| cat.charts_order.iter())
+        {
+            enabled_names.remove(&line_chart);
+        }
+        // pages
+        let charts_in_pages = [
+            ReadService::main_page_charts(),
+            ReadService::contracts_page_charts(),
+            ReadService::transactions_page_charts(),
+        ]
+        .concat();
+        for chart in charts_in_pages {
+            enabled_names.remove(&chart);
+        }
+
+        if !enabled_names.is_empty() {
+            tracing::warn!(
+                endpointless_charts =? enabled_names,
+                "Some charts are updated but not returned \
+                by any endpoint. This is likely a bug, please report it."
+            );
+        }
+    }
+
     fn all_update_groups() -> Vec<ArcUpdateGroup> {
         use stats::update_groups::*;
 
         vec![
             // actual singletons
             Arc::new(ActiveAccountsGroup),
+            Arc::new(ActiveBundlersGroup),
+            Arc::new(ActivePaymastersGroup),
             Arc::new(AverageBlockTimeGroup),
             Arc::new(CompletedTxnsGroup),
-            Arc::new(PendingTxnsGroup),
+            Arc::new(PendingTxns30mGroup),
             Arc::new(TotalAddressesGroup),
             Arc::new(TotalBlocksGroup),
             Arc::new(TotalTokensGroup),
@@ -292,10 +340,12 @@ impl RuntimeSetup {
             Arc::new(NewAccountsGroup),
             Arc::new(NewContractsGroup),
             Arc::new(NewTxnsGroup),
+            Arc::new(NewUserOpsGroup),
             Arc::new(NewVerifiedContractsGroup),
             Arc::new(NativeCoinHoldersGrowthGroup),
             Arc::new(NewNativeCoinTransfersGroup),
             Arc::new(TxnsStats24hGroup),
+            Arc::new(VerifiedContractsPageGroup),
         ]
     }
 
@@ -492,5 +542,27 @@ impl RuntimeSetup {
             }
         }
         members
+    }
+
+    /// Recursive indexing status requirements for all group members.
+    ///
+    /// 'Recursive' means that their dependencies' requirements are also
+    /// considered.
+    ///
+    /// Both enabled and disabled memebers are included.
+    pub fn all_members_indexing_status_requirements() -> BTreeMap<ChartKey, IndexingStatus> {
+        Self::all_update_groups()
+            .into_iter()
+            .flat_map(|g| {
+                g.list_charts()
+                    .into_iter()
+                    .map(|c| {
+                        let key = c.properties.key;
+                        let enabled_key = &HashSet::from([key.clone()]);
+                        (key, g.dependency_indexing_status_requirement(enabled_key))
+                    })
+                    .collect_vec()
+            })
+            .collect()
     }
 }

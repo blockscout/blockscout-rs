@@ -651,6 +651,66 @@ mod tests {
                 true,
                 "e.g. `test-url`",
             ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_CONNECTIONS",
+                Some("`null`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MIN_CONNECTIONS",
+                Some("`null`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__CONNECT_TIMEOUT",
+                Some("`null`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__IDLE_TIMEOUT",
+                Some("`null`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__ACQUIRE_TIMEOUT",
+                Some("`null`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_LIFETIME",
+                Some("`null`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING",
+                Some("`true`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING_LEVEL",
+                Some("`debug`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_LEVEL",
+                Some("`off`"),
+                false,
+                "",
+            ),
+            var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_THRESHOLD",
+                Some("`1`"),
+                false,
+                "",
+            ),
         ]))
     }
 
@@ -662,17 +722,27 @@ mod tests {
 
 [anchor]: <> (anchors.envs.start.cool_postfix)
 
-| Variable                                  | Required    | Description      | Default Value |
-|-------------------------------------------|-------------|------------------|---------------|
-| `TEST_SERVICE__TEST`                      | true        | e.g. `value`     |               |
-| `TEST_SERVICE__DATABASE__CREATE_DATABASE` | false       |                  | `false`       |
-| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`  | false       |                  | `false`       |
-| `TEST_SERVICE__TEST2`                     | false       | e.g. `123`       | `1000`        |
-| `TEST_SERVICE__TEST3_SET`                 | false       | e.g. `false`     | `null`        |
-| `TEST_SERVICE__TEST4_NOT_SET`             | false       |                  | `null`        |
-| `TEST_SERVICE__TEST5_WITH_UNICODE`        | false       |                  | `false`       |
-| `TEST_SERVICE__STRING_WITH_DEFAULT`       | false       |                  | `kekek`       |
-| `TEST_SERVICE__DATABASE__CONNECT__URL`    | true        | e.g. `test-url`  |               |
+| Variable                                                      | Required    | Description      | Default Value |
+|---------------------------------------------------------------|-------------|------------------|---------------|
+| `TEST_SERVICE__TEST`                                          | true        | e.g. `value`     |               |
+| `TEST_SERVICE__DATABASE__CREATE_DATABASE`                     | false       |                  | `false`       |
+| `TEST_SERVICE__DATABASE__RUN_MIGRATIONS`                      | false       |                  | `false`       |
+| `TEST_SERVICE__TEST2`                                         | false       | e.g. `123`       | `1000`        |
+| `TEST_SERVICE__TEST3_SET`                                     | false       | e.g. `false`     | `null`        |
+| `TEST_SERVICE__TEST4_NOT_SET`                                 | false       |                  | `null`        |
+| `TEST_SERVICE__TEST5_WITH_UNICODE`                            | false       |                  | `false`       |
+| `TEST_SERVICE__STRING_WITH_DEFAULT`                           | false       |                  | `kekek`       |
+| `TEST_SERVICE__DATABASE__CONNECT__URL`                        | true        | e.g. `test-url`  |               |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__ACQUIRE_TIMEOUT` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__CONNECT_TIMEOUT` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__IDLE_TIMEOUT` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_CONNECTIONS` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_LIFETIME` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MIN_CONNECTIONS` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING` | | | `true` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING_LEVEL` | | | `debug` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_LEVEL` | | | `off` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_THRESHOLD` | | | `1` |
 [anchor]: <> (anchors.envs.end.cool_postfix)
 "#
     }
@@ -769,6 +839,16 @@ mod tests {
 | `SOME_EXTRA_VARS2` | true | | `example_value2` |
 | `TEST_SERVICE__DATABASE__CONNECT__URL` | true | e.g. `test-url` | |
 | `TEST_SERVICE__TEST` | true | e.g. `value` | |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__ACQUIRE_TIMEOUT` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__CONNECT_TIMEOUT` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__IDLE_TIMEOUT` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_CONNECTIONS` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_LIFETIME` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MIN_CONNECTIONS` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING` | | | `true` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING_LEVEL` | | | `debug` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_LEVEL` | | | `off` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__SQLX_SLOW_STATEMENTS_LOGGING_THRESHOLD` | | | `1` |
 | `TEST_SERVICE__DATABASE__CREATE_DATABASE` | | | `false` |
 | `TEST_SERVICE__DATABASE__RUN_MIGRATIONS` | | | `false` |
 | `TEST_SERVICE__STRING_WITH_DEFAULT` | | | `kekek` |

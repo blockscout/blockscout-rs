@@ -44,7 +44,7 @@ use tokio::sync::{Mutex, MutexGuard};
 use crate::{
     charts::{chart_properties_portrait::imports::ChartKey, ChartObject},
     data_source::UpdateParameters,
-    ChartError,
+    ChartError, IndexingStatus,
 };
 
 #[derive(Error, Debug, PartialEq)]
@@ -70,6 +70,11 @@ pub trait UpdateGroup: core::fmt::Debug {
     fn name(&self) -> String;
     /// List chart properties - members of the group.
     fn list_charts(&self) -> Vec<ChartObject>;
+    /// Indexing status that is needed to update all enabled members of the group
+    fn dependency_indexing_status_requirement(
+        &self,
+        enabled_charts: &HashSet<ChartKey>,
+    ) -> IndexingStatus;
     /// List mutex ids of group members + their dependencies.
     /// Dependencies participate in updates, thus access to them needs to be
     /// synchronized as well.
@@ -272,6 +277,26 @@ macro_rules! construct_update_group {
                 ]
             }
 
+            fn dependency_indexing_status_requirement(
+                &self,
+                enabled_charts: &::std::collections::HashSet<$crate::ChartKey>,
+            ) -> $crate::IndexingStatus {
+                $crate::IndexingStatus::most_restrictive_from(
+                    [
+                        $(
+                            (
+                                <$member as $crate::ChartProperties>::key(),
+                                <$member as $crate::data_source::DataSource>::indexing_status_requirement_recursive()
+                            ),
+                        )*
+                    ]
+                    .into_iter()
+                    .filter(|(k, _)| enabled_charts.contains(k))
+                    .map(|(_, req)| req),
+                )
+
+            }
+
             fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<String> {
                 let mut ids = ::std::collections::HashSet::new();
                 $(
@@ -413,6 +438,15 @@ impl SyncUpdateGroup {
         self.inner.list_charts()
     }
 
+    /// See [`UpdateGroup::dependency_indexing_status_requirement``]
+    pub fn dependency_indexing_status_requirement(
+        &self,
+        enabled_charts: &HashSet<ChartKey>,
+    ) -> IndexingStatus {
+        self.inner
+            .dependency_indexing_status_requirement(enabled_charts)
+    }
+
     /// See [`UpdateGroup::list_dependency_mutex_ids`]
     pub fn list_dependency_mutex_ids(&self) -> HashSet<String> {
         self.inner.list_dependency_mutex_ids()
@@ -496,7 +530,7 @@ impl SyncUpdateGroup {
     }
 
     /// Ignores unknown names
-    pub async fn create_charts_with_mutexes<'a>(
+    pub async fn create_charts_with_mutexes(
         &self,
         db: &DatabaseConnection,
         creation_time_override: Option<chrono::DateTime<Utc>>,
@@ -510,9 +544,9 @@ impl SyncUpdateGroup {
     }
 
     /// Ignores unknown names
-    pub async fn update_charts_with_mutexes<'a>(
+    pub async fn update_charts_with_mutexes(
         &self,
-        params: UpdateParameters<'a>,
+        params: UpdateParameters<'_>,
         enabled_charts: &HashSet<ChartKey>,
     ) -> Result<(), ChartError> {
         let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
@@ -532,22 +566,21 @@ mod tests {
     use tokio::sync::Mutex;
 
     use crate::{
-        counters::TotalVerifiedContracts,
         data_source::DataSource,
-        lines::{NewVerifiedContracts, VerifiedContractsGrowth},
+        lines::{ContractsGrowth, NewContracts},
         update_group::InitializationError,
     };
 
     use super::SyncUpdateGroup;
 
     construct_update_group!(GroupWithoutDependencies {
-        charts: [TotalVerifiedContracts],
+        charts: [ContractsGrowth],
     });
 
     #[test]
     fn new_checks_mutexes() {
         let mutexes: BTreeMap<String, Arc<Mutex<()>>> = [(
-            TotalVerifiedContracts::mutex_id().unwrap(),
+            ContractsGrowth::mutex_id().unwrap(),
             Arc::new(Mutex::new(())),
         )]
         .into();
@@ -566,10 +599,7 @@ mod tests {
                 .map_err(sorted_init_error)
                 .unwrap_err(),
             sorted_init_error(InitializationError {
-                missing_mutexes: vec![
-                    VerifiedContractsGrowth::mutex_id().unwrap(),
-                    NewVerifiedContracts::mutex_id().unwrap()
-                ]
+                missing_mutexes: vec![NewContracts::mutex_id().unwrap(),]
             })
         );
     }

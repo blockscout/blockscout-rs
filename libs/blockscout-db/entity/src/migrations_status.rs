@@ -10,6 +10,8 @@ pub struct Model {
     pub status: Option<String>,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
+    #[sea_orm(column_type = "JsonBinary", nullable)]
+    pub meta: Option<Json>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -2,12 +2,13 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 16.2 (Debian 16.2-1.pgdg120+2)
--- Dumped by pg_dump version 16.2 (Debian 16.2-1.pgdg120+2)
+-- Dumped from database version 17.2 (Debian 17.2-1.pgdg120+1)
+-- Dumped by pg_dump version 17.2 (Debian 17.2-1.pgdg120+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SET check_function_bodies = false;
@@ -72,6 +73,43 @@ COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching
 
 
 --
+-- Name: entry_point_version; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.entry_point_version AS ENUM (
+    'v0.6',
+    'v0.7'
+);
+
+
+ALTER TYPE public.entry_point_version OWNER TO postgres;
+
+--
+-- Name: log_id; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.log_id AS (
+	transaction_hash bytea,
+	block_hash bytea,
+	log_index integer
+);
+
+
+ALTER TYPE public.log_id OWNER TO postgres;
+
+--
+-- Name: nft_id; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.nft_id AS (
+	block_number bigint,
+	log_index integer
+);
+
+
+ALTER TYPE public.nft_id OWNER TO postgres;
+
+--
 -- Name: proxy_type; Type: TYPE; Schema: public; Owner: postgres
 --
 
@@ -86,11 +124,26 @@ CREATE TYPE public.proxy_type AS ENUM (
     'comptroller',
     'eip2535',
     'clone_with_immutable_arguments',
+    'eip7702',
     'unknown'
 );
 
 
 ALTER TYPE public.proxy_type OWNER TO postgres;
+
+--
+-- Name: sponsor_type; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.sponsor_type AS ENUM (
+    'wallet_deposit',
+    'wallet_balance',
+    'paymaster_sponsor',
+    'paymaster_hybrid'
+);
+
+
+ALTER TYPE public.sponsor_type OWNER TO postgres;
 
 --
 -- Name: transaction_actions_protocol; Type: TYPE; Schema: public; Owner: postgres
@@ -229,7 +282,8 @@ CREATE TABLE public.account_custom_abis (
     updated_at timestamp(0) without time zone NOT NULL,
     address_hash_hash bytea,
     address_hash bytea,
-    name bytea
+    name bytea,
+    user_created boolean DEFAULT true
 );
 
 
@@ -269,10 +323,9 @@ CREATE TABLE public.account_identities (
     uid bytea,
     uid_hash bytea,
     email bytea,
-    name bytea,
-    nickname bytea,
     avatar bytea,
-    verification_email_sent_at timestamp without time zone
+    verification_email_sent_at timestamp without time zone,
+    otp_sent_at timestamp without time zone
 );
 
 
@@ -357,7 +410,8 @@ CREATE TABLE public.account_tag_addresses (
     updated_at timestamp(0) without time zone NOT NULL,
     address_hash_hash bytea,
     name bytea,
-    address_hash bytea
+    address_hash bytea,
+    user_created boolean DEFAULT true
 );
 
 
@@ -393,9 +447,10 @@ CREATE TABLE public.account_tag_transactions (
     identity_id bigint,
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL,
-    tx_hash_hash bytea,
+    transaction_hash_hash bytea,
     name bytea,
-    tx_hash bytea
+    transaction_hash bytea,
+    user_created boolean DEFAULT true
 );
 
 
@@ -447,7 +502,8 @@ CREATE TABLE public.account_watchlist_addresses (
     name bytea,
     address_hash bytea,
     watch_erc_404_input boolean DEFAULT true,
-    watch_erc_404_output boolean DEFAULT true
+    watch_erc_404_output boolean DEFAULT true,
+    user_created boolean DEFAULT true
 );
 
 
@@ -486,7 +542,7 @@ CREATE TABLE public.account_watchlist_notifications (
     method character varying(255),
     block_number integer,
     amount numeric,
-    tx_fee numeric,
+    transaction_fee numeric,
     viewed_at timestamp without time zone,
     inserted_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL,
@@ -796,7 +852,9 @@ CREATE TABLE public.address_token_balances (
     inserted_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL,
     token_id numeric(78,0),
-    token_type character varying(255)
+    token_type character varying(255),
+    refetch_after timestamp without time zone,
+    retries_count smallint
 );
 
 
@@ -1215,7 +1273,8 @@ CREATE TABLE public.migrations_status (
     migration_name character varying(255) NOT NULL,
     status character varying(255),
     inserted_at timestamp without time zone NOT NULL,
-    updated_at timestamp without time zone NOT NULL
+    updated_at timestamp without time zone NOT NULL,
+    meta jsonb
 );
 
 
@@ -1316,6 +1375,19 @@ CREATE TABLE public.proxy_smart_contract_verification_statuses (
 ALTER TABLE public.proxy_smart_contract_verification_statuses OWNER TO postgres;
 
 --
+-- Name: scam_address_badge_mappings; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.scam_address_badge_mappings (
+    address_hash bytea NOT NULL,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+ALTER TABLE public.scam_address_badge_mappings OWNER TO postgres;
+
+--
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1326,6 +1398,27 @@ CREATE TABLE public.schema_migrations (
 
 
 ALTER TABLE public.schema_migrations OWNER TO postgres;
+
+--
+-- Name: signed_authorizations; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.signed_authorizations (
+    transaction_hash bytea NOT NULL,
+    index integer NOT NULL,
+    chain_id bigint NOT NULL,
+    address bytea NOT NULL,
+    nonce integer NOT NULL,
+    v integer NOT NULL,
+    r numeric(100,0) NOT NULL,
+    s numeric(100,0) NOT NULL,
+    authority bytea,
+    inserted_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+ALTER TABLE public.signed_authorizations OWNER TO postgres;
 
 --
 -- Name: smart_contract_audit_reports; Type: TABLE; Schema: public; Owner: postgres
@@ -1403,7 +1496,8 @@ CREATE TABLE public.smart_contracts (
     license_type smallint DEFAULT 1 NOT NULL,
     verified_via_verifier_alliance boolean,
     certified boolean,
-    is_blueprint boolean
+    is_blueprint boolean,
+    language smallint
 );
 
 
@@ -1497,7 +1591,11 @@ CREATE TABLE public.token_instances (
     owner_updated_at_block bigint,
     owner_updated_at_log_index integer,
     refetch_after timestamp without time zone,
-    retries_count smallint DEFAULT 0 NOT NULL
+    retries_count smallint DEFAULT 0 NOT NULL,
+    thumbnails jsonb,
+    media_type character varying(255),
+    cdn_upload_error character varying(255),
+    is_banned boolean DEFAULT false
 );
 
 
@@ -1690,7 +1788,7 @@ CREATE TABLE public.transactions (
     max_priority_fee_per_gas numeric(100,0),
     max_fee_per_gas numeric(100,0),
     type integer,
-    has_error_in_internal_txs boolean,
+    has_error_in_internal_transactions boolean,
     block_timestamp timestamp without time zone,
     block_consensus boolean DEFAULT true,
     CONSTRAINT collated_block_number CHECK (((block_hash IS NULL) OR (block_number IS NOT NULL))),
@@ -1746,6 +1844,62 @@ ALTER SEQUENCE public.user_contacts_id_seq OWNER TO postgres;
 
 ALTER SEQUENCE public.user_contacts_id_seq OWNED BY public.user_contacts.id;
 
+
+--
+-- Name: user_operations; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.user_operations (
+    hash bytea NOT NULL,
+    sender bytea NOT NULL,
+    nonce bytea NOT NULL,
+    init_code bytea,
+    call_data bytea NOT NULL,
+    call_gas_limit numeric(100,0) NOT NULL,
+    verification_gas_limit numeric(100,0) NOT NULL,
+    pre_verification_gas numeric(100,0) NOT NULL,
+    max_fee_per_gas numeric(100,0) NOT NULL,
+    max_priority_fee_per_gas numeric(100,0) NOT NULL,
+    paymaster_and_data bytea,
+    signature bytea NOT NULL,
+    aggregator bytea,
+    aggregator_signature bytea,
+    entry_point bytea NOT NULL,
+    transaction_hash bytea NOT NULL,
+    block_number integer NOT NULL,
+    block_hash bytea NOT NULL,
+    bundle_index integer NOT NULL,
+    index integer NOT NULL,
+    user_logs_start_index integer NOT NULL,
+    user_logs_count integer NOT NULL,
+    bundler bytea NOT NULL,
+    factory bytea,
+    paymaster bytea,
+    status boolean NOT NULL,
+    revert_reason bytea,
+    gas numeric(100,0) NOT NULL,
+    gas_price numeric(100,0) NOT NULL,
+    gas_used numeric(100,0) NOT NULL,
+    sponsor_type public.sponsor_type NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    entry_point_version public.entry_point_version DEFAULT 'v0.6'::public.entry_point_version NOT NULL
+);
+
+
+ALTER TABLE public.user_operations OWNER TO postgres;
+
+--
+-- Name: user_ops_indexer_migrations; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.user_ops_indexer_migrations (
+    version character varying NOT NULL,
+    applied_at bigint NOT NULL
+);
+
+
+ALTER TABLE public.user_ops_indexer_migrations OWNER TO postgres;
 
 --
 -- Name: users; Type: TABLE; Schema: public; Owner: postgres
@@ -2133,6 +2287,14 @@ ALTER TABLE ONLY public.address_names
 
 
 --
+-- Name: address_tags address_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.address_tags
+    ADD CONSTRAINT address_tags_pkey PRIMARY KEY (label);
+
+
+--
 -- Name: address_to_tags address_to_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2365,6 +2527,14 @@ ALTER TABLE ONLY public.proxy_smart_contract_verification_statuses
 
 
 --
+-- Name: scam_address_badge_mappings scam_address_badge_mappings_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.scam_address_badge_mappings
+    ADD CONSTRAINT scam_address_badge_mappings_pkey PRIMARY KEY (address_hash);
+
+
+--
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2378,6 +2548,14 @@ ALTER TABLE ONLY public.schema_migrations
 
 ALTER TABLE public.internal_transactions
     ADD CONSTRAINT selfdestruct_has_from_and_to_address CHECK ((((type)::text <> 'selfdestruct'::text) OR ((from_address_hash IS NOT NULL) AND (gas IS NULL) AND (to_address_hash IS NOT NULL)))) NOT VALID;
+
+
+--
+-- Name: signed_authorizations signed_authorizations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.signed_authorizations
+    ADD CONSTRAINT signed_authorizations_pkey PRIMARY KEY (transaction_hash, index);
 
 
 --
@@ -2485,6 +2663,22 @@ ALTER TABLE ONLY public.user_contacts
 
 
 --
+-- Name: user_operations user_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_operations
+    ADD CONSTRAINT user_operations_pkey PRIMARY KEY (hash);
+
+
+--
+-- Name: user_ops_indexer_migrations user_ops_indexer_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_ops_indexer_migrations
+    ADD CONSTRAINT user_ops_indexer_migrations_pkey PRIMARY KEY (version);
+
+
+--
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2526,7 +2720,7 @@ CREATE UNIQUE INDEX account_api_plans_id_max_req_per_second_name_index ON public
 -- Name: account_custom_abis_identity_id_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE UNIQUE INDEX account_custom_abis_identity_id_address_hash_hash_index ON public.account_custom_abis USING btree (identity_id, address_hash_hash);
+CREATE UNIQUE INDEX account_custom_abis_identity_id_address_hash_hash_index ON public.account_custom_abis USING btree (identity_id, address_hash_hash) WHERE (user_created = true);
 
 
 --
@@ -2554,7 +2748,7 @@ CREATE INDEX account_tag_addresses_address_hash_hash_index ON public.account_tag
 -- Name: account_tag_addresses_identity_id_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE UNIQUE INDEX account_tag_addresses_identity_id_address_hash_hash_index ON public.account_tag_addresses USING btree (identity_id, address_hash_hash);
+CREATE UNIQUE INDEX account_tag_addresses_identity_id_address_hash_hash_index ON public.account_tag_addresses USING btree (identity_id, address_hash_hash) WHERE (user_created = true);
 
 
 --
@@ -2575,14 +2769,14 @@ CREATE INDEX account_tag_transactions_identity_id_index ON public.account_tag_tr
 -- Name: account_tag_transactions_identity_id_tx_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE UNIQUE INDEX account_tag_transactions_identity_id_tx_hash_hash_index ON public.account_tag_transactions USING btree (identity_id, tx_hash_hash);
+CREATE UNIQUE INDEX account_tag_transactions_identity_id_tx_hash_hash_index ON public.account_tag_transactions USING btree (identity_id, transaction_hash_hash) WHERE (user_created = true);
 
 
 --
 -- Name: account_tag_transactions_tx_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX account_tag_transactions_tx_hash_hash_index ON public.account_tag_transactions USING btree (tx_hash_hash);
+CREATE INDEX account_tag_transactions_tx_hash_hash_index ON public.account_tag_transactions USING btree (transaction_hash_hash);
 
 
 --
@@ -3097,6 +3291,13 @@ CREATE INDEX proxy_implementations_proxy_type_index ON public.proxy_implementati
 
 
 --
+-- Name: signed_authorizations_authority_nonce_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX signed_authorizations_authority_nonce_index ON public.signed_authorizations USING btree (authority, nonce);
+
+
+--
 -- Name: smart_contract_audit_reports_address_hash_index; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -3478,7 +3679,56 @@ CREATE UNIQUE INDEX unique_username ON public.users USING btree (username);
 -- Name: unique_watchlist_id_address_hash_hash_index; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE UNIQUE INDEX unique_watchlist_id_address_hash_hash_index ON public.account_watchlist_addresses USING btree (watchlist_id, address_hash_hash);
+CREATE UNIQUE INDEX unique_watchlist_id_address_hash_hash_index ON public.account_watchlist_addresses USING btree (watchlist_id, address_hash_hash) WHERE (user_created = true);
+
+
+--
+-- Name: user_operations_block_number_hash_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_block_number_hash_index ON public.user_operations USING btree (block_number DESC, hash DESC);
+
+
+--
+-- Name: user_operations_block_number_transaction_hash_bundle_index_inde; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_block_number_transaction_hash_bundle_index_inde ON public.user_operations USING btree (block_number DESC, transaction_hash DESC, bundle_index DESC);
+
+
+--
+-- Name: user_operations_bundler_transaction_hash_bundle_index_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_bundler_transaction_hash_bundle_index_index ON public.user_operations USING btree (bundler, transaction_hash, bundle_index);
+
+
+--
+-- Name: user_operations_factory_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_factory_index ON public.user_operations USING btree (factory);
+
+
+--
+-- Name: user_operations_paymaster_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_paymaster_index ON public.user_operations USING btree (paymaster);
+
+
+--
+-- Name: user_operations_sender_factory_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_sender_factory_index ON public.user_operations USING btree (sender, factory);
+
+
+--
+-- Name: user_operations_transaction_hash_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX user_operations_transaction_hash_index ON public.user_operations USING btree (transaction_hash);
 
 
 --
@@ -3637,6 +3887,22 @@ ALTER TABLE ONLY public.pending_block_operations
 
 ALTER TABLE ONLY public.proxy_smart_contract_verification_statuses
     ADD CONSTRAINT proxy_smart_contract_verification_statuses_contract_address_has FOREIGN KEY (contract_address_hash) REFERENCES public.smart_contracts(address_hash) ON DELETE CASCADE;
+
+
+--
+-- Name: scam_address_badge_mappings scam_address_badge_mappings_address_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.scam_address_badge_mappings
+    ADD CONSTRAINT scam_address_badge_mappings_address_hash_fkey FOREIGN KEY (address_hash) REFERENCES public.addresses(hash) ON DELETE CASCADE;
+
+
+--
+-- Name: signed_authorizations signed_authorizations_transaction_hash_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.signed_authorizations
+    ADD CONSTRAINT signed_authorizations_transaction_hash_fkey FOREIGN KEY (transaction_hash) REFERENCES public.transactions(hash) ON DELETE CASCADE;
 
 
 --
