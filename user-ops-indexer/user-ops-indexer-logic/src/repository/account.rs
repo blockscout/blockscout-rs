@@ -1,5 +1,5 @@
 use crate::types::account::Account;
-use ethers::prelude::Address;
+use alloy::primitives::Address;
 use sea_orm::{prelude::DateTime, ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
 
 #[derive(FromQueryResult)]
@@ -35,7 +35,7 @@ SELECT account_total_cte.sender                 as address,
        account_creation_op_cte.timestamp        as creation_timestamp
 FROM account_total_cte
          LEFT JOIN account_creation_op_cte ON account_total_cte.sender = account_creation_op_cte.sender"#,
-        [addr.as_bytes().into()],
+        [addr.as_slice().into()],
     ))
         .one(db)
         .await?
@@ -79,8 +79,8 @@ SELECT accounts_cte.sender                    as address,
 FROM accounts_cte
          JOIN accounts_total_cte ON accounts_cte.sender = accounts_total_cte.sender"#,
         [
-            factory_filter.map(|f| f.as_bytes().to_vec()).into(),
-            page_token.unwrap_or(Address::zero()).as_bytes().into(),
+            factory_filter.map(|f| f.to_vec()).into(),
+            page_token.unwrap_or(Address::ZERO).to_vec().into(),
             (limit + 1).into(),
         ],
     ))
@@ -100,18 +100,18 @@ FROM accounts_cte
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
-    use keccak_hash::H256;
+    use alloy::primitives::{address, B256, U256};
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
     async fn find_account_by_address_ok() {
         let db = get_shared_db().await;
 
-        let addr = Address::from_low_u64_be(0xffff);
+        let addr = address!("000000000000000000000000000000000000ffff");
         let item = find_account_by_address(&db, addr).await.unwrap();
         assert_eq!(item, None);
 
-        let addr = Address::from_low_u64_be(0x0102);
+        let addr = address!("0000000000000000000000000000000000000102");
         let item = find_account_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,
@@ -125,15 +125,15 @@ mod tests {
             })
         );
 
-        let addr = Address::from_low_u64_be(0x3202);
+        let addr = address!("0000000000000000000000000000000000003202");
         let item = find_account_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,
             Some(Account {
                 address: addr,
-                factory: Some(Address::from_low_u64_be(0xf1)),
-                creation_transaction_hash: Some(H256::from_low_u64_be(0x3204)),
-                creation_op_hash: Some(H256::from_low_u64_be(0x3201)),
+                factory: Some(address!("00000000000000000000000000000000000000f1")),
+                creation_transaction_hash: Some(B256::from(U256::from(0x3204))),
+                creation_op_hash: Some(B256::from(U256::from(0x3201))),
                 creation_timestamp: Some("2024-01-01T00:01:00.000000Z".to_string()),
                 total_ops: 100,
             })
@@ -152,7 +152,7 @@ mod tests {
         assert_eq!(items.len(), 40);
         assert_eq!(next_page_token, None);
 
-        let factory = Some(Address::from_low_u64_be(0xf1));
+        let factory = Some(address!("00000000000000000000000000000000000000f1"));
         let (items, next_page_token) = list_accounts(&db, factory, None, 60).await.unwrap();
         assert_eq!(items.len(), 10);
         assert_eq!(next_page_token, None);

@@ -1,22 +1,32 @@
 use crate::{proto::user_ops_service_server::UserOpsService as UserOps, settings::ApiSettings};
-use ethers::{
-    abi::{AbiEncode, Address},
-    prelude::H256,
-    utils::to_checksum,
-};
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
-use user_ops_indexer_logic::repository;
-use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::{
-    Account, Bundler, Factory, GetAccountRequest, GetBundlerRequest, GetFactoryRequest,
-    GetPaymasterRequest, GetUserOpRequest, ListAccountsRequest, ListAccountsResponse,
-    ListBundlersRequest, ListBundlersResponse, ListBundlesRequest, ListBundlesResponse,
-    ListFactoriesRequest, ListFactoriesResponse, ListPaymastersRequest, ListPaymastersResponse,
-    ListUserOpsRequest, ListUserOpsResponse, Pagination, Paymaster, UserOp,
+use user_ops_indexer_logic::{
+    repository,
+    repository::page_token::{PageTokenFormat, PageTokenParsingError},
 };
+use user_ops_indexer_proto::blockscout::user_ops_indexer::v1::*;
 
 const DEFAULT_PAGE_SIZE: u32 = 50;
+
+enum UserOpsError {
+    PageTokenError(String, PageTokenParsingError),
+    FilterError(String, String),
+}
+
+impl From<UserOpsError> for Status {
+    fn from(value: UserOpsError) -> Self {
+        match value {
+            UserOpsError::PageTokenError(v, err) => {
+                Status::invalid_argument(format!("invalid format '{v}' for page_token: {err}"))
+            }
+            UserOpsError::FilterError(v, field) => {
+                Status::invalid_argument(format!("invalid format '{v}' for filter {field}"))
+            }
+        }
+    }
+}
 
 pub struct UserOpsService {
     db: DatabaseConnection,
@@ -43,7 +53,7 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<Account>, Status> {
         let inner = request.into_inner();
 
-        let address = parse_filter(inner.address)?;
+        let address = inner.address.parse_filter("address")?;
 
         let acc = repository::account::find_account_by_address(&self.db, address)
             .await
@@ -62,7 +72,7 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<UserOp>, Status> {
         let inner = request.into_inner();
 
-        let op_hash = parse_filter(inner.hash)?;
+        let op_hash = inner.hash.parse_filter("hash")?;
 
         let user_op = repository::user_op::find_user_op_by_op_hash(&self.db, op_hash)
             .await
@@ -81,7 +91,7 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<Bundler>, Status> {
         let inner = request.into_inner();
 
-        let bundler = parse_filter(inner.address)?;
+        let bundler = inner.address.parse_filter("address")?;
 
         let bundler = repository::bundler::find_bundler_by_address(&self.db, bundler)
             .await
@@ -100,7 +110,7 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<Paymaster>, Status> {
         let inner = request.into_inner();
 
-        let paymaster = parse_filter(inner.address)?;
+        let paymaster = inner.address.parse_filter("address")?;
 
         let paymaster = repository::paymaster::find_paymaster_by_address(&self.db, paymaster)
             .await
@@ -119,7 +129,7 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<Factory>, Status> {
         let inner = request.into_inner();
 
-        let factory = parse_filter(inner.address)?;
+        let factory = inner.address.parse_filter("address")?;
 
         let factory = repository::factory::find_factory_by_address(&self.db, factory)
             .await
@@ -138,8 +148,8 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<ListAccountsResponse>, Status> {
         let inner = request.into_inner();
 
-        let factory_filter = inner.factory.map(parse_filter).transpose()?;
-        let page_token = inner.page_token.map(parse_filter).transpose()?;
+        let factory_filter = inner.factory.parse_filter("factory")?;
+        let page_token = inner.page_token.parse_page_token()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (accounts, next_page_token) = repository::account::list_accounts(
@@ -156,10 +166,7 @@ impl UserOps for UserOpsService {
 
         let res = ListAccountsResponse {
             items: accounts.into_iter().map(|acc| acc.into()).collect(),
-            next_page_params: next_page_token.map(|a| Pagination {
-                page_token: to_checksum(&a, None),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         };
 
         Ok(Response::new(res))
@@ -171,11 +178,9 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<ListBundlesResponse>, Status> {
         let inner = request.into_inner();
 
-        let bundler_filter = inner.bundler.map(parse_filter).transpose()?;
-        let entry_point_filter = inner.entry_point.map(parse_filter).transpose()?;
-
-        let page_token: Option<(u64, H256, u32)> =
-            inner.page_token.map(parse_filter_3).transpose()?;
+        let bundler_filter = inner.bundler.parse_filter("bundler")?;
+        let entry_point_filter = inner.entry_point.parse_filter("entry_point")?;
+        let page_token = inner.page_token.parse_page_token()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (bundles, next_page_token) = repository::bundle::list_bundles(
@@ -193,10 +198,7 @@ impl UserOps for UserOpsService {
 
         let res = ListBundlesResponse {
             items: bundles.into_iter().map(|b| b.into()).collect(),
-            next_page_params: next_page_token.map(|(b, t, i)| Pagination {
-                page_token: format!("{},{},{}", b, t.encode_hex(), i),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         };
 
         Ok(Response::new(res))
@@ -208,16 +210,15 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<ListUserOpsResponse>, Status> {
         let inner = request.into_inner();
 
-        let sender_filter = inner.sender.map(parse_filter).transpose()?;
-        let bundler_filter = inner.bundler.map(parse_filter).transpose()?;
-        let paymaster_filter = inner.paymaster.map(parse_filter).transpose()?;
-        let factory_filter = inner.factory.map(parse_filter).transpose()?;
-        let tx_hash_filter = inner.transaction_hash.map(parse_filter).transpose()?;
-        let entry_point_filter = inner.entry_point.map(parse_filter).transpose()?;
+        let sender_filter = inner.sender.parse_filter("sender")?;
+        let bundler_filter = inner.bundler.parse_filter("bundler")?;
+        let paymaster_filter = inner.paymaster.parse_filter("paymaster")?;
+        let factory_filter = inner.factory.parse_filter("factory")?;
+        let tx_hash_filter = inner.transaction_hash.parse_filter("transaction_hash")?;
+        let entry_point_filter = inner.entry_point.parse_filter("entry_point")?;
         let bundle_index_filter = inner.bundle_index;
         let block_number_filter = inner.block_number;
-
-        let page_token: Option<(u64, H256)> = inner.page_token.map(parse_filter_2).transpose()?;
+        let page_token = inner.page_token.parse_page_token()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (ops, next_page_token) = repository::user_op::list_user_ops(
@@ -241,10 +242,7 @@ impl UserOps for UserOpsService {
 
         let res = ListUserOpsResponse {
             items: ops.into_iter().map(|acc| acc.into()).collect(),
-            next_page_params: next_page_token.map(|(b, o)| Pagination {
-                page_token: format!("{},{}", b, o.encode_hex()),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         };
 
         Ok(Response::new(res))
@@ -256,8 +254,7 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<ListBundlersResponse>, Status> {
         let inner = request.into_inner();
 
-        let page_token: Option<(u64, Address)> =
-            inner.page_token.map(parse_filter_2).transpose()?;
+        let page_token = inner.page_token.parse_page_token()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (bundlers, next_page_token) =
@@ -270,10 +267,7 @@ impl UserOps for UserOpsService {
 
         let res = ListBundlersResponse {
             items: bundlers.into_iter().map(|b| b.into()).collect(),
-            next_page_params: next_page_token.map(|(t, f)| Pagination {
-                page_token: format!("{},{}", t, to_checksum(&f, None)),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         };
 
         Ok(Response::new(res))
@@ -285,8 +279,7 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<ListPaymastersResponse>, Status> {
         let inner = request.into_inner();
 
-        let page_token: Option<(u64, Address)> =
-            inner.page_token.map(parse_filter_2).transpose()?;
+        let page_token = inner.page_token.parse_page_token()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (paymasters, next_page_token) =
@@ -299,10 +292,7 @@ impl UserOps for UserOpsService {
 
         let res = ListPaymastersResponse {
             items: paymasters.into_iter().map(|b| b.into()).collect(),
-            next_page_params: next_page_token.map(|(t, f)| Pagination {
-                page_token: format!("{},{}", t, to_checksum(&f, None)),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         };
 
         Ok(Response::new(res))
@@ -314,8 +304,7 @@ impl UserOps for UserOpsService {
     ) -> Result<Response<ListFactoriesResponse>, Status> {
         let inner = request.into_inner();
 
-        let page_token: Option<(u64, Address)> =
-            inner.page_token.map(parse_filter_2).transpose()?;
+        let page_token = inner.page_token.parse_page_token()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (factories, next_page_token) =
@@ -328,55 +317,56 @@ impl UserOps for UserOpsService {
 
         let res = ListFactoriesResponse {
             items: factories.into_iter().map(|b| b.into()).collect(),
-            next_page_params: next_page_token.map(|(t, f)| Pagination {
-                page_token: format!("{},{}", t, to_checksum(&f, None)),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         };
 
         Ok(Response::new(res))
     }
 }
 
-#[inline]
-fn parse_filter<T: FromStr>(input: String) -> Result<T, Status>
-where
-    <T as FromStr>::Err: std::fmt::Display,
-{
-    T::from_str(&input)
-        .map_err(|e| Status::invalid_argument(format!("Invalid value {}: {e}", input)))
+fn page_token_to_proto<T: PageTokenFormat>(
+    page_token: Option<T>,
+    page_size: u32,
+) -> Option<Pagination> {
+    page_token.map(|pt| Pagination {
+        page_token: pt.format(),
+        page_size,
+    })
 }
 
-#[inline]
-fn parse_filter_2<T1: FromStr, T2: FromStr>(input: String) -> Result<(T1, T2), Status>
-where
-    <T1 as FromStr>::Err: std::fmt::Display,
-    <T2 as FromStr>::Err: std::fmt::Display,
-{
-    match input.split(',').collect::<Vec<&str>>().as_slice() {
-        [v1, v2] => Ok((
-            parse_filter::<T1>(v1.to_string())?,
-            parse_filter::<T2>(v2.to_string())?,
-        )),
-        _ => Err(Status::invalid_argument("invalid page_token format")),
+trait ParsePageToken<T: PageTokenFormat> {
+    fn parse_page_token(self) -> Result<Option<T>, UserOpsError>;
+}
+
+impl<T: PageTokenFormat> ParsePageToken<T> for Option<String> {
+    fn parse_page_token(self) -> Result<Option<T>, UserOpsError> {
+        self.map(|s| T::from(s.clone()).map_err(|err| UserOpsError::PageTokenError(s, err)))
+            .transpose()
     }
 }
 
-#[inline]
-fn parse_filter_3<T1: FromStr, T2: FromStr, T3: FromStr>(
-    input: String,
-) -> Result<(T1, T2, T3), Status>
-where
-    <T1 as FromStr>::Err: std::fmt::Display,
-    <T2 as FromStr>::Err: std::fmt::Display,
-    <T3 as FromStr>::Err: std::fmt::Display,
-{
-    match input.split(',').collect::<Vec<&str>>().as_slice() {
-        [v1, v2, v3] => Ok((
-            parse_filter::<T1>(v1.to_string())?,
-            parse_filter::<T2>(v2.to_string())?,
-            parse_filter::<T3>(v3.to_string())?,
-        )),
-        _ => Err(Status::invalid_argument("invalid page_token format")),
+trait ParseFilter<T: FromStr> {
+    type R;
+    fn parse_filter(self, field: &str) -> Result<Self::R, UserOpsError>;
+}
+
+impl<T: FromStr> ParseFilter<T> for String {
+    type R = T;
+
+    fn parse_filter(self, field: &str) -> Result<Self::R, UserOpsError> {
+        self.parse()
+            .map_err(|_| UserOpsError::FilterError(self, field.to_string()))
+    }
+}
+
+impl<T: FromStr> ParseFilter<T> for Option<String> {
+    type R = Option<T>;
+
+    fn parse_filter(self, field: &str) -> Result<Self::R, UserOpsError> {
+        self.map(|s| {
+            s.parse()
+                .map_err(|_| UserOpsError::FilterError(s, field.to_string()))
+        })
+        .transpose()
     }
 }

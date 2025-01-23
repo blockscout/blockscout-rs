@@ -9,4 +9,4 @@ members = [
 ]
 
 [workspace.dependencies]
-blockscout-service-launcher = "0.13.2"
+blockscout-service-launcher = "0.16.2"
