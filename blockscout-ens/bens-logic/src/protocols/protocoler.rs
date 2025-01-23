@@ -361,11 +361,6 @@ impl Protocoler {
                 ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash,
             };
 
-            println!(
-                "Creating DomainName with name: {}, empty_label_hash: {:?}",
-                name, empty_label_hash
-            );
-
             let domain_name = DomainName::new(name, empty_label_hash)?;
             results.push(DomainNameOnProtocol {
                 inner: domain_name,
@@ -382,11 +377,6 @@ impl Protocoler {
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        println!(
-            "names_options_in_network_with_suggestions called with: name_with_tld = {}",
-            name_with_tld
-        );
-
         let protocols = self.protocols_of_network_for_tld(
             network_id,
             Tld::from_domain_name(name_with_tld).unwrap(),
@@ -399,11 +389,6 @@ impl Protocoler {
                 ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
                 ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash,
             };
-
-            println!(
-                "Creating DomainName with name: {}, empty_label_hash: {:?}",
-                name_with_tld, empty_label_hash
-            );
 
             let domain_name = DomainName::new(name_with_tld, empty_label_hash)?;
             results.push(DomainNameOnProtocol {
@@ -421,17 +406,9 @@ impl Protocoler {
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<DomainNameOnProtocol, ProtocolError> {
-        println!(
-            "main_name_in_network called with: name = {}, network_id = {}, maybe_filter = {:?}",
-            name, network_id, maybe_filter
-        );
-
         let maybe_name = self
             .names_options_in_network(name, network_id, maybe_filter.clone())
-            .map(|mut names| {
-                println!("names_options_in_network returned: {:?}", names);
-                names.pop()
-            })?;
+            .map(|mut names| names.pop())?;
         let name = maybe_name.ok_or_else(|| ProtocolError::InvalidName {
             name: name.to_string(),
             reason: "no protocol found".to_string(),

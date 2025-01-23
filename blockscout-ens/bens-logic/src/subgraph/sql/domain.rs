@@ -140,10 +140,6 @@ pub async fn get_domain(
         .unwrap_or_default();
     let schema = &domain_name.deployed_protocol.protocol.subgraph_schema;
     let protocol_slug = &domain_name.deployed_protocol.protocol.info.slug;
-    println!(
-        "schema: {}, protocol_slug: {}, only_active_clause: {} ",
-        schema, protocol_slug, only_active_clause
-    );
     let maybe_domain = sqlx::query_as(&format!(
         r#"
         SELECT
@@ -176,7 +172,6 @@ pub async fn get_domain(
     .bind(&domain_name.inner.id)
     .fetch_optional(pool)
     .await?;
-    println!("maybe_domain: {:?}", maybe_domain);
     Ok(maybe_domain)
 }
 
