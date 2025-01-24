@@ -77,7 +77,7 @@ pub async fn quick_search(
     Ok(results)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum SearchTerm {
     Hash(alloy_primitives::B256),
     AddressHash(alloy_primitives::Address),
@@ -202,4 +202,40 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     }
 
     terms
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_search_terms_works() {
+        assert_eq!(
+            parse_search_terms("0x0000000000000000000000000000000000000000"),
+            vec![SearchTerm::AddressHash(alloy_primitives::Address::ZERO)]
+        );
+        assert_eq!(
+            parse_search_terms(
+                "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ),
+            vec![SearchTerm::Hash(alloy_primitives::B256::ZERO)]
+        );
+
+        assert_eq!(
+            parse_search_terms("0x00"),
+            vec![
+                SearchTerm::Dapp("0x00".to_string()),
+                SearchTerm::TokenInfo("0x00".to_string())
+            ]
+        );
+
+        assert_eq!(
+            parse_search_terms("1234"),
+            vec![
+                SearchTerm::BlockNumber(1234),
+                SearchTerm::Dapp("1234".to_string()),
+                SearchTerm::TokenInfo("1234".to_string())
+            ]
+        );
+    }
 }
