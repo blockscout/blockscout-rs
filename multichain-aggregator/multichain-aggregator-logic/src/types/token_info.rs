@@ -10,10 +10,10 @@ pub struct Token {
     pub chain_id: ChainId,
 }
 
-impl TryFrom<clients::token_info::TokenInfo> for Token {
+impl TryFrom<clients::token_info::proto::TokenInfo> for Token {
     type Error = ParseError;
 
-    fn try_from(v: clients::token_info::TokenInfo) -> Result<Self, Self::Error> {
+    fn try_from(v: clients::token_info::proto::TokenInfo) -> Result<Self, Self::Error> {
         Ok(Self {
             address: v.token_address.parse().map_err(ParseError::from)?,
             icon_url: v.icon_url,
@@ -23,7 +23,10 @@ impl TryFrom<clients::token_info::TokenInfo> for Token {
             symbol: v
                 .token_symbol
                 .ok_or_else(|| ParseError::Custom("token symbol is required".to_string()))?,
-            chain_id: v.chain_id.parse().map_err(ParseError::from)?,
+            chain_id: v
+                .chain_id
+                .try_into()
+                .map_err(|_| ParseError::Custom(format!("invalid chain id: {}", v.chain_id)))?,
         })
     }
 }

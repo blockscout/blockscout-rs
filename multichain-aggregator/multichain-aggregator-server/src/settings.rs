@@ -4,6 +4,8 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use std::time;
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,10 +57,14 @@ pub struct DappClientSettings {
     pub url: Url,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct TokenInfoClientSettings {
     pub url: Url,
+    #[serde(default = "default_token_info_timeout")]
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    pub timeout: time::Duration,
 }
 
 impl ConfigSettings for Settings {
@@ -84,6 +90,7 @@ impl Settings {
                 },
                 token_info_client: TokenInfoClientSettings {
                     url: Url::parse("http://localhost:8051").unwrap(),
+                    timeout: default_token_info_timeout(),
                 },
                 api: ApiSettings {
                     default_page_size: default_default_page_size(),
@@ -100,4 +107,8 @@ fn default_max_page_size() -> u32 {
 
 fn default_default_page_size() -> u32 {
     50
+}
+
+fn default_token_info_timeout() -> time::Duration {
+    time::Duration::from_secs(5)
 }

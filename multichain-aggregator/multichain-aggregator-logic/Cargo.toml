@@ -21,6 +21,7 @@ tonic = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
+contracts-info-proto = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }
