@@ -18,6 +18,17 @@ pub struct ChainSearchResult {
     pub tokens: Vec<Token>,
 }
 
+impl ChainSearchResult {
+    pub fn merge(&mut self, other: ChainSearchResult) {
+        self.addresses.extend(other.addresses);
+        self.blocks.extend(other.blocks);
+        self.transactions.extend(other.transactions);
+        self.block_numbers.extend(other.block_numbers);
+        self.dapps.extend(other.dapps);
+        self.tokens.extend(other.tokens);
+    }
+}
+
 impl From<ChainSearchResult> for proto::quick_search_response::ChainSearchResult {
     fn from(v: ChainSearchResult) -> Self {
         Self {
@@ -35,6 +46,14 @@ impl From<ChainSearchResult> for proto::quick_search_response::ChainSearchResult
 #[derive(Default, Debug)]
 pub struct SearchResults {
     pub items: BTreeMap<ChainId, ChainSearchResult>,
+}
+
+impl SearchResults {
+    pub fn merge(&mut self, other: SearchResults) {
+        for (chain_id, result) in other.items {
+            self.items.entry(chain_id).or_default().merge(result);
+        }
+    }
 }
 
 impl From<SearchResults> for proto::QuickSearchResponse {
