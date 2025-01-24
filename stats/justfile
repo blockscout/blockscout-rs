@@ -27,9 +27,17 @@ test *args:
 test-with-db *args:
     # remove db from previous run (if failed)
     -just                            docker-name="{{docker-name}}-test" stop-postgres 2> /dev/null
-    -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
+    just start-postgres-and-build-tests
     just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
     just                            docker-name="{{docker-name}}-test" stop-postgres
+
+start-postgres-and-build-tests:
+    #!/bin/bash -eux
+    just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres &
+    cargo build --tests &
+    trap 'kill $(jobs -pr) || true' EXIT
+    wait
+    echo "finished postgres wait"
 
 check-envs:
     VALIDATE_ONLY=true cargo run --bin env-docs-generation
