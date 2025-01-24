@@ -341,7 +341,7 @@ impl Protocoler {
         }
     }
 
-    pub fn names_options_in_network_exact(
+   fn names_options_in_network_exact(
         &self,
         name: &str,
         network_id: i64,
