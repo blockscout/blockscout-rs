@@ -69,7 +69,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     repository::chains::upsert_many(&db, blockscout_chains.clone()).await?;
 
     let dapp_client = dapp::new_client(settings.service.dapp_client.url)?;
-    let token_info_client = token_info::new_client(settings.service.token_info_client.url)?;
+    let token_info_client = {
+        let settings = settings.service.token_info_client;
+        let config = token_info::Config::new(settings.url).http_timeout(settings.timeout);
+        token_info::Client::new(config).await
+    };
 
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
         db,

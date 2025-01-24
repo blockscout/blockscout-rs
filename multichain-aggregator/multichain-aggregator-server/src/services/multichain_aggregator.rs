@@ -10,7 +10,7 @@ use api_client_framework::HttpApiClient;
 use multichain_aggregator_logic::{
     self as logic,
     api_key_manager::ApiKeyManager,
-    clients::token_info::{SearchTokenInfos, SearchTokenInfosParams},
+    clients::token_info::{self, endpoints::SearchTokenInfos, proto::SearchTokenInfosRequest},
     error::ServiceError,
     Chain, Token,
 };
@@ -27,7 +27,7 @@ pub struct MultichainAggregator {
     // Cached chains
     chains: Vec<Chain>,
     dapp_client: HttpApiClient,
-    token_info_client: HttpApiClient,
+    token_info_client: token_info::Client,
     api_settings: ApiSettings,
 }
 
@@ -36,7 +36,7 @@ impl MultichainAggregator {
         db: DatabaseConnection,
         chains: Vec<Chain>,
         dapp_client: HttpApiClient,
-        token_info_client: HttpApiClient,
+        token_info_client: token_info::Client,
         api_settings: ApiSettings,
     ) -> Self {
         Self {
@@ -123,14 +123,12 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
 
-        let token_info_search_endpoint = SearchTokenInfos {
-            params: SearchTokenInfosParams {
-                query: inner.q.to_string(),
-                chain_id,
-                page_size: inner.page_size,
-                page_token: inner.page_token,
-            },
-        };
+        let token_info_search_endpoint = SearchTokenInfos::new(SearchTokenInfosRequest {
+            query: inner.q.to_string(),
+            chain_id,
+            page_size: inner.page_size,
+            page_token: inner.page_token,
+        });
 
         let res = self
             .token_info_client

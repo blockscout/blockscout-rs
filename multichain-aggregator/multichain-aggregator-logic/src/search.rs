@@ -1,7 +1,7 @@
 use crate::{
     clients::{
         dapp::{SearchDapps, SearchDappsParams},
-        token_info::{SearchTokenInfos, SearchTokenInfosParams},
+        token_info::{endpoints::SearchTokenInfos, proto::SearchTokenInfosRequest, Client},
     },
     error::ServiceError,
     repository::{addresses, block_ranges, hashes},
@@ -38,7 +38,7 @@ macro_rules! populate_search_results {
 pub async fn quick_search(
     db: &DatabaseConnection,
     dapp_client: &HttpApiClient,
-    token_info_client: &HttpApiClient,
+    token_info_client: &Client,
     query: String,
     chains: &[Chain],
 ) -> Result<SearchResults, ServiceError> {
@@ -50,14 +50,12 @@ pub async fn quick_search(
         },
     };
 
-    let token_info_search_endpoint = SearchTokenInfos {
-        params: SearchTokenInfosParams {
-            query: raw_query.to_string(),
-            chain_id: None,
-            page_size: Some(100),
-            page_token: None,
-        },
-    };
+    let token_info_search_endpoint = SearchTokenInfos::new(SearchTokenInfosRequest {
+        query: raw_query.to_string(),
+        chain_id: None,
+        page_size: Some(100),
+        page_token: None,
+    });
 
     let (hashes, block_numbers, addresses, dapps, token_infos) = join!(
         hashes::search_by_query(db, raw_query),
