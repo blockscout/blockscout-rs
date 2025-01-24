@@ -11,11 +11,7 @@ use crate::{
             data_manipulation::map::{MapParseTo, StripExt},
             local_db::{
                 parameters::{
-                    update::batching::{
-                        parameters::{BatchMaxDays, ClearAllAndPassStep},
-                        BatchUpdate,
-                    },
-                    DefaultCreate, DefaultQueryVec,
+                    update::clear_and_query_all::ClearAllAndPassVec, DefaultCreate, DefaultQueryVec,
                 },
                 LocalDbChartSource,
             },
@@ -96,14 +92,7 @@ pub type NewTxnsWindow = LocalDbChartSource<
     NewTxnsWindowRemote,
     (),
     DefaultCreate<Properties>,
-    BatchUpdate<
-        NewTxnsWindowRemote,
-        (),
-        ClearAllAndPassStep,
-        BatchMaxDays,
-        DefaultQueryVec<Properties>,
-        Properties,
-    >,
+    ClearAllAndPassVec<NewTxnsWindowRemote, DefaultQueryVec<Properties>, Properties>,
     DefaultQueryVec<Properties>,
     Properties,
 >;
