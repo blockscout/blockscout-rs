@@ -18,7 +18,10 @@ pub async fn test_main_page_ok(base: Url) {
         total_blocks,
         total_transactions,
         yesterday_transactions,
+        total_operational_transactions,
+        yesterday_operational_transactions,
         daily_new_transactions,
+        daily_new_operational_transactions,
     } = main_page;
     let counters = array_of_variables_with_names!([
         average_block_time,
@@ -26,6 +29,8 @@ pub async fn test_main_page_ok(base: Url) {
         total_blocks,
         total_transactions,
         yesterday_transactions,
+        total_operational_transactions,
+        yesterday_operational_transactions,
     ]);
     for (name, counter) in counters {
         #[allow(clippy::expect_fun_call)]
@@ -34,13 +39,15 @@ pub async fn test_main_page_ok(base: Url) {
         assert!(!counter.title.is_empty());
     }
 
-    let daily_new_transactions =
-        daily_new_transactions.expect("daily new transactions chart must be available");
-    let transactions_info = daily_new_transactions.info.unwrap();
-    assert_eq!(transactions_info.id, NewTxnsWindow::name());
-    assert_eq!(transactions_info.resolutions, vec!["DAY"]);
-    assert_eq!(
-        daily_new_transactions.chart.len(),
-        NEW_TXNS_WINDOW_RANGE as usize
-    );
+    for daily_transactions in [daily_new_transactions, daily_new_operational_transactions] {
+        let daily_transactions =
+            daily_transactions.expect("daily transactions chart must be available");
+        let transactions_info = daily_transactions.info.unwrap();
+        assert_eq!(transactions_info.id, NewTxnsWindow::name());
+        assert_eq!(transactions_info.resolutions, vec!["DAY"]);
+        assert_eq!(
+            daily_transactions.chart.len(),
+            NEW_TXNS_WINDOW_RANGE as usize
+        );
+    }
 }

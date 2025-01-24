@@ -17,8 +17,8 @@ use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
     counters::{
         AverageBlockTime, AverageTxnFee24h, NewContracts24h, NewTxns24h, NewVerifiedContracts24h,
-        PendingTxns30m, TotalAddresses, TotalBlocks, TotalContracts, TotalTxns,
-        TotalVerifiedContracts, TxnsFee24h, YesterdayTxns,
+        PendingTxns30m, TotalAddresses, TotalBlocks, TotalContracts, TotalOperationalTxns,
+        TotalTxns, TotalVerifiedContracts, TxnsFee24h, YesterdayTxns,
     },
     data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
     lines::{NewTxnsWindow, NEW_TXNS_WINDOW_RANGE},
@@ -146,7 +146,10 @@ impl ReadService {
             total_blocks: None,
             total_transactions: None,
             yesterday_transactions: None,
+            total_operational_transactions: None,
+            yesterday_operational_transactions: None,
             daily_new_transactions: None,
+            daily_new_operational_transactions: None,
         };
         vec![
             AverageBlockTime::name(),
@@ -429,14 +432,20 @@ impl StatsService for ReadService {
             total_blocks,
             total_transactions,
             yesterday_transactions,
+            total_operational_transactions,
+            yesterday_operational_transactions,
             daily_new_transactions,
+            daily_new_operational_transactions,
         ) = join!(
             self.query_counter(AverageBlockTime::name(), now),
             self.query_counter(TotalAddresses::name(), now),
             self.query_counter(TotalBlocks::name(), now),
             self.query_counter(TotalTxns::name(), now),
             self.query_counter(YesterdayTxns::name(), now),
-            self.query_new_txns_window(now)
+            self.query_counter(TotalOperationalTxns::name(), now),
+            self.query_counter("todo: YesterdayOperationslTxns::name()".to_string(), now),
+            self.query_new_txns_window(now),
+            self.query_new_txns_window(now) // todo: query_new_op_txns_window
         );
 
         Ok(Response::new(proto_v1::MainPageStats {
@@ -445,7 +454,10 @@ impl StatsService for ReadService {
             total_blocks,
             total_transactions,
             yesterday_transactions,
+            total_operational_transactions,
+            yesterday_operational_transactions,
             daily_new_transactions,
+            daily_new_operational_transactions,
         }))
     }
 

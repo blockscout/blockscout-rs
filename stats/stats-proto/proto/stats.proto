@@ -84,8 +84,11 @@ message MainPageStats {
   optional Counter total_blocks = 3;
   optional Counter total_transactions = 4;
   optional Counter yesterday_transactions = 5;
+  optional Counter total_operational_transactions = 6;
+  optional Counter yesterday_operational_transactions = 7;
 
-  optional LineChart daily_new_transactions = 6;
+  optional LineChart daily_new_transactions = 8;
+  optional LineChart daily_new_operational_transactions = 9;
 }
 
 message GetTransactionsPageStatsRequest {}
