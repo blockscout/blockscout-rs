@@ -97,6 +97,7 @@ pub use new_operational_txns::{
     NewOperationalTxns, NewOperationalTxnsMonthly, NewOperationalTxnsWeekly,
     NewOperationalTxnsYearly,
 };
+pub use new_operational_txns_window::NewOperationalTxnsWindow;
 pub use new_txns::{NewTxns, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
 pub use new_txns_window::NewTxnsWindow;
 pub use new_verified_contracts::{

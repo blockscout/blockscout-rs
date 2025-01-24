@@ -43,6 +43,7 @@ pub(crate) use txns_stats_24h::TxnsStatsValue;
 pub use txns_stats_24h::{
     average_txn_fee_24h::AverageTxnFee24h, new_txns_24h::NewTxns24h, txns_fee_24h::TxnsFee24h,
 };
+pub use yesterday_operational_txns::YesterdayOperationalTxns;
 pub use yesterday_txns::YesterdayTxns;
 
 pub(crate) use total_blocks::TotalBlocksInt;

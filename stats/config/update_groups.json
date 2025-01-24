@@ -8,7 +8,6 @@
         "total_blocks_group": "0 0 */2 * * * *",
         "total_tokens_group": "0 0 18 * * * *",
         "total_txns_group": "0 5 */2 * * * *",
-        "total_operational_txns_group": "0 5 1 * * * *",
         "yesterday_txns_group": "0 8 0 * * * *",
         "new_txns_window_group": "0 8 0 * * * *",
         "active_recurring_accounts_daily_recurrence_60_days_group": "0 0 2 * * * *",

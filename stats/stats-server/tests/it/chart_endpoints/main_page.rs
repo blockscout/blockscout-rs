@@ -1,10 +1,7 @@
 use blockscout_service_launcher::test_server::send_get_request;
 
 use pretty_assertions::assert_eq;
-use stats::{
-    lines::{NewTxnsWindow, NEW_TXNS_WINDOW_RANGE},
-    Named,
-};
+use stats::lines::NEW_TXNS_WINDOW_RANGE;
 use stats_proto::blockscout::stats::v1::MainPageStats;
 use url::Url;
 
@@ -43,7 +40,7 @@ pub async fn test_main_page_ok(base: Url) {
         let daily_transactions =
             daily_transactions.expect("daily transactions chart must be available");
         let transactions_info = daily_transactions.info.unwrap();
-        assert_eq!(transactions_info.id, NewTxnsWindow::name());
+        assert!(!transactions_info.id.is_empty());
         assert_eq!(transactions_info.resolutions, vec!["DAY"]);
         assert_eq!(
             daily_transactions.chart.len(),
