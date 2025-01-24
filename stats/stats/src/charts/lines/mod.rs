@@ -17,6 +17,7 @@ mod new_contracts;
 mod new_native_coin_holders;
 mod new_native_coin_transfers;
 mod new_operational_txns;
+mod new_operational_txns_window;
 mod new_txns;
 mod new_txns_window;
 mod new_verified_contracts;
@@ -80,7 +81,6 @@ pub use native_coin_supply::{
     NativeCoinSupply, NativeCoinSupplyMonthly, NativeCoinSupplyWeekly, NativeCoinSupplyYearly,
 };
 pub use new_accounts::{NewAccounts, NewAccountsMonthly, NewAccountsWeekly, NewAccountsYearly};
-pub use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub use new_blocks::{NewBlocks, NewBlocksMonthly, NewBlocksWeekly, NewBlocksYearly};
 pub use new_contracts::{
     NewContracts, NewContractsMonthly, NewContractsWeekly, NewContractsYearly,
@@ -90,15 +90,14 @@ pub use new_native_coin_holders::{
     NewNativeCoinHoldersYearly,
 };
 pub use new_native_coin_transfers::{
-    NewNativeCoinTransfers, NewNativeCoinTransfersInt, NewNativeCoinTransfersMonthly,
-    NewNativeCoinTransfersWeekly, NewNativeCoinTransfersYearly,
+    NewNativeCoinTransfers, NewNativeCoinTransfersMonthly, NewNativeCoinTransfersWeekly,
+    NewNativeCoinTransfersYearly,
 };
 pub use new_operational_txns::{
     NewOperationalTxns, NewOperationalTxnsMonthly, NewOperationalTxnsWeekly,
     NewOperationalTxnsYearly,
 };
-pub(crate) use new_txns::NewTxnsStatement;
-pub use new_txns::{NewTxns, NewTxnsInt, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
+pub use new_txns::{NewTxns, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
 pub use new_txns_window::NewTxnsWindow;
 pub use new_verified_contracts::{
     NewVerifiedContracts, NewVerifiedContractsMonthly, NewVerifiedContractsWeekly,
@@ -117,6 +116,12 @@ pub use verified_contracts_growth::{
     VerifiedContractsGrowth, VerifiedContractsGrowthMonthly, VerifiedContractsGrowthWeekly,
     VerifiedContractsGrowthYearly,
 };
+
+pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
+pub(crate) use new_blocks::NewBlocksStatement;
+pub(crate) use new_native_coin_transfers::NewNativeCoinTransfersInt;
+pub(crate) use new_txns::{NewTxnsInt, NewTxnsStatement};
+pub(crate) use new_txns_window::NewTxnsWindowInt;
 
 #[cfg(test)]
 pub use mock::{PredefinedMockSource, PseudoRandomMockLine, PseudoRandomMockRetrieve};

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
@@ -71,7 +73,7 @@ pub struct ClearAllAndPassStep;
 impl<Resolution> BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, String>>, ()>
     for ClearAllAndPassStep
 where
-    Resolution: Timespan + Clone + Send + Sync,
+    Resolution: Timespan + Clone + Send + Sync + Debug,
 {
     async fn batch_update_values_step_with<C: ConnectionTrait + TransactionTrait>(
         db: &C,
