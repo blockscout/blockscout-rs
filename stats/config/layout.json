@@ -42,8 +42,7 @@
                 "txns_growth",
                 "new_operational_txns",
                 "operational_txns_growth",
-                "txns_success_rate",
-                "new_txns_window"
+                "txns_success_rate"
             ]
         },
         {
