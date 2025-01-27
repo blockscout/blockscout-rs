@@ -388,7 +388,7 @@ async fn retrieve_deployment_from_action(
                     contract_address.to_vec(),
                     runtime_code.to_vec(),
                 ),
-                _ => {
+                (None, None) => {
                     tracing::warn!(
                         chain_id = chain_id,
                         contract_address = contract_address.to_hex(),
@@ -483,26 +483,18 @@ async fn check_code_matches(
     database_source: &DatabaseReadySource,
     contract_deployment: &ContractDeployment,
 ) -> Result<VerifiedContractMatches, anyhow::Error> {
-    let compilation_artifacts_value = database_source
-        .compilation_artifacts
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("compilation_artifacts are missing"))?;
-    let compilation_artifacts: verification_common::verifier_alliance::CompilationArtifacts =
-        serde::Deserialize::deserialize(compilation_artifacts_value)?;
-
-    let creation_code_artifacts_value = database_source
-        .creation_code_artifacts
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("creation_code_artifacts are missing"))?;
-    let creation_code_artifacts: verification_common::verifier_alliance::CreationCodeArtifacts =
-        serde::Deserialize::deserialize(creation_code_artifacts_value)?;
-
-    let runtime_code_artifacts_value = database_source
-        .runtime_code_artifacts
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("runtime_code_artifacts are missing"))?;
-    let runtime_code_artifacts: verification_common::verifier_alliance::RuntimeCodeArtifacts =
-        serde::Deserialize::deserialize(runtime_code_artifacts_value)?;
+    let compilation_artifacts = parse_artifacts_value(
+        &database_source.compilation_artifacts,
+        "compilation_artifacts",
+    )?;
+    let creation_code_artifacts = parse_artifacts_value(
+        &database_source.creation_code_artifacts,
+        "creation_code_artifacts",
+    )?;
+    let runtime_code_artifacts = parse_artifacts_value(
+        &database_source.runtime_code_artifacts,
+        "runtime_code_artifacts",
+    )?;
 
     let creation_code_match = match &contract_deployment.creation_code {
         None => None,
@@ -538,6 +530,16 @@ async fn check_code_matches(
             "Neither creation code nor runtime code have not matched"
         )),
     }
+}
+
+fn parse_artifacts_value<T: for<'de> serde::Deserialize<'de>>(
+    value: &Option<serde_json::Value>,
+    label: &'static str,
+) -> Result<T, anyhow::Error> {
+    let value = value
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("{label} are missing"))?;
+    Ok(serde::Deserialize::deserialize(value)?)
 }
 
 async fn process_batch_import_response(
