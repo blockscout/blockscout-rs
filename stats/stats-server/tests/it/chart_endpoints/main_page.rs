@@ -35,8 +35,7 @@ pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
         ]));
     }
     for (name, counter) in counters {
-        #[allow(clippy::expect_fun_call)]
-        let counter = counter.expect(&format!("page counter {} must be available", name));
+        let counter = counter.unwrap_or_else(|| panic!("page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
@@ -48,7 +47,8 @@ pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
         ]));
     }
     for (name, window_chart) in window_line_charts {
-        let window_chart = window_chart.expect(&format!("{} chart must be available", name));
+        let window_chart =
+            window_chart.unwrap_or_else(|| panic!("{} chart must be available", name));
         let transactions_info = window_chart.info.unwrap();
         assert!(!transactions_info.id.is_empty());
         assert_eq!(transactions_info.resolutions, vec!["DAY"]);
