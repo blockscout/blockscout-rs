@@ -94,6 +94,7 @@ struct SearchContext<'a> {
 }
 
 impl SearchTerm {
+    #[instrument(skip_all, level = "info", fields(term = ?self), err)]
     async fn search(
         self,
         search_context: &SearchContext<'_>,
@@ -105,28 +106,17 @@ impl SearchTerm {
 
         match self {
             SearchTerm::Hash(hash) => {
-                let (blocks, transactions) =
-                    hashes::find_by_hash(db, hash).await.inspect_err(|err| {
-                        tracing::error!(error = ?err, "failed to search hashes");
-                    })?;
+                let (blocks, transactions) = hashes::find_by_hash(db, hash).await?;
                 populate_search_results!(results, explorers, blocks, blocks);
                 populate_search_results!(results, explorers, transactions, transactions);
             }
             SearchTerm::AddressHash(address) => {
-                let addresses =
-                    addresses::find_by_address(db, address)
-                        .await
-                        .inspect_err(|err| {
-                            tracing::error!(error = ?err, "failed to search addresses");
-                        })?;
+                let addresses = addresses::find_by_address(db, address).await?;
                 populate_search_results!(results, explorers, addresses, addresses)
             }
             SearchTerm::BlockNumber(block_number) => {
                 let block_numbers = block_ranges::find_matching_block_ranges(db, block_number)
-                    .await
-                    .inspect_err(|err| {
-                        tracing::error!(error = ?err, "failed to search block numbers");
-                    })?
+                    .await?
                     .into_iter()
                     .map(|r| ChainBlockNumber {
                         chain_id: r.chain_id,
@@ -142,10 +132,7 @@ impl SearchTerm {
                         params: SearchDappsParams { query },
                     })
                     .await
-                    .map_err(|err| {
-                        tracing::error!(error = ?err, "failed to search dapps");
-                        ServiceError::Internal(err.into())
-                    })?
+                    .map_err(|err| ServiceError::Internal(err.into()))?
                     .into_iter()
                     .filter_map(|d| d.try_into().ok())
                     .collect();
@@ -163,10 +150,7 @@ impl SearchTerm {
                         },
                     })
                     .await
-                    .map_err(|err| {
-                        tracing::error!(error = ?err, "failed to search token infos");
-                        ServiceError::Internal(err.into())
-                    })?
+                    .map_err(|err| ServiceError::Internal(err.into()))?
                     .token_infos
                     .into_iter()
                     .filter_map(|t| t.try_into().ok())
