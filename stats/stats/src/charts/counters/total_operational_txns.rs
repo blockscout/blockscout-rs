@@ -1,14 +1,14 @@
+use std::marker::PhantomData;
+
 use crate::{
-    data_source::{
-        kinds::{
-            data_manipulation::map::{Map, MapFunction},
-            local_db::DirectPointLocalDbChartSource,
-        },
-        DataSource,
+    data_source::kinds::{
+        data_manipulation::map::{Map, MapFunction},
+        local_db::DirectPointLocalDbChartSource,
     },
     types::TimespanValue,
-    ChartProperties, MissingDatePolicy, Named,
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
+use std::fmt::Debug;
 
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -34,22 +34,33 @@ impl ChartProperties for Properties {
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
+    }
 }
 
-pub struct Calculate;
+pub struct CalculateOperationalTxns<ChartName: Named>(PhantomData<ChartName>);
 
-type Input = (
-    <TotalBlocksInt as DataSource>::Output,
-    <TotalTxnsInt as DataSource>::Output,
+type Input<Resolution> = (
+    // blocks
+    TimespanValue<Resolution, i64>,
+    // all transactions
+    TimespanValue<Resolution, i64>,
 );
 
-impl MapFunction<Input> for Calculate {
-    type Output = TimespanValue<NaiveDate, String>;
+impl<Resolution, ChartName> MapFunction<Input<Resolution>> for CalculateOperationalTxns<ChartName>
+where
+    Resolution: Debug + PartialEq + Send,
+    ChartName: Named,
+{
+    type Output = TimespanValue<Resolution, String>;
 
-    fn function(inner_data: Input) -> Result<Self::Output, crate::ChartError> {
+    fn function(inner_data: Input<Resolution>) -> Result<Self::Output, crate::ChartError> {
         let (total_blocks_data, total_txns_data) = inner_data;
         if total_blocks_data.timespan != total_txns_data.timespan {
-            warn!("timespans for total blocks and total transactions do not match when calculating {}", Properties::name());
+            warn!("timespans for total blocks and total transactions do not match when calculating {}: \
+            {:?} != {:?}", ChartName::name(), total_blocks_data.timespan, total_txns_data.timespan);
         }
         let date = total_blocks_data.timespan;
         let value = total_txns_data
@@ -62,8 +73,10 @@ impl MapFunction<Input> for Calculate {
     }
 }
 
-pub type TotalOperationalTxns =
-    DirectPointLocalDbChartSource<Map<(TotalBlocksInt, TotalTxnsInt), Calculate>, Properties>;
+pub type TotalOperationalTxns = DirectPointLocalDbChartSource<
+    Map<(TotalBlocksInt, TotalTxnsInt), CalculateOperationalTxns<Properties>>,
+    Properties,
+>;
 
 #[cfg(test)]
 mod tests {

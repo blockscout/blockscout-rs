@@ -308,7 +308,6 @@ impl RuntimeSetup {
             Arc::new(TotalBlocksGroup),
             Arc::new(TotalTokensGroup),
             Arc::new(TotalTxnsGroup),
-            Arc::new(TotalOperationalTxnsGroup),
             Arc::new(YesterdayTxnsGroup),
             Arc::new(ActiveRecurringAccountsDailyRecurrence60DaysGroup),
             Arc::new(ActiveRecurringAccountsMonthlyRecurrence60DaysGroup),
@@ -412,6 +411,8 @@ impl RuntimeSetup {
             // compute, therefore this solution is ok (to not introduce
             // more update groups if not necessary)
             ("NewBlocksGroup", vec!["newTxns_DAY"]),
+            // Same logic as above
+            ("TotalBlocksGroup", vec!["totalTxns_DAY"]),
         ]
         .map(|(group_name, allowed_missing)| {
             (

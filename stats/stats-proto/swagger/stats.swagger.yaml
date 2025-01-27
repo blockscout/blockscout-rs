@@ -266,7 +266,13 @@ definitions:
         $ref: '#/definitions/v1Counter'
       yesterday_transactions:
         $ref: '#/definitions/v1Counter'
+      total_operational_transactions:
+        $ref: '#/definitions/v1Counter'
+      yesterday_operational_transactions:
+        $ref: '#/definitions/v1Counter'
       daily_new_transactions:
+        $ref: '#/definitions/v1LineChart'
+      daily_new_operational_transactions:
         $ref: '#/definitions/v1LineChart'
   v1Point:
     type: object

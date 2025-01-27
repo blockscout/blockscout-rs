@@ -28,6 +28,7 @@ pub async fn test_counters_ok(base: Url) {
         "totalNativeCoinTransfers",
         "totalTokens",
         "totalTxns",
+        "totalOperationalTxns",
         "totalVerifiedContracts",
         // on a different page
         // "yesterdayTxns",
