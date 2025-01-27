@@ -83,8 +83,8 @@ impl ProtocolSpecific {
 
     pub fn empty_label_hash(&self) -> Option<B256> {
         match self {
-            ProtocolSpecific::EnsLike(ens) => ens.empty_label_hash,
-            ProtocolSpecific::D3Connect(_) => None,
+            ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
+            ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash,
         }
     }
 
@@ -285,47 +285,71 @@ impl Protocoler {
         Ok(protocols)
     }
 
+    pub fn fetch_domain_options(
+        &self,
+        name_with_tld: &str,
+        network_id: i64,
+        maybe_filter: Option<NonEmpty<String>>,
+    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+        let tld =
+            Tld::from_domain_name(name_with_tld).ok_or_else(|| ProtocolError::InvalidName {
+                name: name_with_tld.to_string(),
+                reason: "Invalid TLD".to_string(),
+            })?;
+
+        let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
+
+        let mut results = Vec::new();
+        for deployed_protocol in protocols {
+            let empty_label_hash = deployed_protocol
+                .protocol
+                .info
+                .protocol_specific
+                .empty_label_hash();
+
+            let domain_name = DomainName::new(name_with_tld, empty_label_hash)?;
+            results.push(DomainNameOnProtocol {
+                inner: domain_name,
+                deployed_protocol,
+            });
+        }
+
+        Ok(results)
+    }
+
     pub fn names_options_in_network(
         &self,
         name: &str,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        let tlds = self
-            .networks
-            .get(&network_id)
-            .ok_or_else(|| ProtocolError::NetworkNotFound(network_id))?
-            .use_protocols
-            .iter()
-            .filter_map(|protocol_name| {
-                self.protocols
-                    .get(protocol_name)
-                    .map(|protocol| protocol.info.tld_list.iter().cloned())
-            })
-            .flatten()
-            .collect::<Vec<Tld>>();
-
         if name.contains('.') {
-            let direct = self.names_options_in_network_exact(name, network_id, maybe_filter)?;
+            let direct = self.fetch_domain_options(name, network_id, maybe_filter)?;
             if direct.is_empty() {
                 Err(ProtocolError::InvalidName {
                     name: name.to_string(),
                     reason: "No matching protocols for given TLD".to_string(),
                 })
             } else {
-                Ok(direct.into_iter().take(MAX_NAMES_LIMIT).collect())
+                Ok(direct.into_iter().take(1).collect())
             }
         } else {
+            let tlds = self
+                .networks
+                .get(&network_id)
+                .ok_or_else(|| ProtocolError::NetworkNotFound(network_id))?
+                .use_protocols
+                .iter()
+                .filter_map(|protocol_name| self.protocols.get(protocol_name))
+                .flat_map(|protocol| protocol.info.tld_list.iter().cloned())
+                .collect::<Vec<Tld>>();
+
             let all_names_with_protocols: Vec<_> = tlds
                 .into_iter()
                 .map(|tld| format!("{}.{}", name, tld.0))
                 .flat_map(|name_with_tld| {
-                    self.names_options_in_network_with_suggestions(
-                        &name_with_tld,
-                        network_id,
-                        maybe_filter.clone(),
-                    )
-                    .unwrap_or_default()
+                    self.fetch_domain_options(&name_with_tld, network_id, maybe_filter.clone())
+                        .unwrap_or_default()
                 })
                 .take(MAX_NAMES_LIMIT)
                 .collect();
@@ -341,65 +365,6 @@ impl Protocoler {
         }
     }
 
-    pub fn names_options_in_network_exact(
-        &self,
-        name: &str,
-        network_id: i64,
-        maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        let tld = Tld::from_domain_name(name).ok_or_else(|| ProtocolError::InvalidName {
-            name: name.to_string(),
-            reason: "Invalid TLD".to_string(),
-        })?;
-
-        let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
-
-        let mut results = Vec::new();
-        for deployed_protocol in protocols {
-            let empty_label_hash = match &deployed_protocol.protocol.info.protocol_specific {
-                ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
-                ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash,
-            };
-
-            let domain_name = DomainName::new(name, empty_label_hash)?;
-            results.push(DomainNameOnProtocol {
-                inner: domain_name,
-                deployed_protocol,
-            });
-        }
-
-        Ok(results)
-    }
-
-    fn names_options_in_network_with_suggestions(
-        &self,
-        name_with_tld: &str,
-        network_id: i64,
-        maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        let protocols = self.protocols_of_network_for_tld(
-            network_id,
-            Tld::from_domain_name(name_with_tld).unwrap(),
-            maybe_filter,
-        )?;
-
-        let mut results = Vec::new();
-        for deployed_protocol in protocols {
-            let empty_label_hash = match &deployed_protocol.protocol.info.protocol_specific {
-                ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
-                ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash,
-            };
-
-            let domain_name = DomainName::new(name_with_tld, empty_label_hash)?;
-            results.push(DomainNameOnProtocol {
-                inner: domain_name,
-                deployed_protocol,
-            });
-        }
-
-        Ok(results)
-    }
-
     pub fn main_name_in_network(
         &self,
         name: &str,
@@ -407,8 +372,8 @@ impl Protocoler {
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<DomainNameOnProtocol, ProtocolError> {
         let maybe_name = self
-            .names_options_in_network(name, network_id, maybe_filter.clone())
-            .map(|mut names| names.pop())?;
+            .names_options_in_network(name, network_id, maybe_filter)?
+            .pop();
         let name = maybe_name.ok_or_else(|| ProtocolError::InvalidName {
             name: name.to_string(),
             reason: "no protocol found".to_string(),

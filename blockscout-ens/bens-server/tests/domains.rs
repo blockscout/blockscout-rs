@@ -65,6 +65,14 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
         data_file_as_json!("domains/wai_eth/detailed.json", &context)
     );
 
+    let request: Value = send_get_request(&base, "/api/v1/1/domains/abcnews").await;
+    println!("{:?}", request);
+
+    assert_eq!(
+        request,
+        data_file_as_json!("domains/abcnews_eth/detailed.json", &context)
+    );
+
     // get events
     let expected_events = data_file_as_json!("domains/vitalik_eth/events.json", &context);
     let expected_events = expected_events.as_array().unwrap().clone();
