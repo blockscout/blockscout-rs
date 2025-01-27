@@ -17,11 +17,11 @@ use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
     counters::{
         AverageBlockTime, AverageTxnFee24h, NewContracts24h, NewTxns24h, NewVerifiedContracts24h,
-        PendingTxns30m, TotalAddresses, TotalBlocks, TotalContracts, TotalTxns,
-        TotalVerifiedContracts, TxnsFee24h, YesterdayTxns,
+        PendingTxns30m, TotalAddresses, TotalBlocks, TotalContracts, TotalOperationalTxns,
+        TotalTxns, TotalVerifiedContracts, TxnsFee24h, YesterdayOperationalTxns, YesterdayTxns,
     },
     data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
-    lines::{NewTxnsWindow, NEW_TXNS_WINDOW_RANGE},
+    lines::{NewOperationalTxnsWindow, NewTxnsWindow, NEW_TXNS_WINDOW_RANGE},
     query_dispatch::{CounterHandle, LineHandle, QuerySerializedDyn},
     range::UniversalRange,
     types::{Timespan, TimespanDuration},
@@ -146,7 +146,10 @@ impl ReadService {
             total_blocks: None,
             total_transactions: None,
             yesterday_transactions: None,
+            total_operational_transactions: None,
+            yesterday_operational_transactions: None,
             daily_new_transactions: None,
+            daily_new_operational_transactions: None,
         };
         vec![
             AverageBlockTime::name(),
@@ -154,7 +157,10 @@ impl ReadService {
             TotalBlocks::name(),
             TotalTxns::name(),
             YesterdayTxns::name(),
+            TotalOperationalTxns::name(),
+            YesterdayOperationalTxns::name(),
             NewTxnsWindow::name(),
+            NewOperationalTxnsWindow::name(),
         ]
     }
 
@@ -313,11 +319,18 @@ impl ReadService {
         Ok(chart_data)
     }
 
-    async fn query_new_txns_window(
+    async fn query_window_chart(
         &self,
+        name: String,
+        window_range: u64,
         query_time: DateTime<Utc>,
     ) -> Option<proto_v1::LineChart> {
-        // All `NEW_TXNS_WINDOW_RANGE` should be returned,
+        // `query_line_chart` will result in warn here even when querying a disabled chart.
+        if !self.charts.charts_info.contains_key(&name) {
+            return None;
+        }
+
+        // All `window_range` should be returned,
         // therefore we need to set exact query range to fill
         // zeroes (if any)
 
@@ -325,19 +338,18 @@ impl ReadService {
         // overshoot by two to account for
         // - last point being approximate
         // - chart last updated yesterday
-        let range_start =
-            query_day.saturating_sub(TimespanDuration::from_days(NEW_TXNS_WINDOW_RANGE + 1));
+        let range_start = query_day.saturating_sub(TimespanDuration::from_days(window_range + 1));
         let request_range = inclusive_date_range_to_query_range(Some(range_start), Some(query_day));
         let mut transactions = self
             .query_line_chart(
-                NewTxnsWindow::name(),
+                name.clone(),
                 ResolutionKind::Day,
                 request_range,
                 None,
                 query_time,
             )
             .await
-            .inspect_err(|e| tracing::warn!("Couldn't get transactions for main page: {}", e))
+            .inspect_err(|e| tracing::warn!("Couldn't get {} for the main page: {}", name, e))
             .ok()?;
         // return exactly `NEW_TXNS_WINDOW_RANGE` accurate points
         let data = transactions
@@ -429,14 +441,20 @@ impl StatsService for ReadService {
             total_blocks,
             total_transactions,
             yesterday_transactions,
+            total_operational_transactions,
+            yesterday_operational_transactions,
             daily_new_transactions,
+            daily_new_operational_transactions,
         ) = join!(
             self.query_counter(AverageBlockTime::name(), now),
             self.query_counter(TotalAddresses::name(), now),
             self.query_counter(TotalBlocks::name(), now),
             self.query_counter(TotalTxns::name(), now),
             self.query_counter(YesterdayTxns::name(), now),
-            self.query_new_txns_window(now)
+            self.query_counter(TotalOperationalTxns::name(), now),
+            self.query_counter(YesterdayOperationalTxns::name(), now),
+            self.query_window_chart(NewTxnsWindow::name(), NEW_TXNS_WINDOW_RANGE, now),
+            self.query_window_chart(NewOperationalTxnsWindow::name(), NEW_TXNS_WINDOW_RANGE, now),
         );
 
         Ok(Response::new(proto_v1::MainPageStats {
@@ -445,7 +463,10 @@ impl StatsService for ReadService {
             total_blocks,
             total_transactions,
             yesterday_transactions,
+            total_operational_transactions,
+            yesterday_operational_transactions,
             daily_new_transactions,
+            daily_new_operational_transactions,
         }))
     }
 
