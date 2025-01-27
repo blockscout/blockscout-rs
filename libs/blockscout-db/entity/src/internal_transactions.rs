@@ -10,9 +10,9 @@ pub struct Model {
     pub created_contract_code: Option<Vec<u8>>,
     pub error: Option<String>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub gas: Option<BigDecimal>,
+    pub gas: Option<Decimal>,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))", nullable)]
-    pub gas_used: Option<BigDecimal>,
+    pub gas_used: Option<Decimal>,
     pub index: i32,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub init: Option<Vec<u8>>,
@@ -23,7 +23,7 @@ pub struct Model {
     pub trace_address: Vec<i32>,
     pub r#type: String,
     #[sea_orm(column_type = "Decimal(Some((100, 0)))")]
-    pub value: BigDecimal,
+    pub value: Decimal,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]

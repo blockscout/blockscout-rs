@@ -17,12 +17,9 @@ pub struct Model {
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub email: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
-    pub name: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
-    pub nickname: Option<Vec<u8>>,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub avatar: Option<Vec<u8>>,
     pub verification_email_sent_at: Option<DateTime>,
+    pub otp_sent_at: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

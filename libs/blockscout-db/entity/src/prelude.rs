@@ -32,7 +32,9 @@ pub use super::{
     pending_block_operations::Entity as PendingBlockOperations,
     proxy_implementations::Entity as ProxyImplementations,
     proxy_smart_contract_verification_statuses::Entity as ProxySmartContractVerificationStatuses,
+    scam_address_badge_mappings::Entity as ScamAddressBadgeMappings,
     schema_migrations::Entity as SchemaMigrations,
+    signed_authorizations::Entity as SignedAuthorizations,
     smart_contract_audit_reports::Entity as SmartContractAuditReports,
     smart_contracts::Entity as SmartContracts,
     smart_contracts_additional_sources::Entity as SmartContractsAdditionalSources,
@@ -43,5 +45,7 @@ pub use super::{
     transaction_actions::Entity as TransactionActions,
     transaction_forks::Entity as TransactionForks, transaction_stats::Entity as TransactionStats,
     transactions::Entity as Transactions, user_contacts::Entity as UserContacts,
-    users::Entity as Users, validators::Entity as Validators, withdrawals::Entity as Withdrawals,
+    user_operations::Entity as UserOperations,
+    user_ops_indexer_migrations::Entity as UserOpsIndexerMigrations, users::Entity as Users,
+    validators::Entity as Validators, withdrawals::Entity as Withdrawals,
 };

@@ -13,10 +13,10 @@
         "total_tokens",
         "total_txns",
         "total_operational_txns",
+        "total_user_ops",
         "total_verified_contracts",
-        "yesterday_txns",
         "new_txns_24h",
-        "pending_txns",
+        "pending_txns_30m",
         "txns_fee_24h",
         "average_txn_fee_24h"
     ],
@@ -83,6 +83,16 @@
                 "new_contracts",
                 "new_verified_contracts",
                 "verified_contracts_growth"
+            ]
+        },
+        {
+            "id": "user_ops",
+            "title": "User operations",
+            "charts_order": [
+                "user_ops_growth",
+                "new_user_ops",
+                "active_bundlers",
+                "active_paymasters"
             ]
         }
     ]

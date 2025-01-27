@@ -66,7 +66,6 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     );
 
     let request: Value = send_get_request(&base, "/api/v1/1/domains/abcnews").await;
-    println!("{:?}", request);
 
     assert_eq!(
         request,

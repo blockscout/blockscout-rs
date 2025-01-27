@@ -27,5 +27,8 @@ http:
     - selector: blockscout.userOpsIndexer.v1.UserOpsService.ListFactories
       get: /api/v1/factories
 
+    - selector: blockscout.userOpsIndexer.v1.UserOpsService.GetStatus
+      get: /api/v1/status
+
     - selector: blockscout.userOpsIndexer.v1.Health.Check
       get: /health

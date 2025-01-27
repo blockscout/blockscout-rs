@@ -1,5 +1,5 @@
 use crate::repository::paymaster::PaymasterDB;
-use ethers::{prelude::Address, utils::to_checksum};
+use alloy::primitives::Address;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Paymaster {
@@ -19,7 +19,7 @@ impl From<PaymasterDB> for Paymaster {
 impl From<Paymaster> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::Paymaster {
     fn from(v: Paymaster) -> Self {
         Self {
-            address: to_checksum(&v.paymaster, None),
+            address: v.paymaster.to_string(),
             total_ops: v.total_ops,
         }
     }

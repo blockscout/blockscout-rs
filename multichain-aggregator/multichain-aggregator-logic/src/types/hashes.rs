@@ -37,20 +37,21 @@ impl From<Hash> for proto::Hash {
         Self {
             hash: v.hash.to_string(),
             hash_type: db_hash_type_to_proto_hash_type(v.hash_type).into(),
+            chain_id: v.chain_id.to_string(),
         }
     }
 }
 
-pub fn proto_hash_type_to_db_hash_type(hash_type: proto::hash::HashType) -> db_enum::HashType {
+pub fn proto_hash_type_to_db_hash_type(hash_type: proto::HashType) -> db_enum::HashType {
     match hash_type {
-        proto::hash::HashType::Block => db_enum::HashType::Block,
-        proto::hash::HashType::Transaction => db_enum::HashType::Transaction,
+        proto::HashType::Block => db_enum::HashType::Block,
+        proto::HashType::Transaction => db_enum::HashType::Transaction,
     }
 }
 
-pub fn db_hash_type_to_proto_hash_type(hash_type: db_enum::HashType) -> proto::hash::HashType {
+pub fn db_hash_type_to_proto_hash_type(hash_type: db_enum::HashType) -> proto::HashType {
     match hash_type {
-        db_enum::HashType::Block => proto::hash::HashType::Block,
-        db_enum::HashType::Transaction => proto::hash::HashType::Transaction,
+        db_enum::HashType::Block => proto::HashType::Block,
+        db_enum::HashType::Transaction => proto::HashType::Transaction,
     }
 }

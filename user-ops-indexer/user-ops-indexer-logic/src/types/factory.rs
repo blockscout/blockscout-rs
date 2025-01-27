@@ -1,5 +1,5 @@
 use crate::repository::factory::FactoryDB;
-use ethers::{prelude::Address, utils::to_checksum};
+use alloy::primitives::Address;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Factory {
@@ -19,7 +19,7 @@ impl From<FactoryDB> for Factory {
 impl From<Factory> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::Factory {
     fn from(v: Factory) -> Self {
         Self {
-            address: to_checksum(&v.factory, None),
+            address: v.factory.to_string(),
             total_accounts: v.total_accounts,
         }
     }

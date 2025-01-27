@@ -5,7 +5,7 @@ use crate::{
     },
     gettable_const,
     types::TimespanValue,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -46,6 +46,9 @@ impl ChartProperties for Properties {
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
+    }
 }
 
 gettable_const!(Zero: f64 = 0.0);
@@ -69,7 +72,7 @@ mod tests {
     async fn update_txns_fee_24h_2() {
         simple_test_counter::<TxnsFee24h>(
             "update_txns_fee_24h_2",
-            "0.000495444443949",
+            "0.000613407406794",
             Some(dt("2022-11-11T00:00:00")),
         )
         .await;

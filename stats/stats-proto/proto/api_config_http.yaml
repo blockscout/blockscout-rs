@@ -9,6 +9,12 @@ http:
       get: /api/v1/lines
     - selector: blockscout.stats.v1.StatsService.GetLineChart
       get: /api/v1/lines/{name}
+    - selector: blockscout.stats.v1.StatsService.GetMainPageStats
+      get: /api/v1/pages/main
+    - selector: blockscout.stats.v1.StatsService.GetTransactionsPageStats
+      get: /api/v1/pages/transactions
+    - selector: blockscout.stats.v1.StatsService.GetContractsPageStats
+      get: /api/v1/pages/contracts
 
     - selector: blockscout.stats.v1.Health.Check
       get: /health

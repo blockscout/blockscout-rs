@@ -6,8 +6,8 @@ use alloy_primitives::Address as AddressAlloy;
 use entity::addresses::{ActiveModel, Column, Entity, Model};
 use regex::Regex;
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
-    IntoSimpleExpr, Iterable, QueryFilter, QueryOrder, QuerySelect,
+    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
+    EntityTrait, IntoSimpleExpr, Iterable, QueryFilter, QueryOrder, QuerySelect,
 };
 use std::sync::OnceLock;
 
@@ -21,7 +21,7 @@ fn hex_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"^(0x)?[0-9a-fA-F]{3,40}$").unwrap())
 }
 
-pub async fn upsert_many<C>(db: &C, addresses: Vec<Address>) -> Result<(), DbErr>
+pub async fn upsert_many<C>(db: &C, mut addresses: Vec<Address>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {
@@ -29,6 +29,7 @@ where
         return Ok(());
     }
 
+    addresses.sort_by(|a, b| (a.hash, a.chain_id).cmp(&(b.hash, b.chain_id)));
     let addresses = addresses.into_iter().map(|address| {
         let model: Model = address.into();
         let mut active: ActiveModel = model.into();
@@ -54,7 +55,7 @@ pub async fn search_by_query<C>(db: &C, q: &str) -> Result<Vec<Address>, Service
 where
     C: ConnectionTrait,
 {
-    search_by_query_paginated(db, q, None, 100)
+    search_by_query_paginated(db, q, None, None, 100)
         .await
         .map(|(addresses, _)| addresses)
 }
@@ -62,6 +63,7 @@ where
 pub async fn search_by_query_paginated<C>(
     db: &C,
     q: &str,
+    chain_id: Option<ChainId>,
     page_token: Option<(AddressAlloy, ChainId)>,
     limit: u64,
 ) -> Result<(Vec<Address>, Option<(AddressAlloy, ChainId)>), ServiceError>
@@ -83,6 +85,10 @@ where
         .order_by_asc(Column::Hash)
         .order_by_asc(Column::ChainId)
         .limit(limit + 1);
+
+    if let Some(chain_id) = chain_id {
+        query = query.filter(Column::ChainId.eq(chain_id));
+    }
 
     if hex_regex().is_match(q) {
         query = query.filter(Expr::cust_with_expr(

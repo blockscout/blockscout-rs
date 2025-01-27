@@ -10,7 +10,7 @@ use crate::{
     },
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::blocks;
@@ -70,6 +70,9 @@ impl ChartProperties for Properties {
     }
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
     }
 }
 

@@ -1,7 +1,4 @@
-use blockscout_service_launcher::{
-    launcher::ConfigSettings,
-    test_server::{get_test_server_settings, init_server, send_get_request},
-};
+use blockscout_service_launcher::test_server::{init_server, send_get_request};
 use itertools::Itertools;
 use pretty_assertions::assert_eq;
 
@@ -9,19 +6,17 @@ use stats::tests::{init_db::init_db_all, mock_blockscout::mock_blockscout_api};
 use stats_proto::blockscout::stats::v1::{
     health_check_response::ServingStatus, Counters, HealthCheckResponse,
 };
-use stats_server::{stats, Settings};
+use stats_server::stats;
 use wiremock::ResponseTemplate;
 
-use std::{path::PathBuf, str::FromStr};
-
-use crate::{common::send_arbitrary_request, lines::enabled_resolutions};
+use crate::common::{enabled_resolutions, get_test_stats_settings, send_arbitrary_request};
 
 #[tokio::test]
 #[ignore = "needs database"]
 async fn test_not_indexed_ok() {
     // check that when the blockscout is not indexed, the healthcheck still succeeds and
     // charts don't have any points (i.e. they are not updated)
-    let (stats_db, blockscout_db) = init_db_all("test_healthcheck_ok").await;
+    let (stats_db, blockscout_db) = init_db_all("test_not_indexed_ok").await;
     let blockscout_api = mock_blockscout_api(ResponseTemplate::new(200).set_body_string(
         r#"{
             "finished_indexing": false,
@@ -33,20 +28,12 @@ async fn test_not_indexed_ok() {
     .await;
 
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-    let mut settings = Settings::build().expect("Failed to build settings");
-    let (server_settings, base) = get_test_server_settings();
-    settings.server = server_settings;
-    settings.charts_config = PathBuf::from_str("../config/charts.json").unwrap();
-    settings.layout_config = PathBuf::from_str("../config/layout.json").unwrap();
-    settings.update_groups_config = PathBuf::from_str("../config/update_groups.json").unwrap();
-    settings.db_url = stats_db.db_url();
-    settings.blockscout_db_url = blockscout_db.db_url();
-    settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());
+    let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
 
     init_server(|| stats(settings), &base).await;
 
-    // Sleep until server will start and calculate all values
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    // No update happens so we can wait less
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     // healthcheck is verified in `init_server`, but we double-check it just in case
     let request =

@@ -19,6 +19,8 @@ service UserOpsService {
   rpc ListBundlers(ListBundlersRequest) returns (ListBundlersResponse);
   rpc ListPaymasters(ListPaymastersRequest) returns (ListPaymastersResponse);
   rpc ListFactories(ListFactoriesRequest) returns (ListFactoriesResponse);
+
+  rpc GetStatus(GetStatusRequest) returns (IndexerStatus);
 }
 
 message Pagination {
@@ -115,6 +117,21 @@ message ListFactoriesRequest {
 message ListFactoriesResponse {
   repeated Factory items = 1;
   Pagination next_page_params = 2;
+}
+
+message GetStatusRequest {}
+
+message IndexerStatus {
+  bool finished_past_indexing = 1;
+  EntryPointIndexerStatus v06 = 2;
+  EntryPointIndexerStatus v07 = 3;
+}
+
+message EntryPointIndexerStatus {
+  bool enabled = 1;
+  bool live = 2;
+  bool past_db_logs_indexing_finished = 3;
+  bool past_rpc_logs_indexing_finished = 4;
 }
 
 message Account {

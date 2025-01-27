@@ -10,7 +10,7 @@ use crate::{
     },
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::{blocks, transactions};
@@ -74,6 +74,9 @@ impl ChartProperties for Properties {
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
+    }
 }
 
 pub struct TotalTxnsEstimation;
@@ -114,7 +117,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_txns() {
-        simple_test_counter::<TotalTxns>("update_total_txns", "48", None).await;
+        simple_test_counter::<TotalTxns>("update_total_txns", "57", None).await;
     }
 
     #[tokio::test]

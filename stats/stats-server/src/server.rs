@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
-    blockscout_waiter::{init_blockscout_api_client, wait_for_blockscout_indexing},
+    blockscout_waiter::{self, init_blockscout_api_client},
     config::{read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
     read_service::ReadService,
@@ -12,7 +12,10 @@ use crate::{
 
 use anyhow::Context;
 use blockscout_endpoint_swagger::route_swagger;
-use blockscout_service_launcher::launcher::{self, LaunchSettings};
+use blockscout_service_launcher::{
+    database::{DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings},
+    launcher::{self, LaunchSettings},
+};
 use sea_orm::{ConnectOptions, Database};
 use stats::metrics;
 use stats_proto::blockscout::stats::v1::{
@@ -72,15 +75,19 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         &mut settings.conditional_start,
         &mut charts_config,
     );
-    let mut opt = ConnectOptions::new(settings.db_url.clone());
-    opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-    blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
-        opt.clone(),
-        settings.create_database,
-        settings.run_migrations,
-    )
-    .await?;
-    let db = Arc::new(Database::connect(opt).await.context("stats DB")?);
+    let database_settings = DatabaseSettings {
+        connect: DatabaseConnectSettings::Url(settings.db_url.clone()),
+        connect_options: DatabaseConnectOptionsSettings::default(),
+        create_database: settings.create_database,
+        run_migrations: settings.run_migrations,
+    };
+    let db = Arc::new(
+        blockscout_service_launcher::database::initialize_postgres::<stats::migration::Migrator>(
+            &database_settings,
+        )
+        .await
+        .context("stats DB")?,
+    );
 
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
@@ -108,22 +115,24 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
 
     let blockscout_api_config = init_blockscout_api_client(&settings).await?;
 
-    let update_service =
-        Arc::new(UpdateService::new(db.clone(), blockscout.clone(), charts.clone()).await?);
+    let (status_waiter, status_listener) = blockscout_api_config
+        .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone()))
+        .unzip();
+    let status_waiter_handle = status_waiter.map(|w| tokio::spawn(async move { w.run().await }));
+
+    let update_service = Arc::new(
+        UpdateService::new(
+            db.clone(),
+            blockscout.clone(),
+            charts.clone(),
+            status_listener,
+        )
+        .await?,
+    );
 
     let update_service_handle = tokio::spawn(async move {
-        // Wait for blockscout to index, if necessary.
-        if let Some(config) = blockscout_api_config {
-            if let Err(e) = wait_for_blockscout_indexing(config, settings.conditional_start).await {
-                let error_msg =
-                    "Error starting update service. Failed while waiting for blockscout indexing";
-                tracing::error!(error =? e, error_msg);
-                panic!("{}. {:?}", error_msg, e);
-            }
-        }
-
         update_service
-            .force_async_update_and_run(
+            .run(
                 settings.concurrent_start_updates,
                 settings.default_schedule,
                 settings.force_update_on_start,
@@ -153,12 +162,15 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
     };
 
-    let futures = vec![
+    let mut futures = vec![
         update_service_handle,
         tokio::spawn(
             async move { launcher::launch(&launch_settings, http_router, grpc_router).await },
         ),
     ];
+    if let Some(status_waiter_handle) = status_waiter_handle {
+        futures.push(status_waiter_handle);
+    }
     let (res, _, others) = futures::future::select_all(futures).await;
     for future in others.into_iter() {
         future.abort()

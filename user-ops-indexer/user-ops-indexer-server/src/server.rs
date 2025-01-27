@@ -10,6 +10,8 @@ use crate::{
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+use tokio::sync::RwLock;
+use user_ops_indexer_logic::indexer::status::IndexerStatus;
 
 const SERVICE_NAME: &str = "user_ops_indexer_server";
 
@@ -37,9 +39,14 @@ impl launcher::HttpRouter for Router {
 pub async fn run(
     settings: Settings,
     database_connection: DatabaseConnection,
+    status: Arc<RwLock<IndexerStatus>>,
 ) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
-    let user_ops = Arc::new(UserOpsService::new(database_connection, settings.api));
+    let user_ops = Arc::new(UserOpsService::new(
+        database_connection,
+        settings.api,
+        status,
+    ));
 
     let router = Router { health, user_ops };
 

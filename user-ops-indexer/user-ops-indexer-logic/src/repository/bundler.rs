@@ -1,5 +1,5 @@
 use crate::types::bundler::Bundler;
-use ethers::prelude::Address;
+use alloy::primitives::Address;
 use sea_orm::{ConnectionTrait, DatabaseConnection, FromQueryResult, Statement};
 
 #[derive(FromQueryResult, Clone)]
@@ -24,7 +24,7 @@ WITH bundles_cte AS (SELECT bundler, count(*) as bundle_ops
 SELECT bundler, count(*) as total_bundles, sum(bundle_ops)::int8 as total_ops
 FROM bundles_cte
 GROUP BY bundler"#,
-        [addr.as_bytes().into()],
+        [addr.as_slice().into()],
     ))
     .one(db)
     .await?
@@ -38,7 +38,7 @@ pub async fn list_bundlers(
     page_token: Option<(u64, Address)>,
     limit: u64,
 ) -> Result<(Vec<Bundler>, Option<(u64, Address)>), anyhow::Error> {
-    let page_token = page_token.unwrap_or((i64::MAX as u64, Address::zero()));
+    let page_token = page_token.unwrap_or((i64::MAX as u64, Address::ZERO));
 
     let bundlers: Vec<Bundler> = BundlerDB::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
@@ -55,7 +55,7 @@ ORDER BY 2 DESC, 1 DESC
 LIMIT $3"#,
         [
             page_token.0.into(),
-            page_token.1.as_bytes().into(),
+            page_token.1.as_slice().into(),
             (limit + 1).into(),
         ],
     ))
@@ -78,17 +78,18 @@ LIMIT $3"#,
 mod tests {
     use super::*;
     use crate::repository::tests::get_shared_db;
+    use alloy::primitives::address;
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
     async fn find_bundler_by_address_ok() {
         let db = get_shared_db().await;
 
-        let addr = Address::from_low_u64_be(0xffff);
+        let addr = address!("000000000000000000000000000000000000ffff");
         let item = find_bundler_by_address(&db, addr).await.unwrap();
         assert_eq!(item, None);
 
-        let addr = Address::from_low_u64_be(0x0105);
+        let addr = address!("0000000000000000000000000000000000000105");
         let item = find_bundler_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,
@@ -99,7 +100,7 @@ mod tests {
             })
         );
 
-        let addr = Address::from_low_u64_be(0x0505);
+        let addr = address!("0000000000000000000000000000000000000505");
         let item = find_bundler_by_address(&db, addr).await.unwrap();
         assert_eq!(
             item,

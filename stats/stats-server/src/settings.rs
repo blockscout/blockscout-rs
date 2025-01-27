@@ -8,14 +8,17 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::{
-    counters::{LastNewContracts, TotalOperationalTxns},
-    lines::{ContractsGrowth, NewContracts, NewOperationalTxns, OperationalTxnsGrowth},
-    ChartProperties,
+    counters::TotalOperationalTxns,
+    lines::{NewOperationalTxns, OperationalTxnsGrowth},
+    ChartProperties, IndexingStatus,
 };
-use std::{net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{collections::BTreeSet, net::SocketAddr, path::PathBuf, str::FromStr};
 use tracing::warn;
 
-use crate::config::{self, types::AllChartSettings};
+use crate::{
+    config::{self, types::AllChartSettings},
+    RuntimeSetup,
+};
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -103,14 +106,17 @@ pub fn handle_disable_internal_transactions(
 ) {
     if disable_internal_transactions {
         conditional_start.internal_transactions_ratio.enabled = false;
-        for disable_key in [
-            NewContracts::key().name(),
-            LastNewContracts::key().name(),
-            ContractsGrowth::key().name(),
-        ] {
+        let charts_dependant_on_internal_transactions =
+            RuntimeSetup::all_members_indexing_status_requirements()
+                .into_iter()
+                .filter(|(_k, req)| req == &IndexingStatus::InternalTransactionsIndexed)
+                .map(|(k, _req)| k.into_name());
+        let to_disable: BTreeSet<_> = charts_dependant_on_internal_transactions.collect();
+
+        for disable_name in to_disable {
             let settings = match (
-                charts.lines.get_mut(disable_key),
-                charts.counters.get_mut(disable_key),
+                charts.lines.get_mut(&disable_name),
+                charts.counters.get_mut(&disable_name),
             ) {
                 (Some(settings), _) => settings,
                 (_, Some(settings)) => settings,
@@ -118,7 +124,7 @@ pub fn handle_disable_internal_transactions(
                     warn!(
                         "Could not disable internal transactions related chart {}: chart not found in settings. \
                         This should not be a problem for running the service.",
-                        disable_key
+                        disable_name
                     );
                     continue;
                 }
@@ -244,7 +250,10 @@ impl ConfigSettings for Settings {
 #[cfg(test)]
 mod tests {
     use crate::config_env::test_utils::check_envs_parsed_to;
-    use stats::counters::TotalContracts;
+    use stats::{
+        counters::{LastNewContracts, TotalContracts},
+        lines::{ContractsGrowth, NewContracts},
+    };
 
     use super::*;
 

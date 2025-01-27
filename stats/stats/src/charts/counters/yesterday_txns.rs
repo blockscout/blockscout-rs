@@ -10,7 +10,7 @@ use crate::{
     range::UniversalRange,
     types::TimespanValue,
     utils::day_start,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::{DateTime, Days, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
@@ -65,6 +65,9 @@ impl ChartProperties for Properties {
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
     }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus::NoneIndexed
+    }
 }
 
 pub type YesterdayTxns = DirectPointLocalDbChartSource<YesterdayTxnsRemote, Properties>;
@@ -85,7 +88,7 @@ mod tests {
     async fn update_yesterday_txns_2() {
         simple_test_counter::<YesterdayTxns>(
             "update_yesterday_txns_2",
-            "12",
+            "14",
             Some(dt("2022-11-11T00:00:00")),
         )
         .await;

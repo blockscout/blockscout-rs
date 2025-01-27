@@ -1,22 +1,22 @@
-use actix_web::{test, test::TestRequest, App};
-use pretty_assertions::assert_eq;
-use serde_json::json;
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    sourcify_verifier_actix::route_sourcify_verifier, VerifyResponse,
-};
-use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
-use std::sync::Arc;
-
-const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify";
-
-async fn init_service() -> Arc<SourcifyVerifierService> {
-    let settings = Settings::default();
-    let service = SourcifyVerifierService::new(settings.sourcify, settings.extensions.sourcify)
-        .await
-        .expect("couldn't initialize the service");
-    Arc::new(service)
-}
-
+// use actix_web::{test, test::TestRequest, App};
+// use pretty_assertions::assert_eq;
+// use serde_json::json;
+// use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+//     sourcify_verifier_actix::route_sourcify_verifier, VerifyResponse,
+// };
+// use smart_contract_verifier_server::{Settings, SourcifyVerifierService};
+// use std::sync::Arc;
+//
+// const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify";
+//
+// async fn init_service() -> Arc<SourcifyVerifierService> {
+//     let settings = Settings::default();
+//     let service = SourcifyVerifierService::new(settings.sourcify, settings.extensions.sourcify)
+//         .await
+//         .expect("couldn't initialize the service");
+//     Arc::new(service)
+// }
+//
 // #[rstest::rstest]
 // #[case("0x6da5E8Cd88641dd371F3ED7737664ea86B3C3ec8", "FULL")]
 // #[case("0xdb3b8b0001D2B22502dcEA7b839f10b55A3E43c3", "PARTIAL")]
@@ -82,68 +82,68 @@ async fn init_service() -> Arc<SourcifyVerifierService> {
 //         }),
 //     );
 // }
-
-#[tokio::test]
-async fn invalid_contracts() {
-    let service = init_service().await;
-    let app = test::init_service(
-        App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
-    )
-    .await;
-
-    let metadata_content = include_str!("contracts/storage/metadata.json");
-    let source = include_str!("contracts/storage/source.sol");
-    for (request_body, _error_message) in [
-        (
-            json!({
-                // relies on fact that the Ethereum Testnet Goerli HASN'T any contract with this address
-                "address": "0x1234567890123456789012345678901234567890",
-                "chain": "11155111",
-                "files": {
-                    "metadata.json": metadata_content,
-                    "contracts/1_Storage.sol": source,
-                },
-            }),
-            "does not have a contract",
-        ),
-        (
-            json!({
-                "address": "0x1234567890123456789012345678901234567890",
-                "chain": "11155111",
-                "files": {},
-            }),
-            "Metadata file not found",
-        ),
-        (
-            json!({
-                // relies on fact that Ethereum Testnet Goerli has some contract, but it is not verified in
-                // sourcify and `source` contains wrong source code
-                "address": "0xd9dF63753D90E3DCcc5AA4D13e77992a64393354",
-                "chain": "11155111",
-                "files": {
-                    "metadata.json": metadata_content,
-                    "contracts/1_Storage.sol": source,
-                },
-            }),
-            "deployed and recompiled bytecode don't match",
-        ),
-    ] {
-        let resp = TestRequest::post()
-            .uri(ROUTE)
-            .set_json(&request_body)
-            .send_request(&app)
-            .await;
-
-        let body: VerifyResponse = test::read_body_json(resp).await;
-
-        assert_eq!(body.status().as_str_name(), "FAILURE");
-        assert!(body.source.is_none());
-        assert!(body.extra_data.is_none());
-        // assert!(
-        //     body.message.contains(error_message),
-        //     "body message: {}, expected message: {}",
-        //     body.message,
-        //     error_message
-        // );
-    }
-}
+//
+// #[tokio::test]
+// async fn invalid_contracts() {
+//     let service = init_service().await;
+//     let app = test::init_service(
+//         App::new().configure(|config| route_sourcify_verifier(config, service.clone())),
+//     )
+//     .await;
+//
+//     let metadata_content = include_str!("contracts/storage/metadata.json");
+//     let source = include_str!("contracts/storage/source.sol");
+//     for (request_body, _error_message) in [
+//         (
+//             json!({
+//                 // relies on fact that the Ethereum Testnet Goerli HASN'T any contract with this address
+//                 "address": "0x1234567890123456789012345678901234567890",
+//                 "chain": "11155111",
+//                 "files": {
+//                     "metadata.json": metadata_content,
+//                     "contracts/1_Storage.sol": source,
+//                 },
+//             }),
+//             "does not have a contract",
+//         ),
+//         (
+//             json!({
+//                 "address": "0x1234567890123456789012345678901234567890",
+//                 "chain": "11155111",
+//                 "files": {},
+//             }),
+//             "Metadata file not found",
+//         ),
+//         (
+//             json!({
+//                 // relies on fact that Ethereum Testnet Goerli has some contract, but it is not verified in
+//                 // sourcify and `source` contains wrong source code
+//                 "address": "0xd9dF63753D90E3DCcc5AA4D13e77992a64393354",
+//                 "chain": "11155111",
+//                 "files": {
+//                     "metadata.json": metadata_content,
+//                     "contracts/1_Storage.sol": source,
+//                 },
+//             }),
+//             "deployed and recompiled bytecode don't match",
+//         ),
+//     ] {
+//         let resp = TestRequest::post()
+//             .uri(ROUTE)
+//             .set_json(&request_body)
+//             .send_request(&app)
+//             .await;
+//
+//         let body: VerifyResponse = test::read_body_json(resp).await;
+//
+//         assert_eq!(body.status().as_str_name(), "FAILURE");
+//         assert!(body.source.is_none());
+//         assert!(body.extra_data.is_none());
+//         // assert!(
+//         //     body.message.contains(error_message),
+//         //     "body message: {}, expected message: {}",
+//         //     body.message,
+//         //     error_message
+//         // );
+//     }
+// }

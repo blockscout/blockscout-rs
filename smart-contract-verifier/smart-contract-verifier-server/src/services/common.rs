@@ -83,14 +83,14 @@ pub fn normalize_request_compiler_version(
     request_compiler_version: &DetailedVersion,
 ) -> Result<DetailedVersion, tonic::Status> {
     let corresponding_known_compiler_version = compilers.iter().find(|&version| {
-        return version.version() == request_compiler_version.version()
+        version.version() == request_compiler_version.version()
             && version.date() == request_compiler_version.date()
             && (version
                 .commit()
                 .starts_with(request_compiler_version.commit())
                 || request_compiler_version
                     .commit()
-                    .starts_with(version.commit()));
+                    .starts_with(version.commit()))
     });
     if let Some(compiler_version) = corresponding_known_compiler_version {
         Ok(compiler_version.clone())

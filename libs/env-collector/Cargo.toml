@@ -13,6 +13,6 @@ serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
 
 [dev-dependencies]
-blockscout-service-launcher = { path = "../blockscout-service-launcher", features = ["database-0_12"] }
+blockscout-service-launcher = { path = "../blockscout-service-launcher", features = ["database-1_0"] }
 pretty_assertions = "1.4.0"
 tempfile = "3.10.1"

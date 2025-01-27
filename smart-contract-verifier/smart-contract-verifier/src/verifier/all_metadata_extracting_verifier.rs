@@ -448,7 +448,7 @@ mod cbor_auxdata {
             match part {
                 BytecodePart::Main { .. } => offset += part.size(),
                 BytecodePart::Metadata { raw, .. } => {
-                    let id = format!("{}", auxdata.len());
+                    let id = format!("{}", auxdata.len() + 1);
                     let value = DisplayBytes::from(raw.to_vec());
                     auxdata.insert(id, CborAuxdataValue { offset, value });
                     offset += part.size();

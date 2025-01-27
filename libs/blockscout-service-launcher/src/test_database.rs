@@ -217,9 +217,9 @@ macro_rules! database {
         .await
     }};
     ($migrator:ty, $custom_prefix:expr) => {{
-        $crate::test_database::TestDbGuard::new::<$migrator>($crate::test_database::database_name!(
-            $custom_prefix
-        ))
+        $crate::test_database::TestDbGuard::new::<$migrator>(
+            &$crate::test_database::database_name!($custom_prefix),
+        )
         .await
     }};
 }

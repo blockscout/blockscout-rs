@@ -29,6 +29,8 @@ pub enum ParseError {
     ParseUuid(#[from] uuid::Error),
     #[error("parse error: invalid slice")]
     TryFromSlice(#[from] core::array::TryFromSliceError),
+    #[error("parse error: {0}")]
+    Custom(String),
 }
 
 impl From<ServiceError> for tonic::Status {
