@@ -39,7 +39,10 @@ where
     }
 }
 
-pub async fn find_by_hash<C>(db: &C, hash: BlockHash) -> Result<Vec<Hash>, ServiceError>
+pub async fn find_by_hash<C>(
+    db: &C,
+    hash: BlockHash,
+) -> Result<(Vec<Hash>, Vec<Hash>), ServiceError>
 where
     C: ConnectionTrait,
 {
@@ -49,22 +52,9 @@ where
         .await?
         .into_iter()
         .map(Hash::try_from)
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .partition(|h| h.hash_type == db_enum::HashType::Block);
 
     Ok(res)
-}
-
-pub async fn search_by_query<C>(db: &C, query: &str) -> Result<(Vec<Hash>, Vec<Hash>), ServiceError>
-where
-    C: ConnectionTrait,
-{
-    let hash = match query.parse() {
-        Ok(hash) => hash,
-        Err(_) => return Ok((vec![], vec![])),
-    };
-
-    Ok(find_by_hash(db, hash)
-        .await?
-        .into_iter()
-        .partition(|h| h.hash_type == db_enum::HashType::Block))
 }

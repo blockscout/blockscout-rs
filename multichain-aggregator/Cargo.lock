@@ -2965,6 +2965,7 @@ dependencies = [
  "api-client-framework",
  "blockscout-chains",
  "blockscout-service-launcher",
+ "futures",
  "multichain-aggregator-entity",
  "multichain-aggregator-proto",
  "pretty_assertions",

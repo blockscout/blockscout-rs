@@ -16,11 +16,6 @@ fn words_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"[a-zA-Z0-9]+").unwrap())
 }
 
-fn hex_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^(0x)?[0-9a-fA-F]{3,40}$").unwrap())
-}
-
 pub async fn upsert_many<C>(db: &C, mut addresses: Vec<Address>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
@@ -49,6 +44,21 @@ where
         .await?;
 
     Ok(())
+}
+
+pub async fn find_by_address<C>(db: &C, address: AddressAlloy) -> Result<Vec<Address>, ServiceError>
+where
+    C: ConnectionTrait,
+{
+    let res = Entity::find()
+        .filter(Column::Hash.eq(address.as_slice()))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(Address::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(res)
 }
 
 pub async fn search_by_query<C>(db: &C, q: &str) -> Result<Vec<Address>, ServiceError>
@@ -90,20 +100,13 @@ where
         query = query.filter(Column::ChainId.eq(chain_id));
     }
 
-    if hex_regex().is_match(q) {
-        query = query.filter(Expr::cust_with_expr(
-            "encode(hash, 'hex') LIKE $1",
-            format!("{}%", q.to_lowercase().strip_prefix("0x").unwrap_or(q)),
-        ));
-    } else {
-        let ts_query = prepare_ts_query(q);
-        query = query.filter(Expr::cust_with_expr(
-            "to_tsvector('english', contract_name) @@ to_tsquery($1) OR \
-                to_tsvector('english', ens_name) @@ to_tsquery($1) OR \
-                to_tsvector('english', token_name) @@ to_tsquery($1)",
-            ts_query,
-        ));
-    }
+    let ts_query = prepare_ts_query(q);
+    query = query.filter(Expr::cust_with_expr(
+        "to_tsvector('english', contract_name) @@ to_tsquery($1) OR \
+            to_tsvector('english', ens_name) @@ to_tsquery($1) OR \
+            to_tsvector('english', token_name) @@ to_tsquery($1)",
+        ts_query,
+    ));
 
     let addresses = query
         .all(db)
