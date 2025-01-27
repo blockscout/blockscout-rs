@@ -322,6 +322,11 @@ impl ReadService {
         window_range: u64,
         query_time: DateTime<Utc>,
     ) -> Option<proto_v1::LineChart> {
+        // `query_line_chart` will result in warn here even when querying a disabled chart.
+        if !self.charts.charts_info.contains_key(&name) {
+            return None;
+        }
+
         // All `window_range` should be returned,
         // therefore we need to set exact query range to fill
         // zeroes (if any)
