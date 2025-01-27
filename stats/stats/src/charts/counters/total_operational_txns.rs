@@ -8,6 +8,7 @@ use crate::{
     types::TimespanValue,
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
+use std::fmt::Debug;
 
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
@@ -50,7 +51,7 @@ type Input<Resolution> = (
 
 impl<Resolution, ChartName> MapFunction<Input<Resolution>> for CalculateOperationalTxns<ChartName>
 where
-    Resolution: Send + PartialEq,
+    Resolution: Debug + PartialEq + Send,
     ChartName: Named,
 {
     type Output = TimespanValue<Resolution, String>;
@@ -58,7 +59,8 @@ where
     fn function(inner_data: Input<Resolution>) -> Result<Self::Output, crate::ChartError> {
         let (total_blocks_data, total_txns_data) = inner_data;
         if total_blocks_data.timespan != total_txns_data.timespan {
-            warn!("timespans for total blocks and total transactions do not match when calculating {}", ChartName::name());
+            warn!("timespans for total blocks and total transactions do not match when calculating {}: \
+            {:?} != {:?}", ChartName::name(), total_blocks_data.timespan, total_txns_data.timespan);
         }
         let date = total_blocks_data.timespan;
         let value = total_txns_data

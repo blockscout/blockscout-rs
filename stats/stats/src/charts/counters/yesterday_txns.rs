@@ -30,12 +30,15 @@ pub(crate) async fn query_yesterday_data<DailyDataStatement: StatementFromRange>
     let yesterday_range = day_start(&yesterday)..day_start(&today);
     let query =
         DailyDataStatement::get_statement(Some(yesterday_range), &cx.blockscout_applied_migrations);
-    let data = TimespanValue::<NaiveDate, String>::find_by_statement(query)
+    let mut data = TimespanValue::<NaiveDate, String>::find_by_statement(query)
         .one(cx.blockscout)
         .await
         .map_err(ChartError::BlockscoutDB)?
         // no data for yesterday
         .unwrap_or(TimespanValue::with_zero_value(yesterday));
+    // today's value is the number from the day before.
+    // still a value is considered to be "for today" (technically)
+    data.timespan = today;
     Ok(data)
 }
 
