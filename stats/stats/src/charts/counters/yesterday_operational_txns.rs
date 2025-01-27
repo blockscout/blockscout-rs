@@ -78,10 +78,10 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_yesterday_operational_txns() {
-        // 12 - 3 (txns - blocks)
+        // 14 - 3 (txns - blocks)
         simple_test_counter::<YesterdayOperationalTxns>(
             "update_yesterday_operational_txns",
-            "9",
+            "11",
             Some(dt("2022-11-11T00:00:00")),
         )
         .await;
