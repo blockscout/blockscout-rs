@@ -7,7 +7,7 @@ use url::Url;
 
 use crate::array_of_variables_with_names;
 
-pub async fn test_main_page_ok(base: Url) {
+pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
     let main_page: MainPageStats = send_get_request(&base, "/api/v1/pages/main").await;
     let MainPageStats {
         average_block_time,
@@ -20,15 +20,20 @@ pub async fn test_main_page_ok(base: Url) {
         daily_new_transactions,
         daily_new_operational_transactions,
     } = main_page;
-    let counters = array_of_variables_with_names!([
+    let mut counters = array_of_variables_with_names!([
         average_block_time,
         total_addresses,
         total_blocks,
         total_transactions,
         yesterday_transactions,
-        total_operational_transactions,
-        yesterday_operational_transactions,
-    ]);
+    ])
+    .to_vec();
+    if expect_arbitrum {
+        counters.extend(array_of_variables_with_names!([
+            total_operational_transactions,
+            yesterday_operational_transactions,
+        ]));
+    }
     for (name, counter) in counters {
         #[allow(clippy::expect_fun_call)]
         let counter = counter.expect(&format!("page counter {} must be available", name));
@@ -36,15 +41,17 @@ pub async fn test_main_page_ok(base: Url) {
         assert!(!counter.title.is_empty());
     }
 
-    for daily_transactions in [daily_new_transactions, daily_new_operational_transactions] {
-        let daily_transactions =
-            daily_transactions.expect("daily transactions chart must be available");
-        let transactions_info = daily_transactions.info.unwrap();
+    let mut window_line_charts = array_of_variables_with_names!([daily_new_transactions]).to_vec();
+    if expect_arbitrum {
+        window_line_charts.extend(array_of_variables_with_names!([
+            daily_new_operational_transactions
+        ]));
+    }
+    for (name, window_chart) in window_line_charts {
+        let window_chart = window_chart.expect(&format!("{} chart must be available", name));
+        let transactions_info = window_chart.info.unwrap();
         assert!(!transactions_info.id.is_empty());
         assert_eq!(transactions_info.resolutions, vec!["DAY"]);
-        assert_eq!(
-            daily_transactions.chart.len(),
-            NEW_TXNS_WINDOW_RANGE as usize
-        );
+        assert_eq!(window_chart.chart.len(), NEW_TXNS_WINDOW_RANGE as usize);
     }
 }

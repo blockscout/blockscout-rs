@@ -51,7 +51,7 @@ async fn test_chart_endpoints_ok() {
     let tests: JoinSet<_> = [
         test_lines_ok(base.clone()).boxed(),
         test_counters_ok(base.clone()).boxed(),
-        test_main_page_ok(base.clone()).boxed(),
+        test_main_page_ok(base.clone(), true).boxed(),
         test_transactions_page_ok(base.clone()).boxed(),
         test_contracts_page_ok(base).boxed(),
     ]
@@ -84,11 +84,30 @@ async fn test_chart_endpoints_work_with_not_indexed_blockscout() {
     tokio::time::sleep(std::time::Duration::from_secs(7)).await;
 
     let tests: JoinSet<_> = [
-        test_main_page_ok(base.clone()).boxed(),
+        test_main_page_ok(base.clone(), true).boxed(),
         test_transactions_page_ok(base.clone()).boxed(),
         test_contracts_page_ok(base).boxed(),
     ]
     .into_iter()
     .collect();
     run_consolidated_tests(tests, test_name).await;
+}
+
+#[tokio::test]
+#[ignore = "needs database"]
+async fn test_chart_endpoints_work_with_disabled_arbitrum() {
+    let test_name = "test_chart_endpoints_work_with_disabled_arbitrum";
+    let (stats_db, blockscout_db) = init_db_all(test_name).await;
+    let blockscout_api = default_mock_blockscout_api().await;
+    fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap()).await;
+    std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
+    let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
+    settings.enable_all_arbitrum = false;
+
+    init_server(|| stats(settings), &base).await;
+
+    // Sleep until server will start and calculate all values
+    tokio::time::sleep(std::time::Duration::from_secs(7)).await;
+
+    test_main_page_ok(base, false).await;
 }
