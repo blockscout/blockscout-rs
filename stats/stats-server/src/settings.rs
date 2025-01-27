@@ -8,8 +8,8 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::{
-    counters::TotalOperationalTxns,
-    lines::{NewOperationalTxns, OperationalTxnsGrowth},
+    counters::{TotalOperationalTxns, YesterdayOperationalTxns},
+    lines::{NewOperationalTxns, NewOperationalTxnsWindow, OperationalTxnsGrowth},
     ChartProperties, IndexingStatus,
 };
 use std::{collections::BTreeSet, net::SocketAddr, path::PathBuf, str::FromStr};
@@ -143,6 +143,8 @@ pub fn handle_enable_all_arbitrum(
             NewOperationalTxns::key().name(),
             OperationalTxnsGrowth::key().name(),
             TotalOperationalTxns::key().name(),
+            YesterdayOperationalTxns::key().name(),
+            NewOperationalTxnsWindow::key().name(),
         ] {
             let settings = match (
                 charts.lines.get_mut(enable_key),

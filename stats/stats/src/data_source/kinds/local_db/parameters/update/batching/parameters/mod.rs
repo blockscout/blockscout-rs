@@ -1,8 +1,11 @@
+use std::fmt::Debug;
+
 use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
-    charts::db_interaction::write::{clear_all_chart_data, insert_data_many},
+    charts::db_interaction::write::clear_all_chart_data,
+    data_source::kinds::local_db::parameters::update::pass_vec,
     gettable_const,
     types::{
         timespans::{Month, Week, Year},
@@ -43,21 +46,7 @@ where
         main_data: Vec<TimespanValue<Resolution, String>>,
         _resolution_data: (),
     ) -> Result<usize, ChartError> {
-        let found = main_data.len();
-        // note: right away cloning another chart will not result in exact copy,
-        // because if the other chart is `FillPrevious`, then omitted starting point
-        // within the range is set to the last known before the range
-        // i.e. some duplicate points might get added.
-        //
-        // however, it should not be a problem, since semantics remain the same +
-        // cloning already stored chart is counter-productive/not effective.
-        let values = main_data
-            .into_iter()
-            .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
-        insert_data_many(db, values)
-            .await
-            .map_err(ChartError::StatsDB)?;
-        Ok(found)
+        pass_vec(db, chart_id, min_blockscout_block, main_data).await
     }
 }
 
@@ -71,7 +60,7 @@ pub struct ClearAllAndPassStep;
 impl<Resolution> BatchStepBehaviour<Resolution, Vec<TimespanValue<Resolution, String>>, ()>
     for ClearAllAndPassStep
 where
-    Resolution: Timespan + Clone + Send + Sync,
+    Resolution: Timespan + Clone + Send + Sync + Debug,
 {
     async fn batch_update_values_step_with<C: ConnectionTrait + TransactionTrait>(
         db: &C,

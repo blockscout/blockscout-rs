@@ -65,6 +65,11 @@
             "title": "Yesterday txns",
             "description": "Number of transactions yesterday (0:00 - 23:59 UTC)"
         },
+        "yesterday_operational_txns": {
+            "enabled": false,
+            "title": "Yesterday operational txns",
+            "description": "Number of transactions yesterday (0:00 - 23:59 UTC) without block creation transactions"
+        },
         "total_user_ops": {
             "title": "Total user operations",
             "description": "Number of user operations as per the ERC-4337 standard"
@@ -153,6 +158,11 @@
             "enabled": false,
             "title": "New operational transactions",
             "description": "Number of new transactions without block creation"
+        },
+        "new_operational_txns_window": {
+            "enabled": false,
+            "title": "Daily operational transactions",
+            "description": "The chart displays daily transactions for the past 30 days (without block creation transactions)"
         },
         "operational_txns_growth": {
             "enabled": false,

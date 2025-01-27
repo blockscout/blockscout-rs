@@ -48,6 +48,7 @@ pub fn get_test_stats_settings(
     settings.db_url = stats_db.db_url();
     settings.blockscout_db_url = blockscout_db.db_url();
     settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());
+    settings.enable_all_arbitrum = true;
     (settings, base)
 }
 
