@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 pub mod test_input_data;
-pub mod verifier_alliance_types;
 
 use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;

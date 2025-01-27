@@ -2,7 +2,7 @@ use eth_bytecode_db_proto::{
     blockscout::eth_bytecode_db::v2 as proto,
     http_client::{
         database_client, mock, solidity_verifier_client, sourcify_verifier_client,
-        vyper_verifier_client, Client, Config,
+        verifier_alliance_client, vyper_verifier_client, Client, Config,
     },
 };
 use tonic::Response;
@@ -239,4 +239,44 @@ async fn sourcify_verifier_service() {
     )
     .await
     .is_ok());
+}
+
+#[tokio::test]
+async fn verifier_alliance_service() {
+    let mock_service = {
+        let mut mock_service = mock::MockVerifierAllianceService::default();
+        set_expectation!(
+            mock_service,
+            expect_batch_import_solidity_multi_part,
+            proto::VerifierAllianceBatchImportSolidityMultiPartRequest,
+            proto::VerifierAllianceBatchImportResponse
+        );
+        set_expectation!(
+            mock_service,
+            expect_batch_import_solidity_standard_json,
+            proto::VerifierAllianceBatchImportSolidityStandardJsonRequest,
+            proto::VerifierAllianceBatchImportResponse
+        );
+
+        mock_service
+    };
+
+    let client =
+        build_client(mock::EthBytecodeDbServer::new().verifier_alliance_service(mock_service))
+            .await;
+
+    assert!(verifier_alliance_client::batch_import_solidity_multi_part(
+        &client,
+        proto::VerifierAllianceBatchImportSolidityMultiPartRequest::default()
+    )
+    .await
+    .is_ok(),);
+    assert!(
+        verifier_alliance_client::batch_import_solidity_standard_json(
+            &client,
+            proto::VerifierAllianceBatchImportSolidityStandardJsonRequest::default()
+        )
+        .await
+        .is_ok(),
+    )
 }

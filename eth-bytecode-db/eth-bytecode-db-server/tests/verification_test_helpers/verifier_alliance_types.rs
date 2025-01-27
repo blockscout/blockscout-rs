@@ -182,8 +182,7 @@ impl TestCase {
             #[derive(Clone, Debug, Deserialize)]
             #[serde(rename_all = "camelCase")]
             struct CodeArtifacts {
-                #[serde(default)]
-                pub cbor_auxdata: BTreeMap<String, CborAuxdata>,
+                pub cbor_auxdata: Option<BTreeMap<String, CborAuxdata>>,
             }
 
             let code_artifacts: CodeArtifacts =
@@ -191,6 +190,7 @@ impl TestCase {
             let ordered_auxdata = {
                 let mut auxdata = code_artifacts
                     .cbor_auxdata
+                    .unwrap_or_default()
                     .into_values()
                     .collect::<Vec<_>>();
                 auxdata.sort_by_key(|auxdata| auxdata.offset);

@@ -1,9 +1,9 @@
+use crate::from_json;
 use blockscout_display_bytes::decode_hex;
 use blockscout_service_launcher::test_database::database;
 use sea_orm::{prelude::Uuid, DatabaseConnection};
-use serde_json::json;
 use std::collections::BTreeMap;
-use verification_common_v1::verifier_alliance::{
+use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation, MatchValues,
     RuntimeCodeArtifacts, SourceId,
 };
@@ -11,7 +11,7 @@ use verifier_alliance_database::{
     CompiledContract, CompiledContractCompiler, CompiledContractLanguage, InsertContractDeployment,
     VerifiedContract, VerifiedContractMatches,
 };
-use verifier_alliance_migration_v1::Migrator;
+use verifier_alliance_migration::Migrator;
 
 #[tokio::test]
 async fn insert_verified_contract_with_complete_matches_work() {
@@ -110,22 +110,18 @@ async fn insert_verified_contract_with_filled_matches() {
         match_values.add_immutable(
             "immutable",
             decode_hex("0x0000000000000000000000000000000000000000000000000000000000000032")
-                .unwrap()
-                .into(),
+                .unwrap(),
         );
         match_transformations.push(MatchTransformation::immutable(1, "immutable"));
         match_values.add_library(
             "library",
-            decode_hex("0x0000000000000000000000000000000000000020")
-                .unwrap()
-                .into(),
+            decode_hex("0x0000000000000000000000000000000000000020").unwrap(),
         );
         match_transformations.push(MatchTransformation::library(1, "library"));
         match_values.add_cbor_auxdata(
             "cborAuxdata",
             decode_hex("0x1000000000000000000000000000000000000000000000000000000000000032")
-                .unwrap()
-                .into(),
+                .unwrap(),
         );
         match_transformations.push(MatchTransformation::auxdata(1, "cborAuxdata"));
 
@@ -136,20 +132,17 @@ async fn insert_verified_contract_with_filled_matches() {
         let mut match_values = MatchValues::default();
         let mut match_transformations = vec![];
 
-        match_values.add_constructor_arguments(decode_hex("0x01020304").unwrap().into());
+        match_values.add_constructor_arguments(decode_hex("0x01020304").unwrap());
         match_transformations.push(MatchTransformation::constructor(1));
         match_values.add_library(
             "library",
-            decode_hex("0x0000000000000000000000000000000000000020")
-                .unwrap()
-                .into(),
+            decode_hex("0x0000000000000000000000000000000000000020").unwrap(),
         );
         match_transformations.push(MatchTransformation::library(1, "library"));
         match_values.add_cbor_auxdata(
             "cborAuxdata",
             decode_hex("0x1000000000000000000000000000000000000000000000000000000000000032")
-                .unwrap()
-                .into(),
+                .unwrap(),
         );
         match_transformations.push(MatchTransformation::auxdata(1, "cborAuxdata"));
 
@@ -192,26 +185,26 @@ fn complete_compiled_contract() -> CompiledContract {
             "src/Counter.sol".into(),
             "// SPDX-License-Identifier: UNLICENSED\npragma solidity ^0.8.13;\n\ncontract Counter {\n    uint256 public number;\n\n    function setNumber(uint256 newNumber) public {\n        number = newNumber;\n    }\n\n    function increment() public {\n        number++;\n    }\n}\n".into(),
         )]),
-        compiler_settings: json!({"evmVersion":"paris","libraries":{},"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"*":["*"]}},"remappings":[],"viaIR":false}),
+        compiler_settings: from_json!({"evmVersion":"paris","libraries":{},"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"*":["*"]}},"remappings":[],"viaIR":false}),
         compilation_artifacts: CompilationArtifacts {
-            abi: Some(json!({"abi": "value"})),
-            devdoc: Some(json!({"devdoc": "value"})),
-            userdoc: Some(json!({"userdoc": "value"})),
-            storage_layout: Some(json!({"storage": "value"})),
+            abi: Some(from_json!({"abi": "value"})),
+            devdoc: Some(from_json!({"devdoc": "value"})),
+            userdoc: Some(from_json!({"userdoc": "value"})),
+            storage_layout: Some(from_json!({"storage": "value"})),
             sources: Some(BTreeMap::from([("src/Counter.sol".into(), SourceId {id: 0})]))
         },
         creation_code: vec![0x1, 0x2],
         creation_code_artifacts: CreationCodeArtifacts {
-            source_map: Some(json!("source_map")),
-            link_references: Some(json!({"linkReferences": "value"})),
-            cbor_auxdata: Some(json!({"cborAuxdata": "value"})),
+            source_map: Some(from_json!("source_map")),
+            link_references: Some(from_json!({"lib.sol": {"lib": [{"length": 20, "start": 1}]}})),
+            cbor_auxdata: Some(from_json!({"1": {"value": "0x1234", "offset": 1}})),
         },
         runtime_code: vec![0x3, 0x4],
         runtime_code_artifacts: RuntimeCodeArtifacts {
-            cbor_auxdata: Some(json!({"cborAuxdata": "value"})),
-            immutable_references: Some(json!({"immutableReferences": "value"})),
-            link_references: Some(json!({"linkReferences": "value"})),
-            source_map: Some(json!("source_map")),
+            cbor_auxdata: Some(from_json!({"1": {"value": "0x1234", "offset": 1}})),
+            immutable_references: Some(from_json!({"1": [{"length": 32, "start": 1}]})),
+            link_references: Some(from_json!({"lib.sol": {"lib": [{"length": 20, "start": 1}]}})),
+            source_map: Some(from_json!("source_map")),
         },
     }
 }

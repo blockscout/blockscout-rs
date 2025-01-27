@@ -1,17 +1,14 @@
-use sea_orm::{prelude::Uuid, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use pretty_assertions::assert_eq;
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, str::FromStr};
-use verification_common_v1::verifier_alliance::{
-    CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation, MatchValues,
+use verification_common::verifier_alliance::{
+    CompilationArtifacts, CreationCodeArtifacts, MatchTransformation, MatchValues,
     RuntimeCodeArtifacts,
 };
-use verifier_alliance_database::{
-    CompiledContract, CompiledContractCompiler, CompiledContractLanguage, InsertContractDeployment,
-    VerifiedContract, VerifiedContractMatches,
-};
-use verifier_alliance_entity_v1::{
+use verifier_alliance_entity::{
     code, compiled_contracts, compiled_contracts_sources, contract_deployments, contracts, sources,
     verified_contracts,
 };
@@ -19,51 +16,51 @@ use verifier_alliance_entity_v1::{
 #[serde_with::serde_as]
 #[derive(Clone, Debug, Deserialize)]
 pub struct TestCase {
+    #[serde(default)]
+    pub test_case_name: String,
     #[serde(deserialize_with = "string_to_u128")]
-    chain_id: u128,
+    pub chain_id: u128,
     #[serde_as(as = "blockscout_display_bytes::serde_as::Hex")]
-    address: Vec<u8>,
+    pub address: Vec<u8>,
     #[serde_as(as = "blockscout_display_bytes::serde_as::Hex")]
-    transaction_hash: Vec<u8>,
+    pub transaction_hash: Vec<u8>,
     #[serde(deserialize_with = "string_to_u128")]
-    block_number: u128,
+    pub block_number: u128,
     #[serde(deserialize_with = "string_to_u128")]
-    transaction_index: u128,
+    pub transaction_index: u128,
     #[serde_as(as = "blockscout_display_bytes::serde_as::Hex")]
-    deployer: Vec<u8>,
+    pub deployer: Vec<u8>,
 
     #[serde_as(as = "blockscout_display_bytes::serde_as::Hex")]
-    deployed_creation_code: Vec<u8>,
+    pub deployed_creation_code: Vec<u8>,
     #[serde_as(as = "blockscout_display_bytes::serde_as::Hex")]
-    deployed_runtime_code: Vec<u8>,
+    pub deployed_runtime_code: Vec<u8>,
 
     #[serde_as(as = "blockscout_display_bytes::serde_as::Hex")]
-    compiled_creation_code: Vec<u8>,
+    pub compiled_creation_code: Vec<u8>,
     #[serde_as(as = "blockscout_display_bytes::serde_as::Hex")]
-    compiled_runtime_code: Vec<u8>,
+    pub compiled_runtime_code: Vec<u8>,
 
-    compiler: String,
-    version: String,
-    language: String,
-    name: String,
-    fully_qualified_name: String,
-    sources: BTreeMap<String, String>,
-    compiler_settings: Value,
-    compilation_artifacts: CompilationArtifacts,
-    creation_code_artifacts: CreationCodeArtifacts,
-    runtime_code_artifacts: RuntimeCodeArtifacts,
+    pub compiler: String,
+    pub version: String,
+    pub language: String,
+    pub name: String,
+    pub fully_qualified_name: String,
+    pub sources: BTreeMap<String, String>,
+    pub compiler_settings: Value,
+    pub compilation_artifacts: CompilationArtifacts,
+    pub creation_code_artifacts: CreationCodeArtifacts,
+    pub runtime_code_artifacts: RuntimeCodeArtifacts,
 
-    #[serde(rename = "creation_match")]
-    _creation_match: bool,
-    creation_metadata_match: bool,
-    creation_values: MatchValues,
-    creation_transformations: Vec<MatchTransformation>,
+    pub creation_match: bool,
+    pub creation_metadata_match: bool,
+    pub creation_values: MatchValues,
+    pub creation_transformations: Vec<MatchTransformation>,
 
-    #[serde(rename = "runtime_match")]
-    _runtime_match: bool,
-    runtime_metadata_match: bool,
-    runtime_values: MatchValues,
-    runtime_transformations: Vec<MatchTransformation>,
+    pub runtime_match: bool,
+    pub runtime_metadata_match: bool,
+    pub runtime_values: MatchValues,
+    pub runtime_transformations: Vec<MatchTransformation>,
 }
 
 fn string_to_u128<'de, D>(deserializer: D) -> Result<u128, D::Error>
@@ -75,57 +72,10 @@ where
 }
 
 impl TestCase {
-    pub fn from_content(content: &str) -> Self {
-        serde_json::from_str(content).expect("invalid test case format")
-    }
-
-    pub fn contract_deployment_data(&self) -> InsertContractDeployment {
-        InsertContractDeployment::Regular {
-            chain_id: self.chain_id,
-            address: self.address.clone(),
-            transaction_hash: self.transaction_hash.clone(),
-            block_number: self.block_number,
-            transaction_index: self.transaction_index,
-            deployer: self.deployer.clone(),
-            creation_code: self.deployed_creation_code.clone(),
-            runtime_code: self.deployed_runtime_code.clone(),
-        }
-    }
-
-    pub fn verified_contract_data(&self, contract_deployment_id: Uuid) -> VerifiedContract {
-        let compiler = CompiledContractCompiler::from_str(&self.compiler.to_lowercase())
-            .expect("invalid compiler");
-        let language = CompiledContractLanguage::from_str(&self.language.to_lowercase())
-            .expect("invalid language");
-        VerifiedContract {
-            contract_deployment_id,
-            compiled_contract: CompiledContract {
-                compiler,
-                version: self.version.clone(),
-                language,
-                name: self.name.clone(),
-                fully_qualified_name: self.fully_qualified_name.clone(),
-                sources: self.sources.clone(),
-                compiler_settings: self.compiler_settings.clone(),
-                compilation_artifacts: self.compilation_artifacts.clone(),
-                creation_code: self.compiled_creation_code.clone(),
-                creation_code_artifacts: self.creation_code_artifacts.clone(),
-                runtime_code: self.compiled_runtime_code.clone(),
-                runtime_code_artifacts: self.runtime_code_artifacts.clone(),
-            },
-            matches: VerifiedContractMatches::Complete {
-                creation_match: Match {
-                    metadata_match: self.creation_metadata_match,
-                    transformations: self.creation_transformations.clone(),
-                    values: self.creation_values.clone(),
-                },
-                runtime_match: Match {
-                    metadata_match: self.runtime_metadata_match,
-                    transformations: self.runtime_transformations.clone(),
-                    values: self.runtime_values.clone(),
-                },
-            },
-        }
+    pub fn from_content(name: impl Into<String>, content: &str) -> Self {
+        let mut test_case: Self = serde_json::from_str(content).expect("invalid test case format");
+        test_case.test_case_name = name.into();
+        test_case
     }
 }
 
