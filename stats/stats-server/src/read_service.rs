@@ -157,7 +157,10 @@ impl ReadService {
             TotalBlocks::name(),
             TotalTxns::name(),
             YesterdayTxns::name(),
+            TotalOperationalTxns::name(),
+            YesterdayOperationalTxns::name(),
             NewTxnsWindow::name(),
+            NewOperationalTxnsWindow::name(),
         ]
     }
 
