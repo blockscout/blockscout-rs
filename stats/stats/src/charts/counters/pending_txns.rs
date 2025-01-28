@@ -93,16 +93,11 @@ pub type PendingTxns30m = DirectPointLocalDbChartSource<PendingTxns30mRemote, Pr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_counter_with_migration_variants;
+    use crate::tests::simple_test::simple_test_counter;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_pending_txns_30m() {
-        simple_test_counter_with_migration_variants::<PendingTxns30m>(
-            "update_pending_txns_30m",
-            "0",
-            None,
-        )
-        .await;
+        simple_test_counter::<PendingTxns30m>("update_pending_txns_30m", "0", None).await;
     }
 }

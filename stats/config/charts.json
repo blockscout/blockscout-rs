@@ -74,6 +74,10 @@
             "title": "Total user operations",
             "description": "Number of user operations as per the ERC-4337 standard"
         },
+        "total_account_abstraction_wallets": {
+            "title": "Total AA wallets",
+            "description": "Number of account abstraction wallets (ERC-4337) that sent at least 1 user operation"
+        },
         "last_new_contracts": {
             "title": "Number of contracts today",
             "description": "Number of deployed contracts today (UTC)"
@@ -180,6 +184,18 @@
         "user_ops_growth": {
             "title": "Number of user operations",
             "description": "Cumulative user operation (ERC-4337) growth over time"
+        },
+        "new_account_abstraction_wallets": {
+            "title": "New AA wallets",
+            "description": "Number of newly added account abstraction wallets (ERC-4337)"
+        },
+        "account_abstraction_wallets_growth": {
+            "title": "Number of AA wallets",
+            "description": "Cumulative account abstraction wallets (ERC-4337) growth over time"
+        },
+        "active_account_abstraction_wallets": {
+            "title": "Active AA wallets",
+            "description": "Active account abstraction wallets (ERC-4337) number per period"
         },
         "active_bundlers": {
             "title": "Active bundlers",
