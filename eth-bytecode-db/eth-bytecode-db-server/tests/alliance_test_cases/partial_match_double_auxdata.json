@@ -69,13 +69,13 @@
     "creation_transformations": [
         {
             "type": "replace",
-            "reason": "auxdata",
+            "reason": "cborAuxdata",
             "offset": 1639,
             "id": "1"
         },
         {
             "type": "replace",
-            "reason": "auxdata",
+            "reason": "cborAuxdata",
             "offset": 1731,
             "id": "2"
         }
@@ -90,7 +90,7 @@
     "runtime_transformations": [
         {
             "type": "replace",
-            "reason": "auxdata",
+            "reason": "cborAuxdata",
             "offset": 737,
             "id": "1"
         }

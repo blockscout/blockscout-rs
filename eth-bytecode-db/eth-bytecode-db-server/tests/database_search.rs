@@ -780,9 +780,9 @@ async fn search_alliance_contract_without_metadata_hash_returns_partial_match(
     #[files("tests/alliance_test_cases/metadata_hash_absent.json")] test_case_path: PathBuf,
 ) {
     let remove_cbor_auxdata_from_artifacts = |artifacts: &mut serde_json::Value| {
-        artifacts
-            .as_object_mut()
-            .and_then(|artifacts| artifacts.remove("cborAuxdata"))
+        artifacts.as_object_mut().and_then(|artifacts| {
+            artifacts.insert("cborAuxdata".to_string(), serde_json::Value::Null)
+        })
     };
 
     const TEST_NAME: &str = "search_alliance_contract_without_metadata_hash_returns_partial_match";

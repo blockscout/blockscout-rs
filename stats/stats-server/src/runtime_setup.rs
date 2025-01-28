@@ -303,6 +303,7 @@ impl RuntimeSetup {
             Arc::new(ActiveAccountsGroup),
             Arc::new(ActiveBundlersGroup),
             Arc::new(ActivePaymastersGroup),
+            Arc::new(ActiveAccountAbstractionWalletsGroup),
             Arc::new(AverageBlockTimeGroup),
             Arc::new(CompletedTxnsGroup),
             Arc::new(PendingTxns30mGroup),
@@ -337,6 +338,7 @@ impl RuntimeSetup {
             Arc::new(TxnsSuccessRateGroup),
             // complex groups
             Arc::new(NewAccountsGroup),
+            Arc::new(NewAccountAbstractionWalletsGroup),
             Arc::new(NewContractsGroup),
             Arc::new(NewTxnsGroup),
             Arc::new(NewUserOpsGroup),

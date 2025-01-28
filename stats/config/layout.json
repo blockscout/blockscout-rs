@@ -14,6 +14,7 @@
         "total_txns",
         "total_operational_txns",
         "total_user_ops",
+        "total_account_abstraction_wallets",
         "total_verified_contracts",
         "new_txns_24h",
         "pending_txns_30m",
@@ -90,6 +91,9 @@
             "charts_order": [
                 "user_ops_growth",
                 "new_user_ops",
+                "new_account_abstraction_wallets",
+                "account_abstraction_wallets_growth",
+                "active_account_abstraction_wallets",
                 "active_bundlers",
                 "active_paymasters"
             ]

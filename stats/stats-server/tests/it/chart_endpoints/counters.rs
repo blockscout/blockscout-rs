@@ -27,13 +27,14 @@ pub async fn test_counters_ok(base: Url) {
         "totalTxns",
         "totalOperationalTxns",
         "totalUserOps",
+        "totalAccountAbstractionWallets",
         "totalVerifiedContracts",
         "newTxns24h",
         "pendingTxns30m",
         "txnsFee24h",
         "averageTxnFee24h",
         // on a different page; they are checked by other endpoint tests and
-        // `check_all_enabled_charts_have_endpoints`
+        // `check_all_enabled_charts_have_endpoints`.
 
         // "newContracts24h",
         // "newVerifiedContracts24h",

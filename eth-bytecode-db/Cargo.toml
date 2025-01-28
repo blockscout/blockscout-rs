@@ -9,6 +9,7 @@ members = [
     "eth-bytecode-db/verifier-alliance-entity",
     "eth-bytecode-db/verifier-alliance-migration",
     "verifier-alliance-database",
+    "verifier-alliance-database-tests",
 ]
 
 [workspace.dependencies]
@@ -17,13 +18,10 @@ eth-bytecode-db = { path = "eth-bytecode-db" }
 eth-bytecode-db-proto = { path = "eth-bytecode-db-proto" }
 eth-bytecode-db-server = { path = "eth-bytecode-db-server" }
 migration = { path = "eth-bytecode-db/migration" }
-verifier-alliance-entity = { git = "https://github.com/blockscout/blockscout-rs", rev = "ec1c755" }
+verifier-alliance-entity = { path = "eth-bytecode-db/verifier-alliance-entity" }
 verifier-alliance-database = { path = "verifier-alliance-database" }
-verifier-alliance-migration = { git = "https://github.com/blockscout/blockscout-rs", rev = "ec1c755" }
-
-verifier-alliance-entity-v1 = { path = "eth-bytecode-db/verifier-alliance-entity", package = "verifier-alliance-entity" }
-verifier-alliance-migration-v1 = { path = "eth-bytecode-db/verifier-alliance-migration", package = "verifier-alliance-migration" }
-verification-common-v1 = { git = "https://github.com/blockscout/blockscout-rs", rev = "1164e09", package = "verification-common" }
+verifier-alliance-database-tests = { path = "verifier-alliance-database-tests" }
+verifier-alliance-migration = { path = "eth-bytecode-db/verifier-alliance-migration" }
 
 actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
 actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
@@ -35,7 +33,7 @@ anyhow = { version = "1" }
 async-std = { version = "^1" }
 async-trait = { version = "0.1" }
 blockscout-display-bytes = { version = "1.1.0" }
-blockscout-service-launcher = { version = "0.15.0", default-features = false, features = ["database-1_0"] }
+blockscout-service-launcher = { version = "0.16.2", default-features = false, features = ["database-1_0"] }
 bytes = { version = "1.2" }
 ethabi = { version = "18.0" }
 ethers = { version = "2.0.0" }
@@ -68,6 +66,7 @@ smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscou
 solidity-metadata = { version = "1.0" }
 sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "457af68" }
 strum = { version = "0.26.3", default-features = false, features = ["derive"] }
+test-log = { version = "0.2.16" }
 thiserror = { version = "1" }
 tokio = { version = "1" }
 tokio-stream = { version = "0.1" }
@@ -76,4 +75,4 @@ tonic-build = { version = "0.8" }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
 url = { version = "2" }
-verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "3892914" }
+verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "8d9cf0e" }

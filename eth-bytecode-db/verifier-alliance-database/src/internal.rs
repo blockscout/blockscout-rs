@@ -6,11 +6,12 @@ use sea_orm::{
     ActiveValue::Set,
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
 };
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sha3::Keccak256;
-use std::collections::BTreeMap;
-use verification_common_v1::verifier_alliance::Match;
-use verifier_alliance_entity_v1::{
+use std::{collections::BTreeMap, str::FromStr};
+use verification_common::verifier_alliance::Match;
+use verifier_alliance_entity::{
     code, compiled_contracts, compiled_contracts_sources, contract_deployments, contracts, sources,
     verified_contracts,
 };
@@ -285,6 +286,40 @@ pub async fn retrieve_contract_deployment<C: ConnectionTrait>(
         .context("select from \"contract_deployments\"")
 }
 
+pub async fn retrieve_contract_deployments_by_chain_id_and_address<C: ConnectionTrait>(
+    database_connection: &C,
+    chain_id: u128,
+    contract_address: Vec<u8>,
+) -> Result<Vec<contract_deployments::Model>, Error> {
+    contract_deployments::Entity::find()
+        .filter(contract_deployments::Column::ChainId.eq(Decimal::from(chain_id)))
+        .filter(contract_deployments::Column::Address.eq(contract_address))
+        .all(database_connection)
+        .await
+        .context("select from \"contract_deployments\"")
+}
+
+pub async fn retrieve_verified_contracts_by_deployment_id<C: ConnectionTrait>(
+    database_connection: &C,
+    deployment_id: Uuid,
+) -> Result<Vec<verified_contracts::Model>, Error> {
+    verified_contracts::Entity::find()
+        .filter(verified_contracts::Column::DeploymentId.eq(deployment_id))
+        .all(database_connection)
+        .await
+        .context("select from \"verified_contracts\"")
+}
+
+pub async fn retrieve_compiled_contract_by_id<C: ConnectionTrait>(
+    database_connection: &C,
+    id: Uuid,
+) -> Result<Option<compiled_contracts::Model>, Error> {
+    compiled_contracts::Entity::find_by_id(id)
+        .one(database_connection)
+        .await
+        .context("select from \"compiled_contracts\"")
+}
+
 pub async fn insert_contract<C: ConnectionTrait>(
     database_connection: &C,
     contract_code: ContractCode,
@@ -403,6 +438,36 @@ pub async fn retrieve_code_by_id<C: ConnectionTrait>(
         .ok_or_else(|| anyhow!("code hash was not found: {}", code_hash.to_hex()))
 }
 
+pub async fn retrieve_sources_by_compilation_id<C: ConnectionTrait>(
+    database_connection: &C,
+    compilation_id: Uuid,
+) -> Result<BTreeMap<String, String>, Error> {
+    let compiled_contract_source_models = compiled_contracts_sources::Entity::find()
+        .filter(compiled_contracts_sources::Column::CompilationId.eq(compilation_id))
+        .all(database_connection)
+        .await
+        .context("select from \"compiled_contracts_sources\"")?;
+
+    let mut sources = BTreeMap::new();
+    for compiled_contract_source_model in compiled_contract_source_models {
+        let source_model =
+            sources::Entity::find_by_id(compiled_contract_source_model.source_hash.clone())
+                .one(database_connection)
+                .await
+                .context("select from \"sources\"")?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "source hash does not exist: {}",
+                        compiled_contract_source_model.source_hash.to_hex()
+                    )
+                })?;
+
+        sources.insert(compiled_contract_source_model.path, source_model.content);
+    }
+
+    Ok(sources)
+}
+
 pub fn precalculate_source_hashes(sources: &BTreeMap<String, String>) -> BTreeMap<String, Vec<u8>> {
     let mut source_hashes = BTreeMap::new();
     for (path, content) in sources {
@@ -411,6 +476,172 @@ pub fn precalculate_source_hashes(sources: &BTreeMap<String, String>) -> BTreeMa
     }
 
     source_hashes
+}
+
+pub fn try_models_into_verified_contract(
+    contract_deployment_id: Uuid,
+    compiled_contract: compiled_contracts::Model,
+    creation_code: Vec<u8>,
+    runtime_code: Vec<u8>,
+    sources: BTreeMap<String, String>,
+    verified_contract: verified_contracts::Model,
+) -> Result<VerifiedContract, Error> {
+    let compilation_artifacts = serde_json::from_value(compiled_contract.compilation_artifacts)
+        .context("parsing compilation artifacts")?;
+    let creation_code_artifacts = serde_json::from_value(compiled_contract.creation_code_artifacts)
+        .context("parsing creation code artifacts")?;
+    let runtime_code_artifacts = serde_json::from_value(compiled_contract.runtime_code_artifacts)
+        .context("parsing runtime code artifacts")?;
+
+    let compiler = CompiledContractCompiler::from_str(&compiled_contract.compiler.to_lowercase())
+        .context("parsing compiler")?;
+    let language = CompiledContractLanguage::from_str(&compiled_contract.language.to_lowercase())
+        .context("parsing language")?;
+
+    // We can safely unwrap thanks to `verified_contracts_creation_match_integrity` and `verified_contracts_runtime_match_integrity` database constraints
+    let creation_match = verified_contract
+        .creation_match
+        .then(|| {
+            extract_match_from_model(
+                verified_contract.creation_metadata_match.unwrap(),
+                verified_contract.creation_transformations.unwrap(),
+                verified_contract.creation_values.unwrap(),
+            )
+        })
+        .transpose()?;
+    let runtime_match = verified_contract
+        .runtime_match
+        .then(|| {
+            extract_match_from_model(
+                verified_contract.runtime_metadata_match.unwrap(),
+                verified_contract.runtime_transformations.unwrap(),
+                verified_contract.runtime_values.unwrap(),
+            )
+        })
+        .transpose()?;
+
+    let matches = match (creation_match, runtime_match) {
+        (Some(creation_match), Some(runtime_match)) => VerifiedContractMatches::Complete {
+            creation_match,
+            runtime_match,
+        },
+        (Some(creation_match), None) => VerifiedContractMatches::OnlyCreation { creation_match },
+        (None, Some(runtime_match)) => VerifiedContractMatches::OnlyRuntime { runtime_match },
+        (None, None) => unreachable!("`verified_contracts_match_exists` database constraint"),
+    };
+
+    Ok(VerifiedContract {
+        contract_deployment_id,
+        compiled_contract: CompiledContract {
+            compiler,
+            version: compiled_contract.version,
+            language,
+            name: compiled_contract.name,
+            fully_qualified_name: compiled_contract.fully_qualified_name,
+            sources,
+            compiler_settings: compiled_contract.compiler_settings,
+            compilation_artifacts,
+            creation_code,
+            creation_code_artifacts,
+            runtime_code,
+            runtime_code_artifacts,
+        },
+        matches,
+    })
+}
+
+pub use compare_matches::should_store_the_match;
+mod compare_matches {
+    use super::*;
+
+    #[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
+    enum MatchStatus {
+        NoMatch,
+        WithoutMetadata,
+        WithMetadata,
+    }
+
+    impl From<&Match> for MatchStatus {
+        fn from(value: &Match) -> Self {
+            if value.metadata_match {
+                MatchStatus::WithMetadata
+            } else {
+                MatchStatus::WithoutMetadata
+            }
+        }
+    }
+
+    fn status_from_model_match(does_match: bool, does_metadata_match: Option<bool>) -> MatchStatus {
+        if !does_match {
+            return MatchStatus::NoMatch;
+        }
+        if let Some(true) = does_metadata_match {
+            return MatchStatus::WithMetadata;
+        }
+        MatchStatus::WithoutMetadata
+    }
+
+    pub async fn should_store_the_match<C: ConnectionTrait>(
+        database_connection: &C,
+        contract_deployment_id: Uuid,
+        potential_matches: &VerifiedContractMatches,
+    ) -> Result<bool, Error> {
+        let (potential_creation_match, potential_runtime_match) = match potential_matches {
+            VerifiedContractMatches::OnlyCreation { creation_match } => {
+                (creation_match.into(), MatchStatus::NoMatch)
+            }
+            VerifiedContractMatches::OnlyRuntime { runtime_match } => {
+                (MatchStatus::NoMatch, runtime_match.into())
+            }
+            VerifiedContractMatches::Complete {
+                creation_match,
+                runtime_match,
+            } => (creation_match.into(), runtime_match.into()),
+        };
+
+        // We want to store all perfect matches even if there are other ones in the database.
+        // That should be impossible, but in case that happens we are interested in storing them all
+        // in order to manually review them later.
+        if potential_creation_match == MatchStatus::WithMetadata
+            || potential_runtime_match == MatchStatus::WithMetadata
+        {
+            return Ok(true);
+        }
+
+        let is_model_worse = |model: &verified_contracts::Model| {
+            let model_creation_match =
+                status_from_model_match(model.creation_match, model.creation_metadata_match);
+            let model_runtime_match =
+                status_from_model_match(model.runtime_match, model.runtime_metadata_match);
+            model_creation_match < potential_creation_match
+                || model_runtime_match < potential_runtime_match
+        };
+        let existing_verified_contracts = retrieve_verified_contracts_by_deployment_id(
+            database_connection,
+            contract_deployment_id,
+        )
+        .await?;
+        let should_potential_match_be_stored =
+            existing_verified_contracts.iter().all(is_model_worse);
+
+        Ok(should_potential_match_be_stored)
+    }
+}
+
+fn extract_match_from_model(
+    metadata_match: bool,
+    transformations: Value,
+    values: Value,
+) -> Result<Match, Error> {
+    let transformations =
+        serde_json::from_value(transformations).context("parsing match transformations")?;
+    let values = serde_json::from_value(values).context("parsing match values")?;
+
+    Ok(Match {
+        metadata_match,
+        transformations,
+        values,
+    })
 }
 
 fn parse_genesis_contract_deployment(
