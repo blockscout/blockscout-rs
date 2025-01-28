@@ -12,10 +12,11 @@ use multichain_aggregator_logic::{
     api_key_manager::ApiKeyManager,
     clients::token_info::{SearchTokenInfos, SearchTokenInfosParams},
     error::ServiceError,
-    Chain, Token,
+    search::SearchTerm,
+    Address, Chain, Hash, Token,
 };
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
-    ListTokensRequest, ListTokensResponse,
+    ListTokensRequest, ListTokensResponse, ListTransactionsRequest, ListTransactionsResponse,
 };
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
@@ -92,24 +93,74 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let page_token: Option<(alloy_primitives::Address, logic::ChainId)> =
             inner.page_token.map(parse_query_2).transpose()?;
+
+        let (address, query) = match parse_query::<alloy_primitives::Address>(inner.q.clone()) {
+            Ok(address) => (Some(address), None),
+            Err(_) => (None, Some(inner.q)),
+        };
         let page_size = self.normalize_page_size(inner.page_size);
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
-        let (addresses, next_page_token) = logic::repository::addresses::search_by_query_paginated(
+
+        let (addresses, next_page_token) = logic::repository::addresses::list_addresses_paginated(
             &self.db,
-            &inner.q,
+            address,
+            query,
             chain_id,
-            page_token,
             page_size as u64,
+            page_token,
         )
         .await
-        .inspect_err(|err| {
+        .map_err(|err| {
             tracing::error!(error = ?err, "failed to list addresses");
+            Status::internal("failed to list addresses")
         })?;
 
         Ok(Response::new(ListAddressesResponse {
-            addresses: addresses.into_iter().map(|a| a.into()).collect(),
-            pagination: next_page_token.map(|(a, c)| Pagination {
+            items: addresses
+                .into_iter()
+                .map(|a| Address::try_from(a).map(|a| a.into()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(ServiceError::from)?,
+            next_page_params: next_page_token.map(|(a, c)| Pagination {
                 page_token: format!("{},{}", a.to_checksum(None), c),
+                page_size,
+            }),
+        }))
+    }
+
+    async fn list_transactions(
+        &self,
+        request: Request<ListTransactionsRequest>,
+    ) -> Result<Response<ListTransactionsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let hash = parse_query::<alloy_primitives::B256>(inner.q.clone())?;
+        let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query).transpose()?;
+
+        let (transactions, next_page_token) =
+            logic::repository::hashes::list_transactions_paginated(
+                &self.db,
+                hash,
+                chain_id,
+                page_size as u64,
+                page_token,
+            )
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "failed to list addresses");
+                Status::internal("failed to list addresses")
+            })?;
+
+        Ok(Response::new(ListTransactionsResponse {
+            items: transactions
+                .into_iter()
+                .map(|t| Hash::try_from(t).map(|t| t.into()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(ServiceError::from)?,
+            next_page_params: next_page_token.map(|c| Pagination {
+                page_token: format!("{}", c),
                 page_size,
             }),
         }))
@@ -149,8 +200,8 @@ impl MultichainAggregatorService for MultichainAggregator {
             .map_err(ServiceError::from)?;
 
         Ok(Response::new(ListTokensResponse {
-            tokens,
-            pagination: res.next_page_params.map(|p| Pagination {
+            items: tokens,
+            next_page_params: res.next_page_params.map(|p| Pagination {
                 page_token: p.page_token,
                 page_size: p.page_size,
             }),

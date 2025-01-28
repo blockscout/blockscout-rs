@@ -1,5 +1,6 @@
+use super::paginate_cursor;
 use crate::{
-    error::{ParseError, ServiceError},
+    error::ParseError,
     types::{addresses::Address, ChainId},
 };
 use alloy_primitives::Address as AddressAlloy;
@@ -7,7 +8,7 @@ use entity::addresses::{ActiveModel, Column, Entity, Model};
 use regex::Regex;
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, IntoSimpleExpr, Iterable, QueryFilter, QueryOrder, QuerySelect,
+    EntityTrait, Iterable, QueryFilter, QueryTrait,
 };
 use std::sync::OnceLock;
 
@@ -46,82 +47,44 @@ where
     Ok(())
 }
 
-pub async fn find_by_address<C>(db: &C, address: AddressAlloy) -> Result<Vec<Address>, ServiceError>
-where
-    C: ConnectionTrait,
-{
-    let res = Entity::find()
-        .filter(Column::Hash.eq(address.as_slice()))
-        .all(db)
-        .await?
-        .into_iter()
-        .map(Address::try_from)
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(res)
-}
-
-pub async fn search_by_query<C>(db: &C, q: &str) -> Result<Vec<Address>, ServiceError>
-where
-    C: ConnectionTrait,
-{
-    search_by_query_paginated(db, q, None, None, 100)
-        .await
-        .map(|(addresses, _)| addresses)
-}
-
-pub async fn search_by_query_paginated<C>(
+pub async fn list_addresses_paginated<C>(
     db: &C,
-    q: &str,
+    address: Option<AddressAlloy>,
+    query: Option<String>,
     chain_id: Option<ChainId>,
+    page_size: u64,
     page_token: Option<(AddressAlloy, ChainId)>,
-    limit: u64,
-) -> Result<(Vec<Address>, Option<(AddressAlloy, ChainId)>), ServiceError>
+) -> Result<(Vec<Model>, Option<(AddressAlloy, ChainId)>), DbErr>
 where
     C: ConnectionTrait,
 {
-    let page_token = page_token.unwrap_or((AddressAlloy::ZERO, ChainId::MIN));
-    let mut query = Entity::find()
-        .filter(
-            Expr::tuple([
-                Column::Hash.into_simple_expr(),
-                Column::ChainId.into_simple_expr(),
-            ])
-            .gte(Expr::tuple([
-                page_token.0.as_slice().into(),
-                page_token.1.into(),
-            ])),
+    let mut c = Entity::find()
+        .apply_if(chain_id, |q, chain_id| {
+            q.filter(Column::ChainId.eq(chain_id))
+        })
+        .apply_if(address, |q, address| {
+            q.filter(Column::Hash.eq(address.as_slice()))
+        })
+        .apply_if(query, |q, query| {
+            let ts_query = prepare_ts_query(&query);
+            q.filter(Expr::cust_with_expr(
+                "to_tsvector('english', contract_name) @@ to_tsquery($1)",
+                ts_query,
+            ))
+        })
+        .cursor_by((Column::Hash, Column::ChainId));
+
+    if let Some(page_token) = page_token {
+        c.after((page_token.0.as_slice(), page_token.1));
+    }
+
+    paginate_cursor(db, c, page_size, |u| {
+        (
+            AddressAlloy::try_from(u.hash.as_slice()).unwrap(),
+            u.chain_id,
         )
-        .order_by_asc(Column::Hash)
-        .order_by_asc(Column::ChainId)
-        .limit(limit + 1);
-
-    if let Some(chain_id) = chain_id {
-        query = query.filter(Column::ChainId.eq(chain_id));
-    }
-
-    let ts_query = prepare_ts_query(q);
-    query = query.filter(Expr::cust_with_expr(
-        "to_tsvector('english', contract_name) @@ to_tsquery($1) OR \
-            to_tsvector('english', ens_name) @@ to_tsquery($1) OR \
-            to_tsvector('english', token_name) @@ to_tsquery($1)",
-        ts_query,
-    ));
-
-    let addresses = query
-        .all(db)
-        .await?
-        .into_iter()
-        .map(Address::try_from)
-        .collect::<Result<Vec<_>, _>>()?;
-
-    match addresses.get(limit as usize) {
-        Some(a) => Ok((
-            addresses[0..limit as usize].to_vec(),
-            Some((a.hash, a.chain_id)),
-        )),
-        None => Ok((addresses, None)),
-    }
+    })
+    .await
 }
 
 fn non_primary_columns() -> impl Iterator<Item = Column> {

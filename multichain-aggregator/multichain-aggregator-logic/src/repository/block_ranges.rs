@@ -1,4 +1,5 @@
-use crate::types::block_ranges::BlockRange;
+use super::paginate_cursor;
+use crate::{types::block_ranges::BlockRange, ChainId};
 use entity::block_ranges::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
@@ -55,20 +56,23 @@ where
     Ok(())
 }
 
-pub async fn find_matching_block_ranges<C>(
+pub async fn list_matching_block_ranges_paginated<C>(
     db: &C,
     block_number: u64,
-) -> Result<Vec<BlockRange>, DbErr>
+    page_size: u64,
+    page_token: Option<ChainId>,
+) -> Result<(Vec<Model>, Option<ChainId>), DbErr>
 where
     C: ConnectionTrait,
 {
-    let res = Entity::find()
+    let mut c = Entity::find()
         .filter(Column::MinBlockNumber.lte(block_number))
         .filter(Column::MaxBlockNumber.gte(block_number))
-        .all(db)
-        .await?
-        .into_iter()
-        .map(|r| r.into())
-        .collect();
-    Ok(res)
+        .cursor_by(Column::ChainId);
+
+    if let Some(page_token) = page_token {
+        c.after(page_token);
+    }
+
+    paginate_cursor(db, c, page_size, |u| u.chain_id).await
 }

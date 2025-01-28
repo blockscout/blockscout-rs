@@ -10,5 +10,5 @@ mod types;
 pub use import::batch_import;
 pub use types::{
     addresses::Address, api_keys::ApiKey, batch_import_request::BatchImportRequest, chains::Chain,
-    token_info::Token, ChainId,
+    hashes::Hash, token_info::Token, ChainId,
 };

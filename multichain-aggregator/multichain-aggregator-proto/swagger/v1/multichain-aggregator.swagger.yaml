@@ -113,6 +113,38 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
+  /api/v1/transactions:
+    get:
+      operationId: MultichainAggregatorService_ListTransactions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListTransactionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /health:
     get:
       summary: |-
@@ -314,22 +346,32 @@ definitions:
   v1ListAddressesResponse:
     type: object
     properties:
-      addresses:
+      items:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1Address'
-      pagination:
+      next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListTokensResponse:
     type: object
     properties:
-      tokens:
+      items:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1Token'
-      pagination:
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListTransactionsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1MarketplaceDapp:
     type: object

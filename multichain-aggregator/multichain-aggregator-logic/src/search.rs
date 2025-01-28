@@ -6,20 +6,24 @@ use crate::{
     error::ServiceError,
     repository::{addresses, block_ranges, hashes},
     types::{
+        addresses::Address,
         block_ranges::ChainBlockNumber,
         chains::Chain,
         dapp::MarketplaceDapp,
+        hashes::Hash,
         search_results::{ChainSearchResult, SearchResults},
         token_info::Token,
         ChainId,
     },
 };
 use api_client_framework::HttpApiClient;
+use entity::sea_orm_active_enums as db_enum;
 use sea_orm::DatabaseConnection;
 use std::collections::BTreeMap;
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
+const QUICK_SEARCH_NUM_ITEMS: u64 = 10;
 
 macro_rules! populate_search_results {
     ($target:expr, $explorers:expr, $from:expr, $field:ident) => {
@@ -106,23 +110,58 @@ impl SearchTerm {
 
         match self {
             SearchTerm::Hash(hash) => {
-                let (blocks, transactions) = hashes::find_by_hash(db, hash).await?;
+                let (hashes, _) = hashes::list_hashes_paginated(
+                    db,
+                    hash,
+                    None,
+                    None,
+                    QUICK_SEARCH_NUM_ITEMS,
+                    None,
+                )
+                .await?;
+                let (blocks, transactions): (Vec<_>, Vec<_>) = hashes
+                    .into_iter()
+                    .map(Hash::try_from)
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .partition(|h| h.hash_type == db_enum::HashType::Block);
+
                 populate_search_results!(results, explorers, blocks, blocks);
                 populate_search_results!(results, explorers, transactions, transactions);
             }
             SearchTerm::AddressHash(address) => {
-                let addresses = addresses::find_by_address(db, address).await?;
+                let (addresses, _) = addresses::list_addresses_paginated(
+                    db,
+                    Some(address),
+                    None,
+                    None,
+                    QUICK_SEARCH_NUM_ITEMS,
+                    None,
+                )
+                .await?;
+                let addresses: Vec<_> = addresses
+                    .into_iter()
+                    .map(Address::try_from)
+                    .collect::<Result<Vec<_>, _>>()?;
+
                 populate_search_results!(results, explorers, addresses, addresses)
             }
             SearchTerm::BlockNumber(block_number) => {
-                let block_numbers = block_ranges::find_matching_block_ranges(db, block_number)
-                    .await?
+                let (block_ranges, _) = block_ranges::list_matching_block_ranges_paginated(
+                    db,
+                    block_number,
+                    QUICK_SEARCH_NUM_ITEMS,
+                    None,
+                )
+                .await?;
+                let block_numbers: Vec<_> = block_ranges
                     .into_iter()
                     .map(|r| ChainBlockNumber {
                         chain_id: r.chain_id,
-                        block_number: r.min_block_number,
+                        block_number,
                     })
                     .collect::<Vec<_>>();
+
                 populate_search_results!(results, explorers, block_numbers, block_numbers);
             }
             SearchTerm::Dapp(query) => {
@@ -145,7 +184,7 @@ impl SearchTerm {
                         params: SearchTokenInfosParams {
                             query,
                             chain_id: None,
-                            page_size: Some(100),
+                            page_size: Some(QUICK_SEARCH_NUM_ITEMS as u32),
                             page_token: None,
                         },
                     })
@@ -181,9 +220,10 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     }
 
     if query.len() >= MIN_QUERY_LENGTH {
-        terms.push(SearchTerm::Dapp(query.to_string()));
         terms.push(SearchTerm::TokenInfo(query.to_string()));
     }
+
+    terms.push(SearchTerm::Dapp(query.to_string()));
 
     terms
 }

@@ -9,6 +9,7 @@ service MultichainAggregatorService {
   rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
   rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
   rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
+  rpc ListTransactions(ListTransactionsRequest) returns (ListTransactionsResponse) {}
 }
 
 enum TokenType {
@@ -129,8 +130,8 @@ message ListAddressesRequest {
 }
 
 message ListAddressesResponse {
-  repeated Address addresses = 1;
-  Pagination pagination = 2;
+  repeated Address items = 1;
+  Pagination next_page_params = 2;
 }
 
 message ListTokensRequest {
@@ -141,6 +142,18 @@ message ListTokensRequest {
 }
 
 message ListTokensResponse {
-  repeated Token tokens = 1;
-  Pagination pagination = 2;
+  repeated Token items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListTransactionsRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListTransactionsResponse {
+  repeated Hash items = 1;
+  Pagination next_page_params = 2;
 }
