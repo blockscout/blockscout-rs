@@ -3,10 +3,7 @@
 use std::ops::Range;
 
 use crate::{
-    charts::{
-        db_interaction::{read::QueryAllBlockTimestampRange, utils::datetime_range_filter},
-        types::timespans::DateValue,
-    },
+    charts::{db_interaction::read::QueryAllBlockTimestampRange, types::timespans::DateValue},
     data_source::{
         kinds::{
             data_manipulation::{
@@ -28,17 +25,13 @@ use crate::{
     missing_date::trim_out_of_range_sorted,
     range::{data_source_query_range_to_db_statement_range, UniversalRange},
     types::timespans::{Month, Week, Year},
+    utils::sql_with_range_filter_opt,
     ChartError, ChartProperties, Named,
 };
 
-use blockscout_db::entity::{blocks, user_operations};
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use migration::{Alias, Asterisk, Func, IntoColumnRef, Query, SelectStatement, SimpleExpr};
-use sea_orm::{
-    ColumnTrait, DatabaseBackend, EntityTrait, FromQueryResult, IntoIdentity, IntoSimpleExpr,
-    Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, StatementBuilder,
-};
+use sea_orm::{DbBackend, FromQueryResult, Statement};
 
 pub struct NewAccountAbstractionWalletsStatement;
 
@@ -54,49 +47,26 @@ impl StatementFromRange for NewAccountAbstractionWalletsStatement {
         // we don't want to count it within the range (as it's not a *new* wallet).
         let range = range.map(|r| (min_timestamp..r.end));
 
-        // same as `new_accounts` but in sea-query/sea-orm form
-        let date_intermediate_col = "date".into_identity();
-        let mut first_user_op = user_operations::Entity::find()
-            .select_only()
-            .join(
-                sea_orm::JoinType::InnerJoin,
-                user_operations::Entity::belongs_to(blocks::Entity)
-                    .from(user_operations::Column::BlockHash)
-                    .to(blocks::Column::Hash)
-                    .into(),
-            )
-            .distinct_on([user_operations::Column::Sender])
-            .expr_as(
-                blocks::Column::Timestamp
-                    .into_simple_expr()
-                    .cast_as(Alias::new("date")),
-                date_intermediate_col,
-            )
-            .filter(blocks::Column::Consensus.eq(true))
-            .filter(blocks::Column::Timestamp.ne(DateTime::UNIX_EPOCH))
-            .order_by(user_operations::Column::Sender, Order::Asc)
-            .order_by(blocks::Column::Timestamp, Order::Asc);
-        if let Some(range) = range {
-            first_user_op = datetime_range_filter(first_user_op, blocks::Column::Timestamp, &range);
-        }
-        let first_user_op = first_user_op.into_query();
-        let first_user_op_alias = Alias::new("first_user_op");
-        let date_intermediate_col = (first_user_op_alias.clone(), Alias::new("date"));
-
-        let mut query = Query::select();
-        query
-            .expr_as(
-                date_intermediate_col.clone().into_column_ref(),
-                Alias::new("date"),
-            )
-            .expr_as(
-                SimpleExpr::from(Func::count(Asterisk.into_column_ref()))
-                    .cast_as(Alias::new("text")),
-                Alias::new("value"),
-            )
-            .from_subquery(first_user_op, first_user_op_alias.clone())
-            .add_group_by([date_intermediate_col.into_column_ref().into()]);
-        <SelectStatement as StatementBuilder>::build(&query, &DatabaseBackend::Postgres)
+        sql_with_range_filter_opt!(
+            DbBackend::Postgres,
+            r#"
+                SELECT "first_user_op"."date" AS "date",
+                    COUNT(*)::TEXT AS "value"
+                FROM
+                    (SELECT DISTINCT ON ("sender") CAST("blocks"."timestamp" AS date) AS "date"
+                    FROM "user_operations"
+                    INNER JOIN "blocks" ON "user_operations"."block_hash" = "blocks"."hash"
+                    WHERE "blocks"."consensus" = TRUE
+                        AND "blocks"."timestamp" != to_timestamp(0) {filter}
+                    ORDER BY "user_operations"."sender" ASC,
+                            "blocks"."timestamp" ASC
+                ) AS "first_user_op"
+                GROUP BY "first_user_op"."date"
+            "#,
+            [],
+            "\"blocks\".\"timestamp\"",
+            range
+        )
     }
 }
 
@@ -187,7 +157,18 @@ pub type NewAccountAbstractionWalletsYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::{point_construction::dt, simple_test::simple_test_chart};
+
+    #[test]
+    fn print_stmt() {
+        println!(
+            "{}",
+            NewAccountAbstractionWalletsStatement::get_statement(
+                Some(dt("2023-01-01T00:00:00").and_utc()..dt("2024-01-01T12:00:00").and_utc()),
+                &BlockscoutMigrations::latest(),
+            )
+        )
+    }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
