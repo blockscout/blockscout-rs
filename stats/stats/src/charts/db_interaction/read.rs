@@ -500,10 +500,12 @@ where
             .one(db)
             .await
             .map_err(ChartError::StatsDB)?;
-        let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
 
         match recorded_min_blockscout_block {
-            Some(recorded_min_blockscout_block) => {
+            Some(SyncInfo {
+                min_blockscout_block: Some(recorded_min_blockscout_block),
+            }) if recorded_min_blockscout_block == min_blockscout_block => {
+                let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
                 let Some(last_updated_at) = metadata.last_updated_at else {
                     // data is present, but `last_updated_at` is not set
                     tracing::info!("running full update due to lack of last_updated_at");
@@ -512,6 +514,8 @@ where
                 let last_updated_timespan =
                     ChartProps::Resolution::from_date(last_updated_at.date_naive());
 
+                // todo: reconsider if it makes sense for counters; maybe use dynamic dispatch or
+                // generic parameter
                 let data = get_line_chart_data::<ChartProps::Resolution>(
                     db,
                     &ChartProps::name(),
@@ -539,25 +543,28 @@ where
                     return Err(ChartError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
                 };
 
-                if let Some(block) = recorded_min_blockscout_block.min_blockscout_block {
-                    if block == min_blockscout_block {
-                        tracing::info!(
-                            min_chart_block = block,
-                            last_accurate_point = ?last_accurate_point,
-                            "running partial update"
-                        );
-                        Some(last_accurate_point)
-                    } else {
-                        tracing::info!(
-                            min_chart_block = block,
-                            "running full update due to min blocks mismatch"
-                        );
-                        None
-                    }
-                } else {
-                    tracing::info!("running full update due to lack of saved min block");
-                    None
-                }
+                tracing::info!(
+                    min_chart_block = recorded_min_blockscout_block,
+                    last_accurate_point = ?last_accurate_point,
+                    "running partial update"
+                );
+                Some(last_accurate_point)
+            }
+            // != min_blockscout_block
+            Some(SyncInfo {
+                min_blockscout_block: Some(block),
+            }) => {
+                tracing::info!(
+                    min_chart_block = block,
+                    "running full update due to min blocks mismatch"
+                );
+                None
+            }
+            Some(SyncInfo {
+                min_blockscout_block: None,
+            }) => {
+                tracing::info!("running full update due to lack of saved min block");
+                None
             }
             None => {
                 tracing::info!("running full update due to lack of history data");
