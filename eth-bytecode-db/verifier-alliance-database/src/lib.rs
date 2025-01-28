@@ -62,6 +62,19 @@ pub async fn insert_verified_contract(
         .await
         .context("begin transaction")?;
 
+    // Check that the database does not already have better verification data for the deployment
+    if !internal::should_store_the_match(
+        &transaction,
+        verified_contract.contract_deployment_id,
+        &verified_contract.matches,
+    )
+    .await?
+    {
+        return Err(anyhow!(
+            "the candidate verified contract is not better than existing"
+        ));
+    }
+
     let sources = std::mem::take(&mut verified_contract.compiled_contract.sources);
     let source_hashes = internal::precalculate_source_hashes(&sources);
 

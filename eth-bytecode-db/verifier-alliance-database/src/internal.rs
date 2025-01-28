@@ -550,6 +550,84 @@ pub fn try_models_into_verified_contract(
     })
 }
 
+pub use compare_matches::should_store_the_match;
+mod compare_matches {
+    use super::*;
+
+    #[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
+    enum MatchStatus {
+        NoMatch,
+        WithoutMetadata,
+        WithMetadata,
+    }
+
+    impl From<&Match> for MatchStatus {
+        fn from(value: &Match) -> Self {
+            if value.metadata_match {
+                MatchStatus::WithMetadata
+            } else {
+                MatchStatus::WithoutMetadata
+            }
+        }
+    }
+
+    fn status_from_model_match(does_match: bool, does_metadata_match: Option<bool>) -> MatchStatus {
+        if !does_match {
+            return MatchStatus::NoMatch;
+        }
+        if let Some(true) = does_metadata_match {
+            return MatchStatus::WithMetadata;
+        }
+        MatchStatus::WithoutMetadata
+    }
+
+    pub async fn should_store_the_match<C: ConnectionTrait>(
+        database_connection: &C,
+        contract_deployment_id: Uuid,
+        potential_matches: &VerifiedContractMatches,
+    ) -> Result<bool, Error> {
+        let (potential_creation_match, potential_runtime_match) = match potential_matches {
+            VerifiedContractMatches::OnlyCreation { creation_match } => {
+                (creation_match.into(), MatchStatus::NoMatch)
+            }
+            VerifiedContractMatches::OnlyRuntime { runtime_match } => {
+                (MatchStatus::NoMatch, runtime_match.into())
+            }
+            VerifiedContractMatches::Complete {
+                creation_match,
+                runtime_match,
+            } => (creation_match.into(), runtime_match.into()),
+        };
+
+        // We want to store all perfect matches even if there are other ones in the database.
+        // That should be impossible, but in case that happens we are interested in storing them all
+        // in order to manually review them later.
+        if potential_creation_match == MatchStatus::WithMetadata
+            || potential_runtime_match == MatchStatus::WithMetadata
+        {
+            return Ok(true);
+        }
+
+        let is_model_worse = |model: &verified_contracts::Model| {
+            let model_creation_match =
+                status_from_model_match(model.creation_match, model.creation_metadata_match);
+            let model_runtime_match =
+                status_from_model_match(model.runtime_match, model.runtime_metadata_match);
+            model_creation_match < potential_creation_match
+                || model_runtime_match < potential_runtime_match
+        };
+        let existing_verified_contracts = retrieve_verified_contracts_by_deployment_id(
+            database_connection,
+            contract_deployment_id,
+        )
+        .await?;
+        let should_potential_match_be_stored =
+            existing_verified_contracts.iter().all(is_model_worse);
+
+        Ok(should_potential_match_be_stored)
+    }
+}
+
 fn extract_match_from_model(
     metadata_match: bool,
     transformations: Value,

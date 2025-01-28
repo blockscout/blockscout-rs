@@ -1,15 +1,16 @@
 use crate::from_json;
 use blockscout_display_bytes::decode_hex;
 use blockscout_service_launcher::test_database::database;
-use sea_orm::{prelude::Uuid, DatabaseConnection};
+use pretty_assertions::assert_eq;
+use sea_orm::DatabaseConnection;
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation, MatchValues,
     RuntimeCodeArtifacts,
 };
 use verifier_alliance_database::{
-    CompiledContract, CompiledContractCompiler, CompiledContractLanguage, InsertContractDeployment,
-    VerifiedContract, VerifiedContractMatches,
+    CompiledContract, CompiledContractCompiler, CompiledContractLanguage, ContractDeployment,
+    InsertContractDeployment, VerifiedContract, VerifiedContractMatches,
 };
 use verifier_alliance_migration::Migrator;
 
@@ -17,7 +18,9 @@ use verifier_alliance_migration::Migrator;
 async fn insert_verified_contract_with_complete_matches_work() {
     let db_guard = database!(Migrator);
 
-    let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
+    let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref())
+        .await
+        .id;
     let compiled_contract = complete_compiled_contract();
     let verified_contract = VerifiedContract {
         contract_deployment_id,
@@ -48,7 +51,9 @@ async fn insert_verified_contract_with_complete_matches_work() {
 async fn insert_verified_contract_with_runtime_only_matches_work() {
     let db_guard = database!(Migrator);
 
-    let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
+    let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref())
+        .await
+        .id;
     let compiled_contract = complete_compiled_contract();
     let verified_contract = VerifiedContract {
         contract_deployment_id,
@@ -74,7 +79,9 @@ async fn insert_verified_contract_with_runtime_only_matches_work() {
 async fn insert_verified_contract_with_creation_only_matches_work() {
     let db_guard = database!(Migrator);
 
-    let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
+    let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref())
+        .await
+        .id;
     let compiled_contract = complete_compiled_contract();
     let verified_contract = VerifiedContract {
         contract_deployment_id,
@@ -100,7 +107,9 @@ async fn insert_verified_contract_with_creation_only_matches_work() {
 async fn insert_verified_contract_with_filled_matches() {
     let db_guard = database!(Migrator);
 
-    let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref()).await;
+    let contract_deployment_id = insert_contract_deployment(db_guard.client().as_ref())
+        .await
+        .id;
     let compiled_contract = complete_compiled_contract();
 
     let (runtime_match_values, runtime_match_transformations) = {
@@ -174,6 +183,157 @@ async fn insert_verified_contract_with_filled_matches() {
     .expect("error while inserting");
 }
 
+#[tokio::test]
+async fn inserted_verified_contract_can_be_retrieved() {
+    let db_guard = database!(Migrator);
+    let database_connection = db_guard.client();
+    let database_connection = database_connection.as_ref();
+
+    let contract_deployment = insert_contract_deployment(database_connection).await;
+    let compiled_contract = complete_compiled_contract();
+    let verified_contract = VerifiedContract {
+        contract_deployment_id: contract_deployment.id,
+        compiled_contract,
+        matches: VerifiedContractMatches::Complete {
+            runtime_match: Match {
+                metadata_match: true,
+                transformations: vec![],
+                values: Default::default(),
+            },
+            creation_match: Match {
+                metadata_match: true,
+                transformations: vec![],
+                values: Default::default(),
+            },
+        },
+    };
+
+    verifier_alliance_database::insert_verified_contract(
+        database_connection,
+        verified_contract.clone(),
+    )
+    .await
+    .expect("error while inserting");
+
+    let retrieved_contracts = verifier_alliance_database::find_verified_contracts(
+        database_connection,
+        contract_deployment.chain_id,
+        contract_deployment.address,
+    )
+    .await
+    .expect("error while retrieving");
+    let retrieved_verified_contracts: Vec<_> = retrieved_contracts
+        .into_iter()
+        .map(|value| value.verified_contract)
+        .collect();
+    assert_eq!(
+        retrieved_verified_contracts,
+        vec![verified_contract],
+        "invalid retrieved values"
+    );
+}
+
+#[tokio::test]
+async fn not_override_partial_matches() {
+    let db_guard = database!(Migrator);
+    let database_connection = db_guard.client();
+    let database_connection = database_connection.as_ref();
+
+    let contract_deployment = insert_contract_deployment(database_connection).await;
+
+    let partially_verified_contract = VerifiedContract {
+        contract_deployment_id: contract_deployment.id,
+        compiled_contract: complete_compiled_contract(),
+        matches: VerifiedContractMatches::Complete {
+            runtime_match: Match {
+                metadata_match: false,
+                transformations: vec![],
+                values: Default::default(),
+            },
+            creation_match: Match {
+                metadata_match: false,
+                transformations: vec![],
+                values: Default::default(),
+            },
+        },
+    };
+    verifier_alliance_database::insert_verified_contract(
+        database_connection,
+        partially_verified_contract.clone(),
+    )
+    .await
+    .expect("error while inserting partially verified contract");
+
+    let mut another_partially_verified_contract = partially_verified_contract.clone();
+    another_partially_verified_contract
+        .compiled_contract
+        .creation_code
+        .extend_from_slice(&[0x10]);
+    another_partially_verified_contract
+        .compiled_contract
+        .runtime_code
+        .extend_from_slice(&[0x10]);
+    verifier_alliance_database::insert_verified_contract(
+        database_connection,
+        another_partially_verified_contract.clone(),
+    )
+    .await
+    .map_err(|err| {
+        assert!(
+            err.to_string().contains("is not better than existing"),
+            "unexpected error: {}",
+            err
+        )
+    })
+    .expect_err("error expected while inserting another partially verified contract");
+
+    let mut fully_verified_contract = partially_verified_contract.clone();
+    fully_verified_contract
+        .compiled_contract
+        .creation_code
+        .extend_from_slice(&[0xff]);
+    fully_verified_contract
+        .compiled_contract
+        .runtime_code
+        .extend_from_slice(&[0xff]);
+    fully_verified_contract.matches = VerifiedContractMatches::Complete {
+        creation_match: Match {
+            metadata_match: true,
+            transformations: vec![],
+            values: Default::default(),
+        },
+        runtime_match: Match {
+            metadata_match: true,
+            transformations: vec![],
+            values: Default::default(),
+        },
+    };
+    verifier_alliance_database::insert_verified_contract(
+        database_connection,
+        fully_verified_contract.clone(),
+    )
+    .await
+    .expect("error while inserting fully verified contract");
+
+    let mut retrieved_contracts = verifier_alliance_database::find_verified_contracts(
+        database_connection,
+        contract_deployment.chain_id,
+        contract_deployment.address,
+    )
+    .await
+    .expect("error while retrieving");
+    retrieved_contracts.sort_by_key(|value| value.created_at);
+    let retrieved_verified_contracts: Vec<_> = retrieved_contracts
+        .into_iter()
+        .map(|value| value.verified_contract)
+        .collect();
+
+    assert_eq!(
+        retrieved_verified_contracts,
+        vec![partially_verified_contract, fully_verified_contract]
+    );
+}
+
 fn complete_compiled_contract() -> CompiledContract {
     CompiledContract {
         compiler: CompiledContractCompiler::Solc,
@@ -209,7 +369,9 @@ fn complete_compiled_contract() -> CompiledContract {
     }
 }
 
-async fn insert_contract_deployment(database_connection: &DatabaseConnection) -> Uuid {
+async fn insert_contract_deployment(
+    database_connection: &DatabaseConnection,
+) -> ContractDeployment {
     let contract_deployment = InsertContractDeployment::Regular {
         chain_id: 10,
         address: decode_hex("0x8FbB39A5a79aeCE03c8f13ccEE0b96C128ec1a67").unwrap(),
@@ -227,5 +389,4 @@ async fn insert_contract_deployment(database_connection: &DatabaseConnection) ->
     verifier_alliance_database::insert_contract_deployment(database_connection, contract_deployment)
         .await
         .expect("error while inserting contract deployment")
-        .id
 }
