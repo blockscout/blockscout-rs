@@ -104,7 +104,7 @@ impl RemoteQueryBehaviour for NewAccountAbstractionWalletsQueryBehaviour {
 /// though the implementation allows batching. The batching was done
 /// to simplify interface of the data source.
 ///
-/// Thus, use max batch size in the dependant data sources.
+/// Thus, use max batch size in the `DirectVecLocalDbChartSource` for it.
 pub type NewAccountAbstractionWalletsRemote =
     RemoteDatabaseSource<NewAccountAbstractionWalletsQueryBehaviour>;
 
