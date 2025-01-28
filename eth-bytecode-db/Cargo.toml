@@ -75,4 +75,4 @@ tonic-build = { version = "0.8" }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
 url = { version = "2" }
-verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "5481500" }
+verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "8d9cf0e" }
