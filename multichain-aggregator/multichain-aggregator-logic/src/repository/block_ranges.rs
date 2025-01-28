@@ -1,5 +1,5 @@
 use super::paginate_cursor;
-use crate::{types::block_ranges::BlockRange, ChainId};
+use crate::types::{block_ranges::BlockRange, ChainId};
 use entity::block_ranges::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,

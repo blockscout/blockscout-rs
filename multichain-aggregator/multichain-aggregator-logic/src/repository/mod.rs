@@ -17,7 +17,6 @@ where
     F: FnOnce(&E) -> R,
 {
     let results = c.first(page_size + 1).all(db).await?;
-    dbg!(&results);
     if results.len() as u64 > page_size {
         Ok((
             results[..page_size as usize].to_vec(),

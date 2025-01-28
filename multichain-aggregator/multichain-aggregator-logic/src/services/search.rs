@@ -135,6 +135,7 @@ impl SearchTerm {
                     Some(address),
                     None,
                     None,
+                    None,
                     QUICK_SEARCH_NUM_ITEMS,
                     None,
                 )

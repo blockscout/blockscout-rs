@@ -1,4 +1,4 @@
-use crate::ChainId;
+use crate::types::ChainId;
 use api_client_framework::{
     serialize_query, Endpoint, Error, HttpApiClient as Client, HttpApiClientConfig,
 };

@@ -4,7 +4,10 @@ use crate::{
     types::{addresses::Address, ChainId},
 };
 use alloy_primitives::Address as AddressAlloy;
-use entity::addresses::{ActiveModel, Column, Entity, Model};
+use entity::{
+    addresses::{ActiveModel, Column, Entity, Model},
+    sea_orm_active_enums as db_enum,
+};
 use regex::Regex;
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
@@ -52,6 +55,7 @@ pub async fn list_addresses_paginated<C>(
     address: Option<AddressAlloy>,
     query: Option<String>,
     chain_id: Option<ChainId>,
+    token_types: Option<Vec<db_enum::TokenType>>,
     page_size: u64,
     page_token: Option<(AddressAlloy, ChainId)>,
 ) -> Result<(Vec<Model>, Option<(AddressAlloy, ChainId)>), DbErr>
@@ -71,6 +75,9 @@ where
                 "to_tsvector('english', contract_name) @@ to_tsquery($1)",
                 ts_query,
             ))
+        })
+        .apply_if(token_types, |q, token_types| {
+            q.filter(Column::TokenType.is_in(token_types))
         })
         .cursor_by((Column::Hash, Column::ChainId));
 

@@ -1,5 +1,5 @@
 use super::paginate_cursor;
-use crate::{types::hashes::Hash, ChainId};
+use crate::types::{hashes::Hash, ChainId};
 use alloy_primitives::BlockHash;
 use entity::{
     hashes::{ActiveModel, Column, Entity, Model},
