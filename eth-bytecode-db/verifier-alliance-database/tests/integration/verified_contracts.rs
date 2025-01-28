@@ -5,7 +5,7 @@ use sea_orm::{prelude::Uuid, DatabaseConnection};
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, MatchTransformation, MatchValues,
-    RuntimeCodeArtifacts, SourceId,
+    RuntimeCodeArtifacts,
 };
 use verifier_alliance_database::{
     CompiledContract, CompiledContractCompiler, CompiledContractLanguage, InsertContractDeployment,
@@ -191,7 +191,7 @@ fn complete_compiled_contract() -> CompiledContract {
             devdoc: Some(from_json!({"devdoc": "value"})),
             userdoc: Some(from_json!({"userdoc": "value"})),
             storage_layout: Some(from_json!({"storage": "value"})),
-            sources: Some(BTreeMap::from([("src/Counter.sol".into(), SourceId {id: 0})]))
+            sources: Some(from_json!({"src/Counter.sol": { "id": 0 }})),
         },
         creation_code: vec![0x1, 0x2],
         creation_code_artifacts: CreationCodeArtifacts {

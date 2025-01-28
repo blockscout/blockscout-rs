@@ -2,7 +2,7 @@ use crate::from_json;
 use blockscout_service_launcher::test_database::database;
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
-    CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts, SourceId,
+    CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts,
 };
 use verifier_alliance_database::{
     internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
@@ -30,7 +30,7 @@ async fn insert_compiled_contract_works() {
             devdoc: Some(from_json!({"devdoc": "value"})),
             userdoc: Some(from_json!({"userdoc": "value"})),
             storage_layout: Some(from_json!({"storage": "value"})),
-            sources: Some(BTreeMap::from([("src/Counter.sol".into(), SourceId {id: 0})])),
+            sources: Some(from_json!({"src/Counter.sol": { "id": 0 }})),
         },
         creation_code: vec![0x1, 0x2],
         creation_code_artifacts: CreationCodeArtifacts {
