@@ -1,6 +1,7 @@
 use std::{clone::Clone, collections::BTreeMap, fmt::Debug, str::FromStr, sync::Arc};
 
 use crate::{
+    auth::AuthorizationProvider,
     config::{
         layout::placed_items_according_to_layout,
         types::{self, EnabledChartSettings},
@@ -38,6 +39,7 @@ pub struct ReadService {
     db: Arc<DatabaseConnection>,
     blockscout: Arc<DatabaseConnection>,
     charts: Arc<RuntimeSetup>,
+    authorization: Arc<AuthorizationProvider>,
     limits: ReadLimits,
 }
 
@@ -46,12 +48,14 @@ impl ReadService {
         db: Arc<DatabaseConnection>,
         blockscout: Arc<DatabaseConnection>,
         charts: Arc<RuntimeSetup>,
+        authorization: Arc<AuthorizationProvider>,
         limits: ReadLimits,
     ) -> Result<Self, DbErr> {
         Ok(Self {
             db,
             blockscout,
             charts,
+            authorization,
             limits,
         })
     }

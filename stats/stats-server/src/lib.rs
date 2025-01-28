@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod blockscout_waiter;
 mod config;
 mod health;
