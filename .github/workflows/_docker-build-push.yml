@@ -48,14 +48,28 @@ jobs:
         id: regex
         with:
           text: ${{ github.ref }}
-          regex: '^(refs\/tags\/${{ inputs.service-name }}\/v([^\/]+))|(refs\/heads\/(main))$'
+          # https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
+          regex: '^(refs\/tags\/${{ inputs.service-name }}\/v((0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?))|(refs\/heads\/(main))$'
 
       - name: Extract tag name
         id: tags_extractor
         run: |
-          t=${{ steps.regex.outputs.group2 }}
-          m=${{ steps.regex.outputs.group4 }}
-          (if ! [[ "$t" == "" ]]; then echo tags=${{ env.IMAGE_NAME }}:$t, ${{ env.IMAGE_NAME }}:latest; elif ! [[ "$m" == "" ]]; then echo tags=${{ env.IMAGE_NAME }}:$m; else echo tags=; fi) >> $GITHUB_OUTPUT
+          version=${{ steps.regex.outputs.group2 }}
+          prerelease=${{ steps.regex.outputs.group6 }}
+          main=${{ steps.regex.outputs.group9 }}
+
+          if [[ -n "$version" ]]; then
+            if [[ -n "$prerelease" ]]; then
+              echo "tags=${{ env.IMAGE_NAME }}:$version" >> $GITHUB_OUTPUT
+            else
+              echo "tags=${{ env.IMAGE_NAME }}:$version, ${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+            fi
+          elif [[ -n "$main" ]]; then
+            echo "tags=${{ env.IMAGE_NAME }}:$main" >> $GITHUB_OUTPUT
+          else
+            echo "tags=" >> $GITHUB_OUTPUT
+          fi
+
 
       - name: Extract metadata for Docker
         id: meta
