@@ -60,12 +60,14 @@ jobs:
 
       - name: Get the current tag, branch, or commit hash
         id: git_info
+        # regex from:
+        # https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ ! -z "${{ inputs.version }}" ]; then
             echo "version=${{ inputs.version }}" >> $GITHUB_ENV
           else
-            if [[ "${GITHUB_REF}" =~ refs/tags/${{ inputs.service_name }}/v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-              version=$(echo "${GITHUB_REF}" | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+')
+            if [[ "${GITHUB_REF}" =~ refs/tags/${{ inputs.service_name }}/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$ ]]; then
+              version=$(echo "${GITHUB_REF}" | sed -E 's|.*/v||')
               echo "version=${version}" >> $GITHUB_ENV
 
             # If it's the main branch
