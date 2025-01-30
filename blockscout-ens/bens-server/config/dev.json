@@ -23,7 +23,7 @@
           "url": "https://shibariumscan.io"
         },
         "use_protocols": [
-          "d3_connect_shib"
+          "d3-connect-shib"
         ],
         "rpc_url": "https://www.shibrpc.com"
       },
@@ -32,7 +32,7 @@
           "url": "https://puppyscan.shib.io/"
         },
         "use_protocols": [
-          "d3_connect_shib_testnet"
+          "d3-connect-shib-testnet"
         ],
         "rpc_url": "https://puppynet.shibrpc.com"
       }
@@ -78,7 +78,7 @@
           "docs_url": "https://docs.ens.domains/"
         }
       },
-      "d3_connect_shib": {
+      "d3-connect-shib": {
         "tld_list": ["shib"],
         "network_id": 109,
         "subgraph_name": "d3-connect-shib-subgraph",
@@ -96,10 +96,10 @@
           "docs_url": "https://docs.d3.app/"
         }
       },
-      "d3_connect_shib_testnet": {
+      "d3-connect-shib-testnet": {
         "tld_list": ["shib"],
         "network_id": 157,
-        "subgraph_name": "d3-connect-shib-subgraph",
+        "subgraph_name": "d3-connect-shib-testnet-subgraph",
         "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "d3_connect",
