@@ -1,6 +1,9 @@
 [package]
 name = "api-client-framework"
-description = "A framework to be used when writing custom http api clients."
+description = "A framework helping to write custom http api clients."
+license = "MIT"
+repository = "https://github.com/blockscout/blockscout-rs"
+homepage = "https://github.com/blockscout/blockscout-rs/tree/main/libs/api-client-framework"
 version = "0.1.0"
 edition = "2021"
 
