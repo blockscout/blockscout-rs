@@ -167,7 +167,7 @@
           "url": "https://explorer.inkonchain.com/"
         },
         "use_protocols": [
-          "ens"
+          "ens", "zns-ink"
         ]
       }
     },
@@ -385,6 +385,22 @@
         ],
         "network_id": 81457,
         "subgraph_name": "zns-blast-subgraph",
+        "address_resolve_technique": "all_domains",
+        "specific": {
+          "type": "ens_like"
+        },
+        "meta": {
+          "short_name": "ZNS",
+          "title": "ZNS Connect Domains",
+          "description": "ZNS Blast is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "docs_url": "https://docs.znsconnect.io/"
+        }
+      },
+      "zns-ink": {
+        "tld_list": ["ink"],
+        "network_id": 57073,
+        "subgraph_name": "zns-ink-subgraph",
         "address_resolve_technique": "all_domains",
         "specific": {
           "type": "ens_like"
