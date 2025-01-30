@@ -3,6 +3,11 @@
 mod async_client;
 mod endpoint;
 
+/// Blockscout services related structs.
+/// Contains config and client definitions to be used by blockscout-rs services.
+#[cfg(feature = "blockscout")]
+pub mod blockscout;
+
 pub use async_client::{HttpApiClient, HttpApiClientConfig};
 pub use endpoint::{serialize_query, Endpoint};
 
