@@ -229,8 +229,8 @@ mod tests {
         assert_eq!(
             parse_search_terms("0x00"),
             vec![
+                SearchTerm::TokenInfo("0x00".to_string()),
                 SearchTerm::Dapp("0x00".to_string()),
-                SearchTerm::TokenInfo("0x00".to_string())
             ]
         );
 
@@ -238,8 +238,8 @@ mod tests {
             parse_search_terms("1234"),
             vec![
                 SearchTerm::BlockNumber(1234),
+                SearchTerm::TokenInfo("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
-                SearchTerm::TokenInfo("1234".to_string())
             ]
         );
     }
