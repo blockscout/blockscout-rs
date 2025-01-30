@@ -23,6 +23,9 @@ http:
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListNfts
       get: /api/v1/nfts
 
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListChains
+      get: /api/v1/chains
+
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check

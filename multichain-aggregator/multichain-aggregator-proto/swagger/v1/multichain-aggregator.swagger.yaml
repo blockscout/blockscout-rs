@@ -42,6 +42,20 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
+  /api/v1/chains:
+    get:
+      operationId: MultichainAggregatorService_ListChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - MultichainAggregatorService
   /api/v1/import:batch:
     post:
       operationId: MultichainAggregatorService_BatchImport
@@ -244,6 +258,17 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  ListChainsResponseChain:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      explorer_url:
+        type: string
+      icon_url:
+        type: string
   QuickSearchResponseChainBlockNumber:
     type: object
     properties:
@@ -350,6 +375,14 @@ definitions:
           $ref: '#/definitions/v1Address'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
+  v1ListChainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ListChainsResponseChain'
   v1ListNftsResponse:
     type: object
     properties:

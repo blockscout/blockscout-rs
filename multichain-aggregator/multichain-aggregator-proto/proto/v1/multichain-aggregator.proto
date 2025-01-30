@@ -10,8 +10,9 @@ service MultichainAggregatorService {
   rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
   rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
   rpc ListTransactions(ListTransactionsRequest)
-      returns (ListTransactionsResponse) {}
+  returns (ListTransactionsResponse) {}
   rpc ListNfts(ListNftsRequest) returns (ListNftsResponse) {}
+  rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
 }
 
 enum TokenType {
@@ -166,4 +167,17 @@ message ListNftsRequest {
 message ListNftsResponse {
   repeated Address items = 1;
   Pagination next_page_params = 2;
+}
+
+message ListChainsRequest {}
+
+message ListChainsResponse {
+  message Chain {
+    string id = 1;
+    string name = 2;
+    string explorer_url = 3;
+    string icon_url = 4;
+  }
+
+  repeated Chain items = 1;
 }

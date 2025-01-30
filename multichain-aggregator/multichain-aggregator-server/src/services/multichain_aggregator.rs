@@ -15,8 +15,8 @@ use multichain_aggregator_logic::{
     types,
 };
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
-    ListNftsRequest, ListNftsResponse, ListTokensRequest, ListTokensResponse,
-    ListTransactionsRequest, ListTransactionsResponse,
+    ListChainsRequest, ListChainsResponse, ListNftsRequest, ListNftsResponse, ListTokensRequest,
+    ListTokensResponse, ListTransactionsRequest, ListTransactionsResponse,
 };
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
@@ -82,6 +82,19 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(BatchImportResponse {
             status: "ok".to_string(),
+        }))
+    }
+
+    async fn list_chains(
+        &self,
+        _request: Request<ListChainsRequest>,
+    ) -> Result<Response<ListChainsResponse>, Status> {
+        Ok(Response::new(ListChainsResponse {
+            items: self
+                .chains
+                .iter()
+                .filter_map(|c| c.clone().try_into().ok())
+                .collect(),
         }))
     }
 
