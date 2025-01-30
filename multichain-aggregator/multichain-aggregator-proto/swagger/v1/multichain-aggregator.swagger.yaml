@@ -253,41 +253,6 @@ definitions:
       block_number:
         type: string
         format: uint64
-  QuickSearchResponseChainSearchResult:
-    type: object
-    properties:
-      explorer_url:
-        type: string
-      addresses:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Address'
-      blocks:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      transactions:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      block_numbers:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
-      dapps:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1MarketplaceDapp'
-      tokens:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Token'
   protobufAny:
     type: object
     properties:
@@ -439,10 +404,41 @@ definitions:
   v1QuickSearchResponse:
     type: object
     properties:
-      items:
-        type: object
-        additionalProperties:
-          $ref: '#/definitions/QuickSearchResponseChainSearchResult'
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      block_numbers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
+      dapps:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+      nfts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
   v1Token:
     type: object
     properties:

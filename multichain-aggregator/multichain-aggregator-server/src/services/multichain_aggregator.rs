@@ -91,15 +91,13 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<ListAddressesResponse>, Status> {
         let inner = request.into_inner();
 
-        let page_token: Option<(alloy_primitives::Address, types::ChainId)> =
-            inner.page_token.map(parse_query_2).transpose()?;
-
         let (address, query) = match parse_query::<alloy_primitives::Address>(inner.q.clone()) {
             Ok(address) => (Some(address), None),
             Err(_) => (None, Some(inner.q)),
         };
-        let page_size = self.normalize_page_size(inner.page_size);
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query_2).transpose()?;
 
         let (addresses, next_page_token) = repository::addresses::list_addresses_paginated(
             &self.db,
@@ -135,15 +133,13 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<ListNftsResponse>, Status> {
         let inner = request.into_inner();
 
-        let page_token: Option<(alloy_primitives::Address, types::ChainId)> =
-            inner.page_token.map(parse_query_2).transpose()?;
-
         let (address, query) = match parse_query::<alloy_primitives::Address>(inner.q.clone()) {
             Ok(address) => (Some(address), None),
             Err(_) => (None, Some(inner.q)),
         };
-        let page_size = self.normalize_page_size(inner.page_size);
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query_2).transpose()?;
 
         let (addresses, next_page_token) = repository::addresses::list_addresses_paginated(
             &self.db,
@@ -266,7 +262,6 @@ impl MultichainAggregatorService for MultichainAggregator {
             &self.dapp_client,
             &self.token_info_client,
             inner.q,
-            &self.chains,
         )
         .await
         .inspect_err(|err| {

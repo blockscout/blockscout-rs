@@ -6,39 +6,17 @@ use crate::{
     error::ServiceError,
     repository::{addresses, block_ranges, hashes},
     types::{
-        addresses::Address,
-        block_ranges::ChainBlockNumber,
-        chains::Chain,
-        dapp::MarketplaceDapp,
-        hashes::Hash,
-        search_results::{ChainSearchResult, SearchResults},
-        token_info::Token,
-        ChainId,
+        addresses::Address, block_ranges::ChainBlockNumber, dapp::MarketplaceDapp, hashes::Hash,
+        search_results::QuickSearchResult, token_info::Token,
     },
 };
 use api_client_framework::HttpApiClient;
 use entity::sea_orm_active_enums as db_enum;
 use sea_orm::DatabaseConnection;
-use std::collections::BTreeMap;
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
-const QUICK_SEARCH_NUM_ITEMS: u64 = 10;
-
-macro_rules! populate_search_results {
-    ($target:expr, $explorers:expr, $from:expr, $field:ident) => {
-        for e in $from {
-            if let Some(explorer_url) = $explorers.get(&e.chain_id).cloned() {
-                let entry = $target
-                    .items
-                    .entry(e.chain_id)
-                    .or_insert_with(ChainSearchResult::default);
-                entry.$field.push(e);
-                entry.explorer_url = explorer_url;
-            }
-        }
-    };
-}
+const QUICK_SEARCH_NUM_ITEMS: u64 = 100;
 
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
@@ -46,21 +24,14 @@ pub async fn quick_search(
     dapp_client: &HttpApiClient,
     token_info_client: &HttpApiClient,
     query: String,
-    chains: &[Chain],
-) -> Result<SearchResults, ServiceError> {
+) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
-
-    let explorers = &chains
-        .iter()
-        .filter_map(|c| c.explorer_url.as_ref().map(|url| (c.id, url.clone())))
-        .collect::<BTreeMap<ChainId, String>>();
 
     let terms = parse_search_terms(raw_query);
     let context = SearchContext {
         db,
         dapp_client,
         token_info_client,
-        explorers,
     };
 
     // Each search term produces its own `SearchResults` struct.
@@ -69,7 +40,7 @@ pub async fn quick_search(
     let jobs = terms.into_iter().map(|t| t.search(&context));
 
     let results = futures::future::join_all(jobs).await.into_iter().fold(
-        SearchResults::default(),
+        QuickSearchResult::default(),
         |mut acc, r| {
             if let Ok(r) = r {
                 acc.merge(r);
@@ -94,7 +65,6 @@ struct SearchContext<'a> {
     db: &'a DatabaseConnection,
     dapp_client: &'a HttpApiClient,
     token_info_client: &'a HttpApiClient,
-    explorers: &'a BTreeMap<ChainId, String>,
 }
 
 impl SearchTerm {
@@ -102,11 +72,10 @@ impl SearchTerm {
     async fn search(
         self,
         search_context: &SearchContext<'_>,
-    ) -> Result<SearchResults, ServiceError> {
-        let mut results = SearchResults::default();
+    ) -> Result<QuickSearchResult, ServiceError> {
+        let mut results = QuickSearchResult::default();
 
         let db = search_context.db;
-        let explorers = search_context.explorers;
 
         match self {
             SearchTerm::Hash(hash) => {
@@ -126,8 +95,8 @@ impl SearchTerm {
                     .into_iter()
                     .partition(|h| h.hash_type == db_enum::HashType::Block);
 
-                populate_search_results!(results, explorers, blocks, blocks);
-                populate_search_results!(results, explorers, transactions, transactions);
+                results.blocks.extend(blocks);
+                results.transactions.extend(transactions);
             }
             SearchTerm::AddressHash(address) => {
                 let (addresses, _) = addresses::list_addresses_paginated(
@@ -144,8 +113,19 @@ impl SearchTerm {
                     .into_iter()
                     .map(Address::try_from)
                     .collect::<Result<Vec<_>, _>>()?;
+                let nfts = addresses
+                    .iter()
+                    .filter(|a| {
+                        matches!(
+                            a.token_type,
+                            Some(db_enum::TokenType::Erc721) | Some(db_enum::TokenType::Erc1155)
+                        )
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
 
-                populate_search_results!(results, explorers, addresses, addresses)
+                results.addresses.extend(addresses);
+                results.nfts.extend(nfts);
             }
             SearchTerm::BlockNumber(block_number) => {
                 let (block_ranges, _) = block_ranges::list_matching_block_ranges_paginated(
@@ -163,7 +143,7 @@ impl SearchTerm {
                     })
                     .collect::<Vec<_>>();
 
-                populate_search_results!(results, explorers, block_numbers, block_numbers);
+                results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
                 let dapps: Vec<MarketplaceDapp> = search_context
@@ -176,7 +156,7 @@ impl SearchTerm {
                     .into_iter()
                     .filter_map(|d| d.try_into().ok())
                     .collect();
-                populate_search_results!(results, explorers, dapps, dapps);
+                results.dapps.extend(dapps);
             }
             SearchTerm::TokenInfo(query) => {
                 let tokens: Vec<Token> = search_context
@@ -195,7 +175,7 @@ impl SearchTerm {
                     .into_iter()
                     .filter_map(|t| t.try_into().ok())
                     .collect();
-                populate_search_results!(results, explorers, tokens, tokens);
+                results.tokens.extend(tokens);
             }
         }
 
