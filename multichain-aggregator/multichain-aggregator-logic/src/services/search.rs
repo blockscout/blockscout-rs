@@ -1,6 +1,6 @@
 use crate::{
     clients::{
-        dapp::{SearchDapps, SearchDappsParams},
+        dapp::search_dapps,
         token_info::{SearchTokenInfos, SearchTokenInfosParams},
     },
     error::ServiceError,
@@ -148,8 +148,8 @@ impl SearchTerm {
             SearchTerm::Dapp(query) => {
                 let dapps: Vec<MarketplaceDapp> = search_context
                     .dapp_client
-                    .request(&SearchDapps {
-                        params: SearchDappsParams { query },
+                    .request(&search_dapps::SearchDapps {
+                        params: search_dapps::SearchDappsParams { query },
                     })
                     .await
                     .map_err(|err| ServiceError::Internal(err.into()))?

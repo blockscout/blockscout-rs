@@ -76,6 +76,34 @@ paths:
             $ref: '#/definitions/v1BatchImportRequest'
       tags:
         - MultichainAggregatorService
+  /api/v1/marketplace/categories:
+    get:
+      operationId: MultichainAggregatorService_ListMarketplaceCategories
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListMarketplaceCategoriesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - MultichainAggregatorService
+  /api/v1/marketplace/chains:
+    get:
+      operationId: MultichainAggregatorService_ListMarketplaceChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListMarketplaceChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - MultichainAggregatorService
   /api/v1/nfts:
     get:
       operationId: MultichainAggregatorService_ListNfts
@@ -258,17 +286,6 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
-  ListChainsResponseChain:
-    type: object
-    properties:
-      id:
-        type: string
-      name:
-        type: string
-      explorer_url:
-        type: string
-      icon_url:
-        type: string
   QuickSearchResponseChainBlockNumber:
     type: object
     properties:
@@ -345,6 +362,17 @@ definitions:
     properties:
       status:
         type: string
+  v1Chain:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      explorer_url:
+        type: string
+      icon_url:
+        type: string
   v1Hash:
     type: object
     properties:
@@ -382,7 +410,22 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/ListChainsResponseChain'
+          $ref: '#/definitions/v1Chain'
+  v1ListMarketplaceCategoriesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: string
+  v1ListMarketplaceChainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Chain'
   v1ListNftsResponse:
     type: object
     properties:

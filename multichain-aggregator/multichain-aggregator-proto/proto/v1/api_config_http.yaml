@@ -3,7 +3,6 @@ config_version: 3
 
 http:
   rules:
-    
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.BatchImport
       post: /api/v1/import:batch
       body: "*"
@@ -26,8 +25,13 @@ http:
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListChains
       get: /api/v1/chains
 
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListMarketplaceChains
+      get: /api/v1/marketplace/chains
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListMarketplaceCategories
+      get: /api/v1/marketplace/categories
+
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check
       get: /health
-

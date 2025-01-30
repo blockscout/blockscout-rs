@@ -8,15 +8,20 @@ use crate::{
 };
 use api_client_framework::HttpApiClient;
 use multichain_aggregator_logic::{
-    clients::token_info::{SearchTokenInfos, SearchTokenInfosParams},
+    clients::{
+        dapp,
+        token_info::{SearchTokenInfos, SearchTokenInfosParams},
+    },
     error::ServiceError,
     repository,
     services::{api_key_manager::ApiKeyManager, import, search},
     types,
 };
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
-    ListChainsRequest, ListChainsResponse, ListNftsRequest, ListNftsResponse, ListTokensRequest,
-    ListTokensResponse, ListTransactionsRequest, ListTransactionsResponse,
+    ListChainsRequest, ListChainsResponse, ListMarketplaceCategoriesRequest,
+    ListMarketplaceCategoriesResponse, ListMarketplaceChainsRequest, ListMarketplaceChainsResponse,
+    ListNftsRequest, ListNftsResponse, ListTokensRequest, ListTokensResponse,
+    ListTransactionsRequest, ListTransactionsResponse,
 };
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
@@ -282,6 +287,47 @@ impl MultichainAggregatorService for MultichainAggregator {
         })?;
 
         Ok(Response::new(results.into()))
+    }
+
+    async fn list_marketplace_chains(
+        &self,
+        _request: Request<ListMarketplaceChainsRequest>,
+    ) -> Result<Response<ListMarketplaceChainsResponse>, Status> {
+        let chain_ids = self
+            .dapp_client
+            .request(&dapp::list_chains::ListChains {})
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "failed to list marketplace chains");
+                Status::internal("failed to list marketplace chains")
+            })?;
+        let items = chain_ids
+            .into_iter()
+            .filter_map(|c| {
+                let chain_id = types::ChainId::from_str(&c).ok()?;
+                self.chains
+                    .iter()
+                    .find(|cc| cc.id == chain_id)
+                    .and_then(|c| c.clone().try_into().ok())
+            })
+            .collect::<Vec<_>>();
+
+        Ok(Response::new(ListMarketplaceChainsResponse { items }))
+    }
+
+    async fn list_marketplace_categories(
+        &self,
+        _request: Request<ListMarketplaceCategoriesRequest>,
+    ) -> Result<Response<ListMarketplaceCategoriesResponse>, Status> {
+        let items = self
+            .dapp_client
+            .request(&dapp::list_categories::ListCategories {})
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "failed to list marketplace categories");
+                Status::internal("failed to list marketplace categories")
+            })?;
+        Ok(Response::new(ListMarketplaceCategoriesResponse { items }))
     }
 }
 

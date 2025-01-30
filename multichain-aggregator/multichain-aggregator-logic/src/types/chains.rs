@@ -46,7 +46,7 @@ impl From<Model> for Chain {
     }
 }
 
-impl TryFrom<Chain> for proto::list_chains_response::Chain {
+impl TryFrom<Chain> for proto::Chain {
     type Error = ParseError;
 
     fn try_from(v: Chain) -> Result<Self, Self::Error> {

@@ -13,6 +13,10 @@ service MultichainAggregatorService {
   returns (ListTransactionsResponse) {}
   rpc ListNfts(ListNftsRequest) returns (ListNftsResponse) {}
   rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
+  rpc ListMarketplaceChains(ListMarketplaceChainsRequest)
+      returns (ListMarketplaceChainsResponse) {}
+  rpc ListMarketplaceCategories(ListMarketplaceCategoriesRequest)
+      returns (ListMarketplaceCategoriesResponse) {}
 }
 
 enum TokenType {
@@ -169,15 +173,27 @@ message ListNftsResponse {
   Pagination next_page_params = 2;
 }
 
+message Chain {
+  string id = 1;
+  string name = 2;
+  string explorer_url = 3;
+  string icon_url = 4;
+}
+
 message ListChainsRequest {}
 
 message ListChainsResponse {
-  message Chain {
-    string id = 1;
-    string name = 2;
-    string explorer_url = 3;
-    string icon_url = 4;
-  }
-
   repeated Chain items = 1;
+}
+
+message ListMarketplaceChainsRequest {}
+
+message ListMarketplaceChainsResponse {
+  repeated Chain items = 1;
+}
+
+message ListMarketplaceCategoriesRequest {}
+
+message ListMarketplaceCategoriesResponse {
+  repeated string items = 1;
 }
