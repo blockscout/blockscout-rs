@@ -29,8 +29,8 @@ pub struct TokenTransfer {
     pub token: models::TokenInfo,
     #[serde(rename = "total")]
     pub total: models::TokenTransferTotal,
-    #[serde(rename = "tx_hash")]
-    pub tx_hash: String,
+    #[serde(rename = "transaction_hash")]
+    pub transaction_hash: String,
     #[serde(rename = "type")]
     pub r#type: String,
 }
@@ -45,7 +45,7 @@ impl TokenTransfer {
         to: models::AddressParam,
         token: models::TokenInfo,
         total: models::TokenTransferTotal,
-        tx_hash: String,
+        transaction_hash: String,
         r#type: String,
     ) -> TokenTransfer {
         TokenTransfer {
@@ -57,7 +57,7 @@ impl TokenTransfer {
             to,
             token,
             total,
-            tx_hash,
+            transaction_hash,
             r#type,
         }
     }

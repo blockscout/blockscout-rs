@@ -13,18 +13,18 @@ use crate::{apis::ResponseContent, models};
 use reqwest;
 use serde::{Deserialize, Serialize};
 
-/// struct for typed errors of method [`health`]
+/// struct for typed errors of method [`get_token_transfers`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum HealthError {
-    DefaultResponse(models::RpcStatus),
+pub enum GetTokenTransfersError {
+    Status400(),
     UnknownValue(serde_json::Value),
 }
 
-pub async fn health(
+pub async fn get_token_transfers(
     configuration: &configuration::Configuration,
-) -> Result<models::V1HealthCheckResponse, Error<HealthError>> {
-    let uri_str = format!("{}/api/v1/health", configuration.base_path);
+) -> Result<models::GetTokenTransfers200Response, Error<GetTokenTransfersError>> {
+    let uri_str = format!("{}/api/v2/token-transfers", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
     if let Some(ref user_agent) = configuration.user_agent {
@@ -41,7 +41,7 @@ pub async fn health(
         serde_json::from_str(&content).map_err(Error::from)
     } else {
         let content = resp.text().await?;
-        let entity: Option<HealthError> = serde_json::from_str(&content).ok();
+        let entity: Option<GetTokenTransfersError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,

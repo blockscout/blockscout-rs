@@ -108,6 +108,7 @@ pub mod main_page_api;
 pub mod search_api;
 pub mod smart_contracts_api;
 pub mod stats_api;
+pub mod token_transfers_api;
 pub mod tokens_api;
 pub mod transactions_api;
 pub mod withdrawals_api;

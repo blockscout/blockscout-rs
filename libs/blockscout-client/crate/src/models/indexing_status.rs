@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-#[derive(derive_new::new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct IndexingStatus {
     #[serde(rename = "finished_indexing")]
     pub finished_indexing: bool,
@@ -21,4 +21,18 @@ pub struct IndexingStatus {
     pub indexed_blocks_ratio: Option<String>, // changed
     #[serde(rename = "indexed_internal_transactions_ratio")]
     pub indexed_internal_transactions_ratio: Option<String>, // changed
+}
+
+impl IndexingStatus {
+    pub fn new(
+        finished_indexing: bool,
+        finished_indexing_blocks: bool,
+    ) -> IndexingStatus {
+        IndexingStatus {
+            finished_indexing,
+            finished_indexing_blocks,
+            indexed_blocks_ratio: None,
+            indexed_internal_transactions_ratio: None,
+        }
+    }
 }

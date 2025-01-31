@@ -18,8 +18,11 @@ pub struct Address {
         skip_serializing_if = "Option::is_none"
     )]
     pub creator_address_hash: Option<String>,
-    #[serde(rename = "creation_tx_hash", skip_serializing_if = "Option::is_none")]
-    pub creation_tx_hash: Option<String>,
+    #[serde(
+        rename = "creation_transaction_hash",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub creation_transaction_hash: Option<String>,
     #[serde(rename = "token", skip_serializing_if = "Option::is_none")]
     pub token: Option<models::TokenInfo>,
     #[serde(rename = "coin_balance", skip_serializing_if = "Option::is_none")]
@@ -109,7 +112,7 @@ impl Address {
     pub fn new(hash: String) -> Address {
         Address {
             creator_address_hash: None,
-            creation_tx_hash: None,
+            creation_transaction_hash: None,
             token: None,
             coin_balance: None,
             exchange_rate: None,
