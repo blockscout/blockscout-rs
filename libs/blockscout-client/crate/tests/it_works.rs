@@ -42,9 +42,10 @@ async fn transactions(blockscout: Stubr) {
 #[tokio::test]
 async fn internal_transactions(blockscout: Stubr) {
     let config = get_config_from_stubr(&blockscout);
-    let internal_transactions = transactions_api::get_transaction_internal_txs(&config, DEFAULT_TX_HASH)
-        .await
-        .expect("Failed to get transactions");
+    let internal_transactions =
+        transactions_api::get_transaction_internal_txs(&config, DEFAULT_TX_HASH)
+            .await
+            .expect("Failed to get transactions");
     assert!(!internal_transactions.items.is_empty());
 }
 

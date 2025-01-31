@@ -24,10 +24,7 @@ pub struct IndexingStatus {
 }
 
 impl IndexingStatus {
-    pub fn new(
-        finished_indexing: bool,
-        finished_indexing_blocks: bool,
-    ) -> IndexingStatus {
+    pub fn new(finished_indexing: bool, finished_indexing_blocks: bool) -> IndexingStatus {
         IndexingStatus {
             finished_indexing,
             finished_indexing_blocks,
