@@ -50,6 +50,14 @@ where
         Ok(())
     }
 
+    async fn set_next_update_from_itself(
+        _db: &DatabaseConnection,
+        _update_from: chrono::NaiveDate,
+    ) -> Result<(), ChartError> {
+        // just an adapter; inner is handled recursively
+        Ok(())
+    }
+
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,

@@ -29,12 +29,16 @@ use sea_orm::{DatabaseConnection, DbErr};
 use crate::{
     charts::{
         chart_properties_portrait,
-        db_interaction::read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
+        db_interaction::{
+            read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
+            write::set_last_updated_at,
+        },
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
     metrics,
     range::UniversalRange,
+    utils::day_start,
     ChartError, IndexingStatus,
 };
 
@@ -260,6 +264,32 @@ where
         Ok(())
     }
 
+    async fn set_next_update_from_itself(
+        db: &DatabaseConnection,
+        update_from: chrono::NaiveDate,
+    ) -> Result<(), ChartError> {
+        // make a proper separate table/column and use it
+        // if this approach brings some problems
+        let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
+        let update_from = day_start(&update_from);
+        match metadata.last_updated_at {
+            Some(current_last_updated_at) if update_from < current_last_updated_at => {
+                set_last_updated_at(metadata.id, db, update_from)
+                    .await
+                    .map_err(ChartError::StatsDB)?;
+            }
+            Some(current_last_updated_at) => {
+                tracing::warn!("not setting `last_updated_at` because current value ({}) is less than requested ({})", current_last_updated_at, update_from)
+            }
+            None => {
+                tracing::warn!(
+                    "not setting `last_updated_at` because the chart have never updated before"
+                )
+            }
+        }
+        Ok(())
+    }
+
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
@@ -453,7 +483,7 @@ mod tests {
                 .collect();
             let group = SyncUpdateGroup::new(&mutexes, Arc::new(TestUpdateGroup)).unwrap();
             group
-                .create_charts_with_mutexes(&db, Some(current_time), &enabled)
+                .create_charts_sync(&db, Some(current_time), &enabled)
                 .await
                 .unwrap();
 
@@ -466,7 +496,7 @@ mod tests {
                 force_full: true,
             };
             group
-                .update_charts_with_mutexes(parameters, &enabled)
+                .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
 
@@ -486,7 +516,7 @@ mod tests {
                 force_full: true,
             };
             group
-                .update_charts_with_mutexes(parameters, &enabled)
+                .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
 
@@ -502,7 +532,7 @@ mod tests {
                 force_full: true,
             };
             group
-                .update_charts_with_mutexes(parameters, &enabled)
+                .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
 
@@ -516,7 +546,7 @@ mod tests {
                 force_full: true,
             };
             group
-                .update_charts_with_mutexes(parameters, &enabled)
+                .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
         }

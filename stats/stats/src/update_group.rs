@@ -35,7 +35,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use itertools::Itertools;
 use sea_orm::{DatabaseConnection, DbErr};
 use thiserror::Error;
@@ -100,6 +100,16 @@ pub trait UpdateGroup: core::fmt::Debug {
     async fn update_charts<'a>(
         &self,
         params: UpdateParameters<'a>,
+        enabled_charts: &HashSet<ChartKey>,
+    ) -> Result<(), ChartError>;
+    /// Reset the enabled charts so that they reupdate all their
+    /// data starting from `from`
+    ///
+    /// Recursively applies the same to the dependencies first
+    async fn set_next_update_from(
+        &self,
+        db: &DatabaseConnection,
+        from: NaiveDate,
         enabled_charts: &HashSet<ChartKey>,
     ) -> Result<(), ChartError>;
 }
@@ -366,6 +376,23 @@ macro_rules! construct_update_group {
                 )*
                 Ok(())
             }
+
+            // pretty straightforward, no need for instrumentation
+            async fn set_next_update_from(
+                &self,
+                #[allow(unused)]
+                db: &sea_orm::DatabaseConnection,
+                from: chrono::NaiveDate,
+                #[allow(unused)]
+                enabled_charts: &::std::collections::HashSet<$crate::ChartKey>,
+            ) -> Result<(), $crate::ChartError> {
+                $(
+                    if enabled_charts.contains(&<$member as $crate::ChartProperties>::key()) {
+                        <$member as $crate::data_source::DataSource>::set_next_update_from_recursively(db, from.clone()).await?;
+                    }
+                )*
+                Ok(())
+            }
         }
 
     };
@@ -433,12 +460,12 @@ impl SyncUpdateGroup {
         self.inner.name()
     }
 
-    /// See [`UpdateGroup::list_charts``]
+    /// See [`UpdateGroup::list_charts`]
     pub fn list_charts(&self) -> Vec<ChartObject> {
         self.inner.list_charts()
     }
 
-    /// See [`UpdateGroup::dependency_indexing_status_requirement``]
+    /// See [`UpdateGroup::dependency_indexing_status_requirement`]
     pub fn dependency_indexing_status_requirement(
         &self,
         enabled_charts: &HashSet<ChartKey>,
@@ -506,13 +533,11 @@ impl SyncUpdateGroup {
         guards
     }
 
-    /// Lock only enabled charts and their dependencies
-    ///
-    /// Returns joint mutex guard and enabled group members list
-    async fn lock_enabled_dependencies(
+    // (enabled_members, enabled_members_with_deps)
+    fn get_enabled_members_with_deps(
         &self,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> (Vec<MutexGuard<()>>, HashSet<ChartKey>) {
+    ) -> (HashSet<ChartKey>, HashSet<String>) {
         let members: HashSet<ChartKey> = self
             .list_charts()
             .into_iter()
@@ -524,39 +549,104 @@ impl SyncUpdateGroup {
             .filter(|m| enabled_charts.contains(m))
             .collect();
         let enabled_members_with_deps = self.joint_dependencies_of(&enabled_members);
+        (enabled_members, enabled_members_with_deps)
+    }
+
+    /// Lock only enabled charts (that are also group members) and their dependencies
+    ///
+    /// Returns joint mutex guard and enabled group members list
+    async fn lock_enabled_and_dependencies(
+        &self,
+        enabled_charts: &HashSet<ChartKey>,
+    ) -> ChartsMutexGuards {
+        let (enabled_members, enabled_members_with_deps) =
+            self.get_enabled_members_with_deps(enabled_charts);
         // order is very important to prevent deadlocks
         let joint_guard = self.lock_in_order(enabled_members_with_deps).await;
-        (joint_guard, enabled_members)
+        ChartsMutexGuards {
+            _mutexes_for_charts_with_dependenices: joint_guard,
+            charts: enabled_members,
+        }
     }
 
     /// Ignores unknown names
-    pub async fn create_charts_with_mutexes(
+    ///
+    /// Performs [`UpdateGroup::create_charts`] synchronizing w/ other actions
+    /// using mutexes
+    pub async fn create_charts_sync(
         &self,
         db: &DatabaseConnection,
         creation_time_override: Option<chrono::DateTime<Utc>>,
         enabled_charts: &HashSet<ChartKey>,
     ) -> Result<(), ChartError> {
-        let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
+        let charts_locked_mutexes = self.lock_enabled_and_dependencies(enabled_charts).await;
         self.inner
-            .create_charts(db, creation_time_override, &enabled_members)
+            .create_charts(db, creation_time_override, charts_locked_mutexes.charts())
             .await
             .map_err(ChartError::StatsDB)
     }
 
     /// Ignores unknown names
-    pub async fn update_charts_with_mutexes(
+    ///
+    /// Performs [`UpdateGroup::update_charts`] synchronizing w/ other actions
+    /// using mutexes
+    pub async fn update_charts_sync(
         &self,
         params: UpdateParameters<'_>,
         enabled_charts: &HashSet<ChartKey>,
     ) -> Result<(), ChartError> {
-        let (_joint_guard, enabled_members) = self.lock_enabled_dependencies(enabled_charts).await;
+        let locked_enabled_members = self.lock_enabled_and_dependencies(enabled_charts).await;
         tracing::info!(
             update_group = self.name(),
             "updating group with enabled members {:?}",
-            enabled_members
+            locked_enabled_members.charts()
         );
-        self.inner.update_charts(params, &enabled_members).await?;
-        Ok(())
+        self.inner
+            .update_charts(params, locked_enabled_members.charts())
+            .await
+    }
+
+    /// Ignores unknown names
+    ///
+    /// Performs [`UpdateGroup::set_next_update_from`] synchronizing w/ other actions
+    /// using mutexes
+    pub async fn set_next_update_from_sync(
+        &self,
+        db: &DatabaseConnection,
+        from: NaiveDate,
+        enabled_charts: &HashSet<ChartKey>,
+    ) -> Result<(), ChartError> {
+        let locked_enabled_members = self.lock_enabled_and_dependencies(enabled_charts).await;
+        tracing::info!(
+            update_group = self.name(),
+            "setting next update from {} for members {:?}",
+            from,
+            locked_enabled_members.charts()
+        );
+        self.inner
+            .set_next_update_from(db, from, locked_enabled_members.charts())
+            .await
+    }
+}
+
+/// Mutexes for the listed charts as well as their
+/// dependencies
+pub struct ChartsMutexGuards<'a> {
+    _mutexes_for_charts_with_dependenices: Vec<MutexGuard<'a, ()>>,
+    charts: HashSet<ChartKey>,
+}
+
+impl<'a> ChartsMutexGuards<'a> {
+    /// Charts for which the mutexes were locked in the first place
+    pub fn charts(&self) -> &HashSet<ChartKey> {
+        &self.charts
+    }
+
+    /// Extends content of current guard with another
+    pub fn extend(&mut self, other: Self) {
+        self._mutexes_for_charts_with_dependenices
+            .extend(other._mutexes_for_charts_with_dependenices);
+        self.charts.extend(other.charts);
     }
 }
 

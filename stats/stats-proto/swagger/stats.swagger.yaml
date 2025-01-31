@@ -10,6 +10,37 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/charts:batch-update:
+    post:
+      operationId: StatsService_BatchUpdateCharts
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchUpdateChartsResult'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chart_names
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: from
+          description: Default is today
+          in: query
+          required: false
+          type: string
+        - name: update_later
+          in: query
+          required: false
+          type: boolean
+      tags:
+        - StatsService
   /api/v1/counters:
     get:
       operationId: StatsService_GetCounters
@@ -171,6 +202,31 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1BatchUpdateChartRejection:
+    type: object
+    properties:
+      name:
+        type: string
+      reason:
+        type: string
+  v1BatchUpdateChartsResult:
+    type: object
+    properties:
+      total:
+        type: integer
+        format: int64
+      total_rejected:
+        type: integer
+        format: int64
+      accepted:
+        type: array
+        items:
+          type: string
+      rejected:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1BatchUpdateChartRejection'
   v1ContractsPageStats:
     type: object
     properties:

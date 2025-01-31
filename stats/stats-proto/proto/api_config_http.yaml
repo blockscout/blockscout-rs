@@ -15,6 +15,8 @@ http:
       get: /api/v1/pages/transactions
     - selector: blockscout.stats.v1.StatsService.GetContractsPageStats
       get: /api/v1/pages/contracts
+    - selector: blockscout.stats.v1.StatsService.BatchUpdateCharts
+      post: /api/v1/charts:batch-update
 
     - selector: blockscout.stats.v1.Health.Check
       get: /health

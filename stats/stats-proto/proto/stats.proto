@@ -11,6 +11,7 @@ service StatsService {
   rpc GetMainPageStats(GetMainPageStatsRequest) returns (MainPageStats);
   rpc GetTransactionsPageStats(GetTransactionsPageStatsRequest) returns (TransactionsPageStats);
   rpc GetContractsPageStats(GetContractsPageStatsRequest) returns (ContractsPageStats);
+  rpc BatchUpdateCharts(BatchUpdateChartsRequest) returns (BatchUpdateChartsResult);
 }
 
 message GetCountersRequest {}
@@ -108,4 +109,23 @@ message ContractsPageStats {
   optional Counter new_contracts_24h = 2;
   optional Counter total_verified_contracts = 3;
   optional Counter new_verified_contracts_24h = 4;
+}
+
+message BatchUpdateChartsRequest {
+  repeated string chart_names = 1;
+  // Default is today
+  optional string from = 2;
+  optional bool update_later = 3;
+}
+
+message BatchUpdateChartRejection {
+  string name = 1;
+  string reason = 2;
+}
+
+message BatchUpdateChartsResult {
+  uint32 total = 1;
+  uint32 total_rejected = 2;
+  repeated string accepted = 3;
+  repeated BatchUpdateChartRejection rejected = 4;
 }

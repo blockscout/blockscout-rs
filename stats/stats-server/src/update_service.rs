@@ -1,20 +1,35 @@
+use chrono::{NaiveDate, Utc};
+use cron::Schedule;
+use futures::{stream::FuturesUnordered, StreamExt};
+use itertools::Itertools;
+use sea_orm::{DatabaseConnection, DbErr};
+use stats_proto::blockscout::stats::v1 as proto_v1;
+use thiserror::Error;
+use tokio::sync::{mpsc, Mutex, Semaphore};
+
 use crate::{
     blockscout_waiter::IndexingStatusListener,
     runtime_setup::{RuntimeSetup, UpdateGroupEntry},
 };
-use chrono::Utc;
-use cron::Schedule;
-use futures::{stream::FuturesUnordered, StreamExt};
-use sea_orm::{DatabaseConnection, DbErr};
-use stats::data_source::types::{BlockscoutMigrations, UpdateParameters};
-use std::sync::{atomic::AtomicU64, Arc};
-use tokio::sync::Semaphore;
+use stats::{
+    data_source::types::{BlockscoutMigrations, UpdateParameters},
+    ChartKey,
+};
+
+use std::{
+    collections::HashSet,
+    sync::{atomic::AtomicU64, Arc},
+};
 
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     blockscout_db: Arc<DatabaseConnection>,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
+    // currently only accessed in one place, but `Mutex`es
+    // are needed due to `Arc<Self>` everywhere
+    on_demand_sender: Mutex<mpsc::Sender<OnDemandReupdateRequest>>,
+    on_demand_receiver: Mutex<mpsc::Receiver<OnDemandReupdateRequest>>,
 }
 
 fn time_till_next_call(schedule: &Schedule) -> std::time::Duration {
@@ -27,6 +42,16 @@ fn time_till_next_call(schedule: &Schedule) -> std::time::Duration {
         .map_or(default, |t| (t - now).to_std().unwrap_or(default))
 }
 
+fn group_update_schedule<'a>(
+    group: &'a UpdateGroupEntry,
+    default_schedule: &'a Schedule,
+) -> &'a Schedule {
+    group
+        .update_schedule
+        .as_ref()
+        .unwrap_or_else(|| default_schedule)
+}
+
 impl UpdateService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
@@ -34,11 +59,14 @@ impl UpdateService {
         charts: Arc<RuntimeSetup>,
         status_listener: Option<IndexingStatusListener>,
     ) -> Result<Self, DbErr> {
+        let on_demand = mpsc::channel(128);
         Ok(Self {
             db,
             blockscout_db,
             charts,
             status_listener,
+            on_demand_sender: Mutex::new(on_demand.0),
+            on_demand_receiver: Mutex::new(on_demand.1),
         })
     }
 
@@ -60,7 +88,7 @@ impl UpdateService {
             .map(|group| {
                 let this = self.clone();
                 let group_entry = group.clone();
-                let default_schedule = default_schedule.clone();
+                let schedule = group_update_schedule(&group_entry, &default_schedule).clone();
                 let status_listener = self.status_listener.clone();
                 let initial_update_semaphore = initial_update_semaphore.clone();
                 let init_update_tracker = &init_update_tracker;
@@ -74,18 +102,23 @@ impl UpdateService {
                             init_update_tracker,
                         )
                         .await;
-                    this.run_recurrent_update(group_entry, &default_schedule)
-                        .await
+                    this.run_recurrent_update(group_entry, schedule).await
                 }
             })
             .collect();
+        let on_demand_job = self.run_on_demand_executor(&default_schedule);
 
-        // These futures should never complete because they run in infinite loop.
+        // The futures should never complete because they run in infinite loop.
         // If any completes, it means something went terribly wrong.
-        if let Some(()) = group_update_jobs.next().await {
-            tracing::error!("update job stopped unexpectedly");
-            panic!("update job stopped unexpectedly");
+        let msg = tokio::select! {
+        _ = group_update_jobs.next() => {
+            "update job stopped unexpectedly"
         }
+        _ = on_demand_job => {
+            "on demand updater stopped unexpectedly"
+        }};
+        tracing::error!(msg);
+        panic!("{}", msg);
     }
 
     async fn wait_for_start_condition(
@@ -122,7 +155,7 @@ impl UpdateService {
                 .await
                 .expect("failed to acquire permit");
             if let Some(force_full) = force_update_on_start {
-                self.update(group_entry.clone(), force_full).await
+                self.update(group_entry.clone(), force_full, None).await
             };
         }
         tracing::info!(
@@ -133,22 +166,203 @@ impl UpdateService {
         init_update_tracker.report();
     }
 
+    async fn run_on_demand_executor(self: &Arc<Self>, default_schedule: &Schedule) {
+        let enabled_keys: HashSet<ChartKey> = self
+            .charts
+            .update_groups
+            .values()
+            .flat_map(|g| g.enabled_members.iter())
+            .cloned()
+            .collect();
+        loop {
+            let Some(reupdate) = self.on_demand_receiver.lock().await.recv().await else {
+                tracing::error!("no more on demand reupdate channel senders");
+                return;
+            };
+            tracing::info!(
+                request =? reupdate,
+                "received an on-demand request for chart reupdate"
+            );
+            let mut enabled_charts_to_update: HashSet<_> = reupdate
+                .chart_names
+                .into_iter()
+                .filter(|c| enabled_keys.contains(c))
+                .collect();
+
+            tracing::info!(
+                "{} charts to handle reupdate for",
+                enabled_charts_to_update.len()
+            );
+            while !enabled_charts_to_update.is_empty() {
+                let updated = self
+                    .reupdate_the_best_matching_group(
+                        &enabled_charts_to_update,
+                        reupdate.from,
+                        reupdate.update_later,
+                        default_schedule,
+                    )
+                    .await;
+                if updated.is_empty() {
+                    tracing::warn!("on-demand update list was incorrectly filtered and prepared. this is likely a bug");
+                    break;
+                }
+                let mut any_removed = false;
+                for u in updated {
+                    enabled_charts_to_update.remove(&u);
+                    any_removed = true;
+                }
+                if !any_removed {
+                    // should always have something to remove but placed it just in case
+                    // to prevent infinite loop
+                    tracing::warn!("on-demand updated list does not intersect with enabled charts list. this is likely a bug");
+                }
+
+                tracing::info!(
+                    charts_to_update_left = enabled_charts_to_update.len(),
+                    "finished a step of on-demand update"
+                );
+            }
+            tracing::info!("finished on-demand update");
+        }
+    }
+
+    /// Returns updated charts
+    async fn reupdate_the_best_matching_group(
+        self: &Arc<Self>,
+        enabled_charts_to_update: &HashSet<ChartKey>,
+        from: Option<NaiveDate>,
+        update_later: bool,
+        default_schedule: &Schedule,
+    ) -> HashSet<ChartKey> {
+        let Some((the_best_matching_group, enabled_members_to_update)) =
+            self.choose_the_best_matching_group(enabled_charts_to_update)
+        else {
+            // no update groups
+            return HashSet::new();
+        };
+        tracing::info!(
+            group = the_best_matching_group.group.name(),
+            requested_enabled_members =? enabled_members_to_update,
+            "chosen next group to reupdate on-demand"
+        );
+
+        if let Some(reupdate_from) = from {
+            self.set_next_update_from(
+                reupdate_from,
+                the_best_matching_group,
+                &enabled_members_to_update,
+            )
+            .await;
+        }
+        if update_later {
+            let group_schedule = group_update_schedule(the_best_matching_group, default_schedule);
+            let next_update = time_till_next_call(group_schedule);
+            tracing::info!(
+                group = the_best_matching_group.group.name(),
+                "Will update later according to group's schedule (in {next_update:?})"
+            );
+        } else {
+            tracing::info!(
+                group = the_best_matching_group.group.name(),
+                "Updating the group right now on-demand"
+            );
+            self.clone()
+                .update(
+                    the_best_matching_group.clone(),
+                    false,
+                    Some(&enabled_members_to_update),
+                )
+                .await;
+            tracing::info!(
+                group = the_best_matching_group.group.name(),
+                updated_members =? enabled_members_to_update,
+                "successfully updated the group on-demand"
+            );
+        };
+        enabled_members_to_update
+    }
+
+    fn choose_the_best_matching_group(
+        &self,
+        member_charts_to_update: &HashSet<ChartKey>,
+    ) -> Option<(&UpdateGroupEntry, HashSet<ChartKey>)> {
+        self.charts
+            .update_groups
+            .values()
+            .map(|g| {
+                (
+                    g,
+                    g.enabled_members
+                        .intersection(member_charts_to_update)
+                        .count(),
+                )
+            })
+            .max_by_key(|(_, members_to_update)| *members_to_update)
+            .map(|(g, _)| {
+                (
+                    g,
+                    member_charts_to_update
+                        .intersection(&g.enabled_members)
+                        .cloned()
+                        .collect(),
+                )
+            })
+    }
+
+    async fn set_next_update_from(
+        &self,
+        from: NaiveDate,
+        group_entry: &UpdateGroupEntry,
+        enabled_charts_to_update: &HashSet<ChartKey>,
+    ) {
+        let result = group_entry
+            .group
+            .set_next_update_from_sync(&self.db, from, enabled_charts_to_update)
+            .await;
+        if let Err(err) = result {
+            tracing::error!(
+                update_group = group_entry.group.name(),
+                "error setting next update from: {}",
+                err
+            );
+        } else {
+            tracing::info!(
+                update_group = group_entry.group.name(),
+                "successfully set next update from (will update from {})",
+                from
+            );
+        }
+    }
+
     async fn run_recurrent_update(
         self: &Arc<Self>,
         group_entry: UpdateGroupEntry,
-        default_schedule: &Schedule,
+        schedule: Schedule,
     ) {
         let this = self.clone();
         let chart = group_entry.clone();
-        let schedule = group_entry
-            .update_schedule
-            .as_ref()
-            .unwrap_or(default_schedule)
-            .clone();
         this.run_cron(chart, schedule).await
     }
 
-    async fn update(self: Arc<Self>, group_entry: UpdateGroupEntry, force_full: bool) {
+    async fn run_cron(self: Arc<Self>, group_entry: UpdateGroupEntry, schedule: Schedule) {
+        loop {
+            let sleep_duration = time_till_next_call(&schedule);
+            tracing::info!(
+                update_group = group_entry.group.name(),
+                "scheduled next run of group update in {:?}",
+                sleep_duration
+            );
+            tokio::time::sleep(sleep_duration).await;
+            self.clone().update(group_entry.clone(), false, None).await;
+        }
+    }
+
+    async fn update(
+        self: Arc<Self>,
+        group_entry: UpdateGroupEntry,
+        force_full: bool,
+        enabled_charts_overwrite: Option<&HashSet<ChartKey>>,
+    ) {
         tracing::info!(
             // instrumentation is inside `update_charts_with_mutexes`
             update_group = group_entry.group.name(),
@@ -170,9 +384,10 @@ impl UpdateService {
             update_time_override: None,
             force_full,
         };
+        let enabled_charts = enabled_charts_overwrite.unwrap_or(&group_entry.enabled_members);
         let result = group_entry
             .group
-            .update_charts_with_mutexes(update_parameters, &group_entry.enabled_members)
+            .update_charts_sync(update_parameters, enabled_charts)
             .await;
         if let Err(err) = result {
             tracing::error!(
@@ -188,18 +403,106 @@ impl UpdateService {
         }
     }
 
-    async fn run_cron(self: Arc<Self>, group_entry: UpdateGroupEntry, schedule: Schedule) {
-        loop {
-            let sleep_duration = time_till_next_call(&schedule);
-            tracing::info!(
-                update_group = group_entry.group.name(),
-                "scheduled next run of group update in {:?}",
-                sleep_duration
-            );
-            tokio::time::sleep(sleep_duration).await;
-            self.clone().update(group_entry.clone(), false).await;
+    pub async fn handle_update_request(
+        self: &Arc<Self>,
+        chart_names: Vec<String>,
+        from: Option<NaiveDate>,
+        update_later: bool,
+    ) -> Result<OnDemandReupdateAccepted, OnDemandReupdateError> {
+        let (accepted_keys, accepted_names, rejections) =
+            self.split_update_request_input(chart_names);
+        if accepted_keys.is_empty() {
+            return Err(OnDemandReupdateError::AllChartsNotFound);
+        }
+
+        self.on_demand_sender
+            .lock()
+            .await
+            .send(OnDemandReupdateRequest {
+                chart_names: accepted_keys,
+                from,
+                update_later,
+            })
+            .await
+            .map_err(|_| {
+                tracing::error!("on demand channel closed");
+                OnDemandReupdateError::Internal
+            })?;
+        Ok(OnDemandReupdateAccepted {
+            accepted: accepted_names,
+            rejected: rejections,
+        })
+    }
+
+    /// (accepted_chart_keys, accepted_chart_names, rejected_chart_names)
+    fn split_update_request_input(
+        self: &Arc<Self>,
+        chart_names: Vec<String>,
+    ) -> (HashSet<ChartKey>, Vec<String>, Vec<Rejection>) {
+        let (found, not_found): (Vec<_>, Vec<_>) = chart_names
+            .into_iter()
+            .map(|name| {
+                if let Some(entry) = self.charts.charts_info.get(&name) {
+                    Ok((name, entry.get_keys()))
+                } else {
+                    Err(name)
+                }
+            })
+            .partition_result();
+        let rejections = not_found
+            .into_iter()
+            .map(|name| Rejection {
+                name,
+                reason: "chart name was not found".to_string(),
+            })
+            .collect();
+        let (accepted_names, accepted_keys): (Vec<_>, Vec<_>) = found.into_iter().unzip();
+        let accepted_keys: HashSet<_> = accepted_keys.into_iter().flatten().collect();
+        (accepted_keys, accepted_names, rejections)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct OnDemandReupdateRequest {
+    pub chart_names: HashSet<ChartKey>,
+    pub from: Option<NaiveDate>,
+    pub update_later: bool,
+}
+
+#[derive(Error, Debug)]
+pub enum OnDemandReupdateError {
+    #[error("All provided chart names were not found")]
+    AllChartsNotFound,
+    #[error("internal error")]
+    Internal,
+}
+
+pub struct OnDemandReupdateAccepted {
+    pub accepted: Vec<String>,
+    pub rejected: Vec<Rejection>,
+}
+
+impl OnDemandReupdateAccepted {
+    pub fn into_update_result(self) -> proto_v1::BatchUpdateChartsResult {
+        proto_v1::BatchUpdateChartsResult {
+            total: (self.accepted.len() + self.rejected.len()) as u32,
+            total_rejected: self.rejected.len() as u32,
+            accepted: self.accepted,
+            rejected: self
+                .rejected
+                .into_iter()
+                .map(|r| proto_v1::BatchUpdateChartRejection {
+                    name: r.name,
+                    reason: r.reason,
+                })
+                .collect(),
         }
     }
+}
+
+pub struct Rejection {
+    pub name: String,
+    pub reason: String,
 }
 
 /// Reports progress of inital updates to logs

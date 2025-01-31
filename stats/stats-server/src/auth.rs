@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+use tonic::Status;
 
 pub struct AuthorizationProvider {
     keys: HashMap<String, ApiKey>,
@@ -17,7 +18,6 @@ impl AuthorizationProvider {
         let Some(key) = request.metadata().get(API_KEY_NAME) else {
             return false;
         };
-
         let Ok(api_key) = key
             .to_str()
             .inspect_err(|e| tracing::warn!("could not read http header as ascii: {}", e))
@@ -29,6 +29,11 @@ impl AuthorizationProvider {
 
     pub fn is_key_authorized(&self, api_key: &str) -> bool {
         self.keys.values().find(|key| key.key.eq(api_key)).is_some()
+    }
+
+    /// Unified error message
+    pub fn unauthorized(&self) -> Status {
+        Status::unauthenticated("invalid api key")
     }
 }
 

@@ -110,7 +110,7 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     for group_entry in charts.update_groups.values() {
         group_entry
             .group
-            .create_charts_with_mutexes(&db, None, &group_entry.enabled_members)
+            .create_charts_sync(&db, None, &group_entry.enabled_members)
             .await?;
     }
 
@@ -131,8 +131,9 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         .await?,
     );
 
+    let update_service_cloned = update_service.clone();
     let update_service_handle = tokio::spawn(async move {
-        update_service
+        update_service_cloned
             .run(
                 settings.concurrent_start_updates,
                 settings.default_schedule,
@@ -153,6 +154,7 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
             db,
             blockscout,
             charts,
+            update_service,
             authorization,
             settings.limits.into(),
         )

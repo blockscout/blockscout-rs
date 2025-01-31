@@ -167,6 +167,40 @@ pub trait DataSource {
     fn update_itself(cx: &UpdateContext<'_>)
         -> impl Future<Output = Result<(), ChartError>> + Send;
 
+    fn set_next_update_from_recursively(
+        db: &DatabaseConnection,
+        update_from: chrono::NaiveDate,
+    ) -> impl Future<Output = Result<(), ChartError>> + Send {
+        async move {
+            tracing::debug!("recursively initializing main dependencies");
+            Self::MainDependencies::set_next_update_from_recursively(db, update_from).await?;
+            tracing::debug!("recursively initializing resolution dependencies");
+            Self::ResolutionDependencies::set_next_update_from_recursively(db, update_from).await?;
+            tracing::debug!("initializing itself");
+            Self::set_next_update_from_itself(db, update_from).await
+        }
+        .boxed()
+        // had to juggle with boxed futures
+        // because of recursive async calls (:
+        // :)
+    }
+
+    /// **DO NOT CALL DIRECTLY** unless you don't want dependencies to be initialized.
+    /// During normal operation calling this method directly is likely invalid.
+    ///
+    /// This fn is intended to be implemented
+    /// by types, as recursive logic of [`DataSource::init_recursively`] is
+    /// not expected to change.
+    ///
+    /// Should be idempotent.
+    ///
+    /// ## Description
+    /// Initialize only this source.
+    fn set_next_update_from_itself(
+        db: &DatabaseConnection,
+        update_from: chrono::NaiveDate,
+    ) -> impl Future<Output = Result<(), ChartError>> + Send;
+
     /// Retrieve chart data.
     /// If `range` is `Some`, should return data within the range. Otherwise - all data.
     ///
@@ -235,6 +269,13 @@ impl DataSource for () {
     ) -> Result<Self::Output, ChartError> {
         Ok(())
     }
+
+    async fn set_next_update_from_itself(
+        _db: &DatabaseConnection,
+        _update_from: chrono::NaiveDate,
+    ) -> Result<(), ChartError> {
+        Ok(())
+    }
 }
 
 macro_rules! impl_data_source_for_tuple {
@@ -300,6 +341,27 @@ macro_rules! impl_data_source_for_tuple {
             ) -> Result<(), DbErr> {
                 // dependencies are called in `init_recursively`
                 // the tuple itself does not need any init
+                Ok(())
+            }
+
+
+            async fn set_next_update_from_recursively(
+                db: &DatabaseConnection,
+                update_from: chrono::NaiveDate,
+            ) -> Result<(), ChartError> {
+                $(
+                    $element_generic_name::set_next_update_from_recursively(db, update_from.clone()).await?;
+                )+
+                Ok(())
+            }
+
+
+            async fn set_next_update_from_itself(
+                _db: &DatabaseConnection,
+                _update_from: chrono::NaiveDate,
+            ) -> Result<(), ChartError> {
+                // dependencies are called in `set_next_update_from_recursively`
+                // the tuple itself does not need any
                 Ok(())
             }
 

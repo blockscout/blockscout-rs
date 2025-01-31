@@ -8,6 +8,8 @@ use crate::{
     },
     runtime_setup::{EnabledChartEntry, RuntimeSetup},
     settings::LimitsSettings,
+    update_service::OnDemandReupdateError,
+    UpdateService,
 };
 
 use async_trait::async_trait;
@@ -40,6 +42,7 @@ pub struct ReadService {
     blockscout: Arc<DatabaseConnection>,
     charts: Arc<RuntimeSetup>,
     authorization: Arc<AuthorizationProvider>,
+    update_service: Arc<UpdateService>,
     limits: ReadLimits,
 }
 
@@ -48,6 +51,7 @@ impl ReadService {
         db: Arc<DatabaseConnection>,
         blockscout: Arc<DatabaseConnection>,
         charts: Arc<RuntimeSetup>,
+        update_service: Arc<UpdateService>,
         authorization: Arc<AuthorizationProvider>,
         limits: ReadLimits,
     ) -> Result<Self, DbErr> {
@@ -55,6 +59,7 @@ impl ReadService {
             db,
             blockscout,
             charts,
+            update_service,
             authorization,
             limits,
         })
@@ -526,5 +531,33 @@ impl StatsService for ReadService {
             total_verified_contracts,
             new_verified_contracts_24h,
         }))
+    }
+
+    async fn batch_update_charts(
+        &self,
+        request: Request<proto_v1::BatchUpdateChartsRequest>,
+    ) -> Result<Response<proto_v1::BatchUpdateChartsResult>, Status> {
+        if !self.authorization.is_request_authorized(&request) {
+            return Err(self.authorization.unauthorized());
+        }
+
+        let request = request.into_inner();
+        let from = request
+            .from
+            .map(|s| NaiveDate::from_str(&s))
+            .transpose()
+            .map_err(|e| {
+                Status::invalid_argument(format!("`from` should be a valid date: {}", e))
+            })?;
+        let update_later = request.update_later.unwrap_or(false);
+        let result = self
+            .update_service
+            .handle_update_request(request.chart_names, from, update_later)
+            .await
+            .map_err(|e| match e {
+                OnDemandReupdateError::AllChartsNotFound => Status::not_found(e.to_string()),
+                OnDemandReupdateError::Internal => Status::internal(e.to_string()),
+            })?;
+        Ok(Response::new(result.into_update_result()))
     }
 }
