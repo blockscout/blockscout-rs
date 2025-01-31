@@ -63,9 +63,12 @@ async fn offchain_resolve_cached(
     db: &PgPool,
     from_user: &DomainNameOnProtocol<'_>,
 ) -> cached::Return<Option<ResolveResult>> {
-    let result = match &from_user.deployed_protocol.protocol.info.protocol_specific {
+    let info = &from_user.deployed_protocol.protocol.info;
+    let result = match &info.protocol_specific {
         ProtocolSpecific::EnsLike(ens) => ens::maybe_wildcard_resolution(db, from_user, ens).await,
-        ProtocolSpecific::D3Connect(d3) => d3::maybe_offchain_resolution(db, from_user, d3).await,
+        ProtocolSpecific::D3Connect(d3) => {
+            d3::maybe_offchain_resolution(db, from_user, d3, &info.address_resolve_technique).await
+        }
     };
     cached::Return::new(result)
 }
