@@ -74,6 +74,12 @@
         "subgraph_path": "../subgraphs/d3-connect-subgraph",
         "subgraph_name": "d3-connect-shib-testnet-subgraph",
         "network": "shibarium-testnet"
+    },
+    "zns-ink": {
+        "subgraph_path": "../subgraphs/zns-subgraph",
+        "subgraph_name": "zns-ink-subgraph",
+        "network": "ink-mainnet"
     }
   }
 }
+
