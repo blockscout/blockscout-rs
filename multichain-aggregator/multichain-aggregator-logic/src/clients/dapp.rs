@@ -19,7 +19,9 @@ pub mod search_dapps {
 
     #[derive(Serialize, Clone, Debug, Default, PartialEq)]
     pub struct SearchDappsParams {
-        pub query: String,
+        pub title: Option<String>,
+        pub categories: Option<String>,
+        pub chain_ids: Option<String>,
     }
 
     impl Endpoint for SearchDapps {

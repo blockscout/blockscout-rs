@@ -56,6 +56,61 @@ paths:
             $ref: '#/definitions/rpcStatus'
       tags:
         - MultichainAggregatorService
+  /api/v1/dapps:
+    get:
+      operationId: MultichainAggregatorService_ListDapps
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDappsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: categories
+          in: query
+          required: false
+          type: string
+        - name: chain_ids
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/dapps/categories:
+    get:
+      operationId: MultichainAggregatorService_ListDappCategories
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDappCategoriesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - MultichainAggregatorService
+  /api/v1/dapps/chains:
+    get:
+      operationId: MultichainAggregatorService_ListDappChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDappChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - MultichainAggregatorService
   /api/v1/import:batch:
     post:
       operationId: MultichainAggregatorService_BatchImport
@@ -74,34 +129,6 @@ paths:
           required: true
           schema:
             $ref: '#/definitions/v1BatchImportRequest'
-      tags:
-        - MultichainAggregatorService
-  /api/v1/marketplace/categories:
-    get:
-      operationId: MultichainAggregatorService_ListMarketplaceCategories
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1ListMarketplaceCategoriesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      tags:
-        - MultichainAggregatorService
-  /api/v1/marketplace/chains:
-    get:
-      operationId: MultichainAggregatorService_ListMarketplaceChains
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1ListMarketplaceChainsResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
       tags:
         - MultichainAggregatorService
   /api/v1/nfts:
@@ -411,14 +438,14 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Chain'
-  v1ListMarketplaceCategoriesResponse:
+  v1ListDappCategoriesResponse:
     type: object
     properties:
       items:
         type: array
         items:
           type: string
-  v1ListMarketplaceChainsResponse:
+  v1ListDappChainsResponse:
     type: object
     properties:
       items:
@@ -426,6 +453,14 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Chain'
+  v1ListDappsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
   v1ListNftsResponse:
     type: object
     properties:

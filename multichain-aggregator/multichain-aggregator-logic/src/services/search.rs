@@ -16,7 +16,7 @@ use sea_orm::DatabaseConnection;
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
-const QUICK_SEARCH_NUM_ITEMS: u64 = 100;
+const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
 
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
@@ -49,7 +49,7 @@ pub async fn quick_search(
         },
     );
 
-    results.balance_entities(50);
+    results.balance_entities(QUICK_SEARCH_NUM_ITEMS as usize);
 
     Ok(results)
 }
@@ -151,7 +151,11 @@ impl SearchTerm {
                 let dapps: Vec<MarketplaceDapp> = search_context
                     .dapp_client
                     .request(&search_dapps::SearchDapps {
-                        params: search_dapps::SearchDappsParams { query },
+                        params: search_dapps::SearchDappsParams {
+                            title: Some(query),
+                            categories: None,
+                            chain_ids: None,
+                        },
                     })
                     .await
                     .map_err(|err| ServiceError::Internal(err.into()))?

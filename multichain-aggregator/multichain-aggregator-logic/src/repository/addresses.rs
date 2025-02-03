@@ -87,6 +87,7 @@ where
 
     paginate_cursor(db, c, page_size, |u| {
         (
+            // unwrap is safe here because addresses are validated prior to being inserted
             AddressAlloy::try_from(u.hash.as_slice()).unwrap(),
             u.chain_id,
         )

@@ -13,10 +13,10 @@ service MultichainAggregatorService {
   returns (ListTransactionsResponse) {}
   rpc ListNfts(ListNftsRequest) returns (ListNftsResponse) {}
   rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
-  rpc ListMarketplaceChains(ListMarketplaceChainsRequest)
-      returns (ListMarketplaceChainsResponse) {}
-  rpc ListMarketplaceCategories(ListMarketplaceCategoriesRequest)
-      returns (ListMarketplaceCategoriesResponse) {}
+  rpc ListDapps(ListDappsRequest) returns (ListDappsResponse) {}
+  rpc ListDappChains(ListDappChainsRequest) returns (ListDappChainsResponse) {}
+  rpc ListDappCategories(ListDappCategoriesRequest)
+      returns (ListDappCategoriesResponse) {}
 }
 
 enum TokenType {
@@ -186,14 +186,24 @@ message ListChainsResponse {
   repeated Chain items = 1;
 }
 
-message ListMarketplaceChainsRequest {}
+message ListDappsRequest {
+  optional string q = 1;
+  optional string categories = 2;
+  optional string chain_ids = 3;
+}
 
-message ListMarketplaceChainsResponse {
+message ListDappsResponse {
+  repeated MarketplaceDapp items = 1;
+}
+
+message ListDappChainsRequest {}
+
+message ListDappChainsResponse {
   repeated Chain items = 1;
 }
 
-message ListMarketplaceCategoriesRequest {}
+message ListDappCategoriesRequest {}
 
-message ListMarketplaceCategoriesResponse {
+message ListDappCategoriesResponse {
   repeated string items = 1;
 }

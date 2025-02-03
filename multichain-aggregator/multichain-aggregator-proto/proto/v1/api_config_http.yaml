@@ -25,11 +25,14 @@ http:
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListChains
       get: /api/v1/chains
 
-    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListMarketplaceChains
-      get: /api/v1/marketplace/chains
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDapps
+      get: /api/v1/dapps
 
-    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListMarketplaceCategories
-      get: /api/v1/marketplace/categories
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDappChains
+      get: /api/v1/dapps/chains
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDappCategories
+      get: /api/v1/dapps/categories
 
     #################### Health ####################
 

@@ -18,8 +18,8 @@ use multichain_aggregator_logic::{
     types,
 };
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
-    ListChainsRequest, ListChainsResponse, ListMarketplaceCategoriesRequest,
-    ListMarketplaceCategoriesResponse, ListMarketplaceChainsRequest, ListMarketplaceChainsResponse,
+    ListChainsRequest, ListChainsResponse, ListDappCategoriesRequest, ListDappCategoriesResponse,
+    ListDappChainsRequest, ListDappChainsResponse, ListDappsRequest, ListDappsResponse,
     ListNftsRequest, ListNftsResponse, ListTokensRequest, ListTokensResponse,
     ListTransactionsRequest, ListTransactionsResponse,
 };
@@ -289,10 +289,37 @@ impl MultichainAggregatorService for MultichainAggregator {
         Ok(Response::new(results.into()))
     }
 
-    async fn list_marketplace_chains(
+    async fn list_dapps(
         &self,
-        _request: Request<ListMarketplaceChainsRequest>,
-    ) -> Result<Response<ListMarketplaceChainsResponse>, Status> {
+        request: Request<ListDappsRequest>,
+    ) -> Result<Response<ListDappsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let dapps = self
+            .dapp_client
+            .request(&dapp::search_dapps::SearchDapps {
+                params: dapp::search_dapps::SearchDappsParams {
+                    title: inner.q,
+                    categories: inner.categories,
+                    chain_ids: inner.chain_ids,
+                },
+            })
+            .await
+            .map_err(|err| ServiceError::Internal(err.into()))?
+            .into_iter()
+            .filter_map(|d| {
+                types::dapp::MarketplaceDapp::try_from(d)
+                    .map(|d| d.into())
+                    .ok()
+            })
+            .collect();
+        Ok(Response::new(ListDappsResponse { items: dapps }))
+    }
+
+    async fn list_dapp_chains(
+        &self,
+        _request: Request<ListDappChainsRequest>,
+    ) -> Result<Response<ListDappChainsResponse>, Status> {
         let chain_ids = self
             .dapp_client
             .request(&dapp::list_chains::ListChains {})
@@ -312,13 +339,13 @@ impl MultichainAggregatorService for MultichainAggregator {
             })
             .collect::<Vec<_>>();
 
-        Ok(Response::new(ListMarketplaceChainsResponse { items }))
+        Ok(Response::new(ListDappChainsResponse { items }))
     }
 
-    async fn list_marketplace_categories(
+    async fn list_dapp_categories(
         &self,
-        _request: Request<ListMarketplaceCategoriesRequest>,
-    ) -> Result<Response<ListMarketplaceCategoriesResponse>, Status> {
+        _request: Request<ListDappCategoriesRequest>,
+    ) -> Result<Response<ListDappCategoriesResponse>, Status> {
         let items = self
             .dapp_client
             .request(&dapp::list_categories::ListCategories {})
@@ -327,7 +354,7 @@ impl MultichainAggregatorService for MultichainAggregator {
                 tracing::error!(error = ?err, "failed to list marketplace categories");
                 Status::internal("failed to list marketplace categories")
             })?;
-        Ok(Response::new(ListMarketplaceCategoriesResponse { items }))
+        Ok(Response::new(ListDappCategoriesResponse { items }))
     }
 }
 
