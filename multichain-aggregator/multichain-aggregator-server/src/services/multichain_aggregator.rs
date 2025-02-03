@@ -210,8 +210,8 @@ impl MultichainAggregatorService for MultichainAggregator {
         )
         .await
         .map_err(|err| {
-            tracing::error!(error = ?err, "failed to list addresses");
-            Status::internal("failed to list addresses")
+            tracing::error!(error = ?err, "failed to list transactions");
+            Status::internal("failed to list transactions")
         })?;
 
         Ok(Response::new(ListTransactionsResponse {
