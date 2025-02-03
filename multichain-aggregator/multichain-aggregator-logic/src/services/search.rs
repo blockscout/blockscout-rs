@@ -39,7 +39,7 @@ pub async fn quick_search(
     // We need to merge all of them into a single `SearchResults` struct.
     let jobs = terms.into_iter().map(|t| t.search(&context));
 
-    let results = futures::future::join_all(jobs).await.into_iter().fold(
+    let mut results = futures::future::join_all(jobs).await.into_iter().fold(
         QuickSearchResult::default(),
         |mut acc, r| {
             if let Ok(r) = r {
@@ -48,6 +48,8 @@ pub async fn quick_search(
             acc
         },
     );
+
+    results.balance_entities(50);
 
     Ok(results)
 }
