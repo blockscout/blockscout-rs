@@ -168,32 +168,6 @@ message Factory {
   uint32 total_accounts = 2;
 }
 
-message RawUserOpV06 {
-  string sender = 1;
-  string nonce = 2;
-  string init_code = 3;
-  string call_data = 4;
-  string call_gas_limit = 5;
-  string verification_gas_limit = 6;
-  string pre_verification_gas = 7;
-  string max_fee_per_gas = 8;
-  string max_priority_fee_per_gas = 9;
-  string paymaster_and_data = 10;
-  string signature = 11;
-}
-
-message RawUserOpV07 {
-  string sender = 1;
-  string nonce = 2;
-  string init_code = 3;
-  string call_data = 4;
-  string account_gas_limits = 5; // call_gas_limit + verification_gas_limit
-  string pre_verification_gas = 6;
-  string gas_fees = 7; // max_fee_per_gas + max_priority_fee_per_gas
-  string paymaster_and_data = 8; // paymaster + paymaster_verification_gas_limit + post_op_gas_limit + paymaster_data
-  string signature = 9;
-}
-
 message UserOp {
   string hash = 1;
   string sender = 2;
@@ -205,10 +179,7 @@ message UserOp {
   string max_fee_per_gas = 8;
   string max_priority_fee_per_gas = 9;
   string signature = 10;
-  oneof raw {
-    RawUserOpV06 rawV06 = 11;
-    RawUserOpV07 rawV07 = 35;
-  }
+  google.protobuf.Struct raw = 11;
   optional string aggregator = 12;
   optional string aggregator_signature = 13;
   string entry_point = 14;
@@ -234,8 +205,8 @@ message UserOp {
   optional bool consensus = 33;
   optional string timestamp = 34;
 
-  optional string execute_target = 36;
-  optional string execute_call_data = 37;
+  optional string execute_target = 35;
+  optional string execute_call_data = 36;
 }
 
 message ListUserOp {
