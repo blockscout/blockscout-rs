@@ -3,7 +3,6 @@ config_version: 3
 
 http:
   rules:
-    
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.BatchImport
       post: /api/v1/import:batch
       body: "*"
@@ -17,8 +16,25 @@ http:
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListTokens
       get: /api/v1/tokens
 
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListTransactions
+      get: /api/v1/transactions
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListNfts
+      get: /api/v1/nfts
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListChains
+      get: /api/v1/chains
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDapps
+      get: /api/v1/dapps
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDappChains
+      get: /api/v1/dapps/chains
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDappCategories
+      get: /api/v1/dapps/categories
+
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check
       get: /health
-

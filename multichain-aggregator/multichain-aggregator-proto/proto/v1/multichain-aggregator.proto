@@ -9,6 +9,14 @@ service MultichainAggregatorService {
   rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
   rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
   rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
+  rpc ListTransactions(ListTransactionsRequest)
+  returns (ListTransactionsResponse) {}
+  rpc ListNfts(ListNftsRequest) returns (ListNftsResponse) {}
+  rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
+  rpc ListDapps(ListDappsRequest) returns (ListDappsResponse) {}
+  rpc ListDappChains(ListDappChainsRequest) returns (ListDappChainsResponse) {}
+  rpc ListDappCategories(ListDappCategoriesRequest)
+      returns (ListDappCategoriesResponse) {}
 }
 
 enum TokenType {
@@ -108,17 +116,13 @@ message QuickSearchResponse {
     uint64 block_number = 2;
   }
 
-  message ChainSearchResult {
-    string explorer_url = 1;
-    repeated Address addresses = 2;
-    repeated Hash blocks = 3;
-    repeated Hash transactions = 4;
-    repeated ChainBlockNumber block_numbers = 5;
-    repeated MarketplaceDapp dapps = 6;
-    repeated Token tokens = 7;
-  }
-
-  map<string, ChainSearchResult> items = 1;
+  repeated Address addresses = 1;
+  repeated Hash blocks = 2;
+  repeated Hash transactions = 3;
+  repeated ChainBlockNumber block_numbers = 4;
+  repeated MarketplaceDapp dapps = 5;
+  repeated Token tokens = 6;
+  repeated Address nfts = 7;
 }
 
 message ListAddressesRequest {
@@ -129,8 +133,8 @@ message ListAddressesRequest {
 }
 
 message ListAddressesResponse {
-  repeated Address addresses = 1;
-  Pagination pagination = 2;
+  repeated Address items = 1;
+  Pagination next_page_params = 2;
 }
 
 message ListTokensRequest {
@@ -141,6 +145,65 @@ message ListTokensRequest {
 }
 
 message ListTokensResponse {
-  repeated Token tokens = 1;
-  Pagination pagination = 2;
+  repeated Token items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListTransactionsRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListTransactionsResponse {
+  repeated Hash items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListNftsRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListNftsResponse {
+  repeated Address items = 1;
+  Pagination next_page_params = 2;
+}
+
+message Chain {
+  string id = 1;
+  string name = 2;
+  string explorer_url = 3;
+  string icon_url = 4;
+}
+
+message ListChainsRequest {}
+
+message ListChainsResponse {
+  repeated Chain items = 1;
+}
+
+message ListDappsRequest {
+  optional string q = 1;
+  optional string categories = 2;
+  optional string chain_ids = 3;
+}
+
+message ListDappsResponse {
+  repeated MarketplaceDapp items = 1;
+}
+
+message ListDappChainsRequest {}
+
+message ListDappChainsResponse {
+  repeated Chain items = 1;
+}
+
+message ListDappCategoriesRequest {}
+
+message ListDappCategoriesResponse {
+  repeated string items = 1;
 }

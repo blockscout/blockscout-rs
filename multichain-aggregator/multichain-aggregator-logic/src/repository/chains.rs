@@ -23,11 +23,18 @@ where
     Entity::insert_many(chains)
         .on_conflict(
             OnConflict::columns([Column::Id])
-                .update_columns([Column::ExplorerUrl, Column::IconUrl])
+                .update_columns([Column::ExplorerUrl, Column::IconUrl, Column::Name])
                 .value(Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
         )
         .exec(db)
         .await?;
     Ok(())
+}
+
+pub async fn list_chains<C>(db: &C) -> Result<Vec<Model>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    Entity::find().all(db).await
 }

@@ -8,14 +8,20 @@ use crate::{
 };
 use api_client_framework::HttpApiClient;
 use multichain_aggregator_logic::{
-    self as logic,
-    api_key_manager::ApiKeyManager,
-    clients::token_info::{SearchTokenInfos, SearchTokenInfosParams},
+    clients::{
+        dapp,
+        token_info::{SearchTokenInfos, SearchTokenInfosParams},
+    },
     error::ServiceError,
-    Chain, Token,
+    repository,
+    services::{api_key_manager::ApiKeyManager, import, search},
+    types,
 };
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
-    ListTokensRequest, ListTokensResponse,
+    ListChainsRequest, ListChainsResponse, ListDappCategoriesRequest, ListDappCategoriesResponse,
+    ListDappChainsRequest, ListDappChainsResponse, ListDappsRequest, ListDappsResponse,
+    ListNftsRequest, ListNftsResponse, ListTokensRequest, ListTokensResponse,
+    ListTransactionsRequest, ListTransactionsResponse,
 };
 use sea_orm::DatabaseConnection;
 use std::str::FromStr;
@@ -25,7 +31,7 @@ pub struct MultichainAggregator {
     db: DatabaseConnection,
     api_key_manager: ApiKeyManager,
     // Cached chains
-    chains: Vec<Chain>,
+    chains: Vec<types::chains::Chain>,
     dapp_client: HttpApiClient,
     token_info_client: HttpApiClient,
     api_settings: ApiSettings,
@@ -34,7 +40,7 @@ pub struct MultichainAggregator {
 impl MultichainAggregator {
     pub fn new(
         db: DatabaseConnection,
-        chains: Vec<Chain>,
+        chains: Vec<types::chains::Chain>,
         dapp_client: HttpApiClient,
         token_info_client: HttpApiClient,
         api_settings: ApiSettings,
@@ -71,9 +77,9 @@ impl MultichainAggregatorService for MultichainAggregator {
             .await
             .map_err(ServiceError::from)?;
 
-        let import_request: logic::BatchImportRequest = inner.try_into()?;
+        let import_request: types::batch_import_request::BatchImportRequest = inner.try_into()?;
 
-        logic::batch_import(&self.db, import_request)
+        import::batch_import(&self.db, import_request)
             .await
             .inspect_err(|err| {
                 tracing::error!(error = ?err, "failed to batch import");
@@ -84,32 +90,138 @@ impl MultichainAggregatorService for MultichainAggregator {
         }))
     }
 
+    async fn list_chains(
+        &self,
+        _request: Request<ListChainsRequest>,
+    ) -> Result<Response<ListChainsResponse>, Status> {
+        Ok(Response::new(ListChainsResponse {
+            items: self
+                .chains
+                .iter()
+                .filter_map(|c| c.clone().try_into().ok())
+                .collect(),
+        }))
+    }
+
     async fn list_addresses(
         &self,
         request: Request<ListAddressesRequest>,
     ) -> Result<Response<ListAddressesResponse>, Status> {
         let inner = request.into_inner();
 
-        let page_token: Option<(alloy_primitives::Address, logic::ChainId)> =
-            inner.page_token.map(parse_query_2).transpose()?;
-        let page_size = self.normalize_page_size(inner.page_size);
+        let (address, query) = match parse_query::<alloy_primitives::Address>(inner.q.clone()) {
+            Ok(address) => (Some(address), None),
+            Err(_) => (None, Some(inner.q)),
+        };
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
-        let (addresses, next_page_token) = logic::repository::addresses::search_by_query_paginated(
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+
+        let (addresses, next_page_token) = repository::addresses::list_addresses_paginated(
             &self.db,
-            &inner.q,
+            address,
+            query,
             chain_id,
-            page_token,
+            None,
             page_size as u64,
+            page_token,
         )
         .await
-        .inspect_err(|err| {
+        .map_err(|err| {
             tracing::error!(error = ?err, "failed to list addresses");
+            Status::internal("failed to list addresses")
         })?;
 
         Ok(Response::new(ListAddressesResponse {
-            addresses: addresses.into_iter().map(|a| a.into()).collect(),
-            pagination: next_page_token.map(|(a, c)| Pagination {
+            items: addresses
+                .into_iter()
+                .map(|a| types::addresses::Address::try_from(a).map(|a| a.into()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(ServiceError::from)?,
+            next_page_params: next_page_token.map(|(a, c)| Pagination {
                 page_token: format!("{},{}", a.to_checksum(None), c),
+                page_size,
+            }),
+        }))
+    }
+
+    async fn list_nfts(
+        &self,
+        request: Request<ListNftsRequest>,
+    ) -> Result<Response<ListNftsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let (address, query) = match parse_query::<alloy_primitives::Address>(inner.q.clone()) {
+            Ok(address) => (Some(address), None),
+            Err(_) => (None, Some(inner.q)),
+        };
+        let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+
+        let (addresses, next_page_token) = repository::addresses::list_addresses_paginated(
+            &self.db,
+            address,
+            query,
+            chain_id,
+            Some(vec![
+                types::addresses::TokenType::Erc721,
+                types::addresses::TokenType::Erc1155,
+            ]),
+            page_size as u64,
+            page_token,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error = ?err, "failed to list addresses");
+            Status::internal("failed to list addresses")
+        })?;
+
+        Ok(Response::new(ListNftsResponse {
+            items: addresses
+                .into_iter()
+                .map(|a| types::addresses::Address::try_from(a).map(|a| a.into()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(ServiceError::from)?,
+            next_page_params: next_page_token.map(|(a, c)| Pagination {
+                page_token: format!("{},{}", a.to_checksum(None), c),
+                page_size,
+            }),
+        }))
+    }
+
+    async fn list_transactions(
+        &self,
+        request: Request<ListTransactionsRequest>,
+    ) -> Result<Response<ListTransactionsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let hash = parse_query::<alloy_primitives::B256>(inner.q.clone())?;
+        let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query).transpose()?;
+
+        let (transactions, next_page_token) = repository::hashes::list_transactions_paginated(
+            &self.db,
+            hash,
+            chain_id,
+            page_size as u64,
+            page_token,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error = ?err, "failed to list transactions");
+            Status::internal("failed to list transactions")
+        })?;
+
+        Ok(Response::new(ListTransactionsResponse {
+            items: transactions
+                .into_iter()
+                .map(|t| types::hashes::Hash::try_from(t).map(|t| t.into()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(ServiceError::from)?,
+            next_page_params: next_page_token.map(|c| Pagination {
+                page_token: format!("{}", c),
                 page_size,
             }),
         }))
@@ -144,13 +256,13 @@ impl MultichainAggregatorService for MultichainAggregator {
         let tokens = res
             .token_infos
             .into_iter()
-            .map(|t| Token::try_from(t).map(|t| t.into()))
+            .map(|t| types::token_info::Token::try_from(t).map(|t| t.into()))
             .collect::<Result<Vec<_>, _>>()
             .map_err(ServiceError::from)?;
 
         Ok(Response::new(ListTokensResponse {
-            tokens,
-            pagination: res.next_page_params.map(|p| Pagination {
+            items: tokens,
+            next_page_params: res.next_page_params.map(|p| Pagination {
                 page_token: p.page_token,
                 page_size: p.page_size,
             }),
@@ -163,12 +275,11 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<QuickSearchResponse>, Status> {
         let inner = request.into_inner();
 
-        let results = logic::search::quick_search(
+        let results = search::quick_search(
             &self.db,
             &self.dapp_client,
             &self.token_info_client,
             inner.q,
-            &self.chains,
         )
         .await
         .inspect_err(|err| {
@@ -176,6 +287,74 @@ impl MultichainAggregatorService for MultichainAggregator {
         })?;
 
         Ok(Response::new(results.into()))
+    }
+
+    async fn list_dapps(
+        &self,
+        request: Request<ListDappsRequest>,
+    ) -> Result<Response<ListDappsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let dapps = self
+            .dapp_client
+            .request(&dapp::search_dapps::SearchDapps {
+                params: dapp::search_dapps::SearchDappsParams {
+                    title: inner.q,
+                    categories: inner.categories,
+                    chain_ids: inner.chain_ids,
+                },
+            })
+            .await
+            .map_err(|err| ServiceError::Internal(err.into()))?
+            .into_iter()
+            .filter_map(|d| {
+                types::dapp::MarketplaceDapp::try_from(d)
+                    .map(|d| d.into())
+                    .ok()
+            })
+            .collect();
+        Ok(Response::new(ListDappsResponse { items: dapps }))
+    }
+
+    async fn list_dapp_chains(
+        &self,
+        _request: Request<ListDappChainsRequest>,
+    ) -> Result<Response<ListDappChainsResponse>, Status> {
+        let chain_ids = self
+            .dapp_client
+            .request(&dapp::list_chains::ListChains {})
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "failed to list marketplace chains");
+                Status::internal("failed to list marketplace chains")
+            })?;
+        let items = chain_ids
+            .into_iter()
+            .filter_map(|c| {
+                let chain_id = types::ChainId::from_str(&c).ok()?;
+                self.chains
+                    .iter()
+                    .find(|cc| cc.id == chain_id)
+                    .and_then(|c| c.clone().try_into().ok())
+            })
+            .collect::<Vec<_>>();
+
+        Ok(Response::new(ListDappChainsResponse { items }))
+    }
+
+    async fn list_dapp_categories(
+        &self,
+        _request: Request<ListDappCategoriesRequest>,
+    ) -> Result<Response<ListDappCategoriesResponse>, Status> {
+        let items = self
+            .dapp_client
+            .request(&dapp::list_categories::ListCategories {})
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "failed to list marketplace categories");
+                Status::internal("failed to list marketplace categories")
+            })?;
+        Ok(Response::new(ListDappCategoriesResponse { items }))
     }
 }
 

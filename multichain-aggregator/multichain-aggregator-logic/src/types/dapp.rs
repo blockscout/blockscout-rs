@@ -1,5 +1,5 @@
 use super::ChainId;
-use crate::{clients::dapp::DappWithChainId, error::ParseError, proto};
+use crate::{clients::dapp::search_dapps::DappWithChainId, error::ParseError, proto};
 
 #[derive(Debug)]
 pub struct MarketplaceDapp {

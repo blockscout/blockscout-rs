@@ -1,6 +1,7 @@
 use super::ChainId;
 use crate::{error::ParseError, proto};
-use entity::{addresses::Model, sea_orm_active_enums as db_enum};
+use entity::addresses::Model;
+pub use entity::sea_orm_active_enums::TokenType;
 
 #[derive(Debug, Clone)]
 pub struct Address {
@@ -9,7 +10,7 @@ pub struct Address {
     pub ens_name: Option<String>,
     pub contract_name: Option<String>,
     pub token_name: Option<String>,
-    pub token_type: Option<db_enum::TokenType>,
+    pub token_type: Option<TokenType>,
     pub is_contract: bool,
     pub is_verified_contract: bool,
     pub is_token: bool,
@@ -71,23 +72,34 @@ impl From<Address> for proto::Address {
     }
 }
 
-pub fn proto_token_type_to_db_token_type(
-    token_type: proto::TokenType,
-) -> Option<db_enum::TokenType> {
+pub fn proto_token_type_to_db_token_type(token_type: proto::TokenType) -> Option<TokenType> {
     match token_type {
-        proto::TokenType::Erc20 => Some(db_enum::TokenType::Erc20),
-        proto::TokenType::Erc1155 => Some(db_enum::TokenType::Erc1155),
-        proto::TokenType::Erc721 => Some(db_enum::TokenType::Erc721),
-        proto::TokenType::Erc404 => Some(db_enum::TokenType::Erc404),
+        proto::TokenType::Erc20 => Some(TokenType::Erc20),
+        proto::TokenType::Erc1155 => Some(TokenType::Erc1155),
+        proto::TokenType::Erc721 => Some(TokenType::Erc721),
+        proto::TokenType::Erc404 => Some(TokenType::Erc404),
         proto::TokenType::Unspecified => None,
     }
 }
 
-pub fn db_token_type_to_proto_token_type(token_type: db_enum::TokenType) -> proto::TokenType {
+pub fn db_token_type_to_proto_token_type(token_type: TokenType) -> proto::TokenType {
     match token_type {
-        db_enum::TokenType::Erc20 => proto::TokenType::Erc20,
-        db_enum::TokenType::Erc1155 => proto::TokenType::Erc1155,
-        db_enum::TokenType::Erc721 => proto::TokenType::Erc721,
-        db_enum::TokenType::Erc404 => proto::TokenType::Erc404,
+        TokenType::Erc20 => proto::TokenType::Erc20,
+        TokenType::Erc1155 => proto::TokenType::Erc1155,
+        TokenType::Erc721 => proto::TokenType::Erc721,
+        TokenType::Erc404 => proto::TokenType::Erc404,
+    }
+}
+
+pub fn try_str_to_db_token_type(token_type: &str) -> Result<TokenType, ParseError> {
+    match token_type {
+        "erc-20" => Ok(TokenType::Erc20),
+        "erc-1155" => Ok(TokenType::Erc1155),
+        "erc-721" => Ok(TokenType::Erc721),
+        "erc-404" => Ok(TokenType::Erc404),
+        _ => Err(ParseError::Custom(format!(
+            "invalid token type: {}",
+            token_type
+        ))),
     }
 }

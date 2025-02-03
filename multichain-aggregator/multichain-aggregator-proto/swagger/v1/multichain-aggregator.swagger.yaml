@@ -42,6 +42,75 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
+  /api/v1/chains:
+    get:
+      operationId: MultichainAggregatorService_ListChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - MultichainAggregatorService
+  /api/v1/dapps:
+    get:
+      operationId: MultichainAggregatorService_ListDapps
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDappsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: categories
+          in: query
+          required: false
+          type: string
+        - name: chain_ids
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/dapps/categories:
+    get:
+      operationId: MultichainAggregatorService_ListDappCategories
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDappCategoriesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - MultichainAggregatorService
+  /api/v1/dapps/chains:
+    get:
+      operationId: MultichainAggregatorService_ListDappChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDappChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - MultichainAggregatorService
   /api/v1/import:batch:
     post:
       operationId: MultichainAggregatorService_BatchImport
@@ -60,6 +129,38 @@ paths:
           required: true
           schema:
             $ref: '#/definitions/v1BatchImportRequest'
+      tags:
+        - MultichainAggregatorService
+  /api/v1/nfts:
+    get:
+      operationId: MultichainAggregatorService_ListNfts
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListNftsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
       tags:
         - MultichainAggregatorService
   /api/v1/search:quick:
@@ -89,6 +190,38 @@ paths:
           description: A successful response.
           schema:
             $ref: '#/definitions/v1ListTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/transactions:
+    get:
+      operationId: MultichainAggregatorService_ListTransactions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListTransactionsResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -189,41 +322,6 @@ definitions:
       block_number:
         type: string
         format: uint64
-  QuickSearchResponseChainSearchResult:
-    type: object
-    properties:
-      explorer_url:
-        type: string
-      addresses:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Address'
-      blocks:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      transactions:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      block_numbers:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
-      dapps:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1MarketplaceDapp'
-      tokens:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Token'
   protobufAny:
     type: object
     properties:
@@ -291,6 +389,17 @@ definitions:
     properties:
       status:
         type: string
+  v1Chain:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      explorer_url:
+        type: string
+      icon_url:
+        type: string
   v1Hash:
     type: object
     properties:
@@ -314,22 +423,73 @@ definitions:
   v1ListAddressesResponse:
     type: object
     properties:
-      addresses:
+      items:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1Address'
-      pagination:
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListChainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Chain'
+  v1ListDappCategoriesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: string
+  v1ListDappChainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Chain'
+  v1ListDappsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
+  v1ListNftsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListTokensResponse:
     type: object
     properties:
-      tokens:
+      items:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1Token'
-      pagination:
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListTransactionsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1MarketplaceDapp:
     type: object
@@ -355,10 +515,41 @@ definitions:
   v1QuickSearchResponse:
     type: object
     properties:
-      items:
-        type: object
-        additionalProperties:
-          $ref: '#/definitions/QuickSearchResponseChainSearchResult'
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      block_numbers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
+      dapps:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+      nfts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
   v1Token:
     type: object
     properties:
