@@ -21,7 +21,8 @@ fn compile(
             ".blockscout.userOpsIndexer.v1.HealthCheckRequest.service",
             "#[serde(default)]"
         )
-        .field_attribute(".blockscout.userOpsIndexer.v1.UserOp.raw", "#[serde(rename=\"raw\")]");
+        .field_attribute(".blockscout.userOpsIndexer.v1.UserOp.raw", "#[serde(rename=\"raw\")]")
+        .extern_path(".google.protobuf", "::prost-wkt-types");
 
     config.compile_protos(protos, includes)?;
     Ok(())
