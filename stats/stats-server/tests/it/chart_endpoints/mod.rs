@@ -52,7 +52,7 @@ async fn test_chart_endpoints_ok() {
         test_lines_ok(base.clone()).boxed(),
         test_counters_ok(base.clone()).boxed(),
         test_main_page_ok(base.clone(), true).boxed(),
-        test_transactions_page_ok(base.clone()).boxed(),
+        test_transactions_page_ok(base.clone(), true).boxed(),
         test_contracts_page_ok(base).boxed(),
     ]
     .into_iter()
@@ -85,7 +85,7 @@ async fn test_chart_endpoints_work_with_not_indexed_blockscout() {
 
     let tests: JoinSet<_> = [
         test_main_page_ok(base.clone(), true).boxed(),
-        test_transactions_page_ok(base.clone()).boxed(),
+        test_transactions_page_ok(base.clone(), true).boxed(),
         test_contracts_page_ok(base).boxed(),
     ]
     .into_iter()
@@ -109,5 +109,11 @@ async fn test_chart_endpoints_work_with_disabled_arbitrum() {
     // Sleep until server will start and calculate all values
     tokio::time::sleep(std::time::Duration::from_secs(8)).await;
 
-    test_main_page_ok(base, false).await;
+    let tests: JoinSet<_> = [
+        test_main_page_ok(base.clone(), false).boxed(),
+        test_transactions_page_ok(base, false).boxed(),
+    ]
+    .into_iter()
+    .collect();
+    run_consolidated_tests(tests, test_name).await;
 }

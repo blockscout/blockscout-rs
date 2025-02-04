@@ -160,7 +160,12 @@ construct_update_group!(TxnsSuccessRateGroup {
 });
 
 construct_update_group!(TxnsStats24hGroup {
-    charts: [AverageTxnFee24h, NewTxns24h, TxnsFee24h,]
+    charts: [
+        AverageTxnFee24h,
+        NewTxns24h,
+        TxnsFee24h,
+        NewOperationalTxns24h,
+    ]
 });
 
 construct_update_group!(NewAccountsGroup {
