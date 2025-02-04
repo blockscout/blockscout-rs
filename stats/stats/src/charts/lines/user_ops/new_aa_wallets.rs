@@ -157,7 +157,7 @@ pub type NewAccountAbstractionWalletsYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{point_construction::dt, simple_test::simple_test_chart};
+    use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
