@@ -26,7 +26,7 @@ async fn tests_reupdate_works() {
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // obviously don't use this anywhere except tests
-    let api_key = ApiKey::from_str("123");
+    let api_key = ApiKey::from_str_infallible("123");
     setup_single_key(&mut settings, api_key.clone());
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
@@ -64,6 +64,7 @@ async fn tests_reupdate_works() {
             rejected: vec![]
         }
     );
+    #[allow(clippy::identity_op)]
     // wait to reupdate
     sleep(Duration::from_secs(1 * wait_multiplier)).await;
 
@@ -93,6 +94,7 @@ async fn tests_reupdate_works() {
             rejected: vec![]
         }
     );
+    #[allow(clippy::identity_op)]
     // wait to reupdate
     sleep(Duration::from_secs(1 * wait_multiplier)).await;
 
@@ -145,7 +147,7 @@ async fn get_new_txns(base: &Url) -> Vec<proto_v1::Point> {
     let line_name = "newTxns";
     let resolution = "DAY";
     let chart: proto_v1::LineChart = send_get_request(
-        &base,
+        base,
         &format!("/api/v1/lines/{line_name}?resolution={resolution}"),
     )
     .await;

@@ -46,10 +46,7 @@ fn group_update_schedule<'a>(
     group: &'a UpdateGroupEntry,
     default_schedule: &'a Schedule,
 ) -> &'a Schedule {
-    group
-        .update_schedule
-        .as_ref()
-        .unwrap_or_else(|| default_schedule)
+    group.update_schedule.as_ref().unwrap_or(default_schedule)
 }
 
 impl UpdateService {

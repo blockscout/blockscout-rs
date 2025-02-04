@@ -46,7 +46,7 @@ pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // obviously don't use this anywhere except tests
-    let api_key = ApiKey::from_str("123");
+    let api_key = ApiKey::from_str_infallible("123");
     setup_single_key(&mut settings, api_key.clone());
 
     init_server(|| stats(settings), &base).await;

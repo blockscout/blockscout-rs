@@ -636,7 +636,7 @@ pub struct ChartsMutexGuards<'a> {
     charts: HashSet<ChartKey>,
 }
 
-impl<'a> ChartsMutexGuards<'a> {
+impl ChartsMutexGuards<'_> {
     /// Charts for which the mutexes were locked in the first place
     pub fn charts(&self) -> &HashSet<ChartKey> {
         &self.charts

@@ -28,7 +28,7 @@ impl AuthorizationProvider {
     }
 
     pub fn is_key_authorized(&self, api_key: &str) -> bool {
-        self.keys.values().find(|key| key.key.eq(api_key)).is_some()
+        self.keys.values().any(|key| key.key.eq(api_key))
     }
 
     /// Unified error message
@@ -48,7 +48,7 @@ impl ApiKey {
         Self { key }
     }
 
-    pub fn from_str(key: &str) -> Self {
+    pub fn from_str_infallible(key: &str) -> Self {
         Self {
             key: key.to_string(),
         }

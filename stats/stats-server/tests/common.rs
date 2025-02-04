@@ -68,8 +68,8 @@ pub async fn request_reupdate_from(
 ) -> proto_v1::BatchUpdateChartsResult {
     let chart_names = charts.into_iter().map(|s| s.to_string()).collect();
     send_request_with_key(
-        &base,
-        &format!("/api/v1/charts/batch-update"),
+        base,
+        "/api/v1/charts/batch-update",
         reqwest::Method::POST,
         Some(&proto_v1::BatchUpdateChartsRequest {
             chart_names,
