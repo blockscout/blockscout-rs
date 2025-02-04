@@ -15,6 +15,7 @@
         "total_operational_txns",
         "total_verified_contracts",
         "new_txns_24h",
+        "new_operational_txns_24h",
         "pending_txns_30m",
         "txns_fee_24h",
         "average_txn_fee_24h"
