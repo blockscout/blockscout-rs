@@ -42,10 +42,11 @@ impl StatementFromRange for NewBlocks24hStatement {
     }
 }
 
-// should only be used in this chart for query efficiency.
-// because is not directly stored in local DB.
+// caching is not needed but I don't want to make another type just for this
 //
-// also caching is not needed but I don't want to make another type just for this
+// btw the caching should solve the problem with not storing `NewBlocks24h` in local
+// db while not introducing any new unnecessary entries to the db. so it should be safe
+// to use this in other places as well (in terms of efficiency)
 pub type NewBlocks24h =
     RemoteDatabaseSource<PullOne24hCached<NewBlocks24hStatement, WrappedValue<String>>>;
 
