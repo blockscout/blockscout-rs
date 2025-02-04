@@ -68,7 +68,7 @@ pub async fn run_consolidated_tests(mut tests: JoinSet<()>, log_prefix: &str) {
     let total = tests.len();
     println!("[{log_prefix}]: running {total} tests");
     while let Some(test_result) = tests.join_next().await {
-        let result_string_start = format!("[{log_prefix}]: stats endpoint test ... ");
+        let result_string_start = format!("[{log_prefix}]: consolidated test ... ");
         match test_result {
             Ok(()) => println!("{result_string_start}ok"),
             Err(e) => {
@@ -78,7 +78,7 @@ pub async fn run_consolidated_tests(mut tests: JoinSet<()>, log_prefix: &str) {
         }
     }
     let passed = total - failed;
-    let msg = format!("[{log_prefix}]: {passed}/{total} not fully indexed endpoint tests passed");
+    let msg = format!("[{log_prefix}]: {passed}/{total} consolidated tests passed");
     if failed > 0 {
         panic!("{}", msg)
     } else {

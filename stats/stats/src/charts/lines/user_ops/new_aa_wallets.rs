@@ -159,17 +159,6 @@ mod tests {
     use super::*;
     use crate::tests::{point_construction::dt, simple_test::simple_test_chart};
 
-    #[test]
-    fn print_stmt() {
-        println!(
-            "{}",
-            NewAccountAbstractionWalletsStatement::get_statement(
-                Some(dt("2023-01-01T00:00:00").and_utc()..dt("2024-01-01T12:00:00").and_utc()),
-                &BlockscoutMigrations::latest(),
-            )
-        )
-    }
-
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_account_abstraction_wallets() {
