@@ -16,9 +16,10 @@ use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
     counters::{
-        AverageBlockTime, AverageTxnFee24h, NewContracts24h, NewTxns24h, NewVerifiedContracts24h,
-        PendingTxns30m, TotalAddresses, TotalBlocks, TotalContracts, TotalOperationalTxns,
-        TotalTxns, TotalVerifiedContracts, TxnsFee24h, YesterdayOperationalTxns, YesterdayTxns,
+        AverageBlockTime, AverageTxnFee24h, NewContracts24h, NewOperationalTxns24h, NewTxns24h,
+        NewVerifiedContracts24h, PendingTxns30m, TotalAddresses, TotalBlocks, TotalContracts,
+        TotalOperationalTxns, TotalTxns, TotalVerifiedContracts, TxnsFee24h,
+        YesterdayOperationalTxns, YesterdayTxns,
     },
     data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
     lines::{NewOperationalTxnsWindow, NewTxnsWindow, NEW_TXNS_WINDOW_RANGE},
@@ -189,12 +190,14 @@ impl ReadService {
             transactions_fee_24h: None,
             average_transactions_fee_24h: None,
             transactions_24h: None,
+            operational_transactions_24h: None,
         };
         vec![
             PendingTxns30m::name(),
             TxnsFee24h::name(),
             AverageTxnFee24h::name(),
             NewTxns24h::name(),
+            NewOperationalTxns24h::name(),
         ]
     }
 }
@@ -480,17 +483,20 @@ impl StatsService for ReadService {
             transactions_fee_24h,
             average_transactions_fee_24h,
             transactions_24h,
+            operational_transactions_24h,
         ) = join!(
             self.query_counter(PendingTxns30m::name(), now),
             self.query_counter(TxnsFee24h::name(), now),
             self.query_counter(AverageTxnFee24h::name(), now),
             self.query_counter(NewTxns24h::name(), now),
+            self.query_counter(NewOperationalTxns24h::name(), now),
         );
         Ok(Response::new(proto_v1::TransactionsPageStats {
             pending_transactions_30m,
             transactions_fee_24h,
             average_transactions_fee_24h,
             transactions_24h,
+            operational_transactions_24h,
         }))
     }
 

@@ -17,11 +17,13 @@ mod parse;
 mod strip_extension;
 mod to_string;
 mod unwrap_or;
+mod wrapper;
 
 pub use parse::MapParseTo;
 pub use strip_extension::StripExt;
 pub use to_string::MapToString;
 pub use unwrap_or::UnwrapOr;
+pub use wrapper::StripWrapper;
 
 /// Apply `F` to each value queried from data source `D`
 pub struct Map<D, F>(PhantomData<(D, F)>)

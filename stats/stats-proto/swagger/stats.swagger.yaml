@@ -306,3 +306,5 @@ definitions:
         $ref: '#/definitions/v1Counter'
       transactions_24h:
         $ref: '#/definitions/v1Counter'
+      operational_transactions_24h:
+        $ref: '#/definitions/v1Counter'

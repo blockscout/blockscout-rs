@@ -33,6 +33,7 @@ pub async fn test_counters_ok(base: Url) {
         // on a different page
         // "yesterdayTxns",
         "newTxns24h",
+        "newOperationalTxns24h",
         "pendingTxns30m",
         "txnsFee24h",
         "averageTxnFee24h",

@@ -5,19 +5,26 @@ use url::Url;
 
 use crate::array_of_variables_with_names;
 
-pub async fn test_transactions_page_ok(base: Url) {
+pub async fn test_transactions_page_ok(base: Url, expect_arbitrum: bool) {
     let TransactionsPageStats {
         pending_transactions_30m,
         transactions_fee_24h,
         average_transactions_fee_24h,
         transactions_24h,
+        operational_transactions_24h,
     } = send_get_request(&base, "/api/v1/pages/transactions").await;
-    let counters = array_of_variables_with_names!([
+    let mut counters = array_of_variables_with_names!([
         pending_transactions_30m,
         transactions_fee_24h,
         average_transactions_fee_24h,
         transactions_24h,
-    ]);
+    ])
+    .to_vec();
+    if expect_arbitrum {
+        counters.extend(array_of_variables_with_names!([
+            operational_transactions_24h
+        ]));
+    }
     for (name, counter) in counters {
         #[allow(clippy::expect_fun_call)]
         let counter = counter.expect(&format!("page counter {} must be available", name));
