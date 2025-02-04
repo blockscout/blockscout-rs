@@ -270,11 +270,19 @@ impl DataSource for () {
         Ok(())
     }
 
+    async fn set_next_update_from_recursively(
+        _db: &DatabaseConnection,
+        _update_from: chrono::NaiveDate,
+    ) -> Result<(), ChartError> {
+        // stop recursion
+        Ok(())
+    }
+
     async fn set_next_update_from_itself(
         _db: &DatabaseConnection,
         _update_from: chrono::NaiveDate,
     ) -> Result<(), ChartError> {
-        Ok(())
+        unreachable!("not called by `set_next_update_from_recursively` and must not be called by anything else");
     }
 }
 

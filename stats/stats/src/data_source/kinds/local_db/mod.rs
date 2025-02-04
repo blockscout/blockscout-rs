@@ -273,7 +273,7 @@ where
         let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
         let update_from = day_start(&update_from);
         match metadata.last_updated_at {
-            Some(current_last_updated_at) if update_from < current_last_updated_at => {
+            Some(current_last_updated_at) if update_from <= current_last_updated_at => {
                 set_last_updated_at(metadata.id, db, update_from)
                     .await
                     .map_err(ChartError::StatsDB)?;

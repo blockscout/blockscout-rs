@@ -10,7 +10,7 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/charts:batch-update:
+  /api/v1/charts/batch-update:
     post:
       operationId: StatsService_BatchUpdateCharts
       responses:
@@ -23,22 +23,11 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: chart_names
-          in: query
-          required: false
-          type: array
-          items:
-            type: string
-          collectionFormat: multi
-        - name: from
-          description: Default is today
-          in: query
-          required: false
-          type: string
-        - name: update_later
-          in: query
-          required: false
-          type: boolean
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1BatchUpdateChartsRequest'
       tags:
         - StatsService
   /api/v1/counters:
@@ -209,6 +198,18 @@ definitions:
         type: string
       reason:
         type: string
+  v1BatchUpdateChartsRequest:
+    type: object
+    properties:
+      chart_names:
+        type: array
+        items:
+          type: string
+      from:
+        type: string
+        title: Default is today
+      update_later:
+        type: boolean
   v1BatchUpdateChartsResult:
     type: object
     properties:

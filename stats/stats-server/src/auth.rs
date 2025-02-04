@@ -7,7 +7,7 @@ pub struct AuthorizationProvider {
     keys: HashMap<String, ApiKey>,
 }
 
-const API_KEY_NAME: &str = "x-api-key";
+pub const API_KEY_NAME: &str = "x-api-key";
 
 impl AuthorizationProvider {
     pub fn new(keys: HashMap<String, ApiKey>) -> Self {
@@ -41,4 +41,16 @@ impl AuthorizationProvider {
 #[serde(deny_unknown_fields)]
 pub struct ApiKey {
     pub key: String,
+}
+
+impl ApiKey {
+    pub fn new(key: String) -> Self {
+        Self { key }
+    }
+
+    pub fn from_str(key: &str) -> Self {
+        Self {
+            key: key.to_string(),
+        }
+    }
 }
