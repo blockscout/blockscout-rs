@@ -34,11 +34,8 @@ pub async fn test_lines_ok(base: Url) {
 
     let mut enabled_resolutions = enabled_resolutions(line_charts).await;
 
-    // does not return data for latest dates,
-    // so todo: test later with other main page stuff
-    assert!(enabled_resolutions.remove("newTxnsWindow").is_some());
-
     for line_name in [
+        // disabled charts are commented out
         "accountsGrowth",
         "activeAccounts",
         // "activeRecurringAccounts60Days",
@@ -57,7 +54,6 @@ pub async fn test_lines_ok(base: Url) {
         "newBlocks",
         "newNativeCoinTransfers",
         "newTxns",
-        // "newTxnsWindow",
         "txnsFee",
         "txnsGrowth",
         "newOperationalTxns",

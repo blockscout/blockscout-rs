@@ -13,6 +13,10 @@ use tokio::task::JoinSet;
 use url::Url;
 use wiremock::MockServer;
 
+pub fn setup_single_key(settings: &mut Settings, key: ApiKey) {
+    settings.api_keys = HashMap::from([("test_key".to_string(), key)]);
+}
+
 pub async fn send_arbitrary_request(request: RequestBuilder) -> Response {
     let response = request
         .send()
@@ -139,6 +143,11 @@ pub async fn run_consolidated_tests(mut tests: JoinSet<()>, log_prefix: &str) {
     } else {
         println!("{}", msg)
     }
+}
+
+pub fn sorted_vec<T: Ord>(mut v: Vec<T>) -> Vec<T> {
+    v.sort();
+    v
 }
 
 #[cfg(test)]

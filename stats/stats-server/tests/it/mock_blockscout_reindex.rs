@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::{str::FromStr, time::Duration};
 
 use blockscout_service_launcher::test_server::{init_server, send_get_request};
 use chrono::NaiveDate;
@@ -12,7 +12,7 @@ use stats_server::{auth::ApiKey, stats};
 use tokio::time::sleep;
 use url::Url;
 
-use crate::common::{get_test_stats_settings, request_reupdate_from};
+use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single_key};
 
 /// Uses reindexing, so needs to be independent
 #[tokio::test]
@@ -26,9 +26,8 @@ async fn tests_reupdate_works() {
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // obviously don't use this anywhere except tests
-    let api_key =
-        ApiKey::from_str("0000000000000000000000000000000000000000000000000000000000000010");
-    settings.api_keys = HashMap::from([("test_key".to_string(), api_key.clone())]);
+    let api_key = ApiKey::from_str("123");
+    setup_single_key(&mut settings, api_key.clone());
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
 
