@@ -22,6 +22,11 @@
             "title": "Transactions (24h)",
             "description": "Number of new transactions within last 24 hours"
         },
+        "new_operational_txns_24h": {
+            "enabled": false,
+            "title": "Operational transactions (24h)",
+            "description": "Number of new transactions within last 24 hours without block creation transactions"
+        },
         "pending_txns_30m": {
             "title": "Pending transactions (30m)",
             "description": "Transactions in the past 30 minutes waiting to be processed by the network"

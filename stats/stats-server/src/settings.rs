@@ -8,7 +8,7 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::{
-    counters::{TotalOperationalTxns, YesterdayOperationalTxns},
+    counters::{NewOperationalTxns24h, TotalOperationalTxns, YesterdayOperationalTxns},
     lines::{NewOperationalTxns, NewOperationalTxnsWindow, OperationalTxnsGrowth},
     ChartProperties, IndexingStatus,
 };
@@ -141,10 +141,11 @@ pub fn handle_enable_all_arbitrum(
     if enable_all_arbitrum {
         for enable_key in [
             NewOperationalTxns::key().name(),
-            OperationalTxnsGrowth::key().name(),
-            TotalOperationalTxns::key().name(),
-            YesterdayOperationalTxns::key().name(),
             NewOperationalTxnsWindow::key().name(),
+            TotalOperationalTxns::key().name(),
+            NewOperationalTxns24h::key().name(),
+            OperationalTxnsGrowth::key().name(),
+            YesterdayOperationalTxns::key().name(),
         ] {
             let settings = match (
                 charts.lines.get_mut(enable_key),

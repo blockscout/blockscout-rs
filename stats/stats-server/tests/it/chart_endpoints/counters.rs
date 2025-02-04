@@ -30,6 +30,7 @@ pub async fn test_counters_ok(base: Url) {
         "totalAccountAbstractionWallets",
         "totalVerifiedContracts",
         "newTxns24h",
+        "newOperationalTxns24h",
         "pendingTxns30m",
         "txnsFee24h",
         "averageTxnFee24h",
