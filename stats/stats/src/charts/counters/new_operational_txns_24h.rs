@@ -91,7 +91,7 @@ mod tests {
             "update_new_operational_txns_24h",
             // block at `2022-11-11T00:00:00` is not counted because
             // the relation is 'less than' in query
-            "9",
+            "11",
             Some(dt("2022-11-11T00:00:00")),
         )
         .await;

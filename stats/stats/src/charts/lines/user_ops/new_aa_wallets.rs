@@ -157,18 +157,7 @@ pub type NewAccountAbstractionWalletsYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{point_construction::dt, simple_test::simple_test_chart};
-
-    #[test]
-    fn print_stmt() {
-        println!(
-            "{}",
-            NewAccountAbstractionWalletsStatement::get_statement(
-                Some(dt("2023-01-01T00:00:00").and_utc()..dt("2024-01-01T12:00:00").and_utc()),
-                &BlockscoutMigrations::latest(),
-            )
-        )
-    }
+    use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
