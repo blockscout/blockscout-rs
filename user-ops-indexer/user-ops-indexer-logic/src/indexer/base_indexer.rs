@@ -462,15 +462,14 @@ mod tests {
     };
     use alloy::{
         primitives::{address, b256, bytes, U256},
-        providers::{ProviderBuilder, RootProvider},
-        transports::BoxTransport,
+        providers::{Provider, ProviderBuilder},
     };
     use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
     use sea_orm::EntityTrait;
 
     const ETH_RPC_URL: &str = "https://eth.drpc.org";
 
-    async fn connect_rpc() -> RootProvider<BoxTransport> {
+    async fn connect_rpc() -> impl Provider {
         ProviderBuilder::new()
             .on_builtin(ETH_RPC_URL)
             .await
