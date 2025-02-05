@@ -29,7 +29,7 @@ pub struct Log {
     pub smart_contract: models::AddressParam,
     #[serde(rename = "topics")]
     pub topics: Vec<String>,
-    #[serde(rename = "transaction_hash")]
+    #[serde(rename = "transaction_hash", alias = "tx_hash")] // changed
     pub transaction_hash: String,
 }
 

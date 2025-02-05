@@ -20,6 +20,7 @@ pub struct AddressWithTxCount {
     pub creator_address_hash: Option<String>,
     #[serde(
         rename = "creation_transaction_hash",
+        alias = "creation_tx_hash", // changed
         skip_serializing_if = "Option::is_none"
     )]
     pub creation_transaction_hash: Option<String>,
@@ -106,7 +107,7 @@ pub struct AddressWithTxCount {
         skip_serializing_if = "Option::is_none"
     )]
     pub has_validated_blocks: Option<bool>,
-    #[serde(rename = "transaction_count")]
+    #[serde(rename = "transaction_count", alias = "tx_count")] // changed
     pub transaction_count: String,
 }
 

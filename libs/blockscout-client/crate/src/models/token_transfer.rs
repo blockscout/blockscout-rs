@@ -29,7 +29,7 @@ pub struct TokenTransfer {
     pub token: models::TokenInfo,
     #[serde(rename = "total")]
     pub total: models::TokenTransferTotal,
-    #[serde(rename = "transaction_hash")]
+    #[serde(rename = "transaction_hash", alias = "tx_hash")] // changed
     pub transaction_hash: String,
     #[serde(rename = "type")]
     pub r#type: String,

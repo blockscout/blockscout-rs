@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 pub struct TransactionChartItem {
     #[serde(rename = "date")]
     pub date: String,
-    #[serde(rename = "transaction_count")]
+    #[serde(rename = "transaction_count", alias = "tx_count")] // changed
     pub transaction_count: i32,
 }
 
