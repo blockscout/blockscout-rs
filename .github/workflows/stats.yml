@@ -66,7 +66,10 @@ jobs:
         if: success() || failure()
 
       - name: DB tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace -- --nocapture --ignored
+        # No logs because they hinder performance too much (75s with vs 45s without on local machine)
+        # and there are too much logs to view in the browser, forcing to download .zip and open
+        # ~90 MB log file locally
+        run: RUST_BACKTRACE=1 cargo test --locked --workspace -- --nocapture --ignored
         if: success() || failure()
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
