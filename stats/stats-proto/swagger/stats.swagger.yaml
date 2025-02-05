@@ -1,10 +1,16 @@
 swagger: "2.0"
 info:
-  title: stats.proto
+  title: Stats service
   version: version not set
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
 tags:
   - name: StatsService
   - name: Health
+schemes:
+  - https
 consumes:
   - application/json
 produces:
@@ -29,7 +35,9 @@ paths:
           schema:
             $ref: '#/definitions/v1BatchUpdateChartsRequest'
       tags:
-        - StatsService
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/counters:
     get:
       operationId: StatsService_GetCounters
@@ -365,3 +373,11 @@ definitions:
         $ref: '#/definitions/v1Counter'
       operational_transactions_24h:
         $ref: '#/definitions/v1Counter'
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    name: x-api-key
+    in: header
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs
