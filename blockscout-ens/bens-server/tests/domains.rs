@@ -56,6 +56,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
 
     // get detailed domain
     let request: Value = send_get_request(&base, "/api/v1/1/domains/vitalik").await;
+    println!("{:?}", request);
     let vitalik_detailed_json = data_file_as_json!("domains/vitalik_eth/detailed.json", &context);
     assert_eq!(request, vitalik_detailed_json.clone());
     // get detailed domain with emojied name and with wrapped token
@@ -66,6 +67,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     );
 
     let request: Value = send_get_request(&base, "/api/v1/1/domains/abcnews").await;
+    println!("{:?}", request);
 
     assert_eq!(
         request,
