@@ -131,6 +131,7 @@ pub async fn test_lines_counters_not_indexed_ok(base: Url) {
             "txnsFee24h",
             "averageTxnFee24h",
             "newTxns24h",
+            "newOperationalTxns24h",
             // contracts
             "totalContracts",
             "totalVerifiedContracts",
