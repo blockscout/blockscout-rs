@@ -82,7 +82,7 @@ impl VyperVerifier for VyperVerifierService {
 
         tracing::debug!(
             bytecode = request.bytecode,
-            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+            bytecode_type = BytecodeType::try_from(request.bytecode_type)
                 .unwrap()
                 .as_str_name(),
             compiler_version = request.compiler_version,
@@ -153,7 +153,7 @@ impl VyperVerifier for VyperVerifierService {
 
         tracing::debug!(
             bytecode = request.bytecode,
-            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+            bytecode_type = BytecodeType::try_from(request.bytecode_type)
                 .unwrap()
                 .as_str_name(),
             compiler_version = request.compiler_version,
