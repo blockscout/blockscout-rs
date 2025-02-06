@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 async-trait = { workspace = true }
-http = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
@@ -13,3 +12,4 @@ sig-provider-proto = { workspace = true }
 smart-contract-verifier = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
+tracing = { workspace = true }

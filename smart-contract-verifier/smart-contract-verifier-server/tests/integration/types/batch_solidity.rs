@@ -283,10 +283,10 @@ impl From<proto::ContractVerificationSuccess> for ParsedSuccessItem {
         let runtime_code =
             DisplayBytes::from_str(&runtime_code).expect("cannot parse runtime_code as bytes");
 
-        let compiler = proto::contract_verification_success::compiler::Compiler::from_i32(compiler)
+        let compiler = proto::contract_verification_success::compiler::Compiler::try_from(compiler)
             .unwrap()
             .as_str_name();
-        let language = proto::contract_verification_success::language::Language::from_i32(language)
+        let language = proto::contract_verification_success::language::Language::try_from(language)
             .unwrap()
             .as_str_name();
         let compiler_settings = {
@@ -308,7 +308,7 @@ impl From<proto::ContractVerificationSuccess> for ParsedSuccessItem {
 
         let parse_match_details =
             |proto_details: proto::contract_verification_success::MatchDetails| {
-                let match_type = proto::contract_verification_success::MatchType::from_i32(
+                let match_type = proto::contract_verification_success::MatchType::try_from(
                     proto_details.match_type,
                 )
                 .unwrap()

@@ -1,4 +1,3 @@
-use http::Uri;
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use sig_provider_proto::blockscout::sig_provider::v1::{
@@ -6,7 +5,7 @@ use sig_provider_proto::blockscout::sig_provider::v1::{
 };
 use smart_contract_verifier::{Middleware, SoliditySuccess, SourcifySuccess, VyperSuccess};
 use std::sync::Arc;
-use tonic::transport::Channel;
+use tonic::transport::Uri;
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -22,20 +21,29 @@ pub struct SigProvider {
 
 impl SigProvider {
     pub async fn new(config: Config) -> Result<Self, tonic::transport::Error> {
-        let connection = Channel::builder(config.url).connect().await?;
         Ok(Self {
-            inner: Arc::new(SigProviderImpl { connection }),
+            inner: Arc::new(SigProviderImpl { uri: config.url }),
         })
     }
 }
 
 struct SigProviderImpl {
-    connection: Channel,
+    uri: Uri,
 }
 
 impl SigProviderImpl {
     async fn create_signatures(&self, abi: String) {
-        let mut client = SignatureServiceClient::new(self.connection.clone());
+        let mut client = match SignatureServiceClient::connect(self.uri.to_string()).await {
+            Ok(client) => client,
+            Err(err) => {
+                tracing::error!(
+                    "error connecting to signature service; uri={}, err={}",
+                    self.uri,
+                    err
+                );
+                return;
+            }
+        };
         let _ = client
             .create_signatures(CreateSignaturesRequest { abi })
             .await;
