@@ -21,6 +21,10 @@ pub struct Fee {
 
 impl Fee {
     pub fn new(r#type: String, value: String) -> Fee {
-        Fee { r#type, value }
+        Fee {
+            r#type,
+            value,
+        }
     }
 }
+

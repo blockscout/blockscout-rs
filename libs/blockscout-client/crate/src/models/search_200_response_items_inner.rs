@@ -25,3 +25,4 @@ impl Default for Search200ResponseItemsInner {
         Self::SearchResultToken(Default::default())
     }
 }
+

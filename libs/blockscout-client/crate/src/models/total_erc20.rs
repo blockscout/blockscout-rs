@@ -21,6 +21,10 @@ pub struct TotalErc20 {
 
 impl TotalErc20 {
     pub fn new(decimals: String, value: String) -> TotalErc20 {
-        TotalErc20 { decimals, value }
+        TotalErc20 {
+            decimals,
+            value,
+        }
     }
 }
+

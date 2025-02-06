@@ -22,11 +22,7 @@ pub struct DecodedInput {
 }
 
 impl DecodedInput {
-    pub fn new(
-        method_call: String,
-        method_id: String,
-        parameters: Vec<models::DecodedInputParameter>,
-    ) -> DecodedInput {
+    pub fn new(method_call: String, method_id: String, parameters: Vec<models::DecodedInputParameter>) -> DecodedInput {
         DecodedInput {
             method_call,
             method_id,
@@ -34,3 +30,4 @@ impl DecodedInput {
         }
     }
 }
+

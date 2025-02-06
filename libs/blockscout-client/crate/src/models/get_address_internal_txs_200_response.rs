@@ -20,13 +20,11 @@ pub struct GetAddressInternalTxs200Response {
 }
 
 impl GetAddressInternalTxs200Response {
-    pub fn new(
-        items: Vec<models::InternalTransaction>,
-        next_page_params: serde_json::Value,
-    ) -> GetAddressInternalTxs200Response {
+    pub fn new(items: Vec<models::InternalTransaction>, next_page_params: serde_json::Value) -> GetAddressInternalTxs200Response {
         GetAddressInternalTxs200Response {
             items,
             next_page_params,
         }
     }
 }
+

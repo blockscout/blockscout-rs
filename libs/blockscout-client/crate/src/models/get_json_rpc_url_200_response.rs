@@ -19,6 +19,9 @@ pub struct GetJsonRpcUrl200Response {
 
 impl GetJsonRpcUrl200Response {
     pub fn new(json_rpc_url: String) -> GetJsonRpcUrl200Response {
-        GetJsonRpcUrl200Response { json_rpc_url }
+        GetJsonRpcUrl200Response {
+            json_rpc_url,
+        }
     }
 }
+

@@ -20,13 +20,11 @@ pub struct GetSmartContracts200Response {
 }
 
 impl GetSmartContracts200Response {
-    pub fn new(
-        items: Vec<models::SmartContractForList>,
-        next_page_params: serde_json::Value,
-    ) -> GetSmartContracts200Response {
+    pub fn new(items: Vec<models::SmartContractForList>, next_page_params: serde_json::Value) -> GetSmartContracts200Response {
         GetSmartContracts200Response {
             items,
             next_page_params,
         }
     }
 }
+

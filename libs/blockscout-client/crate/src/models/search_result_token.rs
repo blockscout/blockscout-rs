@@ -38,19 +38,7 @@ pub struct SearchResultToken {
 }
 
 impl SearchResultToken {
-    pub fn new(
-        address: String,
-        address_url: String,
-        exchange_rate: String,
-        icon_url: String,
-        is_smart_contract_verified: bool,
-        name: String,
-        symbol: String,
-        token_type: String,
-        token_url: String,
-        total_supply: String,
-        r#type: String,
-    ) -> SearchResultToken {
+    pub fn new(address: String, address_url: String, exchange_rate: String, icon_url: String, is_smart_contract_verified: bool, name: String, symbol: String, token_type: String, token_url: String, total_supply: String, r#type: String) -> SearchResultToken {
         SearchResultToken {
             address,
             address_url,
@@ -66,3 +54,4 @@ impl SearchResultToken {
         }
     }
 }
+

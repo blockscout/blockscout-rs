@@ -29,20 +29,12 @@ pub struct Log {
     pub smart_contract: models::AddressParam,
     #[serde(rename = "topics")]
     pub topics: Vec<String>,
-    #[serde(rename = "tx_hash")]
-    pub tx_hash: String,
+    #[serde(rename = "transaction_hash")]
+    pub transaction_hash: String,
 }
 
 impl Log {
-    pub fn new(
-        address: models::AddressParam,
-        data: String,
-        decoded: models::DecodedInputLog,
-        index: i32,
-        smart_contract: models::AddressParam,
-        topics: Vec<String>,
-        tx_hash: String,
-    ) -> Log {
+    pub fn new(address: models::AddressParam, data: String, decoded: models::DecodedInputLog, index: i32, smart_contract: models::AddressParam, topics: Vec<String>, transaction_hash: String) -> Log {
         Log {
             address,
             block_hash: None,
@@ -52,7 +44,8 @@ impl Log {
             index,
             smart_contract,
             topics,
-            tx_hash,
+            transaction_hash,
         }
     }
 }
+

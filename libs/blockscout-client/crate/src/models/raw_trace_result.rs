@@ -23,3 +23,4 @@ impl Default for RawTraceResult {
         Self::RawTraceCallResult(Default::default())
     }
 }
+

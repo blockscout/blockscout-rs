@@ -17,7 +17,6 @@ pub enum TokenTransferTotal {
     TotalErc20(models::TotalErc20),
     TotalErc721(models::TotalErc721),
     TotalErc1155(models::TotalErc1155),
-    TotalErc1155Batch(Vec<models::TotalErc1155>),
 }
 
 impl Default for TokenTransferTotal {
@@ -25,3 +24,4 @@ impl Default for TokenTransferTotal {
         Self::TotalErc20(Default::default())
     }
 }
+

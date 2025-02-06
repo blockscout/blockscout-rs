@@ -15,10 +15,16 @@ use serde::{Deserialize, Serialize};
 pub struct TotalErc721 {
     #[serde(rename = "token_id")]
     pub token_id: String,
+    #[serde(rename = "token_instance", skip_serializing_if = "Option::is_none")]
+    pub token_instance: Option<models::NftInstance>,
 }
 
 impl TotalErc721 {
     pub fn new(token_id: String) -> TotalErc721 {
-        TotalErc721 { token_id }
+        TotalErc721 {
+            token_id,
+            token_instance: None,
+        }
     }
 }
+

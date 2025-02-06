@@ -22,11 +22,7 @@ pub struct TransactionActionUniswapV3Bcs {
 }
 
 impl TransactionActionUniswapV3Bcs {
-    pub fn new(
-        data: serde_json::Value,
-        protocol: String,
-        r#type: String,
-    ) -> TransactionActionUniswapV3Bcs {
+    pub fn new(data: serde_json::Value, protocol: String, r#type: String) -> TransactionActionUniswapV3Bcs {
         TransactionActionUniswapV3Bcs {
             data,
             protocol,
@@ -34,3 +30,4 @@ impl TransactionActionUniswapV3Bcs {
         }
     }
 }
+

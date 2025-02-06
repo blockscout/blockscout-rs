@@ -13,25 +13,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct V1Data {
-    #[serde(
-        rename = "cache_latest_block_inserted_at",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "cache_latest_block_inserted_at", skip_serializing_if = "Option::is_none")]
     pub cache_latest_block_inserted_at: Option<String>,
-    #[serde(
-        rename = "cache_latest_block_number",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "cache_latest_block_number", skip_serializing_if = "Option::is_none")]
     pub cache_latest_block_number: Option<String>,
-    #[serde(
-        rename = "latest_block_inserted_at",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "latest_block_inserted_at", skip_serializing_if = "Option::is_none")]
     pub latest_block_inserted_at: Option<String>,
-    #[serde(
-        rename = "latest_block_number",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "latest_block_number", skip_serializing_if = "Option::is_none")]
     pub latest_block_number: Option<String>,
 }
 
@@ -45,3 +33,4 @@ impl V1Data {
         }
     }
 }
+

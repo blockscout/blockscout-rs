@@ -24,12 +24,7 @@ pub struct AddressCounters {
 }
 
 impl AddressCounters {
-    pub fn new(
-        transactions_count: String,
-        token_transfers_count: String,
-        gas_usage_count: String,
-        validations_count: String,
-    ) -> AddressCounters {
+    pub fn new(transactions_count: String, token_transfers_count: String, gas_usage_count: String, validations_count: String) -> AddressCounters {
         AddressCounters {
             transactions_count,
             token_transfers_count,
@@ -38,3 +33,4 @@ impl AddressCounters {
         }
     }
 }
+

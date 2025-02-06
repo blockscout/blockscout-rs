@@ -24,3 +24,4 @@ impl Default for RawTraceAction {
         Self::RawTraceCallAction(Default::default())
     }
 }
+

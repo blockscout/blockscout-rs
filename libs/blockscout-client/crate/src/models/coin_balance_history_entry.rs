@@ -26,12 +26,7 @@ pub struct CoinBalanceHistoryEntry {
 }
 
 impl CoinBalanceHistoryEntry {
-    pub fn new(
-        block_number: i32,
-        block_timestamp: String,
-        delta: String,
-        value: String,
-    ) -> CoinBalanceHistoryEntry {
+    pub fn new(block_number: i32, block_timestamp: String, delta: String, value: String) -> CoinBalanceHistoryEntry {
         CoinBalanceHistoryEntry {
             transaction_hash: None,
             block_number,
@@ -41,3 +36,4 @@ impl CoinBalanceHistoryEntry {
         }
     }
 }
+

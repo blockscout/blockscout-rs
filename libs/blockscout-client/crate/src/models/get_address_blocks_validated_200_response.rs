@@ -20,13 +20,11 @@ pub struct GetAddressBlocksValidated200Response {
 }
 
 impl GetAddressBlocksValidated200Response {
-    pub fn new(
-        items: Vec<models::Block>,
-        next_page_params: serde_json::Value,
-    ) -> GetAddressBlocksValidated200Response {
+    pub fn new(items: Vec<models::Block>, next_page_params: serde_json::Value) -> GetAddressBlocksValidated200Response {
         GetAddressBlocksValidated200Response {
             items,
             next_page_params,
         }
     }
 }
+

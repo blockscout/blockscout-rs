@@ -20,13 +20,11 @@ pub struct GetMarketChart200Response {
 }
 
 impl GetMarketChart200Response {
-    pub fn new(
-        available_supply: String,
-        chart_data: Vec<models::MarketChartItem>,
-    ) -> GetMarketChart200Response {
+    pub fn new(available_supply: String, chart_data: Vec<models::MarketChartItem>) -> GetMarketChart200Response {
         GetMarketChart200Response {
             available_supply,
             chart_data,
         }
     }
 }
+

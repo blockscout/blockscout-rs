@@ -28,12 +28,7 @@ pub struct RawTrace {
 }
 
 impl RawTrace {
-    pub fn new(
-        action: models::RawTraceAction,
-        subtraces: i32,
-        trace_address: Vec<i32>,
-        r#type: String,
-    ) -> RawTrace {
+    pub fn new(action: models::RawTraceAction, subtraces: i32, trace_address: Vec<i32>, r#type: String) -> RawTrace {
         RawTrace {
             action,
             subtraces,
@@ -44,3 +39,4 @@ impl RawTrace {
         }
     }
 }
+

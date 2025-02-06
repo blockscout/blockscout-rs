@@ -21,6 +21,10 @@ pub struct NftChange {
 
 impl NftChange {
     pub fn new(direction: String, total: models::TotalErc721) -> NftChange {
-        NftChange { direction, total }
+        NftChange {
+            direction,
+            total,
+        }
     }
 }
+

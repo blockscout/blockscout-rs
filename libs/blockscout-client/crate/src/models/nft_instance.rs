@@ -17,10 +17,7 @@ pub struct NftInstance {
     pub is_unique: bool,
     #[serde(rename = "id")]
     pub id: String,
-    #[serde(
-        rename = "holder_address_hash",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "holder_address_hash", skip_serializing_if = "Option::is_none")]
     pub holder_address_hash: Option<String>,
     #[serde(rename = "image_url", skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
@@ -37,12 +34,7 @@ pub struct NftInstance {
 }
 
 impl NftInstance {
-    pub fn new(
-        is_unique: bool,
-        id: String,
-        owner: models::AddressParam,
-        token: models::TokenInfo,
-    ) -> NftInstance {
+    pub fn new(is_unique: bool, id: String, owner: models::AddressParam, token: models::TokenInfo) -> NftInstance {
         NftInstance {
             is_unique,
             id,
@@ -56,3 +48,4 @@ impl NftInstance {
         }
     }
 }
+

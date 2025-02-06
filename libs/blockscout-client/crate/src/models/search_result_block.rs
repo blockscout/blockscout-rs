@@ -26,13 +26,7 @@ pub struct SearchResultBlock {
 }
 
 impl SearchResultBlock {
-    pub fn new(
-        block_hash: String,
-        block_number: i32,
-        timestamp: String,
-        r#type: String,
-        url: String,
-    ) -> SearchResultBlock {
+    pub fn new(block_hash: String, block_number: i32, timestamp: String, r#type: String, url: String) -> SearchResultBlock {
         SearchResultBlock {
             block_hash,
             block_number,
@@ -42,3 +36,4 @@ impl SearchResultBlock {
         }
     }
 }
+

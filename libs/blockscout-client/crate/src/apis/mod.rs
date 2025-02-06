@@ -1,4 +1,5 @@
-use std::{error, fmt};
+use std::error;
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct ResponseContent<T> {
@@ -16,7 +17,7 @@ pub enum Error<T> {
     ResponseError(ResponseContent<T>),
 }
 
-impl<T> fmt::Display for Error<T> {
+impl <T> fmt::Display for Error<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (module, e) = match self {
             Error::Reqwest(e) => ("reqwest", e.to_string()),
@@ -29,7 +30,7 @@ impl<T> fmt::Display for Error<T> {
     }
 }
 
-impl<T: fmt::Debug> error::Error for Error<T> {
+impl <T: fmt::Debug> error::Error for Error<T> {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         Some(match self {
             Error::Reqwest(e) => e,
@@ -41,7 +42,7 @@ impl<T: fmt::Debug> error::Error for Error<T> {
     }
 }
 
-impl<T> From<reqwest::Error> for Error<T> {
+impl <T> From<reqwest::Error> for Error<T> {
     fn from(e: reqwest::Error) -> Self {
         Error::Reqwest(e)
     }
@@ -53,13 +54,13 @@ impl<T> From<reqwest_middleware::Error> for Error<T> {
     }
 }
 
-impl<T> From<serde_json::Error> for Error<T> {
+impl <T> From<serde_json::Error> for Error<T> {
     fn from(e: serde_json::Error) -> Self {
         Error::Serde(e)
     }
 }
 
-impl<T> From<std::io::Error> for Error<T> {
+impl <T> From<std::io::Error> for Error<T> {
     fn from(e: std::io::Error) -> Self {
         Error::Io(e)
     }
@@ -86,10 +87,8 @@ pub fn parse_deep_object(prefix: &str, value: &serde_json::Value) -> Vec<(String
                             value,
                         ));
                     }
-                }
-                serde_json::Value::String(s) => {
-                    params.push((format!("{}[{}]", prefix, key), s.clone()))
-                }
+                },
+                serde_json::Value::String(s) => params.push((format!("{}[{}]", prefix, key), s.clone())),
                 _ => params.push((format!("{}[{}]", prefix, key), value.to_string())),
             }
         }
@@ -104,10 +103,13 @@ pub mod addresses_api;
 pub mod blocks_api;
 pub mod config_api;
 pub mod health_api;
+pub mod internal_transactions_api;
 pub mod main_page_api;
+pub mod proxy_api;
 pub mod search_api;
 pub mod smart_contracts_api;
 pub mod stats_api;
+pub mod token_transfers_api;
 pub mod tokens_api;
 pub mod transactions_api;
 pub mod withdrawals_api;

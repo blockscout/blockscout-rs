@@ -20,13 +20,11 @@ pub struct GetAddressLogs200Response {
 }
 
 impl GetAddressLogs200Response {
-    pub fn new(
-        items: Vec<models::Log>,
-        next_page_params: serde_json::Value,
-    ) -> GetAddressLogs200Response {
+    pub fn new(items: Vec<models::Log>, next_page_params: serde_json::Value) -> GetAddressLogs200Response {
         GetAddressLogs200Response {
             items,
             next_page_params,
         }
     }
 }
+

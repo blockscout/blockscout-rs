@@ -20,13 +20,11 @@ pub struct GetTokenTokenTransfers200Response {
 }
 
 impl GetTokenTokenTransfers200Response {
-    pub fn new(
-        items: Vec<models::TokenTransfer>,
-        next_page_params: serde_json::Value,
-    ) -> GetTokenTokenTransfers200Response {
+    pub fn new(items: Vec<models::TokenTransfer>, next_page_params: serde_json::Value) -> GetTokenTokenTransfers200Response {
         GetTokenTokenTransfers200Response {
             items,
             next_page_params,
         }
     }
 }
+

@@ -21,6 +21,10 @@ pub struct ReadMethodResponse {
 
 impl ReadMethodResponse {
     pub fn new(is_error: bool, result: models::ReadMethodResponseResult) -> ReadMethodResponse {
-        ReadMethodResponse { is_error, result }
+        ReadMethodResponse {
+            is_error,
+            result,
+        }
     }
 }
+

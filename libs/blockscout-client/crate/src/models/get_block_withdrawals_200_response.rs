@@ -20,13 +20,11 @@ pub struct GetBlockWithdrawals200Response {
 }
 
 impl GetBlockWithdrawals200Response {
-    pub fn new(
-        items: Vec<models::Withdrawal>,
-        next_page_params: serde_json::Value,
-    ) -> GetBlockWithdrawals200Response {
+    pub fn new(items: Vec<models::Withdrawal>, next_page_params: serde_json::Value) -> GetBlockWithdrawals200Response {
         GetBlockWithdrawals200Response {
             items,
             next_page_params,
         }
     }
 }
+

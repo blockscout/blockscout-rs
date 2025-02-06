@@ -26,13 +26,7 @@ pub struct SearchResultAddressOrContract {
 }
 
 impl SearchResultAddressOrContract {
-    pub fn new(
-        address: String,
-        is_smart_contract_verified: bool,
-        name: String,
-        r#type: String,
-        url: String,
-    ) -> SearchResultAddressOrContract {
+    pub fn new(address: String, is_smart_contract_verified: bool, name: String, r#type: String, url: String) -> SearchResultAddressOrContract {
         SearchResultAddressOrContract {
             address,
             is_smart_contract_verified,
@@ -42,3 +36,4 @@ impl SearchResultAddressOrContract {
         }
     }
 }
+

@@ -20,13 +20,11 @@ pub struct GetBlocks200Response {
 }
 
 impl GetBlocks200Response {
-    pub fn new(
-        items: Vec<models::Block>,
-        next_page_params: serde_json::Value,
-    ) -> GetBlocks200Response {
+    pub fn new(items: Vec<models::Block>, next_page_params: serde_json::Value) -> GetBlocks200Response {
         GetBlocks200Response {
             items,
             next_page_params,
         }
     }
 }
+

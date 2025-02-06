@@ -21,6 +21,10 @@ pub struct OutputAndNames {
 
 impl OutputAndNames {
     pub fn new(output: Vec<String>, names: Vec<String>) -> OutputAndNames {
-        OutputAndNames { output, names }
+        OutputAndNames {
+            output,
+            names,
+        }
     }
 }
+

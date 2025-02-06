@@ -28,14 +28,7 @@ pub struct RawTraceCallAction {
 }
 
 impl RawTraceCallAction {
-    pub fn new(
-        call_type: String,
-        to: String,
-        from: String,
-        input: String,
-        gas: String,
-        value: String,
-    ) -> RawTraceCallAction {
+    pub fn new(call_type: String, to: String, from: String, input: String, gas: String, value: String) -> RawTraceCallAction {
         RawTraceCallAction {
             call_type,
             to,
@@ -46,3 +39,4 @@ impl RawTraceCallAction {
         }
     }
 }
+

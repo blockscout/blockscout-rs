@@ -24,12 +24,7 @@ pub struct DecodedInputLogParameter {
 }
 
 impl DecodedInputLogParameter {
-    pub fn new(
-        name: String,
-        r#type: String,
-        value: String,
-        indexed: bool,
-    ) -> DecodedInputLogParameter {
+    pub fn new(name: String, r#type: String, value: String, indexed: bool) -> DecodedInputLogParameter {
         DecodedInputLogParameter {
             name,
             r#type,
@@ -38,3 +33,4 @@ impl DecodedInputLogParameter {
         }
     }
 }
+

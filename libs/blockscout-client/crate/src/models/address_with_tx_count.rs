@@ -13,35 +13,23 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AddressWithTxCount {
-    #[serde(
-        rename = "creator_address_hash",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "creator_address_hash", skip_serializing_if = "Option::is_none")]
     pub creator_address_hash: Option<String>,
-    #[serde(rename = "creation_tx_hash", skip_serializing_if = "Option::is_none")]
-    pub creation_tx_hash: Option<String>,
+    #[serde(rename = "creation_transaction_hash", skip_serializing_if = "Option::is_none")]
+    pub creation_transaction_hash: Option<String>,
     #[serde(rename = "token", skip_serializing_if = "Option::is_none")]
     pub token: Option<models::TokenInfo>,
     #[serde(rename = "coin_balance", skip_serializing_if = "Option::is_none")]
     pub coin_balance: Option<String>,
     #[serde(rename = "exchange_rate", skip_serializing_if = "Option::is_none")]
     pub exchange_rate: Option<String>,
-    #[serde(
-        rename = "implementation_address",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "implementation_address", skip_serializing_if = "Option::is_none")]
     pub implementation_address: Option<String>,
-    #[serde(
-        rename = "block_number_balance_updated_at",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "block_number_balance_updated_at", skip_serializing_if = "Option::is_none")]
     pub block_number_balance_updated_at: Option<i32>,
     #[serde(rename = "hash")]
     pub hash: String,
-    #[serde(
-        rename = "implementation_name",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "implementation_name", skip_serializing_if = "Option::is_none")]
     pub implementation_name: Option<String>,
     #[serde(rename = "name", skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -55,25 +43,13 @@ pub struct AddressWithTxCount {
     pub public_tags: Option<Vec<models::AddressTag>>,
     #[serde(rename = "is_verified", skip_serializing_if = "Option::is_none")]
     pub is_verified: Option<bool>,
-    #[serde(
-        rename = "has_beacon_chain_withdrawals",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "has_beacon_chain_withdrawals", skip_serializing_if = "Option::is_none")]
     pub has_beacon_chain_withdrawals: Option<bool>,
-    #[serde(
-        rename = "has_custom_methods_read",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "has_custom_methods_read", skip_serializing_if = "Option::is_none")]
     pub has_custom_methods_read: Option<bool>,
-    #[serde(
-        rename = "has_custom_methods_write",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "has_custom_methods_write", skip_serializing_if = "Option::is_none")]
     pub has_custom_methods_write: Option<bool>,
-    #[serde(
-        rename = "has_decompiled_code",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "has_decompiled_code", skip_serializing_if = "Option::is_none")]
     pub has_decompiled_code: Option<bool>,
     #[serde(rename = "has_logs", skip_serializing_if = "Option::is_none")]
     pub has_logs: Option<bool>,
@@ -81,37 +57,25 @@ pub struct AddressWithTxCount {
     pub has_methods_read: Option<bool>,
     #[serde(rename = "has_methods_write", skip_serializing_if = "Option::is_none")]
     pub has_methods_write: Option<bool>,
-    #[serde(
-        rename = "has_methods_read_proxy",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "has_methods_read_proxy", skip_serializing_if = "Option::is_none")]
     pub has_methods_read_proxy: Option<bool>,
-    #[serde(
-        rename = "has_methods_write_proxy",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "has_methods_write_proxy", skip_serializing_if = "Option::is_none")]
     pub has_methods_write_proxy: Option<bool>,
-    #[serde(
-        rename = "has_token_transfers",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "has_token_transfers", skip_serializing_if = "Option::is_none")]
     pub has_token_transfers: Option<bool>,
     #[serde(rename = "has_tokens", skip_serializing_if = "Option::is_none")]
     pub has_tokens: Option<bool>,
-    #[serde(
-        rename = "has_validated_blocks",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "has_validated_blocks", skip_serializing_if = "Option::is_none")]
     pub has_validated_blocks: Option<bool>,
-    #[serde(rename = "tx_count")]
-    pub tx_count: String,
+    #[serde(rename = "transaction_count")]
+    pub transaction_count: String,
 }
 
 impl AddressWithTxCount {
-    pub fn new(hash: String, tx_count: String) -> AddressWithTxCount {
+    pub fn new(hash: String, transaction_count: String) -> AddressWithTxCount {
         AddressWithTxCount {
             creator_address_hash: None,
-            creation_tx_hash: None,
+            creation_transaction_hash: None,
             token: None,
             coin_balance: None,
             exchange_rate: None,
@@ -137,7 +101,8 @@ impl AddressWithTxCount {
             has_token_transfers: None,
             has_tokens: None,
             has_validated_blocks: None,
-            tx_count,
+            transaction_count,
         }
     }
 }
+

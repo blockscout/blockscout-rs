@@ -26,3 +26,4 @@ impl Default for ReadMethodResponseResult {
         Self::ExtendedRevertReasonAsMap(Default::default())
     }
 }
+

@@ -23,3 +23,4 @@ impl Default for StateChangeChange {
         Self::NftChangesArray(Default::default())
     }
 }
+

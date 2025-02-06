@@ -40,20 +40,7 @@ pub struct StatsResponse {
 }
 
 impl StatsResponse {
-    pub fn new(
-        total_blocks: String,
-        total_addresses: String,
-        total_transactions: String,
-        average_block_time: f64,
-        coin_price: String,
-        total_gas_used: String,
-        transactions_today: String,
-        gas_used_today: String,
-        gas_prices: serde_json::Value,
-        static_gas_price: String,
-        market_cap: String,
-        network_utilization_percentage: f64,
-    ) -> StatsResponse {
+    pub fn new(total_blocks: String, total_addresses: String, total_transactions: String, average_block_time: f64, coin_price: String, total_gas_used: String, transactions_today: String, gas_used_today: String, gas_prices: serde_json::Value, static_gas_price: String, market_cap: String, network_utilization_percentage: f64) -> StatsResponse {
         StatsResponse {
             total_blocks,
             total_addresses,
@@ -70,3 +57,4 @@ impl StatsResponse {
         }
     }
 }
+

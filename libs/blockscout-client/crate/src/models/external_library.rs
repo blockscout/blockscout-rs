@@ -21,6 +21,10 @@ pub struct ExternalLibrary {
 
 impl ExternalLibrary {
     pub fn new(name: String, address_hash: String) -> ExternalLibrary {
-        ExternalLibrary { name, address_hash }
+        ExternalLibrary {
+            name,
+            address_hash,
+        }
     }
 }
+

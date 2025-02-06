@@ -24,12 +24,7 @@ pub struct GetAddresses200Response {
 }
 
 impl GetAddresses200Response {
-    pub fn new(
-        exchange_rate: String,
-        total_supply: String,
-        items: Vec<models::AddressWithTxCount>,
-        next_page_params: serde_json::Value,
-    ) -> GetAddresses200Response {
+    pub fn new(exchange_rate: String, total_supply: String, items: Vec<models::AddressWithTxCount>, next_page_params: serde_json::Value) -> GetAddresses200Response {
         GetAddresses200Response {
             exchange_rate,
             total_supply,
@@ -38,3 +33,4 @@ impl GetAddresses200Response {
         }
     }
 }
+

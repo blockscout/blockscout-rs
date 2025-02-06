@@ -23,3 +23,4 @@ impl Default for GetReadMethods200ResponseInner {
         Self::ReadMethodWithValue(Default::default())
     }
 }
+

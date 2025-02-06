@@ -24,12 +24,7 @@ pub struct GetSmartContractsCounters200Response {
 }
 
 impl GetSmartContractsCounters200Response {
-    pub fn new(
-        new_smart_contracts_24h: String,
-        new_verified_smart_contracts_24h: String,
-        smart_contracts: String,
-        verified_smart_contracts: String,
-    ) -> GetSmartContractsCounters200Response {
+    pub fn new(new_smart_contracts_24h: String, new_verified_smart_contracts_24h: String, smart_contracts: String, verified_smart_contracts: String) -> GetSmartContractsCounters200Response {
         GetSmartContractsCounters200Response {
             new_smart_contracts_24h,
             new_verified_smart_contracts_24h,
@@ -38,3 +33,4 @@ impl GetSmartContractsCounters200Response {
         }
     }
 }
+

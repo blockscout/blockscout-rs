@@ -16,9 +16,7 @@ use serde::{Deserialize, Serialize};
 pub enum TransactionAction {
     TransactionActionAaveV3LiquidationCall(models::TransactionActionAaveV3LiquidationCall),
     TransactionActionAaveV3Bswrf(models::TransactionActionAaveV3Bswrf),
-    TransactionActionAaveV3EnableDisableCollateral(
-        models::TransactionActionAaveV3EnableDisableCollateral,
-    ),
+    TransactionActionAaveV3EnableDisableCollateral(models::TransactionActionAaveV3EnableDisableCollateral),
     TransactionActionUniswapV3MintNft(models::TransactionActionUniswapV3MintNft),
     TransactionActionUniswapV3Bcs(models::TransactionActionUniswapV3Bcs),
 }
@@ -28,3 +26,4 @@ impl Default for TransactionAction {
         Self::TransactionActionAaveV3LiquidationCall(Default::default())
     }
 }
+

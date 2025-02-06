@@ -20,13 +20,11 @@ pub struct GetTokenHolders200Response {
 }
 
 impl GetTokenHolders200Response {
-    pub fn new(
-        items: Vec<models::Holder>,
-        next_page_params: serde_json::Value,
-    ) -> GetTokenHolders200Response {
+    pub fn new(items: Vec<models::Holder>, next_page_params: serde_json::Value) -> GetTokenHolders200Response {
         GetTokenHolders200Response {
             items,
             next_page_params,
         }
     }
 }
+

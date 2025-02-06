@@ -21,6 +21,10 @@ pub struct CodeAndMessage {
 
 impl CodeAndMessage {
     pub fn new(code: i32, message: String) -> CodeAndMessage {
-        CodeAndMessage { code, message }
+        CodeAndMessage {
+            code,
+            message,
+        }
     }
 }
+

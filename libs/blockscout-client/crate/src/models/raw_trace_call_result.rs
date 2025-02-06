@@ -21,6 +21,10 @@ pub struct RawTraceCallResult {
 
 impl RawTraceCallResult {
     pub fn new(gas_used: String, output: String) -> RawTraceCallResult {
-        RawTraceCallResult { gas_used, output }
+        RawTraceCallResult {
+            gas_used,
+            output,
+        }
     }
 }
+

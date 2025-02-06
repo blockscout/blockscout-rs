@@ -36,18 +36,7 @@ pub struct TokenInfo {
 }
 
 impl TokenInfo {
-    pub fn new(
-        circulating_market_cap: String,
-        icon_url: String,
-        name: String,
-        decimals: String,
-        symbol: String,
-        address: String,
-        r#type: String,
-        holders: String,
-        exchange_rate: String,
-        total_supply: String,
-    ) -> TokenInfo {
+    pub fn new(circulating_market_cap: String, icon_url: String, name: String, decimals: String, symbol: String, address: String, r#type: String, holders: String, exchange_rate: String, total_supply: String) -> TokenInfo {
         TokenInfo {
             circulating_market_cap,
             icon_url,
@@ -62,3 +51,4 @@ impl TokenInfo {
         }
     }
 }
+

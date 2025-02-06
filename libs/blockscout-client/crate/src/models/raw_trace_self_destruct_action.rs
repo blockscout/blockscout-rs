@@ -22,11 +22,7 @@ pub struct RawTraceSelfDestructAction {
 }
 
 impl RawTraceSelfDestructAction {
-    pub fn new(
-        address: String,
-        balance: String,
-        refund_address: String,
-    ) -> RawTraceSelfDestructAction {
+    pub fn new(address: String, balance: String, refund_address: String) -> RawTraceSelfDestructAction {
         RawTraceSelfDestructAction {
             address,
             balance,
@@ -34,3 +30,4 @@ impl RawTraceSelfDestructAction {
         }
     }
 }
+

@@ -22,11 +22,7 @@ pub struct TransactionActionAaveV3EnableDisableCollateral {
 }
 
 impl TransactionActionAaveV3EnableDisableCollateral {
-    pub fn new(
-        data: serde_json::Value,
-        protocol: String,
-        r#type: String,
-    ) -> TransactionActionAaveV3EnableDisableCollateral {
+    pub fn new(data: serde_json::Value, protocol: String, r#type: String) -> TransactionActionAaveV3EnableDisableCollateral {
         TransactionActionAaveV3EnableDisableCollateral {
             data,
             protocol,
@@ -34,3 +30,4 @@ impl TransactionActionAaveV3EnableDisableCollateral {
         }
     }
 }
+

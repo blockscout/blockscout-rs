@@ -26,13 +26,7 @@ pub struct TransactionReward {
 }
 
 impl TransactionReward {
-    pub fn new(
-        types: serde_json::Value,
-        emission_reward: String,
-        block_hash: String,
-        from: models::AddressParam,
-        to: models::AddressParam,
-    ) -> TransactionReward {
+    pub fn new(types: serde_json::Value, emission_reward: String, block_hash: String, from: models::AddressParam, to: models::AddressParam) -> TransactionReward {
         TransactionReward {
             types,
             emission_reward,
@@ -42,3 +36,4 @@ impl TransactionReward {
         }
     }
 }
+

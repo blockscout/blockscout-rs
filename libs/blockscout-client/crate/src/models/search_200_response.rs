@@ -20,13 +20,11 @@ pub struct Search200Response {
 }
 
 impl Search200Response {
-    pub fn new(
-        items: Vec<models::Search200ResponseItemsInner>,
-        next_page_params: serde_json::Value,
-    ) -> Search200Response {
+    pub fn new(items: Vec<models::Search200ResponseItemsInner>, next_page_params: serde_json::Value) -> Search200Response {
         Search200Response {
             items,
             next_page_params,
         }
     }
 }
+

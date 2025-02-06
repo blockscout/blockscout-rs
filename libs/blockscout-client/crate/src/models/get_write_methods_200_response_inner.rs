@@ -22,3 +22,4 @@ impl Default for GetWriteMethods200ResponseInner {
         Self::WriteMethod(Default::default())
     }
 }
+

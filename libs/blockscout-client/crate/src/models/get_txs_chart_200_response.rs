@@ -19,6 +19,9 @@ pub struct GetTxsChart200Response {
 
 impl GetTxsChart200Response {
     pub fn new(chart_data: Vec<models::TransactionChartItem>) -> GetTxsChart200Response {
-        GetTxsChart200Response { chart_data }
+        GetTxsChart200Response {
+            chart_data,
+        }
     }
 }
+

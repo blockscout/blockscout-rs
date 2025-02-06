@@ -20,13 +20,11 @@ pub struct GetAddressCoinBalanceHistory200Response {
 }
 
 impl GetAddressCoinBalanceHistory200Response {
-    pub fn new(
-        items: Vec<models::CoinBalanceHistoryEntry>,
-        next_page_params: serde_json::Value,
-    ) -> GetAddressCoinBalanceHistory200Response {
+    pub fn new(items: Vec<models::CoinBalanceHistoryEntry>, next_page_params: serde_json::Value) -> GetAddressCoinBalanceHistory200Response {
         GetAddressCoinBalanceHistory200Response {
             items,
             next_page_params,
         }
     }
 }
+

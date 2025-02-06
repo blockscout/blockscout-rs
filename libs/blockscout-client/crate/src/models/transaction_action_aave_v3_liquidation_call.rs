@@ -22,11 +22,7 @@ pub struct TransactionActionAaveV3LiquidationCall {
 }
 
 impl TransactionActionAaveV3LiquidationCall {
-    pub fn new(
-        data: serde_json::Value,
-        protocol: String,
-        r#type: String,
-    ) -> TransactionActionAaveV3LiquidationCall {
+    pub fn new(data: serde_json::Value, protocol: String, r#type: String) -> TransactionActionAaveV3LiquidationCall {
         TransactionActionAaveV3LiquidationCall {
             data,
             protocol,
@@ -34,3 +30,4 @@ impl TransactionActionAaveV3LiquidationCall {
         }
     }
 }
+

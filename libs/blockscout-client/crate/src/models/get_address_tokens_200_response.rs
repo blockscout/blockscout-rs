@@ -20,13 +20,11 @@ pub struct GetAddressTokens200Response {
 }
 
 impl GetAddressTokens200Response {
-    pub fn new(
-        items: Vec<models::TokenBalance>,
-        next_page_params: serde_json::Value,
-    ) -> GetAddressTokens200Response {
+    pub fn new(items: Vec<models::TokenBalance>, next_page_params: serde_json::Value) -> GetAddressTokens200Response {
         GetAddressTokens200Response {
             items,
             next_page_params,
         }
     }
 }
+

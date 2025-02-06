@@ -19,6 +19,9 @@ pub struct GetNftInstanceTransfersCount200Response {
 
 impl GetNftInstanceTransfersCount200Response {
     pub fn new(transfers_count: i32) -> GetNftInstanceTransfersCount200Response {
-        GetNftInstanceTransfersCount200Response { transfers_count }
+        GetNftInstanceTransfersCount200Response {
+            transfers_count,
+        }
     }
 }
+

@@ -23,6 +23,11 @@ pub struct ExtendedRevertReasonAsMap {
 
 impl ExtendedRevertReasonAsMap {
     pub fn new(raw: String, code: i32, message: String) -> ExtendedRevertReasonAsMap {
-        ExtendedRevertReasonAsMap { raw, code, message }
+        ExtendedRevertReasonAsMap {
+            raw,
+            code,
+            message,
+        }
     }
 }
+

@@ -20,13 +20,11 @@ pub struct GetTxs200Response {
 }
 
 impl GetTxs200Response {
-    pub fn new(
-        items: Vec<models::Transaction>,
-        next_page_params: serde_json::Value,
-    ) -> GetTxs200Response {
+    pub fn new(items: Vec<models::Transaction>, next_page_params: serde_json::Value) -> GetTxs200Response {
         GetTxs200Response {
             items,
             next_page_params,
         }
     }
 }
+

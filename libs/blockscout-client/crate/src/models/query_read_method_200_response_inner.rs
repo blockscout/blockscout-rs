@@ -22,3 +22,4 @@ impl Default for QueryReadMethod200ResponseInner {
         Self::ReadMethodResponse(Default::default())
     }
 }
+

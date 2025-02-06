@@ -19,6 +19,9 @@ pub struct ProtobufAny {
 
 impl ProtobufAny {
     pub fn new() -> ProtobufAny {
-        ProtobufAny { at_type: None }
+        ProtobufAny {
+            at_type: None,
+        }
     }
 }
+

@@ -20,13 +20,11 @@ pub struct GetNftInstanceTransfers200Response {
 }
 
 impl GetNftInstanceTransfers200Response {
-    pub fn new(
-        items: Vec<models::TokenTransfer>,
-        next_page_params: serde_json::Value,
-    ) -> GetNftInstanceTransfers200Response {
+    pub fn new(items: Vec<models::TokenTransfer>, next_page_params: serde_json::Value) -> GetNftInstanceTransfers200Response {
         GetNftInstanceTransfers200Response {
             items,
             next_page_params,
         }
     }
 }
+

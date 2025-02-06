@@ -32,16 +32,7 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(
-        name: String,
-        decimals: String,
-        symbol: String,
-        address: String,
-        r#type: String,
-        holders: i32,
-        exchange_rate: String,
-        total_supply: String,
-    ) -> Token {
+    pub fn new(name: String, decimals: String, symbol: String, address: String, r#type: String, holders: i32, exchange_rate: String, total_supply: String) -> Token {
         Token {
             name,
             decimals,
@@ -54,3 +45,4 @@ impl Token {
         }
     }
 }
+

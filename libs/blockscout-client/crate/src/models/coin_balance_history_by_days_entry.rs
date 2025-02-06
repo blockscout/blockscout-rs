@@ -21,6 +21,10 @@ pub struct CoinBalanceHistoryByDaysEntry {
 
 impl CoinBalanceHistoryByDaysEntry {
     pub fn new(date: String, value: f64) -> CoinBalanceHistoryByDaysEntry {
-        CoinBalanceHistoryByDaysEntry { date, value }
+        CoinBalanceHistoryByDaysEntry {
+            date,
+            value,
+        }
     }
 }
+
