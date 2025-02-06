@@ -36,6 +36,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: start_time
+          in: query
+          required: false
+          type: string
+        - name: end_time
+          in: query
+          required: false
+          type: string
       tags:
         - UserOpsService
   /api/v1/accounts/{address}:
@@ -285,6 +293,14 @@ paths:
           type: integer
           format: int64
         - name: page_token
+          in: query
+          required: false
+          type: string
+        - name: start_time
+          in: query
+          required: false
+          type: string
+        - name: end_time
           in: query
           required: false
           type: string

@@ -52,6 +52,8 @@ message ListAccountsRequest {
   optional string factory = 1;
   optional uint32 page_size = 2;
   optional string page_token = 3;
+  optional string start_time = 4;
+  optional string end_time = 5;
 }
 
 message ListAccountsResponse {
@@ -82,6 +84,8 @@ message ListUserOpsRequest {
   optional uint64 block_number = 8;
   optional uint32 page_size = 9;
   optional string page_token = 10;
+  optional string start_time = 11;
+  optional string end_time = 12;
 }
 
 message ListUserOpsResponse {

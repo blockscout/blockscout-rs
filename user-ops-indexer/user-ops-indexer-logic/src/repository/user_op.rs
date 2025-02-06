@@ -95,6 +95,8 @@ pub async fn list_user_ops(
     block_number_filter: Option<u64>,
     page_token: Option<(u64, B256)>,
     limit: u64,
+    start_time_filter: Option<DateTime>,
+    end_time_filter: Option<DateTime>,
 ) -> Result<(Vec<ListUserOp>, Option<(u64, B256)>), anyhow::Error> {
     let page_token = page_token.unwrap_or((i64::MAX as u64, B256::ZERO));
     let mut q = Entity::find()
@@ -109,6 +111,7 @@ pub async fn list_user_ops(
             Column::Status,
             Column::GasPrice,
             Column::GasUsed,
+            Column::InsertedAt,
         ])
         .column(blocks::Column::Timestamp)
         .join_rev(JoinType::Join, user_ops_blocks_rel());
@@ -135,6 +138,12 @@ pub async fn list_user_ops(
     }
     if let Some(block_number) = block_number_filter {
         q = q.filter(Column::BlockNumber.eq(block_number));
+    }
+    if let Some(start_time) = start_time_filter {
+        q = q.filter(blocks::Column::Timestamp.gte(start_time));
+    }
+    if let Some(end_time) = end_time_filter {
+        q = q.filter(blocks::Column::Timestamp.lte(end_time));
     }
     q = q
         .filter(
@@ -275,9 +284,10 @@ mod tests {
     #[tokio::test]
     async fn list_user_ops_ok() {
         let db = get_shared_db().await;
+        let end_time: Option<DateTime> = Some(Utc::now());
 
         let (items, next_page_token) = list_user_ops(
-            &db, None, None, None, None, None, None, None, None, None, 5000,
+            &db, None, None, None, None, None, None, None, None, None, 5000, None, end_time
         )
         .await
         .unwrap();
@@ -299,6 +309,8 @@ mod tests {
             None,
             next_page_token,
             5000,
+            None,
+            end_time
         )
         .await
         .unwrap();
@@ -320,6 +332,8 @@ mod tests {
             Some(0),
             None,
             10,
+            None,
+            end_time
         )
         .await
         .unwrap();
