@@ -1,15 +1,43 @@
 swagger: "2.0"
 info:
-  title: stats.proto
+  title: Stats service
   version: version not set
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
 tags:
   - name: StatsService
   - name: Health
+schemes:
+  - https
 consumes:
   - application/json
 produces:
   - application/json
 paths:
+  /api/v1/charts/batch-update:
+    post:
+      operationId: StatsService_BatchUpdateCharts
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchUpdateChartsResult'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1BatchUpdateChartsRequest'
+      tags:
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/counters:
     get:
       operationId: StatsService_GetCounters
@@ -171,6 +199,43 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1BatchUpdateChartRejection:
+    type: object
+    properties:
+      name:
+        type: string
+      reason:
+        type: string
+  v1BatchUpdateChartsRequest:
+    type: object
+    properties:
+      chart_names:
+        type: array
+        items:
+          type: string
+      from:
+        type: string
+        title: Default is today
+      update_later:
+        type: boolean
+  v1BatchUpdateChartsResult:
+    type: object
+    properties:
+      total:
+        type: integer
+        format: int64
+      total_rejected:
+        type: integer
+        format: int64
+      accepted:
+        type: array
+        items:
+          type: string
+      rejected:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1BatchUpdateChartRejection'
   v1ContractsPageStats:
     type: object
     properties:
@@ -308,3 +373,11 @@ definitions:
         $ref: '#/definitions/v1Counter'
       operational_transactions_24h:
         $ref: '#/definitions/v1Counter'
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    name: x-api-key
+    in: header
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs

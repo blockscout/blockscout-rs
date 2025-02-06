@@ -79,4 +79,11 @@ impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
     async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         Ok(())
     }
+
+    async fn set_next_update_from_itself(
+        _db: &DatabaseConnection,
+        _update_from: chrono::NaiveDate,
+    ) -> Result<(), ChartError> {
+        Ok(())
+    }
 }

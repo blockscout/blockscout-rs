@@ -60,6 +60,13 @@ impl EnabledChartEntry {
                 .collect_vec(),
         }
     }
+
+    pub fn get_keys(&self) -> Vec<ChartKey> {
+        self.resolutions
+            .iter()
+            .map(|(res, entry)| ChartKey::new(entry.name.clone(), *res))
+            .collect()
+    }
 }
 
 #[derive(Debug)]

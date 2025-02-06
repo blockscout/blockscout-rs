@@ -11,6 +11,9 @@ export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-ho
 docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
 
+docker-build *args:
+    docker build --build-context proto=../proto . {{args}}
+
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping
     docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres -N 500

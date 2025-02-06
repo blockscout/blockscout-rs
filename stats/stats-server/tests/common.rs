@@ -4,10 +4,18 @@ use blockscout_service_launcher::{
     launcher::ConfigSettings, test_database::TestDbGuard, test_server::get_test_server_settings,
 };
 use reqwest::{RequestBuilder, Response};
-use stats_server::Settings;
+use stats_proto::blockscout::stats::v1 as proto_v1;
+use stats_server::{
+    auth::{ApiKey, API_KEY_NAME},
+    Settings,
+};
 use tokio::task::JoinSet;
 use url::Url;
 use wiremock::MockServer;
+
+pub fn setup_single_key(settings: &mut Settings, key: ApiKey) {
+    settings.api_keys = HashMap::from([("test_key".to_string(), key)]);
+}
 
 pub async fn send_arbitrary_request(request: RequestBuilder) -> Response {
     let response = request
@@ -52,6 +60,57 @@ pub fn get_test_stats_settings(
     (settings, base)
 }
 
+pub async fn request_reupdate_from(
+    base: &Url,
+    key: &ApiKey,
+    from: &str,
+    charts: Vec<&str>,
+) -> proto_v1::BatchUpdateChartsResult {
+    let chart_names = charts.into_iter().map(|s| s.to_string()).collect();
+    send_request_with_key(
+        base,
+        "/api/v1/charts/batch-update",
+        reqwest::Method::POST,
+        Some(&proto_v1::BatchUpdateChartsRequest {
+            chart_names,
+            from: Some(from.into()),
+            update_later: None,
+        }),
+        key,
+    )
+    .await
+}
+
+pub async fn send_request_with_key<Response: for<'a> serde::Deserialize<'a>>(
+    url: &Url,
+    route: &str,
+    method: reqwest::Method,
+    payload: Option<&impl serde::Serialize>,
+    key: &ApiKey,
+) -> Response {
+    let mut request = reqwest::Client::new().request(method, url.join(route).unwrap());
+    if let Some(p) = payload {
+        request = request.json(p);
+    };
+    request = request.header(API_KEY_NAME, &key.key);
+    let response = request
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("Failed to send request"));
+
+    // Assert that status code is success
+    if !response.status().is_success() {
+        let status = response.status();
+        let message = response.text().await.expect("Read body as text");
+        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
+    }
+
+    response
+        .json()
+        .await
+        .unwrap_or_else(|_| panic!("Response deserialization failed"))
+}
+
 #[macro_export]
 macro_rules! array_of_variables_with_names {
     ([
@@ -84,6 +143,11 @@ pub async fn run_consolidated_tests(mut tests: JoinSet<()>, log_prefix: &str) {
     } else {
         println!("{}", msg)
     }
+}
+
+pub fn sorted_vec<T: Ord>(mut v: Vec<T>) -> Vec<T> {
+    v.sort();
+    v
 }
 
 #[cfg(test)]

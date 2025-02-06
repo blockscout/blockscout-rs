@@ -355,7 +355,7 @@ mod tests {
         test_aggregator(
             wait_config,
             IndexingStatus::InternalTransactionsIndexed,
-            None,
+            Some(Duration::from_millis(500)),
             ResponseTemplate::new(200)
                 .set_body_string(
                     r#"{

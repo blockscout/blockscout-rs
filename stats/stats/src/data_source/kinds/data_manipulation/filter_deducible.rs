@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_source::{DataSource, UpdateContext},
@@ -40,12 +40,20 @@ where
     async fn init_itself(
         _db: &DatabaseConnection,
         _init_time: &DateTime<Utc>,
-    ) -> Result<(), sea_orm::DbErr> {
+    ) -> Result<(), DbErr> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
 
     async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
+        // just an adapter; inner is handled recursively
+        Ok(())
+    }
+
+    async fn set_next_update_from_itself(
+        _db: &DatabaseConnection,
+        _update_from: chrono::NaiveDate,
+    ) -> Result<(), ChartError> {
         // just an adapter; inner is handled recursively
         Ok(())
     }
