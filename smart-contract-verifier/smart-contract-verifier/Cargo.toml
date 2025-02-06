@@ -7,56 +7,55 @@ repository = "https://github.com/blockscout/blockscout-rs"
 keywords = ["ethereum", "web3", "solidity"]
 
 [dependencies]
-smart-contract-verifier-proto = { path = "../smart-contract-verifier-proto" }
-
-alloy-dyn-abi = "0.6.4"
-alloy-json-abi = "0.6.4"
-anyhow = "1.0"
-async-trait = "0.1"
+alloy-dyn-abi = { workspace = true }
+alloy-json-abi = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 blockscout-display-bytes = { workspace = true }
-bytes = "1.2"
-chrono = "0.4"
-cron = "0.11"
-ethabi = "18.0"
-ethers-core = "2.0.10"
-ethers-solc = { version = "2.0.6", features = ["async"] }
-foundry-compilers = { version = "=0.3.9", features = ["async"] }
-futures = "0.3"
-hex = "0.4"
-lazy_static = "1"
-mismatch = "1.0"
-nonempty = "0.10.0"
-parking_lot = "0.12"
-primitive-types = "0.12"
-prometheus = "0.13"
-reqwest = { version = "0.11", features = ["json"] }
-reqwest-middleware = "0.1"
-reqwest-retry = "0.1"
-rust-s3 = "0.32.0"
-semver = "1.0"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-serde_with = "2"
-sha2 = "0.10"
-solidity-metadata = "1.1.0"
-sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "c4261d0" }
-sscanf = "0.3"
-tempfile = "3.3"
-thiserror = "1.0"
-tokio = { version = "1", features = ["macros"] }
-tracing = "0.1"
-url = { version = "2.4", features = ["serde"] }
+bytes = { workspace = true }
+chrono = { workspace = true }
+cron = { workspace = true }
+ethabi = { workspace = true }
+ethers-core = { workspace = true }
+ethers-solc = { workspace = true, features = ["async"] }
+foundry-compilers = { workspace = true, features = ["async"] }
+futures = { workspace = true }
+hex = { workspace = true }
+lazy_static = { workspace = true }
+mismatch = { workspace = true }
+nonempty = { workspace = true }
+parking_lot = { workspace = true }
+primitive-types = { workspace = true }
+prometheus = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
+rust-s3 = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+sha2 = { workspace = true }
+smart-contract-verifier-proto = { workspace = true }
+solidity-metadata = { workspace = true }
+sourcify = { workspace = true }
+sscanf = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tracing = { workspace = true }
+url = { workspace = true, features = ["serde"] }
 verification-common = { workspace = true }
 
-era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-common", rev = "9969de1" }
+era-compiler-common = { workspace = true }
 
 [dev-dependencies]
-const_format = "0.2"
-mockall = "0.11"
-pretty_assertions = "1.2"
-quick-xml = { version = "0.24", features = ["serialize"] }
-rand = "0.8"
-rstest = "0.15"
-tempfile = "3.3"
-tokio = { version = "*", features = ["sync", "parking_lot"] }
-wiremock = "0.5"
+const_format = { workspace = true }
+mockall = { workspace = true }
+pretty_assertions = { workspace = true }
+quick-xml = { workspace = true, features = ["serialize"] }
+rand = { workspace = true }
+rstest = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["sync", "parking_lot"] }
+wiremock = { workspace = true }

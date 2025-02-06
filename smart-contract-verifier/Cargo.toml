@@ -1,13 +1,76 @@
 [workspace]
 resolver = "2"
 members = [
+    "sig-provider-extension",
     "smart-contract-verifier",
     "smart-contract-verifier-proto",
     "smart-contract-verifier-server",
-    "sig-provider-extension",
 ]
 
 [workspace.dependencies]
+sig-provider-extension = { path = "sig-provider-extension" }
+smart-contract-verifier = { path = "smart-contract-verifier" }
+smart-contract-verifier-proto = { path = "smart-contract-verifier-proto" }
+smart-contract-verifier-server = { path = "smart-contract-verifier-server" }
+
+actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "9cc47aa1" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "9cc47aa1" }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "9cc47aa1" }
+actix-web = { version = "4" }
+alloy-dyn-abi = { version = "0.6.4" }
+alloy-json-abi = { version = "0.6.4" }
+amplify = { version = "4.6.0" }
+anyhow = { version = "1.0" }
+async-trait = { version = "0.1" }
 blockscout-display-bytes = "1.1.0"
 blockscout-service-launcher = "0.12.0"
+bytes = { version = "1.2" }
+chrono = { version = "0.4" }
+config = { version = "0.13" }
+const_format = { version = "0.2" }
+cron = { version = "0.11" }
+era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-common", rev = "9969de1" }
+ethabi = { version = "18.0" }
+ethers-core = { version = "2.0.10" }
+ethers-solc = { version = "2.0.6" }
+foundry-compilers = { version = "=0.3.9" }
+futures = { version = "0.3" }
+hex = { version = "0.4" }
+http = { version = "0.2" }
+lazy_static = { version = "1" }
+mismatch = { version = "1.0" }
+mockall = { version = "0.11" }
+nonempty = { version = "0.10.0" }
+parking_lot = { version = "0.12" }
+pretty_assertions = { version = "1.2" }
+primitive-types = { version = "0.12" }
+prometheus = { version = "0.13" }
+prost = { version = "0.11" }
+prost-build = { version = "0.11" }
+quick-xml = { version = "0.24" }
+rand = { version = "0.8" }
+reqwest = { version = "0.11" }
+reqwest-middleware = { version = "0.1" }
+reqwest-retry = { version = "0.1" }
+rstest = { version = "0.19" }
+rust-s3 = { version = "0.32.0" }
+semver = { version = "1.0" }
+serde = { version = "1" }
+serde_json = { version = "1" }
+serde_with = { version = "3" }
+sha2 = { version = "0.10" }
+sig-provider-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "b1bdb48" }
+solidity-metadata = { version = "1.1.0" }
+sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "c4261d0" }
+sscanf = { version = "0.3" }
+stdext = { version = "0.3.2" }
+tempfile = { version = "3.3" }
+thiserror = { version = "1.0" }
+tokio = { version = "1" }
+tonic = { version = "0.8" }
+tonic-build = { version = "0.8" }
+tracing = { version = "0.1" }
+url = { version = "2.4" }
+uuid = { version = "1.6.1" }
 verification-common = { git = "https://github.com/blockscout/blockscout-rs/", rev = "bd6352d" }
+wiremock = { version = "0.5" }
