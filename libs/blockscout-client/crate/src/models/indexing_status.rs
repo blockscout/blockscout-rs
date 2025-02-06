@@ -24,12 +24,17 @@ pub struct IndexingStatus {
 }
 
 impl IndexingStatus {
-    pub fn new(finished_indexing: bool, finished_indexing_blocks: bool) -> IndexingStatus {
+    pub fn new(
+        finished_indexing: bool,
+        finished_indexing_blocks: bool,
+        indexed_blocks_ratio: Option<String>,
+        indexed_internal_transactions_ratio: Option<String>,
+    ) -> IndexingStatus {
         IndexingStatus {
             finished_indexing,
             finished_indexing_blocks,
-            indexed_blocks_ratio: None,
-            indexed_internal_transactions_ratio: None,
+            indexed_blocks_ratio,
+            indexed_internal_transactions_ratio,
         }
     }
 }
