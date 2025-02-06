@@ -58,7 +58,7 @@ paths:
                       items_count: 50
                       name: RealToken S 13245 Monica St Detroit MI
                       q: '1'
-                      tx_hash: null
+                      transaction_hash: null
         '400':
           description: bad input parameter
       tags:
@@ -103,7 +103,7 @@ paths:
           schema:
             type: string
             example: 'approve,transfer,multicall,mint,commit'
-      summary: get txs
+      summary: get transactions
       operationId: get_txs
       responses:
         '200':
@@ -164,13 +164,41 @@ paths:
           description: bad input parameter
       tags:
         - blocks
+  /api/v2/token-transfers:
+    get:
+      summary: get token transfers
+      operationId: get_token_transfers
+      responses:
+        '200':
+          description: token transfers
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - next_page_params
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TokenTransfer'
+                  next_page_params:
+                    type: object
+                    example:
+                      block_number: 27170298
+                      index: 0
+        '400':
+          description: bad input parameter
+      tags:
+        - token-transfers
   /api/v2/main-page/transactions:
     get:
-      summary: get main page txs
+      summary: get main page transactions
       operationId: get_main_page_txs
       responses:
         '200':
-          description: txs
+          description: transactions
           content:
             application/json:
               schema:
@@ -222,11 +250,11 @@ paths:
         - stats
   /api/v2/stats/charts/transactions:
     get:
-      summary: get txs chart
+      summary: get transactions chart
       operationId: get_txs_chart
       responses:
         '200':
-          description: tx chart
+          description: transaction chart
           content:
             application/json:
               schema:
@@ -266,13 +294,13 @@ paths:
         - stats
   '/api/v2/transactions/{transaction_hash}':
     get:
-      summary: get tx info
+      summary: get transaction info
       operationId: get_tx
       parameters:
         - $ref: '#/components/parameters/transactionHash'
       responses:
         '200':
-          description: tx info
+          description: transaction info
           content:
             application/json:
               schema:
@@ -283,8 +311,8 @@ paths:
         - transactions
   '/api/v2/transactions/{transaction_hash}/token-transfers':
     get:
-      summary: get token transfers
-      operationId: get_token_transfers
+      summary: get transaction token transfers
+      operationId: get_transaction_token_transfers
       parameters:
         - $ref: '#/components/parameters/transactionHash'
         - in: query
@@ -329,13 +357,13 @@ paths:
         - transactions
   '/api/v2/transactions/{transaction_hash}/internal-transactions':
     get:
-      summary: get internal txs
-      operationId: get_internal_txs
+      summary: get transaction internal transactions
+      operationId: get_transaction_internal_txs
       parameters:
         - $ref: '#/components/parameters/transactionHash'
       responses:
         '200':
-          description: internal txs
+          description: internal transactions
           content:
             application/json:
               schema:
@@ -361,13 +389,13 @@ paths:
         - transactions
   '/api/v2/transactions/{transaction_hash}/logs':
     get:
-      summary: get logs
-      operationId: get_logs
+      summary: get transaction logs
+      operationId: get_transaction_logs
       parameters:
         - $ref: '#/components/parameters/transactionHash'
       responses:
         '200':
-          description: internal txs
+          description: internal transactions
           content:
             application/json:
               schema:
@@ -392,8 +420,8 @@ paths:
         - transactions
   '/api/v2/transactions/{transaction_hash}/raw-trace':
     get:
-      summary: get raw trace
-      operationId: get_raw_trace
+      summary: get transaction raw trace
+      operationId: get_transaction_raw_trace
       parameters:
         - $ref: '#/components/parameters/transactionHash'
       responses:
@@ -411,8 +439,8 @@ paths:
         - transactions
   '/api/v2/transactions/{transaction_hash}/state-changes':
     get:
-      summary: get state changes
-      operationId: get_state_changes
+      summary: get transaction state changes
+      operationId: get_transaction_state_changes
       parameters:
         - $ref: '#/components/parameters/transactionHash'
       responses:
@@ -439,6 +467,23 @@ paths:
           description: bad input parameter
       tags:
         - transactions
+  '/api/v2/transactions/{transaction_hash}/summary':
+    get:
+      summary: get human-readable transaction summary
+      operationId: get_transaction_summary
+      parameters:
+        - $ref: '#/components/parameters/transactionHash'
+      responses:
+        '200':
+          description: human-readable transaction summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionSummary'
+        '400':
+          description: bad input parameter
+      tags:
+        - transactions
   '/api/v2/blocks/{block_number_or_hash}':
     get:
       summary: get block info
@@ -458,7 +503,7 @@ paths:
         - blocks
   '/api/v2/blocks/{block_number_or_hash}/transactions':
     get:
-      summary: get block txs
+      summary: get block transactions
       operationId: get_block_txs
       parameters:
         - $ref: '#/components/parameters/blockNumberOrHash'
@@ -592,7 +637,7 @@ paths:
         - addresses
   '/api/v2/addresses/{address_hash}/transactions':
     get:
-      summary: get address txs
+      summary: get address transactions
       operationId: get_address_txs
       parameters:
         - $ref: '#/components/parameters/addressHash'
@@ -673,7 +718,7 @@ paths:
         - addresses
   '/api/v2/addresses/{address_hash}/internal-transactions':
     get:
-      summary: get address internal txs
+      summary: get address internal transactions
       operationId: get_address_internal_txs
       parameters:
         - $ref: '#/components/parameters/addressHash'
@@ -902,6 +947,77 @@ paths:
                     example:
                       index: 1
                       items_count: 50
+        '400':
+          description: bad input parameter
+      tags:
+        - addresses
+  '/api/v2/addresses/{address_hash}/nft':
+    get:
+      summary: get list of NFT owned by address
+      operationId: get_address_nft
+      parameters:
+        - $ref: '#/components/parameters/addressHash'
+        - in: query
+          name: type
+          schema:
+            type: string
+            example: 'ERC-721,ERC-404,ERC-1155'
+      responses:
+        '200':
+          description: address
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - next_page_params
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AddressNFTInstance'
+                  next_page_params:
+                    type: object
+                    example:
+                      token_contract_address_hash: '0xb81afe27c103bcd42f4026cf719af6d802928765'
+                      token_id: '1011'
+                      token_type: ERC-721
+        '400':
+          description: bad input parameter
+      tags:
+        - addresses
+  '/api/v2/addresses/{address_hash}/nft/collections':
+    get:
+      summary: 'get list of NFT owned by address, grouped by collection'
+      operationId: get_address_nft_collections
+      parameters:
+        - $ref: '#/components/parameters/addressHash'
+        - in: query
+          name: type
+          schema:
+            type: string
+            example: 'ERC-721,ERC-404,ERC-1155'
+      responses:
+        '200':
+          description: address
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - next_page_params
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AddressNFTCollection'
+                  next_page_params:
+                    type: object
+                    example:
+                      token_contract_address_hash: '0xb81afe27c103bcd42f4026cf719af6d802928765'
+                      token_type: ERC-721
         '400':
           description: bad input parameter
       tags:
@@ -1178,6 +1294,48 @@ paths:
           description: bad input parameter
       tags:
         - tokens
+  '/api/v2/tokens/{address_hash}/instances/{id}/refetch-metadata':
+    patch:
+      summary: re-fetch token instance metadata
+      operationId: refetch_token_instance_metadata
+      parameters:
+        - $ref: '#/components/parameters/addressHash'
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecaptchaBody'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - next_page_params
+                properties:
+                  message:
+                    type: string
+                    example: OK
+        '403':
+          description: Invalid reCAPTCHA response
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - next_page_params
+                properties:
+                  message:
+                    type: string
+                    example: Invalid reCAPTCHA response
+      tags:
+        - tokens
   /api/v2/smart-contracts:
     get:
       summary: get verified smart contracts
@@ -1269,7 +1427,7 @@ paths:
         - smart-contracts
   '/api/v2/smart-contracts/{address_hash}/methods-read':
     get:
-      summary: get read methods
+      summary: get verified smart-contract read methods
       operationId: get_read_methods
       parameters:
         - $ref: '#/components/parameters/addressHash'
@@ -1300,7 +1458,7 @@ paths:
         - smart-contracts
   '/api/v2/smart-contracts/{address_hash}/methods-read-proxy':
     get:
-      summary: get read methods proxy
+      summary: get verified smart-contract read methods proxy
       operationId: get_read_methods_proxy
       parameters:
         - $ref: '#/components/parameters/addressHash'
@@ -1329,7 +1487,7 @@ paths:
         - smart-contracts
   '/api/v2/smart-contracts/{address_hash}/methods-write':
     get:
-      summary: get write methods
+      summary: get verified smart-contract write methods
       operationId: get_write_methods
       parameters:
         - $ref: '#/components/parameters/addressHash'
@@ -1354,7 +1512,7 @@ paths:
         - smart-contracts
   '/api/v2/smart-contracts/{address_hash}/methods-write-proxy':
     get:
-      summary: get write methods proxy
+      summary: get verified smart-contract write methods proxy
       operationId: get_write_methods_proxy
       parameters:
         - $ref: '#/components/parameters/addressHash'
@@ -1379,7 +1537,7 @@ paths:
         - smart-contracts
   '/api/v2/smart-contracts/{address_hash}/query-read-method':
     post:
-      summary: query read method
+      summary: query verified smart-contract read method
       operationId: query_read_method
       parameters:
         - $ref: '#/components/parameters/addressHash'
@@ -1491,8 +1649,8 @@ components:
         - state_root
         - timestamp
         - total_difficulty
-        - tx_count
-        - tx_fees
+        - transaction_count
+        - transaction_fees
         - type
         - uncles_hashes
         - withdrawals_count
@@ -1557,10 +1715,10 @@ components:
         total_difficulty:
           type: string
           example: '58750003716598352816469'
-        tx_count:
+        transaction_count:
           type: integer
           example: 120
-        tx_fees:
+        transaction_fees:
           type: string
           example: '306681898876578498'
         type:
@@ -1585,7 +1743,7 @@ components:
         - to
         - token
         - total
-        - tx_hash
+        - transaction_hash
         - type
       properties:
         block_hash:
@@ -1612,7 +1770,7 @@ components:
             - $ref: '#/components/schemas/TotalERC721'
             - $ref: '#/components/schemas/TotalERC1155'
             - $ref: '#/components/schemas/TotalERC1155Batch'
-        tx_hash:
+        transaction_hash:
           type: string
           example: '0x6662ad1ad2ea899e9e27832dc202fd2ef915a5d2816c1142e6933cff93f7c592'
         type:
@@ -1754,7 +1912,7 @@ components:
         - index
         - smart_contract
         - topics
-        - tx_hash
+        - transaction_hash
       properties:
         address:
           $ref: '#/components/schemas/AddressParam'
@@ -1791,13 +1949,13 @@ components:
           items:
             type: string
             example: '0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c'
-        tx_hash:
+        transaction_hash:
           type: string
           example: '0x08ea4d75ad0abe327a7fd368733eaeac43077989e635d800530d7906ebf3bd54'
     InternalTransaction:
       type: object
       required:
-        - block
+        - block_number
         - created_contract
         - error
         - from
@@ -1810,7 +1968,7 @@ components:
         - type
         - value
       properties:
-        block:
+        block_number:
           type: integer
           example: 8844586
         created_contract:
@@ -1861,14 +2019,14 @@ components:
         - timestamp
         - fee
         - gas_limit
-        - block
+        - block_number
         - status
         - method
         - confirmations
         - type
         - exchange_rate
         - to
-        - tx_burnt_fee
+        - transaction_burnt_fee
         - max_fee_per_gas
         - result
         - hash
@@ -1877,12 +2035,12 @@ components:
         - base_fee_per_gas
         - from
         - token_transfers
-        - tx_types
+        - transaction_types
         - gas_used
         - created_contract
         - position
         - nonce
-        - has_error_in_internal_txs
+        - has_error_in_internal_transactions
         - actions
         - decoded_input
         - token_transfers_overflow
@@ -1891,7 +2049,7 @@ components:
         - max_priority_fee_per_gas
         - revert_reason
         - confirmation_duration
-        - tx_tag
+        - transaction_tag
       properties:
         timestamp:
           type: string
@@ -1900,7 +2058,7 @@ components:
           $ref: '#/components/schemas/Fee'
         gas_limit:
           type: integer
-        block:
+        block_number:
           type: integer
           format: int32
           example: 23484035
@@ -1921,7 +2079,7 @@ components:
           example: '1866.51'
         to:
           $ref: '#/components/schemas/AddressParam'
-        tx_burnt_fee:
+        transaction_burnt_fee:
           type: string
           example: '1099596081903840'
         max_fee_per_gas:
@@ -1948,7 +2106,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TokenTransfer'
-        tx_types:
+        transaction_types:
           type: array
           items:
             type: string
@@ -1969,7 +2127,7 @@ components:
         nonce:
           type: integer
           example: 115
-        has_error_in_internal_txs:
+        has_error_in_internal_transactions:
           type: boolean
           example: false
         actions:
@@ -1999,9 +2157,9 @@ components:
           example:
             - 0
             - 17479
-        tx_tag:
+        transaction_tag:
           type: string
-          example: private_tx_tag
+          example: private_transaction_tag
     ExtendedRevertReasonAsMap:
       type: object
       required:
@@ -2071,6 +2229,195 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DecodedInputParameter'
+    TokenAddressParam:
+      type: object
+      required:
+        - hash
+        - implementation_name
+        - is_contract
+        - is_verified
+        - name
+        - private_tags
+        - public_tags
+        - watchlist_names
+      properties:
+        hash:
+          type: string
+          example: '0xEb533ee5687044E622C69c58B1B12329F56eD9ad'
+        implementation_name:
+          type: string
+          example: implementationName
+        name:
+          type: string
+          example: contractName
+        is_contract:
+          type: boolean
+        is_verified:
+          type: boolean
+        private_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/AddressTag'
+        public_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/AddressTag'
+        watchlist_names:
+          type: array
+          items:
+            $ref: '#/components/schemas/WatchlistName'
+        address:
+          type: string
+          example: 0x123abc...
+          description: Address
+    TransactionSummary:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/TransactionSummaryObj'
+    TransactionSummaryObj:
+      type: object
+      properties:
+        summaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/Summary'
+    Summary:
+      type: object
+      required:
+        - summary_template
+        - summary_template_variables
+      properties:
+        summary_template:
+          type: string
+          example: '{action_type} of {amount} {token}'
+          description: Summary template
+        summary_template_variables:
+          $ref: '#/components/schemas/SummaryTemplateVariables'
+          description: Variables for summary
+    SummaryTemplateVariables:
+      type: object
+      required:
+        - action_type
+        - amount
+        - token
+      properties:
+        action_type:
+          $ref: '#/components/schemas/SummaryVariable'
+          description: Action type
+        amount:
+          $ref: '#/components/schemas/SummaryVariableCurrency'
+          description: Amount
+        token:
+          $ref: '#/components/schemas/SummaryVariableToken'
+          description: Token info
+    SummaryVariable:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          example: string
+          description: Variable type
+        value:
+          type: string
+          example: Registered withdrawal of
+          description: Action Type
+    SummaryVariableCurrency:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          example: currency
+          description: Currency type
+        value:
+          type: string
+          example: '0.195999999980484004'
+          description: Value
+    SummaryVariableToken:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          example: token
+          description: Type
+        value:
+          $ref: '#/components/schemas/TokenInfoDetailed'
+          description: Token info
+    TokenInfoDetailed:
+      type: object
+      required:
+        - address
+        - circulating_market_cap
+        - decimals
+        - exchange_rate
+        - holders
+        - icon_url
+        - name
+        - symbol
+        - total_supply
+        - type
+        - volume_24h
+      properties:
+        address:
+          type: string
+          example: '0xBEEF69Ac7870777598A04B2bd4771c71212E6aBc'
+          description: Token Address
+        circulating_market_cap:
+          type: string
+          example: '0.0'
+          description: Token circulating market cap
+        decimals:
+          type: string
+          example: '18'
+          description: Token decimals
+        exchange_rate:
+          type: string
+          example: '2890.96'
+          description: Token exchange rate
+        holders:
+          type: string
+          example: '2999'
+          description: Token holders amount
+        icon_url:
+          type: string
+          example: >-
+            https://assets.coingecko.com/coins/images/39410/small/Steakhouse_logo-05.jpg?1722053893
+          description: 'Token image URL '
+        name:
+          type: string
+          example: Steakhouse Resteaking Vault
+          description: Token name
+        symbol:
+          type: string
+          example: steakLRT
+          description: Token symbol
+        total_supply:
+          type: string
+          example: '9710057205959239302188'
+          description: Token total supply
+        type:
+          type: string
+          example: ERC-20
+          description: Token type
+        volume_24h:
+          type: string
+          example: '24298.765344836862'
+          description: Token trading volume for past 24h
     DecodedInputParameter:
       type: object
       required:
@@ -2196,7 +2543,7 @@ components:
         creator_address_hash:
           type: string
           example: '0xEb533ee5687044E622C69c58B1B12329F56eD9ad'
-        creation_tx_hash:
+        creation_transaction_hash:
           type: string
           example: '0x1f610ff9c1efad6b5a8bb6afcc0786cd7343f03f9a61e2544fcff908cedee924'
         token:
@@ -2267,9 +2614,9 @@ components:
         - $ref: '#/components/schemas/Address'
         - type: object
           required:
-            - tx_count
+            - transaction_count
           properties:
-            tx_count:
+            transaction_count:
               type: string
               example: '1234'
     Reward:
@@ -2522,6 +2869,146 @@ components:
           $ref: '#/components/schemas/AddressParam'
         token:
           $ref: '#/components/schemas/TokenInfo'
+    AddressNFTInstance:
+      required:
+        - token_type
+        - value
+        - is_unique
+        - id
+        - token
+        - owner
+      properties:
+        is_unique:
+          type: boolean
+        id:
+          type: string
+          example: '431'
+        holder_address_hash:
+          type: string
+          example: '0x394c399dbA25B99Ab7708EdB505d755B3aa29997'
+        image_url:
+          type: string
+          example: example.com/picture.png
+        animation_url:
+          type: string
+          example: example.com/video.mp4
+        external_app_url:
+          type: string
+          example: d-app.com
+        metadata:
+          type: object
+          example:
+            year: 2023
+            tags:
+              - poap
+              - event
+            name: 'Social Listening Committee #2 Attendees'
+            image_url: 'https://assets.poap.xyz/chanel-poap-4c-2023-logo-1675083420470.png'
+            home_url: 'https://app.poap.xyz/token/6292128'
+            external_url: 'https://api.poap.tech/metadata/99010/6292128'
+            description: >-
+              This is the POAP for attendees of the second Social Listening
+              Committee.
+            attributes:
+              - value: 01-Feb-2023
+                trait_type: startDate
+              - value: 01-Feb-2023
+                trait_type: endDate
+              - value: 'false'
+                trait_type: virtualEvent
+              - value: Paris
+                trait_type: city
+              - value: France
+                trait_type: country
+              - value: 'https://www.chanel.com'
+                trait_type: eventURL
+        owner:
+          $ref: '#/components/schemas/AddressParam'
+        token:
+          $ref: '#/components/schemas/TokenInfo'
+        token_type:
+          type: string
+          example: ERC-721
+        value:
+          type: string
+          example: '1'
+    AddressNFTInstanceCollection:
+      required:
+        - token_type
+        - value
+        - is_unique
+        - id
+        - owner
+      properties:
+        is_unique:
+          type: boolean
+        id:
+          type: string
+          example: '431'
+        holder_address_hash:
+          type: string
+          example: '0x394c399dbA25B99Ab7708EdB505d755B3aa29997'
+        image_url:
+          type: string
+          example: example.com/picture.png
+        animation_url:
+          type: string
+          example: example.com/video.mp4
+        external_app_url:
+          type: string
+          example: d-app.com
+        metadata:
+          type: object
+          example:
+            year: 2023
+            tags:
+              - poap
+              - event
+            name: 'Social Listening Committee #2 Attendees'
+            image_url: 'https://assets.poap.xyz/chanel-poap-4c-2023-logo-1675083420470.png'
+            home_url: 'https://app.poap.xyz/token/6292128'
+            external_url: 'https://api.poap.tech/metadata/99010/6292128'
+            description: >-
+              This is the POAP for attendees of the second Social Listening
+              Committee.
+            attributes:
+              - value: 01-Feb-2023
+                trait_type: startDate
+              - value: 01-Feb-2023
+                trait_type: endDate
+              - value: 'false'
+                trait_type: virtualEvent
+              - value: Paris
+                trait_type: city
+              - value: France
+                trait_type: country
+              - value: 'https://www.chanel.com'
+                trait_type: eventURL
+        owner:
+          $ref: '#/components/schemas/AddressParam'
+        token:
+          type: object
+          example: null
+        token_type:
+          type: string
+          example: ERC-721
+        value:
+          type: string
+          example: '1'
+    AddressNFTCollection:
+      required:
+        - token
+        - token_instances
+      properties:
+        token:
+          $ref: '#/components/schemas/TokenInfo'
+        amount:
+          type: string
+          example: '1'
+        token_instances:
+          type: array
+          items:
+            $ref: '#/components/schemas/AddressNFTInstanceCollection'
     SmartContract:
       properties:
         verified_twin_address_hash:
@@ -2809,14 +3296,14 @@ components:
     SearchResultTransaction:
       required:
         - timestamp
-        - tx_hash
+        - transaction_hash
         - type
         - url
       properties:
         timestamp:
           type: string
           example: '2022-10-31T07:18:05.000000Z'
-        tx_hash:
+        transaction_hash:
           type: string
           example: '0xe38c6772f33edfbd218f59853befe18391cb786f911fb6c0b00ed6dd72ef6e69'
         type:
@@ -2915,12 +3402,12 @@ components:
     TransactionChartItem:
       required:
         - date
-        - tx_count
+        - transaction_count
       properties:
         date:
           type: string
           example: '2022-10-31'
-        tx_count:
+        transaction_count:
           type: integer
           example: 622
     TokenCounters:
@@ -2934,6 +3421,13 @@ components:
         transfers_count:
           type: string
           example: '1000'
+    RecaptchaBody:
+      required:
+        - recaptcha_response
+      properties:
+        recaptcha_response:
+          type: string
+          example: '123'
     ReadMethodQueryBody:
       required:
         - args
@@ -3051,7 +3545,7 @@ components:
         - has_constructor_args
         - language
         - optimization_enabled
-        - tx_count
+        - transaction_count
         - verified_at
       properties:
         address:
@@ -3069,7 +3563,7 @@ components:
           type: boolean
         optimization_enabled:
           type: boolean
-        tx_count:
+        transaction_count:
           type: integer
         verified_at:
           type: string
@@ -3334,7 +3828,7 @@ components:
             total:
               decimals: '6'
               value: '830000000'
-            tx_hash: '0x6662ad1ad2ea899e9e27832dc202fd2ef915a5d2816c1142e6933cff93f7c592'
+            transaction_hash: '0x6662ad1ad2ea899e9e27832dc202fd2ef915a5d2816c1142e6933cff93f7c592'
             type: token_transfer
         next_page_params:
           batch_block_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
@@ -3380,7 +3874,7 @@ components:
             total:
               decimals: '6'
               value: '830000000'
-            tx_hash: '0x6662ad1ad2ea899e9e27832dc202fd2ef915a5d2816c1142e6933cff93f7c592'
+            transaction_hash: '0x6662ad1ad2ea899e9e27832dc202fd2ef915a5d2816c1142e6933cff93f7c592'
             type: token_transfer
         next_page_params:
           block_number: 4
@@ -3424,7 +3918,7 @@ components:
             total:
               decimals: '6'
               value: '830000000'
-            tx_hash: '0x6662ad1ad2ea899e9e27832dc202fd2ef915a5d2816c1142e6933cff93f7c592'
+            transaction_hash: '0x6662ad1ad2ea899e9e27832dc202fd2ef915a5d2816c1142e6933cff93f7c592'
             type: token_transfer
         next_page_params:
           batch_block_hash: '0x0000000000000000000000000000000000000000000000000000000000000014'
