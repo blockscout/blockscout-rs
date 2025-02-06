@@ -23,29 +23,33 @@ defaults:
     working-directory: smart-contract-verifier
 
 jobs:
-  build:
-    name: Checkout and build
-    uses: ./.github/workflows/t_build_tests.yml
-    with:
-      working-directory: smart-contract-verifier
-
   test:
     name: Unit, doc and integration tests
-    needs:
-      - build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          working-directory: smart-contract-verifier
+
+      - name: Build
+        id: build
+        run: RUST_BACKTRACE=1 cargo build --locked --workspace --all-targets --all-features
+
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
 
       - name: Doc tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --doc -- --skip proto
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
 
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
 
   lint:
     name: Linting
