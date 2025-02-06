@@ -11,7 +11,7 @@ The service consists of 2 parts, a stats calculation library and a transport lay
 
 - Postgresql database for this service
 - Access to Blockscout database
-- (Preferable) Access to Blockscout API
+- (Preferable) Access to Blockscout API (see `STATS__BLOCKSCOUT_API_URL` description for details)
 - (Optional) Access to User Ops Indexer database (actually just tables in Blockscout database)
 
 ### Dependecy version requirements
