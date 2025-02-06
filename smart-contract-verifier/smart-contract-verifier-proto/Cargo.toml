@@ -16,18 +16,18 @@ serde_with = { workspace = true, features = ["hex", "base64"] }
 tonic = { workspace = true }
 
 anyhow = { workspace = true, optional = true }
+mockall = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 reqwest-middleware = { workspace = true, optional = true }
 reqwest-retry = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
-url = { workspace = true, optional = true }
-mockall = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 [build-dependencies]
 actix-prost-build = { workspace = true }
-tonic-build = { workspace = true }
 prost-build = { workspace = true }
+tonic-build = { workspace = true }
 
 [dev-dependencies]
 smart-contract-verifier-proto = { workspace = true, features = ["http-client", "mock"] }

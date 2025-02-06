@@ -7,7 +7,6 @@ repository = "https://github.com/blockscout/blockscout-rs"
 keywords = ["ethereum", "web3", "solidity"]
 
 [dependencies]
-smart-contract-verifier-proto = { workspace = true }
 alloy-dyn-abi = { workspace = true }
 alloy-json-abi = { workspace = true }
 anyhow = { workspace = true }
@@ -37,6 +36,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
 sha2 = { workspace = true }
+smart-contract-verifier-proto = { workspace = true }
 solidity-metadata = { workspace = true }
 sourcify = { workspace = true }
 sscanf = { workspace = true }

@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
+    "sig-provider-extension",
     "smart-contract-verifier",
     "smart-contract-verifier-proto",
     "smart-contract-verifier-server",
-    "sig-provider-extension",
 ]
 
 [workspace.dependencies]
@@ -66,9 +66,9 @@ sscanf = { version = "0.3" }
 stdext = { version = "0.3.2" }
 tempfile = { version = "3.3" }
 thiserror = { version = "1.0" }
+tokio = { version = "1" }
 tonic = { version = "0.8" }
 tonic-build = { version = "0.8" }
-tokio = { version = "1" }
 tracing = { version = "0.1" }
 url = { version = "2.4" }
 uuid = { version = "1.6.1" }

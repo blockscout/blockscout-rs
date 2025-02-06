@@ -6,9 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+sig-provider-extension = { workspace = true, optional = true }
 smart-contract-verifier = { workspace = true }
 smart-contract-verifier-proto = { workspace = true }
-sig-provider-extension = { workspace = true, optional = true }
 
 actix-web = { workspace = true }
 amplify = { workspace = true, features = ["derive"] }
@@ -19,8 +19,8 @@ blockscout-service-launcher = { workspace = true }
 bytes = { workspace = true }
 config = { workspace = true }
 cron = { workspace = true }
-ethers-solc = { workspace = true }
 ethers-core = { workspace = true }
+ethers-solc = { workspace = true }
 foundry-compilers = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
@@ -39,9 +39,9 @@ uuid = { workspace = true, features = ["v4"] }
 verification-common = { workspace = true }
 
 [dev-dependencies]
-ethers-solc = { workspace = true, features = ["svm-solc"] }
 blockscout-service-launcher = { workspace = true , features = ["test-server"]}
 ethabi = { workspace = true }
+ethers-solc = { workspace = true, features = ["svm-solc"] }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
 rstest = { workspace = true }
