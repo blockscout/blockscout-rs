@@ -1,0 +1,24 @@
+name: Checkout and build for testing (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: true
+        type: string
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+
+      - name: Build
+        run: RUST_BACKTRACE=1 cargo build --locked --workspace --all-targets --all-features
+        working-directory: ${{ inputs.working-directory }}
