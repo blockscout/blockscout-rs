@@ -170,9 +170,10 @@ fn process_verification_result(
 }
 
 fn process_match(internal_match: verifier_alliance::Match) -> Match {
-    let match_type = match internal_match.r#type {
-        verifier_alliance::MatchType::Full => MatchType::Full,
-        verifier_alliance::MatchType::Partial => MatchType::Partial,
+    let match_type = if internal_match.metadata_match {
+        MatchType::Full
+    } else {
+        MatchType::Partial
     };
     Match {
         r#type: match_type.into(),

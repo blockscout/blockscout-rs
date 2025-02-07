@@ -71,5 +71,5 @@ tonic-build = { version = "0.12" }
 tracing = { version = "0.1" }
 url = { version = "2.4" }
 uuid = { version = "1.6.1" }
-verification-common = { git = "https://github.com/blockscout/blockscout-rs/", rev = "bd6352d" }
+verification-common = { git = "https://github.com/blockscout/blockscout-rs/", rev = "8d9cf0e" }
 wiremock = { version = "0.5" }
