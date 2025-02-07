@@ -1,4 +1,4 @@
-use std::{time::Duration, u64};
+use std::time::Duration;
 
 use crate::settings::{Settings, StartConditionSettings, ToggleableThreshold};
 
