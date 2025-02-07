@@ -3,8 +3,9 @@ use crate::{
         data_manipulation::map::{Map, MapFunction, MapParseTo},
         local_db::DirectPointLocalDbChartSource,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::TimespanValue,
-    ChartError, ChartProperties, IndexingStatus, indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus, IndexingStatusTrait}, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;

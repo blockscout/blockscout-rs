@@ -7,11 +7,12 @@ use crate::{
         },
         UpdateContext,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     lines::NewTxnsStatement,
     range::UniversalRange,
     types::TimespanValue,
     utils::day_start,
-    ChartError, ChartProperties, IndexingStatus, indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus, IndexingStatusTrait}, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::{DateTime, Days, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
