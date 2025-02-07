@@ -59,19 +59,14 @@ WITH accounts_cte AS (SELECT DISTINCT ON (sender) sender,
                                                   factory,
                                                   CASE WHEN factory IS NOT NULL THEN user_operations.transaction_hash END as creation_transaction_hash,
                                                   CASE WHEN factory IS NOT NULL THEN user_operations.hash END             as creation_op_hash,
-                                                  COALESCE(
-                                                        CASE WHEN factory IS NOT NULL THEN blocks.timestamp END,
-                                                        NULL
-                                                  ) AS creation_timestamp
+                                                  CASE WHEN factory IS NOT NULL THEN blocks.timestamp END,                as creation_timestamp
                       FROM user_operations
                                JOIN blocks
                                     ON blocks.hash = block_hash AND consensus
                       WHERE sender >= $2
                       AND ($1 IS NULL OR factory = $1)
-                      AND ($3 IS NULL OR (factory IS NOT NULL AND creation_timestamp >= $3))
-                      AND ($4 IS NULL OR (factory IS NOT NULL AND creation_timestamp <= $4))
                       ORDER BY sender, factory NULLS LAST
-                      LIMIT $5),
+                      LIMIT $3),
      accounts_total_cte AS (SELECT accounts_cte.sender, count(*) as total_ops
                             FROM accounts_cte
                                      JOIN user_operations ON accounts_cte.sender = user_operations.sender
@@ -84,13 +79,16 @@ SELECT accounts_cte.sender                    as address,
        accounts_cte.creation_op_hash          as creation_op_hash,
        accounts_cte.creation_timestamp        as creation_timestamp
 FROM accounts_cte
-         JOIN accounts_total_cte ON accounts_cte.sender = accounts_total_cte.sender"#,
+         JOIN accounts_total_cte ON accounts_cte.sender = accounts_total_cte.sender
+WHERE ($4 IS NULL OR accounts_cte.creation_timestamp IS NULL OR accounts_cte.creation_timestamp >= $4)
+AND ($5 IS NULL OR accounts_cte.creation_timestamp IS NULL OR accounts_cte.creation_timestamp <= $5);
+         "#,
         [
             factory_filter.map(|f| f.to_vec()).into(),
             page_token.unwrap_or(Address::ZERO).to_vec().into(),
+            (limit + 1).into(),
             start_time.into(),
             end_time.into(),
-            (limit + 1).into(),
         ],
     ))
         .all(db)
