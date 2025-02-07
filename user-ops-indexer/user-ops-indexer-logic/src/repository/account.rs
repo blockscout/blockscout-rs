@@ -59,7 +59,10 @@ WITH accounts_cte AS (SELECT DISTINCT ON (sender) sender,
                                                   factory,
                                                   CASE WHEN factory IS NOT NULL THEN user_operations.transaction_hash END as creation_transaction_hash,
                                                   CASE WHEN factory IS NOT NULL THEN user_operations.hash END             as creation_op_hash,
-                                                  CASE WHEN factory IS NOT NULL THEN blocks.timestamp END                 as creation_timestamp
+                                                  COALESCE(
+                                                        CASE WHEN factory IS NOT NULL THEN blocks.timestamp END,
+                                                        NULL
+                                                  ) AS creation_timestamp
                       FROM user_operations
                                JOIN blocks
                                     ON blocks.hash = block_hash AND consensus
@@ -85,8 +88,8 @@ FROM accounts_cte
         [
             factory_filter.map(|f| f.to_vec()).into(),
             page_token.unwrap_or(Address::ZERO).to_vec().into(),
-            //start_time.into(),
-            //end_time.into(),
+            start_time.into(),
+            end_time.into(),
             (limit + 1).into(),
         ],
     ))
