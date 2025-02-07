@@ -37,7 +37,7 @@ jobs:
 
       - name: Build
         id: build
-        run: RUST_BACKTRACE=1 cargo build --locked --workspace --all-targets --all-features
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
