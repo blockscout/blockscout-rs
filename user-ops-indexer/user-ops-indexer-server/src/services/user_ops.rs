@@ -1,6 +1,6 @@
 use crate::{proto::user_ops_service_server::UserOpsService as UserOps, settings::ApiSettings};
 use sea_orm::{prelude::DateTime, DatabaseConnection};
-use std::{str::FromStr, sync::Arc, error::Error};
+use std::{str::FromStr, sync::Arc, string::ParseError};
 use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 use user_ops_indexer_logic::{
