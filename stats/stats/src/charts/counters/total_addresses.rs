@@ -7,8 +7,9 @@ use crate::{
         },
         types::BlockscoutMigrations,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::timespans::DateValue,
-    ChartError, ChartProperties, IndexingStatus, indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus, IndexingStatusTrait}, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use blockscout_db::entity::addresses;
 use chrono::{NaiveDate, Utc};

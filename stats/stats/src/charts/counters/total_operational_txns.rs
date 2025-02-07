@@ -5,8 +5,9 @@ use crate::{
         data_manipulation::map::{Map, MapFunction},
         local_db::DirectPointLocalDbChartSource,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::TimespanValue,
-    ChartProperties, IndexingStatus, indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus, IndexingStatusTrait}, MissingDatePolicy, Named,
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use std::fmt::Debug;
 

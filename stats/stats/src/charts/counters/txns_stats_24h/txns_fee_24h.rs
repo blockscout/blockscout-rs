@@ -4,8 +4,9 @@ use crate::{
         local_db::DirectPointLocalDbChartSource,
     },
     gettable_const,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::TimespanValue,
-    ChartError, ChartProperties, IndexingStatus, indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus, IndexingStatusTrait}, MissingDatePolicy, Named,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
