@@ -705,18 +705,24 @@ mod tests {
             }"#,
         );
         let ok_u = ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true));
-        let config = StartConditionSettings {
+        let config_b_off = StartConditionSettings {
             blocks_ratio: ToggleableThreshold::disabled(),
             internal_transactions_ratio: ToggleableThreshold::disabled(),
+            user_ops_past_indexing_finished: ToggleableCheck { enabled: true },
+            check_period_secs: 1,
+        };
+        let config_u_off = StartConditionSettings {
+            blocks_ratio: ToggleableThreshold::default(),
+            internal_transactions_ratio: ToggleableThreshold::default(),
             user_ops_past_indexing_finished: ToggleableCheck { enabled: false },
             check_period_secs: 1,
         };
         let mut tests = JoinSet::from_iter(
             [
-                (&config, &s, timeout, &r(400), Some(&ok_u)),
-                (&config, &s, timeout, &r(404), Some(&ok_u)),
-                (&config, &s, timeout, &ok_b, Some(&r(400))),
-                (&config, &s, timeout, &ok_b, Some(&r(404))),
+                (&config_b_off, &s, timeout, &r(400), Some(&ok_u)),
+                (&config_b_off, &s, timeout, &r(404), Some(&ok_u)),
+                (&config_u_off, &s, timeout, &ok_b, Some(&r(400))),
+                (&config_u_off, &s, timeout, &ok_b, Some(&r(404))),
             ]
             .map(|(a, b, c, d, e)| test_aggregator(a.clone(), b.clone(), c, d.clone(), e.cloned())),
         );
