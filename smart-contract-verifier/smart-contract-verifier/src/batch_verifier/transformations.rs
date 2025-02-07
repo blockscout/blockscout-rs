@@ -210,7 +210,7 @@ fn process_constructor_arguments(
 
     let constructor = match compilation_artifacts.abi.as_ref() {
         Some(abi) => {
-            alloy_json_abi::JsonAbi::from_json_str(&abi.to_string())
+            alloy_json_abi::JsonAbi::deserialize(abi)
                 .context("parse json abi from compilation artifacts")?
                 .constructor
         }
