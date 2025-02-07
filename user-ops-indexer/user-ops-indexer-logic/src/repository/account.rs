@@ -59,7 +59,7 @@ WITH accounts_cte AS (SELECT DISTINCT ON (sender) sender,
                                                   factory,
                                                   CASE WHEN factory IS NOT NULL THEN user_operations.transaction_hash END as creation_transaction_hash,
                                                   CASE WHEN factory IS NOT NULL THEN user_operations.hash END             as creation_op_hash,
-                                                  CASE WHEN factory IS NOT NULL THEN blocks.timestamp END,                as creation_timestamp
+                                                  CASE WHEN factory IS NOT NULL THEN blocks.timestamp END                as creation_timestamp
                       FROM user_operations
                                JOIN blocks
                                     ON blocks.hash = block_hash AND consensus
