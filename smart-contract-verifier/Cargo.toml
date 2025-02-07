@@ -17,8 +17,8 @@ actix-prost = { version = "0.1.0" }
 actix-prost-build = { version = "0.1.0" }
 actix-prost-macros = { version = "0.1.0" }
 actix-web = { version = "4" }
-alloy-dyn-abi = { version = "0.6.4" }
-alloy-json-abi = { version = "0.6.4" }
+alloy-dyn-abi = { version = "0.8.20" }
+alloy-json-abi = { version = "0.8.20" }
 amplify = { version = "4.6.0" }
 anyhow = { version = "1.0" }
 async-trait = { version = "0.1" }
@@ -71,5 +71,5 @@ tonic-build = { version = "0.12" }
 tracing = { version = "0.1" }
 url = { version = "2.4" }
 uuid = { version = "1.6.1" }
-verification-common = { git = "https://github.com/blockscout/blockscout-rs/", rev = "bd6352d" }
+verification-common = { git = "https://github.com/blockscout/blockscout-rs/", rev = "8d9cf0e" }
 wiremock = { version = "0.5" }
