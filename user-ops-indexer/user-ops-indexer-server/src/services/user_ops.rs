@@ -58,13 +58,28 @@ impl UserOpsService {
             .clamp(1, self.settings.max_page_size)
     }
 
-    fn parse_iso8601(&self, timestamp: Option<&String>) -> Result<Option<DateTime>, Box<dyn Error>> {
+    fn parse_iso8601(&self, timestamp: Option<&String>) -> Result<Option<DateTime>, ParseError> {
         match timestamp {
             Some(ts) => {
-                let dt = ts.parse::<DateTime>()?;  // ✅ Now uses SeaORM's DateTime
-                Ok(Some(dt))
+                println!("Parsing timestamp: {:?}", ts); // ✅ Debug log
+    
+                // ✅ Try ISO 8601 (`2024-02-06T12:30:00Z`)
+                if let Ok(dt) = DateTime::parse_from_rfc3339(ts) {
+                    return Ok(Some(dt.naive_utc())); // ✅ Convert to `NaiveDateTime`
+                }
+    
+                // ✅ Try `YYYY-MM-DD HH:MM:SS`
+                if let Ok(dt) = DateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S") {
+                    return Ok(Some(dt));
+                }
+    
+                // ❌ If all fails, return None
+                Ok(None)
             }
-            None => Ok(None), // ✅ Handle `None` gracefully
+            None => {
+                println!("No timestamp provided");
+                Ok(None)
+            }
         }
     }
 }
