@@ -6,7 +6,8 @@ use crate::{
         },
         types::BlockscoutMigrations,
     },
-    ChartProperties, IndexingStatus, indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus, IndexingStatusTrait}, MissingDatePolicy, Named,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;
