@@ -90,7 +90,7 @@ impl ChartProperties for Properties {
 
     fn indexing_status_requirement() -> IndexingStatus {
         IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
             user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
         }
     }
