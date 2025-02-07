@@ -85,8 +85,8 @@ FROM accounts_cte
         [
             factory_filter.map(|f| f.to_vec()).into(),
             page_token.unwrap_or(Address::ZERO).to_vec().into(),
-            start_time.into(),
-            end_time.into(),
+            //start_time.into(),
+            //end_time.into(),
             (limit + 1).into(),
         ],
     ))
