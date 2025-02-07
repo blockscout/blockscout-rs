@@ -1,10 +1,12 @@
-use std::time::Duration;
+use std::{time::Duration, u64};
 
 use crate::settings::{Settings, StartConditionSettings, ToggleableThreshold};
 
 use anyhow::Context;
 use blockscout_service_launcher::launcher::ConfigSettings;
-use stats::IndexingStatus;
+use stats::indexing_status::{
+    BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
+};
 use tokio::{sync::watch, time::sleep};
 
 const RETRIES: u64 = 10;
@@ -24,10 +26,10 @@ pub struct IndexingStatusAggregator {
 }
 
 impl IndexingStatusAggregator {
-    fn internal_status_from_api_status(
+    fn blockscout_internal_status_from_api_status(
         api_status: blockscout_client::models::IndexingStatus,
         wait_config: &StartConditionSettings,
-    ) -> anyhow::Result<IndexingStatus> {
+    ) -> anyhow::Result<BlockscoutIndexingStatus> {
         let blocks_passed = is_threshold_passed(
             &wait_config.blocks_ratio,
             api_status.indexed_blocks_ratio.clone(),
@@ -42,55 +44,149 @@ impl IndexingStatusAggregator {
             )
             .context("checking indexed internal transactions ratio")?;
             if internal_transactions_passed {
-                IndexingStatus::InternalTransactionsIndexed
+                BlockscoutIndexingStatus::InternalTransactionsIndexed
             } else {
-                IndexingStatus::BlocksIndexed
+                BlockscoutIndexingStatus::BlocksIndexed
             }
         } else {
-            IndexingStatus::NoneIndexed
+            BlockscoutIndexingStatus::NoneIndexed
         };
         Ok(status)
+    }
+
+    fn user_ops_internal_status_from_api_status(
+        api_status: blockscout_client::models::V1IndexerStatus,
+        wait_config: &StartConditionSettings,
+    ) -> UserOpsIndexingStatus {
+        if !wait_config.user_ops_past_indexing_finished.enabled {
+            return UserOpsIndexingStatus::PastOperationsIndexed;
+        }
+        let finished_past_indexing = api_status.finished_past_indexing.unwrap_or_else(|| {
+            tracing::info!("Treating `finished_past_indexing=null` as false.",);
+            false
+        });
+        if finished_past_indexing {
+            tracing::info!("User ops are fully indexed");
+            UserOpsIndexingStatus::PastOperationsIndexed
+        } else {
+            tracing::info!("User ops are not fully indexed");
+            UserOpsIndexingStatus::IndexingPastOperations
+        }
+    }
+
+    async fn check_blockscout_status(
+        &self,
+        consecutive_errors: &mut u64,
+    ) -> Result<(), anyhow::Error> {
+        match blockscout_client::apis::main_page_api::get_indexing_status(&self.api_config).await {
+            Ok(result) => {
+                *consecutive_errors = 0;
+                match Self::blockscout_internal_status_from_api_status(result, &self.wait_config) {
+                    Ok(status) => {
+                        let modified = self.sender.send_if_modified(|val| {
+                            if val.blockscout != status {
+                                val.blockscout = status.clone();
+                                true
+                            } else {
+                                false
+                            }
+                        });
+                        if modified {
+                            tracing::info!("Observed new indexing status: {:?}", status);
+                        } else {
+                            tracing::info!("Indexing status is unchanged");
+                        }
+                    }
+                    Err(e) => tracing::error!("{}", e),
+                }
+            }
+            Err(e) => {
+                if *consecutive_errors >= RETRIES {
+                    return Err(e).context("Requesting indexing status");
+                }
+                tracing::warn!(
+                    "Error ({consecutive_errors}/{RETRIES}) requesting indexing status: {e:?}"
+                );
+                *consecutive_errors += 1;
+            }
+        }
+        Ok(())
+    }
+
+    async fn check_user_ops_status(&self) {
+        match blockscout_client::apis::proxy_api::get_account_abstraction_status(&self.api_config)
+            .await
+        {
+            Ok(status) => {
+                let status =
+                    Self::user_ops_internal_status_from_api_status(status, &self.wait_config);
+                let modified = self.sender.send_if_modified(|val| {
+                    if val.user_ops != status {
+                        val.user_ops = status.clone();
+                        true
+                    } else {
+                        false
+                    }
+                });
+                if modified {
+                    tracing::info!("Observed new indexing status: {:?}", status);
+                } else {
+                    tracing::info!("Indexing status is unchanged");
+                }
+            }
+            Err(e) => {
+                match &e {
+                    blockscout_client::Error::ResponseError(bad_request)
+                        if bad_request.status == reqwest::StatusCode::BAD_REQUEST =>
+                    {
+                        tracing::warn!(
+                            error =? e,
+                            "Got response with HTTP 400. This likely means that blockscout version \
+                            is <7.0.0.",
+                        );
+                    }
+                    _ => {
+                        tracing::error!(
+                            error =? e,
+                            "Failed to get user ops indexing status",
+                        );
+                    }
+                }
+                // don't need to change if disabled, because it's handled
+                // in `init`
+                if self.wait_config.user_ops_past_indexing_finished.enabled {
+                    tracing::warn!(
+                        "User ops related charts are turned off to avoid \
+                        incorrect data. Set `STATS__CONDITIONAL_START__USER_OPS_PAST_INDEXING_FINISHED__ENABLED=false` \
+                        to ignore this check and update the charts."
+                    );
+                }
+            }
+        }
+    }
+
+    async fn sleep_indefinitely() {
+        tracing::info!("All indexing status checks are disabled, stopping status checks");
+        sleep(Duration::from_secs(u64::MAX)).await;
     }
 
     pub async fn run(&self) -> Result<(), anyhow::Error> {
         let mut consecutive_errors = 0;
         loop {
-            match blockscout_client::apis::main_page_api::get_indexing_status(&self.api_config)
-                .await
+            if self.wait_config.blockscout_checks_enabled() {
+                self.check_blockscout_status(&mut consecutive_errors)
+                    .await?;
+            }
+            if self.wait_config.user_ops_checks_enabled() {
+                self.check_user_ops_status().await;
+            }
+            if !self.wait_config.blockscout_checks_enabled()
+                && !self.wait_config.user_ops_checks_enabled()
             {
-                Ok(result) => {
-                    consecutive_errors = 0;
-                    match Self::internal_status_from_api_status(result, &self.wait_config) {
-                        Ok(status) => {
-                            let modified = self.sender.send_if_modified(|val| {
-                                if val != &status {
-                                    *val = status.clone();
-                                    true
-                                } else {
-                                    false
-                                }
-                            });
-                            if modified {
-                                tracing::info!("Observed new indexing status: {:?}", status);
-                            } else {
-                                tracing::info!("Indexing status is unchanged");
-                            }
-                        }
-                        Err(e) => tracing::error!("{}", e),
-                    }
-                }
-                Err(e) => {
-                    if consecutive_errors >= RETRIES {
-                        return Err(e).context("Requesting indexing status");
-                    }
-                    tracing::warn!(
-                        "Error ({consecutive_errors}/{RETRIES}) requesting indexing status: {e:?}"
-                    );
-                    consecutive_errors += 1;
-                }
+                Self::sleep_indefinitely().await;
             }
             let wait_time = if let IndexingStatus::MAX = *self.sender.borrow() {
-                self.wait_config.check_period_secs * 100
+                self.wait_config.check_period_secs.saturating_mul(100)
             } else {
                 self.wait_config.check_period_secs
             };
@@ -115,16 +211,7 @@ impl IndexingStatusListener {
         minimal_status: IndexingStatus,
     ) -> Result<(), watch::error::RecvError> {
         self.receiver
-            .wait_for(|value| match minimal_status {
-                IndexingStatus::NoneIndexed => true,
-                IndexingStatus::BlocksIndexed => matches!(
-                    value,
-                    IndexingStatus::BlocksIndexed | IndexingStatus::InternalTransactionsIndexed
-                ),
-                IndexingStatus::InternalTransactionsIndexed => {
-                    matches!(value, IndexingStatus::InternalTransactionsIndexed)
-                }
-            })
+            .wait_for(|value| value.is_requirement_satisfied(&minimal_status))
             .await?;
         Ok(())
     }
@@ -169,7 +256,25 @@ pub fn init(
     api_config: blockscout_client::Configuration,
     wait_config: StartConditionSettings,
 ) -> (IndexingStatusAggregator, IndexingStatusListener) {
-    let (sender, receiver) = watch::channel(IndexingStatus::LEAST_RESTRICTIVE);
+    // enable immediately if the checks are disabled
+    let blockscout_init_value = match (
+        wait_config.blocks_ratio.enabled,
+        wait_config.internal_transactions_ratio.enabled,
+    ) {
+        (true, _) => BlockscoutIndexingStatus::NoneIndexed,
+        (false, true) => BlockscoutIndexingStatus::BlocksIndexed,
+        (false, false) => BlockscoutIndexingStatus::InternalTransactionsIndexed,
+    };
+    let user_ops_init_value = if wait_config.user_ops_past_indexing_finished.enabled {
+        UserOpsIndexingStatus::IndexingPastOperations
+    } else {
+        UserOpsIndexingStatus::PastOperationsIndexed
+    };
+
+    let (sender, receiver) = watch::channel(IndexingStatus {
+        blockscout: blockscout_init_value,
+        user_ops: user_ops_init_value,
+    });
     (
         IndexingStatusAggregator {
             api_config,
@@ -214,15 +319,28 @@ mod tests {
         Mock, MockServer, ResponseTemplate,
     };
 
+    use crate::settings::ToggleableCheck;
+
     use super::*;
 
-    async fn mock_indexing_status(response: ResponseTemplate) -> MockServer {
+    async fn mock_indexing_statuses(
+        response_blockscout: ResponseTemplate,
+        response_user_ops: Option<ResponseTemplate>,
+    ) -> MockServer {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/api/v2/main-page/indexing-status"))
-            .respond_with(response)
+            .respond_with(response_blockscout)
             .mount(&mock_server)
             .await;
+
+        if let Some(response) = response_user_ops {
+            Mock::given(method("GET"))
+                .and(path("/api/v2/proxy/account-abstraction/status"))
+                .respond_with(response)
+                .mount(&mock_server)
+                .await;
+        }
         mock_server
     }
 
@@ -230,9 +348,10 @@ mod tests {
         wait_config: StartConditionSettings,
         expected_status: IndexingStatus,
         timeout: Option<Duration>,
-        response: ResponseTemplate,
+        response_blockscout: ResponseTemplate,
+        response_user_ops: Option<ResponseTemplate>,
     ) -> Result<Result<(), anyhow::Error>, Elapsed> {
-        let server = mock_indexing_status(response).await;
+        let server = mock_indexing_statuses(response_blockscout, response_user_ops).await;
         let api_config =
             blockscout_client::Configuration::new(Url::from_str(&server.uri()).unwrap());
         let (aggregator, mut listener) = init(api_config, wait_config);
@@ -250,15 +369,39 @@ mod tests {
         }
     }
 
+    fn user_ops_status_response_json(past_finished: bool) -> String {
+        format!(
+            r#"{{
+            "finished_past_indexing": {past_finished},
+            "v06": {{
+                "enabled": true,
+                "live": false,
+                "past_db_logs_indexing_finished": false,
+                "past_rpc_logs_indexing_finished": false
+            }},
+            "v07": {{
+                "enabled": true,
+                "live": false,
+                "past_db_logs_indexing_finished": false,
+                "past_rpc_logs_indexing_finished": false
+            }}
+        }}"#
+        )
+    }
+
     #[fixture]
     fn wait_config(
         #[default(0.9)] blocks: f64,
         #[default(0.9)] internal_transactions: f64,
+        #[default(true)] account_abstraction_check_enabled: bool,
         #[default(0)] check_period_secs: u32,
     ) -> StartConditionSettings {
         StartConditionSettings {
             blocks_ratio: ToggleableThreshold::enabled(blocks),
             internal_transactions_ratio: ToggleableThreshold::enabled(internal_transactions),
+            user_ops_past_indexing_finished: ToggleableCheck {
+                enabled: account_abstraction_check_enabled,
+            },
             check_period_secs,
         }
     }
@@ -268,7 +411,10 @@ mod tests {
     async fn waiter_works_with_200_response(wait_config: StartConditionSettings) {
         test_aggregator(
             wait_config.clone(),
-            IndexingStatus::InternalTransactionsIndexed,
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+                user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+            },
             None,
             ResponseTemplate::new(200).set_body_string(
                 r#"{
@@ -278,6 +424,7 @@ mod tests {
                     "indexed_internal_transactions_ratio": "1"
                 }"#,
             ),
+            Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true))),
         )
         .await
         .expect("must not timeout")
@@ -285,7 +432,10 @@ mod tests {
 
         test_aggregator(
             wait_config.clone(),
-            IndexingStatus::InternalTransactionsIndexed,
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+                user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+            },
             None,
             ResponseTemplate::new(200).set_body_string(
                 r#"{
@@ -295,13 +445,17 @@ mod tests {
                     "indexed_internal_transactions_ratio": "0.80"
                 }"#,
             ),
+            None,
         )
         .await
         .expect_err("must time out");
 
         test_aggregator(
             wait_config.clone(),
-            IndexingStatus::InternalTransactionsIndexed,
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+                user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+            },
             None,
             ResponseTemplate::new(200).set_body_string(
                 r#"{
@@ -311,13 +465,17 @@ mod tests {
                     "indexed_internal_transactions_ratio": "1.00"
                 }"#,
             ),
+            None,
         )
         .await
         .expect_err("must time out");
 
         test_aggregator(
             wait_config.clone(),
-            IndexingStatus::InternalTransactionsIndexed,
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+                user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+            },
             None,
             ResponseTemplate::new(200).set_body_string(
                 r#"{
@@ -327,13 +485,37 @@ mod tests {
                     "indexed_internal_transactions_ratio": "0.80"
                 }"#,
             ),
+            None,
+        )
+        .await
+        .expect_err("must time out");
+
+        test_aggregator(
+            wait_config.clone(),
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+                user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+            },
+            None,
+            ResponseTemplate::new(200).set_body_string(
+                r#"{
+                    "finished_indexing": true,
+                    "finished_indexing_blocks": true,
+                    "indexed_blocks_ratio": "1.00",
+                    "indexed_internal_transactions_ratio": "1.00"
+                }"#,
+            ),
+            Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(false))),
         )
         .await
         .expect_err("must time out");
 
         test_aggregator(
             wait_config,
-            IndexingStatus::BlocksIndexed,
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::BlocksIndexed,
+                user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+            },
             None,
             ResponseTemplate::new(200).set_body_string(
                 r#"{
@@ -343,6 +525,7 @@ mod tests {
                     "indexed_internal_transactions_ratio": "0.80"
                 }"#,
             ),
+            Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true))),
         )
         .await
         .expect("must not timeout")
@@ -354,7 +537,10 @@ mod tests {
     async fn waiter_works_with_slow_response(wait_config: StartConditionSettings) {
         test_aggregator(
             wait_config,
-            IndexingStatus::InternalTransactionsIndexed,
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+                user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+            },
             Some(Duration::from_millis(500)),
             ResponseTemplate::new(200)
                 .set_body_string(
@@ -365,7 +551,12 @@ mod tests {
                         "indexed_internal_transactions_ratio": "1.0"
                     }"#,
                 )
-                .set_delay(Duration::from_millis(100)),
+                .set_delay(Duration::from_millis(50)),
+            Some(
+                ResponseTemplate::new(200)
+                    .set_body_string(user_ops_status_response_json(true))
+                    .set_delay(Duration::from_millis(50)),
+            ),
         )
         .await
         .expect("must not timeout")
@@ -377,7 +568,10 @@ mod tests {
     async fn waiter_works_with_infinite_timeout(wait_config: StartConditionSettings) {
         test_aggregator(
             wait_config.clone(),
-            IndexingStatus::InternalTransactionsIndexed,
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+                user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+            },
             None,
             ResponseTemplate::new(200)
                 .set_body_string(
@@ -389,13 +583,41 @@ mod tests {
                     }"#,
                 )
                 .set_delay(Duration::MAX),
+            Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true))),
+        )
+        .await
+        .expect_err("must time out");
+
+        test_aggregator(
+            wait_config.clone(),
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+                user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+            },
+            None,
+            ResponseTemplate::new(200).set_body_string(
+                r#"{
+                    "finished_indexing": false,
+                    "finished_indexing_blocks": false,
+                    "indexed_blocks_ratio": "0.80",
+                    "indexed_internal_transactions_ratio": "0.80"
+                }"#,
+            ),
+            Some(
+                ResponseTemplate::new(200)
+                    .set_body_string(user_ops_status_response_json(true))
+                    .set_delay(Duration::MAX),
+            ),
         )
         .await
         .expect_err("must time out");
 
         test_aggregator(
             wait_config,
-            IndexingStatus::NoneIndexed,
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::NoneIndexed,
+                user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+            },
             None,
             ResponseTemplate::new(200)
                 .set_body_string(
@@ -407,6 +629,11 @@ mod tests {
                     }"#,
                 )
                 .set_delay(Duration::MAX),
+            Some(
+                ResponseTemplate::new(200)
+                    .set_body_string(user_ops_status_response_json(true))
+                    .set_delay(Duration::MAX),
+            ),
         )
         .await
         .expect("must not timeout")
@@ -418,7 +645,10 @@ mod tests {
     async fn waiter_works_with_null_ratios(wait_config: StartConditionSettings) {
         test_aggregator(
             wait_config,
-            IndexingStatus::BlocksIndexed,
+            IndexingStatus {
+                blockscout: BlockscoutIndexingStatus::BlocksIndexed,
+                user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+            },
             Some(Duration::from_millis(300)),
             ResponseTemplate::new(200).set_body_string(
                 r#"{
@@ -428,6 +658,7 @@ mod tests {
                     "indexed_internal_transactions_ratio": null
                 }"#,
             ),
+            None,
         )
         .await
         .expect_err("must time out and not fall with error");
@@ -436,25 +667,64 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn waiter_retries_with_error_codes(
-        #[with(0.9, 0.9, 1)] wait_config: StartConditionSettings,
+        #[with(0.9, 0.9, true, 1)] wait_config: StartConditionSettings,
     ) {
         let timeout = Some(Duration::from_millis(1500));
-        let s = IndexingStatus::BlocksIndexed;
+        let s = IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        };
         let r = |code: u16| ResponseTemplate::new(code);
         let mut error_servers = JoinSet::from_iter([
-            test_aggregator(wait_config.clone(), s.clone(), timeout, r(429)),
-            test_aggregator(wait_config.clone(), s.clone(), timeout, r(500)),
-            test_aggregator(wait_config.clone(), s.clone(), timeout, r(503)),
-            test_aggregator(wait_config.clone(), s.clone(), timeout, r(504)),
-            test_aggregator(wait_config.clone(), s.clone(), timeout, r(400)),
-            test_aggregator(wait_config.clone(), s.clone(), timeout, r(403)),
-            test_aggregator(wait_config.clone(), s.clone(), timeout, r(404)),
-            test_aggregator(wait_config.clone(), s.clone(), timeout, r(405)),
+            test_aggregator(wait_config.clone(), s.clone(), timeout, r(429), None),
+            test_aggregator(wait_config.clone(), s.clone(), timeout, r(500), None),
+            test_aggregator(wait_config.clone(), s.clone(), timeout, r(503), None),
+            test_aggregator(wait_config.clone(), s.clone(), timeout, r(504), None),
+            test_aggregator(wait_config.clone(), s.clone(), timeout, r(400), None),
+            test_aggregator(wait_config.clone(), s.clone(), timeout, r(403), None),
+            test_aggregator(wait_config.clone(), s.clone(), timeout, r(404), None),
+            test_aggregator(wait_config.clone(), s.clone(), timeout, r(405), None),
         ]);
-        #[allow(for_loops_over_fallibles)]
-        for server in error_servers.join_next().await {
+        while let Some(server) = error_servers.join_next().await {
             let test_result = server.unwrap();
             test_result.expect_err("must time out");
+        }
+    }
+
+    #[tokio::test]
+    async fn waiter_ignores_errors_when_checks_are_disabled() {
+        let timeout = Some(Duration::from_millis(1500));
+        let s = IndexingStatus::MOST_RESTRICTIVE;
+        let r = |code: u16| ResponseTemplate::new(code);
+        let ok_b = ResponseTemplate::new(200).set_body_string(
+            r#"{
+                "finished_indexing": true,
+                "finished_indexing_blocks": true,
+                "indexed_blocks_ratio": "1.00",
+                "indexed_internal_transactions_ratio": "1.00"
+            }"#,
+        );
+        let ok_u = ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true));
+        let config = StartConditionSettings {
+            blocks_ratio: ToggleableThreshold::disabled(),
+            internal_transactions_ratio: ToggleableThreshold::disabled(),
+            user_ops_past_indexing_finished: ToggleableCheck { enabled: false },
+            check_period_secs: 1,
+        };
+        let mut tests = JoinSet::from_iter(
+            [
+                (&config, &s, timeout, &r(400), Some(&ok_u)),
+                (&config, &s, timeout, &r(404), Some(&ok_u)),
+                (&config, &s, timeout, &ok_b, Some(&r(400))),
+                (&config, &s, timeout, &ok_b, Some(&r(404))),
+            ]
+            .map(|(a, b, c, d, e)| test_aggregator(a.clone(), b.clone(), c, d.clone(), e.cloned())),
+        );
+        while let Some(server) = tests.join_next().await {
+            let test_result = server.unwrap();
+            test_result
+                .expect("must not timeout")
+                .expect("must not error");
         }
     }
 }

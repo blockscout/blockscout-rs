@@ -6,7 +6,7 @@ use crate::{
         local_db::DirectPointLocalDbChartSource,
     },
     types::TimespanValue,
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    ChartProperties, IndexingStatus, indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus, IndexingStatusTrait}, MissingDatePolicy, Named,
 };
 use std::fmt::Debug;
 
@@ -36,7 +36,10 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 

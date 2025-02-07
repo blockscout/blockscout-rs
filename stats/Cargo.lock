@@ -797,7 +797,7 @@ dependencies = [
 [[package]]
 name = "blockscout-client"
 version = "0.1.1"
-source = "git+https://github.com/blockscout/blockscout-rs/?rev=506b821#506b8219d6cb8be69e1ed373759b66e8d566c89d"
+source = "git+https://github.com/blockscout/blockscout-rs/?rev=d07ed56#d07ed56cc9082d11e2d6b646a790bf042d7978c7"
 dependencies = [
  "derive-new",
  "reqwest 0.12.5",
