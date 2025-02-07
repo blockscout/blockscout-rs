@@ -65,8 +65,8 @@ WITH accounts_cte AS (SELECT DISTINCT ON (sender) sender,
                                     ON blocks.hash = block_hash AND consensus
                       WHERE sender >= $2
                       AND ($1 IS NULL OR factory = $1)
-                      AND ($3 IS NULL OR creation_timestamp >= $3)
-                      AND ($4 IS NULL OR creation_timestamp <= $4)
+                      AND ($3 IS NULL OR creation_timestamp >= $3::timestamp)
+                      AND ($4 IS NULL OR creation_timestamp <= $4::timestamp)
                       ORDER BY sender, factory NULLS LAST
                       LIMIT $5),
      accounts_total_cte AS (SELECT accounts_cte.sender, count(*) as total_ops
