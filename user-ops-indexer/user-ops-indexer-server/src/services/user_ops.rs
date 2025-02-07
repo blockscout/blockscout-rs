@@ -62,12 +62,6 @@ impl UserOpsService {
         match timestamp {
             Some(ts) => {
                 println!("Parsing timestamp: {:?}", ts); // ✅ Debug log
-    
-                // ✅ Try ISO 8601 (`2024-02-06T12:30:00Z`)
-                if let Ok(dt) = DateTime::parse_from_rfc3339(ts) {
-                    return Ok(Some(dt.naive_utc())); // ✅ Convert to `NaiveDateTime`
-                }
-    
                 // ✅ Try `YYYY-MM-DD HH:MM:SS`
                 if let Ok(dt) = DateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S") {
                     return Ok(Some(dt));
