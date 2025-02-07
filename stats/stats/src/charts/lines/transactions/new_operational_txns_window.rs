@@ -19,6 +19,7 @@ use crate::{
         types::BlockscoutMigrations,
         UpdateContext,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     lines::{NewBlocksStatement, NewTxnsWindowInt, NEW_TXNS_WINDOW_RANGE},
     range::UniversalRange,
     types::{Timespan, TimespanDuration, TimespanValue},
@@ -88,7 +89,10 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 
