@@ -2,8 +2,10 @@ src/apis/addresses_api.rs
 src/apis/blocks_api.rs
 src/apis/config_api.rs
 src/apis/health_api.rs
+src/apis/internal_transactions_api.rs
 src/apis/main_page_api.rs
 src/apis/mod.rs
+src/apis/proxy_api.rs
 src/apis/search_api.rs
 src/apis/smart_contracts_api.rs
 src/apis/stats_api.rs
@@ -42,6 +44,7 @@ src/models/get_addresses_200_response.rs
 src/models/get_block_txs_200_response.rs
 src/models/get_block_withdrawals_200_response.rs
 src/models/get_blocks_200_response.rs
+src/models/get_internal_transactions_200_response.rs
 src/models/get_json_rpc_url_200_response.rs
 src/models/get_market_chart_200_response.rs
 src/models/get_nft_instance_transfers_200_response.rs
@@ -124,6 +127,8 @@ src/models/transaction_reward.rs
 src/models/transaction_summary.rs
 src/models/transaction_summary_obj.rs
 src/models/v1_data.rs
+src/models/v1_entry_point_indexer_status.rs
 src/models/v1_health_check_response.rs
+src/models/v1_indexer_status.rs
 src/models/watchlist_name.rs
 src/models/withdrawal.rs
