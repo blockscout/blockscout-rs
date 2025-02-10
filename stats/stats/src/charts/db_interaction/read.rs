@@ -15,7 +15,10 @@ use crate::{
 
 use blockscout_db::entity::blocks;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
-use entity::{chart_data, charts, sea_orm_active_enums::ChartResolution};
+use entity::{
+    chart_data, charts,
+    sea_orm_active_enums::{ChartResolution, ChartType},
+};
 use itertools::Itertools;
 use sea_orm::{
     sea_query::{self, Expr},
@@ -514,41 +517,59 @@ where
                 let last_updated_timespan =
                     ChartProps::Resolution::from_date(last_updated_at.date_naive());
 
-                // todo: reconsider if it makes sense for counters; maybe use dynamic dispatch or
-                // generic parameter
-                let data = get_line_chart_data::<ChartProps::Resolution>(
-                    db,
-                    &ChartProps::name(),
-                    Some(last_updated_timespan.saturating_sub(
-                        TimespanDuration::from_timespan_repeats(approximate_trailing_points),
-                    )),
-                    Some(last_updated_timespan),
-                    None,
-                    policy,
-                    true,
-                    approximate_trailing_points,
-                )
-                .await?;
-                let last_accurate_point = data.into_iter().rev().find_map(|p| {
-                    if p.is_approximate {
-                        None
-                    } else {
-                        Some(TimespanValue {
-                            timespan: p.timespan,
-                            value: p.value,
-                        })
+                match ChartProps::chart_type() {
+                    ChartType::Counter => {
+                        let data = get_counter_data(
+                            db,
+                            &ChartProps::name(),
+                            Some(last_updated_timespan.into_date()),
+                            policy,
+                        )
+                        .await?;
+                        let data = data.map(|d| TimespanValue {
+                            timespan: ChartProps::Resolution::from_date(d.timespan),
+                            value: d.value,
+                        });
+                        data
                     }
-                });
-                let Some(last_accurate_point) = last_accurate_point else {
-                    return Err(ChartError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
-                };
+                    ChartType::Line => {
+                        let data = get_line_chart_data::<ChartProps::Resolution>(
+                            db,
+                            &ChartProps::name(),
+                            Some(last_updated_timespan.saturating_sub(
+                                TimespanDuration::from_timespan_repeats(
+                                    approximate_trailing_points,
+                                ),
+                            )),
+                            Some(last_updated_timespan),
+                            None,
+                            policy,
+                            true,
+                            approximate_trailing_points,
+                        )
+                        .await?;
+                        let last_accurate_point = data.into_iter().rev().find_map(|p| {
+                            if p.is_approximate {
+                                None
+                            } else {
+                                Some(TimespanValue {
+                                    timespan: p.timespan,
+                                    value: p.value,
+                                })
+                            }
+                        });
+                        let Some(last_accurate_point) = last_accurate_point else {
+                            return Err(ChartError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
+                        };
 
-                tracing::info!(
-                    min_chart_block = recorded_min_blockscout_block,
-                    last_accurate_point = ?last_accurate_point,
-                    "running partial update"
-                );
-                Some(last_accurate_point)
+                        tracing::info!(
+                            min_chart_block = recorded_min_blockscout_block,
+                            last_accurate_point = ?last_accurate_point,
+                            "running partial update"
+                        );
+                        Some(last_accurate_point)
+                    }
+                }
             }
             // != min_blockscout_block
             Some(SyncInfo {

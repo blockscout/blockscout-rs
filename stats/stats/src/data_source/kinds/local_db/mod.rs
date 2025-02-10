@@ -370,35 +370,11 @@ mod tests {
         // Reindex blockscout data
         imitate_reindex(&blockscout, current_date).await;
 
-        // Two transactions were added in 2023-01-01
+        // Eight transactions were added as a result of reindex
+        // `TotalTxns` calculates all data at once, so the date to update from
+        // does not make a difference here.
 
         TotalTxns::set_next_update_from_recursively(&db, d("2023-01-02"))
-            .await
-            .unwrap();
-        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-        TotalTxns::update_recursively(&cx).await.unwrap();
-        // doesn't touch changed region
-        assert_eq!("57", get_counter::<TotalTxns>(&cx).await.value);
-
-        TotalTxns::set_next_update_from_recursively(&db, d("2023-12-31"))
-            .await
-            .unwrap();
-        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-        TotalTxns::update_recursively(&cx).await.unwrap();
-        assert_eq!("59", get_counter::<TotalTxns>(&cx).await.value);
-
-        // Four transactions were added in 2022-11-11
-
-        TotalTxns::set_next_update_from_recursively(&db, d("2022-11-11"))
-            .await
-            .unwrap();
-        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-        TotalTxns::update_recursively(&cx).await.unwrap();
-        assert_eq!("63", get_counter::<TotalTxns>(&cx).await.value);
-
-        // Two more transactions were added in 2022-11-10
-
-        TotalTxns::set_next_update_from_recursively(&db, d("2000-01-01"))
             .await
             .unwrap();
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
