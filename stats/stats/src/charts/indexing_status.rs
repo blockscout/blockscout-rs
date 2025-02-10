@@ -15,7 +15,7 @@ pub trait IndexingStatusTrait {
 
     fn is_requirement_satisfied(&self, requirement: &Self) -> bool;
 
-    fn most_restrictive_from(requrements: impl Iterator<Item = Self> + Clone) -> Self;
+    fn most_restrictive_from(requirements: impl Iterator<Item = Self> + Clone) -> Self;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,9 +52,9 @@ impl IndexingStatusTrait for IndexingStatus {
         blockscout_satisfied && user_ops_satisfied
     }
 
-    fn most_restrictive_from(requrements: impl Iterator<Item = Self> + Clone) -> Self {
-        let blockscout_requirements = requrements.clone().map(|r| r.blockscout);
-        let user_ops_requirements = requrements.map(|r| r.user_ops);
+    fn most_restrictive_from(requirements: impl Iterator<Item = Self> + Clone) -> Self {
+        let blockscout_requirements = requirements.clone().map(|r| r.blockscout);
+        let user_ops_requirements = requirements.map(|r| r.user_ops);
         let blockscout_most_restrictive =
             BlockscoutIndexingStatus::most_restrictive_from(blockscout_requirements);
         let user_ops_most_restrictive =
@@ -85,8 +85,11 @@ impl IndexingStatusTrait for BlockscoutIndexingStatus {
         self >= requirement
     }
 
-    fn most_restrictive_from(requrements: impl Iterator<Item = Self> + Clone) -> Self {
-        requrements.max().unwrap_or(Self::LEAST_RESTRICTIVE).clone()
+    fn most_restrictive_from(requirements: impl Iterator<Item = Self> + Clone) -> Self {
+        requirements
+            .max()
+            .unwrap_or(Self::LEAST_RESTRICTIVE)
+            .clone()
     }
 }
 
@@ -107,8 +110,11 @@ impl IndexingStatusTrait for UserOpsIndexingStatus {
         self >= requirement
     }
 
-    fn most_restrictive_from(requrements: impl Iterator<Item = Self> + Clone) -> Self {
-        requrements.max().unwrap_or(Self::LEAST_RESTRICTIVE).clone()
+    fn most_restrictive_from(requirements: impl Iterator<Item = Self> + Clone) -> Self {
+        requirements
+            .max()
+            .unwrap_or(Self::LEAST_RESTRICTIVE)
+            .clone()
     }
 }
 
