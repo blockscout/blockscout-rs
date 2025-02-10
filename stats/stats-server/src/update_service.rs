@@ -27,7 +27,8 @@ pub struct UpdateService {
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
     // currently only accessed in one place, but `Mutex`es
-    // are needed due to `Arc<Self>` everywhere
+    // are needed due to `Arc<Self>` everywhere to provide
+    // interior mutability
     on_demand_sender: Mutex<mpsc::Sender<OnDemandReupdateRequest>>,
     on_demand_receiver: Mutex<mpsc::Receiver<OnDemandReupdateRequest>>,
 }

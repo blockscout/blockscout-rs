@@ -167,6 +167,13 @@ pub trait DataSource {
     fn update_itself(cx: &UpdateContext<'_>)
         -> impl Future<Output = Result<(), ChartError>> + Send;
 
+    /// Set date to update this data dource (and its dependencies) from
+    /// in the next update. Does not update by itself, it must be performed separately
+    ///
+    /// The intention is to leave default implementation and implement only
+    /// [`DataSource::set_next_update_from_itself`].
+    ///
+    /// Will overwrite the previously set values (if any).
     fn set_next_update_from_recursively(
         db: &DatabaseConnection,
         update_from: chrono::NaiveDate,
@@ -189,13 +196,14 @@ pub trait DataSource {
     /// During normal operation calling this method directly is likely invalid.
     ///
     /// This fn is intended to be implemented
-    /// by types, as recursive logic of [`DataSource::init_recursively`] is
+    /// by types, as recursive logic of [`DataSource::set_next_update_from_recursively`] is
     /// not expected to change.
     ///
     /// Should be idempotent.
     ///
     /// ## Description
-    /// Initialize only this source.
+    /// Set date to update this Data Source from (in the next update). Does not
+    /// update by itself, it must be performed separately
     fn set_next_update_from_itself(
         db: &DatabaseConnection,
         update_from: chrono::NaiveDate,

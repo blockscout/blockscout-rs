@@ -61,6 +61,7 @@ impl EnabledChartEntry {
         }
     }
 
+    /// Returns a vector of `ChartKey`'s for all resolutions of the chart.
     pub fn get_keys(&self) -> Vec<ChartKey> {
         self.resolutions
             .iter()

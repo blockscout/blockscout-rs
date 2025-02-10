@@ -33,7 +33,9 @@ impl AuthorizationProvider {
 
     /// Unified error message
     pub fn unauthorized(&self) -> Status {
-        Status::unauthenticated("invalid api key")
+        Status::unauthenticated(format!(
+            "Request not authorized: Invalid or missing API key in {API_KEY_NAME} header"
+        ))
     }
 }
 
