@@ -62,7 +62,6 @@ pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
         test_lines_counters_not_indexed_ok(base.clone()).boxed(),
         test_swagger_ok(base.clone()).boxed(),
         test_reupdate_without_correct_key_is_rejected(base).boxed(),
-        // todo: test cant reupdate w/o api key
     ]
     .into_iter()
     .collect();
