@@ -526,11 +526,10 @@ where
                             policy,
                         )
                         .await?;
-                        let data = data.map(|d| TimespanValue {
+                        data.map(|d| TimespanValue {
                             timespan: ChartProps::Resolution::from_date(d.timespan),
                             value: d.value,
-                        });
-                        data
+                        })
                     }
                     ChartType::Line => {
                         let data = get_line_chart_data::<ChartProps::Resolution>(
