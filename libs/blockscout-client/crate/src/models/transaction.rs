@@ -19,8 +19,8 @@ pub struct Transaction {
     pub fee: models::Fee,
     #[serde(rename = "gas_limit")]
     pub gas_limit: String, // changed
-    #[serde(rename = "block")]
-    pub block: i32,
+    #[serde(rename = "block_number")]
+    pub block_number: i32,
     #[serde(rename = "status")]
     pub status: String,
     #[serde(rename = "method")]
