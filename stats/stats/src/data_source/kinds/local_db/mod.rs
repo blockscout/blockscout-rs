@@ -334,6 +334,78 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        counters::TotalTxns,
+        data_source::{types::BlockscoutMigrations, UpdateParameters},
+        tests::{
+            mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
+            point_construction::d,
+            simple_test::{get_counter, prepare_chart_test},
+        },
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_total_txns_with_reindex() {
+        let test_name = "update_total_txns_with_reindex";
+        let (current_time, db, blockscout) = prepare_chart_test::<TotalTxns>(test_name, None).await;
+        let current_date = current_time.date_naive();
+        fill_mock_blockscout_data(&blockscout, current_date).await;
+
+        // Initial update and verify
+        let parameters = UpdateParameters {
+            db: &db,
+            blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            update_time_override: Some(current_time),
+            force_full: false,
+        };
+
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        TotalTxns::update_recursively(&cx).await.unwrap();
+        assert_eq!("57", get_counter::<TotalTxns>(&cx).await.value);
+
+        // Reindex blockscout data
+        imitate_reindex(&blockscout, current_date).await;
+
+        // Two transactions were added in 2023-01-01
+
+        TotalTxns::set_next_update_from_recursively(&db, d("2023-01-02"))
+            .await
+            .unwrap();
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        TotalTxns::update_recursively(&cx).await.unwrap();
+        // doesn't touch changed region
+        assert_eq!("57", get_counter::<TotalTxns>(&cx).await.value);
+
+        TotalTxns::set_next_update_from_recursively(&db, d("2023-12-31"))
+            .await
+            .unwrap();
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        TotalTxns::update_recursively(&cx).await.unwrap();
+        assert_eq!("59", get_counter::<TotalTxns>(&cx).await.value);
+
+        // Four transactions were added in 2022-11-11
+
+        TotalTxns::set_next_update_from_recursively(&db, d("2022-11-11"))
+            .await
+            .unwrap();
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        TotalTxns::update_recursively(&cx).await.unwrap();
+        assert_eq!("63", get_counter::<TotalTxns>(&cx).await.value);
+
+        // Two more transactions were added in 2022-11-10
+
+        TotalTxns::set_next_update_from_recursively(&db, d("2000-01-01"))
+            .await
+            .unwrap();
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        TotalTxns::update_recursively(&cx).await.unwrap();
+        assert_eq!("65", get_counter::<TotalTxns>(&cx).await.value);
+    }
+
     mod update_itself_is_triggered_once_per_group {
         use std::{
             collections::HashSet,
