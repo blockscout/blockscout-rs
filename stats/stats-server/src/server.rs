@@ -147,6 +147,9 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
     }
 
+    if settings.api_keys.is_empty() {
+        tracing::warn!("No api keys found in settings, provide them to make use of authorization-protected endpoints")
+    }
     let authorization = Arc::new(AuthorizationProvider::new(settings.api_keys));
 
     let read_service = Arc::new(
