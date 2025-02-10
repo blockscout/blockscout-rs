@@ -32,7 +32,7 @@ pub struct Transaction {
     #[serde(rename = "exchange_rate")]
     pub exchange_rate: String,
     #[serde(rename = "to")]
-    pub to: models::AddressParam,
+    pub to: Option<models::AddressParam>, // changed
     #[serde(rename = "tx_burnt_fee")]
     pub tx_burnt_fee: Option<String>, // changed
     #[serde(rename = "max_fee_per_gas")]
