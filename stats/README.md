@@ -22,6 +22,7 @@ The table lists versions of Blockscout and User Ops Indexer that each Stats vers
 
 | Stats version | Recommended Blockscout version | Recommended User Ops Indexer version |
 |---|---|---|
+| v2.6.0 | v7.0.0  | v1.3.1 |
 | v2.5.0 | v6.10.1 | - |
 | v2.4.0 | v6.10.1 | - (not yet supported) |
 
