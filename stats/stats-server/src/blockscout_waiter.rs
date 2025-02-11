@@ -343,7 +343,7 @@ mod tests {
                 panic!("aggregator terminated with error: {res:?}")
             }
             listener = wait_for_listener_timeout => {
-                return listener.map(|a| a.map_err(|e| e.into()))
+                listener.map(|a| a.map_err(|e| e.into()))
             }
         }
     }
