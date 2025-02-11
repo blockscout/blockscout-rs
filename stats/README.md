@@ -11,6 +11,20 @@ The service consists of 2 parts, a stats calculation library and a transport lay
 
 - Postgresql database for this service
 - Access to Blockscout database
+- (Preferable) Access to Blockscout API (see `STATS__BLOCKSCOUT_API_URL` description for details)
+- (Optional) Access to User Ops Indexer database (actually just tables in Blockscout database)
+
+### Dependecy version requirements
+
+Usually, it's best to use the latest versions of all components. Nevertheless, if there is a need in using older versions, you can refer to the following table.
+
+The table lists versions of Blockscout and User Ops Indexer that each Stats version was developed for and tested on. In practice, semver-compatible versions should work as well.
+
+| Stats version | Recommended Blockscout version | Recommended User Ops Indexer version |
+|---|---|---|
+| v2.6.0 | v7.0.0  | v1.3.1 |
+| v2.5.0 | v6.10.1 | - |
+| v2.4.0 | v6.10.1 | - (not yet supported) |
 
 ## Build
 
