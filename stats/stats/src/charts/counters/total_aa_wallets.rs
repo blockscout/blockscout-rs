@@ -3,8 +3,9 @@ use crate::{
         data_manipulation::{last_point::LastPoint, map::StripExt},
         local_db::DirectPointLocalDbChartSource,
     },
+    indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus},
     lines::AccountAbstractionWalletsGrowth,
-    ChartProperties, MissingDatePolicy, Named,
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;
@@ -26,6 +27,12 @@ impl ChartProperties for Properties {
     }
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
+            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+        }
     }
 }
 

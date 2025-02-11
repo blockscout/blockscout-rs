@@ -22,6 +22,7 @@ use crate::{
         UpdateContext,
     },
     define_and_impl_resolution_properties,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
     missing_date::trim_out_of_range_sorted,
     range::{data_source_query_range_to_db_statement_range, UniversalRange},
     types::timespans::{Month, Week, Year},
@@ -121,6 +122,12 @@ impl ChartProperties for Properties {
 
     fn chart_type() -> ChartType {
         ChartType::Line
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
+            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+        }
     }
 }
 
