@@ -8,8 +8,9 @@ use crate::{
         },
     },
     define_and_impl_resolution_properties,
+    indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus},
     types::timespans::{Month, Week, Year},
-    MissingDatePolicy, Named,
+    IndexingStatus, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;
@@ -33,6 +34,12 @@ impl ChartProperties for Properties {
     }
     fn missing_date_policy() -> MissingDatePolicy {
         MissingDatePolicy::FillPrevious
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
+            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+        }
     }
 }
 
