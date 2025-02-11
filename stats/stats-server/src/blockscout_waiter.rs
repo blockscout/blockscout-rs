@@ -102,10 +102,10 @@ impl IndexingStatusAggregator {
             }
             Err(e) => {
                 if *consecutive_errors >= RETRIES {
-                    return Err(e).context("Requesting indexing status");
+                    return Err(e).context("Requesting blockscout indexing status");
                 }
                 tracing::warn!(
-                    "Error ({consecutive_errors}/{RETRIES}) requesting indexing status: {e:?}"
+                    "Error ({consecutive_errors}/{RETRIES}) requesting blockscout indexing status: {e:?}"
                 );
                 *consecutive_errors += 1;
             }
@@ -165,12 +165,12 @@ impl IndexingStatusAggregator {
         }
     }
 
-    async fn sleep_indefinitely() {
-        tracing::info!("All indexing status checks are disabled, stopping status checks");
-        sleep(Duration::from_secs(u64::MAX)).await;
-    }
-
     pub async fn run(&self) -> Result<(), anyhow::Error> {
+        if !self.wait_config.blockscout_checks_enabled()
+            && !self.wait_config.user_ops_checks_enabled()
+        {
+            return Ok(());
+        }
         let mut consecutive_errors = 0;
         loop {
             if self.wait_config.blockscout_checks_enabled() {
@@ -179,11 +179,6 @@ impl IndexingStatusAggregator {
             }
             if self.wait_config.user_ops_checks_enabled() {
                 self.check_user_ops_status().await;
-            }
-            if !self.wait_config.blockscout_checks_enabled()
-                && !self.wait_config.user_ops_checks_enabled()
-            {
-                Self::sleep_indefinitely().await;
             }
             let wait_time = if let IndexingStatus::MAX = *self.sender.borrow() {
                 self.wait_config.check_period_secs.saturating_mul(100)
@@ -311,38 +306,15 @@ mod tests {
     use std::str::FromStr;
 
     use rstest::*;
+    use stats::tests::mock_blockscout::{mock_blockscout_api, user_ops_status_response_json};
     use std::time::Duration;
     use tokio::{select, task::JoinSet, time::error::Elapsed};
     use url::Url;
-    use wiremock::{
-        matchers::{method, path},
-        Mock, MockServer, ResponseTemplate,
-    };
+    use wiremock::ResponseTemplate;
 
     use crate::settings::ToggleableCheck;
 
     use super::*;
-
-    async fn mock_indexing_statuses(
-        response_blockscout: ResponseTemplate,
-        response_user_ops: Option<ResponseTemplate>,
-    ) -> MockServer {
-        let mock_server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/api/v2/main-page/indexing-status"))
-            .respond_with(response_blockscout)
-            .mount(&mock_server)
-            .await;
-
-        if let Some(response) = response_user_ops {
-            Mock::given(method("GET"))
-                .and(path("/api/v2/proxy/account-abstraction/status"))
-                .respond_with(response)
-                .mount(&mock_server)
-                .await;
-        }
-        mock_server
-    }
 
     async fn test_aggregator(
         wait_config: StartConditionSettings,
@@ -351,42 +323,29 @@ mod tests {
         response_blockscout: ResponseTemplate,
         response_user_ops: Option<ResponseTemplate>,
     ) -> Result<Result<(), anyhow::Error>, Elapsed> {
-        let server = mock_indexing_statuses(response_blockscout, response_user_ops).await;
+        let timeout = timeout.unwrap_or(Duration::from_millis(1000));
+        let server = mock_blockscout_api(response_blockscout, response_user_ops).await;
         let api_config =
             blockscout_client::Configuration::new(Url::from_str(&server.uri()).unwrap());
         let (aggregator, mut listener) = init(api_config, wait_config);
+        let aggregator_future = async {
+            aggregator.run().await?;
+            sleep(timeout).await;
+            Ok::<(), anyhow::Error>(())
+        };
         let wait_for_listener_timeout = tokio::time::timeout(
-            timeout.unwrap_or(Duration::from_millis(200)),
+            timeout,
             listener.wait_until_status_at_least(expected_status),
         );
+
         select! {
-            res = aggregator.run() => {
-                panic!("aggregator terminated: {:?}", res)
+            res = aggregator_future => {
+                panic!("aggregator terminated with error: {res:?}")
             }
             listener = wait_for_listener_timeout => {
-                listener.map(|a| a.map_err(|e| e.into()))
+                return listener.map(|a| a.map_err(|e| e.into()))
             }
         }
-    }
-
-    fn user_ops_status_response_json(past_finished: bool) -> String {
-        format!(
-            r#"{{
-            "finished_past_indexing": {past_finished},
-            "v06": {{
-                "enabled": true,
-                "live": false,
-                "past_db_logs_indexing_finished": false,
-                "past_rpc_logs_indexing_finished": false
-            }},
-            "v07": {{
-                "enabled": true,
-                "live": false,
-                "past_db_logs_indexing_finished": false,
-                "past_rpc_logs_indexing_finished": false
-            }}
-        }}"#
-        )
     }
 
     #[fixture]
@@ -649,7 +608,7 @@ mod tests {
                 blockscout: BlockscoutIndexingStatus::BlocksIndexed,
                 user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
             },
-            Some(Duration::from_millis(300)),
+            Some(Duration::from_millis(500)),
             ResponseTemplate::new(200).set_body_string(
                 r#"{
                     "finished_indexing": false,
