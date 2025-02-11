@@ -34,14 +34,17 @@ use crate::common::{
 pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
     let test_name = "run_tests_with_charts_uninitialized";
     let stats_db = init_db(test_name).await;
-    let blockscout_api = mock_blockscout_api(ResponseTemplate::new(200).set_body_string(
-        r#"{
-            "finished_indexing": false,
-            "finished_indexing_blocks": false,
-            "indexed_blocks_ratio": "0.00",
-            "indexed_internal_transactions_ratio": null
-        }"#,
-    ))
+    let blockscout_api = mock_blockscout_api(
+        ResponseTemplate::new(200).set_body_string(
+            r#"{
+                "finished_indexing": false,
+                "finished_indexing_blocks": false,
+                "indexed_blocks_ratio": "0.10",
+                "indexed_internal_transactions_ratio": null
+            }"#,
+        ),
+        None,
+    )
     .await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
