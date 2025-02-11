@@ -97,6 +97,15 @@
           "base-name-service", "ens"
         ]
       },
+      "33111": {
+        "blockscout": {
+          "url": "https://curtis.explorer.caldera.xyz/"
+        },
+        "use_protocols": [
+          "d3-connect-ape-testnet"
+        ],
+        "rpc_url": "https://curtis.rpc.caldera.xyz/http"
+      },
       "33139": {
         "blockscout": {
           "url": "https://apechain.calderaexplorer.xyz"
@@ -445,6 +454,24 @@
           "short_name": "D3",
           "title": "D3 Connect",
           "description": "D3 Connect is official identity service for top web3 communities.",
+          "icon_url": "https://i.imgur.com/cD6VIXk.png",
+          "docs_url": "https://docs.d3.app/"
+        }
+      },
+      "d3-connect-ape-testnet": {
+        "tld_list": ["ape"],
+        "network_id": 33111,
+        "subgraph_name": "d3-connect-ape-testnet-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "d3_connect",
+          "native_token_contract": "0xA6A33ddE98BAb3ee5262e7e1a14ee5B1F06D0D40",
+          "resolver_contract": "0x2ad234136165B59f98cf03f696cB84eaf48E30cF"
+        },
+        "meta": {
+          "short_name": "D3 Connect",
+          "title": "D3 Connect",
+          "description": "D3 Connect is a platform for connecting to the Shibarium network.",
           "icon_url": "https://i.imgur.com/cD6VIXk.png",
           "docs_url": "https://docs.d3.app/"
         }
