@@ -19,9 +19,11 @@ use super::{
 };
 use crate::common::{get_test_stats_settings, run_consolidated_tests};
 
-pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard) {
+pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard, start_delay: Duration) {
     let test_name = "run_fully_initialized_stats_tests";
     let stats_db = init_db(test_name).await;
+    // in order to not clash with port names/etc.
+    sleep(start_delay).await;
     let blockscout_api = default_mock_blockscout_api().await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);

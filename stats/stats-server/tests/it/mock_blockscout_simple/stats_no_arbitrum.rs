@@ -12,11 +12,19 @@ use tokio::{task::JoinSet, time::sleep};
 
 use crate::common::{get_test_stats_settings, run_consolidated_tests};
 
-use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
+use super::{
+    common_tests::{test_main_page_ok, test_transactions_page_ok},
+    STATS_INIT_WAIT_S,
+};
 
-pub async fn run_chart_pages_tests_with_disabled_arbitrum(blockscout_db: TestDbGuard) {
+pub async fn run_chart_pages_tests_with_disabled_arbitrum(
+    blockscout_db: TestDbGuard,
+    start_delay: Duration,
+) {
     let test_name = "run_chart_pages_tests_with_disabled_arbitrum";
     let stats_db = init_db(test_name).await;
+    // in order to not clash with port names/etc.
+    sleep(start_delay).await;
     let blockscout_api = default_mock_blockscout_api().await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
@@ -25,7 +33,7 @@ pub async fn run_chart_pages_tests_with_disabled_arbitrum(blockscout_db: TestDbG
     init_server(|| stats(settings), &base).await;
 
     // Sleep until server will start and calculate all values
-    sleep(Duration::from_secs(8)).await;
+    sleep(Duration::from_secs(STATS_INIT_WAIT_S)).await;
 
     let tests: JoinSet<_> = [
         test_main_page_ok(base.clone(), false).boxed(),

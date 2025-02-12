@@ -32,9 +32,11 @@ use crate::common::{
     get_test_stats_settings, run_consolidated_tests, send_arbitrary_request, setup_single_key,
 };
 
-pub async fn run_tests_with_nothing_indexed(blockscout_db: TestDbGuard) {
+pub async fn run_tests_with_nothing_indexed(blockscout_db: TestDbGuard, start_delay: Duration) {
     let test_name = "run_tests_with_nothing_indexed";
     let stats_db = init_db(test_name).await;
+    // in order to not clash with port names/etc.
+    sleep(start_delay).await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
@@ -73,9 +75,14 @@ pub async fn run_tests_with_nothing_indexed(blockscout_db: TestDbGuard) {
     run_consolidated_tests(tests, test_name).await;
 }
 
-pub async fn run_tests_with_user_ops_not_indexed(blockscout_db: TestDbGuard) {
+pub async fn run_tests_with_user_ops_not_indexed(
+    blockscout_db: TestDbGuard,
+    start_delay: Duration,
+) {
     let test_name = "run_tests_with_user_ops_not_indexed";
     let stats_db = init_db(test_name).await;
+    // in order to not clash with port names/etc.
+    sleep(start_delay).await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
