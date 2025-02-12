@@ -240,7 +240,8 @@ pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
         ]));
     }
     for (name, counter) in counters {
-        let counter = counter.unwrap_or_else(|| panic!("page counter {} must be available", name));
+        let counter =
+            counter.unwrap_or_else(|| panic!("main page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
@@ -282,8 +283,8 @@ pub async fn test_transactions_page_ok(base: Url, expect_arbitrum: bool) {
         ]));
     }
     for (name, counter) in counters {
-        #[allow(clippy::expect_fun_call)]
-        let counter = counter.expect(&format!("page counter {} must be available", name));
+        let counter = counter
+            .unwrap_or_else(|| panic!("transactions page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
@@ -303,8 +304,8 @@ pub async fn test_contracts_page_ok(base: Url) {
         new_verified_contracts_24h,
     ]);
     for (name, counter) in counters {
-        #[allow(clippy::expect_fun_call)]
-        let counter = counter.expect(&format!("page counter {} must be available", name));
+        let counter =
+            counter.unwrap_or_else(|| panic!("contracts page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
