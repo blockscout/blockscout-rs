@@ -48,8 +48,8 @@ jobs:
         with:
           working-directory: stats
 
-      - name: DB tests
-        run: RUST_BACKTRACE=1 cargo test --locked --workspace -- --nocapture --ignored
+      - name: DB tests temp
+        run: RUST_BACKTRACE=1 cargo test --locked --workspace --manifest-path stats-server/Cargo.toml -- --nocapture --ignored
         if: success() || failure()
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
@@ -70,6 +70,12 @@ jobs:
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
         if: success() || failure()
+
+      - name: DB tests temp
+        run: RUST_BACKTRACE=1 cargo test --locked --workspace -- --nocapture --ignored
+        if: success() || failure()
+        env:
+          DATABASE_URL: postgres://postgres:admin@localhost:5432/
 
   lint:
     name: Linting
