@@ -523,6 +523,12 @@ impl InitialUpdateTracker {
     }
 
     pub fn report(&self) {
+        println!(
+            "{}/{} of initial updates are finished",
+            self.updated_groups
+                .load(std::sync::atomic::Ordering::Relaxed),
+            self.total_groups
+        );
         tracing::info!(
             "{}/{} of initial updates are finished",
             self.updated_groups
