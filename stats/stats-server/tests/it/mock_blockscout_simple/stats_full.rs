@@ -29,8 +29,8 @@ pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard) {
     sleep(Duration::from_secs(8)).await;
 
     let tests: JoinSet<_> = [
-        test_lines_ok(base.clone()).boxed(),
-        test_counters_ok(base.clone()).boxed(),
+        test_lines_ok(base.clone(), true, true).boxed(),
+        test_counters_ok(base.clone(), true, true).boxed(),
         test_main_page_ok(base.clone(), true).boxed(),
         test_transactions_page_ok(base.clone(), true).boxed(),
         test_contracts_page_ok(base).boxed(),
