@@ -24,9 +24,11 @@ use wiremock::ResponseTemplate;
 
 use crate::common::{enabled_resolutions, get_test_stats_settings, send_arbitrary_request};
 
-pub async fn run_tests_with_charts_not_updated(blockscout_db: TestDbGuard) {
+pub async fn run_tests_with_charts_not_updated(blockscout_db: TestDbGuard, start_delay: Duration) {
     let test_name = "run_tests_with_charts_not_updated";
     let stats_db = init_db(test_name).await;
+    // in order to not clash with port names/etc.
+    sleep(start_delay).await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
