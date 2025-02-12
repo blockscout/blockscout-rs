@@ -15,7 +15,6 @@ mod stats_no_arbitrum;
 mod stats_not_indexed;
 mod stats_not_updated;
 
-const STATS_INIT_WAIT_S: u64 = 30;
 static MOCK_BLOCKSCOUT: OnceCell<TestDbGuard> = OnceCell::const_new();
 
 /// All tests using this must not change the state of blockscout db.
