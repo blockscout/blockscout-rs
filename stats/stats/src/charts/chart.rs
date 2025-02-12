@@ -121,6 +121,10 @@ impl ChartKey {
         Self { name, resolution }
     }
 
+    pub fn with_day(name: String) -> Self {
+        Self::new(name, ResolutionKind::Day)
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
