@@ -15,6 +15,10 @@ mod stats_no_arbitrum;
 mod stats_not_indexed;
 mod stats_not_updated;
 
+/// Should be increased with the number of initialized stats instances,
+/// because they will take more time to load concurrently
+const STATS_INIT_WAIT_S: u64 = 12;
+
 /// Tests that do not change the state of blockscout db
 #[tokio::test]
 #[ignore = "needs database"]

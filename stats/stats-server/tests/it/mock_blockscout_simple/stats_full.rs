@@ -10,9 +10,12 @@ use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_ap
 use stats_server::stats;
 use tokio::{task::JoinSet, time::sleep};
 
-use super::common_tests::{
-    test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
-    test_transactions_page_ok,
+use super::{
+    common_tests::{
+        test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
+        test_transactions_page_ok,
+    },
+    STATS_INIT_WAIT_S,
 };
 use crate::common::{get_test_stats_settings, run_consolidated_tests};
 
@@ -26,7 +29,7 @@ pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard) {
     init_server(|| stats(settings), &base).await;
 
     // Sleep until server will start and calculate all values
-    sleep(Duration::from_secs(8)).await;
+    sleep(Duration::from_secs(STATS_INIT_WAIT_S)).await;
 
     let tests: JoinSet<_> = [
         test_lines_ok(base.clone(), true, true).boxed(),
