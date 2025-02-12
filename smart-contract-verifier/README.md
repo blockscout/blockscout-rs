@@ -41,3 +41,19 @@ Here, we describe variables specific to this service. Variables common to all se
 - [Swagger](https://blockscout.github.io/swaggers/services/smart-contract-verifier/index.html)
 - [Packages](https://github.com/blockscout/blockscout-rs/pkgs/container/smart-contract-verifier)
 - [Releases](https://github.com/blockscout/blockscout-rs/releases?q=smart-contract-verifier&expanded=true)
+
+## Pulling the Docker Image
+
+To pull the Docker image for the smart-contract-verifier service, use the following command:
+
+```sh
+docker pull ghcr.io/blockscout/smart-contract-verifier:main
+```
+
+## Running the Service
+
+To run the smart-contract-verifier service using the pulled Docker image, use the following command:
+
+```sh
+docker run -p 8050:8050 -p 8051:8051 --env-file <path-to-your-env-file> ghcr.io/blockscout/smart-contract-verifier:main
+```
