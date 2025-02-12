@@ -1,4 +1,4 @@
-use std::{str::FromStr, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use blockscout_service_launcher::test_server::{init_server, send_get_request};
 use chrono::NaiveDate;
@@ -9,7 +9,7 @@ use stats::tests::{
 };
 use stats_proto::blockscout::stats::v1::{self as proto_v1, BatchUpdateChartsResult};
 use stats_server::{auth::ApiKey, stats};
-use tokio::time::sleep;
+use tokio::{sync::Notify, time::sleep};
 use url::Url;
 
 use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single_key};
@@ -31,10 +31,10 @@ async fn tests_reupdate_works() {
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
 
-    init_server(|| stats(settings), &base).await;
-
-    // Sleep until server will start and calculate all values
-    sleep(Duration::from_secs(8 * wait_multiplier)).await;
+    let stats_init_finished = Arc::new(Notify::new());
+    let notify_handle = stats_init_finished.clone();
+    init_server(move || stats(settings, Some(notify_handle)), &base).await;
+    stats_init_finished.notified().await;
 
     let data = get_new_txns(&base).await;
     assert_eq!(

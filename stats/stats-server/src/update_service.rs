@@ -5,7 +5,7 @@ use itertools::Itertools;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use thiserror::Error;
-use tokio::sync::{mpsc, Mutex, Semaphore};
+use tokio::sync::{mpsc, Mutex, Notify, Semaphore};
 
 use crate::{
     blockscout_waiter::IndexingStatusListener,
@@ -77,11 +77,13 @@ impl UpdateService {
         concurrent_initial_tasks: usize,
         default_schedule: Schedule,
         force_update_on_start: Option<bool>,
+        initial_update_finish: Option<Arc<Notify>>,
     ) {
         let initial_update_semaphore: Arc<Semaphore> =
             Arc::new(Semaphore::new(concurrent_initial_tasks));
         let groups = self.charts.update_groups.values();
-        let init_update_tracker = InitialUpdateTracker::new(groups.len() as u64);
+        let init_update_tracker =
+            InitialUpdateTracker::new(groups.len() as u64, initial_update_finish);
         let mut group_update_jobs: FuturesUnordered<_> = groups
             .map(|group| {
                 let this = self.clone();
@@ -507,13 +509,15 @@ pub struct Rejection {
 struct InitialUpdateTracker {
     updated_groups: AtomicU64,
     total_groups: u64,
+    initial_update_finish: Option<Arc<Notify>>,
 }
 
 impl InitialUpdateTracker {
-    pub fn new(total_groups: u64) -> Self {
+    pub fn new(total_groups: u64, initial_update_finish: Option<Arc<Notify>>) -> Self {
         Self {
             updated_groups: AtomicU64::new(0),
             total_groups,
+            initial_update_finish,
         }
     }
 
@@ -523,12 +527,15 @@ impl InitialUpdateTracker {
     }
 
     pub fn report(&self) {
-        println!(
-            "{}/{} of initial updates are finished",
-            self.updated_groups
-                .load(std::sync::atomic::Ordering::Relaxed),
-            self.total_groups
-        );
+        let total = self.total_groups;
+        let updated_so_far = self
+            .updated_groups
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if let Some(finish_notify) = &self.initial_update_finish {
+            if total == updated_so_far {
+                finish_notify.notify_waiters();
+            }
+        }
         tracing::info!(
             "{}/{} of initial updates are finished",
             self.updated_groups

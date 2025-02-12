@@ -3,7 +3,7 @@
 //! - stats server is fully enabled & updated as much as possible
 //!     with not indexed blockscout
 
-use std::time::Duration;
+use std::sync::Arc;
 
 use blockscout_service_launcher::test_server::init_server;
 use futures::FutureExt;
@@ -17,16 +17,13 @@ use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
     stats,
 };
-use tokio::{task::JoinSet, time::sleep};
+use tokio::{sync::Notify, task::JoinSet};
 use url::Url;
 use wiremock::ResponseTemplate;
 
-use super::{
-    common_tests::{
-        test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
-        test_transactions_page_ok,
-    },
-    STATS_INIT_WAIT_S,
+use super::common_tests::{
+    test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
+    test_transactions_page_ok,
 };
 use crate::{
     common::{
@@ -59,10 +56,10 @@ pub async fn run_tests_with_nothing_indexed() {
     let api_key = ApiKey::from_str_infallible("123");
     setup_single_key(&mut settings, api_key.clone());
 
-    init_server(|| stats(settings), &base).await;
-
-    // Sleep until server will start and calculate all values
-    sleep(Duration::from_secs(STATS_INIT_WAIT_S)).await;
+    let stats_init_finished = Arc::new(Notify::new());
+    let notify_handle = stats_init_finished.clone();
+    init_server(move || stats(settings, Some(notify_handle)), &base).await;
+    stats_init_finished.notified().await;
 
     // these pages must be available right away to display users
     let tests: JoinSet<_> = [
@@ -99,10 +96,10 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     .await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
-    init_server(|| stats(settings), &base).await;
-
-    // Sleep until server will start and calculate all values
-    sleep(Duration::from_secs(STATS_INIT_WAIT_S)).await;
+    let stats_init_finished = Arc::new(Notify::new());
+    let notify_handle = stats_init_finished.clone();
+    init_server(move || stats(settings, Some(notify_handle)), &base).await;
+    stats_init_finished.notified().await;
 
     // these pages must be available right away to display users
     let tests: JoinSet<_> = [
