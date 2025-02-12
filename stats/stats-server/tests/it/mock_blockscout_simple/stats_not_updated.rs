@@ -5,10 +5,7 @@
 
 use std::time::Duration;
 
-use blockscout_service_launcher::{
-    test_database::TestDbGuard,
-    test_server::{init_server, send_get_request},
-};
+use blockscout_service_launcher::test_server::{init_server, send_get_request};
 use itertools::Itertools;
 use stats::tests::{
     init_db::init_db,
@@ -22,13 +19,17 @@ use tokio::time::sleep;
 use url::Url;
 use wiremock::ResponseTemplate;
 
-use crate::common::{enabled_resolutions, get_test_stats_settings, send_arbitrary_request};
+use crate::{
+    common::{enabled_resolutions, get_test_stats_settings, send_arbitrary_request},
+    it::mock_blockscout_simple::get_mock_blockscout,
+};
 
-pub async fn run_tests_with_charts_not_updated(blockscout_db: TestDbGuard, start_delay: Duration) {
+#[tokio::test]
+#[ignore = "needs database"]
+pub async fn run_tests_with_charts_not_updated() {
     let test_name = "run_tests_with_charts_not_updated";
     let stats_db = init_db(test_name).await;
-    // in order to not clash with port names/etc.
-    sleep(start_delay).await;
+    let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{

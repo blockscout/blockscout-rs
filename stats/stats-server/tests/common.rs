@@ -122,6 +122,10 @@ macro_rules! array_of_variables_with_names {
     };
 }
 
+/// It's better not to do slow/expensive stuff inside because tests consolidated
+/// with this function are not affected by test concurrency settings, thus
+/// leading to unexpected behaviour (especially in slow systems like CI
+/// runners)
 pub async fn run_consolidated_tests(mut tests: JoinSet<()>, log_prefix: &str) {
     let mut failed = 0;
     let total = tests.len();

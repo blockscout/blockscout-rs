@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use blockscout_service_launcher::{test_database::TestDbGuard, test_server::init_server};
+use blockscout_service_launcher::test_server::init_server;
 use futures::FutureExt;
 use pretty_assertions::assert_eq;
 use stats::tests::{
@@ -28,15 +28,19 @@ use super::{
     },
     STATS_INIT_WAIT_S,
 };
-use crate::common::{
-    get_test_stats_settings, run_consolidated_tests, send_arbitrary_request, setup_single_key,
+use crate::{
+    common::{
+        get_test_stats_settings, run_consolidated_tests, send_arbitrary_request, setup_single_key,
+    },
+    it::mock_blockscout_simple::get_mock_blockscout,
 };
 
-pub async fn run_tests_with_nothing_indexed(blockscout_db: TestDbGuard, start_delay: Duration) {
+#[tokio::test]
+#[ignore = "needs database"]
+pub async fn run_tests_with_nothing_indexed() {
     let test_name = "run_tests_with_nothing_indexed";
     let stats_db = init_db(test_name).await;
-    // in order to not clash with port names/etc.
-    sleep(start_delay).await;
+    let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
@@ -75,14 +79,12 @@ pub async fn run_tests_with_nothing_indexed(blockscout_db: TestDbGuard, start_de
     run_consolidated_tests(tests, test_name).await;
 }
 
-pub async fn run_tests_with_user_ops_not_indexed(
-    blockscout_db: TestDbGuard,
-    start_delay: Duration,
-) {
+#[tokio::test]
+#[ignore = "needs database"]
+pub async fn run_tests_with_user_ops_not_indexed() {
     let test_name = "run_tests_with_user_ops_not_indexed";
     let stats_db = init_db(test_name).await;
-    // in order to not clash with port names/etc.
-    sleep(start_delay).await;
+    let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
