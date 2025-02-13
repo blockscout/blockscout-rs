@@ -1,15 +1,20 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr, time::Duration};
 
 use blockscout_service_launcher::{
-    launcher::ConfigSettings, test_database::TestDbGuard, test_server::get_test_server_settings,
+    launcher::ConfigSettings,
+    test_database::TestDbGuard,
+    test_server::{get_test_server_settings, send_get_request},
 };
-use reqwest::{RequestBuilder, Response};
-use stats_proto::blockscout::stats::v1 as proto_v1;
+use reqwest::{RequestBuilder, Response, StatusCode};
+use stats_proto::blockscout::stats::v1::{
+    self as proto_v1, health_check_response::ServingStatus, ChartSubsetUpdateStatus,
+    HealthCheckResponse,
+};
 use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
     Settings,
 };
-use tokio::task::JoinSet;
+use tokio::{task::JoinSet, time::sleep};
 use url::Url;
 use wiremock::MockServer;
 
@@ -24,11 +29,78 @@ pub async fn send_arbitrary_request(request: RequestBuilder) -> Response {
         .unwrap_or_else(|_| panic!("Failed to send request"));
 
     if !response.status().is_success() {
-        let status = response.status();
-        let message = response.text().await.expect("Read body as text");
-        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
+        panic!("{}", response_panic_message(response).await);
     }
     response
+}
+
+pub(crate) async fn response_panic_message(response: Response) -> String {
+    let status = response.status();
+    let message = response.text().await.expect("Read body as text");
+    format!("Invalid status code (success expected). Status: {status}. Message: {message}")
+}
+
+pub enum ChartSubset {
+    Independent,
+    #[allow(unused)]
+    BlocksDependent,
+    InternalTransactionsDependent,
+    #[allow(unused)]
+    UserOpsDependent,
+    AllCharts,
+}
+
+/// Current logic in `blockscout_service_launcher` is insufficient
+/// (unfortunately)
+pub async fn wait_for_successful_healthcheck(base: &Url) {
+    let wait_health_check = async {
+        loop {
+            if let Ok(response) = reqwest::Client::new()
+                .request(reqwest::Method::GET, base.join("health").unwrap())
+                .send()
+                .await
+            {
+                if response.status() == StatusCode::OK {
+                    let healthcheck_status = response
+                        .json::<HealthCheckResponse>()
+                        .await
+                        .unwrap()
+                        .status();
+                    if healthcheck_status == ServingStatus::Serving {
+                        break;
+                    }
+                }
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(90), wait_health_check)
+        .await
+        .expect("Server did not start serving");
+}
+
+pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
+    let wait_job = async {
+        loop {
+            let statuses: proto_v1::UpdateStatus =
+                send_get_request(&base, "/api/v1/update-status").await;
+            let matching_status = match subset {
+                ChartSubset::Independent => statuses.independent_status(),
+                ChartSubset::BlocksDependent => statuses.blocks_dependent_status(),
+                ChartSubset::InternalTransactionsDependent => {
+                    statuses.internal_transactions_dependent_status()
+                }
+                ChartSubset::UserOpsDependent => statuses.user_ops_dependent_status(),
+                ChartSubset::AllCharts => statuses.all_status(),
+            };
+            if matching_status == ChartSubsetUpdateStatus::CompletedInitialUpdate {
+                return;
+            }
+            sleep(Duration::from_millis(250)).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(300), wait_job)
+        .await
+        .expect("Did not reach required indexing status in time");
 }
 
 pub async fn enabled_resolutions(

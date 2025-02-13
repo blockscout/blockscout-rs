@@ -533,6 +533,15 @@ impl StatsService for ReadService {
         }))
     }
 
+    async fn get_update_status(
+        &self,
+        _request: Request<proto_v1::GetUpdateStatusRequest>,
+    ) -> Result<Response<proto_v1::UpdateStatus>, Status> {
+        Ok(Response::new(
+            self.update_service.get_initial_update_status().await,
+        ))
+    }
+
     async fn batch_update_charts(
         &self,
         request: Request<proto_v1::BatchUpdateChartsRequest>,

@@ -25,7 +25,6 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
 };
-use tokio::sync::Notify;
 
 const SERVICE_NAME: &str = "stats";
 
@@ -67,10 +66,7 @@ async fn sleep_indefinitely() {
     tokio::time::sleep(Duration::from_secs(u64::MAX)).await;
 }
 
-pub async fn stats(
-    mut settings: Settings,
-    initial_update_finish: Option<Arc<Notify>>,
-) -> Result<(), anyhow::Error> {
+pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     blockscout_service_launcher::tracing::init_logs(
         SERVICE_NAME,
         &settings.tracing,
@@ -155,7 +151,6 @@ pub async fn stats(
                 settings.concurrent_start_updates,
                 settings.default_schedule,
                 settings.force_update_on_start,
-                initial_update_finish,
             )
             .await;
         Ok(())

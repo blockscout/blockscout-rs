@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{str::FromStr, time::Duration};
 
 use blockscout_service_launcher::test_server::{init_server, send_get_request};
 use chrono::NaiveDate;
@@ -9,10 +9,13 @@ use stats::tests::{
 };
 use stats_proto::blockscout::stats::v1::{self as proto_v1, BatchUpdateChartsResult};
 use stats_server::{auth::ApiKey, stats};
-use tokio::{sync::Notify, time::sleep};
+use tokio::time::sleep;
 use url::Url;
 
-use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single_key};
+use crate::common::{
+    get_test_stats_settings, request_reupdate_from, setup_single_key, wait_for_subset_to_update,
+    wait_for_successful_healthcheck, ChartSubset,
+};
 
 /// Uses reindexing, so needs to be independent
 #[tokio::test]
@@ -31,10 +34,9 @@ async fn tests_reupdate_works() {
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
 
-    let stats_init_finished = Arc::new(Notify::new());
-    let notify_handle = stats_init_finished.clone();
-    init_server(move || stats(settings, Some(notify_handle)), &base).await;
-    stats_init_finished.notified().await;
+    init_server(move || stats(settings), &base).await;
+    wait_for_successful_healthcheck(&base).await;
+    wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     let data = get_new_txns(&base).await;
     assert_eq!(

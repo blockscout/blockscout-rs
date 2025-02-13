@@ -66,7 +66,7 @@ impl IndexingStatusTrait for IndexingStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BlockscoutIndexingStatus {
     NoneIndexed,
     BlocksIndexed,
@@ -93,8 +93,9 @@ impl IndexingStatusTrait for BlockscoutIndexingStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum UserOpsIndexingStatus {
+    //todo: rename to be more acruate
     IndexingPastOperations,
     PastOperationsIndexed,
 }

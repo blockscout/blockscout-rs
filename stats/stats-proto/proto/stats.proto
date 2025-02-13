@@ -41,6 +41,7 @@ service StatsService {
   rpc GetMainPageStats(GetMainPageStatsRequest) returns (MainPageStats);
   rpc GetTransactionsPageStats(GetTransactionsPageStatsRequest) returns (TransactionsPageStats);
   rpc GetContractsPageStats(GetContractsPageStatsRequest) returns (ContractsPageStats);
+  rpc GetUpdateStatus(GetUpdateStatusRequest) returns (UpdateStatus);
   rpc BatchUpdateCharts(BatchUpdateChartsRequest) returns (BatchUpdateChartsResult) {
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       security: {
@@ -146,6 +147,32 @@ message ContractsPageStats {
   optional Counter new_contracts_24h = 2;
   optional Counter total_verified_contracts = 3;
   optional Counter new_verified_contracts_24h = 4;
+}
+
+message GetUpdateStatusRequest {}
+
+enum ChartSubsetUpdateStatus {
+  // No actions were taken yet for some charts 
+  PENDING = 0;
+  // Some charts are waiting for starting condition
+  WAITING_FOR_STARTING_CONDITION = 1;
+  // Some charts are still running initial update
+  RUNNING_INITIAL_UPDATE = 2;
+  // Initial updates were completed for all charts
+  COMPLETED_INITIAL_UPDATE = 3;
+}
+
+message UpdateStatus {
+  // Status of all enabled charts
+  ChartSubsetUpdateStatus all_status = 1;
+  // Status of all enabled charts that are independent from any indexing
+  ChartSubsetUpdateStatus independent_status = 2;
+  // Status of all enabled charts that depend on indexing blocks
+  ChartSubsetUpdateStatus blocks_dependent_status = 3;
+  // Status of all enabled charts that depend on indexing internal transactions
+  ChartSubsetUpdateStatus internal_transactions_dependent_status = 4;
+  // Status of all enabled charts that depend on indexing user operations
+  ChartSubsetUpdateStatus user_ops_dependent_status = 5;
 }
 
 message BatchUpdateChartsRequest {
