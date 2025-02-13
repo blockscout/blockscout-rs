@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
+    auth::AuthorizationProvider,
     blockscout_waiter::{self, init_blockscout_api_client},
     config::{read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
@@ -109,7 +110,7 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     for group_entry in charts.update_groups.values() {
         group_entry
             .group
-            .create_charts_with_mutexes(&db, None, &group_entry.enabled_members)
+            .create_charts_sync(&db, None, &group_entry.enabled_members)
             .await?;
     }
 
@@ -130,8 +131,9 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         .await?,
     );
 
+    let update_service_cloned = update_service.clone();
     let update_service_handle = tokio::spawn(async move {
-        update_service
+        update_service_cloned
             .run(
                 settings.concurrent_start_updates,
                 settings.default_schedule,
@@ -145,8 +147,22 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
         metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
     }
 
-    let read_service =
-        Arc::new(ReadService::new(db, blockscout, charts, settings.limits.into()).await?);
+    if settings.api_keys.is_empty() {
+        tracing::warn!("No api keys found in settings, provide them to make use of authorization-protected endpoints")
+    }
+    let authorization = Arc::new(AuthorizationProvider::new(settings.api_keys));
+
+    let read_service = Arc::new(
+        ReadService::new(
+            db,
+            blockscout,
+            charts,
+            update_service,
+            authorization,
+            settings.limits.into(),
+        )
+        .await?,
+    );
     let health = Arc::new(HealthService::default());
 
     let grpc_router = grpc_router(read_service.clone(), health.clone());

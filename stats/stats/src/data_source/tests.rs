@@ -292,10 +292,7 @@ async fn update_examples() {
         .map(|id| (id.to_owned(), Arc::new(Mutex::new(()))))
         .collect();
     let group = SyncUpdateGroup::new(&mutexes, Arc::new(ExampleUpdateGroup)).unwrap();
-    group
-        .create_charts_with_mutexes(&db, None, &enabled)
-        .await
-        .unwrap();
+    group.create_charts_sync(&db, None, &enabled).await.unwrap();
 
     let parameters = UpdateParameters {
         db: &db,
@@ -305,7 +302,7 @@ async fn update_examples() {
         force_full: true,
     };
     group
-        .update_charts_with_mutexes(parameters, &enabled)
+        .update_charts_sync(parameters, &enabled)
         .await
         .unwrap();
 }
