@@ -5,27 +5,26 @@ use itertools::Itertools;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use thiserror::Error;
-use tokio::sync::{mpsc, Mutex, Notify, Semaphore};
+use tokio::sync::{mpsc, Mutex, Semaphore};
 
 use crate::{
     blockscout_waiter::IndexingStatusListener,
     runtime_setup::{RuntimeSetup, UpdateGroupEntry},
+    InitialUpdateTracker,
 };
 use stats::{
     data_source::types::{BlockscoutMigrations, UpdateParameters},
     ChartKey,
 };
 
-use std::{
-    collections::HashSet,
-    sync::{atomic::AtomicU64, Arc},
-};
+use std::{collections::HashSet, sync::Arc};
 
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     blockscout_db: Arc<DatabaseConnection>,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
+    init_update_tracker: InitialUpdateTracker,
     // currently only accessed in one place, but `Mutex`es
     // are needed due to `Arc<Self>` everywhere to provide
     // interior mutability
@@ -58,11 +57,13 @@ impl UpdateService {
         status_listener: Option<IndexingStatusListener>,
     ) -> Result<Self, DbErr> {
         let on_demand = mpsc::channel(128);
+        let init_update_tracker = Self::initialize_update_tracker(&charts);
         Ok(Self {
             db,
             blockscout_db,
             charts,
             status_listener,
+            init_update_tracker,
             on_demand_sender: Mutex::new(on_demand.0),
             on_demand_receiver: Mutex::new(on_demand.1),
         })
@@ -77,13 +78,10 @@ impl UpdateService {
         concurrent_initial_tasks: usize,
         default_schedule: Schedule,
         force_update_on_start: Option<bool>,
-        initial_update_finish: Option<Arc<Notify>>,
     ) {
         let initial_update_semaphore: Arc<Semaphore> =
             Arc::new(Semaphore::new(concurrent_initial_tasks));
         let groups = self.charts.update_groups.values();
-        let init_update_tracker =
-            InitialUpdateTracker::new(groups.len() as u64, initial_update_finish);
         let mut group_update_jobs: FuturesUnordered<_> = groups
             .map(|group| {
                 let this = self.clone();
@@ -91,9 +89,14 @@ impl UpdateService {
                 let schedule = group_update_schedule(&group_entry, &default_schedule).clone();
                 let status_listener = self.status_listener.clone();
                 let initial_update_semaphore = initial_update_semaphore.clone();
-                let init_update_tracker = &init_update_tracker;
+                let init_update_tracker = &self.init_update_tracker;
                 async move {
-                    Self::wait_for_start_condition(&group_entry, status_listener).await;
+                    Self::wait_for_start_condition(
+                        &group_entry,
+                        status_listener,
+                        init_update_tracker,
+                    )
+                    .await;
                     this.clone()
                         .run_initial_update(
                             &group_entry,
@@ -121,10 +124,21 @@ impl UpdateService {
         panic!("{}", msg);
     }
 
+    fn initialize_update_tracker(charts: &RuntimeSetup) -> InitialUpdateTracker {
+        let all_charts_requirements = charts.all_enabled_members_indexing_status_requirements();
+        InitialUpdateTracker::new(&all_charts_requirements)
+    }
+
     async fn wait_for_start_condition(
         group_entry: &UpdateGroupEntry,
         status_listener: Option<IndexingStatusListener>,
+        init_update_tracker: &InitialUpdateTracker,
     ) {
+        // set even if no status listener is present
+        // because the chart might wait for mutex later
+        init_update_tracker
+            .mark_waiting_for_starting_condition(&group_entry.enabled_members)
+            .await;
         if let Some(mut status_listener) = status_listener {
             let wait_result = status_listener
                 .wait_until_status_at_least(
@@ -154,6 +168,9 @@ impl UpdateService {
                 .acquire()
                 .await
                 .expect("failed to acquire permit");
+            init_update_tracker
+                .mark_started_initial_update(&group_entry.enabled_members)
+                .await;
             if let Some(force_full) = force_update_on_start {
                 self.update(group_entry.clone(), force_full, None).await
             };
@@ -162,8 +179,10 @@ impl UpdateService {
             update_group = group_entry.group.name(),
             "initial update for group is done"
         );
-        init_update_tracker.mark_updated();
-        init_update_tracker.report();
+        init_update_tracker
+            .mark_initial_update_done(&group_entry.enabled_members)
+            .await;
+        init_update_tracker.report().await;
     }
 
     async fn run_on_demand_executor(self: &Arc<Self>, default_schedule: &Schedule) {
@@ -434,6 +453,32 @@ impl UpdateService {
         })
     }
 
+    pub async fn get_initial_update_status(&self) -> proto_v1::UpdateStatus {
+        proto_v1::UpdateStatus {
+            all_status: self.init_update_tracker.get_all_status().await.into(),
+            independent_status: self
+                .init_update_tracker
+                .get_independent_status()
+                .await
+                .into(),
+            blocks_dependent_status: self
+                .init_update_tracker
+                .get_blocks_dependent_status()
+                .await
+                .into(),
+            internal_transactions_dependent_status: self
+                .init_update_tracker
+                .get_internal_transactions_dependent_status()
+                .await
+                .into(),
+            user_ops_dependent_status: self
+                .init_update_tracker
+                .get_user_ops_dependent_status()
+                .await
+                .into(),
+        }
+    }
+
     /// (accepted_chart_keys, accepted_chart_names, rejected_chart_names)
     fn split_update_request_input(
         self: &Arc<Self>,
@@ -503,44 +548,4 @@ impl OnDemandReupdateAccepted {
 pub struct Rejection {
     pub name: String,
     pub reason: String,
-}
-
-/// Reports progress of inital updates to logs
-struct InitialUpdateTracker {
-    updated_groups: AtomicU64,
-    total_groups: u64,
-    initial_update_finish: Option<Arc<Notify>>,
-}
-
-impl InitialUpdateTracker {
-    pub fn new(total_groups: u64, initial_update_finish: Option<Arc<Notify>>) -> Self {
-        Self {
-            updated_groups: AtomicU64::new(0),
-            total_groups,
-            initial_update_finish,
-        }
-    }
-
-    pub fn mark_updated(&self) {
-        self.updated_groups
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    pub fn report(&self) {
-        let total = self.total_groups;
-        let updated_so_far = self
-            .updated_groups
-            .load(std::sync::atomic::Ordering::Relaxed);
-        if let Some(finish_notify) = &self.initial_update_finish {
-            if total == updated_so_far {
-                finish_notify.notify_waiters();
-            }
-        }
-        tracing::info!(
-            "{}/{} of initial updates are finished",
-            self.updated_groups
-                .load(std::sync::atomic::Ordering::Relaxed),
-            self.total_groups
-        );
-    }
 }
