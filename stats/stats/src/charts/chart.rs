@@ -99,6 +99,12 @@ impl From<ResolutionKind> for String {
     }
 }
 
+impl Display for ResolutionKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (*self).to_string().fmt(f)
+    }
+}
+
 pub trait Named {
     /// Name of this data source that represents its contents
     fn name() -> String;
@@ -113,6 +119,10 @@ pub struct ChartKey {
 impl ChartKey {
     pub fn new(name: String, resolution: ResolutionKind) -> Self {
         Self { name, resolution }
+    }
+
+    pub fn with_day(name: String) -> Self {
+        Self::new(name, ResolutionKind::Day)
     }
 
     pub fn name(&self) -> &str {
