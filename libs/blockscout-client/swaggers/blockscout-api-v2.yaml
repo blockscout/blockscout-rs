@@ -2138,6 +2138,7 @@ components:
           type: string
           example: '1866.51'
         to:
+          nullable: true,
           $ref: '#/components/schemas/AddressParam'
         transaction_burnt_fee:
           type: string
@@ -2180,6 +2181,7 @@ components:
           type: string
           example: '41309'
         created_contract:
+          nullable: true,
           $ref: '#/components/schemas/AddressParam'
         position:
           type: integer
@@ -3400,6 +3402,7 @@ components:
           example: '1.0'
         indexed_internal_transactions_ratio:
           type: string
+          nullable: true
           example: '1.0'
     StatsResponse:
       required:
