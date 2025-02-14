@@ -24,7 +24,7 @@ pub fn get_test_server_settings() -> (ServerSettings, Url) {
 
 /// `check_health_response` - additional logic to verify if healthcheck
 /// was successful. `true` - success
-pub async fn init_server<F, R, FCheck>(
+pub async fn init_server<F, R, FCheck, RCheck>(
     run: F,
     base: &Url,
     healthcheck_timeout: Option<Duration>,
@@ -33,7 +33,8 @@ pub async fn init_server<F, R, FCheck>(
 where
     F: FnOnce() -> R + Send + 'static,
     R: Future<Output = Result<(), anyhow::Error>> + Send,
-    FCheck: Fn(reqwest::Response) -> bool,
+    FCheck: Fn(reqwest::Response) -> RCheck + Send + 'static,
+    RCheck: Future<Output = bool> + Send,
 {
     let server_handle = tokio::spawn(async move { run().await });
 
@@ -50,7 +51,7 @@ where
             {
                 if response.status() == reqwest::StatusCode::OK {
                     if let Some(check_health_response) = &check_health_response {
-                        if check_health_response(response) {
+                        if check_health_response(response).await {
                             break;
                         }
                     } else {
