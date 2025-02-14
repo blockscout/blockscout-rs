@@ -85,7 +85,7 @@ impl IndexingStatusAggregator {
                     Ok(status) => {
                         let modified = self.sender.send_if_modified(|val| {
                             if val.blockscout != status {
-                                val.blockscout = status.clone();
+                                val.blockscout = status;
                                 true
                             } else {
                                 false
@@ -122,7 +122,7 @@ impl IndexingStatusAggregator {
                     Self::user_ops_internal_status_from_api_status(status, &self.wait_config);
                 let modified = self.sender.send_if_modified(|val| {
                     if val.user_ops != status {
-                        val.user_ops = status.clone();
+                        val.user_ops = status;
                         true
                     } else {
                         false

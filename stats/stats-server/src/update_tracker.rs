@@ -147,13 +147,12 @@ impl InitialUpdateTrackerInner {
         charts: &BTreeMap<ChartKey, IndexingStatus>,
         tracking: &[&HashSet<ChartKey>],
     ) {
-        let all_tracked =
-            tracking
-                .into_iter()
-                .fold(HashSet::<&ChartKey>::new(), |mut all, next| {
-                    all.extend(next.iter());
-                    all
-                });
+        let all_tracked = tracking
+            .iter()
+            .fold(HashSet::<&ChartKey>::new(), |mut all, next| {
+                all.extend(next.iter());
+                all
+            });
         let charts = charts.keys().collect::<HashSet<_>>();
         let not_tracked: Vec<_> = charts.difference(&all_tracked).collect();
         if !not_tracked.is_empty() {
