@@ -11,7 +11,7 @@ members = [
 
 [workspace.dependencies]
 blockscout-client = { git = "https://github.com/blockscout/blockscout-rs/", rev = "d02877c" }
-blockscout-service-launcher = { version = "0.16.1" }
+blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs/", rev = "3908e8bf" }
 rstest = "0.23.0"
 trait-variant = "0.1.2"
 wiremock = "0.6.2"

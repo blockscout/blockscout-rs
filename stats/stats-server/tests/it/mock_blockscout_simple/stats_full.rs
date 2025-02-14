@@ -16,8 +16,8 @@ use super::common_tests::{
 };
 use crate::{
     common::{
-        get_test_stats_settings, run_consolidated_tests, wait_for_subset_to_update,
-        wait_for_successful_healthcheck, ChartSubset,
+        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+        wait_for_subset_to_update, ChartSubset,
     },
     it::mock_blockscout_simple::get_mock_blockscout,
 };
@@ -32,8 +32,13 @@ pub async fn run_fully_initialized_stats_tests() {
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
 
-    init_server(move || stats(settings), &base).await;
-    wait_for_successful_healthcheck(&base).await;
+    init_server(
+        move || stats(settings),
+        &base,
+        Some(Duration::from_secs(25)),
+        Some(healthcheck_successful),
+    )
+    .await;
     sleep(Duration::from_secs(1)).await;
     wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 

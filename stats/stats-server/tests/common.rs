@@ -5,7 +5,7 @@ use blockscout_service_launcher::{
     test_database::TestDbGuard,
     test_server::{get_test_server_settings, send_get_request},
 };
-use reqwest::{RequestBuilder, Response, StatusCode};
+use reqwest::{RequestBuilder, Response};
 use stats_proto::blockscout::stats::v1::{
     self as proto_v1, health_check_response::ServingStatus, ChartSubsetUpdateStatus,
     HealthCheckResponse,
@@ -53,30 +53,14 @@ pub enum ChartSubset {
     AllCharts,
 }
 
-/// Current logic in `blockscout_service_launcher` is insufficient
-/// (unfortunately)
-pub async fn wait_for_successful_healthcheck(base: &Url) {
-    wait_until(Duration::from_secs(90), || async {
-        if let Ok(response) = reqwest::Client::new()
-            .request(reqwest::Method::GET, base.join("health").unwrap())
-            .send()
-            .await
-        {
-            if response.status() == StatusCode::OK {
-                let healthcheck_status = response
-                    .json::<HealthCheckResponse>()
-                    .await
-                    .unwrap()
-                    .status();
-                if healthcheck_status == ServingStatus::Serving {
-                    return true;
-                }
-            }
-        }
-        false
-    })
-    .await
-    .expect("Server did not start serving");
+/// for `init_server`
+pub async fn healthcheck_successful(response: Response) -> bool {
+    let healthcheck_status = response
+        .json::<HealthCheckResponse>()
+        .await
+        .unwrap()
+        .status();
+    healthcheck_status == ServingStatus::Serving
 }
 
 pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {

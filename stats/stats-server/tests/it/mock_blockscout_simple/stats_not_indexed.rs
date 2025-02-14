@@ -27,8 +27,8 @@ use super::common_tests::{
 };
 use crate::{
     common::{
-        get_test_stats_settings, run_consolidated_tests, send_arbitrary_request, setup_single_key,
-        wait_for_subset_to_update, wait_for_successful_healthcheck, ChartSubset,
+        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+        send_arbitrary_request, setup_single_key, wait_for_subset_to_update, ChartSubset,
     },
     it::mock_blockscout_simple::get_mock_blockscout,
 };
@@ -58,8 +58,13 @@ pub async fn run_tests_with_nothing_indexed() {
     let api_key = ApiKey::from_str_infallible("123");
     setup_single_key(&mut settings, api_key.clone());
 
-    init_server(move || stats(settings), &base).await;
-    wait_for_successful_healthcheck(&base).await;
+    init_server(
+        move || stats(settings),
+        &base,
+        Some(Duration::from_secs(25)),
+        Some(healthcheck_successful),
+    )
+    .await;
     sleep(Duration::from_secs(1)).await;
     wait_for_subset_to_update(&base, ChartSubset::Independent).await;
 
@@ -101,9 +106,13 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     settings.tracing.enabled = true;
 
     println!("initing server");
-    init_server(move || stats(settings), &base).await;
-    println!("waiting for healthcheck");
-    wait_for_successful_healthcheck(&base).await;
+    init_server(
+        move || stats(settings),
+        &base,
+        Some(Duration::from_secs(25)),
+        Some(healthcheck_successful),
+    )
+    .await;
     sleep(Duration::from_secs(1)).await;
     println!("waiting for subset update");
     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
