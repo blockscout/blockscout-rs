@@ -73,7 +73,7 @@ pub async fn wait_for_successful_healthcheck(base: &Url) {
                 }
             }
         }
-        return false;
+        false
     })
     .await
     .expect("Server did not start serving");
@@ -82,7 +82,7 @@ pub async fn wait_for_successful_healthcheck(base: &Url) {
 pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
     wait_until(Duration::from_secs(300), || async {
         let statuses: proto_v1::UpdateStatus =
-            send_get_request(&base, "/api/v1/update-status").await;
+            send_get_request(base, "/api/v1/update-status").await;
         let matching_status = match subset {
             ChartSubset::Independent => statuses.independent_status(),
             ChartSubset::BlocksDependent => statuses.blocks_dependent_status(),
@@ -95,7 +95,7 @@ pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
         if matching_status == ChartSubsetUpdateStatus::CompletedInitialUpdate {
             return true;
         }
-        return false;
+        false
     })
     .await
     .expect("Did not reach required indexing status in time");
