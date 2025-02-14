@@ -705,6 +705,7 @@ dependencies = [
  "eth-bytecode-db-proto 0.1.0 (git+https://github.com/blockscout/blockscout-rs?rev=41fc491)",
  "futures",
  "governor",
+ "job-queue",
  "reqwest",
  "reqwest-middleware",
  "reqwest-rate-limiter",
@@ -738,6 +739,7 @@ dependencies = [
 name = "blockscout-entity"
 version = "0.1.0"
 dependencies = [
+ "job-queue",
  "sea-orm",
 ]
 
@@ -746,6 +748,7 @@ name = "blockscout-migration"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "job-queue",
  "sea-orm-migration",
 ]
 
@@ -2008,6 +2011,14 @@ name = "itoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
+
+[[package]]
+name = "job-queue"
+version = "0.1.0"
+dependencies = [
+ "sea-orm",
+ "sea-orm-migration",
+]
 
 [[package]]
 name = "jobserver"

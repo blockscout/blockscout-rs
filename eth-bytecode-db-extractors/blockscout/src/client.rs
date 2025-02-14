@@ -7,42 +7,12 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::{
     VerifyVyperStandardJsonRequest,
 };
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ActiveValue::Set, ConnectionTrait, DatabaseBackend,
-    DatabaseConnection, DbErr, EntityTrait, Statement,
+    prelude::Uuid, sea_query::OnConflict, ActiveModelTrait, ActiveValue::Set, ColumnTrait,
+    DatabaseConnection, DbErr, EntityTrait, JoinType, QueryFilter, QuerySelect, RelationTrait,
+    Select,
 };
 use serde::Serialize;
 use std::sync::Arc;
-
-macro_rules! process_result {
-    ( $result:expr, $self:expr, $contract_address:expr) => {
-        match $result {
-            Ok(res) => res,
-            Err(err) => {
-                tracing::warn!(
-                    contract_address = $contract_address.to_string(),
-                    error = format!("{err:#}"),
-                    "Error processing contract"
-                );
-
-                contract_addresses::ActiveModel {
-                    contract_address: Set($contract_address.to_vec()),
-                    chain_id: Set($self.chain_id.into()),
-                    status: Set(sea_orm_active_enums::Status::Error),
-                    log: Set(Some(format!("{:#?}", err))),
-                    ..Default::default()
-                }
-                .update($self.db_client.as_ref())
-                .await
-                .context(format!(
-                    "saving error details failed; contract={}, chain_id={}",
-                    $contract_address, $self.chain_id,
-                ))?;
-
-                continue;
-            }
-        }
-    };
-}
 
 #[derive(Debug, Serialize)]
 struct StandardJson {
@@ -160,25 +130,31 @@ impl Client {
         while let Some(contract_model) = self.next_contract().await? {
             processed += 1;
             let contract_address = Bytes::from(contract_model.contract_address.clone());
+            let job_id = contract_model.job_id;
 
             tracing::info!(
                 contract_address = contract_address.to_string(),
                 "contract processed"
             );
 
-            let contract_details_model = process_result!(
+            let contract_details_model = job_queue::process_result!(
+                self.db_client.as_ref(),
                 self.import_contract_details(contract_address.clone()).await,
-                &self,
-                contract_address
+                job_id,
+                contract_address = contract_address,
+                chain_id = self.chain_id
             );
 
-            let source = process_result!(
+            let source = job_queue::process_result!(
+                self.db_client.as_ref(),
                 self.verify_contract(contract_model, contract_details_model)
                     .await,
-                &self,
-                contract_address
+                job_id,
+                contract_address = contract_address
             );
-            self.mark_as_success(contract_address, source).await?;
+
+            self.mark_as_success(job_id, contract_address, source)
+                .await?;
         }
 
         Ok(processed)
@@ -354,20 +330,18 @@ impl Client {
 
     async fn mark_as_success(
         &self,
+        job_id: Uuid,
         contract_address: Bytes,
-        source: eth_bytecode_db::Source,
+        source: Source,
     ) -> anyhow::Result<()> {
-        contract_addresses::ActiveModel {
-            contract_address: Set(contract_address.to_vec()),
-            chain_id: Set(self.chain_id.into()),
-            status: Set(sea_orm_active_enums::Status::Success),
-            log: Set(Some(
+        job_queue::mark_as_success(
+            self.db_client.as_ref(),
+            job_id,
+            Some(
                 serde_json::to_string(&source)
                     .context("serializing success result (source) failed")?,
-            )),
-            ..Default::default()
-        }
-        .update(self.db_client.as_ref())
+            ),
+        )
         .await
         .context(format!(
             "saving success details failed for the contract {}",
@@ -379,51 +353,24 @@ impl Client {
 
     async fn next_contract(&self) -> anyhow::Result<Option<contract_addresses::Model>> {
         // Notice that we are looking only for contracts with given `chain_id`
-        let next_contract_address_sql = format!(
-            r#"
-            UPDATE contract_addresses
-            SET status = 'in_process'
-            WHERE contract_address = (SELECT contract_address
-                                      FROM contract_addresses
-                                      WHERE status = 'waiting'
-                                        AND chain_id = {}
-                                      LIMIT 1 FOR UPDATE SKIP LOCKED)
-            RETURNING contract_address;
-        "#,
-            self.chain_id
-        );
+        let chain_id_filter = |select: Select<entity::job_queue::Entity>| {
+            select
+                .join_rev(JoinType::Join, contract_addresses::Relation::JobQueue.def())
+                .filter(contract_addresses::Column::ChainId.eq(self.chain_id))
+        };
 
-        let next_contract_address_stmt = Statement::from_string(
-            DatabaseBackend::Postgres,
-            next_contract_address_sql.to_string(),
-        );
+        let next_job_id =
+            job_queue::next_job_id_with_filter(self.db_client.as_ref(), chain_id_filter)
+                .await
+                .context("querying the next_job_id")?;
 
-        let next_contract_address = self
-            .db_client
-            .as_ref()
-            .query_one(next_contract_address_stmt)
-            .await
-            .context("querying for the next contract address")?
-            .map(|query_result| {
-                query_result
-                    .try_get_by::<Vec<u8>, _>("contract_address")
-                    .expect("error while try_get_by contract_address")
-            });
-
-        if let Some(contract_address) = next_contract_address {
-            let model = contract_addresses::Entity::find_by_id((
-                contract_address.clone(),
-                self.chain_id.into(),
-            ))
-            .one(self.db_client.as_ref())
-            .await
-            .expect("querying contract_address model failed")
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "contract_address model does not exist for the contract: {}",
-                    Bytes::from(contract_address),
-                )
-            })?;
+        if let Some(job_id) = next_job_id {
+            let model = contract_addresses::Entity::find()
+                .filter(contract_addresses::Column::JobId.eq(job_id))
+                .one(self.db_client.as_ref())
+                .await
+                .context("querying contract_address model")?
+                .expect("contract_address model does not exist");
 
             return Ok(Some(model));
         }
