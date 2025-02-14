@@ -81,10 +81,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
             C::missing_date_policy(),
         )
         .await?
-        .ok_or(ChartError::Internal(format!(
-            "no data for counter '{}' was found",
-            C::name()
-        )))?;
+        .ok_or(ChartError::NoCounterData(C::key()))?;
         Ok(value)
     }
 }

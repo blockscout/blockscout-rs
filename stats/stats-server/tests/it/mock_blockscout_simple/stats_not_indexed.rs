@@ -3,6 +3,8 @@
 //! - stats server is fully enabled & updated as much as possible
 //!     with not indexed blockscout
 
+use std::time::Duration;
+
 use blockscout_service_launcher::test_server::init_server;
 use futures::FutureExt;
 use pretty_assertions::assert_eq;
@@ -15,7 +17,7 @@ use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
     stats,
 };
-use tokio::task::JoinSet;
+use tokio::{task::JoinSet, time::sleep};
 use url::Url;
 use wiremock::ResponseTemplate;
 
@@ -46,6 +48,7 @@ pub async fn run_tests_with_nothing_indexed() {
                 "indexed_internal_transactions_ratio": null
             }"#,
         ),
+        // will error getting user ops status
         None,
     )
     .await;
@@ -57,6 +60,7 @@ pub async fn run_tests_with_nothing_indexed() {
 
     init_server(move || stats(settings), &base).await;
     wait_for_successful_healthcheck(&base).await;
+    sleep(Duration::from_secs(1)).await;
     wait_for_subset_to_update(&base, ChartSubset::Independent).await;
 
     // these pages must be available right away to display users
@@ -97,6 +101,7 @@ pub async fn run_tests_with_user_ops_not_indexed() {
 
     init_server(move || stats(settings), &base).await;
     wait_for_successful_healthcheck(&base).await;
+    sleep(Duration::from_secs(1)).await;
     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
 
     // these pages must be available right away to display users
