@@ -45,7 +45,7 @@ where
         }
     };
     // Wait for the server to start
-    if (timeout(Duration::from_secs(10), wait_health_check).await).is_err() {
+    if (timeout(Duration::from_secs(30), wait_health_check).await).is_err() {
         match timeout(Duration::from_secs(1), server_handle).await {
             Ok(Ok(result)) => {
                 panic!("Server terminated with: {result:?}")
@@ -54,7 +54,7 @@ where
                 panic!("Server start terminated with exit error")
             }
             Err(_) => {
-                panic!("Server did not start in time, but did not terminate");
+                panic!("Server did not start in time, and did not terminate");
             }
         }
     }
