@@ -26,6 +26,8 @@ pub enum ChartError {
     StatsDB(DbErr),
     #[error("chart {0} not found")]
     ChartNotFound(ChartKey),
+    #[error("no data for chart {0} is present. it might be because it's yet to update")]
+    NoCounterData(ChartKey),
     #[error("exceeded limit on requested data points (~{limit}); choose smaller time interval.")]
     IntervalTooLarge { limit: u32 },
     #[error("internal error: {0}")]
