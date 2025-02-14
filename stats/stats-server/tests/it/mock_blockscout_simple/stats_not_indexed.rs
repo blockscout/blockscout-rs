@@ -107,6 +107,7 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     sleep(Duration::from_secs(1)).await;
     println!("waiting for subset update");
     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
+    sleep(Duration::from_secs(1)).await;
 
     println!("testing");
     // these pages must be available right away to display users
