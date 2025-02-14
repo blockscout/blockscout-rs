@@ -86,10 +86,7 @@ impl IndexingStatusTrait for BlockscoutIndexingStatus {
     }
 
     fn most_restrictive_from(requirements: impl Iterator<Item = Self> + Clone) -> Self {
-        requirements
-            .max()
-            .unwrap_or(Self::LEAST_RESTRICTIVE)
-            .clone()
+        requirements.max().unwrap_or(Self::LEAST_RESTRICTIVE)
     }
 }
 
@@ -112,10 +109,7 @@ impl IndexingStatusTrait for UserOpsIndexingStatus {
     }
 
     fn most_restrictive_from(requirements: impl Iterator<Item = Self> + Clone) -> Self {
-        requirements
-            .max()
-            .unwrap_or(Self::LEAST_RESTRICTIVE)
-            .clone()
+        requirements.max().unwrap_or(Self::LEAST_RESTRICTIVE)
     }
 }
 
