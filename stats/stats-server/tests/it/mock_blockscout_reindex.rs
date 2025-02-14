@@ -13,8 +13,8 @@ use tokio::time::sleep;
 use url::Url;
 
 use crate::common::{
-    get_test_stats_settings, request_reupdate_from, setup_single_key, wait_for_subset_to_update,
-    wait_for_successful_healthcheck, wait_until, ChartSubset,
+    get_test_stats_settings, healthcheck_successful, request_reupdate_from, setup_single_key,
+    wait_for_subset_to_update, wait_until, ChartSubset,
 };
 
 /// Uses reindexing, so needs to be independent
@@ -34,8 +34,13 @@ async fn tests_reupdate_works() {
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
 
-    init_server(move || stats(settings), &base).await;
-    wait_for_successful_healthcheck(&base).await;
+    init_server(
+        move || stats(settings),
+        &base,
+        Some(Duration::from_secs(25)),
+        Some(healthcheck_successful),
+    )
+    .await;
     wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     let data = get_new_txns(&base).await;
