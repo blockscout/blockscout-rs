@@ -22,10 +22,18 @@ pub fn get_test_server_settings() -> (ServerSettings, Url) {
     (server, base)
 }
 
-pub async fn init_server<F, R>(run: F, base: &Url) -> JoinHandle<Result<(), anyhow::Error>>
+/// `check_health_response` - additional logic to verify if healthcheck
+/// was successful. `true` - success
+pub async fn init_server<F, R, FCheck>(
+    run: F,
+    base: &Url,
+    healthcheck_timeout: Option<Duration>,
+    check_health_response: Option<FCheck>,
+) -> JoinHandle<Result<(), anyhow::Error>>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Future<Output = Result<(), anyhow::Error>> + Send,
+    FCheck: Fn(reqwest::Response) -> bool,
 {
     let server_handle = tokio::spawn(async move { run().await });
 
@@ -34,18 +42,27 @@ where
 
     let wait_health_check = async {
         loop {
-            if let Ok(_response) = client
-                .get(health_endpoint.clone())
+            if let Ok(response) = client
+                .request(reqwest::Method::GET, health_endpoint.clone())
                 .query(&[("service", "")])
                 .send()
                 .await
             {
-                break;
+                if response.status() == reqwest::StatusCode::OK {
+                    if let Some(check_health_response) = &check_health_response {
+                        if check_health_response(response) {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
             }
         }
     };
     // Wait for the server to start
-    if (timeout(Duration::from_secs(30), wait_health_check).await).is_err() {
+    let timeout_duration = healthcheck_timeout.unwrap_or(Duration::from_secs(15));
+    if (timeout(timeout_duration, wait_health_check).await).is_err() {
         match timeout(Duration::from_secs(1), server_handle).await {
             Ok(Ok(result)) => {
                 panic!("Server terminated with: {result:?}")
