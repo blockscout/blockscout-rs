@@ -21,6 +21,8 @@ pub use charts::{
     db_interaction::read::{
         ApproxUnsignedDiff, QueryAllBlockTimestampRange, ReadError, RequestedPointsLimit,
     },
+    indexing_status,
+    indexing_status::IndexingStatus,
     lines, query_dispatch, types, ChartError, ChartKey, ChartObject, ChartProperties,
-    ChartPropertiesObject, IndexingStatus, MissingDatePolicy, Named, ResolutionKind,
+    ChartPropertiesObject, MissingDatePolicy, Named, ResolutionKind,
 };

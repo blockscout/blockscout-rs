@@ -85,6 +85,7 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__CONDITIONAL_START__BLOCKS_RATIO__THRESHOLD` | | Value for `blocks_ratio` threshold | `0.98` |
 | `STATS__CONDITIONAL_START__INTERNAL_TRANSACTIONS_RATIO__ENABLED` | | Enable `internal_transactions_ratio` threshold | `true` |
 | `STATS__CONDITIONAL_START__INTERNAL_TRANSACTIONS_RATIO__THRESHOLD` | | Value for `internal_transactions_ratio` threshold | `0.98` |
+| `STATS__CONDITIONAL_START__USER_OPS_PAST_INDEXING_FINISHED__ENABLED` | | Enable checking user ops indexing status | `true` |
 | `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE` | | Disable requirement for blockscout api url setting. Turns off corresponding features if the api setting is not set | `false` |
 | `STATS__DISABLE_INTERNAL_TRANSACTIONS` | | Disable functionality that utilizes internal transactions. In particular, disable internal transactions ratio check for starting the service and related charts (`newContracts`, `lastNewContracts`, and `contractsGrowth`). It has a higher priority than config files and respective envs. | `false` |
 | `STATS__ENABLE_ALL_ARBITRUM` | | Enable Arbitrum-specific charts. Variable for convenience only, the same can be done manually in configs. | `false` |

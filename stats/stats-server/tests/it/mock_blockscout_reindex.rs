@@ -12,7 +12,10 @@ use stats_server::{auth::ApiKey, stats};
 use tokio::time::sleep;
 use url::Url;
 
-use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single_key};
+use crate::common::{
+    get_test_stats_settings, healthcheck_successful, request_reupdate_from, setup_single_key,
+    wait_for_subset_to_update, wait_until, ChartSubset,
+};
 
 /// Uses reindexing, so needs to be independent
 #[tokio::test]
@@ -31,10 +34,14 @@ async fn tests_reupdate_works() {
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
 
-    init_server(|| stats(settings), &base).await;
-
-    // Sleep until server will start and calculate all values
-    sleep(Duration::from_secs(8 * wait_multiplier)).await;
+    init_server(
+        move || stats(settings),
+        &base,
+        Some(Duration::from_secs(60)),
+        Some(healthcheck_successful),
+    )
+    .await;
+    wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     let data = get_new_txns(&base).await;
     assert_eq!(
@@ -64,24 +71,25 @@ async fn tests_reupdate_works() {
             rejected: vec![]
         }
     );
-    #[allow(clippy::identity_op)]
+    let expected_after_reupdate = map_str_tuple_to_owned(vec![
+        ("2022-11-09", "6"),
+        ("2022-11-10", "14"),
+        ("2022-11-11", "16"),
+        ("2022-11-12", "6"),
+        ("2022-12-01", "6"),
+        ("2023-01-01", "3"),
+        ("2023-02-01", "5"),
+        ("2023-03-01", "1"),
+    ]);
     // wait to reupdate
-    sleep(Duration::from_secs(1 * wait_multiplier)).await;
-
+    let _ = wait_until(Duration::from_secs(10 * wait_multiplier), || async {
+        let data = get_new_txns(&base).await;
+        chart_output_to_expected(data) == expected_after_reupdate
+    })
+    .await;
+    sleep(Duration::from_secs(1)).await;
     let data = get_new_txns(&base).await;
-    assert_eq!(
-        chart_output_to_expected(data),
-        map_str_tuple_to_owned(vec![
-            ("2022-11-09", "6"),
-            ("2022-11-10", "14"),
-            ("2022-11-11", "16"),
-            ("2022-11-12", "6"),
-            ("2022-12-01", "6"),
-            ("2023-01-01", "3"),
-            ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
-        ])
-    );
+    assert_eq!(chart_output_to_expected(data), expected_after_reupdate);
 
     let reupdate_response =
         request_reupdate_from(&base, &api_key, "2022-11-11", vec!["newTxns"]).await;
@@ -94,24 +102,26 @@ async fn tests_reupdate_works() {
             rejected: vec![]
         }
     );
-    #[allow(clippy::identity_op)]
+    let expected_after_reupdate = map_str_tuple_to_owned(vec![
+        ("2022-11-09", "6"),
+        ("2022-11-10", "14"),
+        ("2022-11-11", "20"),
+        ("2022-11-12", "6"),
+        ("2022-12-01", "6"),
+        ("2023-01-01", "3"),
+        ("2023-02-01", "5"),
+        ("2023-03-01", "1"),
+    ]);
     // wait to reupdate
-    sleep(Duration::from_secs(1 * wait_multiplier)).await;
+    let _ = wait_until(Duration::from_secs(10 * wait_multiplier), || async {
+        let data = get_new_txns(&base).await;
+        chart_output_to_expected(data) == expected_after_reupdate
+    })
+    .await;
+    sleep(Duration::from_secs(1)).await;
 
     let data = get_new_txns(&base).await;
-    assert_eq!(
-        chart_output_to_expected(data),
-        map_str_tuple_to_owned(vec![
-            ("2022-11-09", "6"),
-            ("2022-11-10", "14"),
-            ("2022-11-11", "20"),
-            ("2022-11-12", "6"),
-            ("2022-12-01", "6"),
-            ("2023-01-01", "3"),
-            ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
-        ])
-    );
+    assert_eq!(chart_output_to_expected(data), expected_after_reupdate);
 
     let reupdate_response =
         request_reupdate_from(&base, &api_key, "2000-01-01", vec!["newTxns"]).await;
@@ -124,23 +134,26 @@ async fn tests_reupdate_works() {
             rejected: vec![]
         }
     );
-    // need to wait longer as reupdating from year 2000
-    sleep(Duration::from_secs(2 * wait_multiplier)).await;
+    let expected_after_reupdate = map_str_tuple_to_owned(vec![
+        ("2022-11-09", "6"),
+        ("2022-11-10", "16"),
+        ("2022-11-11", "20"),
+        ("2022-11-12", "6"),
+        ("2022-12-01", "6"),
+        ("2023-01-01", "3"),
+        ("2023-02-01", "5"),
+        ("2023-03-01", "1"),
+    ]);
+    let _ = wait_until(Duration::from_secs(10 * wait_multiplier), || async {
+        let data = get_new_txns(&base).await;
+
+        chart_output_to_expected(data) == expected_after_reupdate
+    })
+    .await;
+    sleep(Duration::from_secs(1)).await;
 
     let data = get_new_txns(&base).await;
-    assert_eq!(
-        chart_output_to_expected(data),
-        map_str_tuple_to_owned(vec![
-            ("2022-11-09", "6"),
-            ("2022-11-10", "16"),
-            ("2022-11-11", "20"),
-            ("2022-11-12", "6"),
-            ("2022-12-01", "6"),
-            ("2023-01-01", "3"),
-            ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
-        ])
-    );
+    assert_eq!(chart_output_to_expected(data), expected_after_reupdate);
 }
 
 async fn get_new_txns(base: &Url) -> Vec<proto_v1::Point> {
