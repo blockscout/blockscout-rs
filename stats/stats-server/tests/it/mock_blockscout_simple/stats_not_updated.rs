@@ -21,8 +21,8 @@ use wiremock::ResponseTemplate;
 
 use crate::{
     common::{
-        enabled_resolutions, get_test_stats_settings, send_arbitrary_request,
-        wait_for_successful_healthcheck,
+        enabled_resolutions, get_test_stats_settings, healthcheck_successful,
+        send_arbitrary_request,
     },
     it::mock_blockscout_simple::get_mock_blockscout,
 };
@@ -50,9 +50,14 @@ pub async fn run_tests_with_charts_not_updated() {
     // will not update at all
     settings.force_update_on_start = None;
 
-    init_server(move || stats(settings), &base).await;
+    init_server(
+        move || stats(settings),
+        &base,
+        Some(Duration::from_secs(25)),
+        Some(healthcheck_successful),
+    )
+    .await;
     sleep(Duration::from_secs(1)).await;
-    wait_for_successful_healthcheck(&base).await;
 
     test_lines_counters_not_updated_ok(base).await
 }
