@@ -97,13 +97,18 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     )
     .await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-    let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
+    let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
+    settings.tracing.enabled = true;
 
+    println!("initing server");
     init_server(move || stats(settings), &base).await;
+    println!("waiting for healthcheck");
     wait_for_successful_healthcheck(&base).await;
     sleep(Duration::from_secs(1)).await;
+    println!("waiting for subset update");
     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
 
+    println!("testing");
     // these pages must be available right away to display users
     let tests: JoinSet<_> = [
         test_lines_ok(base.clone(), true, false).boxed(),

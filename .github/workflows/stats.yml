@@ -49,7 +49,7 @@ jobs:
           working-directory: stats
 
       - name: DB tests temp
-        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --package stats-server -- --nocapture --ignored
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --package stats-server run_tests_with_user_ops_not_indexed -- --nocapture --ignored
         if: success() || failure()
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
@@ -71,7 +71,7 @@ jobs:
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
         if: success() || failure()
 
-      - name: DB tests temp
+      - name: DB tests
         run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored
         if: success() || failure()
         env:
