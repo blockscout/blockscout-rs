@@ -102,8 +102,8 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     )
     .await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-    let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
-    settings.tracing.enabled = true;
+    let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
+    // settings.tracing.enabled = true;
 
     println!("initing server");
     init_server(
