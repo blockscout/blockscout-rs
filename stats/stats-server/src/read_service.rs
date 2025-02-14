@@ -284,9 +284,12 @@ impl ReadService {
             .await
         {
             Ok(counter_data) => Some(counter_data),
-            Err(ChartError::NoCounterData(_)) => None,
+            Err(ChartError::NoCounterData(k)) => {
+                tracing::warn!("No data for counter: {:?}", k);
+                None
+            }
             Err(e) => {
-                tracing::warn!("Failed to query counter: {:?}", e);
+                tracing::error!("Failed to query counter: {:?}", e);
                 None
             }
         }
