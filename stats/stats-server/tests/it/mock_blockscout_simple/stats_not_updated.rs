@@ -3,6 +3,8 @@
 //! - stats server is fully enabled but not updated (yet)
 //!     (e.g. the update is slow and in progress)
 
+use std::time::Duration;
+
 use blockscout_service_launcher::test_server::{init_server, send_get_request};
 use itertools::Itertools;
 use stats::tests::{
@@ -13,6 +15,7 @@ use stats_proto::blockscout::stats::v1::{
     health_check_response::ServingStatus, Counters, HealthCheckResponse,
 };
 use stats_server::stats;
+use tokio::time::sleep;
 use url::Url;
 use wiremock::ResponseTemplate;
 
@@ -48,6 +51,7 @@ pub async fn run_tests_with_charts_not_updated() {
     settings.force_update_on_start = None;
 
     init_server(move || stats(settings), &base).await;
+    sleep(Duration::from_secs(1)).await;
     wait_for_successful_healthcheck(&base).await;
 
     test_lines_counters_not_updated_ok(base).await

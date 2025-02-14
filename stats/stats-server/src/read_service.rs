@@ -279,12 +279,17 @@ impl ReadService {
         query_time: DateTime<Utc>,
     ) -> Option<proto_v1::Counter> {
         let query_handle = get_counter_query_handle(&name, chart_entry)?;
-        let counter = self
+        match self
             .query_counter_with_handle(name, chart_entry.settings.clone(), query_handle, query_time)
             .await
-            .inspect_err(|e| tracing::error!("Failed to query counter: {:?}", e))
-            .ok()?;
-        Some(counter)
+        {
+            Ok(counter_data) => Some(counter_data),
+            Err(ChartError::NoCounterData(_)) => None,
+            Err(e) => {
+                tracing::warn!("Failed to query counter: {:?}", e);
+                None
+            }
+        }
     }
 
     async fn query_counter(

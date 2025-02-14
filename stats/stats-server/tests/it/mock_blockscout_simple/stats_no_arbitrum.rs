@@ -2,11 +2,13 @@
 //! - blockscout is fully indexed
 //! - stats server is fully initialized with arbitrum charts disabled
 
+use std::time::Duration;
+
 use blockscout_service_launcher::test_server::init_server;
 use futures::FutureExt;
 use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_api};
 use stats_server::stats;
-use tokio::task::JoinSet;
+use tokio::{task::JoinSet, time::sleep};
 
 use crate::{
     common::{
@@ -31,6 +33,7 @@ pub async fn run_chart_pages_tests_with_disabled_arbitrum() {
 
     init_server(move || stats(settings), &base).await;
     wait_for_successful_healthcheck(&base).await;
+    sleep(Duration::from_secs(1)).await;
     wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     let tests: JoinSet<_> = [

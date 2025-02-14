@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr, time::Duration};
+use std::{collections::HashMap, future::Future, path::PathBuf, str::FromStr, time::Duration};
 
 use blockscout_service_launcher::{
     launcher::ConfigSettings,
@@ -14,7 +14,10 @@ use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
     Settings,
 };
-use tokio::{task::JoinSet, time::sleep};
+use tokio::{
+    task::JoinSet,
+    time::{error::Elapsed, sleep},
+};
 use url::Url;
 use wiremock::MockServer;
 
@@ -53,54 +56,66 @@ pub enum ChartSubset {
 /// Current logic in `blockscout_service_launcher` is insufficient
 /// (unfortunately)
 pub async fn wait_for_successful_healthcheck(base: &Url) {
-    let wait_health_check = async {
-        loop {
-            if let Ok(response) = reqwest::Client::new()
-                .request(reqwest::Method::GET, base.join("health").unwrap())
-                .send()
-                .await
-            {
-                if response.status() == StatusCode::OK {
-                    let healthcheck_status = response
-                        .json::<HealthCheckResponse>()
-                        .await
-                        .unwrap()
-                        .status();
-                    if healthcheck_status == ServingStatus::Serving {
-                        break;
-                    }
+    wait_until(Duration::from_secs(90), || async {
+        if let Ok(response) = reqwest::Client::new()
+            .request(reqwest::Method::GET, base.join("health").unwrap())
+            .send()
+            .await
+        {
+            if response.status() == StatusCode::OK {
+                let healthcheck_status = response
+                    .json::<HealthCheckResponse>()
+                    .await
+                    .unwrap()
+                    .status();
+                if healthcheck_status == ServingStatus::Serving {
+                    return true;
                 }
             }
         }
-    };
-    tokio::time::timeout(Duration::from_secs(90), wait_health_check)
-        .await
-        .expect("Server did not start serving");
+        return false;
+    })
+    .await
+    .expect("Server did not start serving");
 }
 
 pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
+    wait_until(Duration::from_secs(300), || async {
+        let statuses: proto_v1::UpdateStatus =
+            send_get_request(&base, "/api/v1/update-status").await;
+        let matching_status = match subset {
+            ChartSubset::Independent => statuses.independent_status(),
+            ChartSubset::BlocksDependent => statuses.blocks_dependent_status(),
+            ChartSubset::InternalTransactionsDependent => {
+                statuses.internal_transactions_dependent_status()
+            }
+            ChartSubset::UserOpsDependent => statuses.user_ops_dependent_status(),
+            ChartSubset::AllCharts => statuses.all_status(),
+        };
+        if matching_status == ChartSubsetUpdateStatus::CompletedInitialUpdate {
+            return true;
+        }
+        return false;
+    })
+    .await
+    .expect("Did not reach required indexing status in time");
+}
+
+pub async fn wait_until<F, Fut>(timeout: Duration, condition_fut: F) -> Result<(), Elapsed>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = bool>,
+{
     let wait_job = async {
         loop {
-            let statuses: proto_v1::UpdateStatus =
-                send_get_request(&base, "/api/v1/update-status").await;
-            let matching_status = match subset {
-                ChartSubset::Independent => statuses.independent_status(),
-                ChartSubset::BlocksDependent => statuses.blocks_dependent_status(),
-                ChartSubset::InternalTransactionsDependent => {
-                    statuses.internal_transactions_dependent_status()
-                }
-                ChartSubset::UserOpsDependent => statuses.user_ops_dependent_status(),
-                ChartSubset::AllCharts => statuses.all_status(),
-            };
-            if matching_status == ChartSubsetUpdateStatus::CompletedInitialUpdate {
+            let future = condition_fut();
+            if future.await {
                 return;
             }
             sleep(Duration::from_millis(250)).await;
         }
     };
-    tokio::time::timeout(Duration::from_secs(300), wait_job)
-        .await
-        .expect("Did not reach required indexing status in time");
+    tokio::time::timeout(timeout, wait_job).await
 }
 
 pub async fn enabled_resolutions(
