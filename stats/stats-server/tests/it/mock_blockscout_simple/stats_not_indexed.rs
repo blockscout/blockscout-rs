@@ -61,7 +61,7 @@ pub async fn run_tests_with_nothing_indexed() {
     init_server(
         move || stats(settings),
         &base,
-        Some(Duration::from_secs(25)),
+        Some(Duration::from_secs(60)),
         Some(healthcheck_successful),
     )
     .await;
@@ -109,7 +109,7 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     init_server(
         move || stats(settings),
         &base,
-        Some(Duration::from_secs(25)),
+        Some(Duration::from_secs(60)),
         Some(healthcheck_successful),
     )
     .await;

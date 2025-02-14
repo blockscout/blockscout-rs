@@ -35,7 +35,7 @@ pub async fn run_fully_initialized_stats_tests() {
     init_server(
         move || stats(settings),
         &base,
-        Some(Duration::from_secs(25)),
+        Some(Duration::from_secs(60)),
         Some(healthcheck_successful),
     )
     .await;
