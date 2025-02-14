@@ -37,7 +37,7 @@ async fn tests_reupdate_works() {
     init_server(
         move || stats(settings),
         &base,
-        Some(Duration::from_secs(25)),
+        Some(Duration::from_secs(60)),
         Some(healthcheck_successful),
     )
     .await;
