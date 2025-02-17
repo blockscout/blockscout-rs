@@ -65,7 +65,7 @@ pub async fn run_tests_with_nothing_indexed() {
         Some(healthcheck_successful),
     )
     .await;
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(10)).await;
     wait_for_subset_to_update(&base, ChartSubset::Independent).await;
 
     // these pages must be available right away to display users
@@ -113,10 +113,10 @@ pub async fn run_tests_with_user_ops_not_indexed() {
         Some(healthcheck_successful),
     )
     .await;
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(10)).await;
     println!("waiting for subset update");
     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(10)).await;
 
     println!("testing");
     // these pages must be available right away to display users

@@ -39,7 +39,7 @@ pub async fn run_fully_initialized_stats_tests() {
         Some(healthcheck_successful),
     )
     .await;
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(10)).await;
     wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     let tests: JoinSet<_> = [

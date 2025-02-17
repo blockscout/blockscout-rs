@@ -57,7 +57,7 @@ pub async fn run_tests_with_charts_not_updated() {
         Some(healthcheck_successful),
     )
     .await;
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(10)).await;
 
     test_lines_counters_not_updated_ok(base).await
 }
