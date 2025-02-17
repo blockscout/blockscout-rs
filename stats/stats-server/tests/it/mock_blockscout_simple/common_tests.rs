@@ -97,6 +97,7 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
                 &format!("/api/v1/lines/{line_name}?resolution={resolution}"),
             )
             .await;
+            dbg!(chart.as_object().expect("response has to be json object"));
             let chart_data = chart
                 .as_object()
                 .expect("response has to be json object")
