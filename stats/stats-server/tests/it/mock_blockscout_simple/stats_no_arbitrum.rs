@@ -38,7 +38,7 @@ pub async fn run_chart_pages_tests_with_disabled_arbitrum() {
         Some(healthcheck_successful),
     )
     .await;
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(10)).await;
     wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     let tests: JoinSet<_> = [
