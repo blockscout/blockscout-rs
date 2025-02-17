@@ -231,7 +231,7 @@ impl UpdateService {
                 .unwrap();
 
             let info = chart_entry.build_proto_line_chart_info(name.to_string());
-            debug_string.push_str(&format!("chart:{{{data:?},{info:?}}};"));
+            debug_string.push_str(&format!("chart({resolution}):{{{data:?},{info:?}}};"));
         }
         println!("group members data right after initial update: {debug_string}");
     }
