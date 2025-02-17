@@ -49,7 +49,7 @@ jobs:
           working-directory: stats
 
       - name: DB tests temp
-        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --package stats-server -- --nocapture --ignored
+        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --package stats-server -- --nocapture --ignored --test-threads=1
         if: success() || failure()
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
