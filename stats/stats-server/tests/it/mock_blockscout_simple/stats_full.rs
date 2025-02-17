@@ -14,12 +14,9 @@ use super::common_tests::{
     test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
     test_transactions_page_ok,
 };
-use crate::{
-    common::{
-        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
-        wait_for_subset_to_update, ChartSubset,
-    },
-    it::mock_blockscout_simple::get_mock_blockscout,
+use crate::common::{
+    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+    wait_for_subset_to_update, ChartSubset,
 };
 
 #[tokio::test]
@@ -27,7 +24,7 @@ use crate::{
 pub async fn run_fully_initialized_stats_tests() {
     let test_name = "run_fully_initialized_stats_tests";
     let stats_db = init_db(test_name).await;
-    let blockscout_db = get_mock_blockscout().await;
+    // let blockscout_db = get_mock_blockscout().await;
     let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
     stats::tests::mock_blockscout::fill_mock_blockscout_data(
         &blockscout_db,

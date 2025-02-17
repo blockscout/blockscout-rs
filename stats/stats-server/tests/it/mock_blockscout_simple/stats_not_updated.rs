@@ -19,12 +19,8 @@ use tokio::time::sleep;
 use url::Url;
 use wiremock::ResponseTemplate;
 
-use crate::{
-    common::{
-        enabled_resolutions, get_test_stats_settings, healthcheck_successful,
-        send_arbitrary_request,
-    },
-    it::mock_blockscout_simple::get_mock_blockscout,
+use crate::common::{
+    enabled_resolutions, get_test_stats_settings, healthcheck_successful, send_arbitrary_request,
 };
 
 #[tokio::test]
@@ -32,7 +28,6 @@ use crate::{
 pub async fn run_tests_with_charts_not_updated() {
     let test_name = "run_tests_with_charts_not_updated";
     let stats_db = init_db(test_name).await;
-    let blockscout_db = get_mock_blockscout().await;
     let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
     stats::tests::mock_blockscout::fill_mock_blockscout_data(
         &blockscout_db,
