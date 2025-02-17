@@ -10,12 +10,9 @@ use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_ap
 use stats_server::stats;
 use tokio::{task::JoinSet, time::sleep};
 
-use crate::{
-    common::{
-        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
-        wait_for_subset_to_update, ChartSubset,
-    },
-    it::mock_blockscout_simple::get_mock_blockscout,
+use crate::common::{
+    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+    wait_for_subset_to_update, ChartSubset,
 };
 
 use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
@@ -25,7 +22,7 @@ use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
 pub async fn run_chart_pages_tests_with_disabled_arbitrum() {
     let test_name = "run_chart_pages_tests_with_disabled_arbitrum";
     let stats_db = init_db(test_name).await;
-    let blockscout_db = get_mock_blockscout().await;
+    // let blockscout_db = get_mock_blockscout().await;
     let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
     stats::tests::mock_blockscout::fill_mock_blockscout_data(
         &blockscout_db,

@@ -25,12 +25,9 @@ use super::common_tests::{
     test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
     test_transactions_page_ok,
 };
-use crate::{
-    common::{
-        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
-        send_arbitrary_request, setup_single_key, wait_for_subset_to_update, ChartSubset,
-    },
-    it::mock_blockscout_simple::get_mock_blockscout,
+use crate::common::{
+    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+    send_arbitrary_request, setup_single_key, wait_for_subset_to_update, ChartSubset,
 };
 
 #[tokio::test]
@@ -38,7 +35,6 @@ use crate::{
 pub async fn run_tests_with_nothing_indexed() {
     let test_name = "run_tests_with_nothing_indexed";
     let stats_db = init_db(test_name).await;
-    let blockscout_db = get_mock_blockscout().await;
     let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
     stats::tests::mock_blockscout::fill_mock_blockscout_data(
         &blockscout_db,
@@ -94,7 +90,6 @@ pub async fn run_tests_with_nothing_indexed() {
 pub async fn run_tests_with_user_ops_not_indexed() {
     let test_name = "run_tests_with_user_ops_not_indexed";
     let stats_db = init_db(test_name).await;
-    let blockscout_db = get_mock_blockscout().await;
     let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
     stats::tests::mock_blockscout::fill_mock_blockscout_data(
         &blockscout_db,
