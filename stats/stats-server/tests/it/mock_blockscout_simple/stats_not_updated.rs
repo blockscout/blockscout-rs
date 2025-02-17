@@ -33,6 +33,12 @@ pub async fn run_tests_with_charts_not_updated() {
     let test_name = "run_tests_with_charts_not_updated";
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
+    let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
+    stats::tests::mock_blockscout::fill_mock_blockscout_data(
+        &blockscout_db,
+        <chrono::NaiveDate as std::str::FromStr>::from_str("2023-03-01").unwrap(),
+    )
+    .await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
@@ -46,7 +52,7 @@ pub async fn run_tests_with_charts_not_updated() {
     )
     .await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-    let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
+    let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // will not update at all
     settings.force_update_on_start = None;
 

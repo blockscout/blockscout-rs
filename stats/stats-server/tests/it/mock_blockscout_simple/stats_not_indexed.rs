@@ -39,6 +39,12 @@ pub async fn run_tests_with_nothing_indexed() {
     let test_name = "run_tests_with_nothing_indexed";
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
+    let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
+    stats::tests::mock_blockscout::fill_mock_blockscout_data(
+        &blockscout_db,
+        <chrono::NaiveDate as std::str::FromStr>::from_str("2023-03-01").unwrap(),
+    )
+    .await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
@@ -53,7 +59,7 @@ pub async fn run_tests_with_nothing_indexed() {
     )
     .await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-    let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
+    let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // obviously don't use this anywhere except tests
     let api_key = ApiKey::from_str_infallible("123");
     setup_single_key(&mut settings, api_key.clone());
@@ -89,6 +95,12 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     let test_name = "run_tests_with_user_ops_not_indexed";
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
+    let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
+    stats::tests::mock_blockscout::fill_mock_blockscout_data(
+        &blockscout_db,
+        <chrono::NaiveDate as std::str::FromStr>::from_str("2023-03-01").unwrap(),
+    )
+    .await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
@@ -102,7 +114,7 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     )
     .await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-    let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
+    let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // settings.tracing.enabled = true;
 
     println!("initing server");
