@@ -172,7 +172,9 @@ impl UpdateService {
                 .mark_started_initial_update(&group_entry.enabled_members)
                 .await;
             if let Some(force_full) = force_update_on_start {
-                self.update(group_entry.clone(), force_full, None).await
+                self.clone()
+                    .update(group_entry.clone(), force_full, None)
+                    .await
             };
         }
         tracing::info!(
@@ -182,7 +184,56 @@ impl UpdateService {
         init_update_tracker
             .mark_initial_update_done(&group_entry.enabled_members)
             .await;
+        self.print_updated_group_contents_debug(&group_entry).await;
         init_update_tracker.report().await;
+    }
+
+    async fn print_updated_group_contents_debug(&self, group_entry: &UpdateGroupEntry) {
+        let time = Utc::now();
+        let mut debug_string = String::new();
+        for member in &group_entry.enabled_members {
+            let resolution = member.resolution();
+            let name = member.name();
+
+            let request_range = stats::range::UniversalRange::full();
+            let points_limit = Some(stats::RequestedPointsLimit::from_points(182500));
+
+            let Some(chart_entry) = self.charts.charts_info.get(name) else {
+                tracing::warn!("(debug)chart with name '{}' was not found", name);
+                return;
+            };
+            let Some(query_handle) = chart_entry
+                .resolutions
+                .get(&resolution)
+                .and_then(|r| r.type_specifics.clone().into_line_handle())
+            else {
+                tracing::warn!(
+                    "resolution '{}' for line chart '{}' was not found",
+                    String::from(*resolution),
+                    &name,
+                );
+                return;
+            };
+            let migrations = BlockscoutMigrations::query_from_db(&self.blockscout_db)
+                .await
+                .unwrap();
+            let context =
+                stats::data_source::UpdateContext::from_params_now_or_override(UpdateParameters {
+                    db: &self.db,
+                    blockscout: &self.blockscout_db,
+                    blockscout_applied_migrations: migrations,
+                    update_time_override: Some(time),
+                    force_full: false,
+                });
+            let data = query_handle
+                .query_data(&context, request_range, points_limit, true)
+                .await
+                .unwrap();
+
+            let info = chart_entry.build_proto_line_chart_info(name.to_string());
+            debug_string.push_str(&format!("chart:{{{data:?},{info:?}}};"));
+        }
+        println!("group members data right after initial update: {debug_string}");
     }
 
     async fn run_on_demand_executor(self: &Arc<Self>, default_schedule: &Schedule) {
