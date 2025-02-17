@@ -15,17 +15,17 @@ mod stats_no_arbitrum;
 mod stats_not_indexed;
 mod stats_not_updated;
 
-static MOCK_BLOCKSCOUT: OnceCell<TestDbGuard> = OnceCell::const_new();
+// static MOCK_BLOCKSCOUT: OnceCell<TestDbGuard> = OnceCell::const_new();
 
-/// All tests using this must not change the state of blockscout db.
-async fn get_mock_blockscout() -> &'static TestDbGuard {
-    MOCK_BLOCKSCOUT
-        .get_or_init(|| async {
-            let test_name = "tests_with_mock_blockscout";
-            let blockscout_db = init_db_blockscout(test_name).await;
-            fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap())
-                .await;
-            blockscout_db
-        })
-        .await
-}
+// /// All tests using this must not change the state of blockscout db.
+// async fn get_mock_blockscout() -> &'static TestDbGuard {
+//     MOCK_BLOCKSCOUT
+//         .get_or_init(|| async {
+//             let test_name = "tests_with_mock_blockscout";
+//             let blockscout_db = init_db_blockscout(test_name).await;
+//             fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap())
+//                 .await;
+//             blockscout_db
+//         })
+//         .await
+// }
