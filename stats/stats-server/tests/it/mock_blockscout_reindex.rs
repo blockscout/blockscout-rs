@@ -20,8 +20,8 @@ use crate::common::{
 /// Uses reindexing, so needs to be independent
 #[tokio::test]
 #[ignore = "needs database"]
-async fn tests_reupdate_works() {
-    let test_name = "tests_reupdate_works";
+async fn test_reupdate_works() {
+    let test_name = "test_reupdate_works";
     let (stats_db, blockscout_db) = init_db_all(test_name).await;
     let max_date = NaiveDate::from_str("2023-03-01").unwrap();
     fill_mock_blockscout_data(&blockscout_db, max_date).await;
