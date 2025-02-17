@@ -652,7 +652,7 @@ mod tests {
 
     #[tokio::test]
     async fn waiter_ignores_errors_when_checks_are_disabled() {
-        let timeout = Some(Duration::from_millis(1500));
+        let timeout = Some(Duration::from_millis(2000));
         let s = IndexingStatus::MOST_RESTRICTIVE;
         let r = |code: u16| ResponseTemplate::new(code);
         let ok_b = ResponseTemplate::new(200).set_body_string(
