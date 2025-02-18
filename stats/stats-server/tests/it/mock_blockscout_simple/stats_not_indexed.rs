@@ -24,6 +24,7 @@ use super::common_tests::{
 };
 use crate::common::{
     get_test_stats_settings, run_consolidated_tests, send_arbitrary_request, setup_single_key,
+    wait_for_subset_to_update, ChartSubset,
 };
 
 pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
@@ -52,6 +53,7 @@ pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
 
     // Sleep until server will start and calculate all values
     sleep(Duration::from_secs(8)).await;
+    wait_for_subset_to_update(&base, ChartSubset::Independent).await;
 
     // these pages must be available right away to display users
     let tests: JoinSet<_> = [

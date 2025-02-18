@@ -10,7 +10,9 @@ use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_ap
 use stats_server::stats;
 use tokio::{task::JoinSet, time::sleep};
 
-use crate::common::{get_test_stats_settings, run_consolidated_tests};
+use crate::common::{
+    get_test_stats_settings, run_consolidated_tests, wait_for_subset_to_update, ChartSubset,
+};
 
 use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
 
@@ -26,6 +28,7 @@ pub async fn run_chart_pages_tests_with_disabled_arbitrum(blockscout_db: TestDbG
 
     // Sleep until server will start and calculate all values
     sleep(Duration::from_secs(8)).await;
+    wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     let tests: JoinSet<_> = [
         test_main_page_ok(base.clone(), false).boxed(),
