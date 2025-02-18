@@ -13,6 +13,7 @@ mod common_tests;
 mod stats_full;
 mod stats_no_arbitrum;
 mod stats_not_indexed;
+mod stats_not_updated;
 
 /// Tests that do not change the state of blockscout db
 #[tokio::test]

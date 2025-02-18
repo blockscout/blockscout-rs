@@ -3,25 +3,47 @@
 //! - stats server is fully enabled but not updated (yet)
 //!     (e.g. the update is slow and in progress)
 
-use crate::common::get_test_stats_settings;
+use std::time::Duration;
+
+use blockscout_service_launcher::{
+    test_database::TestDbGuard,
+    test_server::{init_server, send_get_request},
+};
+use itertools::Itertools;
+use stats::tests::{
+    init_db::init_db,
+    mock_blockscout::{mock_blockscout_api, user_ops_status_response_json},
+};
+use stats_proto::blockscout::stats::v1::{
+    health_check_response::ServingStatus, Counters, HealthCheckResponse,
+};
+use stats_server::stats;
+use tokio::time::sleep;
+use url::Url;
+use wiremock::ResponseTemplate;
+
+use crate::common::{enabled_resolutions, get_test_stats_settings, send_arbitrary_request};
 
 pub async fn run_tests_with_charts_not_updated(blockscout_db: TestDbGuard) {
     let test_name = "run_tests_with_charts_not_updated";
     let stats_db = init_db(test_name).await;
-    let blockscout_api = mock_blockscout_api(ResponseTemplate::new(200).set_body_string(
-        r#"{
+    let blockscout_api = mock_blockscout_api(
+        ResponseTemplate::new(200).set_body_string(
+            r#"{
             "finished_indexing": false,
             "finished_indexing_blocks": false,
             "indexed_blocks_ratio": "0.00",
             "indexed_internal_transactions_ratio": null
         }"#,
-    ))
+        ),
+        Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(false))),
+    )
     .await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // will not update at all
     settings.force_update_on_start = None;
-    init_server(|| stats(settings), &base).await;
+    init_server(|| stats(settings), &base, None, Some(|_| async { true })).await;
 
     // No update so no need to wait too long
     sleep(Duration::from_secs(1)).await;
@@ -32,7 +54,7 @@ pub async fn run_tests_with_charts_not_updated(blockscout_db: TestDbGuard) {
 pub async fn test_lines_counters_not_updated_ok(base: Url) {
     // healthcheck is verified in `init_server`, but we double-check it just in case
     let request =
-        reqwest::Client::new().request(reqwest::Method::GET, base.join("/health").unwrap());
+        reqwest::Client::new().request(reqwest::Method::GET, base.join("health").unwrap());
     let response = send_arbitrary_request(request).await;
 
     assert_eq!(
