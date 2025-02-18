@@ -184,7 +184,7 @@ impl UpdateService {
         init_update_tracker
             .mark_initial_update_done(&group_entry.enabled_members)
             .await;
-        self.print_updated_group_contents_debug(&group_entry).await;
+        self.print_updated_group_contents_debug(group_entry).await;
         init_update_tracker.report().await;
     }
 
@@ -204,7 +204,7 @@ impl UpdateService {
             };
             let Some(query_handle) = chart_entry
                 .resolutions
-                .get(&resolution)
+                .get(resolution)
                 .and_then(|r| r.type_specifics.clone().into_line_handle())
             else {
                 tracing::warn!(
