@@ -24,7 +24,7 @@ pub use crate::types::{
 
 #[derive(Clone, Debug)]
 pub struct InternalContractDeploymentData {
-    pub chain_id: Decimal,
+    pub chain_id: i64,
     pub address: Vec<u8>,
     pub transaction_hash: Vec<u8>,
     pub block_number: Decimal,
@@ -288,7 +288,7 @@ pub async fn retrieve_contract_deployment<C: ConnectionTrait>(
 
 pub async fn retrieve_contract_deployments_by_chain_id_and_address<C: ConnectionTrait>(
     database_connection: &C,
-    chain_id: u128,
+    chain_id: i64,
     contract_address: Vec<u8>,
 ) -> Result<Vec<contract_deployments::Model>, Error> {
     contract_deployments::Entity::find()
@@ -658,7 +658,7 @@ fn parse_genesis_contract_deployment(
         let contract_code = ContractCode::OnlyRuntimeCode { code: runtime_code };
 
         return InternalContractDeploymentData {
-            chain_id: Decimal::from(chain_id),
+            chain_id,
             address,
             transaction_hash,
             block_number: Decimal::from(-1),
@@ -691,7 +691,7 @@ fn parse_regular_contract_deployment(
         };
 
         return InternalContractDeploymentData {
-            chain_id: Decimal::from(chain_id),
+            chain_id,
             address,
             transaction_hash,
             block_number: Decimal::from(block_number),

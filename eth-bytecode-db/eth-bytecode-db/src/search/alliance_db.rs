@@ -9,7 +9,6 @@ pub async fn find_contract(
     chain_id: i64,
     contract_address: Vec<u8>,
 ) -> Result<Vec<MatchContract>, anyhow::Error> {
-    let chain_id: u128 = chain_id.try_into().context("invalid chain_id")?;
     let retrieved_values =
         verifier_alliance_database::find_verified_contracts(db, chain_id, contract_address)
             .await
