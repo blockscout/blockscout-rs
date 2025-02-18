@@ -11,7 +11,7 @@ pub struct Model {
     pub updated_at: DateTimeWithTimeZone,
     pub created_by: String,
     pub updated_by: String,
-    pub chain_id: Decimal,
+    pub chain_id: i64,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub address: Vec<u8>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]

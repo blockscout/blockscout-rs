@@ -374,9 +374,6 @@ async fn retrieve_deployment_from_action(
             runtime_code,
             ..
         } => {
-            let chain_id: u128 = chain_id
-                .try_into()
-                .context("parsing metadata: invalid chain_id")?;
             let deployment_data = match (&transaction_hash, &runtime_code) {
                 (Some(transaction_hash), _) => RetrieveContractDeployment::regular(
                     chain_id,
@@ -426,7 +423,7 @@ async fn save_deployment_data(
     db_client: &DatabaseConnection,
     deployment_data: AllianceContract,
 ) -> Result<ContractDeployment, anyhow::Error> {
-    let chain_id = u128::from_str(&deployment_data.chain_id)
+    let chain_id = i64::from_str(&deployment_data.chain_id)
         .context("parsing contract metadata: invalid chain_id")?;
     let insert_data = match deployment_data {
         AllianceContract {

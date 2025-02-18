@@ -15,7 +15,10 @@ use crate::{
 
 use blockscout_db::entity::blocks;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
-use entity::{chart_data, charts, sea_orm_active_enums::ChartResolution};
+use entity::{
+    chart_data, charts,
+    sea_orm_active_enums::{ChartResolution, ChartType},
+};
 use itertools::Itertools;
 use sea_orm::{
     sea_query::{self, Expr},
@@ -500,10 +503,12 @@ where
             .one(db)
             .await
             .map_err(ChartError::StatsDB)?;
-        let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
 
         match recorded_min_blockscout_block {
-            Some(recorded_min_blockscout_block) => {
+            Some(SyncInfo {
+                min_blockscout_block: Some(recorded_min_blockscout_block),
+            }) if recorded_min_blockscout_block == min_blockscout_block => {
+                let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
                 let Some(last_updated_at) = metadata.last_updated_at else {
                     // data is present, but `last_updated_at` is not set
                     tracing::info!("running full update due to lack of last_updated_at");
@@ -512,52 +517,76 @@ where
                 let last_updated_timespan =
                     ChartProps::Resolution::from_date(last_updated_at.date_naive());
 
-                let data = get_line_chart_data::<ChartProps::Resolution>(
-                    db,
-                    &ChartProps::name(),
-                    Some(last_updated_timespan.saturating_sub(
-                        TimespanDuration::from_timespan_repeats(approximate_trailing_points),
-                    )),
-                    Some(last_updated_timespan),
-                    None,
-                    policy,
-                    true,
-                    approximate_trailing_points,
-                )
-                .await?;
-                let last_accurate_point = data.into_iter().rev().find_map(|p| {
-                    if p.is_approximate {
-                        None
-                    } else {
-                        Some(TimespanValue {
-                            timespan: p.timespan,
-                            value: p.value,
+                match ChartProps::chart_type() {
+                    ChartType::Counter => {
+                        // `approximate_trailing_points` doesn't really make sense for counters
+                        // so it remains unused
+                        let data = get_counter_data(
+                            db,
+                            &ChartProps::name(),
+                            Some(last_updated_timespan.into_date()),
+                            policy,
+                        )
+                        .await?;
+                        data.map(|d| TimespanValue {
+                            timespan: ChartProps::Resolution::from_date(d.timespan),
+                            value: d.value,
                         })
                     }
-                });
-                let Some(last_accurate_point) = last_accurate_point else {
-                    return Err(ChartError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
-                };
+                    ChartType::Line => {
+                        let data = get_line_chart_data::<ChartProps::Resolution>(
+                            db,
+                            &ChartProps::name(),
+                            Some(last_updated_timespan.saturating_sub(
+                                TimespanDuration::from_timespan_repeats(
+                                    approximate_trailing_points,
+                                ),
+                            )),
+                            Some(last_updated_timespan),
+                            None,
+                            policy,
+                            true,
+                            approximate_trailing_points,
+                        )
+                        .await?;
+                        let last_accurate_point = data.into_iter().rev().find_map(|p| {
+                            if p.is_approximate {
+                                None
+                            } else {
+                                Some(TimespanValue {
+                                    timespan: p.timespan,
+                                    value: p.value,
+                                })
+                            }
+                        });
+                        let Some(last_accurate_point) = last_accurate_point else {
+                            return Err(ChartError::Internal("Failure while reading chart data: did not return accurate data (with `fill_missing_dates`=true)".into()));
+                        };
 
-                if let Some(block) = recorded_min_blockscout_block.min_blockscout_block {
-                    if block == min_blockscout_block {
                         tracing::info!(
-                            min_chart_block = block,
+                            min_chart_block = recorded_min_blockscout_block,
                             last_accurate_point = ?last_accurate_point,
                             "running partial update"
                         );
                         Some(last_accurate_point)
-                    } else {
-                        tracing::info!(
-                            min_chart_block = block,
-                            "running full update due to min blocks mismatch"
-                        );
-                        None
                     }
-                } else {
-                    tracing::info!("running full update due to lack of saved min block");
-                    None
                 }
+            }
+            // != min_blockscout_block
+            Some(SyncInfo {
+                min_blockscout_block: Some(block),
+            }) => {
+                tracing::info!(
+                    min_chart_block = block,
+                    "running full update due to min blocks mismatch"
+                );
+                None
+            }
+            Some(SyncInfo {
+                min_blockscout_block: None,
+            }) => {
+                tracing::info!("running full update due to lack of saved min block");
+                None
             }
             None => {
                 tracing::info!("running full update due to lack of history data");
@@ -675,7 +704,7 @@ mod tests {
             kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations,
             UpdateParameters,
         },
-        lines::{AccountsGrowth, ActiveAccounts, TxnsGrowth, TxnsGrowthMonthly},
+        lines::{AccountsGrowth, ActiveAccounts, NewTxns, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
             init_db::{init_db, init_db_all},
             mock_blockscout::fill_mock_blockscout_data,
@@ -689,7 +718,7 @@ mod tests {
     use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
     use pretty_assertions::assert_eq;
     use sea_orm::{EntityName, EntityTrait, Set};
-    use std::str::FromStr;
+    use std::{collections::HashMap, str::FromStr};
 
     fn mock_chart_data(chart_id: i32, date: &str, value: i64) -> chart_data::ActiveModel {
         chart_data::ActiveModel {
@@ -701,12 +730,12 @@ mod tests {
         }
     }
 
-    async fn insert_mock_data(db: &DatabaseConnection) {
-        charts::Entity::insert_many([
+    async fn insert_mock_data(db: &DatabaseConnection) -> HashMap<ChartKey, i32> {
+        let charts = [
             charts::ActiveModel {
-                name: Set(TotalBlocks::name().to_string()),
+                name: Set(NewTxns::name().to_string()),
                 resolution: Set(ChartResolution::Day),
-                chart_type: Set(ChartType::Counter),
+                chart_type: Set(ChartType::Line),
                 last_updated_at: Set(Some(
                     DateTime::parse_from_rfc3339("2022-11-12T08:08:08+00:00").unwrap(),
                 )),
@@ -756,29 +785,121 @@ mod tests {
                 last_updated_at: Set(None),
                 ..Default::default()
             },
-        ])
-        .exec(db)
-        .await
-        .unwrap();
+            charts::ActiveModel {
+                name: Set(TotalBlocks::name().to_string()),
+                resolution: Set(ChartResolution::Day),
+                chart_type: Set(ChartType::Counter),
+                last_updated_at: Set(Some(
+                    DateTime::parse_from_rfc3339("2022-11-12T08:08:08+00:00").unwrap(),
+                )),
+                ..Default::default()
+            },
+        ];
+        let chart_ids: HashMap<_, _> = charts
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                (
+                    ChartKey::new(
+                        c.name.clone().unwrap(),
+                        c.resolution.clone().unwrap().into(),
+                    ),
+                    (i + 1) as i32,
+                )
+            })
+            .collect();
+        charts::Entity::insert_many(charts).exec(db).await.unwrap();
         chart_data::Entity::insert_many([
-            mock_chart_data(1, "2022-11-10", 1000),
-            mock_chart_data(2, "2022-11-10", 100),
-            mock_chart_data(1, "2022-11-11", 1150),
-            mock_chart_data(2, "2022-11-11", 150),
-            mock_chart_data(1, "2022-11-12", 1350),
-            mock_chart_data(2, "2022-11-12", 200),
-            mock_chart_data(3, "2022-11-13", 2),
-            mock_chart_data(3, "2022-11-15", 3),
-            mock_chart_data(4, "2022-11-17", 123),
-            mock_chart_data(4, "2022-11-19", 323),
-            mock_chart_data(4, "2022-11-29", 1000),
-            mock_chart_data(5, "2022-08-17", 12),
-            mock_chart_data(5, "2022-09-19", 100),
-            mock_chart_data(5, "2022-10-29", 1000),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day(NewTxns::name())],
+                "2022-11-10",
+                1000,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day(NewTxns::name())],
+                "2022-11-11",
+                1150,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day(NewTxns::name())],
+                "2022-11-12",
+                1350,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day("newBlocksPerDay".into())],
+                "2022-11-10",
+                100,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day("newBlocksPerDay".into())],
+                "2022-11-11",
+                150,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day("newBlocksPerDay".into())],
+                "2022-11-12",
+                200,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day("newVerifiedContracts".into())],
+                "2022-11-13",
+                2,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day("newVerifiedContracts".into())],
+                "2022-11-15",
+                3,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day(TxnsGrowth::name())],
+                "2022-11-17",
+                123,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day(TxnsGrowth::name())],
+                "2022-11-19",
+                323,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day(TxnsGrowth::name())],
+                "2022-11-29",
+                1000,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::new(TxnsGrowth::name(), ResolutionKind::Month)],
+                "2022-08-17",
+                12,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::new(TxnsGrowth::name(), ResolutionKind::Month)],
+                "2022-09-19",
+                100,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::new(TxnsGrowth::name(), ResolutionKind::Month)],
+                "2022-10-29",
+                1000,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day(TotalBlocks::name())],
+                "2022-08-17",
+                12,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day(TotalBlocks::name())],
+                "2022-09-19",
+                100,
+            ),
+            mock_chart_data(
+                chart_ids[&ChartKey::with_day(TotalBlocks::name())],
+                "2022-10-29",
+                1000,
+            ),
         ])
         .exec(db)
         .await
         .unwrap();
+        chart_ids
     }
 
     /// Depicts a chart during the process of reupdate
@@ -841,7 +962,7 @@ mod tests {
             force_full: false,
         });
         assert_eq!(
-            value(&date.to_string(), "1350"),
+            value(&date.to_string(), "1000"),
             get_counter::<TotalBlocks>(&cx).await
         );
     }
@@ -1115,9 +1236,9 @@ mod tests {
         insert_mock_data(&db).await;
 
         // No missing points
-        assert!(chart_id_matches_key(&db, 1, "totalBlocks", ResolutionKind::Day).await);
+        assert!(chart_id_matches_key(&db, 1, "newTxns", ResolutionKind::Day).await);
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<NewTxns, DefaultQueryVec<NewTxns>>(
                 1,
                 1,
                 &db,
@@ -1133,7 +1254,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<NewTxns, DefaultQueryVec<NewTxns>>(
                 1,
                 1,
                 &db,
@@ -1149,7 +1270,7 @@ mod tests {
             })
         );
         assert_eq!(
-            last_accurate_point::<TotalBlocks, DefaultQueryVec<TotalBlocks>>(
+            last_accurate_point::<NewTxns, DefaultQueryVec<NewTxns>>(
                 1,
                 1,
                 &db,

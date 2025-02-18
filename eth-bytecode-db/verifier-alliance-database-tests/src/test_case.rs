@@ -18,8 +18,8 @@ use verifier_alliance_entity::{
 pub struct TestCase {
     #[serde(default)]
     pub test_case_name: String,
-    #[serde(deserialize_with = "string_to_u128")]
-    pub chain_id: u128,
+    #[serde(deserialize_with = "string_to_i64")]
+    pub chain_id: i64,
     #[serde_as(as = "blockscout_display_bytes::serde_as::Hex")]
     pub address: Vec<u8>,
     #[serde_as(as = "blockscout_display_bytes::serde_as::Hex")]
@@ -69,6 +69,14 @@ where
 {
     let string = String::deserialize(deserializer)?;
     u128::from_str(&string).map_err(<D::Error as serde::de::Error>::custom)
+}
+
+fn string_to_i64<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let string = String::deserialize(deserializer)?;
+    i64::from_str(&string).map_err(<D::Error as serde::de::Error>::custom)
 }
 
 impl TestCase {
@@ -146,8 +154,7 @@ impl TestCase {
             "invalid contract deployment address"
         );
         assert_eq!(
-            contract_deployment.chain_id,
-            self.chain_id.into(),
+            contract_deployment.chain_id, self.chain_id,
             "invalid contract deployment chain id"
         );
         assert_eq!(
