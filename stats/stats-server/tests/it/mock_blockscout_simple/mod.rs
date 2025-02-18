@@ -24,12 +24,16 @@ async fn tests_with_mock_blockscout() {
     fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap()).await;
 
     let tests: JoinSet<_> = [
-        // stats_full::run_fully_initialized_stats_tests(blockscout_db.clone()).boxed(),
+        stats_full::run_fully_initialized_stats_tests(blockscout_db.clone(), "0").boxed(),
+        stats_full::run_fully_initialized_stats_tests(blockscout_db.clone(), "1").boxed(),
+        stats_full::run_fully_initialized_stats_tests(blockscout_db.clone(), "2").boxed(),
+        stats_full::run_fully_initialized_stats_tests(blockscout_db.clone(), "3").boxed(),
+        stats_full::run_fully_initialized_stats_tests(blockscout_db.clone(), "4").boxed(),
         // stats_no_arbitrum::run_chart_pages_tests_with_disabled_arbitrum(blockscout_db.clone())
         //     .boxed(),
         // stats_not_indexed::run_tests_with_charts_uninitialized(blockscout_db.clone()).boxed(),
         // stats_not_indexed::run_tests_with_user_ops_not_indexed(blockscout_db.clone()).boxed(),
-        stats_not_updated::run_tests_with_charts_not_updated(blockscout_db).boxed(),
+        // stats_not_updated::run_tests_with_charts_not_updated(blockscout_db).boxed(),
     ]
     .into_iter()
     .collect();

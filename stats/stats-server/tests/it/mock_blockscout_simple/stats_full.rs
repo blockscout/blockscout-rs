@@ -19,9 +19,9 @@ use crate::common::{
     wait_for_subset_to_update, ChartSubset,
 };
 
-pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard) {
-    let test_name = "run_fully_initialized_stats_tests";
-    let stats_db = init_db(test_name).await;
+pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard, add_test_variant: &str) {
+    let test_name = format!("run_fully_initialized_stats_tests_{}", add_test_variant);
+    let stats_db = init_db(&test_name).await;
     let blockscout_api = default_mock_blockscout_api().await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
@@ -47,5 +47,5 @@ pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard) {
     ]
     .into_iter()
     .collect();
-    run_consolidated_tests(tests, test_name).await;
+    run_consolidated_tests(tests, &test_name).await;
 }
