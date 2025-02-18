@@ -28,6 +28,7 @@ async fn tests_with_mock_blockscout() {
         stats_no_arbitrum::run_chart_pages_tests_with_disabled_arbitrum(blockscout_db.clone())
             .boxed(),
         stats_not_indexed::run_tests_with_charts_uninitialized(blockscout_db.clone()).boxed(),
+        stats_not_indexed::run_tests_with_user_ops_not_indexed(blockscout_db.clone()).boxed(),
         stats_not_updated::run_tests_with_charts_not_updated(blockscout_db).boxed(),
     ]
     .into_iter()
