@@ -15,7 +15,8 @@ use super::common_tests::{
     test_transactions_page_ok,
 };
 use crate::common::{
-    get_test_stats_settings, run_consolidated_tests, wait_for_subset_to_update, ChartSubset,
+    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+    wait_for_subset_to_update, ChartSubset,
 };
 
 pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard) {
@@ -25,7 +26,13 @@ pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard) {
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
 
-    init_server(|| stats(settings), &base, None, Some(|_| async { true })).await;
+    init_server(
+        || stats(settings),
+        &base,
+        None,
+        Some(healthcheck_successful),
+    )
+    .await;
 
     // Sleep until server will start and calculate all values
     sleep(Duration::from_secs(8)).await;
