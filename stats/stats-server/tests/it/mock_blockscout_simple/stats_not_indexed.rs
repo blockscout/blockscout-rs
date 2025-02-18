@@ -23,8 +23,8 @@ use super::common_tests::{
     test_transactions_page_ok,
 };
 use crate::common::{
-    get_test_stats_settings, run_consolidated_tests, send_arbitrary_request, setup_single_key,
-    wait_for_subset_to_update, ChartSubset,
+    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+    send_arbitrary_request, setup_single_key, wait_for_subset_to_update, ChartSubset,
 };
 
 pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
@@ -49,7 +49,13 @@ pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
     let api_key = ApiKey::from_str_infallible("123");
     setup_single_key(&mut settings, api_key.clone());
 
-    init_server(|| stats(settings), &base, None, Some(|_| async { true })).await;
+    init_server(
+        || stats(settings),
+        &base,
+        None,
+        Some(healthcheck_successful),
+    )
+    .await;
 
     // Sleep until server will start and calculate all values
     sleep(Duration::from_secs(8)).await;
@@ -102,7 +108,7 @@ pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
 //         move || stats(settings),
 //         &base,
 //         Some(Duration::from_secs(60)),
-//         Some(healthcheck_successful),
+//         Some(|_| async { true }),
 //     )
 //     .await;
 //     sleep(Duration::from_secs(10)).await;

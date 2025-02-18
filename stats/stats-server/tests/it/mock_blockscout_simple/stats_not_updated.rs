@@ -22,7 +22,9 @@ use tokio::time::sleep;
 use url::Url;
 use wiremock::ResponseTemplate;
 
-use crate::common::{enabled_resolutions, get_test_stats_settings, send_arbitrary_request};
+use crate::common::{
+    enabled_resolutions, get_test_stats_settings, healthcheck_successful, send_arbitrary_request,
+};
 
 pub async fn run_tests_with_charts_not_updated(blockscout_db: TestDbGuard) {
     let test_name = "run_tests_with_charts_not_updated";
@@ -43,7 +45,13 @@ pub async fn run_tests_with_charts_not_updated(blockscout_db: TestDbGuard) {
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // will not update at all
     settings.force_update_on_start = None;
-    init_server(|| stats(settings), &base, None, Some(|_| async { true })).await;
+    init_server(
+        || stats(settings),
+        &base,
+        None,
+        Some(healthcheck_successful),
+    )
+    .await;
 
     // No update so no need to wait too long
     sleep(Duration::from_secs(1)).await;
