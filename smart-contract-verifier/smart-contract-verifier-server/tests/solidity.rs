@@ -439,4 +439,11 @@ mod success_tests {
             get_verification_response(&test_case, BytecodeType::CreationInput).await;
         validate_verification_response(&initial_test_case, verification_response);
     }
+
+    #[tokio::test]
+    async fn supports_manually_linked_libraries() {
+        let test_case = solidity_types::from_file::<StandardJson>("libraries_manually_linked");
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
+    }
 }
