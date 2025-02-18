@@ -26,7 +26,7 @@ async fn insert_compiled_contract_works() {
         compiler_settings: from_json!({"evmVersion":"paris","libraries":{},"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"*":["*"]}},"remappings":[],"viaIR":false}),
 
         compilation_artifacts: CompilationArtifacts {
-            abi: Some(from_json!({"abi": "value"})),
+            abi: Some(from_json!([{"abi": "value"}])),
             devdoc: Some(from_json!({"devdoc": "value"})),
             userdoc: Some(from_json!({"userdoc": "value"})),
             storage_layout: Some(from_json!({"storage": "value"})),
