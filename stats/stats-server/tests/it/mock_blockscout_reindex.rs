@@ -12,7 +12,9 @@ use stats_server::{auth::ApiKey, stats};
 use tokio::time::sleep;
 use url::Url;
 
-use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single_key};
+use crate::common::{
+    get_test_stats_settings, healthcheck_successful, request_reupdate_from, setup_single_key,
+};
 
 /// Uses reindexing, so needs to be independent
 #[tokio::test]
@@ -31,7 +33,13 @@ async fn test_reupdate_works() {
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
 
-    init_server(|| stats(settings), &base, None, Some(|_| async { true })).await;
+    init_server(
+        || stats(settings),
+        &base,
+        None,
+        Some(healthcheck_successful),
+    )
+    .await;
 
     // Sleep until server will start and calculate all values
     sleep(Duration::from_secs(8 * wait_multiplier)).await;

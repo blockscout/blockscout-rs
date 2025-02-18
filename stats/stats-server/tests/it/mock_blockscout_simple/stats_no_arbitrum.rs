@@ -11,7 +11,8 @@ use stats_server::stats;
 use tokio::{task::JoinSet, time::sleep};
 
 use crate::common::{
-    get_test_stats_settings, run_consolidated_tests, wait_for_subset_to_update, ChartSubset,
+    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+    wait_for_subset_to_update, ChartSubset,
 };
 
 use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
@@ -24,7 +25,13 @@ pub async fn run_chart_pages_tests_with_disabled_arbitrum(blockscout_db: TestDbG
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     settings.enable_all_arbitrum = false;
 
-    init_server(|| stats(settings), &base, None, Some(|_| async { true })).await;
+    init_server(
+        || stats(settings),
+        &base,
+        None,
+        Some(healthcheck_successful),
+    )
+    .await;
 
     // Sleep until server will start and calculate all values
     sleep(Duration::from_secs(8)).await;
