@@ -14,7 +14,9 @@ use super::common_tests::{
     test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
     test_transactions_page_ok,
 };
-use crate::common::{get_test_stats_settings, run_consolidated_tests};
+use crate::common::{
+    get_test_stats_settings, run_consolidated_tests, wait_for_subset_to_update, ChartSubset,
+};
 
 pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard) {
     let test_name = "run_fully_initialized_stats_tests";
@@ -27,6 +29,7 @@ pub async fn run_fully_initialized_stats_tests(blockscout_db: TestDbGuard) {
 
     // Sleep until server will start and calculate all values
     sleep(Duration::from_secs(8)).await;
+    wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     let tests: JoinSet<_> = [
         test_lines_ok(base.clone(), true, true).boxed(),
