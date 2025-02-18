@@ -8,7 +8,10 @@ use std::time::Duration;
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server::init_server};
 use futures::FutureExt;
 use pretty_assertions::assert_eq;
-use stats::tests::{init_db::init_db, mock_blockscout::mock_blockscout_api};
+use stats::tests::{
+    init_db::init_db,
+    mock_blockscout::{mock_blockscout_api, user_ops_status_response_json},
+};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
@@ -76,56 +79,46 @@ pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
     run_consolidated_tests(tests, test_name).await;
 }
 
-// #[tokio::test]
-// #[ignore = "needs database"]
-// pub async fn run_tests_with_user_ops_not_indexed() {
-//     let test_name = "run_tests_with_user_ops_not_indexed";
-//     let stats_db = init_db(test_name).await;
-//     let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
-//     stats::tests::mock_blockscout::fill_mock_blockscout_data(
-//         &blockscout_db,
-//         <chrono::NaiveDate as std::str::FromStr>::from_str("2023-03-01").unwrap(),
-//     )
-//     .await;
-//     let blockscout_api = mock_blockscout_api(
-//         ResponseTemplate::new(200).set_body_string(
-//             r#"{
-//                 "finished_indexing": true,
-//                 "finished_indexing_blocks": true,
-//                 "indexed_blocks_ratio": "1.00",
-//                 "indexed_internal_transactions_ratio": "1.00"
-//             }"#,
-//         ),
-//         Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(false))),
-//     )
-//     .await;
-//     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-//     let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
-//     // settings.tracing.enabled = true;
+pub async fn run_tests_with_user_ops_not_indexed(blockscout_db: TestDbGuard) {
+    let test_name = "run_tests_with_user_ops_not_indexed";
+    let stats_db = init_db(test_name).await;
+    let blockscout_api = mock_blockscout_api(
+        ResponseTemplate::new(200).set_body_string(
+            r#"{
+                "finished_indexing": true,
+                "finished_indexing_blocks": true,
+                "indexed_blocks_ratio": "1.00",
+                "indexed_internal_transactions_ratio": "1.00"
+            }"#,
+        ),
+        Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(false))),
+    )
+    .await;
+    std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
+    let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
 
-//     println!("initing server");
-//     init_server(
-//         move || stats(settings),
-//         &base,
-//         Some(Duration::from_secs(60)),
-//         Some(|_| async { true }),
-//     )
-//     .await;
-//     sleep(Duration::from_secs(10)).await;
-//     println!("waiting for subset update");
-//     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
-//     sleep(Duration::from_secs(10)).await;
+    println!("initing server");
+    init_server(
+        move || stats(settings),
+        &base,
+        Some(Duration::from_secs(60)),
+        Some(|_| async { true }),
+    )
+    .await;
+    sleep(Duration::from_secs(10)).await;
+    println!("waiting for subset update");
+    wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
+    sleep(Duration::from_secs(10)).await;
 
-//     println!("testing");
-//     // these pages must be available right away to display users
-//     let tests: JoinSet<_> = [
-//         test_lines_ok(base.clone(), true, false).boxed(),
-//         test_counters_ok(base.clone(), true, false).boxed(),
-//     ]
-//     .into_iter()
-//     .collect();
-//     run_consolidated_tests(tests, test_name).await;
-// }
+    println!("testing");
+    let tests: JoinSet<_> = [
+        test_lines_ok(base.clone(), true, false).boxed(),
+        test_counters_ok(base.clone(), true, false).boxed(),
+    ]
+    .into_iter()
+    .collect();
+    run_consolidated_tests(tests, test_name).await;
+}
 
 pub async fn test_swagger_ok(base: Url) {
     let request = reqwest::Client::new().request(
