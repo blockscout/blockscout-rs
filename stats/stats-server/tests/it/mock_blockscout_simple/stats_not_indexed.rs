@@ -5,14 +5,18 @@
 
 use std::time::Duration;
 
-use blockscout_service_launcher::test_server::init_server;
-use futures::FutureExt;
-use pretty_assertions::assert_eq;
-use stats::tests::{
-    init_db::init_db,
-    mock_blockscout::{mock_blockscout_api, user_ops_status_response_json},
+use blockscout_service_launcher::{
+    test_database::TestDbGuard,
+    test_server::{init_server, send_get_request},
 };
-use stats_proto::blockscout::stats::v1 as proto_v1;
+use futures::FutureExt;
+use itertools::Itertools;
+use pretty_assertions::assert_eq;
+use stats::tests::{init_db::init_db, mock_blockscout::mock_blockscout_api};
+use stats_proto::blockscout::stats::{
+    v1 as proto_v1,
+    v1::{health_check_response::ServingStatus, Counters, HealthCheckResponse},
+};
 use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
     stats,
@@ -21,36 +25,24 @@ use tokio::{task::JoinSet, time::sleep};
 use url::Url;
 use wiremock::ResponseTemplate;
 
-use super::common_tests::{
-    test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
-    test_transactions_page_ok,
-};
+use super::common_tests::{test_contracts_page_ok, test_main_page_ok, test_transactions_page_ok};
 use crate::common::{
-    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
-    send_arbitrary_request, setup_single_key, wait_for_subset_to_update, ChartSubset,
+    enabled_resolutions, get_test_stats_settings, run_consolidated_tests, send_arbitrary_request,
+    setup_single_key, sorted_vec,
 };
 
-#[tokio::test]
-#[ignore = "needs database"]
-pub async fn run_tests_with_nothing_indexed() {
-    let test_name = "run_tests_with_nothing_indexed";
+pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
+    let test_name = "run_tests_with_charts_uninitialized";
     let stats_db = init_db(test_name).await;
-    let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
-    stats::tests::mock_blockscout::fill_mock_blockscout_data(
-        &blockscout_db,
-        <chrono::NaiveDate as std::str::FromStr>::from_str("2023-03-01").unwrap(),
-    )
-    .await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
-                "finished_indexing": false,
-                "finished_indexing_blocks": false,
-                "indexed_blocks_ratio": "0.10",
-                "indexed_internal_transactions_ratio": null
-            }"#,
+            "finished_indexing": false,
+            "finished_indexing_blocks": false,
+            "indexed_blocks_ratio": "0.00",
+            "indexed_internal_transactions_ratio": null
+        }"#,
         ),
-        // will error getting user ops status
         None,
     )
     .await;
@@ -60,23 +52,17 @@ pub async fn run_tests_with_nothing_indexed() {
     let api_key = ApiKey::from_str_infallible("123");
     setup_single_key(&mut settings, api_key.clone());
 
-    init_server(
-        move || stats(settings),
-        &base,
-        Some(Duration::from_secs(60)),
-        Some(healthcheck_successful),
-    )
-    .await;
-    sleep(Duration::from_secs(10)).await;
-    wait_for_subset_to_update(&base, ChartSubset::Independent).await;
+    init_server(|| stats(settings), &base, None, Some(|_| async { true })).await;
+
+    // Sleep until server will start and calculate all values
+    sleep(Duration::from_secs(8)).await;
 
     // these pages must be available right away to display users
     let tests: JoinSet<_> = [
         test_main_page_ok(base.clone(), true).boxed(),
         test_transactions_page_ok(base.clone(), true).boxed(),
         test_contracts_page_ok(base.clone()).boxed(),
-        test_lines_ok(base.clone(), false, false).boxed(),
-        test_counters_ok(base.clone(), false, false).boxed(),
+        test_lines_counters_not_indexed_ok(base.clone()).boxed(),
         test_swagger_ok(base.clone()).boxed(),
         test_reupdate_without_correct_key_is_rejected(base).boxed(),
     ]
@@ -85,55 +71,76 @@ pub async fn run_tests_with_nothing_indexed() {
     run_consolidated_tests(tests, test_name).await;
 }
 
-#[tokio::test]
-#[ignore = "needs database"]
-pub async fn run_tests_with_user_ops_not_indexed() {
-    let test_name = "run_tests_with_user_ops_not_indexed";
-    let stats_db = init_db(test_name).await;
-    let blockscout_db = stats::tests::init_db::init_db_blockscout(test_name).await;
-    stats::tests::mock_blockscout::fill_mock_blockscout_data(
-        &blockscout_db,
-        <chrono::NaiveDate as std::str::FromStr>::from_str("2023-03-01").unwrap(),
-    )
-    .await;
-    let blockscout_api = mock_blockscout_api(
-        ResponseTemplate::new(200).set_body_string(
-            r#"{
-                "finished_indexing": true,
-                "finished_indexing_blocks": true,
-                "indexed_blocks_ratio": "1.00",
-                "indexed_internal_transactions_ratio": "1.00"
-            }"#,
-        ),
-        Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(false))),
-    )
-    .await;
-    std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-    let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
-    // settings.tracing.enabled = true;
+pub async fn test_lines_counters_not_indexed_ok(base: Url) {
+    // healthcheck is verified in `init_server`, but we double-check it just in case
+    let request =
+        reqwest::Client::new().request(reqwest::Method::GET, base.join("/health").unwrap());
+    let response = send_arbitrary_request(request).await;
 
-    println!("initing server");
-    init_server(
-        move || stats(settings),
-        &base,
-        Some(Duration::from_secs(60)),
-        Some(healthcheck_successful),
-    )
-    .await;
-    sleep(Duration::from_secs(10)).await;
-    println!("waiting for subset update");
-    wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
-    sleep(Duration::from_secs(10)).await;
+    assert_eq!(
+        response.json::<HealthCheckResponse>().await.unwrap(),
+        HealthCheckResponse {
+            status: ServingStatus::Serving as i32
+        }
+    );
 
-    println!("testing");
-    // these pages must be available right away to display users
-    let tests: JoinSet<_> = [
-        test_lines_ok(base.clone(), true, false).boxed(),
-        test_counters_ok(base.clone(), true, false).boxed(),
-    ]
-    .into_iter()
-    .collect();
-    run_consolidated_tests(tests, test_name).await;
+    // all charts on stats page require indexed blockscout
+
+    let enabled_resolutions =
+        enabled_resolutions(send_get_request(&base, "/api/v1/lines").await).await;
+    for (line_chart_id, resolutions) in enabled_resolutions {
+        for resolution in resolutions {
+            let chart: serde_json::Value = send_get_request(
+                &base,
+                &format!("/api/v1/lines/{line_chart_id}?resolution={resolution}"),
+            )
+            .await;
+            let chart_data = chart
+                .as_object()
+                .expect("response has to be json object")
+                .get("chart")
+                .expect("response doesn't have 'chart' field")
+                .as_array()
+                .expect("'chart' field has to be json array");
+
+            assert!(
+                chart_data.is_empty(),
+                "chart '{line_chart_id}' '{resolution}' is not empty"
+            );
+        }
+    }
+
+    let counters: Counters = send_get_request(&base, "/api/v1/counters").await;
+
+    // returns only counters
+    // - from main/tx/contracts pages
+    //  (that are also available as regular counters)
+    // - with fallback query logic
+    //  (they are returned even without calling an update)
+    //  (they all coincide with the previous case)
+    // - that are valid w/o fully indexed blockscout
+    assert_eq!(
+        sorted_vec(counters.counters.into_iter().map(|c| c.id).collect_vec()),
+        sorted_vec(vec![
+            // main page
+            "averageBlockTime",
+            "totalAddresses",
+            "totalBlocks",
+            "totalTxns",
+            "totalOperationalTxns",
+            // transactions
+            "pendingTxns30m",
+            "txnsFee24h",
+            "averageTxnFee24h",
+            "newTxns24h",
+            "newOperationalTxns24h",
+            // contracts
+            "totalContracts",
+            "totalVerifiedContracts",
+            // valid w/o
+            "totalTokens",
+        ])
+    )
 }
 
 pub async fn test_swagger_ok(base: Url) {

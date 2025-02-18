@@ -10,12 +10,9 @@ use stats_proto::blockscout::stats::v1::{
 };
 use url::Url;
 
-use crate::{
-    array_of_variables_with_names,
-    common::{enabled_resolutions, sorted_vec},
-};
+use crate::{array_of_variables_with_names, common::enabled_resolutions};
 
-pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed: bool) {
+pub async fn test_lines_ok(base: Url) {
     let line_charts: stats_proto::blockscout::stats::v1::LineCharts =
         send_get_request(&base, "/api/v1/lines").await;
 
@@ -37,52 +34,43 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
 
     let mut enabled_resolutions = enabled_resolutions(line_charts).await;
 
-    let mut expected_lines = vec![];
-    if blockscout_indexed {
-        expected_lines.extend([
-            // disabled charts are commented out
-            "accountsGrowth",
-            "activeAccounts",
-            // "activeRecurringAccounts60Days",
-            // "activeRecurringAccounts90Days",
-            // "activeRecurringAccounts120Days",
-            "averageBlockSize",
-            "averageBlockRewards",
-            "newAccounts",
-            "averageGasLimit",
-            "averageGasPrice",
-            "averageTxnFee",
-            "gasUsedGrowth",
-            // "nativeCoinHoldersGrowth",
-            // "nativeCoinSupply",
-            // "newNativeCoinHolders",
-            "newBlocks",
-            "newNativeCoinTransfers",
-            "newTxns",
-            "txnsFee",
-            "txnsGrowth",
-            "newOperationalTxns",
-            "operationalTxnsGrowth",
-            "txnsSuccessRate",
-            "newVerifiedContracts",
-            "newContracts",
-            "verifiedContractsGrowth",
-            "contractsGrowth",
-        ]);
-    }
-    if user_ops_indexed {
-        expected_lines.extend([
-            "newUserOps",
-            "userOpsGrowth",
-            "newAccountAbstractionWallets",
-            "accountAbstractionWalletsGrowth",
-            "activeAccountAbstractionWallets",
-            "activeBundlers",
-            "activePaymasters",
-        ]);
-    }
-
-    for line_name in expected_lines {
+    for line_name in [
+        // disabled charts are commented out
+        "accountsGrowth",
+        "activeAccounts",
+        // "activeRecurringAccounts60Days",
+        // "activeRecurringAccounts90Days",
+        // "activeRecurringAccounts120Days",
+        "averageBlockSize",
+        "averageBlockRewards",
+        "newAccounts",
+        "averageGasLimit",
+        "averageGasPrice",
+        "averageTxnFee",
+        "gasUsedGrowth",
+        // "nativeCoinHoldersGrowth",
+        // "nativeCoinSupply",
+        // "newNativeCoinHolders",
+        "newBlocks",
+        "newNativeCoinTransfers",
+        "newTxns",
+        "txnsFee",
+        "txnsGrowth",
+        "newOperationalTxns",
+        "operationalTxnsGrowth",
+        "txnsSuccessRate",
+        "newUserOps",
+        "userOpsGrowth",
+        "newAccountAbstractionWallets",
+        "accountAbstractionWalletsGrowth",
+        "activeAccountAbstractionWallets",
+        "activeBundlers",
+        "activePaymasters",
+        "newVerifiedContracts",
+        "newContracts",
+        "verifiedContractsGrowth",
+        "contractsGrowth",
+    ] {
         let line_resolutions = enabled_resolutions
             .remove(line_name)
             .unwrap_or_else(|| panic!("must return chart info for {}", &line_name));
@@ -97,7 +85,6 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
                 &format!("/api/v1/lines/{line_name}?resolution={resolution}"),
             )
             .await;
-            dbg!(chart.as_object().expect("response has to be json object"));
             let chart_data = chart
                 .as_object()
                 .expect("response has to be json object")
@@ -125,32 +112,14 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
         let _chart: serde_json::Value =
             send_get_request(&base, &format!("/api/v1/lines/{line_name}")).await;
     }
-
-    // check that remaining are empty
-    for (line_chart_id, resolutions) in enabled_resolutions {
-        for resolution in resolutions {
-            let chart: serde_json::Value = send_get_request(
-                &base,
-                &format!("/api/v1/lines/{line_chart_id}?resolution={resolution}"),
-            )
-            .await;
-            let chart_data = chart
-                .as_object()
-                .expect("response has to be json object")
-                .get("chart")
-                .expect("response doesn't have 'chart' field")
-                .as_array()
-                .expect("'chart' field has to be json array");
-
-            assert!(
-                chart_data.is_empty(),
-                "chart '{line_chart_id}' '{resolution}' is not empty (it should not be enabled)"
-            );
-        }
-    }
+    assert!(
+        enabled_resolutions.is_empty(),
+        "some charts were not tested ({:?})",
+        enabled_resolutions
+    );
 }
 
-pub async fn test_counters_ok(base: Url, blockscout_indexed: bool, user_ops_indexed: bool) {
+pub async fn test_counters_ok(base: Url) {
     let counters: Counters = send_get_request(&base, "/api/v1/counters").await;
     for counter in counters.counters.iter() {
         assert!(!counter.description.is_empty());
@@ -158,59 +127,39 @@ pub async fn test_counters_ok(base: Url, blockscout_indexed: bool, user_ops_inde
     }
     // Also check the order set in layout
     let counter_names: Vec<_> = counters.counters.iter().map(|c| c.id.as_str()).collect();
-
-    // always present counters are
-    // - from main/tx/contracts pages
-    //  (that are also available as regular counters)
-    // - with fallback query logic
-    //  (they are returned even without calling an update)
-    //  (they all coincide with the previous case)
-    // - that are valid w/o fully indexed blockscout
-    let mut expected_counter_names: Vec<_> = vec![
-        // main page
+    let expected_counter_names: Vec<_> = [
         "averageBlockTime",
+        "completedTxns",
+        "lastNewContracts",
+        "lastNewVerifiedContracts",
+        "totalAccounts",
         "totalAddresses",
         "totalBlocks",
+        "totalContracts",
+        // "totalNativeCoinHolders", // disabled
+        "totalNativeCoinTransfers",
+        "totalTokens",
         "totalTxns",
         "totalOperationalTxns",
-        // transactions
+        "totalUserOps",
+        "totalAccountAbstractionWallets",
+        "totalVerifiedContracts",
+        "newTxns24h",
+        "newOperationalTxns24h",
         "pendingTxns30m",
         "txnsFee24h",
         "averageTxnFee24h",
-        "newTxns24h",
-        "newOperationalTxns24h",
-        // contracts
-        "totalContracts",
-        "totalVerifiedContracts",
-        // valid w/o
-        "totalTokens",
-    ];
+        // on a different page; they are checked by other endpoint tests and
+        // `check_all_enabled_charts_have_endpoints`.
 
-    if blockscout_indexed {
-        expected_counter_names.extend([
-            "completedTxns",
-            "lastNewContracts",
-            "lastNewVerifiedContracts",
-            "totalAccounts",
-            // "totalNativeCoinHolders", // disabled
-            "totalNativeCoinTransfers",
-            // on a different page; they are checked by other endpoint tests and
-            // `check_all_enabled_charts_have_endpoints`.
+        // "newContracts24h",
+        // "newVerifiedContracts24h",
+        // "yesterdayTxns",
+    ]
+    .into_iter()
+    .collect();
 
-            // "newContracts24h",
-            // "newVerifiedContracts24h",
-            // "yesterdayTxns",
-        ]);
-    }
-
-    if user_ops_indexed {
-        expected_counter_names.extend(["totalUserOps", "totalAccountAbstractionWallets"]);
-    }
-
-    assert_eq!(
-        sorted_vec(counter_names),
-        sorted_vec(expected_counter_names)
-    );
+    assert_eq!(counter_names, expected_counter_names);
 }
 
 pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
@@ -241,8 +190,7 @@ pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
         ]));
     }
     for (name, counter) in counters {
-        let counter =
-            counter.unwrap_or_else(|| panic!("main page counter {} must be available", name));
+        let counter = counter.unwrap_or_else(|| panic!("page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
@@ -284,8 +232,8 @@ pub async fn test_transactions_page_ok(base: Url, expect_arbitrum: bool) {
         ]));
     }
     for (name, counter) in counters {
-        let counter = counter
-            .unwrap_or_else(|| panic!("transactions page counter {} must be available", name));
+        #[allow(clippy::expect_fun_call)]
+        let counter = counter.expect(&format!("page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
@@ -305,8 +253,8 @@ pub async fn test_contracts_page_ok(base: Url) {
         new_verified_contracts_24h,
     ]);
     for (name, counter) in counters {
-        let counter =
-            counter.unwrap_or_else(|| panic!("contracts page counter {} must be available", name));
+        #[allow(clippy::expect_fun_call)]
+        let counter = counter.expect(&format!("page counter {} must be available", name));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
