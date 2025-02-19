@@ -3,17 +3,14 @@
 //! - stats server is fully enabled & updated as much as possible
 //!     with not indexed blockscout
 
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 
 use blockscout_service_launcher::test_server::init_server;
-use chrono::NaiveDate;
 use futures::FutureExt;
 use pretty_assertions::assert_eq;
 use stats::tests::{
-    init_db::{init_db, init_db_blockscout},
-    mock_blockscout::{
-        fill_mock_blockscout_data, mock_blockscout_api, user_ops_status_response_json,
-    },
+    init_db::init_db,
+    mock_blockscout::{mock_blockscout_api, user_ops_status_response_json},
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use stats_server::{
@@ -105,7 +102,7 @@ pub async fn run_tests_with_user_ops_not_indexed() {
         Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(false))),
     )
     .await;
-    let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
+    let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
 
     init_server(
         move || stats(settings),
