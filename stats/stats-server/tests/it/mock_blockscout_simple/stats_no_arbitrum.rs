@@ -26,7 +26,7 @@ pub async fn run_chart_pages_tests_with_disabled_arbitrum() {
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = default_mock_blockscout_api().await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-    let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
+    let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
     settings.enable_all_arbitrum = false;
 
     init_server(

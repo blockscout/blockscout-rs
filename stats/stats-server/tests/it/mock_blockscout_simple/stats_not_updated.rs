@@ -46,7 +46,7 @@ pub async fn run_tests_with_charts_not_updated() {
     )
     .await;
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
-    let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
+    let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
     // will not update at all
     settings.force_update_on_start = None;
     init_server(
