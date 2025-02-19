@@ -2,13 +2,11 @@
 //! - blockscout is fully indexed
 //! - stats server is fully enabled & initialized
 
-use std::time::Duration;
-
 use blockscout_service_launcher::test_server::init_server;
 use futures::FutureExt;
 use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_api};
 use stats_server::stats;
-use tokio::{task::JoinSet, time::sleep};
+use tokio::task::JoinSet;
 
 use super::common_tests::{
     test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
@@ -19,7 +17,7 @@ use crate::{
         get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
         wait_for_subset_to_update, ChartSubset,
     },
-    it::mock_blockscout_simple::{get_mock_blockscout, STATS_INIT_WAIT_S},
+    it::mock_blockscout_simple::get_mock_blockscout,
 };
 
 #[tokio::test]

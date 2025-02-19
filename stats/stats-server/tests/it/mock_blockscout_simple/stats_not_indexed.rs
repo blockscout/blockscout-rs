@@ -3,8 +3,6 @@
 //! - stats server is fully enabled & updated as much as possible
 //!     with not indexed blockscout
 
-use std::time::Duration;
-
 use blockscout_service_launcher::test_server::init_server;
 use futures::FutureExt;
 use pretty_assertions::assert_eq;
@@ -17,16 +15,13 @@ use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
     stats,
 };
-use tokio::{task::JoinSet, time::sleep};
+use tokio::task::JoinSet;
 use url::Url;
 use wiremock::ResponseTemplate;
 
-use super::{
-    common_tests::{
-        test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
-        test_transactions_page_ok,
-    },
-    STATS_INIT_WAIT_S,
+use super::common_tests::{
+    test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
+    test_transactions_page_ok,
 };
 use crate::{
     common::{
