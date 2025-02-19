@@ -42,7 +42,6 @@ src/apis/configuration.rs
 # ======
 # models
 # ======
-src/models/decoded_input_parameter.rs
 src/models/internal_transaction.rs
 src/models/reward.rs
 src/models/smart_contract_for_list.rs
