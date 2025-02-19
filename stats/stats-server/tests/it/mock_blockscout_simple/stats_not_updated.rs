@@ -3,16 +3,12 @@
 //! - stats server is fully enabled but not updated (yet)
 //!     (e.g. the update is slow and in progress)
 
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 
 use blockscout_service_launcher::test_server::{init_server, send_get_request};
-use chrono::NaiveDate;
-use itertools::Itertools;
 use stats::tests::{
-    init_db::{init_db, init_db_blockscout},
-    mock_blockscout::{
-        fill_mock_blockscout_data, mock_blockscout_api, user_ops_status_response_json,
-    },
+    init_db::init_db,
+    mock_blockscout::{mock_blockscout_api, user_ops_status_response_json},
 };
 use stats_proto::blockscout::stats::v1::{
     health_check_response::ServingStatus, Counters, HealthCheckResponse,
@@ -110,11 +106,7 @@ pub async fn test_lines_counters_not_updated_ok(base: Url) {
     // returns counters with fallback query logic
     for counter in ["totalAddresses", "totalBlocks", "totalTxns"] {
         assert!(
-            counters
-                .counters
-                .iter()
-                .find(|kek| kek.id == counter)
-                .is_some(),
+            counters.counters.iter().any(|kek| kek.id == counter),
             "counter {} not found in returned counters: {:?}",
             counter,
             counters.counters
