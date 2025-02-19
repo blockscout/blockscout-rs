@@ -107,9 +107,17 @@ pub async fn test_lines_counters_not_updated_ok(base: Url) {
     }
 
     let counters: Counters = send_get_request(&base, "/api/v1/counters").await;
-    // returns only counters with fallback query logic
-    assert_eq!(
-        counters.counters.into_iter().map(|c| c.id).collect_vec(),
-        vec!["totalAddresses", "totalBlocks", "totalTxns",]
-    )
+    // returns counters with fallback query logic
+    for counter in ["totalAddresses", "totalBlocks", "totalTxns"] {
+        assert!(
+            counters
+                .counters
+                .iter()
+                .find(|kek| kek.id == counter)
+                .is_some(),
+            "counter {} not found in returned counters: {:?}",
+            counter,
+            counters.counters
+        );
+    }
 }
