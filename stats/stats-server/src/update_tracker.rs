@@ -212,22 +212,6 @@ impl InitialUpdateTrackerInner {
         for (status, count) in all_count_by_status {
             log_string.push_str(&format!("{status} charts - {count}; "));
         }
-        println!(
-            "completed_initial_update charts: {:?}",
-            [
-                &self.blocks_dependent.completed_initial_update,
-                &self.independent.completed_initial_update,
-                &self
-                    .internal_transactions_dependent
-                    .completed_initial_update,
-                &self.user_ops_dependent.completed_initial_update
-            ]
-            .iter()
-            .fold(HashSet::<&ChartKey>::new(), |mut all, next| {
-                all.extend(next.iter());
-                all
-            })
-        );
         let independent_status = self.independent.get_status();
         let blocks_dependent_status = self.blocks_dependent.get_status();
         let internal_transactions_dependent_status =
