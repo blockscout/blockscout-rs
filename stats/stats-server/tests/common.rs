@@ -64,7 +64,6 @@ pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
     wait_until(Duration::from_secs(300), || async {
         let statuses: proto_v1::UpdateStatus =
             send_get_request(base, "/api/v1/update-status").await;
-        println!("{statuses:?}");
         let matching_status = match subset {
             ChartSubset::Independent => statuses.independent_status(),
             ChartSubset::BlocksDependent => statuses.blocks_dependent_status(),
