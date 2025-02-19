@@ -42,7 +42,6 @@ src/apis/configuration.rs
 # ======
 # models
 # ======
-src/models/address_param.rs
 src/models/block.rs
 src/models/decoded_input_parameter.rs
 src/models/internal_transaction.rs

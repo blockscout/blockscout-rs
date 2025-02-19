@@ -18,6 +18,7 @@ src/models/address_counters.rs
 src/models/address_nft_collection.rs
 src/models/address_nft_instance.rs
 src/models/address_nft_instance_collection.rs
+src/models/address_param.rs
 src/models/address_tag.rs
 src/models/address_with_tx_count.rs
 src/models/argument.rs
