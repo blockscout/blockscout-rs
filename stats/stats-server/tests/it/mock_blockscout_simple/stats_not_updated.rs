@@ -31,6 +31,7 @@ use crate::{
 #[ignore = "needs database"]
 pub async fn run_tests_with_charts_not_updated() {
     let test_name = "run_tests_with_charts_not_updated";
+    let _ = tracing_subscriber::fmt::try_init();
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(

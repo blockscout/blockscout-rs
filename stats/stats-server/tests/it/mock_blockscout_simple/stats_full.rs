@@ -24,6 +24,7 @@ use crate::{
 #[ignore = "needs database"]
 pub async fn run_fully_initialized_stats_tests() {
     let test_name = "run_fully_initialized_stats_tests";
+    let _ = tracing_subscriber::fmt::try_init();
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = default_mock_blockscout_api().await;
