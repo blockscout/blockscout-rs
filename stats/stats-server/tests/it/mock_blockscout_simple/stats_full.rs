@@ -31,7 +31,6 @@ pub async fn run_fully_initialized_stats_tests() {
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = default_mock_blockscout_api().await;
-    std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
 
     init_server(
