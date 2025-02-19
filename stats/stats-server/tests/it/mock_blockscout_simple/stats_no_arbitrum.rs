@@ -2,13 +2,11 @@
 //! - blockscout is fully indexed
 //! - stats server is fully initialized with arbitrum charts disabled
 
-use std::time::Duration;
-
 use blockscout_service_launcher::test_server::init_server;
 use futures::FutureExt;
 use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_api};
 use stats_server::stats;
-use tokio::{task::JoinSet, time::sleep};
+use tokio::task::JoinSet;
 
 use crate::{
     common::{
@@ -18,10 +16,7 @@ use crate::{
     it::mock_blockscout_simple::get_mock_blockscout,
 };
 
-use super::{
-    common_tests::{test_main_page_ok, test_transactions_page_ok},
-    STATS_INIT_WAIT_S,
-};
+use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
 
 #[tokio::test]
 #[ignore = "needs database"]
