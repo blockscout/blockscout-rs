@@ -56,7 +56,6 @@ pub async fn run_tests_with_nothing_indexed() {
         None,
     )
     .await;
-    std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
     // obviously don't use this anywhere except tests
     let api_key = ApiKey::from_str_infallible("123");
@@ -106,7 +105,6 @@ pub async fn run_tests_with_user_ops_not_indexed() {
         Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(false))),
     )
     .await;
-    std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
 
     init_server(
