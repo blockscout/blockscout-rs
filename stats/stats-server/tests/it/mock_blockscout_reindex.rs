@@ -21,6 +21,7 @@ use crate::common::{
 #[ignore = "needs database"]
 async fn test_reupdate_works() {
     let test_name = "test_reupdate_works";
+    let _ = tracing_subscriber::fmt::try_init();
     let (stats_db, blockscout_db) = init_db_all(test_name).await;
     let max_date = NaiveDate::from_str("2023-03-01").unwrap();
     fill_mock_blockscout_data(&blockscout_db, max_date).await;
