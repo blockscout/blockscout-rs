@@ -6,10 +6,7 @@ use blockscout_service_launcher::{
     test_server::{get_test_server_settings, send_get_request},
 };
 use reqwest::{RequestBuilder, Response};
-use stats_proto::blockscout::stats::v1::{
-    self as proto_v1, health_check_response::ServingStatus, ChartSubsetUpdateStatus,
-    HealthCheckResponse,
-};
+use stats_proto::blockscout::stats::v1 as proto_v1;
 use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
     Settings,
@@ -56,11 +53,11 @@ pub enum ChartSubset {
 /// for `init_server`
 pub async fn healthcheck_successful(response: Response) -> bool {
     let healthcheck_status = response
-        .json::<HealthCheckResponse>()
+        .json::<proto_v1::HealthCheckResponse>()
         .await
         .unwrap()
         .status();
-    healthcheck_status == ServingStatus::Serving
+    healthcheck_status == proto_v1::health_check_response::ServingStatus::Serving
 }
 
 pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
@@ -77,7 +74,7 @@ pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
             ChartSubset::UserOpsDependent => statuses.user_ops_dependent_status(),
             ChartSubset::AllCharts => statuses.all_status(),
         };
-        if matching_status == ChartSubsetUpdateStatus::CompletedInitialUpdate {
+        if matching_status == proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate {
             return true;
         }
         false
@@ -194,10 +191,6 @@ macro_rules! array_of_variables_with_names {
     };
 }
 
-/// It's better not to do slow/expensive stuff inside because tests consolidated
-/// with this function are not affected by test concurrency settings, thus
-/// leading to unexpected behaviour (especially in slow systems like CI
-/// runners)
 pub async fn run_consolidated_tests(mut tests: JoinSet<()>, log_prefix: &str) {
     let mut failed = 0;
     let total = tests.len();
