@@ -3,13 +3,16 @@
 //! - stats server is fully enabled but not updated (yet)
 //!     (e.g. the update is slow and in progress)
 
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use blockscout_service_launcher::test_server::{init_server, send_get_request};
+use chrono::NaiveDate;
 use itertools::Itertools;
 use stats::tests::{
-    init_db::init_db,
-    mock_blockscout::{mock_blockscout_api, user_ops_status_response_json},
+    init_db::{init_db, init_db_blockscout},
+    mock_blockscout::{
+        fill_mock_blockscout_data, mock_blockscout_api, user_ops_status_response_json,
+    },
 };
 use stats_proto::blockscout::stats::v1::{
     health_check_response::ServingStatus, Counters, HealthCheckResponse,
@@ -53,7 +56,7 @@ pub async fn run_tests_with_charts_not_updated() {
     init_server(
         || stats(settings),
         &base,
-        None,
+        Some(Duration::from_secs(60)),
         Some(healthcheck_successful),
     )
     .await;

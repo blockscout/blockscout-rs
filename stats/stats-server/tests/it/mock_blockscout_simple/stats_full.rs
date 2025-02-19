@@ -2,9 +2,15 @@
 //! - blockscout is fully indexed
 //! - stats server is fully enabled & initialized
 
+use std::{str::FromStr, time::Duration};
+
 use blockscout_service_launcher::test_server::init_server;
+use chrono::NaiveDate;
 use futures::FutureExt;
-use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_api};
+use stats::tests::{
+    init_db::{init_db, init_db_blockscout},
+    mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data},
+};
 use stats_server::stats;
 use tokio::task::JoinSet;
 
@@ -12,12 +18,9 @@ use super::common_tests::{
     test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
     test_transactions_page_ok,
 };
-use crate::{
-    common::{
-        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
-        wait_for_subset_to_update, ChartSubset,
-    },
-    it::mock_blockscout_simple::get_mock_blockscout,
+use crate::common::{
+    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+    wait_for_subset_to_update, ChartSubset,
 };
 
 #[tokio::test]
@@ -34,7 +37,7 @@ pub async fn run_fully_initialized_stats_tests() {
     init_server(
         || stats(settings),
         &base,
-        None,
+        Some(Duration::from_secs(60)),
         Some(healthcheck_successful),
     )
     .await;
