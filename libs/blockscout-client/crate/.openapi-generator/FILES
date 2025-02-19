@@ -22,6 +22,7 @@ src/models/address_param.rs
 src/models/address_tag.rs
 src/models/address_with_tx_count.rs
 src/models/argument.rs
+src/models/block.rs
 src/models/code_and_message.rs
 src/models/coin_balance_history_by_days_entry.rs
 src/models/coin_balance_history_entry.rs

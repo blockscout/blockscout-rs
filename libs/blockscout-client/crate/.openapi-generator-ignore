@@ -42,7 +42,6 @@ src/apis/configuration.rs
 # ======
 # models
 # ======
-src/models/block.rs
 src/models/decoded_input_parameter.rs
 src/models/internal_transaction.rs
 src/models/reward.rs
