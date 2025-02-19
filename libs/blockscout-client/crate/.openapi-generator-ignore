@@ -42,5 +42,4 @@ src/apis/configuration.rs
 # ======
 # models
 # ======
-src/models/reward.rs
 src/models/smart_contract_for_list.rs

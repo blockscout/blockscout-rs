@@ -93,6 +93,7 @@ src/models/read_method_response_result.rs
 src/models/recaptcha_body.rs
 src/models/refetch_token_instance_metadata_200_response.rs
 src/models/refetch_token_instance_metadata_403_response.rs
+src/models/reward.rs
 src/models/rpc_status.rs
 src/models/search_200_response.rs
 src/models/search_200_response_items_inner.rs
