@@ -2,15 +2,11 @@
 //! - blockscout is fully indexed
 //! - stats server is fully enabled & initialized
 
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 
 use blockscout_service_launcher::test_server::init_server;
-use chrono::NaiveDate;
 use futures::FutureExt;
-use stats::tests::{
-    init_db::{init_db, init_db_blockscout},
-    mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data},
-};
+use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_api};
 use stats_server::stats;
 use tokio::task::JoinSet;
 
