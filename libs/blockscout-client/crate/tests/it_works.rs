@@ -85,6 +85,18 @@ async fn tokens(blockscout: Stubr) {
             .expect("Failed to get transactions");
 }
 
+#[rstest]
+#[tokio::test]
+async fn the_transaction(blockscout: Stubr) {
+    let config = get_config_from_stubr(&blockscout);
+    transactions_api::get_tx(
+        &config,
+        "0xf7d09142363203b4c572bac2be3599de91260eb6131b57663832490e7eeaf213",
+    )
+    .await
+    .expect("Failed to get transaction");
+}
+
 #[fixture]
 fn blockscout() -> Stubr {
     Stubr::start_blocking("tests/recorded/eth_blockscout_com")
