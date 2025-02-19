@@ -63,32 +63,36 @@ jobs:
         with:
           args: docker restart postgres
 
-      - name: DB tests temp
-        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --package stats-server -- --nocapture --ignored --test-threads=1
-        if: success() || failure()
-        env:
-          DATABASE_URL: postgres://postgres:admin@localhost:5432/
-
-      - name: Unit tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
-        if: success() || failure()
-
-      - name: Doc tests
-        run: cargo test --locked --workspace --all-features --doc
-        if: success() || failure()
+      - name: Build
+        id: build
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
 
       - name: ENVs in documentation
         run: cargo run --bin env-docs-generation
         env:
           VALIDATE_ONLY: true
 
+      - name: DB tests temp
+        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --package stats-server -- --nocapture --ignored --test-threads=1
+        if: steps.build.outcome == 'success'
+        env:
+          DATABASE_URL: postgres://postgres:admin@localhost:5432/
+
+      - name: Unit tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+        if: steps.build.outcome == 'success'
+
+      - name: Doc tests
+        run: cargo test --locked --workspace --all-features --doc
+        if: steps.build.outcome == 'success'
+
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
 
       - name: DB tests
         run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
 
