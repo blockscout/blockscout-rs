@@ -33,7 +33,7 @@ pub struct Transaction {
     pub exchange_rate: String,
     #[serde(rename = "to")]
     pub to: Option<models::AddressParam>, // changed
-    #[serde(rename = "transaction_burnt_fee", alias = "tx_burnt_fee")] //changed
+    #[serde(rename = "transaction_burnt_fee")]
     pub transaction_burnt_fee: Option<String>, // changed
     #[serde(rename = "max_fee_per_gas")]
     pub max_fee_per_gas: Option<String>, // changed
@@ -51,7 +51,7 @@ pub struct Transaction {
     pub from: models::AddressParam,
     #[serde(rename = "token_transfers")]
     pub token_transfers: Option<Vec<models::TokenTransfer>>, //changed
-    #[serde(rename = "transaction_types", alias = "tx_types")]
+    #[serde(rename = "transaction_types")]
     pub transaction_types: Vec<String>,
     #[serde(rename = "gas_used")]
     pub gas_used: String,
@@ -61,10 +61,7 @@ pub struct Transaction {
     pub position: i32,
     #[serde(rename = "nonce")]
     pub nonce: i32,
-    #[serde(
-        rename = "has_error_in_internal_transactions",
-        alias = "has_error_in_internal_txs"
-    )] // changed
+    #[serde(rename = "has_error_in_internal_transactions")]
     pub has_error_in_internal_transactions: Option<bool>, // changed
     #[serde(rename = "actions")]
     pub actions: Vec<models::TransactionAction>,
@@ -82,6 +79,6 @@ pub struct Transaction {
     pub revert_reason: Option<serde_json::Value>, // changed
     #[serde(rename = "confirmation_duration")]
     pub confirmation_duration: serde_json::Value,
-    #[serde(rename = "transaction_tag", alias = "tx_tag")] // changed
+    #[serde(rename = "transaction_tag")]
     pub transaction_tag: Option<String>, // changed
 }

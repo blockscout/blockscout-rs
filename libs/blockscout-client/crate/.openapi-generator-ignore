@@ -49,4 +49,3 @@ src/models/internal_transaction.rs
 src/models/reward.rs
 src/models/smart_contract.rs
 src/models/smart_contract_for_list.rs
-src/models/transaction.rs

@@ -116,6 +116,7 @@ src/models/token_transfer_total.rs
 src/models/total_erc1155.rs
 src/models/total_erc20.rs
 src/models/total_erc721.rs
+src/models/transaction.rs
 src/models/transaction_action.rs
 src/models/transaction_action_aave_v3_bswrf.rs
 src/models/transaction_action_aave_v3_enable_disable_collateral.rs
