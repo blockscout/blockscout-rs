@@ -26,7 +26,6 @@ async fn test_reupdate_works() {
     let max_date = NaiveDate::from_str("2023-03-01").unwrap();
     fill_mock_blockscout_data(&blockscout_db, max_date).await;
     let blockscout_api = default_mock_blockscout_api().await;
-    std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // obviously don't use this anywhere except tests
     let api_key = ApiKey::from_str_infallible("123");
