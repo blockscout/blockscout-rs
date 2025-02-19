@@ -14,9 +14,12 @@ use stats::tests::{
 use stats_server::stats;
 use tokio::task::JoinSet;
 
-use crate::common::{
-    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
-    wait_for_subset_to_update, ChartSubset,
+use crate::{
+    common::{
+        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+        wait_for_subset_to_update, ChartSubset,
+    },
+    it::mock_blockscout_simple::get_mock_blockscout,
 };
 
 use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
