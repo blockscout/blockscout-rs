@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use blockscout_service_launcher::{test_database::TestDbGuard, test_server::init_server};
+use blockscout_service_launcher::test_server::init_server;
 use futures::FutureExt;
 use pretty_assertions::assert_eq;
 use stats::tests::{
@@ -21,18 +21,27 @@ use tokio::{task::JoinSet, time::sleep};
 use url::Url;
 use wiremock::ResponseTemplate;
 
-use super::common_tests::{
-    test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
-    test_transactions_page_ok,
+use super::{
+    common_tests::{
+        test_contracts_page_ok, test_counters_ok, test_lines_ok, test_main_page_ok,
+        test_transactions_page_ok,
+    },
+    STATS_INIT_WAIT_S,
 };
-use crate::common::{
-    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
-    send_arbitrary_request, setup_single_key, wait_for_subset_to_update, ChartSubset,
+use crate::{
+    common::{
+        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+        send_arbitrary_request, setup_single_key, wait_for_subset_to_update, ChartSubset,
+    },
+    it::mock_blockscout_simple::get_mock_blockscout,
 };
 
-pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
-    let test_name = "run_tests_with_charts_uninitialized";
+#[tokio::test]
+#[ignore = "needs database"]
+pub async fn run_tests_with_nothing_indexed() {
+    let test_name = "run_tests_with_nothing_indexed";
     let stats_db = init_db(test_name).await;
+    let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
@@ -60,8 +69,6 @@ pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
     )
     .await;
 
-    // Sleep until server will start and calculate all values
-    sleep(Duration::from_secs(8)).await;
     wait_for_subset_to_update(&base, ChartSubset::Independent).await;
 
     // these pages must be available right away to display users
@@ -79,9 +86,12 @@ pub async fn run_tests_with_charts_uninitialized(blockscout_db: TestDbGuard) {
     run_consolidated_tests(tests, test_name).await;
 }
 
-pub async fn run_tests_with_user_ops_not_indexed(blockscout_db: TestDbGuard) {
+#[tokio::test]
+#[ignore = "needs database"]
+pub async fn run_tests_with_user_ops_not_indexed() {
     let test_name = "run_tests_with_user_ops_not_indexed";
     let stats_db = init_db(test_name).await;
+    let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(
         ResponseTemplate::new(200).set_body_string(
             r#"{
@@ -97,20 +107,16 @@ pub async fn run_tests_with_user_ops_not_indexed(blockscout_db: TestDbGuard) {
     std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
 
-    println!("initing server");
     init_server(
         move || stats(settings),
         &base,
-        Some(Duration::from_secs(60)),
-        Some(|_| async { true }),
+        None,
+        Some(healthcheck_successful),
     )
     .await;
-    sleep(Duration::from_secs(10)).await;
-    println!("waiting for subset update");
-    wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
-    sleep(Duration::from_secs(10)).await;
 
-    println!("testing");
+    wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
+
     let tests: JoinSet<_> = [
         test_lines_ok(base.clone(), true, false).boxed(),
         test_counters_ok(base.clone(), true, false).boxed(),
