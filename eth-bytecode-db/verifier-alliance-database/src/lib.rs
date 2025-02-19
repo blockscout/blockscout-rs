@@ -146,7 +146,7 @@ pub async fn find_contract_deployment(
 
 pub async fn find_verified_contracts(
     database_connection: &DatabaseConnection,
-    chain_id: u128,
+    chain_id: i64,
     contract_address: Vec<u8>,
 ) -> Result<Vec<RetrievedVerifiedContract>, Error> {
     let database_connection = database_connection

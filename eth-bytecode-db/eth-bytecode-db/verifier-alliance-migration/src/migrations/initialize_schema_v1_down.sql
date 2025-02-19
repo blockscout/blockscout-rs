@@ -36,10 +36,21 @@ DROP FUNCTION validate_values_constructor_arguments;
 
 DROP FUNCTION validate_runtime_code_artifacts;
 DROP FUNCTION validate_creation_code_artifacts;
+DROP FUNCTION validate_code_artifacts_immutable_references;
+DROP FUNCTION validate_code_artifacts_immutable_references_internal;
+DROP FUNCTION validate_code_artifacts_link_references;
+DROP FUNCTION validate_code_artifacts_link_references_internal;
+DROP FUNCTION validate_code_artifacts_link_references_internal_file_libraries;
+DROP FUNCTION validate_code_artifacts_cbor_auxdata;
+DROP FUNCTION validate_code_artifacts_cbor_auxdata_internal;
 DROP FUNCTION validate_compilation_artifacts;
+DROP FUNCTION validate_compilation_artifacts_sources;
+DROP FUNCTION validate_compilation_artifacts_sources_internal;
+DROP FUNCTION validate_compilation_artifacts_abi;
 
 DROP FUNCTION validate_json_object_keys;
 DROP FUNCTION is_valid_hex;
+DROP FUNCTION is_jsonb_null;
 DROP FUNCTION is_jsonb_number;
 DROP FUNCTION is_jsonb_array;
 DROP FUNCTION is_jsonb_string;
