@@ -3,6 +3,8 @@
 //! - stats server is fully enabled & updated as much as possible
 //!     with not indexed blockscout
 
+use std::time::Duration;
+
 use blockscout_service_launcher::test_server::init_server;
 use futures::FutureExt;
 use pretty_assertions::assert_eq;
@@ -35,6 +37,7 @@ use crate::{
 #[ignore = "needs database"]
 pub async fn run_tests_with_nothing_indexed() {
     let test_name = "run_tests_with_nothing_indexed";
+    let _ = tracing_subscriber::fmt::try_init();
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(
@@ -59,7 +62,7 @@ pub async fn run_tests_with_nothing_indexed() {
     init_server(
         || stats(settings),
         &base,
-        None,
+        Some(Duration::from_secs(30)),
         Some(healthcheck_successful),
     )
     .await;
@@ -85,6 +88,7 @@ pub async fn run_tests_with_nothing_indexed() {
 #[ignore = "needs database"]
 pub async fn run_tests_with_user_ops_not_indexed() {
     let test_name = "run_tests_with_user_ops_not_indexed";
+    let _ = tracing_subscriber::fmt::try_init();
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(
