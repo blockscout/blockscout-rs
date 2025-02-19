@@ -26,7 +26,7 @@ pub struct SmartContractForList {
     #[serde(rename = "optimization_enabled")]
     pub optimization_enabled: bool,
     #[serde(rename = "transaction_count")]
-    pub transaction_count: i32,
+    pub transaction_count: Option<i32>, // changed
     #[serde(rename = "verified_at")]
     pub verified_at: String,
     #[serde(rename = "market_cap", skip_serializing_if = "Option::is_none")]
