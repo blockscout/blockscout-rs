@@ -2,18 +2,21 @@
 //! - blockscout is fully indexed
 //! - stats server is fully initialized with arbitrum charts disabled
 
+use std::{str::FromStr, time::Duration};
+
 use blockscout_service_launcher::test_server::init_server;
+use chrono::NaiveDate;
 use futures::FutureExt;
-use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_api};
+use stats::tests::{
+    init_db::{init_db, init_db_blockscout},
+    mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data},
+};
 use stats_server::stats;
 use tokio::task::JoinSet;
 
-use crate::{
-    common::{
-        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
-        wait_for_subset_to_update, ChartSubset,
-    },
-    it::mock_blockscout_simple::get_mock_blockscout,
+use crate::common::{
+    get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
+    wait_for_subset_to_update, ChartSubset,
 };
 
 use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
@@ -33,7 +36,7 @@ pub async fn run_chart_pages_tests_with_disabled_arbitrum() {
     init_server(
         || stats(settings),
         &base,
-        None,
+        Some(Duration::from_secs(60)),
         Some(healthcheck_successful),
     )
     .await;

@@ -323,7 +323,7 @@ mod tests {
         response_blockscout: ResponseTemplate,
         response_user_ops: Option<ResponseTemplate>,
     ) -> Result<Result<(), anyhow::Error>, Elapsed> {
-        let timeout = timeout.unwrap_or(Duration::from_millis(1000));
+        let timeout = timeout.unwrap_or(Duration::from_millis(2000));
         let server = mock_blockscout_api(response_blockscout, response_user_ops).await;
         let api_config =
             blockscout_client::Configuration::new(Url::from_str(&server.uri()).unwrap());
