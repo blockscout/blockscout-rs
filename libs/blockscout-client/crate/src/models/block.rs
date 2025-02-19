@@ -53,10 +53,10 @@ pub struct Block {
     pub timestamp: String,
     #[serde(rename = "total_difficulty")]
     pub total_difficulty: String,
-    #[serde(rename = "tx_count")]
-    pub tx_count: i32,
-    #[serde(rename = "tx_fees")]
-    pub tx_fees: String,
+    #[serde(rename = "transaction_count")]
+    pub transaction_count: i32,
+    #[serde(rename = "transaction_fees")]
+    pub transaction_fees: String,
     #[serde(rename = "type")]
     pub r#type: String,
     #[serde(rename = "uncles_hashes")]

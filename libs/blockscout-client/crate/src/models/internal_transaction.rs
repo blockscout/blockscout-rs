@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(derive_new::new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InternalTransaction {
-    #[serde(rename = "block")]
-    pub block: i32,
+    #[serde(rename = "block_number")]
+    pub block_number: i32,
     #[serde(rename = "created_contract")]
     pub created_contract: Option<models::AddressParam>, // changed
     #[serde(rename = "error")]

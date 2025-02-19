@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 pub struct SearchResultTransaction {
     #[serde(rename = "timestamp")]
     pub timestamp: String,
-    #[serde(rename = "transaction_hash", alias = "tx_hash")] // changed
+    #[serde(rename = "transaction_hash")]
     pub transaction_hash: String,
     #[serde(rename = "type")]
     pub r#type: String,

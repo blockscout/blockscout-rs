@@ -19,7 +19,8 @@
     "getV2": "ts-node ts-src/get-api-v2.ts",
     "merge": "openapi-merge-cli --config openapi-merge.json",
     "generate": "docker run --rm -v \"${PWD}:/local\" openapitools/openapi-generator-cli generate -c /local/openapi-generator-config.json -i /local/swaggers/blockscout-api.yaml --skip-validate-spec -g rust -o /local/crate",
-    "generate-from-remote": "yarn getV2 && yarn merge && yarn generate",
+    "format": "cargo fmt --all -- --config imports_granularity=Crate",
+    "generate-from-remote": "yarn getV2 && yarn merge && yarn generate && yarn format",
     "record-stubs": "ts-node ts-src/record-stubs.ts"
   },
   "devDependencies": {

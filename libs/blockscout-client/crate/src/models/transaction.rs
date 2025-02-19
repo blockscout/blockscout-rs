@@ -19,8 +19,8 @@ pub struct Transaction {
     pub fee: models::Fee,
     #[serde(rename = "gas_limit")]
     pub gas_limit: String, // changed
-    #[serde(rename = "block")]
-    pub block: i32,
+    #[serde(rename = "block_number")]
+    pub block_number: i32,
     #[serde(rename = "status")]
     pub status: String,
     #[serde(rename = "method")]
@@ -32,9 +32,9 @@ pub struct Transaction {
     #[serde(rename = "exchange_rate")]
     pub exchange_rate: String,
     #[serde(rename = "to")]
-    pub to: models::AddressParam,
-    #[serde(rename = "tx_burnt_fee")]
-    pub tx_burnt_fee: Option<String>, // changed
+    pub to: Option<models::AddressParam>, // changed
+    #[serde(rename = "transaction_burnt_fee")]
+    pub transaction_burnt_fee: Option<String>, // changed
     #[serde(rename = "max_fee_per_gas")]
     pub max_fee_per_gas: Option<String>, // changed
     #[serde(rename = "result")]
@@ -50,9 +50,9 @@ pub struct Transaction {
     #[serde(rename = "from")]
     pub from: models::AddressParam,
     #[serde(rename = "token_transfers")]
-    pub token_transfers: Option<Vec<models::TokenTransfer>>,
-    #[serde(rename = "tx_types")]
-    pub tx_types: Vec<String>,
+    pub token_transfers: Option<Vec<models::TokenTransfer>>, //changed
+    #[serde(rename = "transaction_types")]
+    pub transaction_types: Vec<String>,
     #[serde(rename = "gas_used")]
     pub gas_used: String,
     #[serde(rename = "created_contract")]
@@ -61,8 +61,8 @@ pub struct Transaction {
     pub position: i32,
     #[serde(rename = "nonce")]
     pub nonce: i32,
-    #[serde(rename = "has_error_in_internal_txs")]
-    pub has_error_in_internal_txs: Option<bool>, // changed
+    #[serde(rename = "has_error_in_internal_transactions")]
+    pub has_error_in_internal_transactions: Option<bool>, // changed
     #[serde(rename = "actions")]
     pub actions: Vec<models::TransactionAction>,
     #[serde(rename = "decoded_input")]
@@ -79,6 +79,6 @@ pub struct Transaction {
     pub revert_reason: Option<serde_json::Value>, // changed
     #[serde(rename = "confirmation_duration")]
     pub confirmation_duration: serde_json::Value,
-    #[serde(rename = "tx_tag")]
-    pub tx_tag: Option<String>, // changed
+    #[serde(rename = "transaction_tag")]
+    pub transaction_tag: Option<String>, // changed
 }

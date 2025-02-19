@@ -19,6 +19,10 @@ pub struct AddressParam {
     pub implementation_name: Option<String>, // changed
     #[serde(rename = "name")]
     pub name: Option<String>, // changed
+    #[serde(rename = "ens_domain_name", skip_serializing_if = "Option::is_none")]
+    pub ens_domain_name: Option<String>,
+    #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
     #[serde(rename = "is_contract")]
     pub is_contract: bool,
     #[serde(rename = "private_tags")]
