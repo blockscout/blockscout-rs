@@ -97,6 +97,7 @@ src/models/search_result_block.rs
 src/models/search_result_redirect.rs
 src/models/search_result_token.rs
 src/models/search_result_transaction.rs
+src/models/smart_contract.rs
 src/models/state_change.rs
 src/models/state_change_change.rs
 src/models/stats_response.rs
