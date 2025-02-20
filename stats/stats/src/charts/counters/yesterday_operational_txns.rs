@@ -7,6 +7,7 @@ use crate::{
         },
         UpdateContext,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     lines::NewBlocksStatement,
     range::UniversalRange,
     types::TimespanValue,
@@ -61,7 +62,10 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 

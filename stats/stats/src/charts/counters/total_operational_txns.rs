@@ -5,6 +5,7 @@ use crate::{
         data_manipulation::map::{Map, MapFunction},
         local_db::DirectPointLocalDbChartSource,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::TimespanValue,
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
@@ -36,7 +37,10 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 

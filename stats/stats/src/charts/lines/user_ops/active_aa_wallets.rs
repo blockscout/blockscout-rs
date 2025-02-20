@@ -13,6 +13,7 @@ use crate::{
         },
         types::BlockscoutMigrations,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
     ChartProperties, Named,
 };
 
@@ -57,6 +58,12 @@ impl ChartProperties for Properties {
 
     fn chart_type() -> ChartType {
         ChartType::Line
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
+            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+        }
     }
 }
 

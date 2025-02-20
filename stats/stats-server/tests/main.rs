@@ -1,2 +1,2 @@
-mod common;
 mod it;
+pub use it::common;

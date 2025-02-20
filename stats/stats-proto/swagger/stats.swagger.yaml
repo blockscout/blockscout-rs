@@ -148,6 +148,20 @@ paths:
             $ref: '#/definitions/rpcStatus'
       tags:
         - StatsService
+  /api/v1/update-status:
+    get:
+      operationId: StatsService_GetUpdateStatus
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1UpdateStatus'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
   /health:
     get:
       summary: |-
@@ -236,6 +250,19 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1BatchUpdateChartRejection'
+  v1ChartSubsetUpdateStatus:
+    type: string
+    enum:
+      - PENDING
+      - WAITING_FOR_STARTING_CONDITION
+      - RUNNING_INITIAL_UPDATE
+      - COMPLETED_INITIAL_UPDATE
+    default: PENDING
+    title: |-
+      - PENDING: No actions were taken yet for some charts
+       - WAITING_FOR_STARTING_CONDITION: Some charts are waiting for starting condition
+       - RUNNING_INITIAL_UPDATE: Some charts are still running initial update
+       - COMPLETED_INITIAL_UPDATE: Initial updates were completed for all charts
   v1ContractsPageStats:
     type: object
     properties:
@@ -373,6 +400,27 @@ definitions:
         $ref: '#/definitions/v1Counter'
       operational_transactions_24h:
         $ref: '#/definitions/v1Counter'
+  v1UpdateStatus:
+    type: object
+    properties:
+      all_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts
+      independent_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts that are independent from any indexing
+      blocks_dependent_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts that depend on indexing blocks
+      internal_transactions_dependent_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts that depend on indexing internal transactions and blocks
+      user_ops_dependent_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts that depend on indexing user operations and internal transactions
+    title: |-
+      Each field represents status of charts with corresponding dependency
+      as well as all charts with weaker requirements
 securityDefinitions:
   ApiKeyAuth:
     type: apiKey

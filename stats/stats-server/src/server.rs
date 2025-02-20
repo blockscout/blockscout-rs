@@ -61,6 +61,10 @@ fn grpc_router<S: StatsService>(
         .add_service(StatsServiceServer::from_arc(stats))
 }
 
+async fn sleep_indefinitely() {
+    tokio::time::sleep(Duration::from_secs(u64::MAX)).await;
+}
+
 pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     blockscout_service_launcher::tracing::init_logs(
         SERVICE_NAME,
@@ -119,7 +123,15 @@ pub async fn stats(mut settings: Settings) -> Result<(), anyhow::Error> {
     let (status_waiter, status_listener) = blockscout_api_config
         .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone()))
         .unzip();
-    let status_waiter_handle = status_waiter.map(|w| tokio::spawn(async move { w.run().await }));
+    let status_waiter_handle = status_waiter.map(|w| {
+        tokio::spawn(async move {
+            w.run().await?;
+            // we don't want to finish on success because of the way
+            // the tasks are handled here
+            sleep_indefinitely().await;
+            Ok(())
+        })
+    });
 
     let update_service = Arc::new(
         UpdateService::new(
