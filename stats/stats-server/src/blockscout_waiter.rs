@@ -169,6 +169,7 @@ impl IndexingStatusAggregator {
         if !self.wait_config.blockscout_checks_enabled()
             && !self.wait_config.user_ops_checks_enabled()
         {
+            tracing::info!("All indexing status checks are disabled, stopping status checks");
             return Ok(());
         }
         let mut consecutive_errors = 0;
@@ -352,14 +353,14 @@ mod tests {
     fn wait_config(
         #[default(0.9)] blocks: f64,
         #[default(0.9)] internal_transactions: f64,
-        #[default(true)] account_abstraction_check_enabled: bool,
+        #[default(true)] user_ops_check_enabled: bool,
         #[default(0)] check_period_secs: u32,
     ) -> StartConditionSettings {
         StartConditionSettings {
             blocks_ratio: ToggleableThreshold::enabled(blocks),
             internal_transactions_ratio: ToggleableThreshold::enabled(internal_transactions),
             user_ops_past_indexing_finished: ToggleableCheck {
-                enabled: account_abstraction_check_enabled,
+                enabled: user_ops_check_enabled,
             },
             check_period_secs,
         }
