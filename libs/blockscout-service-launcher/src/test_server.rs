@@ -23,6 +23,15 @@ pub fn get_test_server_settings() -> (ServerSettings, Url) {
     (server, base)
 }
 
+/// Use [`TestServerSettings`] for more configurable interface
+pub async fn init_server<F, R>(run: F, base: &Url) -> JoinHandle<Result<(), anyhow::Error>>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Future<Output = Result<(), anyhow::Error>> + Send,
+{
+    TestServerSettings::new(base.clone()).init(run).await
+}
+
 pub fn health_always_valid(_: reqwest::Response) -> DefaultRCheck {
     Box::pin(async { true })
 }
@@ -104,16 +113,6 @@ where
         server_handle
     }
 }
-
-/// Use [`TestServerSettings`] for more configurable interface
-pub async fn init_server<F, R>(run: F, base: &Url) -> JoinHandle<Result<(), anyhow::Error>>
-where
-    F: FnOnce() -> R + Send + 'static,
-    R: Future<Output = Result<(), anyhow::Error>> + Send,
-{
-    TestServerSettings::new(base.clone()).init(run).await
-}
-
 async fn send_annotated_request<Response: for<'a> serde::Deserialize<'a>>(
     url: &Url,
     route: &str,
