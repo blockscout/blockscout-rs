@@ -3,7 +3,6 @@ use reqwest::Url;
 use std::{
     future::Future,
     net::{SocketAddr, TcpListener},
-    pin::Pin,
     str::FromStr,
     time::Duration,
 };
@@ -32,39 +31,21 @@ where
     TestServerSettings::new(base.clone()).init(run).await
 }
 
-pub fn health_always_valid(_: reqwest::Response) -> DefaultRCheck {
-    Box::pin(async { true })
-}
-
-pub struct TestServerSettings<RCheck, FCheckHealth = fn(reqwest::Response) -> RCheck>
-where
-    RCheck: Future<Output = bool> + Send,
-    FCheckHealth: Fn(reqwest::Response) -> RCheck + Send + 'static,
-{
+pub struct TestServerSettings {
     healthcheck_timeout: Duration,
-    /// additional logic to verify if healthcheck
-    /// was successful. `true` - success
-    check_health_response: Option<FCheckHealth>,
     base: Url,
 }
 
-type DefaultRCheck = Pin<Box<dyn Future<Output = bool> + Send>>;
-
-impl TestServerSettings<DefaultRCheck, fn(reqwest::Response) -> DefaultRCheck> {
+impl TestServerSettings {
     pub fn new(base: Url) -> Self {
         Self {
             healthcheck_timeout: Duration::from_secs(15),
-            check_health_response: None,
             base,
         }
     }
 }
 
-impl<RCheck, FCheckHealth> TestServerSettings<RCheck, FCheckHealth>
-where
-    RCheck: Future<Output = bool> + Send,
-    FCheckHealth: Fn(reqwest::Response) -> RCheck + Send + 'static,
-{
+impl TestServerSettings {
     pub async fn init<F, R>(self, run: F) -> JoinHandle<Result<(), anyhow::Error>>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -84,13 +65,7 @@ where
                     .await
                 {
                     if response.status() == reqwest::StatusCode::OK {
-                        if let Some(check_health_response) = &self.check_health_response {
-                            if check_health_response(response).await {
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
+                        break;
                     }
                 }
             }
