@@ -226,7 +226,7 @@ impl Default for StartConditionSettings {
 
 impl StartConditionSettings {
     pub fn blockscout_checks_enabled(&self) -> bool {
-        self.blocks_ratio.enabled && self.internal_transactions_ratio.enabled
+        self.blocks_ratio.enabled || self.internal_transactions_ratio.enabled
     }
     pub fn user_ops_checks_enabled(&self) -> bool {
         self.user_ops_past_indexing_finished.enabled

@@ -62,7 +62,6 @@ fn grpc_router<S: StatsService>(
 }
 
 async fn sleep_indefinitely() {
-    tracing::info!("All indexing status checks are disabled, stopping status checks");
     tokio::time::sleep(Duration::from_secs(u64::MAX)).await;
 }
 
