@@ -3,6 +3,7 @@ use reqwest::Url;
 use std::{
     future::Future,
     net::{SocketAddr, TcpListener},
+    pin::Pin,
     str::FromStr,
     time::Duration,
 };
@@ -22,62 +23,98 @@ pub fn get_test_server_settings() -> (ServerSettings, Url) {
     (server, base)
 }
 
-/// `check_health_response` - additional logic to verify if healthcheck
-/// was successful. `true` - success
+pub fn health_always_valid(_: reqwest::Response) -> DefaultRCheck {
+    Box::pin(async { true })
+}
+
+pub struct TestServerSettings<RCheck, FCheckHealth = fn(reqwest::Response) -> RCheck>
+where
+    RCheck: Future<Output = bool> + Send,
+    FCheckHealth: Fn(reqwest::Response) -> RCheck + Send + 'static,
+{
+    healthcheck_timeout: Duration,
+    /// additional logic to verify if healthcheck
+    /// was successful. `true` - success
+    check_health_response: Option<FCheckHealth>,
+    base: Url,
+}
+
+type DefaultRCheck = Pin<Box<dyn Future<Output = bool> + Send>>;
+
+impl TestServerSettings<DefaultRCheck, fn(reqwest::Response) -> DefaultRCheck> {
+    pub fn new(base: Url) -> Self {
+        Self {
+            healthcheck_timeout: Duration::from_secs(15),
+            check_health_response: None,
+            base,
+        }
+    }
+}
+
+impl<RCheck, FCheckHealth> TestServerSettings<RCheck, FCheckHealth>
+where
+    RCheck: Future<Output = bool> + Send,
+    FCheckHealth: Fn(reqwest::Response) -> RCheck + Send + 'static,
+{
+    pub async fn init<F, R>(self, run: F) -> JoinHandle<Result<(), anyhow::Error>>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Future<Output = Result<(), anyhow::Error>> + Send,
+    {
+        let server_handle = tokio::spawn(async move { run().await });
+
+        let client = reqwest::Client::new();
+        let health_endpoint = self.base.join("health").unwrap();
+
+        let wait_health_check = async {
+            loop {
+                if let Ok(response) = client
+                    .request(reqwest::Method::GET, health_endpoint.clone())
+                    .query(&[("service", "")])
+                    .send()
+                    .await
+                {
+                    if response.status() == reqwest::StatusCode::OK {
+                        if let Some(check_health_response) = &self.check_health_response {
+                            if check_health_response(response).await {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+        };
+        // Wait for the server to start
+        if (timeout(self.healthcheck_timeout, wait_health_check).await).is_err() {
+            match timeout(Duration::from_secs(1), server_handle).await {
+                Ok(Ok(result)) => {
+                    panic!("Server terminated with: {result:?}")
+                }
+                Ok(Err(_)) => {
+                    panic!("Server start terminated with exit error")
+                }
+                Err(_) => {
+                    panic!("Server did not start in time, and did not terminate");
+                }
+            }
+        }
+
+        server_handle
+    }
+}
+
+/// Use [`TestServerSettings`] for more configurable interface
 pub async fn init_server<F, R, FCheck, RCheck>(
     run: F,
     base: &Url,
-    healthcheck_timeout: Option<Duration>,
-    check_health_response: Option<FCheck>,
 ) -> JoinHandle<Result<(), anyhow::Error>>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Future<Output = Result<(), anyhow::Error>> + Send,
-    FCheck: Fn(reqwest::Response) -> RCheck + Send + 'static,
-    RCheck: Future<Output = bool> + Send,
 {
-    let server_handle = tokio::spawn(async move { run().await });
-
-    let client = reqwest::Client::new();
-    let health_endpoint = base.join("health").unwrap();
-
-    let wait_health_check = async {
-        loop {
-            if let Ok(response) = client
-                .request(reqwest::Method::GET, health_endpoint.clone())
-                .query(&[("service", "")])
-                .send()
-                .await
-            {
-                if response.status() == reqwest::StatusCode::OK {
-                    if let Some(check_health_response) = &check_health_response {
-                        if check_health_response(response).await {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-    };
-    // Wait for the server to start
-    let timeout_duration = healthcheck_timeout.unwrap_or(Duration::from_secs(15));
-    if (timeout(timeout_duration, wait_health_check).await).is_err() {
-        match timeout(Duration::from_secs(1), server_handle).await {
-            Ok(Ok(result)) => {
-                panic!("Server terminated with: {result:?}")
-            }
-            Ok(Err(_)) => {
-                panic!("Server start terminated with exit error")
-            }
-            Err(_) => {
-                panic!("Server did not start in time, and did not terminate");
-            }
-        }
-    }
-
-    server_handle
+    TestServerSettings::new(base.clone()).init(run).await
 }
 
 async fn send_annotated_request<Response: for<'a> serde::Deserialize<'a>>(
