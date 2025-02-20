@@ -106,10 +106,7 @@ where
 }
 
 /// Use [`TestServerSettings`] for more configurable interface
-pub async fn init_server<F, R, FCheck, RCheck>(
-    run: F,
-    base: &Url,
-) -> JoinHandle<Result<(), anyhow::Error>>
+pub async fn init_server<F, R>(run: F, base: &Url) -> JoinHandle<Result<(), anyhow::Error>>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Future<Output = Result<(), anyhow::Error>> + Send,
