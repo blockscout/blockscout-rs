@@ -91,12 +91,11 @@ impl UpdateService {
                 let initial_update_semaphore = initial_update_semaphore.clone();
                 let init_update_tracker = &self.init_update_tracker;
                 async move {
-                    Self::wait_for_start_condition(
-                        &group_entry,
-                        status_listener,
-                        init_update_tracker,
-                    )
-                    .await;
+                    // also includes wait for mutex in `run_initial_update`
+                    init_update_tracker
+                        .mark_waiting_for_starting_condition(&group_entry.enabled_members)
+                        .await;
+                    Self::wait_for_start_condition(&group_entry, status_listener).await;
                     this.clone()
                         .run_initial_update(
                             &group_entry,
@@ -132,13 +131,7 @@ impl UpdateService {
     async fn wait_for_start_condition(
         group_entry: &UpdateGroupEntry,
         status_listener: Option<IndexingStatusListener>,
-        init_update_tracker: &InitialUpdateTracker,
     ) {
-        // set even if no status listener is present
-        // because the chart might wait for mutex later
-        init_update_tracker
-            .mark_waiting_for_starting_condition(&group_entry.enabled_members)
-            .await;
         if let Some(mut status_listener) = status_listener {
             let wait_result = status_listener
                 .wait_until_status_at_least(

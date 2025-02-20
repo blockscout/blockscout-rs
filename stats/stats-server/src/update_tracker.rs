@@ -115,7 +115,9 @@ impl InitialUpdateTrackerInner {
             user_ops: UserOpsIndexingStatus::IndexingPastOperations,
         };
         let user_ops_indexed_status = IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+            // We want to include all user ops dependant charts
+            // therefore we set blockscout to be as indexed as possible
+            blockscout: BlockscoutIndexingStatus::MAX,
             user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
         };
 
