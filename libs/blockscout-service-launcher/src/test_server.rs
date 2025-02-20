@@ -113,6 +113,7 @@ where
         server_handle
     }
 }
+
 async fn send_annotated_request<Response: for<'a> serde::Deserialize<'a>>(
     url: &Url,
     route: &str,
