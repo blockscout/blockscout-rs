@@ -107,7 +107,7 @@ pub async fn test_lines_counters_not_updated_ok(base: Url) {
     for counter in ["totalAddresses", "totalBlocks", "totalTxns"] {
         assert!(
             counters.counters.iter().any(|kek| kek.id == counter),
-            "counter {} not found in returned counters: {:?}",
+            "counter {} not found in returned counters ({:?})",
             counter,
             counters.counters
         );
