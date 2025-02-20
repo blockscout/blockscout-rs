@@ -162,6 +162,8 @@ enum ChartSubsetUpdateStatus {
   COMPLETED_INITIAL_UPDATE = 3;
 }
 
+// Each field represents status of charts with corresponding dependency
+// as well as all charts with weaker requirements
 message UpdateStatus {
   // Status of all enabled charts
   ChartSubsetUpdateStatus all_status = 1;
@@ -169,9 +171,9 @@ message UpdateStatus {
   ChartSubsetUpdateStatus independent_status = 2;
   // Status of all enabled charts that depend on indexing blocks
   ChartSubsetUpdateStatus blocks_dependent_status = 3;
-  // Status of all enabled charts that depend on indexing internal transactions
+  // Status of all enabled charts that depend on indexing internal transactions and blocks
   ChartSubsetUpdateStatus internal_transactions_dependent_status = 4;
-  // Status of all enabled charts that depend on indexing user operations
+  // Status of all enabled charts that depend on indexing user operations and internal transactions
   ChartSubsetUpdateStatus user_ops_dependent_status = 5;
 }
 
