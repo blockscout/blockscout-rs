@@ -5,24 +5,24 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum/contract
-    name: ENSRegistry
+    name: Registry
     network: gravity
     source:
-      abi: ENSRegistry
+      abi: Registry
       address: "0x5dc881dda4e4a8d312be3544ad13118d1a04cb17"
       startBlock: 32227752
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
-      file: ./src/ENSRegistry.ts
+      file: ./src/Registry.ts
       entities:
         - Domain
         - Account
         - Resolver
       abis:
-        - name: ENSRegistry
-          file: ./abis/ENSRegistry.json
+        - name: Registry
+          file: ./abis/Registry.json
       eventHandlers:
         - event: Transfer(indexed bytes32,address)
           handler: handleTransfer
@@ -35,16 +35,16 @@ dataSources:
 
 
   - kind: ethereum/contract
-    name: PublicResolver
+    name: Resolver
     network: gravity
     source:
-      abi: PublicResolver
+      abi: Resolver
       startBlock: 29420800
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
-      file: ./src/PublicResolver.ts
+      file: ./src/Resolver.ts
       entities:
         - AddrChanged
         - MulticoinAddrChanged
@@ -55,8 +55,8 @@ dataSources:
         - ContenthashChanged
         - InterfaceChanged
       abis:
-        - name: PublicResolver
-          file: ./abis/PublicResolver.json
+        - name: Resolver
+          file: ./abis/Resolver.json
       eventHandlers:
         - event: ABIChanged(indexed bytes32,indexed uint256)
           handler: handleABIChanged
@@ -77,25 +77,25 @@ dataSources:
         - event: VersionChanged(indexed bytes32,uint64)
           handler: handleVersionChanged
   - kind: ethereum/contract
-    name: BaseRegistrarImplementation
+    name: Base
     network: gravity
     source:
-      abi: BaseRegistrarImplementation
+      abi: Base
       address: "0xf8d9d86a4594ffc975ca9c760c5887bd9a3b6232"
       startBlock: 29420800
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
-      file: ./src/BaseRegistrarImplementation.ts
+      file: ./src/Base.ts
       entities:
         - Registration
         - NameRegistered
         - NameRenewed
         - NameTransferred
       abis:
-        - name: BaseRegistrarImplementation
-          file: ./abis/BaseRegistrarImplementation.json
+        - name: Base
+          file: ./abis/Base.json
       eventHandlers:
         - event: NameRegistered(indexed uint256,indexed address,uint256)
           handler: handleNameRegistered
@@ -105,22 +105,22 @@ dataSources:
           handler: handleNameTransferred
 
   - kind: ethereum/contract
-    name: BASERegistrarController
+    name: RegistrarController
     network: gravity
     source:
-      abi: BASERegistrarController
+      abi: RegistrarController
       address: "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7"
       startBlock: 29420800
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
-      file: ./src/BASERegistrarController.ts
+      file: ./src/RegistrarController.ts
       entities:
         - Registration
       abis:
-        - name: BASERegistrarController
-          file: ./abis/BASERegistrarController.json
+        - name: RegistrarController
+          file: ./abis/RegistrarController.json
       eventHandlers:
         - event: NameRegistered(string,indexed bytes32,indexed address,uint256,uint256,uint256)
           handler: handleNameRegisteredByController

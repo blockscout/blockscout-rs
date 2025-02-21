@@ -5,7 +5,7 @@ import {
   Transfer as TransferEvent,
   NewResolver as NewResolverEvent,
   NewTTL as NewTTLEvent
-} from "../generated/ENSRegistry/ENSRegistry"
+} from "../generated/Registry/Registry"
 import { NewOwner, Transfer, NewResolver, NewTTL, Domain, Account, Resolver } from "../generated/schema"
 import { EMPTY_ADDRESS, EMPTY_ADDRESS_BYTEARRAY, ROOT_NODE, concat, createEventID } from "./utils";
 

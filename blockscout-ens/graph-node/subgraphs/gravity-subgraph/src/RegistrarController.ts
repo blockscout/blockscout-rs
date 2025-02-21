@@ -3,7 +3,7 @@ import { BigInt, ByteArray, Bytes, crypto, ens } from "@graphprotocol/graph-ts";
 import {
     NameRegistered as ControllerNameRegisteredEvent,
     NameRenewed as ControllerNameRenewedEvent,
-  } from "../generated/BASERegistrarController/BASERegistrarController";
+  } from "../generated/RegistrarController/RegistrarController";
   
   import {
     checkValidLabel,
@@ -33,7 +33,7 @@ export function handleNameRegisteredByController(
     setNamePreimage(
       event.params.name,
       event.params.label,
-      event.params.baseCost.plus(event.params.premium)
+      event.params.baseCost
     );
   }
   
