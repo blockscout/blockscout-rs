@@ -1,0 +1,15 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    
+    - selector: blockscout.tacOperationLifecycle.v1.TacService.GetOperationStatus
+      post: /api/v1/TacService:getOperationStatus
+      body: "*"
+    
+    #################### Health ####################
+
+    - selector: blockscout.tacOperationLifecycle.v1.Health.Check
+      get: /health
+
