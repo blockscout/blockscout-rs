@@ -1,0 +1,38 @@
+{
+  "gravity": {
+    "ENSRegistry": {
+      "address": "0x5dc881dda4e4a8d312be3544ad13118d1a04cb17",
+      "startBlock": 32227752
+    },
+    "PublicResolver": {
+      "startBlock": 29420800
+    },
+    "BASERegistrarController": {
+      "address": "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7",
+      "startBlock": 29420800
+    },
+    "BaseRegistrarImplementation": {
+      "address": "0xf8d9d86a4594ffc975ca9c760c5887bd9a3b6232",
+      "startBlock": 29420800
+    },
+    "": ""
+  },
+  "gravity-faucet": {
+    "ENSRegistry": {
+      "address": "",
+      "startBlock": 0
+    },
+    "PublicResolver": {
+      "startBlock": 0
+    },
+    "BASERegistrarController": {
+      "address": "",
+      "startBlock": 0
+    },
+    "BaseRegistrarImplementation": {
+      "address": "",
+      "startBlock": 0
+    },
+    "": ""
+  }
+}
