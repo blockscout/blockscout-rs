@@ -5,7 +5,7 @@ import { Account, Domain } from "../generated/schema";
 export const BASE_NODE_HASH = "b8d5774ade4492991dce6d60a4b058ae904534abd252bc4b60bf5f7a683e2a2f" // sepolia base node hash
 export const BASE_NODE = ".mode";
 export const COIN_TYPE      = 2147485273 // 1625
-export const COIN_TYPE_FAUCET      = 2147497153 // 13505
+export const COIN_TYPE_SEPOLIA      = 2147497153 // 13505
 
 export const ROOT_NODE =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
