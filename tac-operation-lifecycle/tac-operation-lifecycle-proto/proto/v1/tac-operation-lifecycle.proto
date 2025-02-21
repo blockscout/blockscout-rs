@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package blockscout.tacOperationLifecycle.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/tac-operation-lifecycle";
+
+
+service TacService {
+  rpc GetOperationStatus(GetOperationStatusRequest) returns (GetOperationStatusResponse) {}
+  
+}
+
+message GetOperationStatusResponse {
+  string operation_id = 1;
+  repeated OperationStatus status_history = 2;
+}
+
+message GetOperationStatusRequest {
+  string operation_id = 1;
+}
+
+message OperationStatus {
+  string status = 1;
+  uint64 timestamp = 2;
+  
+}
+
+
+
+
