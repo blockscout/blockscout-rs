@@ -1,7 +1,7 @@
 use crate::database::{
     ConnectionTrait, Database, DatabaseConnection, DbErr, MigratorTrait, Statement,
 };
-use std::ops::Deref;
+use std::{ops::Deref, sync::Arc};
 
 /// Postgres supports maximum 63 symbols.
 /// All exceeding symbols are truncated by the database.
@@ -13,8 +13,8 @@ const HASH_SUFFIX_STRING_LEN: usize = 8;
 
 #[derive(Clone, Debug)]
 pub struct TestDbGuard {
-    // `Arc`'s are inside, so we can confidently clone the
-    // connections
+    // Return to `Arc` as soon as https://github.com/SeaQL/sea-orm/pull/2511 is available
+    // to work with mock connecitons
     conn_with_db: DatabaseConnection,
     conn_without_db: DatabaseConnection,
     base_db_url: String,
@@ -72,8 +72,8 @@ impl TestDbGuard {
         Self::new::<Migrator>(db_name.as_str()).await
     }
 
-    pub fn client(&self) -> DatabaseConnection {
-        self.conn_with_db.clone()
+    pub fn client(&self) -> Arc<DatabaseConnection> {
+        Arc::new(self.conn_with_db.clone())
     }
 
     pub fn db_url(&self) -> String {
