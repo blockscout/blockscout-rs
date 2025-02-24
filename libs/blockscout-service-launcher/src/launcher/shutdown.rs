@@ -3,8 +3,6 @@ use std::future::Future;
 use tokio::task::JoinSet;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-use super::launch::TaskTrackers;
-
 /// Graceful shutdown according to https://tokio.rs/tokio/topics/shutdown
 #[derive(Clone)]
 pub struct GracefulShutdownHandler {
@@ -65,6 +63,53 @@ impl LocalGracefulShutdownHandler {
             )
         } else {
             futures.spawn(self.task_trackers.local.track_future(future))
+        }
+    }
+}
+
+/// * `local` - tracker for tasks created within this crate.
+/// * `external` - tracker provided by some dependant crate,
+///     so that it can track our tasks as well.
+#[derive(Clone)]
+pub(crate) struct TaskTrackers {
+    // we don't use `JoinSet` here because we wish to
+    // share this tracker with many tasks
+    pub local: TaskTracker,
+    pub external: Option<TaskTracker>,
+}
+
+impl TaskTrackers {
+    pub fn new(external: Option<TaskTracker>) -> Self {
+        Self {
+            local: TaskTracker::new(),
+            external,
+        }
+    }
+
+    pub fn close(&self) {
+        self.local.close();
+        if let Some(t) = &self.external {
+            t.close();
+        }
+    }
+
+    /// Should be cancel-safe, just like `TaskTracker::wait()`
+    pub async fn wait(&self) {
+        self.local.wait().await;
+        if let Some(t) = &self.external {
+            t.wait().await;
+        }
+    }
+
+    pub fn track_future<F>(&self, future: F) -> impl Future<Output = F::Output>
+    where
+        F: Future,
+    {
+        let future = self.local.track_future(future);
+        if let Some(t) = &self.external {
+            either::Left(t.track_future(future))
+        } else {
+            either::Right(future)
         }
     }
 }
