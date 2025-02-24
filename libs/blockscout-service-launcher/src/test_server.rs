@@ -32,8 +32,8 @@ where
 }
 
 pub struct TestServerSettings {
-    healthcheck_timeout: Duration,
-    base: Url,
+    pub healthcheck_timeout: Duration,
+    pub base: Url,
 }
 
 impl TestServerSettings {
