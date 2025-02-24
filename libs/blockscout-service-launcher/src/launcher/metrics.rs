@@ -1,11 +1,10 @@
 use actix_web::{App, HttpServer};
 use actix_web_prom::{PrometheusMetrics, PrometheusMetricsBuilder};
 use std::{collections::HashMap, net::SocketAddr};
-use tokio_util::sync::CancellationToken;
 
 use crate::launcher::launch::{stop_actix_server_on_cancel, SHUTDOWN_TIMEOUT_SEC};
 
-use super::launch::TaskTrackers;
+use super::shutdown::LocalGracefulShutdownHandler;
 
 #[derive(Clone)]
 pub struct Metrics {
@@ -41,8 +40,7 @@ impl Metrics {
     pub fn run_server(
         self,
         addr: SocketAddr,
-        shutdown: Option<CancellationToken>,
-        task_trackers: &TaskTrackers,
+        graceful_shutdown: LocalGracefulShutdownHandler,
     ) -> actix_web::dev::Server {
         tracing::info!(addr = ?addr, "starting metrics server");
         let server = HttpServer::new(move || App::new().wrap(self.metrics_middleware.clone()))
@@ -50,12 +48,12 @@ impl Metrics {
             .bind(addr)
             .unwrap()
             .run();
-        if let Some(shutdown) = shutdown {
-            tokio::spawn(task_trackers.track_future(stop_actix_server_on_cancel(
-                server.handle(),
-                shutdown,
-                true,
-            )));
+        if let Some(shutdown) = graceful_shutdown.shutdown {
+            tokio::spawn(
+                graceful_shutdown
+                    .task_trackers
+                    .track_future(stop_actix_server_on_cancel(server.handle(), shutdown, true)),
+            );
         }
         server
     }
