@@ -124,35 +124,29 @@ where
             })
             .await;
     }
-    if let Some(ref shutdown) = graceful_shutdown.shutdown {
-        let shutdown = shutdown.clone();
-        graceful_shutdown
-            .spawn_and_track(&mut futures, async move {
-                shutdown.cancelled().await;
-                Ok(())
-            })
-            .await;
-    }
+    let shutdown = graceful_shutdown.shutdown.clone();
+    graceful_shutdown
+        .spawn_and_track(&mut futures, async move {
+            shutdown.cancelled().await;
+            Ok(())
+        })
+        .await;
 
     let res = futures.join_next().await.expect("future set is not empty");
     tracing::info!("observed finished future, shutting down launcher and created tasks");
     graceful_shutdown.task_trackers.close();
-    if let Some(shutdown) = graceful_shutdown.shutdown {
-        shutdown.cancel();
-        if timeout(
-            Duration::from_secs(SHUTDOWN_TIMEOUT_SEC),
-            graceful_shutdown.task_trackers.wait(),
-        )
-        .await
-        .is_err()
-        {
-            // timed out; fallback to simple task abort
-            tracing::error!(
-                "failed to gracefully shutdown with `CancellationToken`, aborting launcher tasks"
-            );
-            futures.abort_all();
-        }
-    } else {
+    graceful_shutdown.shutdown.cancel();
+    if timeout(
+        Duration::from_secs(SHUTDOWN_TIMEOUT_SEC),
+        graceful_shutdown.task_trackers.wait(),
+    )
+    .await
+    .is_err()
+    {
+        // timed out; fallback to simple task abort
+        tracing::error!(
+            "failed to gracefully shutdown with `CancellationToken`, aborting launcher tasks"
+        );
         futures.abort_all();
     }
     graceful_shutdown.task_trackers.wait().await;
@@ -223,26 +217,24 @@ where
         .expect("failed to bind server")
         .run()
     };
-    if let Some(shutdown) = graceful_shutdown.shutdown {
-        tokio::spawn(
-            graceful_shutdown
-                .task_trackers
-                .track_future(stop_actix_server_on_cancel(server.handle(), shutdown, true)),
-        );
-    }
+    tokio::spawn(
+        graceful_shutdown
+            .task_trackers
+            .track_future(stop_actix_server_on_cancel(
+                server.handle(),
+                graceful_shutdown.shutdown,
+                true,
+            )),
+    );
     server
 }
 
 async fn grpc_serve(
     grpc: tonic::transport::server::Router,
     addr: SocketAddr,
-    shutdown: Option<CancellationToken>,
+    shutdown: CancellationToken,
 ) -> Result<(), tonic::transport::Error> {
     tracing::info!("starting grpc server on addr {}", addr);
-    if let Some(shutdown) = shutdown {
-        grpc.serve_with_shutdown(addr, grpc_cancel_signal(shutdown))
-            .await
-    } else {
-        grpc.serve(addr).await
-    }
+    grpc.serve_with_shutdown(addr, grpc_cancel_signal(shutdown))
+        .await
 }
