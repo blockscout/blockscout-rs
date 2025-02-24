@@ -38,7 +38,7 @@ pub struct LocalGracefulShutdownHandler {
 impl From<GracefulShutdownHandler> for LocalGracefulShutdownHandler {
     fn from(value: GracefulShutdownHandler) -> Self {
         Self {
-            shutdown_token: value.shutdown_token.unwrap_or(CancellationToken::new()),
+            shutdown_token: value.shutdown_token.unwrap_or_default(),
             task_trackers: TaskTrackers::new(value.task_tracker),
         }
     }
