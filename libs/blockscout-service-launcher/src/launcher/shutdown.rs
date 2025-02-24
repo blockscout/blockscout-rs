@@ -26,14 +26,14 @@ impl GracefulShutdownHandler {
 /// See [`TaskTrackers`] for details
 #[derive(Clone)]
 pub struct LocalGracefulShutdownHandler {
-    pub shutdown: Option<CancellationToken>,
+    pub shutdown: CancellationToken,
     pub task_trackers: TaskTrackers,
 }
 
 impl From<GracefulShutdownHandler> for LocalGracefulShutdownHandler {
     fn from(value: GracefulShutdownHandler) -> Self {
         Self {
-            shutdown: value.shutdown,
+            shutdown: value.shutdown.unwrap_or(CancellationToken::new()),
             task_trackers: TaskTrackers::new(value.task_tracker),
         }
     }
