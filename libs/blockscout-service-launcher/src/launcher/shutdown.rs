@@ -6,23 +6,22 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 /// Graceful shutdown according to https://tokio.rs/tokio/topics/shutdown
 #[derive(Clone)]
 pub struct GracefulShutdownHandler {
-    pub shutdown_token: Option<CancellationToken>,
-    pub task_tracker: Option<TaskTracker>,
+    pub shutdown_token: CancellationToken,
+    pub task_tracker: TaskTracker,
 }
 
 impl GracefulShutdownHandler {
-    /// No external tracking
-    pub fn new_empty() -> Self {
+    pub fn new() -> Self {
         Self {
-            shutdown_token: None,
-            task_tracker: None,
+            shutdown_token: CancellationToken::new(),
+            task_tracker: TaskTracker::new(),
         }
     }
 
     pub fn from_token(token: CancellationToken) -> Self {
         Self {
-            shutdown_token: Some(token),
-            task_tracker: None,
+            shutdown_token: token,
+            task_tracker: TaskTracker::new(),
         }
     }
 }
@@ -38,7 +37,7 @@ pub struct LocalGracefulShutdownHandler {
 impl From<GracefulShutdownHandler> for LocalGracefulShutdownHandler {
     fn from(value: GracefulShutdownHandler) -> Self {
         Self {
-            shutdown_token: value.shutdown_token.unwrap_or_default(),
+            shutdown_token: value.shutdown_token,
             task_trackers: TaskTrackers::new(value.task_tracker),
         }
     }
@@ -55,15 +54,11 @@ impl LocalGracefulShutdownHandler {
         F: Send + 'static,
         F::Output: Send,
     {
-        if let Some(t) = &self.task_trackers.external {
-            futures.spawn(
-                self.task_trackers
-                    .local
-                    .track_future(t.track_future(future)),
-            )
-        } else {
-            futures.spawn(self.task_trackers.local.track_future(future))
-        }
+        futures.spawn(
+            self.task_trackers
+                .local
+                .track_future(self.task_trackers.external.track_future(future)),
+        )
     }
 }
 
@@ -75,11 +70,11 @@ pub(crate) struct TaskTrackers {
     // we don't use `JoinSet` here because we wish to
     // share this tracker with many tasks
     pub local: TaskTracker,
-    pub external: Option<TaskTracker>,
+    pub external: TaskTracker,
 }
 
 impl TaskTrackers {
-    pub fn new(external: Option<TaskTracker>) -> Self {
+    pub fn new(external: TaskTracker) -> Self {
         Self {
             local: TaskTracker::new(),
             external,
@@ -88,28 +83,19 @@ impl TaskTrackers {
 
     pub fn close(&self) {
         self.local.close();
-        if let Some(t) = &self.external {
-            t.close();
-        }
+        self.external.close();
     }
 
     /// Should be cancel-safe, just like `TaskTracker::wait()`
     pub async fn wait(&self) {
         self.local.wait().await;
-        if let Some(t) = &self.external {
-            t.wait().await;
-        }
+        self.external.wait().await;
     }
 
     pub fn track_future<F>(&self, future: F) -> impl Future<Output = F::Output>
     where
         F: Future,
     {
-        let future = self.local.track_future(future);
-        if let Some(t) = &self.external {
-            either::Left(t.track_future(future))
-        } else {
-            either::Right(future)
-        }
+        self.external.track_future(self.local.track_future(future))
     }
 }
