@@ -48,13 +48,15 @@ impl Metrics {
             .bind(addr)
             .unwrap()
             .run();
-        if let Some(shutdown) = graceful_shutdown.shutdown {
-            tokio::spawn(
-                graceful_shutdown
-                    .task_trackers
-                    .track_future(stop_actix_server_on_cancel(server.handle(), shutdown, true)),
-            );
-        }
+        tokio::spawn(
+            graceful_shutdown
+                .task_trackers
+                .track_future(stop_actix_server_on_cancel(
+                    server.handle(),
+                    graceful_shutdown.shutdown,
+                    true,
+                )),
+        );
         server
     }
 }
