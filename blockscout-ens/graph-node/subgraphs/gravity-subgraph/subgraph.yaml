@@ -120,7 +120,8 @@ dataSources:
         - name: RegistrarController
           file: ./abis/RegistrarController.json
       eventHandlers:
-        - event: NameRegistered(uint256,string,indexed bytes32,indexed address,uint256,uint256)
+        - event: NameRegistered(uint256,string,indexed bytes32,indexed
+            address,uint256,uint256)
           handler: handleNameRegisteredByController
         - event: NameRenewed(uint256,string,indexed bytes32,uint256,uint256)
           handler: handleNameRenewedByController
