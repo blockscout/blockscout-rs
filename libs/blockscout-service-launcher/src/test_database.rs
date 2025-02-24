@@ -1,7 +1,7 @@
 use crate::database::{
     ConnectionTrait, Database, DatabaseConnection, DbErr, MigratorTrait, Statement,
 };
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
 
 /// Postgres supports maximum 63 symbols.
 /// All exceeding symbols are truncated by the database.
@@ -13,8 +13,10 @@ const HASH_SUFFIX_STRING_LEN: usize = 8;
 
 #[derive(Clone, Debug)]
 pub struct TestDbGuard {
-    conn_with_db: Arc<DatabaseConnection>,
-    conn_without_db: Arc<DatabaseConnection>,
+    // `Arc`'s are inside, so we can confidently clone the
+    // connections
+    conn_with_db: DatabaseConnection,
+    conn_without_db: DatabaseConnection,
     base_db_url: String,
     db_name: String,
 }
@@ -30,8 +32,8 @@ impl TestDbGuard {
             .expect("Connection to postgres (without database) failed");
         let db_name = Self::preprocess_database_name(db_name);
         let mut guard = TestDbGuard {
-            conn_with_db: Arc::new(DatabaseConnection::Disconnected),
-            conn_without_db: Arc::new(conn_without_db),
+            conn_with_db: DatabaseConnection::Disconnected,
+            conn_without_db: conn_without_db,
             base_db_url,
             db_name,
         };
@@ -70,7 +72,7 @@ impl TestDbGuard {
         Self::new::<Migrator>(db_name.as_str()).await
     }
 
-    pub fn client(&self) -> Arc<DatabaseConnection> {
+    pub fn client(&self) -> DatabaseConnection {
         self.conn_with_db.clone()
     }
 
@@ -87,7 +89,7 @@ impl TestDbGuard {
         let conn_with_db = Database::connect(&db_url)
             .await
             .expect("Connection to postgres (with database) failed");
-        self.conn_with_db = Arc::new(conn_with_db);
+        self.conn_with_db = conn_with_db;
     }
 
     pub async fn drop_database(&self) {
@@ -123,7 +125,7 @@ impl TestDbGuard {
     }
 
     async fn run_migrations<Migrator: MigratorTrait>(&self) {
-        Migrator::up(self.conn_with_db.as_ref(), None)
+        Migrator::up(&self.conn_with_db, None)
             .await
             .expect("Database migration failed");
     }
@@ -141,6 +143,19 @@ impl TestDbGuard {
             "{}-{hash}",
             &name[..MAX_DATABASE_NAME_LEN - HASH_SUFFIX_STRING_LEN - 1]
         )
+    }
+
+    pub async fn close_all(self) -> (Result<(), DbErr>, Result<(), DbErr>) {
+        (
+            self.conn_with_db.close().await,
+            self.conn_without_db.close().await,
+        )
+    }
+
+    pub async fn close_all_unwrap(self) {
+        let (res_with_db, res_without_db) = self.close_all().await;
+        res_with_db.expect("couldn't close connection with database");
+        res_without_db.expect("couldn't close connection without database");
     }
 }
 
