@@ -105,7 +105,7 @@ where
         let grpc_server = grpc_serve(
             grpc,
             settings.server.grpc.addr,
-            graceful_shutdown.shutdown.clone(),
+            graceful_shutdown.shutdown_token.clone(),
         );
         graceful_shutdown
             .spawn_and_track(&mut futures, async move {
@@ -124,7 +124,7 @@ where
             })
             .await;
     }
-    let shutdown = graceful_shutdown.shutdown.clone();
+    let shutdown = graceful_shutdown.shutdown_token.clone();
     graceful_shutdown
         .spawn_and_track(&mut futures, async move {
             shutdown.cancelled().await;
@@ -135,7 +135,7 @@ where
     let res = futures.join_next().await.expect("future set is not empty");
     tracing::info!("observed finished future, shutting down launcher and created tasks");
     graceful_shutdown.task_trackers.close();
-    graceful_shutdown.shutdown.cancel();
+    graceful_shutdown.shutdown_token.cancel();
     if timeout(
         Duration::from_secs(SHUTDOWN_TIMEOUT_SEC),
         graceful_shutdown.task_trackers.wait(),
@@ -222,7 +222,7 @@ where
             .task_trackers
             .track_future(stop_actix_server_on_cancel(
                 server.handle(),
-                graceful_shutdown.shutdown,
+                graceful_shutdown.shutdown_token,
                 true,
             )),
     );
