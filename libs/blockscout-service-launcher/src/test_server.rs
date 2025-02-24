@@ -105,7 +105,7 @@ async fn send_annotated_request<Response: for<'a> serde::Deserialize<'a>>(
     let response = request
         .send()
         .await
-        .unwrap_or_else(|_| panic!("{annotation}Failed to send request"));
+        .unwrap_or_else(|e| panic!("{annotation}Failed to send request: {e}"));
 
     // Assert that status code is success
     if !response.status().is_success() {
