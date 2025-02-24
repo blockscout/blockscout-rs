@@ -8,7 +8,7 @@ use super::launch::TaskTrackers;
 /// Graceful shutdown according to https://tokio.rs/tokio/topics/shutdown
 #[derive(Clone)]
 pub struct GracefulShutdownHandler {
-    pub shutdown: Option<CancellationToken>,
+    pub shutdown_token: Option<CancellationToken>,
     pub task_tracker: Option<TaskTracker>,
 }
 
@@ -16,7 +16,14 @@ impl GracefulShutdownHandler {
     /// No external tracking
     pub fn new_empty() -> Self {
         Self {
-            shutdown: None,
+            shutdown_token: None,
+            task_tracker: None,
+        }
+    }
+
+    pub fn from_token(token: CancellationToken) -> Self {
+        Self {
+            shutdown_token: Some(token),
             task_tracker: None,
         }
     }
@@ -33,7 +40,7 @@ pub struct LocalGracefulShutdownHandler {
 impl From<GracefulShutdownHandler> for LocalGracefulShutdownHandler {
     fn from(value: GracefulShutdownHandler) -> Self {
         Self {
-            shutdown_token: value.shutdown.unwrap_or(CancellationToken::new()),
+            shutdown_token: value.shutdown_token.unwrap_or(CancellationToken::new()),
             task_trackers: TaskTrackers::new(value.task_tracker),
         }
     }
