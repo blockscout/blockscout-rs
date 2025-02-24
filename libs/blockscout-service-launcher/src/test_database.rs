@@ -13,10 +13,8 @@ const HASH_SUFFIX_STRING_LEN: usize = 8;
 
 #[derive(Clone, Debug)]
 pub struct TestDbGuard {
-    // Return to `Arc` as soon as https://github.com/SeaQL/sea-orm/pull/2511 is available
-    // to work with mock connecitons
-    conn_with_db: DatabaseConnection,
-    conn_without_db: DatabaseConnection,
+    conn_with_db: Arc<DatabaseConnection>,
+    conn_without_db: Arc<DatabaseConnection>,
     base_db_url: String,
     db_name: String,
 }
@@ -32,8 +30,8 @@ impl TestDbGuard {
             .expect("Connection to postgres (without database) failed");
         let db_name = Self::preprocess_database_name(db_name);
         let mut guard = TestDbGuard {
-            conn_with_db: DatabaseConnection::Disconnected,
-            conn_without_db: conn_without_db,
+            conn_with_db: Arc::new(DatabaseConnection::Disconnected),
+            conn_without_db: Arc::new(conn_without_db),
             base_db_url,
             db_name,
         };
@@ -73,7 +71,7 @@ impl TestDbGuard {
     }
 
     pub fn client(&self) -> Arc<DatabaseConnection> {
-        Arc::new(self.conn_with_db.clone())
+        self.conn_with_db.clone()
     }
 
     pub fn db_url(&self) -> String {
@@ -89,7 +87,7 @@ impl TestDbGuard {
         let conn_with_db = Database::connect(&db_url)
             .await
             .expect("Connection to postgres (with database) failed");
-        self.conn_with_db = conn_with_db;
+        self.conn_with_db = Arc::new(conn_with_db);
     }
 
     pub async fn drop_database(&self) {
@@ -125,7 +123,7 @@ impl TestDbGuard {
     }
 
     async fn run_migrations<Migrator: MigratorTrait>(&self) {
-        Migrator::up(&self.conn_with_db, None)
+        Migrator::up(self.conn_with_db.as_ref(), None)
             .await
             .expect("Database migration failed");
     }
@@ -145,11 +143,19 @@ impl TestDbGuard {
         )
     }
 
-    pub async fn close_all(self) -> (Result<(), DbErr>, Result<(), DbErr>) {
-        (
-            self.conn_with_db.close().await,
-            self.conn_without_db.close().await,
-        )
+    pub async fn close_all(&self) -> (Result<(), DbErr>, Result<(), DbErr>) {
+        // remove `get_postgres_connection_pool` as soon as
+        // https://github.com/SeaQL/sea-orm/pull/2511 is available
+        // to work with other connections
+        self.conn_with_db
+            .get_postgres_connection_pool()
+            .close()
+            .await;
+        self.conn_without_db
+            .get_postgres_connection_pool()
+            .close()
+            .await;
+        (Ok(()), Ok(()))
     }
 
     pub async fn close_all_unwrap(self) {
