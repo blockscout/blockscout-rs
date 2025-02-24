@@ -8,9 +8,9 @@ use super::{
 };
 use actix_web::{middleware::Condition, App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
-use std::{future::Future, net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, time::Duration};
 use tokio::{task::JoinSet, time::timeout};
-use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tokio_util::sync::CancellationToken;
 use tracing_actix_web::TracingLogger;
 
 pub(crate) const SHUTDOWN_TIMEOUT_SEC: u64 = 10;
@@ -19,53 +19,6 @@ pub struct LaunchSettings {
     pub service_name: String,
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
-}
-
-/// * `local` - tracker for tasks created within this crate.
-/// * `external` - tracker provided by some dependant crate,
-///     so that it can track our tasks as well.
-#[derive(Clone)]
-pub(crate) struct TaskTrackers {
-    // we don't use `JoinSet` here because we wish to
-    // share this tracker with many tasks
-    pub local: TaskTracker,
-    pub external: Option<TaskTracker>,
-}
-
-impl TaskTrackers {
-    pub fn new(external: Option<TaskTracker>) -> Self {
-        Self {
-            local: TaskTracker::new(),
-            external,
-        }
-    }
-
-    pub fn close(&self) {
-        self.local.close();
-        if let Some(t) = &self.external {
-            t.close();
-        }
-    }
-
-    /// Should be cancel-safe, just like `TaskTracker::wait()`
-    pub async fn wait(&self) {
-        self.local.wait().await;
-        if let Some(t) = &self.external {
-            t.wait().await;
-        }
-    }
-
-    pub fn track_future<F>(&self, future: F) -> impl Future<Output = F::Output>
-    where
-        F: Future,
-    {
-        let future = self.local.track_future(future);
-        if let Some(t) = &self.external {
-            either::Left(t.track_future(future))
-        } else {
-            either::Right(future)
-        }
-    }
 }
 
 pub async fn launch<R>(
