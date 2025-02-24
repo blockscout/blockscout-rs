@@ -2,6 +2,7 @@ use super::{
     metrics::Metrics,
     router::{configure_router, HttpRouter},
     settings::{MetricsSettings, ServerSettings},
+    shutdown::{GracefulShutdownHandler, LocalGracefulShutdownHandler},
     span_builder::CompactRootSpanBuilder,
     HttpServerSettings,
 };
@@ -20,8 +21,13 @@ pub struct LaunchSettings {
     pub metrics: MetricsSettings,
 }
 
+/// * `local` - tracker for tasks created within this crate.
+/// * `external` - tracker provided by some dependant crate,
+///     so that it can track our tasks as well.
 #[derive(Clone)]
 pub(crate) struct TaskTrackers {
+    // we don't use `JoinSet` here because we wish to
+    // share this tracker with many tasks
     pub local: TaskTracker,
     pub external: Option<TaskTracker>,
 }
@@ -62,29 +68,11 @@ impl TaskTrackers {
     }
 }
 
-async fn spawn_and_track<F>(
-    futures: &mut JoinSet<F::Output>,
-    trackers: &TaskTrackers,
-    future: F,
-) -> tokio::task::AbortHandle
-where
-    F: Future,
-    F: Send + 'static,
-    F::Output: Send,
-{
-    if let Some(t) = &trackers.external {
-        futures.spawn(trackers.local.track_future(t.track_future(future)))
-    } else {
-        futures.spawn(trackers.local.track_future(future))
-    }
-}
-
 pub async fn launch<R>(
     settings: &LaunchSettings,
     http: R,
     grpc: tonic::transport::server::Router,
-    shutdown: Option<CancellationToken>,
-    task_tracker: Option<TaskTracker>,
+    graceful_shutdown: GracefulShutdownHandler,
 ) -> Result<(), anyhow::Error>
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
@@ -93,9 +81,9 @@ where
         .metrics
         .enabled
         .then(|| Metrics::new(&settings.service_name, &settings.metrics.route));
+    let graceful_shutdown = LocalGracefulShutdownHandler::from(graceful_shutdown);
 
     let mut futures = JoinSet::new();
-    let trackers = TaskTrackers::new(task_tracker);
 
     if settings.server.http.enabled {
         let http_server = http_serve(
@@ -104,57 +92,70 @@ where
                 .as_ref()
                 .map(|metrics| metrics.http_middleware().clone()),
             &settings.server.http,
-            shutdown.clone(),
-            &trackers,
+            graceful_shutdown.clone(),
         );
-        spawn_and_track(&mut futures, &trackers, async move {
-            http_server.await.map_err(anyhow::Error::msg)
-        })
-        .await;
+        graceful_shutdown
+            .spawn_and_track(&mut futures, async move {
+                http_server.await.map_err(anyhow::Error::msg)
+            })
+            .await;
     }
 
     if settings.server.grpc.enabled {
-        let grpc_server = grpc_serve(grpc, settings.server.grpc.addr, shutdown.clone());
-        spawn_and_track(&mut futures, &trackers, async move {
-            grpc_server.await.map_err(anyhow::Error::msg)
-        })
-        .await;
+        let grpc_server = grpc_serve(
+            grpc,
+            settings.server.grpc.addr,
+            graceful_shutdown.shutdown.clone(),
+        );
+        graceful_shutdown
+            .spawn_and_track(&mut futures, async move {
+                grpc_server.await.map_err(anyhow::Error::msg)
+            })
+            .await;
     }
 
     if let Some(metrics) = metrics {
         let addr = settings.metrics.addr;
-        let shutdown = shutdown.clone();
-        let trackers_ = trackers.clone();
-        spawn_and_track(&mut futures, &trackers, async move {
-            metrics.run_server(addr, shutdown, &trackers_).await?;
-            Ok(())
-        })
-        .await;
+        let graceful_shutdown_cloned = graceful_shutdown.clone();
+        graceful_shutdown
+            .spawn_and_track(&mut futures, async move {
+                metrics.run_server(addr, graceful_shutdown_cloned).await?;
+                Ok(())
+            })
+            .await;
     }
-    if let Some(ref shutdown) = shutdown {
+    if let Some(ref shutdown) = graceful_shutdown.shutdown {
         let shutdown = shutdown.clone();
-        spawn_and_track(&mut futures, &trackers, async move {
-            shutdown.cancelled().await;
-            Ok(())
-        })
-        .await;
+        graceful_shutdown
+            .spawn_and_track(&mut futures, async move {
+                shutdown.cancelled().await;
+                Ok(())
+            })
+            .await;
     }
 
     let res = futures.join_next().await.expect("future set is not empty");
-    trackers.close();
-    if let Some(shutdown) = shutdown {
+    tracing::info!("observed finished future, shutting down launcher and created tasks");
+    graceful_shutdown.task_trackers.close();
+    if let Some(shutdown) = graceful_shutdown.shutdown {
         shutdown.cancel();
-        if timeout(Duration::from_secs(SHUTDOWN_TIMEOUT_SEC), trackers.wait())
-            .await
-            .is_err()
+        if timeout(
+            Duration::from_secs(SHUTDOWN_TIMEOUT_SEC),
+            graceful_shutdown.task_trackers.wait(),
+        )
+        .await
+        .is_err()
         {
             // timed out; fallback to simple task abort
+            tracing::error!(
+                "failed to gracefully shutdown with `CancellationToken`, aborting launcher tasks"
+            );
             futures.abort_all();
         }
     } else {
         futures.abort_all();
     }
-    trackers.wait().await;
+    graceful_shutdown.task_trackers.wait().await;
     futures.join_all().await;
     res?
 }
@@ -181,8 +182,7 @@ fn http_serve<R>(
     http: R,
     metrics: Option<PrometheusMetrics>,
     settings: &HttpServerSettings,
-    shutdown: Option<CancellationToken>,
-    task_trackers: &TaskTrackers,
+    graceful_shutdown: LocalGracefulShutdownHandler,
 ) -> actix_web::dev::Server
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
@@ -223,12 +223,12 @@ where
         .expect("failed to bind server")
         .run()
     };
-    if let Some(shutdown) = shutdown {
-        tokio::spawn(task_trackers.track_future(stop_actix_server_on_cancel(
-            server.handle(),
-            shutdown,
-            true,
-        )));
+    if let Some(shutdown) = graceful_shutdown.shutdown {
+        tokio::spawn(
+            graceful_shutdown
+                .task_trackers
+                .track_future(stop_actix_server_on_cancel(server.handle(), shutdown, true)),
+        );
     }
     server
 }
