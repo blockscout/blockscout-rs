@@ -53,7 +53,7 @@ impl Metrics {
                 .task_trackers
                 .track_future(stop_actix_server_on_cancel(
                     server.handle(),
-                    graceful_shutdown.shutdown,
+                    graceful_shutdown.shutdown_token,
                     true,
                 )),
         );
