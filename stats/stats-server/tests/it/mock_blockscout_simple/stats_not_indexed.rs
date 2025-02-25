@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use blockscout_service_launcher::test_server::init_server;
+use blockscout_service_launcher::{launcher::GracefulShutdownHandler, test_server::init_server};
 use futures::FutureExt;
 use pretty_assertions::assert_eq;
 use stats::tests::{
@@ -17,7 +17,7 @@ use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
     stats,
 };
-use tokio::task::JoinSet;
+use tokio::{task::JoinSet, time::timeout};
 use url::Url;
 use wiremock::ResponseTemplate;
 
@@ -27,8 +27,8 @@ use super::common_tests::{
 };
 use crate::{
     common::{
-        get_test_stats_settings, healthcheck_successful, run_consolidated_tests,
-        send_arbitrary_request, setup_single_key, wait_for_subset_to_update, ChartSubset,
+        get_test_stats_settings, run_consolidated_tests, send_arbitrary_request, setup_single_key,
+        wait_for_subset_to_update, ChartSubset,
     },
     it::mock_blockscout_simple::get_mock_blockscout,
 };
@@ -57,14 +57,9 @@ pub async fn run_tests_with_nothing_indexed() {
     // obviously don't use this anywhere except tests
     let api_key = ApiKey::from_str_infallible("123");
     setup_single_key(&mut settings, api_key.clone());
-
-    init_server(
-        || stats(settings),
-        &base,
-        Some(Duration::from_secs(60)),
-        Some(healthcheck_successful),
-    )
-    .await;
+    let shutdown = GracefulShutdownHandler::new();
+    let shutdown_cloned = shutdown.clone();
+    init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
 
     wait_for_subset_to_update(&base, ChartSubset::Independent).await;
 
@@ -81,6 +76,13 @@ pub async fn run_tests_with_nothing_indexed() {
     .into_iter()
     .collect();
     run_consolidated_tests(tests, test_name).await;
+    stats_db.close_all_unwrap().await;
+    // todo: add method for these (+timeout)
+    shutdown.shutdown_token.cancel();
+    shutdown.task_tracker.close();
+    timeout(Duration::from_secs(15), shutdown.task_tracker.wait())
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -103,14 +105,9 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     )
     .await;
     let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
-
-    init_server(
-        move || stats(settings),
-        &base,
-        Some(Duration::from_secs(60)),
-        Some(healthcheck_successful),
-    )
-    .await;
+    let shutdown = GracefulShutdownHandler::new();
+    let shutdown_cloned = shutdown.clone();
+    init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
 
     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
 
@@ -121,6 +118,13 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     .into_iter()
     .collect();
     run_consolidated_tests(tests, test_name).await;
+    stats_db.close_all_unwrap().await;
+    // todo: add method for these (+timeout)
+    shutdown.shutdown_token.cancel();
+    shutdown.task_tracker.close();
+    timeout(Duration::from_secs(15), shutdown.task_tracker.wait())
+        .await
+        .unwrap();
 }
 
 pub async fn test_swagger_ok(base: Url) {

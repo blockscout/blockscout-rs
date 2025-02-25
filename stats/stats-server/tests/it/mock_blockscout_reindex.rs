@@ -1,6 +1,9 @@
 use std::{str::FromStr, time::Duration};
 
-use blockscout_service_launcher::test_server::{init_server, send_get_request};
+use blockscout_service_launcher::{
+    launcher::GracefulShutdownHandler,
+    test_server::{init_server, send_get_request},
+};
 use chrono::NaiveDate;
 use stats::tests::{
     init_db::init_db_all,
@@ -9,12 +12,10 @@ use stats::tests::{
 };
 use stats_proto::blockscout::stats::v1::{self as proto_v1, BatchUpdateChartsResult};
 use stats_server::{auth::ApiKey, stats};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use url::Url;
 
-use crate::common::{
-    get_test_stats_settings, healthcheck_successful, request_reupdate_from, setup_single_key,
-};
+use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single_key};
 
 /// Uses reindexing, so needs to be independent
 #[tokio::test]
@@ -33,13 +34,9 @@ async fn test_reupdate_works() {
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
 
-    init_server(
-        || stats(settings),
-        &base,
-        Some(Duration::from_secs(60)),
-        Some(healthcheck_successful),
-    )
-    .await;
+    let shutdown = GracefulShutdownHandler::new();
+    let shutdown_cloned = shutdown.clone();
+    init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
 
     // Sleep until server will start and calculate all values
     sleep(Duration::from_secs(8 * wait_multiplier)).await;
@@ -149,6 +146,14 @@ async fn test_reupdate_works() {
             ("2023-03-01", "1"),
         ])
     );
+    blockscout_db.close_all_unwrap().await;
+    stats_db.close_all_unwrap().await;
+    // todo: add method for these (+timeout)
+    shutdown.shutdown_token.cancel();
+    shutdown.task_tracker.close();
+    timeout(Duration::from_secs(15), shutdown.task_tracker.wait())
+        .await
+        .unwrap();
 }
 
 async fn get_new_txns(base: &Url) -> Vec<proto_v1::Point> {

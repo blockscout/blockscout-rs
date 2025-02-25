@@ -832,8 +832,8 @@ source = "git+https://github.com/blockscout/blockscout-rs?rev=980634e#980634e7ad
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.17.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?rev=3908e8bf#3908e8bfb86a66a26240d001e172f1ba7970cb87"
+version = "0.18.0"
+source = "git+https://github.com/blockscout/blockscout-rs/?rev=cdb4441a#cdb4441a8c72e6d02103c34b21f71bd616bf08d1"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -842,6 +842,7 @@ dependencies = [
  "blockscout-tracing-actix-web",
  "cfg-if",
  "config 0.13.4",
+ "either",
  "futures",
  "keccak-hash",
  "once_cell",
@@ -855,6 +856,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "tokio",
+ "tokio-util",
  "tonic",
  "tracing",
  "tracing-opentelemetry",
@@ -4724,6 +4726,7 @@ dependencies = [
  "stats-proto",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-util",
  "tonic",
  "tracing",
  "tracing-subscriber",
@@ -5049,6 +5052,8 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
+ "hashbrown 0.14.5",
  "pin-project-lite",
  "tokio",
 ]
