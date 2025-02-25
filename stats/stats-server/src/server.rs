@@ -121,14 +121,13 @@ async fn create_charts_if_needed(
     Ok(())
 }
 
+type WaiterHandle = JoinHandle<Result<(), anyhow::Error>>;
+
 /// Returns `(<waiter spawned task join handle>, <listener>)`
 fn init_and_spawn_waiter(
     settings: &Settings,
-) -> anyhow::Result<(
-    Option<JoinHandle<Result<(), anyhow::Error>>>,
-    Option<IndexingStatusListener>,
-)> {
-    let blockscout_api_config = init_blockscout_api_client(&settings)?;
+) -> anyhow::Result<(Option<WaiterHandle>, Option<IndexingStatusListener>)> {
+    let blockscout_api_config = init_blockscout_api_client(settings)?;
     let (status_waiter, status_listener) = blockscout_api_config
         .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone()))
         .unzip();
