@@ -17,7 +17,7 @@ use stats_proto::blockscout::stats::v1::{
     health_check_response::ServingStatus, Counters, HealthCheckResponse,
 };
 use stats_server::stats;
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
 use url::Url;
 use wiremock::ResponseTemplate;
 
@@ -55,12 +55,7 @@ pub async fn run_tests_with_charts_not_updated(variant: &str) {
 
     test_lines_counters_not_updated_ok(base).await;
     stats_db.close_all_unwrap().await;
-    // todo: add method for these (+timeout)
-    shutdown.shutdown_token.cancel();
-    shutdown.task_tracker.close();
-    timeout(Duration::from_secs(15), shutdown.task_tracker.wait())
-        .await
-        .unwrap();
+    shutdown.close_wait_timeout(None).await.unwrap();
 }
 
 pub async fn test_lines_counters_not_updated_ok(base: Url) {
