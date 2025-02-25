@@ -281,7 +281,7 @@ pub fn init(
     )
 }
 
-pub async fn init_blockscout_api_client(
+pub fn init_blockscout_api_client(
     settings: &Settings,
 ) -> anyhow::Result<Option<blockscout_client::Configuration>> {
     match (settings.ignore_blockscout_api_absence, &settings.blockscout_api_url) {
