@@ -6,7 +6,10 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use tokio::{task::JoinHandle, time::timeout};
+use tokio::{
+    task::JoinHandle,
+    time::{sleep, timeout},
+};
 
 fn get_free_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -68,6 +71,7 @@ impl TestServerSettings {
                         break;
                     }
                 }
+                sleep(Duration::from_millis(100)).await;
             }
         };
         // Wait for the server to start
