@@ -72,12 +72,6 @@ jobs:
         env:
           VALIDATE_ONLY: true
 
-      - name: DB tests temp
-        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --package stats-server -- --nocapture --ignored --test-threads=1
-        if: steps.build.outcome == 'success'
-        env:
-          DATABASE_URL: postgres://postgres:admin@localhost:5432/
-
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
         if: steps.build.outcome == 'success'
