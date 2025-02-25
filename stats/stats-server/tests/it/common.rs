@@ -50,16 +50,6 @@ pub enum ChartSubset {
     AllCharts,
 }
 
-/// for `init_server`
-pub async fn healthcheck_successful(response: Response) -> bool {
-    let healthcheck_status = response
-        .json::<proto_v1::HealthCheckResponse>()
-        .await
-        .unwrap()
-        .status();
-    healthcheck_status == proto_v1::health_check_response::ServingStatus::Serving
-}
-
 pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
     wait_until(Duration::from_secs(300), || async {
         let statuses: proto_v1::UpdateStatus =
