@@ -178,7 +178,6 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     let verification_result_constructor_arguments = verification_result
         .constructor_arguments
         .map(|args| DisplayBytes::from_str(&args).unwrap());
-    let expected_constructor_argument = expected_constructor_argument.map(DisplayBytes::from);
     assert_eq!(
         verification_result_constructor_arguments, expected_constructor_argument,
         "Invalid constructor args"
