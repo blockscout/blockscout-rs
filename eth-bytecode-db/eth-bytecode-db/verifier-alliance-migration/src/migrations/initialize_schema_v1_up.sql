@@ -113,7 +113,7 @@ CREATE TABLE contract_deployments
 
         also note that for genesis contracts, creation_code_hash may be '\x' (i.e. there is no creation code)
     */
-    chain_id            numeric NOT NULL,
+    chain_id            bigint NOT NULL, /* see https://github.com/verifier-alliance/database-specs/issues/23 */
     address             bytea NOT NULL,
     transaction_hash    bytea NOT NULL,
 
@@ -357,6 +357,15 @@ RETURN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION is_jsonb_null(obj jsonb)
+    RETURNS boolean AS
+$$
+BEGIN
+RETURN
+    jsonb_typeof(obj) = 'null';
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION is_valid_hex(val text, repetition text)
     RETURNS boolean AS
 $$
@@ -378,6 +387,57 @@ RETURN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION validate_compilation_artifacts_abi(abi jsonb)
+    RETURNS boolean AS
+$$
+BEGIN
+RETURN is_jsonb_null(abi) OR is_jsonb_array(abi);
+END;
+$$ LANGUAGE plpgsql;
+
+/*
+   Validates the internal values of compilation_artifacts->'sources'.
+   Precondition: sources MUST be a jsonb object.
+*/
+CREATE OR REPLACE FUNCTION validate_compilation_artifacts_sources_internal(obj jsonb)
+    RETURNS boolean AS
+$$
+DECLARE
+are_object_values_valid bool;
+    are_ids_unique          bool;
+BEGIN
+SELECT bool_and (
+           -- file name must be non-empty string
+               length(key) > 0 AND
+                   -- the corresponding value is expected to be an object with only the 'id' key
+               is_jsonb_object(value) AND
+               validate_json_object_keys(value, array ['id'], array []::text[]) AND
+                   -- the value of 'id' key is expected to be a non-negative integer
+               is_jsonb_number(value -> 'id') AND
+               (value->>'id')::int >= 0
+       )
+INTO are_object_values_valid
+FROM jsonb_each(obj);
+
+SELECT count(value -> 'id') = count(DISTINCT value -> 'id')
+INTO are_ids_unique
+FROM jsonb_each(obj);
+
+RETURN are_object_values_valid AND are_ids_unique;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_compilation_artifacts_sources(sources jsonb)
+    RETURNS boolean AS
+$$
+BEGIN
+RETURN is_jsonb_null(sources) OR (
+    is_jsonb_object(sources) AND
+    validate_compilation_artifacts_sources_internal(sources)
+    );
+END;
+$$ LANGUAGE plpgsql;
+
 /*
     Validation functions to be used in `compiled_contracts` artifact constraints.
 */
@@ -391,6 +451,163 @@ RETURN
             obj,
             array ['abi', 'userdoc', 'devdoc', 'sources', 'storageLayout'],
             array []::text[]
+    ) AND
+    validate_compilation_artifacts_abi(obj -> 'abi') AND
+    validate_compilation_artifacts_sources(obj -> 'sources');
+END;
+$$ LANGUAGE plpgsql;
+
+/*
+   Validates the internal values of (creation/runtime)_code_artifacts->'cborAuxdata'.
+   Precondition: obj MUST be a jsonb object.
+*/
+CREATE OR REPLACE FUNCTION validate_code_artifacts_cbor_auxdata_internal(obj jsonb)
+    RETURNS boolean AS
+$$
+DECLARE
+are_object_values_valid bool;
+BEGIN
+SELECT bool_and (
+           -- file name must be non-empty string
+               length(key) > 0 AND
+                   -- the corresponding value is expected to be an object with only 'value' and 'offset' keys
+               is_jsonb_object(value) AND
+               validate_json_object_keys(value, array ['value', 'offset'], array []::text[]) AND
+                   -- the value of 'value' key is expected to be a non-empty hex string
+               is_jsonb_string(value -> 'value') AND
+               is_valid_hex(value ->> 'value', '+') AND
+                   -- the value of 'offset' key is expected to be a non-negative integer
+               is_jsonb_number(value -> 'offset') AND
+               (value->>'offset')::int >= 0
+       )
+INTO are_object_values_valid
+FROM jsonb_each(obj);
+
+RETURN are_object_values_valid;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_code_artifacts_cbor_auxdata(cbor_auxdata jsonb)
+    RETURNS boolean AS
+$$
+BEGIN
+RETURN is_jsonb_null(cbor_auxdata) OR (
+    is_jsonb_object(cbor_auxdata) AND
+    validate_code_artifacts_cbor_auxdata_internal(cbor_auxdata)
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+/*
+   Validates the content of (creation/runtime)_code_artifacts->'linkReferences'->'{file_name}'.
+   Precondition: obj MUST be a jsonb object.
+*/
+CREATE OR REPLACE FUNCTION validate_code_artifacts_link_references_internal_file_libraries(obj jsonb)
+    RETURNS boolean AS
+$$
+DECLARE
+are_file_libraries_valid bool;
+BEGIN
+SELECT bool_and (
+           -- library name must be non-empty string
+               length(key) > 0 AND
+                   -- the corresponding value is expected to be an array of objects
+               is_jsonb_array(value) AND (
+                   SELECT bool_and (
+                                  is_jsonb_object(library_references) AND
+                                      -- expected only 'start' (non-negative number) and 'length' (number always equals to 20) key-values
+                                  validate_json_object_keys(library_references, array ['start', 'length'], array []::text[]) AND
+                                  is_jsonb_number(library_references->'start') AND
+                                  (library_references->'start')::int >= 0 AND
+                is_jsonb_number(library_references->'length') AND
+                (library_references->'length')::int = 20
+                          )
+                   FROM jsonb_array_elements(value) library_references
+               )
+       )
+INTO are_file_libraries_valid
+FROM jsonb_each(obj);
+
+RETURN are_file_libraries_valid;
+END;
+$$ LANGUAGE plpgsql;
+
+/*
+   Validates the internal values of (creation/runtime)_code_artifacts->'linkReferences'.
+   Precondition: obj MUST be a jsonb object.
+*/
+CREATE OR REPLACE FUNCTION validate_code_artifacts_link_references_internal(obj jsonb)
+    RETURNS boolean AS
+$$
+DECLARE
+are_file_levels_valid bool;
+BEGIN
+SELECT bool_and (
+           -- file name must be non-empty string
+               length(key) > 0 AND
+                   -- the corresponding value is expected to be an object with library names as keys
+               is_jsonb_object(value) AND
+               validate_code_artifacts_link_references_internal_file_libraries(value)
+       )
+INTO are_file_levels_valid
+FROM jsonb_each(obj);
+
+RETURN are_file_levels_valid;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_code_artifacts_link_references(link_references jsonb)
+    RETURNS boolean AS
+$$
+BEGIN
+RETURN is_jsonb_null(link_references) OR (
+    is_jsonb_object(link_references) AND
+    validate_code_artifacts_link_references_internal(link_references)
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+/*
+   Validates the internal values of runtime_code_artifacts->'immutableReferences'.
+   Precondition: obj MUST be a jsonb object.
+*/
+CREATE OR REPLACE FUNCTION validate_code_artifacts_immutable_references_internal(obj jsonb)
+    RETURNS boolean AS
+$$
+DECLARE
+are_values_valid bool;
+BEGIN
+SELECT bool_and (
+           -- id must be non-empty string
+               length(key) > 0 AND
+                   -- the corresponding value is expected to be an array of objects
+               is_jsonb_array(value) AND (
+                   SELECT bool_and (
+                                  is_jsonb_object(_references) AND
+                                      -- expected only 'start' (non-negative number) and 'length' (positive number) key-values
+                                  validate_json_object_keys(_references, array ['start', 'length'], array []::text[]) AND
+                                  is_jsonb_number(_references->'start') AND
+                                  (_references->'start')::int >= 0 AND
+                is_jsonb_number(_references->'length') AND
+                (_references->'length')::int > 0
+                          )
+                   FROM jsonb_array_elements(value) _references
+               )
+       )
+INTO are_values_valid
+FROM jsonb_each(obj);
+
+RETURN are_values_valid;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_code_artifacts_immutable_references(immutable_references jsonb)
+    RETURNS boolean AS
+$$
+BEGIN
+RETURN is_jsonb_null(immutable_references) OR (
+    is_jsonb_object(immutable_references) AND
+    validate_code_artifacts_immutable_references_internal(immutable_references)
     );
 END;
 $$ LANGUAGE plpgsql;
@@ -405,7 +622,9 @@ RETURN
             obj,
             array ['sourceMap', 'linkReferences'],
             array ['cborAuxdata']
-    );
+    ) AND
+    validate_code_artifacts_cbor_auxdata(coalesce(obj -> 'cborAuxdata', 'null'::jsonb)) AND
+    validate_code_artifacts_link_references(obj -> 'linkReferences');
 END;
 $$ LANGUAGE plpgsql;
 
@@ -419,7 +638,10 @@ RETURN
             obj,
             array ['sourceMap', 'linkReferences', 'immutableReferences'],
             array ['cborAuxdata']
-    );
+    ) AND
+    validate_code_artifacts_cbor_auxdata(coalesce(obj -> 'cborAuxdata', 'null'::jsonb)) AND
+    validate_code_artifacts_link_references(obj -> 'linkReferences') AND
+    validate_code_artifacts_immutable_references(obj -> 'immutableReferences');
 END;
 $$ LANGUAGE plpgsql;
 
@@ -462,14 +684,16 @@ BEGIN
         RETURN true;
 END IF;
 
-    -- we have to use IF, so that internal select subquery is executed only when `obj -> 'libraries'` is an object
-    IF is_jsonb_object(obj -> 'libraries') THEN
-        RETURN bool_and(are_valid_values)
-            FROM (SELECT is_jsonb_string(value) AND is_valid_hex(value ->> 0, '{20}') as are_valid_values
-                  FROM jsonb_each(obj -> 'libraries')) as subquery;
-ELSE
+    IF NOT is_jsonb_object(obj -> 'libraries') THEN
         RETURN false;
 END IF;
+
+RETURN bool_and(
+        length(key) > 0 AND
+        is_jsonb_string(value) AND
+        is_valid_hex(value ->> 0, '{20}')
+       )
+    FROM jsonb_each(obj -> 'libraries');
 END;
 $$ LANGUAGE plpgsql;
 
@@ -482,13 +706,16 @@ BEGIN
         RETURN true;
 END IF;
 
-    IF is_jsonb_object(obj -> 'immutables') THEN
-        RETURN bool_and(are_valid_values)
-            FROM (SELECT is_jsonb_string(value) AND is_valid_hex(value ->> 0, '{32}') as are_valid_values
-                  FROM jsonb_each(obj -> 'immutables')) as subquery;
-ELSE
+    IF NOT is_jsonb_object(obj -> 'immutables') THEN
         RETURN false;
 END IF;
+
+RETURN bool_and(
+        length(key) > 0 AND
+        is_jsonb_string(value) AND
+        is_valid_hex(value ->> 0, '+')
+       )
+    FROM jsonb_each(obj -> 'immutables');
 END;
 $$ LANGUAGE plpgsql;
 
@@ -501,13 +728,16 @@ BEGIN
         RETURN true;
 END IF;
 
-    IF is_jsonb_object(obj -> 'cborAuxdata') THEN
-        RETURN bool_and(are_valid_values)
-            FROM (SELECT is_jsonb_string(value) AND is_valid_hex(value ->> 0, '+') as are_valid_values
-                  FROM jsonb_each(obj -> 'cborAuxdata')) as subquery;
-ELSE
+    IF NOT is_jsonb_object(obj -> 'cborAuxdata') THEN
         RETURN false;
 END IF;
+
+RETURN bool_and(
+        length(key) > 0 AND
+        is_jsonb_string(value) AND
+        is_valid_hex(value ->> 0, '+')
+       )
+    FROM jsonb_each(obj -> 'cborAuxdata');
 END;
 $$ LANGUAGE plpgsql;
 
@@ -606,7 +836,7 @@ CREATE OR REPLACE FUNCTION validate_transformations_immutable(object jsonb)
     RETURNS boolean AS
 $$
 BEGIN
-RETURN validate_transformation_key_type(object, 'replace') AND validate_transformation_key_offset(object)
+RETURN (validate_transformation_key_type(object, 'replace') OR validate_transformation_key_type(object, 'insert')) AND validate_transformation_key_offset(object)
     AND validate_transformation_key_id(object);
 END;
 $$ LANGUAGE plpgsql;
@@ -624,7 +854,9 @@ CREATE OR REPLACE FUNCTION validate_transformations_call_protection(object jsonb
     RETURNS boolean AS
 $$
 BEGIN
-RETURN validate_transformation_key_type(object, 'replace') AND validate_transformation_key_offset(object);
+RETURN validate_transformation_key_type(object, 'replace')
+    -- 'callProtection' value is always located at offset 1
+    AND validate_transformation_key_offset(object) AND (object ->> 'offset')::integer = 1;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -720,7 +952,7 @@ RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-/*  Needed to prevent modifying `crerated_at` fields on updates */
+/*  Needed to prevent modifying `created_at` fields on updates */
 CREATE FUNCTION trigger_reuse_created_at()
     RETURNS TRIGGER AS
     $$
@@ -798,7 +1030,7 @@ RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-/*  Needed to prevent modifying `crerated_by` fields on updates */
+/*  Needed to prevent modifying `created_by` fields on updates */
 CREATE FUNCTION trigger_reuse_created_by()
     RETURNS TRIGGER AS
     $$

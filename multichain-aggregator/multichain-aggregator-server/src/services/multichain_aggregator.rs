@@ -69,9 +69,7 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<BatchImportResponse>, Status> {
         let inner = request.into_inner();
 
-        let api_key = (inner.api_key.as_str(), inner.chain_id.as_str())
-            .try_into()
-            .map_err(ServiceError::from)?;
+        let api_key = (inner.api_key.as_str(), inner.chain_id.as_str()).try_into()?;
         self.api_key_manager
             .validate_api_key(api_key)
             .await
