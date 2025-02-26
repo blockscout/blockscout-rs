@@ -537,4 +537,11 @@ mod standard_json {
         let verification_response = get_verification_response(&test_case).await;
         validate_verification_response(&initial_test_case, verification_response);
     }
+
+    #[tokio::test]
+    async fn verify_contracts_with_integrity_hashes_inside_cbor_auxdata() {
+        let test_case =
+            vyper_types::from_file::<StandardJson>("standard_json_contracts_with_integrity_hashes");
+        test_success(test_case).await;
+    }
 }

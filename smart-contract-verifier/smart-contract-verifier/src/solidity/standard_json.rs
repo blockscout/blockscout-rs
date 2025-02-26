@@ -34,6 +34,7 @@ impl From<StandardJsonContent> for CompilerInput {
 pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
     let compiler_input = CompilerInput::from(request.content);
     let verifier = ContractVerifier::new(
+        false,
         client.compilers(),
         &request.compiler_version,
         request.creation_bytecode,
