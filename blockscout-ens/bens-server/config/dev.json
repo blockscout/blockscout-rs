@@ -35,6 +35,24 @@
           "d3-connect-shib-testnet"
         ],
         "rpc_url": "https://puppynet.shibrpc.com"
+      },
+      "33111": {
+        "blockscout": {
+          "url": "https://curtis.explorer.caldera.xyz/"
+        },
+        "use_protocols": [
+          "d3-connect-ape-testnet"
+        ],
+        "rpc_url": "https://curtis.rpc.caldera.xyz/http"
+      },
+      "33139": {
+        "blockscout": {
+          "url": "https://apescan.io/"
+        },
+        "use_protocols": [
+          "d3-connect-ape-mainnet"
+        ],
+        "rpc_url": "https://rpc.apechain.com/"
       }
     },
     "protocols": {
@@ -91,7 +109,7 @@
         "meta": {
           "short_name": "D3 Connect",
           "title": "D3 Connect",
-          "description": "D3 Connect is a platform for connecting to the Shibarium network.",
+          "description": "D3 Connect is official identity service for top web3 communities.",
           "icon_url": "https://i.imgur.com/cD6VIXk.png",
           "docs_url": "https://docs.d3.app/"
         }
@@ -109,7 +127,43 @@
         "meta": {
           "short_name": "D3 Connect",
           "title": "D3 Connect",
-          "description": "D3 Connect is a platform for connecting to the Shibarium network.",
+          "description": "D3 Connect is official identity service for top web3 communities.",
+          "icon_url": "https://i.imgur.com/cD6VIXk.png",
+          "docs_url": "https://docs.d3.app/"
+        }
+      },
+      "d3-connect-ape-testnet": {
+        "tld_list": ["ape"],
+        "network_id": 33111,
+        "subgraph_name": "d3-connect-ape-testnet-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "d3_connect",
+          "native_token_contract": "0xA6A33ddE98BAb3ee5262e7e1a14ee5B1F06D0D40",
+          "resolver_contract": "0x2ad234136165B59f98cf03f696cB84eaf48E30cF"
+        },
+        "meta": {
+          "short_name": "D3 Connect",
+          "title": "D3 Connect",
+          "description": "D3 Connect is official identity service for top web3 communities.",
+          "icon_url": "https://i.imgur.com/cD6VIXk.png",
+          "docs_url": "https://docs.d3.app/"
+        }
+      },
+      "d3-connect-ape-mainnet": {
+        "tld_list": ["ape"],
+        "network_id": 33139,
+        "subgraph_name": "d3-connect-ape-mainnet-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "d3_connect",
+          "native_token_contract": "0x0D435A6c16045Abeaf6A442Bf162fd52597B4Ed3",
+          "resolver_contract": "0x3698485B8079FBDCc86Eb4f69Ebb9349DF1fc6f4"
+        },
+        "meta": {
+          "short_name": "D3 Connect",
+          "title": "D3 Connect",
+          "description": "D3 Connect is official identity service for top web3 communities.",
           "icon_url": "https://i.imgur.com/cD6VIXk.png",
           "docs_url": "https://docs.d3.app/"
         }

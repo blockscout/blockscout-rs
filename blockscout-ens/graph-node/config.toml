@@ -49,3 +49,15 @@ provider = [
     { label = "shibarium-testnet", url = "https://puppynet.shibrpc.com", features = [] }
 ]
 shard = "primary"
+
+[chains.ape-mainnet]
+provider = [
+    { label = "ape-mainnet", url = "https://rpc.apechain.com", features = [] }
+]
+shard = "primary"
+
+[chains.ape-testnet]
+provider = [
+    { label = "ape-testnet", url = "https://curtis.rpc.caldera.xyz/http", features = [] }
+]
+shard = "primary"
