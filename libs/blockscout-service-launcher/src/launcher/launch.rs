@@ -19,13 +19,13 @@ pub struct LaunchSettings {
     pub service_name: String,
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
+    pub graceful_shutdown: GracefulShutdownHandler,
 }
 
 pub async fn launch<R>(
-    settings: &LaunchSettings,
+    settings: LaunchSettings,
     http: R,
     grpc: tonic::transport::server::Router,
-    graceful_shutdown: GracefulShutdownHandler,
 ) -> Result<(), anyhow::Error>
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
@@ -34,7 +34,7 @@ where
         .metrics
         .enabled
         .then(|| Metrics::new(&settings.service_name, &settings.metrics.route));
-    let graceful_shutdown = LocalGracefulShutdownHandler::from(graceful_shutdown);
+    let graceful_shutdown = LocalGracefulShutdownHandler::from(settings.graceful_shutdown);
 
     let mut futures = JoinSet::new();
 
