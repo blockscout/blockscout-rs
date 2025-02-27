@@ -3,6 +3,8 @@ use std::{future::Future, time::Duration};
 use tokio::{task::JoinSet, time::error::Elapsed};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
+pub(crate) const DEFAULT_SHUTDOWN_TIMEOUT_SEC: u64 = 15;
+
 /// Graceful shutdown according to https://tokio.rs/tokio/topics/shutdown
 #[derive(Clone)]
 pub struct GracefulShutdownHandler {
@@ -74,6 +76,15 @@ impl LocalGracefulShutdownHandler {
                 .local
                 .track_future(self.task_trackers.external.track_future(future)),
         )
+    }
+
+    /// Close the tasks with shutdown token and wait for their completion
+    /// with provided (or default) timeout (`duration`).
+    pub async fn cancel_wait_timeout(&self, duration: Option<Duration>) -> Result<(), Elapsed> {
+        self.shutdown_token.cancel();
+        self.task_trackers.close();
+        let duration = duration.unwrap_or(Duration::from_secs(DEFAULT_SHUTDOWN_TIMEOUT_SEC));
+        tokio::time::timeout(duration, self.task_trackers.wait()).await
     }
 }
 

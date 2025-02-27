@@ -9,7 +9,7 @@ use super::{
 use actix_web::{middleware::Condition, App, HttpServer};
 use actix_web_prom::PrometheusMetrics;
 use std::{net::SocketAddr, time::Duration};
-use tokio::{task::JoinSet, time::timeout};
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing_actix_web::TracingLogger;
 
@@ -87,14 +87,10 @@ where
 
     let res = futures.join_next().await.expect("future set is not empty");
     tracing::info!("observed finished future, shutting down launcher and created tasks");
-    graceful_shutdown.task_trackers.close();
-    graceful_shutdown.shutdown_token.cancel();
-    if timeout(
-        Duration::from_secs(SHUTDOWN_TIMEOUT_SEC),
-        graceful_shutdown.task_trackers.wait(),
-    )
-    .await
-    .is_err()
+    if graceful_shutdown
+        .cancel_wait_timeout(Some(Duration::from_secs(SHUTDOWN_TIMEOUT_SEC)))
+        .await
+        .is_err()
     {
         // timed out; fallback to simple task abort
         tracing::error!(
