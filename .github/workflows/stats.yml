@@ -49,20 +49,6 @@ jobs:
         with:
           working-directory: stats
 
-      # temporary fix for failing tests
-      - name: Set postgres max_connections
-        run: |
-          psql -h localhost -p 5432 -c "ALTER SYSTEM SET max_connections = 500;" -d postgres
-        env:
-          PGPASSWORD: admin
-          PGUSER: postgres
-
-      - name: Restart postgres
-        # Restart Postgres so that new system parameters to be applied
-        uses: docker://docker
-        with:
-          args: docker restart postgres
-
       - name: Build
         id: build
         run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
