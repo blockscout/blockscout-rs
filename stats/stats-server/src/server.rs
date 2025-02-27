@@ -231,11 +231,11 @@ pub async fn stats(
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: shutdown.clone(),
     };
-    let shutdown_cloned = shutdown.clone();
-    let servers_handle = shutdown.task_tracker.spawn(async move {
-        launcher::launch(&launch_settings, http_router, grpc_router, shutdown_cloned).await
-    });
+    let servers_handle = shutdown
+        .task_tracker
+        .spawn(async move { launcher::launch(launch_settings, http_router, grpc_router).await });
 
     let mut spawned = vec![update_service_handle, servers_handle];
     if let Some(status_waiter_handle) = status_waiter_handle {
