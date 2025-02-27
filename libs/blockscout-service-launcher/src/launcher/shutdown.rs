@@ -10,6 +10,12 @@ pub struct GracefulShutdownHandler {
     pub task_tracker: TaskTracker,
 }
 
+impl Default for GracefulShutdownHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GracefulShutdownHandler {
     pub fn new() -> Self {
         Self {
