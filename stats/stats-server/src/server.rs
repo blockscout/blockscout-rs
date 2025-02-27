@@ -28,6 +28,7 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_server::{StatsService, StatsServiceServer},
 };
 use tokio::task::JoinHandle;
+use tokio_util::task::TaskTracker;
 
 const SERVICE_NAME: &str = "stats";
 
@@ -125,6 +126,7 @@ type WaiterHandle = JoinHandle<Result<(), anyhow::Error>>;
 
 /// Returns `(<waiter spawned task join handle>, <listener>)`
 fn init_and_spawn_waiter(
+    tracker: &TaskTracker,
     settings: &Settings,
 ) -> anyhow::Result<(Option<WaiterHandle>, Option<IndexingStatusListener>)> {
     let blockscout_api_config = init_blockscout_api_client(settings)?;
@@ -132,7 +134,7 @@ fn init_and_spawn_waiter(
         .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone()))
         .unzip();
     let status_waiter_handle = status_waiter.map(|w| {
-        tokio::spawn(async move {
+        tracker.spawn(async move {
             w.run().await?;
             // we don't want to finish on success because of the way
             // the tasks are handled here
@@ -176,7 +178,8 @@ pub async fn stats(
     create_charts_if_needed(&db, &charts).await?;
 
     let shutdown = shutdown.unwrap_or(GracefulShutdownHandler::new());
-    let (status_waiter_handle, status_listener) = init_and_spawn_waiter(&settings)?;
+    let (status_waiter_handle, status_listener) =
+        init_and_spawn_waiter(&shutdown.task_tracker, &settings)?;
 
     let update_service = Arc::new(
         UpdateService::new(
@@ -189,7 +192,7 @@ pub async fn stats(
     );
 
     let update_service_cloned = update_service.clone();
-    let update_service_handle = tokio::spawn(async move {
+    let update_service_handle = shutdown.task_tracker.spawn(async move {
         update_service_cloned
             .run(
                 settings.concurrent_start_updates,
@@ -230,7 +233,7 @@ pub async fn stats(
         metrics: settings.metrics,
     };
     let shutdown_cloned = shutdown.clone();
-    let servers_handle = tokio::spawn(async move {
+    let servers_handle = shutdown.task_tracker.spawn(async move {
         launcher::launch(&launch_settings, http_router, grpc_router, shutdown_cloned).await
     });
 
