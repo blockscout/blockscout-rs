@@ -75,7 +75,7 @@ pub async fn run_tests_with_nothing_indexed() {
     .collect();
     run_consolidated_tests(tests, test_name).await;
     stats_db.close_all_unwrap().await;
-    shutdown.close_wait_timeout(None).await.unwrap();
+    shutdown.cancel_wait_timeout(None).await.unwrap();
 }
 
 #[tokio::test]
@@ -112,7 +112,7 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     .collect();
     run_consolidated_tests(tests, test_name).await;
     stats_db.close_all_unwrap().await;
-    shutdown.close_wait_timeout(None).await.unwrap();
+    shutdown.cancel_wait_timeout(None).await.unwrap();
 }
 
 pub async fn test_swagger_ok(base: Url) {
