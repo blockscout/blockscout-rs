@@ -142,6 +142,27 @@ impl TestDbGuard {
             &name[..MAX_DATABASE_NAME_LEN - HASH_SUFFIX_STRING_LEN - 1]
         )
     }
+
+    pub async fn close_all(&self) -> (Result<(), DbErr>, Result<(), DbErr>) {
+        // remove `get_postgres_connection_pool` as soon as
+        // https://github.com/SeaQL/sea-orm/pull/2511 is available
+        // to work with other connections
+        self.conn_with_db
+            .get_postgres_connection_pool()
+            .close()
+            .await;
+        self.conn_without_db
+            .get_postgres_connection_pool()
+            .close()
+            .await;
+        (Ok(()), Ok(()))
+    }
+
+    pub async fn close_all_unwrap(self) {
+        let (res_with_db, res_without_db) = self.close_all().await;
+        res_with_db.expect("couldn't close connection with database");
+        res_without_db.expect("couldn't close connection without database");
+    }
 }
 
 impl Deref for TestDbGuard {
