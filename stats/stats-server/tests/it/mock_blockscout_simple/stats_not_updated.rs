@@ -55,7 +55,7 @@ pub async fn run_tests_with_charts_not_updated(variant: &str) {
 
     test_lines_counters_not_updated_ok(base).await;
     stats_db.close_all_unwrap().await;
-    shutdown.close_wait_timeout(None).await.unwrap();
+    shutdown.cancel_wait_timeout(None).await.unwrap();
 }
 
 pub async fn test_lines_counters_not_updated_ok(base: Url) {

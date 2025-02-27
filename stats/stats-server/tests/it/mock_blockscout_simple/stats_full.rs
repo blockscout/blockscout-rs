@@ -45,5 +45,5 @@ pub async fn run_fully_initialized_stats_tests() {
     .collect();
     run_consolidated_tests(tests, test_name).await;
     stats_db.close_all_unwrap().await;
-    shutdown.close_wait_timeout(None).await.unwrap();
+    shutdown.cancel_wait_timeout(None).await.unwrap();
 }
