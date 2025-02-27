@@ -10,15 +10,14 @@ use crate::{
     settings::{Extensions, SoliditySettings},
     types,
     types::{
-        LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, StandardJsonParseError,
-        VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
-        VerifySolidityStandardJsonRequestWrapper,
+        LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, VerifyResponseWrapper,
+        VerifySolidityMultiPartRequestWrapper,
     },
 };
 use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity, Compilers, SolcValidator, SolidityClient, SolidityCompiler,
-    VerificationError,
+    find_methods, solidity, solidity::standard_json::StandardJsonParseError, Compilers,
+    SolcValidator, SolidityClient, SolidityCompiler, VerificationError,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     BytecodeType, LookupMethodsRequest, LookupMethodsResponse,
@@ -149,64 +148,51 @@ impl SolidityVerifier for SolidityVerifierService {
         &self,
         request: Request<VerifySolidityStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        let request: VerifySolidityStandardJsonRequestWrapper = request.into_inner().into();
+        let request = request.into_inner();
+
         let chain_id = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.chain_id.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.chain_id.clone());
         let contract_address = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.contract_address.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.contract_address.clone());
         tracing::info!(
-            chain_id = chain_id,
-            contract_address = contract_address,
-            "Solidity standard-json verification request received"
+            chain_id =? chain_id,
+            contract_address =? contract_address,
+            "solidity standard-json verification request received"
         );
 
-        tracing::debug!(
-            bytecode = request.bytecode,
-            bytecode_type = BytecodeType::try_from(request.bytecode_type)
-                .unwrap()
-                .as_str_name(),
-            compiler_version = request.compiler_version,
-            input = request.input,
-            "Request details"
-        );
-
-        let mut verification_request: solidity::standard_json::VerificationRequest = {
-            let request: Result<_, StandardJsonParseError> = request.try_into();
-            if let Err(err) = request {
-                match err {
-                    StandardJsonParseError::InvalidContent(_) => {
-                        let response = VerifyResponseWrapper::err(err).into_inner();
-                        tracing::info!(response=?response, "Request processed");
-                        return Ok(Response::new(response));
-                    }
-                    StandardJsonParseError::BadRequest(_) => {
-                        tracing::info!(err=%err, "Bad request");
-                        return Err(Status::invalid_argument(err.to_string()));
-                    }
-                }
+        let maybe_verification_request =
+            solidity::standard_json::VerificationRequestNew::try_from(request);
+        let mut verification_request = match maybe_verification_request {
+            Ok(request) => request,
+            Err(err @ StandardJsonParseError::InvalidContent(_)) => {
+                let response = VerifyResponseWrapper::err(err).into_inner();
+                tracing::info!(response=?response, "request processed");
+                return Ok(Response::new(response));
             }
-            request.unwrap()
+            Err(err @ StandardJsonParseError::BadRequest(_)) => {
+                tracing::info!(err=%err, "bad request");
+                return Err(Status::invalid_argument(err.to_string()));
+            }
         };
+
         verification_request.compiler_version = common::normalize_request_compiler_version(
             &self.client.compilers().all_versions(),
             &verification_request.compiler_version,
         )?;
 
         let result =
-            solidity::standard_json::verify(self.client.clone(), verification_request).await;
+            solidity::standard_json::verify_new(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
-            tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
+            tracing::info!(match_type=?verification_success.match_type, "verification succeeded");
             VerifyResponseWrapper::ok(verification_success)
         } else {
             let err = result.unwrap_err();
-            tracing::info!(err=%err, "Request processing failed");
+            tracing::info!(err=%err, "verification failed");
             match err {
                 VerificationError::Compilation(_)
                 | VerificationError::NoMatchingContracts
@@ -222,7 +208,7 @@ impl SolidityVerifier for SolidityVerifierService {
         };
 
         metrics::count_verify_contract(
-            chain_id.as_ref(),
+            &chain_id.unwrap_or_default(),
             "solidity",
             response.status().as_str_name(),
             "standard-json",

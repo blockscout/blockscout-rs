@@ -15,6 +15,7 @@ mod verifier;
 mod batch_verifier;
 #[cfg(test)]
 mod tests;
+mod verifier_new;
 pub mod zksync;
 
 pub(crate) use blockscout_display_bytes::Bytes as DisplayBytes;
