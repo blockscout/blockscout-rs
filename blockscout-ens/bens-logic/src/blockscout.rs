@@ -49,7 +49,7 @@ pub struct Transaction {
     pub method: Option<String>,
     pub from: TransactionFrom,
     pub hash: alloy::primitives::TxHash,
-    pub block: i64,
+    pub block_number: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
