@@ -27,7 +27,8 @@ impl GracefulShutdownHandler {
 
     /// Close the tasks with shutdown token and wait for their completion
     /// with provided (or default) timeout (`duration`).
-    pub async fn close_wait_timeout(&self, duration: Option<Duration>) -> Result<(), Elapsed> {
+    pub async fn cancel_wait_timeout(&self, duration: Option<Duration>) -> Result<(), Elapsed> {
+        self.shutdown_token.cancel();
         self.task_tracker.close();
         let duration = duration.unwrap_or(Duration::from_secs(15));
         tokio::time::timeout(duration, self.task_tracker.wait()).await
