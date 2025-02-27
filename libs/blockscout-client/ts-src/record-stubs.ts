@@ -6,17 +6,17 @@ const baseHost = 'eth.blockscout.com';
 const baseName = baseHost.replace(/\./g, '_');
 const outputDir = './crate/tests/recorded/'
 const paths = [
-    // "/api/v1/health",
-    // "/api/v2/blocks",
-    // "/api/v2/transactions",
+    "/api/v1/health",
+    "/api/v2/blocks",
+    "/api/v2/transactions",
     "/api/v2/transactions/0xf7d09142363203b4c572bac2be3599de91260eb6131b57663832490e7eeaf213",
-    // "/api/v2/transactions/0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e/internal-transactions",
-    // "/api/v2/smart-contracts",
-    // "/api/v2/smart-contracts/0x8FD4596d4E7788a71F82dAf4119D069a84E7d3f3",
-    // "/api/v2/tokens",
-    // "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e",
-    // "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/instances",
-    // "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/instances/1",
+    "/api/v2/transactions/0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e/internal-transactions",
+    "/api/v2/smart-contracts",
+    "/api/v2/smart-contracts/0x8FD4596d4E7788a71F82dAf4119D069a84E7d3f3",
+    "/api/v2/tokens",
+    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e",
+    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/instances",
+    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/instances/1",
 
 ]
 
