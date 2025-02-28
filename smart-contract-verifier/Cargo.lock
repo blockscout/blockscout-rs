@@ -2987,7 +2987,16 @@ version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f8e213c36148d828083ae01948eed271d03f95f7e72571fa242d78184029af2"
 dependencies = [
- "minicbor-derive",
+ "minicbor-derive 0.15.0",
+]
+
+[[package]]
+name = "minicbor"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e661deac75bd438730c7335469ea8aee72a607e2bc93282386ef765b4ea7cdc0"
+dependencies = [
+ "minicbor-derive 0.16.0",
 ]
 
 [[package]]
@@ -2995,6 +3004,17 @@ name = "minicbor-derive"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6bdc119b1a405df86a8cde673295114179dbd0ebe18877c26ba89fb080365c2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
+name = "minicbor-derive"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1164934feccd1ca0b67754a8656c409ec80c5888bcbdb6a7ccd2e43722d819c1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5215,6 +5235,7 @@ dependencies = [
  "tracing",
  "url",
  "verification-common",
+ "vyper-cbor-auxdata",
  "wiremock",
 ]
 
@@ -5327,7 +5348,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27866969b7fa575837afa26079574f78f1e8223ac2f933e5808060b204ba23d8"
 dependencies = [
- "minicbor",
+ "minicbor 0.24.2",
  "semver 1.0.23",
  "thiserror 1.0.63",
 ]
@@ -6251,6 +6272,16 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vyper-cbor-auxdata"
+version = "0.1.0"
+dependencies = [
+ "blockscout-display-bytes",
+ "minicbor 0.26.0",
+ "semver 1.0.23",
+ "thiserror 1.0.63",
+]
 
 [[package]]
 name = "wait-timeout"

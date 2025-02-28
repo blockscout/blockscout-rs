@@ -215,6 +215,7 @@ impl<T> LocalBytecode<T> {
     /// Any error here is [`VerificationErrorKind::InternalError`], as both original
     /// and modified bytecodes are obtained as a result of local compilation.
     pub fn new(
+        is_vyper: bool,
         (creation_tx_input, deployed_bytecode): (
             Bytecode<CreationTxInput>,
             Bytecode<DeployedBytecode>,
@@ -226,11 +227,13 @@ impl<T> LocalBytecode<T> {
         immutable_references: BTreeMap<String, Vec<Offsets>>,
     ) -> Result<Self, VerificationErrorKind> {
         let creation_tx_input_parts = split(
+            is_vyper,
             creation_tx_input.bytecode(),
             creation_tx_input_modified.bytecode(),
         )
         .map_err(|err| VerificationErrorKind::InternalError(format!("{err:#}")))?;
         let deployed_bytecode_parts = split(
+            is_vyper,
             deployed_bytecode.bytecode(),
             deployed_bytecode_modified.bytecode(),
         )
@@ -272,7 +275,11 @@ impl<T> LocalBytecode<T> {
 ///
 /// Any error here is [`VerificationErrorKind::InternalError`], as both original
 /// and modified bytecodes are obtained as a result of local compilation.
-pub fn split(raw: &Bytes, raw_modified: &Bytes) -> Result<Vec<BytecodePart>, anyhow::Error> {
+pub fn split(
+    is_vyper: bool,
+    raw: &Bytes,
+    raw_modified: &Bytes,
+) -> Result<Vec<BytecodePart>, anyhow::Error> {
     if raw.len() != raw_modified.len() {
         anyhow::bail!(
             "bytecode and modified bytecode length mismatch: {}",
@@ -287,7 +294,7 @@ pub fn split(raw: &Bytes, raw_modified: &Bytes) -> Result<Vec<BytecodePart>, any
 
     let mut i = 0usize;
     while i < raw.len() {
-        let decoded = parse_bytecode_parts(&raw.slice(i..raw.len()), &raw_modified[i..])?;
+        let decoded = parse_bytecode_parts(is_vyper, &raw.slice(i..raw.len()), &raw_modified[i..])?;
         let decoded_size = parts_total_size(&decoded);
         result.extend(decoded);
 
@@ -301,6 +308,7 @@ pub fn split(raw: &Bytes, raw_modified: &Bytes) -> Result<Vec<BytecodePart>, any
 ///
 /// Parses at most one [`BytecodePart::Main`] and one [`BytecodePart::Metadata`].
 fn parse_bytecode_parts(
+    is_vyper: bool,
     raw: &Bytes,
     raw_modified: &[u8],
 ) -> Result<Vec<BytecodePart>, anyhow::Error> {
@@ -316,8 +324,11 @@ fn parse_bytecode_parts(
 
     // There is some non-matching byte - part of the metadata part byte.
     if let Some(mut i) = index {
-        let is_metadata_length_valid = |metadata_length: usize, i: usize| {
-            if len < i + metadata_length + 2 {
+        let is_metadata_length_valid = |is_vyper: bool, metadata_length: usize, i: usize| {
+            // solidity does not count 2 length bytes as metadata, while vyper does
+            if (is_vyper && len < i + metadata_length)
+                || (!is_vyper && len < i + metadata_length + 2)
+            {
                 return false;
             }
 
@@ -325,7 +336,10 @@ fn parse_bytecode_parts(
             let mut metadata_length_raw =
                 raw.slice((i + metadata_length)..(i + metadata_length + 2));
             let encoded_metadata_length = metadata_length_raw.get_u16() as usize;
-            if encoded_metadata_length != metadata_length {
+
+            if (is_vyper && encoded_metadata_length != metadata_length + 2)
+                || (!is_vyper && encoded_metadata_length != metadata_length)
+            {
                 return false;
             }
 
@@ -336,25 +350,52 @@ fn parse_bytecode_parts(
         // (at least for "a1"/"a2" indicating number of elements in cbor mapping).
         // Next steps are trying to find that beginning.
 
-        let (metadata, metadata_length) = loop {
-            let mut result = MetadataHash::from_cbor(&raw[i..]);
-            while result.is_err() {
-                // It is the beginning of the bytecode segment but no metadata hash has been parsed
-                if i == 0 {
-                    anyhow::bail!("failed to parse bytecode part",)
+        // TODO: rewrite when updating verification method approach
+        let (metadata, metadata_length) = if !is_vyper {
+            loop {
+                let mut result = MetadataHash::from_cbor(&raw[i..]);
+                while result.is_err() {
+                    // It is the beginning of the bytecode segment but no metadata hash has been parsed
+                    if i == 0 {
+                        anyhow::bail!("failed to parse bytecode part",)
+                    }
+                    i -= 1;
+
+                    result = MetadataHash::from_cbor(&raw[i..]);
                 }
+
+                let (metadata, metadata_length) = result.unwrap();
+
+                if is_metadata_length_valid(is_vyper, metadata_length, i) {
+                    break (metadata, metadata_length);
+                }
+
                 i -= 1;
-
-                result = MetadataHash::from_cbor(&raw[i..]);
             }
+        } else {
+            loop {
+                let mut result = vyper_cbor_auxdata::Auxdata::from_cbor(&raw[i..]);
+                while result.is_err() {
+                    // It is the beginning of the bytecode segment but no metadata hash has been parsed
+                    if i == 0 {
+                        anyhow::bail!("failed to parse bytecode part",)
+                    }
+                    i -= 1;
 
-            let (metadata, metadata_length) = result.unwrap();
+                    result = vyper_cbor_auxdata::Auxdata::from_cbor(&raw[i..]);
+                }
 
-            if is_metadata_length_valid(metadata_length, i) {
-                break (metadata, metadata_length);
+                let (_auxdata, metadata_length) = result.unwrap();
+
+                if is_metadata_length_valid(is_vyper, metadata_length, i) {
+                    // We use metadata hash to compare on_chain compiler version with the one provided during request.
+                    // But for vyper compilers we may just ignore such check for now, so not to rewrite too much of the code
+                    // which is going to be rewritten soon anyway.
+                    break (MetadataHash { solc: None }, metadata_length);
+                }
+
+                i -= 1;
             }
-
-            i -= 1;
         };
 
         parts.push(BytecodePart::Metadata {
@@ -416,6 +457,7 @@ mod local_bytecode_initialization_tests {
     }
 
     fn new_local_bytecode<T: Source>(
+        is_vyper: bool,
         (creation_tx_input, deployed_bytecode): (&str, &str),
         (creation_tx_input_modified, deployed_bytecode_modified): (&str, &str),
     ) -> Result<Bytecodes<T>, VerificationErrorKind> {
@@ -430,6 +472,7 @@ mod local_bytecode_initialization_tests {
             .expect("Modified bytecode initialization failed");
 
         LocalBytecode::new(
+            is_vyper,
             (creation_tx_input.clone(), deployed_bytecode.clone()),
             (creation_tx_input_modified, deployed_bytecode_modified),
             Default::default(),
@@ -475,6 +518,7 @@ mod local_bytecode_initialization_tests {
                 creation_tx_input,
                 ..
             }: Bytecodes<CreationTxInput> = new_local_bytecode(
+                false,
                 (&creation_tx_input_str, &deployed_bytecode_str),
                 (
                     &creation_tx_input_modified_str,
@@ -501,6 +545,7 @@ mod local_bytecode_initialization_tests {
                 deployed_bytecode,
                 ..
             }: Bytecodes<DeployedBytecode> = new_local_bytecode(
+                false,
                 (&creation_tx_input_str, &deployed_bytecode_str),
                 (
                     &creation_tx_input_modified_str,
@@ -538,6 +583,7 @@ mod local_bytecode_initialization_tests {
                 creation_tx_input,
                 ..
             }: Bytecodes<CreationTxInput> = new_local_bytecode(
+                false,
                 (&creation_tx_input_str, &deployed_bytecode_str),
                 (
                     &creation_tx_input_modified_str,
@@ -567,6 +613,7 @@ mod local_bytecode_initialization_tests {
                 deployed_bytecode,
                 ..
             }: Bytecodes<DeployedBytecode> = new_local_bytecode(
+                false,
                 (&creation_tx_input_str, &deployed_bytecode_str),
                 (
                     &creation_tx_input_modified_str,
@@ -613,6 +660,7 @@ mod local_bytecode_initialization_tests {
                 creation_tx_input,
                 ..
             }: Bytecodes<CreationTxInput> = new_local_bytecode(
+                false,
                 (&creation_tx_input_str, &deployed_bytecode_str),
                 (
                     &creation_tx_input_modified_str,
@@ -644,6 +692,7 @@ mod local_bytecode_initialization_tests {
                 deployed_bytecode,
                 ..
             }: Bytecodes<DeployedBytecode> = new_local_bytecode(
+                false,
                 (&creation_tx_input_str, &deployed_bytecode_str),
                 (
                     &creation_tx_input_modified_str,
@@ -690,6 +739,7 @@ mod local_bytecode_initialization_tests {
                 creation_tx_input,
                 ..
             }: Bytecodes<CreationTxInput> = new_local_bytecode(
+                false,
                 (&creation_tx_input_str, &deployed_bytecode_str),
                 (
                     &creation_tx_input_modified_str,
@@ -720,6 +770,7 @@ mod local_bytecode_initialization_tests {
                 deployed_bytecode,
                 ..
             }: Bytecodes<DeployedBytecode> = new_local_bytecode(
+                false,
                 (&creation_tx_input_str, &deployed_bytecode_str),
                 (
                     &creation_tx_input_modified_str,
@@ -755,6 +806,7 @@ mod local_bytecode_initialization_tests {
         let deployed_bytecode_modified_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
 
         let local_bytecode: Result<Bytecodes<CreationTxInput>, _> = new_local_bytecode(
+            false,
             (&creation_tx_input_str, &deployed_bytecode_str),
             (
                 &creation_tx_input_modified_str,
@@ -788,6 +840,7 @@ mod local_bytecode_initialization_tests {
         let deployed_bytecode_modified_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
 
         let local_bytecode: Result<Bytecodes<CreationTxInput>, _> = new_local_bytecode(
+            false,
             (&creation_tx_input_str, &deployed_bytecode_str),
             (
                 &creation_tx_input_modified_str,
@@ -828,6 +881,7 @@ mod local_bytecode_initialization_tests {
         let deployed_bytecode_modified_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
 
         let local_bytecode: Result<Bytecodes<CreationTxInput>, _> = new_local_bytecode(
+            false,
             (&creation_tx_input_str, &deployed_bytecode_str),
             (
                 &creation_tx_input_modified_str,
@@ -867,6 +921,7 @@ mod local_bytecode_initialization_tests {
         let deployed_bytecode_modified_str = DEPLOYED_BYTECODE_MAIN_PART_1.to_string();
 
         let local_bytecode: Result<Bytecodes<CreationTxInput>, _> = new_local_bytecode(
+            false,
             (&creation_tx_input_str, &deployed_bytecode_str),
             (
                 &creation_tx_input_modified_str,
@@ -905,6 +960,7 @@ mod local_bytecode_initialization_tests {
             creation_tx_input,
             ..
         }: Bytecodes<CreationTxInput> = new_local_bytecode(
+            false,
             (creation_tx_input_str, deployed_bytecode_str),
             (
                 creation_tx_input_modified_str,
