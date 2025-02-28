@@ -182,7 +182,7 @@ impl IndexingStatusAggregator {
                 self.check_user_ops_status().await;
             }
             let wait_time = if let IndexingStatus::MAX = *self.sender.borrow() {
-                self.wait_config.check_period_secs.saturating_mul(100)
+                self.wait_config.check_period_secs.saturating_mul(10000)
             } else {
                 self.wait_config.check_period_secs
             };
