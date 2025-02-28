@@ -9,6 +9,7 @@ use crate::{
         },
         types::{BlockscoutMigrations, WrappedValue},
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     utils::sql_with_range_filter_opt,
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
@@ -70,7 +71,10 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 

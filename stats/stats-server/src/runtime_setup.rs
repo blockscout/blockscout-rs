@@ -555,6 +555,13 @@ impl RuntimeSetup {
         members
     }
 
+    pub fn enabled_chart_keys(&self) -> Vec<ChartKey> {
+        self.charts_info
+            .values()
+            .flat_map(|entry| entry.get_keys())
+            .collect()
+    }
+
     /// Recursive indexing status requirements for all group members.
     ///
     /// 'Recursive' means that their dependencies' requirements are also
@@ -574,6 +581,18 @@ impl RuntimeSetup {
                     })
                     .collect_vec()
             })
+            .collect()
+    }
+
+    /// Recursive indexing status requirements for all enabled group members.
+    /// See [`Self::all_members_indexing_status_requirements`] for details.
+    pub fn all_enabled_members_indexing_status_requirements(
+        &self,
+    ) -> BTreeMap<ChartKey, IndexingStatus> {
+        let enabled_charts: HashSet<_> = self.enabled_chart_keys().into_iter().collect();
+        Self::all_members_indexing_status_requirements()
+            .into_iter()
+            .filter(|(chart, _req)| enabled_charts.contains(chart))
             .collect()
     }
 }

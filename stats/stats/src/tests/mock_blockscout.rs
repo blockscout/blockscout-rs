@@ -18,25 +18,59 @@ use wiremock::{
 };
 
 pub async fn default_mock_blockscout_api() -> MockServer {
-    mock_blockscout_api(ResponseTemplate::new(200).set_body_string(
-        r#"{
+    mock_blockscout_api(
+        ResponseTemplate::new(200).set_body_string(
+            r#"{
             "finished_indexing": true,
             "finished_indexing_blocks": true,
             "indexed_blocks_ratio": "1.00",
             "indexed_internal_transactions_ratio": "1.00"
         }"#,
-    ))
+        ),
+        Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true))),
+    )
     .await
 }
 
-pub async fn mock_blockscout_api(indexing_status_response: ResponseTemplate) -> MockServer {
+pub async fn mock_blockscout_api(
+    blockscout_indexing_status_response: ResponseTemplate,
+    user_ops_indexing_status_response: Option<ResponseTemplate>,
+) -> MockServer {
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/api/v2/main-page/indexing-status"))
-        .respond_with(indexing_status_response)
+        .respond_with(blockscout_indexing_status_response)
         .mount(&mock_server)
         .await;
+
+    if let Some(response) = user_ops_indexing_status_response {
+        Mock::given(method("GET"))
+            .and(path("/api/v2/proxy/account-abstraction/status"))
+            .respond_with(response)
+            .mount(&mock_server)
+            .await;
+    }
     mock_server
+}
+
+pub fn user_ops_status_response_json(past_finished: bool) -> String {
+    format!(
+        r#"{{
+        "finished_past_indexing": {past_finished},
+        "v06": {{
+            "enabled": true,
+            "live": false,
+            "past_db_logs_indexing_finished": false,
+            "past_rpc_logs_indexing_finished": false
+        }},
+        "v07": {{
+            "enabled": true,
+            "live": false,
+            "past_db_logs_indexing_finished": false,
+            "past_rpc_logs_indexing_finished": false
+        }}
+    }}"#
+    )
 }
 
 pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date: NaiveDate) {

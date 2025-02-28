@@ -10,5 +10,5 @@ fn log_error(err: anyhow::Error) -> anyhow::Error {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let settings = Settings::build().map_err(log_error)?;
-    stats(settings).await.map_err(log_error)
+    stats(settings, None).await.map_err(log_error)
 }

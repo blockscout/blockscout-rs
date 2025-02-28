@@ -14,6 +14,7 @@ use thiserror::Error;
 
 use super::{
     db_interaction::read::ApproxUnsignedDiff,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
     query_dispatch::{ChartTypeSpecifics, QuerySerialized, QuerySerializedDyn},
 };
 
@@ -25,6 +26,8 @@ pub enum ChartError {
     StatsDB(DbErr),
     #[error("chart {0} not found")]
     ChartNotFound(ChartKey),
+    #[error("no data for counter {0} is present. it might be because it's yet to update")]
+    NoCounterData(ChartKey),
     #[error("exceeded limit on requested data points (~{limit}); choose smaller time interval.")]
     IntervalTooLarge { limit: u32 },
     #[error("internal error: {0}")]
@@ -101,7 +104,7 @@ impl From<ResolutionKind> for String {
 
 impl Display for ResolutionKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        (*self).to_string().fmt(f)
+        String::from(*self).fmt(f)
     }
 }
 
@@ -155,40 +158,11 @@ impl Display for ChartKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum IndexingStatus {
-    NoneIndexed,
-    BlocksIndexed,
-    /// Implies that blocks are also indexed
-    InternalTransactionsIndexed,
-}
-
-impl IndexingStatus {
-    // constants for status itself
-
-    /// Indexing status at the start of blockscout
-    pub const MIN: IndexingStatus = IndexingStatus::NoneIndexed;
-    /// Finished indexing everything
-    pub const MAX: IndexingStatus = IndexingStatus::InternalTransactionsIndexed;
-
-    // constants corresponding to status requirement
-
-    /// The most relaxed requirement
-    pub const LEAST_RESTRICTIVE: IndexingStatus = Self::MIN;
-    /// The hardest to achieve requirement
-    pub const MOST_RESTRICTIVE: IndexingStatus = Self::MAX;
-
-    pub fn most_restrictive_from(
-        requrements: impl Iterator<Item = IndexingStatus>,
-    ) -> IndexingStatus {
-        requrements.max().unwrap_or(Self::LEAST_RESTRICTIVE)
-    }
-}
-
 #[portrait::make(import(
     crate::charts::chart::{
-        MissingDatePolicy, IndexingStatus, ResolutionKind, ChartKey
+        MissingDatePolicy, ResolutionKind, ChartKey
     },
+    crate::charts::indexing_status::IndexingStatus,
     entity::sea_orm_active_enums::ChartType,
 ))]
 pub trait ChartProperties: Sync + Named {
@@ -218,8 +192,12 @@ pub trait ChartProperties: Sync + Named {
     /// is propagated to its dependants with
     /// [`DataSource::indexing_status_requirement_recursive`](crate::data_source::DataSource::indexing_status_requirement_recursive).
     fn indexing_status_requirement() -> IndexingStatus {
-        // most of the charts need indexed blocks
-        IndexingStatus::BlocksIndexed
+        IndexingStatus {
+            // most of the charts need indexed blocks
+            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
+            // most of the charts don't depend on user ops
+            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
+        }
     }
 
     /// Number of last values that are considered approximate.
@@ -345,52 +323,5 @@ impl ChartPropertiesObject {
             indexing_status_requirement: T::indexing_status_requirement(),
             approximate_trailing_points: T::approximate_trailing_points(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::IndexingStatus;
-
-    #[test]
-    fn indexing_status_requirements_are_combined_correctly() {
-        assert_eq!(
-            IndexingStatus::most_restrictive_from(
-                vec![
-                    IndexingStatus::BlocksIndexed,
-                    IndexingStatus::InternalTransactionsIndexed,
-                    IndexingStatus::BlocksIndexed
-                ]
-                .into_iter()
-            ),
-            IndexingStatus::InternalTransactionsIndexed
-        );
-
-        assert_eq!(
-            IndexingStatus::most_restrictive_from(
-                vec![
-                    IndexingStatus::NoneIndexed,
-                    IndexingStatus::InternalTransactionsIndexed,
-                ]
-                .into_iter()
-            ),
-            IndexingStatus::InternalTransactionsIndexed
-        );
-
-        assert_eq!(
-            IndexingStatus::most_restrictive_from(
-                vec![
-                    IndexingStatus::InternalTransactionsIndexed,
-                    IndexingStatus::InternalTransactionsIndexed,
-                ]
-                .into_iter()
-            ),
-            IndexingStatus::InternalTransactionsIndexed
-        );
-
-        assert_eq!(
-            IndexingStatus::most_restrictive_from(vec![].into_iter()),
-            IndexingStatus::NoneIndexed
-        );
     }
 }

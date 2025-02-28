@@ -149,8 +149,6 @@ impl Week {
 
     /// `None` - out of range (week of `NaiveDate::MAX`)
     pub fn checked_last_day(&self) -> Option<NaiveDate> {
-        // Current interface of `NaiveWeek` does not provide any way
-        // of idiomatic overflow handling
         self.0.checked_last_day()
     }
 

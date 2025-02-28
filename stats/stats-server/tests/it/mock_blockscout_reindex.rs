@@ -1,6 +1,9 @@
 use std::{str::FromStr, time::Duration};
 
-use blockscout_service_launcher::test_server::{init_server, send_get_request};
+use blockscout_service_launcher::{
+    launcher::GracefulShutdownHandler,
+    test_server::{init_server, send_get_request},
+};
 use chrono::NaiveDate;
 use stats::tests::{
     init_db::init_db_all,
@@ -9,7 +12,7 @@ use stats::tests::{
 };
 use stats_proto::blockscout::stats::v1::{self as proto_v1, BatchUpdateChartsResult};
 use stats_server::{auth::ApiKey, stats};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use url::Url;
 
 use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single_key};
@@ -17,13 +20,13 @@ use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single
 /// Uses reindexing, so needs to be independent
 #[tokio::test]
 #[ignore = "needs database"]
-async fn tests_reupdate_works() {
-    let test_name = "tests_reupdate_works";
+async fn test_reupdate_works() {
+    let test_name = "test_reupdate_works";
+    let _ = tracing_subscriber::fmt::try_init();
     let (stats_db, blockscout_db) = init_db_all(test_name).await;
     let max_date = NaiveDate::from_str("2023-03-01").unwrap();
     fill_mock_blockscout_data(&blockscout_db, max_date).await;
     let blockscout_api = default_mock_blockscout_api().await;
-    std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // obviously don't use this anywhere except tests
     let api_key = ApiKey::from_str_infallible("123");
@@ -31,7 +34,9 @@ async fn tests_reupdate_works() {
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
 
-    init_server(|| stats(settings), &base).await;
+    let shutdown = GracefulShutdownHandler::new();
+    let shutdown_cloned = shutdown.clone();
+    init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
 
     // Sleep until server will start and calculate all values
     sleep(Duration::from_secs(8 * wait_multiplier)).await;
@@ -141,6 +146,14 @@ async fn tests_reupdate_works() {
             ("2023-03-01", "1"),
         ])
     );
+    blockscout_db.close_all_unwrap().await;
+    stats_db.close_all_unwrap().await;
+    // todo: add method for these (+timeout)
+    shutdown.shutdown_token.cancel();
+    shutdown.task_tracker.close();
+    timeout(Duration::from_secs(15), shutdown.task_tracker.wait())
+        .await
+        .unwrap();
 }
 
 async fn get_new_txns(base: &Url) -> Vec<proto_v1::Point> {

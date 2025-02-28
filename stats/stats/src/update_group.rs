@@ -44,7 +44,8 @@ use tokio::sync::{Mutex, MutexGuard};
 use crate::{
     charts::{chart_properties_portrait::imports::ChartKey, ChartObject},
     data_source::UpdateParameters,
-    ChartError, IndexingStatus,
+    indexing_status::IndexingStatus,
+    ChartError,
 };
 
 #[derive(Error, Debug, PartialEq)]
@@ -290,8 +291,10 @@ macro_rules! construct_update_group {
             fn dependency_indexing_status_requirement(
                 &self,
                 enabled_charts: &::std::collections::HashSet<$crate::ChartKey>,
-            ) -> $crate::IndexingStatus {
-                $crate::IndexingStatus::most_restrictive_from(
+            ) -> $crate::indexing_status::IndexingStatus {
+                use $crate::indexing_status::IndexingStatusTrait;
+
+                $crate::indexing_status::IndexingStatus::most_restrictive_from(
                     [
                         $(
                             (
