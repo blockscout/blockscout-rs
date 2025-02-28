@@ -177,7 +177,7 @@ pub async fn stats(
 
     create_charts_if_needed(&db, &charts).await?;
 
-    let shutdown = shutdown.unwrap_or(GracefulShutdownHandler::new());
+    let shutdown = shutdown.unwrap_or_default();
     let (status_waiter_handle, status_listener) =
         init_and_spawn_waiter(&shutdown.task_tracker, &settings)?;
 
