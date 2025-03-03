@@ -5,12 +5,9 @@ use std::{str::FromStr, time::Duration};
 use tracing::log::LevelFilter;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "database-1_0")] {
-        pub use sea_orm_1_0::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
-        pub use sea_orm_migration_1_0::MigratorTrait;
-    } else if #[cfg(feature = "database-0_12")] {
-        pub use sea_orm_0_12::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
-        pub use sea_orm_migration_0_12::MigratorTrait;
+    if #[cfg(feature = "database-1")] {
+        pub use sea_orm_1::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
+        pub use sea_orm_migration_1::MigratorTrait;
     } else if #[cfg(feature = "database-0_11")] {
         pub use sea_orm_0_11::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
         pub use sea_orm_migration_0_11::MigratorTrait;
@@ -19,7 +16,7 @@ cfg_if::cfg_if! {
         pub use sea_orm_migration_0_10::MigratorTrait;
     } else {
         compile_error!(
-            "one of the features ['database-1_0', 'database-0_12', 'database-0_11', 'database-0_10'] \
+            "one of the features ['database-1', 'database-0_11', 'database-0_10'] \
              must be enabled"
         );
     }
@@ -169,17 +166,22 @@ pub struct DatabaseConnectOptionsSettings {
     )]
     /// SQLx statement logging level (ignored if `sqlx_logging` is false)
     pub sqlx_logging_level: LevelFilter,
-    #[cfg(feature = "database-1_0")]
+    #[cfg(feature = "database-1")]
     #[serde(
         deserialize_with = "string_to_level_filter",
         serialize_with = "level_filter_to_string"
     )]
     /// SQLx slow statements logging level (ignored if `sqlx_logging` is false)
     pub sqlx_slow_statements_logging_level: LevelFilter,
-    #[cfg(feature = "database-1_0")]
+    #[cfg(feature = "database-1")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     /// SQLx slow statements duration threshold (ignored if `sqlx_logging` is false)
     pub sqlx_slow_statements_logging_threshold: Duration,
+    #[cfg(feature = "database-1")]
+    /// Only establish connections to the DB as needed. If set to `true`, the db connection will
+    /// be created using SQLx's [connect_lazy](https://docs.rs/sqlx/latest/sqlx/struct.Pool.html#method.connect_lazy)
+    /// method.
+    pub connect_lazy: bool,
 }
 
 impl Default for DatabaseConnectOptionsSettings {
@@ -193,10 +195,12 @@ impl Default for DatabaseConnectOptionsSettings {
             max_lifetime: None,
             sqlx_logging: true,
             sqlx_logging_level: LevelFilter::Debug,
-            #[cfg(feature = "database-1_0")]
+            #[cfg(feature = "database-1")]
             sqlx_slow_statements_logging_level: LevelFilter::Off,
-            #[cfg(feature = "database-1_0")]
+            #[cfg(feature = "database-1")]
             sqlx_slow_statements_logging_threshold: Duration::from_secs(1),
+            #[cfg(feature = "database-1")]
+            connect_lazy: false,
         }
     }
 }
@@ -223,11 +227,13 @@ impl DatabaseConnectOptionsSettings {
         }
         options.sqlx_logging(self.sqlx_logging);
         options.sqlx_logging_level(self.sqlx_logging_level);
-        #[cfg(feature = "database-1_0")]
+        #[cfg(feature = "database-1")]
         options.sqlx_slow_statements_logging_settings(
             self.sqlx_slow_statements_logging_level,
             self.sqlx_slow_statements_logging_threshold,
         );
+        #[cfg(feature = "database-1")]
+        options.connect_lazy(self.connect_lazy);
         options
     }
 }
