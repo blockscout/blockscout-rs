@@ -19,6 +19,8 @@ pub struct TotalErc1155 {
     pub decimals: String,
     #[serde(rename = "value")]
     pub value: String,
+    #[serde(rename = "token_instance", skip_serializing_if = "Option::is_none")]
+    pub token_instance: Option<models::NftInstance>,
 }
 
 impl TotalErc1155 {
@@ -27,6 +29,7 @@ impl TotalErc1155 {
             token_id,
             decimals,
             value,
+            token_instance: None,
         }
     }
 }

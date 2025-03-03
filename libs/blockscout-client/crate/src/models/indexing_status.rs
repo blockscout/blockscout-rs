@@ -19,17 +19,25 @@ pub struct IndexingStatus {
     pub finished_indexing_blocks: bool,
     #[serde(rename = "indexed_blocks_ratio")]
     pub indexed_blocks_ratio: Option<String>, // changed
-    #[serde(rename = "indexed_internal_transactions_ratio")]
-    pub indexed_internal_transactions_ratio: Option<String>, // changed
+    #[serde(
+        rename = "indexed_internal_transactions_ratio",
+        deserialize_with = "Option::deserialize"
+    )]
+    pub indexed_internal_transactions_ratio: Option<String>,
 }
 
 impl IndexingStatus {
-    pub fn new(finished_indexing: bool, finished_indexing_blocks: bool) -> IndexingStatus {
+    pub fn new(
+        finished_indexing: bool,
+        finished_indexing_blocks: bool,
+        indexed_blocks_ratio: Option<String>,
+        indexed_internal_transactions_ratio: Option<String>,
+    ) -> IndexingStatus {
         IndexingStatus {
             finished_indexing,
             finished_indexing_blocks,
-            indexed_blocks_ratio: None,
-            indexed_internal_transactions_ratio: None,
+            indexed_blocks_ratio,
+            indexed_internal_transactions_ratio,
         }
     }
 }

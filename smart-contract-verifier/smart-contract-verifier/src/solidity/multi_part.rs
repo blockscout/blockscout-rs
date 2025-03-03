@@ -70,6 +70,7 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
     let compiler_version = request.compiler_version;
 
     let verifier = ContractVerifier::new(
+        false,
         client.compilers(),
         &compiler_version,
         request.creation_bytecode,

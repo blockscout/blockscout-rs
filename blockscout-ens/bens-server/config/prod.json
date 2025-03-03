@@ -178,6 +178,22 @@
         "use_protocols": [
           "ens", "zns-ink"
         ]
+      },
+      "130": {
+        "blockscout": {
+          "url": "https://unichain.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "1301": {
+        "blockscout": {
+          "url": "https://unichain-sepolia.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
+        ]
       }
     },
     "protocols": {
@@ -383,8 +399,8 @@
         "meta": {
           "short_name": "ZNS",
           "title": "ZNS Connect Domains",
-          "description": "ZNS Connect is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
           "docs_url": "https://docs.znsconnect.io/"
         }
       },
@@ -401,8 +417,8 @@
         "meta": {
           "short_name": "ZNS",
           "title": "ZNS Connect Domains",
-          "description": "ZNS Connect is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
           "docs_url": "https://docs.znsconnect.io/"
         }
       },
@@ -417,8 +433,8 @@
         "meta": {
           "short_name": "ZNS",
           "title": "ZNS Connect Domains",
-          "description": "ZNS Connect is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
           "docs_url": "https://docs.znsconnect.io/"
         }
       },

@@ -192,6 +192,33 @@ paths:
           description: bad input parameter
       tags:
         - token-transfers
+  /api/v2/internal-transactions:
+    get:
+      summary: get internal transactions
+      operationId: get_internal_transactions
+      responses:
+        '200':
+          description: internal transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - next_page_params
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InternalTransaction'
+                  next_page_params:
+                    type: object
+                    example:
+                      block_number: 27170298
+                      index: 0
+                      transaction_index: 0
+      tags:
+        - internal-transactions
   /api/v2/main-page/transactions:
     get:
       summary: get main page transactions
@@ -1606,6 +1633,21 @@ paths:
                       items_count: 50
       tags:
         - withdrawals
+  /api/v2/proxy/account-abstraction/status:
+    get:
+      summary: get account abstraction indexing status
+      operationId: get_account_abstraction_status
+      responses:
+        '200':
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1IndexerStatus'
+        '500':
+          description: unexpected error
+      tags:
+        - proxy
   /api/v1/health:
     get:
       tags:
@@ -1769,7 +1811,6 @@ components:
             - $ref: '#/components/schemas/TotalERC20'
             - $ref: '#/components/schemas/TotalERC721'
             - $ref: '#/components/schemas/TotalERC1155'
-            - $ref: '#/components/schemas/TotalERC1155Batch'
         transaction_hash:
           type: string
           example: '0x6662ad1ad2ea899e9e27832dc202fd2ef915a5d2816c1142e6933cff93f7c592'
@@ -2078,6 +2119,7 @@ components:
           type: string
           example: '1866.51'
         to:
+          nullable: 'true,'
           $ref: '#/components/schemas/AddressParam'
         transaction_burnt_fee:
           type: string
@@ -2120,6 +2162,7 @@ components:
           type: string
           example: '41309'
         created_contract:
+          nullable: 'true,'
           $ref: '#/components/schemas/AddressParam'
         position:
           type: integer
@@ -2491,6 +2534,17 @@ components:
         name:
           type: string
           example: contractName
+        ens_domain_name:
+          type: string
+          example: domain.eth
+        metadata:
+          type: object
+          example:
+            slug: tag_slug
+            name: Tag name
+            tagType: name
+            ordinal: 0
+            meta: {}
         is_contract:
           type: boolean
         private_tags:
@@ -2779,6 +2833,8 @@ components:
         token_id:
           type: string
           example: '1'
+        token_instance:
+          $ref: '#/components/schemas/NFTInstance'
     TotalERC1155:
       required:
         - token_id
@@ -2794,10 +2850,8 @@ components:
         value:
           type: string
           example: '1000'
-    TotalERC1155Batch:
-      type: array
-      items:
-        $ref: '#/components/schemas/TotalERC1155'
+        token_instance:
+          $ref: '#/components/schemas/NFTInstance'
     Holder:
       required:
         - address
@@ -3329,6 +3383,7 @@ components:
           example: '1.0'
         indexed_internal_transactions_ratio:
           type: string
+          nullable: true
           example: '1.0'
     StatsResponse:
       required:
@@ -3704,6 +3759,24 @@ components:
         type:
           type: string
           example: burn | collect | swap
+    v1IndexerStatus:
+      properties:
+        finished_past_indexing:
+          type: boolean
+        v06:
+          $ref: '#/components/schemas/v1EntryPointIndexerStatus'
+        v07:
+          $ref: '#/components/schemas/v1EntryPointIndexerStatus'
+    v1EntryPointIndexerStatus:
+      properties:
+        enabled:
+          type: boolean
+        live:
+          type: boolean
+        past_db_logs_indexing_finished:
+          type: boolean
+        past_rpc_logs_indexing_finished:
+          type: boolean
     protobufAny:
       type: object
       properties:

@@ -493,7 +493,7 @@ async fn events_from_transactions(
                 .remove(&TxHash::from_slice(txn.transaction_id.as_slice()))
                 .map(|t| DomainEvent {
                     transaction_hash: t.hash,
-                    block_number: t.block,
+                    block_number: t.block_number,
                     timestamp: t.timestamp,
                     from_address: t.from.hash,
                     method: t.method,

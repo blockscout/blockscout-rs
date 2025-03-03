@@ -12,10 +12,16 @@ use stats::{
     lines::{NewOperationalTxns, NewOperationalTxnsWindow, OperationalTxnsGrowth},
     ChartProperties, IndexingStatus,
 };
-use std::{collections::BTreeSet, net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{
+    collections::{BTreeSet, HashMap},
+    net::SocketAddr,
+    path::PathBuf,
+    str::FromStr,
+};
 use tracing::warn;
 
 use crate::{
+    auth::ApiKey,
     config::{self, types::AllChartSettings},
     RuntimeSetup,
 };
@@ -53,6 +59,7 @@ pub struct Settings {
     pub update_groups_config: PathBuf,
     /// Location of swagger file to serve
     pub swagger_file: PathBuf,
+    pub api_keys: HashMap<String, ApiKey>,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
@@ -75,6 +82,7 @@ impl Default for Settings {
                     addr: SocketAddr::from_str("0.0.0.0:8051").unwrap(),
                 },
             },
+            api_keys: Default::default(),
             db_url: Default::default(),
             default_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
             force_update_on_start: Some(false),
@@ -97,6 +105,10 @@ impl Default for Settings {
             tracing: Default::default(),
         }
     }
+}
+
+impl ConfigSettings for Settings {
+    const SERVICE_NAME: &'static str = "STATS";
 }
 
 pub fn handle_disable_internal_transactions(
@@ -244,10 +256,6 @@ impl Default for ToggleableThreshold {
     fn default() -> Self {
         Self::enabled(0.98)
     }
-}
-
-impl ConfigSettings for Settings {
-    const SERVICE_NAME: &'static str = "STATS";
 }
 
 #[cfg(test)]

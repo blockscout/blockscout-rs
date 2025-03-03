@@ -27,6 +27,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Verifier<T> {
     remote_bytecode: Bytecode<T>,
+    is_vyper: bool,
 }
 
 impl<T: Source + Send + Sync> base::Verifier for Verifier<T> {
@@ -42,9 +43,10 @@ impl<T: Source + Send + Sync> base::Verifier for Verifier<T> {
 }
 
 impl<T: Source> Verifier<T> {
-    pub fn new(input: Bytes) -> Result<Self, BytecodeInitError> {
+    pub fn new(is_vyper: bool, input: Bytes) -> Result<Self, BytecodeInitError> {
         let bytecode = Bytecode::new(input)?;
         Ok(Self {
+            is_vyper,
             remote_bytecode: bytecode,
         })
     }
@@ -214,12 +216,14 @@ impl<T: Source> Verifier<T> {
             .immutable_references
             .clone();
         let local_bytecode = LocalBytecode::new(
+            self.is_vyper,
             (creation_tx_input, deployed_bytecode),
             (creation_tx_input_modified, deployed_bytecode_modified),
             immutable_references,
         )?;
 
-        let match_type = Self::compare_bytecodes(&self.remote_bytecode, &local_bytecode)?;
+        let match_type =
+            Self::compare_bytecodes(self.is_vyper, &self.remote_bytecode, &local_bytecode)?;
 
         let abi = contract.get_abi().map(|abi| abi.into_owned());
 
@@ -238,6 +242,7 @@ impl<T: Source> Verifier<T> {
     }
 
     fn compare_bytecodes(
+        is_vyper: bool,
         remote_bytecode: &Bytecode<T>,
         local_bytecode: &LocalBytecode<T>,
     ) -> Result<MatchType, VerificationErrorKind> {
@@ -273,6 +278,7 @@ impl<T: Source> Verifier<T> {
         }
 
         Self::compare_bytecode_parts(
+            is_vyper,
             &processed_remote_code,
             local_code,
             local_bytecode.bytecode_parts(),
@@ -303,6 +309,7 @@ impl<T: Source> Verifier<T> {
     ///
     /// The function will panic if `remote_raw.len()` is less than `local_raw.len()`.
     fn compare_bytecode_parts(
+        is_vyper: bool,
         remote_raw: &Bytes,
         local_raw: &Bytes,
         local_parts: &Vec<BytecodePart>,
@@ -331,6 +338,7 @@ impl<T: Source> Verifier<T> {
                         });
                     }
                 }
+                BytecodePart::Metadata { .. } if is_vyper => {}
                 BytecodePart::Metadata { metadata, raw, .. } => {
                     let (remote_metadata, remote_metadata_length) =
                         MetadataHash::from_cbor(&remote_raw[i..])
@@ -603,7 +611,7 @@ mod verifier_initialization_tests {
         let bytecode = DisplayBytes::from_str(bytecode)
             .expect("Invalid bytecode")
             .0;
-        Verifier::new(bytecode)
+        Verifier::new(false, bytecode)
     }
 
     #[test]
