@@ -21,6 +21,17 @@
     },
     "": ""
   },
+  "ape-testnet": {
+    "Registry": {
+      "address": "0xA6A33ddE98BAb3ee5262e7e1a14ee5B1F06D0D40",
+      "startBlock": 1902834
+    },
+    "Resolver": {
+      "address": "0x2ad234136165B59f98cf03f696cB84eaf48E30cF",
+      "startBlock": 14614509
+    },
+    "": ""
+  },
   "shibarium-testnet": {
     "Registry": {
       "address": "0x1443bC2bBAB07437BCF9C577b647523A736bB33E",
