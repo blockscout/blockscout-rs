@@ -61,3 +61,10 @@ provider = [
     { label = "ape-testnet", url = "https://curtis.rpc.caldera.xyz/http", features = [] }
 ]
 shard = "primary"
+
+[chains.story-mainnet]
+provider = [
+    { label = "story-mainnet", url = "https://frequent-hidden-telescope.story-mainnet.quiknode.pro/9934ef7bc4e5bcc89ef9768b5ca2f39fcb937c46", features = [] }
+]
+shard = "primary"
+

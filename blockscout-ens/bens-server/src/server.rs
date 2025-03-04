@@ -97,6 +97,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .subgraphs_reader
         .protocols
         .into_iter()
+        .filter(|(_, p)| !p.disabled)
         .map(|(name, p)| {
             (
                 name.clone(),
