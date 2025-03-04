@@ -12,9 +12,9 @@ members = [
 [workspace.dependencies]
 blockscout-client = { git = "https://github.com/blockscout/blockscout-rs/", rev = "d02877c" }
 # todo: update to a release version
-blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs/", rev = "3d16b65" }
+blockscout-service-launcher = { git = "https://github.com/blockscout/blockscout-rs/", rev = "903c230" }
 rstest = "0.23.0"
 trait-variant = "0.1.2"
 wiremock = "0.6.2"
-sea-orm = "~1.0"
-sea-orm-migration = "~1.0"
+sea-orm = "1.1"
+sea-orm-migration = "1.1"

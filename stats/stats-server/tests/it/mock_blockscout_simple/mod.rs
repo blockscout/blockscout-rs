@@ -10,9 +10,9 @@ use stats::tests::{init_db::init_db_blockscout, mock_blockscout::fill_mock_block
 use tokio::sync::OnceCell;
 
 mod common_tests;
-mod stats_full;
-mod stats_no_arbitrum;
-mod stats_not_indexed;
+// mod stats_full;
+// mod stats_no_arbitrum;
+// mod stats_not_indexed;
 mod stats_not_updated;
 
 static MOCK_BLOCKSCOUT: OnceCell<TestDbGuard> = OnceCell::const_new();

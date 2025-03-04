@@ -15,7 +15,11 @@ use anyhow::Context;
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{
     database::{DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings},
-    launcher::{self, GracefulShutdownHandler, LaunchSettings},
+    launcher::{
+        self,
+        // GracefulShutdownHandler,
+        LaunchSettings,
+    },
 };
 use futures::FutureExt;
 use itertools::Itertools;
@@ -28,7 +32,7 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_server::{StatsService, StatsServiceServer},
 };
 use tokio::task::JoinHandle;
-use tokio_util::task::TaskTracker;
+// use tokio_util::task::TaskTracker;
 
 const SERVICE_NAME: &str = "stats";
 
@@ -126,7 +130,7 @@ type WaiterHandle = JoinHandle<Result<(), anyhow::Error>>;
 
 /// Returns `(<waiter spawned task join handle>, <listener>)`
 fn init_and_spawn_waiter(
-    tracker: &TaskTracker,
+    // tracker: &TaskTracker,
     settings: &Settings,
 ) -> anyhow::Result<(Option<WaiterHandle>, Option<IndexingStatusListener>)> {
     let blockscout_api_config = init_blockscout_api_client(settings)?;
@@ -134,7 +138,7 @@ fn init_and_spawn_waiter(
         .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone()))
         .unzip();
     let status_waiter_handle = status_waiter.map(|w| {
-        tracker.spawn(async move {
+        tokio::spawn(async move {
             w.run().await?;
             // we don't want to finish on success because of the way
             // the tasks are handled here
@@ -154,7 +158,7 @@ fn init_authorization(api_keys: HashMap<String, ApiKey>) -> Arc<AuthorizationPro
 
 pub async fn stats(
     mut settings: Settings,
-    shutdown: Option<GracefulShutdownHandler>,
+    // shutdown: Option<GracefulShutdownHandler>,
 ) -> Result<(), anyhow::Error> {
     blockscout_service_launcher::tracing::init_logs(
         SERVICE_NAME,
@@ -177,9 +181,11 @@ pub async fn stats(
 
     create_charts_if_needed(&db, &charts).await?;
 
-    let shutdown = shutdown.unwrap_or_default();
-    let (status_waiter_handle, status_listener) =
-        init_and_spawn_waiter(&shutdown.task_tracker, &settings)?;
+    // let shutdown = shutdown.unwrap_or_default();
+    let (status_waiter_handle, status_listener) = init_and_spawn_waiter(
+        // &shutdown.task_tracker,
+        &settings,
+    )?;
 
     let update_service = Arc::new(
         UpdateService::new(
@@ -192,7 +198,7 @@ pub async fn stats(
     );
 
     let update_service_cloned = update_service.clone();
-    let update_service_handle = shutdown.task_tracker.spawn(async move {
+    let update_service_handle = tokio::spawn(async move {
         update_service_cloned
             .run(
                 settings.concurrent_start_updates,
@@ -231,11 +237,11 @@ pub async fn stats(
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
-        graceful_shutdown: shutdown.clone(),
+        // graceful_shutdown: shutdown.clone(),
     };
-    let servers_handle = shutdown
-        .task_tracker
-        .spawn(async move { launcher::launch(launch_settings, http_router, grpc_router).await });
+    let servers_handle = tokio::spawn(async move {
+        launcher::launch(&launch_settings, http_router, grpc_router, None).await
+    });
 
     let mut spawned = vec![update_service_handle, servers_handle];
     if let Some(status_waiter_handle) = status_waiter_handle {

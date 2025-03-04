@@ -2,7 +2,10 @@
 //! - blockscout is fully indexed
 //! - stats server is fully initialized with arbitrum charts disabled
 
-use blockscout_service_launcher::{launcher::GracefulShutdownHandler, test_server::init_server};
+use blockscout_service_launcher::{
+    // launcher::GracefulShutdownHandler,
+    test_server::init_server,
+};
 use futures::FutureExt;
 use stats::tests::{init_db::init_db, mock_blockscout::default_mock_blockscout_api};
 use stats_server::stats;

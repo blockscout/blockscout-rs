@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 entity = { path = "./entity" }
-blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "d5125c0" }
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "903c230" }
 blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "980634e" }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
@@ -37,7 +37,7 @@ tracing-subscriber = { version = "0.3", features = [
     "env-filter",
 ], optional = true }
 blockscout-service-launcher = { workspace = true, features = [
-    "database-1_0",
+    "database-1",
     "test-database",
 ], optional = true }
 wiremock = { workspace = true, optional = true }
@@ -55,16 +55,16 @@ rust_decimal_macros = "1.27"
 
 # test-utils
 pretty_assertions = "1.2"
-tracing-subscriber = { version = "0.3", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 blockscout-service-launcher = { workspace = true, features = [
-    "database-1_0",
+    "database-1",
     "test-database",
 ] }
 wiremock = { workspace = true }
 hex-literal = "0.4.1"
 
 [features]
-default = [  ]
+default = []
 test-utils = [
     "dep:tracing-subscriber",
     "dep:blockscout-service-launcher",
