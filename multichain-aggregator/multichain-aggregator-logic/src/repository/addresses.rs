@@ -21,10 +21,6 @@ pub async fn upsert_many<C>(db: &C, mut addresses: Vec<Address>) -> Result<(), D
 where
     C: ConnectionTrait,
 {
-    if addresses.is_empty() {
-        return Ok(());
-    }
-
     addresses.sort_by(|a, b| (a.hash, a.chain_id).cmp(&(b.hash, b.chain_id)));
     let addresses = addresses.into_iter().map(|address| {
         let model: Model = address.into();
@@ -41,7 +37,8 @@ where
                 .value(Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
         )
-        .exec(db)
+        .do_nothing()
+        .exec_without_returning(db)
         .await?;
 
     Ok(())

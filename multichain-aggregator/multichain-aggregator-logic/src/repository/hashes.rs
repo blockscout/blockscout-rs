@@ -14,10 +14,6 @@ pub async fn upsert_many<C>(db: &C, hashes: Vec<Hash>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {
-    if hashes.is_empty() {
-        return Ok(());
-    }
-
     let hashes = hashes.into_iter().map(|hash| {
         let model: Model = hash.into();
         let mut active: ActiveModel = model.into();
@@ -25,19 +21,17 @@ where
         active
     });
 
-    let res = Entity::insert_many(hashes)
+    Entity::insert_many(hashes)
         .on_conflict(
             OnConflict::columns([Column::Hash, Column::ChainId])
                 .do_nothing()
                 .to_owned(),
         )
-        .exec(db)
-        .await;
+        .do_nothing()
+        .exec_without_returning(db)
+        .await?;
 
-    match res {
-        Ok(_) | Err(DbErr::RecordNotInserted) => Ok(()),
-        Err(err) => Err(err),
-    }
+    Ok(())
 }
 
 // Because (`hash`, `chain_id`) is a primary key
