@@ -1,3 +1,4 @@
+use super::repo::ReadWriteRepo;
 use crate::{
     proto::{
         multichain_aggregator_service_server::MultichainAggregatorService, BatchImportRequest,
@@ -19,12 +20,11 @@ use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
     ListNftsRequest, ListNftsResponse, ListTokensRequest, ListTokensResponse,
     ListTransactionsRequest, ListTransactionsResponse,
 };
-use sea_orm::DatabaseConnection;
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
 
 pub struct MultichainAggregator {
-    db: DatabaseConnection,
+    repo: ReadWriteRepo,
     api_key_manager: ApiKeyManager,
     // Cached chains
     chains: Vec<types::chains::Chain>,
@@ -35,15 +35,15 @@ pub struct MultichainAggregator {
 
 impl MultichainAggregator {
     pub fn new(
-        db: DatabaseConnection,
+        repo: ReadWriteRepo,
         chains: Vec<types::chains::Chain>,
         dapp_client: HttpApiClient,
         token_info_client: HttpApiClient,
         api_settings: ApiSettings,
     ) -> Self {
         Self {
-            db: db.clone(),
-            api_key_manager: ApiKeyManager::new(db),
+            api_key_manager: ApiKeyManager::new(repo.write_db().clone()),
+            repo,
             chains,
             dapp_client,
             token_info_client,
@@ -73,7 +73,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let import_request: types::batch_import_request::BatchImportRequest = inner.try_into()?;
 
-        import::batch_import(&self.db, import_request)
+        import::batch_import(self.repo.write_db(), import_request)
             .await
             .inspect_err(|err| {
                 tracing::error!(error = ?err, "failed to batch import");
@@ -108,7 +108,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let page_token = inner.page_token.map(parse_query_2).transpose()?;
 
         let (addresses, next_page_token) = search::search_addresses(
-            &self.db,
+            self.repo.read_db(),
             inner.q,
             chain_id,
             None,
@@ -141,7 +141,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let page_token = inner.page_token.map(parse_query_2).transpose()?;
 
         let (addresses, next_page_token) = search::search_addresses(
-            &self.db,
+            self.repo.read_db(),
             inner.q,
             chain_id,
             Some(vec![
@@ -177,7 +177,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let page_token = inner.page_token.map(parse_query).transpose()?;
 
         let (transactions, next_page_token) = search::search_hashes(
-            &self.db,
+            self.repo.read_db(),
             inner.q,
             Some(types::hashes::HashType::Transaction),
             chain_id,
@@ -206,7 +206,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let results = search::quick_search(
-            &self.db,
+            self.repo.read_db(),
             &self.dapp_client,
             &self.token_info_client,
             inner.q,
