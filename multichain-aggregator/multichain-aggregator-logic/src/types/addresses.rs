@@ -1,7 +1,8 @@
 use super::ChainId;
 use crate::{error::ParseError, proto};
 use entity::addresses::Model;
-pub use entity::sea_orm_active_enums::TokenType;
+
+pub type TokenType = entity::sea_orm_active_enums::TokenType;
 
 #[derive(Debug, Clone)]
 pub struct Address {
@@ -88,18 +89,5 @@ pub fn db_token_type_to_proto_token_type(token_type: TokenType) -> proto::TokenT
         TokenType::Erc1155 => proto::TokenType::Erc1155,
         TokenType::Erc721 => proto::TokenType::Erc721,
         TokenType::Erc404 => proto::TokenType::Erc404,
-    }
-}
-
-pub fn try_str_to_db_token_type(token_type: &str) -> Result<TokenType, ParseError> {
-    match token_type {
-        "erc-20" => Ok(TokenType::Erc20),
-        "erc-1155" => Ok(TokenType::Erc1155),
-        "erc-721" => Ok(TokenType::Erc721),
-        "erc-404" => Ok(TokenType::Erc404),
-        _ => Err(ParseError::Custom(format!(
-            "invalid token type: {}",
-            token_type
-        ))),
     }
 }

@@ -1,8 +1,5 @@
 use super::paginate_cursor;
-use crate::{
-    error::ParseError,
-    types::{addresses::Address, ChainId},
-};
+use crate::types::{addresses::Address, ChainId};
 use alloy_primitives::Address as AddressAlloy;
 use entity::{
     addresses::{ActiveModel, Column, Entity, Model},
@@ -50,7 +47,7 @@ where
     Ok(())
 }
 
-pub async fn list_addresses_paginated<C>(
+pub async fn list<C>(
     db: &C,
     address: Option<AddressAlloy>,
     query: Option<String>,
@@ -102,10 +99,6 @@ fn non_primary_columns() -> impl Iterator<Item = Column> {
             Column::Hash | Column::ChainId | Column::CreatedAt | Column::UpdatedAt
         )
     })
-}
-
-pub fn try_parse_address(query: &str) -> Result<alloy_primitives::Address, ParseError> {
-    query.parse().map_err(ParseError::from)
 }
 
 fn prepare_ts_query(query: &str) -> String {

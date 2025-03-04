@@ -6,17 +6,144 @@ use crate::{
     error::ServiceError,
     repository::{addresses, block_ranges, hashes},
     types::{
-        addresses::Address, block_ranges::ChainBlockNumber, dapp::MarketplaceDapp, hashes::Hash,
-        search_results::QuickSearchResult, token_info::Token,
+        addresses::{Address, TokenType},
+        block_ranges::ChainBlockNumber,
+        dapp::MarketplaceDapp,
+        hashes::{Hash, HashType},
+        search_results::QuickSearchResult,
+        token_info::Token,
+        ChainId,
     },
 };
+use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
-use entity::sea_orm_active_enums as db_enum;
 use sea_orm::DatabaseConnection;
+use std::str::FromStr;
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
 const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
+
+pub async fn search_addresses(
+    db: &DatabaseConnection,
+    query: String,
+    chain_id: Option<ChainId>,
+    token_types: Option<Vec<TokenType>>,
+    page_size: u64,
+    page_token: Option<(AddressAlloy, ChainId)>,
+) -> Result<(Vec<Address>, Option<(AddressAlloy, ChainId)>), ServiceError> {
+    if query.len() < MIN_QUERY_LENGTH {
+        return Ok((vec![], None));
+    }
+
+    let (address, query) = match alloy_primitives::Address::from_str(&query) {
+        Ok(address) => (Some(address), None),
+        Err(_) => (None, Some(query)),
+    };
+
+    let (addresses, page_token) = addresses::list(
+        db,
+        address,
+        query,
+        chain_id,
+        token_types,
+        page_size,
+        page_token,
+    )
+    .await?;
+
+    Ok((
+        addresses
+            .into_iter()
+            .map(Address::try_from)
+            .collect::<Result<Vec<_>, _>>()?,
+        page_token,
+    ))
+}
+
+pub async fn search_hashes(
+    db: &DatabaseConnection,
+    query: String,
+    hash_type: Option<HashType>,
+    chain_id: Option<ChainId>,
+    page_size: u64,
+    page_token: Option<ChainId>,
+) -> Result<(Vec<Hash>, Option<ChainId>), ServiceError> {
+    let hash = match alloy_primitives::B256::from_str(&query) {
+        Ok(hash) => hash,
+        Err(_) => return Ok((vec![], None)),
+    };
+
+    let (hashes, page_token) =
+        hashes::list(db, hash, hash_type, chain_id, page_size, page_token).await?;
+
+    Ok((
+        hashes
+            .into_iter()
+            .map(Hash::try_from)
+            .collect::<Result<Vec<_>, _>>()?,
+        page_token,
+    ))
+}
+
+pub async fn search_tokens(
+    token_info_client: &HttpApiClient,
+    query: String,
+    chain_id: Option<ChainId>,
+    page_size: u64,
+    page_token: Option<String>,
+) -> Result<(Vec<Token>, Option<String>), ServiceError> {
+    if query.len() < MIN_QUERY_LENGTH {
+        return Ok((vec![], None));
+    }
+
+    let token_info_search_endpoint = SearchTokenInfos {
+        params: SearchTokenInfosParams {
+            query,
+            chain_id,
+            page_size: Some(page_size as u32),
+            page_token,
+        },
+    };
+
+    let res = token_info_client
+        .request(&token_info_search_endpoint)
+        .await
+        .map_err(|err| anyhow::anyhow!("failed to search tokens: {:?}", err))?;
+
+    let tokens = res
+        .token_infos
+        .into_iter()
+        .map(Token::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok((tokens, res.next_page_params.map(|p| p.page_token)))
+}
+
+pub async fn search_dapps(
+    dapp_client: &HttpApiClient,
+    query: Option<String>,
+    categories: Option<String>,
+    chain_ids: Option<String>,
+) -> Result<Vec<MarketplaceDapp>, ServiceError> {
+    let res = dapp_client
+        .request(&search_dapps::SearchDapps {
+            params: search_dapps::SearchDappsParams {
+                title: query,
+                categories,
+                chain_ids,
+            },
+        })
+        .await
+        .map_err(|err| anyhow::anyhow!("failed to search dapps: {:?}", err))?;
+
+    let dapps = res
+        .into_iter()
+        .filter_map(|d| d.try_into().ok())
+        .collect::<Vec<_>>();
+
+    Ok(dapps)
+}
 
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
@@ -81,27 +208,20 @@ impl SearchTerm {
 
         match self {
             SearchTerm::Hash(hash) => {
-                let (hashes, _) = hashes::list_hashes_paginated(
-                    db,
-                    hash,
-                    None,
-                    None,
-                    QUICK_SEARCH_NUM_ITEMS,
-                    None,
-                )
-                .await?;
+                let (hashes, _) =
+                    hashes::list(db, hash, None, None, QUICK_SEARCH_NUM_ITEMS, None).await?;
                 let (blocks, transactions): (Vec<_>, Vec<_>) = hashes
                     .into_iter()
                     .map(Hash::try_from)
                     .collect::<Result<Vec<_>, _>>()?
                     .into_iter()
-                    .partition(|h| h.hash_type == db_enum::HashType::Block);
+                    .partition(|h| h.hash_type == HashType::Block);
 
                 results.blocks.extend(blocks);
                 results.transactions.extend(transactions);
             }
             SearchTerm::AddressHash(address) => {
-                let (addresses, _) = addresses::list_addresses_paginated(
+                let (addresses, _) = addresses::list(
                     db,
                     Some(address),
                     None,
@@ -120,7 +240,7 @@ impl SearchTerm {
                     .filter(|a| {
                         matches!(
                             a.token_type,
-                            Some(db_enum::TokenType::Erc721) | Some(db_enum::TokenType::Erc1155)
+                            Some(TokenType::Erc721) | Some(TokenType::Erc1155)
                         )
                     })
                     .cloned()
@@ -148,39 +268,21 @@ impl SearchTerm {
                 results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
-                let dapps: Vec<MarketplaceDapp> = search_context
-                    .dapp_client
-                    .request(&search_dapps::SearchDapps {
-                        params: search_dapps::SearchDappsParams {
-                            title: Some(query),
-                            categories: None,
-                            chain_ids: None,
-                        },
-                    })
-                    .await
-                    .map_err(|err| ServiceError::Internal(err.into()))?
-                    .into_iter()
-                    .filter_map(|d| d.try_into().ok())
-                    .collect();
+                let dapps =
+                    search_dapps(search_context.dapp_client, Some(query), None, None).await?;
+
                 results.dapps.extend(dapps);
             }
             SearchTerm::TokenInfo(query) => {
-                let tokens: Vec<Token> = search_context
-                    .token_info_client
-                    .request(&SearchTokenInfos {
-                        params: SearchTokenInfosParams {
-                            query,
-                            chain_id: None,
-                            page_size: Some(QUICK_SEARCH_NUM_ITEMS as u32),
-                            page_token: None,
-                        },
-                    })
-                    .await
-                    .map_err(|err| ServiceError::Internal(err.into()))?
-                    .token_infos
-                    .into_iter()
-                    .filter_map(|t| t.try_into().ok())
-                    .collect();
+                let (tokens, _) = search_tokens(
+                    search_context.token_info_client,
+                    query,
+                    None,
+                    QUICK_SEARCH_NUM_ITEMS,
+                    None,
+                )
+                .await?;
+
                 results.tokens.extend(tokens);
             }
         }
