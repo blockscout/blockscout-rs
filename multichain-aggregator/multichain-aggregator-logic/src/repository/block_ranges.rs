@@ -10,10 +10,6 @@ pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> Result<(),
 where
     C: ConnectionTrait,
 {
-    if block_ranges.is_empty() {
-        return Ok(());
-    }
-
     let block_ranges = block_ranges.into_iter().map(|block_range| {
         let model: Model = block_range.into();
         let mut active: ActiveModel = model.into();
@@ -50,7 +46,8 @@ where
                 ])
                 .to_owned(),
         )
-        .exec(db)
+        .do_nothing()
+        .exec_without_returning(db)
         .await?;
 
     Ok(())

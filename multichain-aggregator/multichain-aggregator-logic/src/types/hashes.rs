@@ -1,12 +1,14 @@
 use super::ChainId;
 use crate::{error::ParseError, proto};
-use entity::{hashes::Model, sea_orm_active_enums as db_enum};
+use entity::hashes::Model;
+
+pub type HashType = entity::sea_orm_active_enums::HashType;
 
 #[derive(Debug, Clone)]
 pub struct Hash {
     pub chain_id: ChainId,
     pub hash: alloy_primitives::B256,
-    pub hash_type: db_enum::HashType,
+    pub hash_type: HashType,
 }
 
 impl From<Hash> for Model {
@@ -42,16 +44,16 @@ impl From<Hash> for proto::Hash {
     }
 }
 
-pub fn proto_hash_type_to_db_hash_type(hash_type: proto::HashType) -> db_enum::HashType {
+pub fn proto_hash_type_to_db_hash_type(hash_type: proto::HashType) -> HashType {
     match hash_type {
-        proto::HashType::Block => db_enum::HashType::Block,
-        proto::HashType::Transaction => db_enum::HashType::Transaction,
+        proto::HashType::Block => HashType::Block,
+        proto::HashType::Transaction => HashType::Transaction,
     }
 }
 
-pub fn db_hash_type_to_proto_hash_type(hash_type: db_enum::HashType) -> proto::HashType {
+pub fn db_hash_type_to_proto_hash_type(hash_type: HashType) -> proto::HashType {
     match hash_type {
-        db_enum::HashType::Block => proto::HashType::Block,
-        db_enum::HashType::Transaction => proto::HashType::Transaction,
+        HashType::Block => proto::HashType::Block,
+        HashType::Transaction => proto::HashType::Transaction,
     }
 }

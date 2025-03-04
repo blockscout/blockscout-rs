@@ -27,8 +27,10 @@ where
                 .value(Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
         )
-        .exec(db)
+        .do_nothing()
+        .exec_without_returning(db)
         .await?;
+
     Ok(())
 }
 
