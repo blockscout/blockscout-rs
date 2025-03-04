@@ -241,12 +241,14 @@ pub async fn stats(
     if let Some(status_waiter_handle) = status_waiter_handle {
         spawned.push(status_waiter_handle);
     }
-    let futures = [async move {
-        shutdown.shutdown_token.cancelled().await;
-        Ok(Ok(()))
-    }]
-    .into_iter()
-    .map(|t| t.boxed());
+    // let futures = [
+    //     async move {
+    //     shutdown.shutdown_token.cancelled().await;
+    //     Ok(Ok(()))
+    // }
+    // ]
+    // .into_iter()
+    // .map(|t| t.boxed());
 
     let to_abort = spawned
         .iter()
@@ -255,7 +257,7 @@ pub async fn stats(
     let all_tasks = spawned
         .into_iter()
         .map(|join| join.boxed())
-        .chain(futures)
+        // .chain(futures)
         .collect_vec();
     let (res, _, _) = futures::future::select_all(all_tasks).await;
     db.get_postgres_connection_pool().close().await;
