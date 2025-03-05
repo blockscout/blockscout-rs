@@ -78,13 +78,16 @@ impl LocalGracefulShutdownHandler {
         )
     }
 
-    /// Close the tasks with shutdown token and wait for their completion
+    /// Close the tasks with shutdown token and wait for the local tasks to complete
     /// with provided (or default) timeout (`duration`).
-    pub async fn cancel_wait_timeout(&self, duration: Option<Duration>) -> Result<(), Elapsed> {
+    pub async fn local_cancel_wait_timeout(
+        &self,
+        duration: Option<Duration>,
+    ) -> Result<(), Elapsed> {
         self.shutdown_token.cancel();
-        self.task_trackers.close();
+        self.task_trackers.close_local();
         let duration = duration.unwrap_or(Duration::from_secs(DEFAULT_SHUTDOWN_TIMEOUT_SEC));
-        tokio::time::timeout(duration, self.task_trackers.wait()).await
+        tokio::time::timeout(duration, self.task_trackers.wait_local()).await
     }
 }
 

@@ -88,7 +88,7 @@ where
     let res = futures.join_next().await.expect("future set is not empty");
     tracing::info!("observed finished future, shutting down launcher and created tasks");
     if graceful_shutdown
-        .cancel_wait_timeout(Some(Duration::from_secs(SHUTDOWN_TIMEOUT_SEC)))
+        .local_cancel_wait_timeout(Some(Duration::from_secs(SHUTDOWN_TIMEOUT_SEC)))
         .await
         .is_err()
     {
@@ -98,7 +98,6 @@ where
         );
         futures.abort_all();
     }
-    graceful_shutdown.task_trackers.wait().await;
     futures.join_all().await;
     res?
 }
