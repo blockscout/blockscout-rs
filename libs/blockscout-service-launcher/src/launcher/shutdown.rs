@@ -88,14 +88,19 @@ impl LocalGracefulShutdownHandler {
     }
 }
 
-/// * `local` - tracker for tasks created within this crate.
-/// * `external` - tracker provided by some dependant crate,
-///     so that it can track our tasks as well.
+/// Just like a regular task tracker, but it also tracks
+/// the tasks to an external tracker. We would like to
+/// allow the dependent crate to track tasks created in the launcher.
+///
+/// So, it behaves just like a normal task tracker, but it adds the
+/// task to an external tracker when tracking.
 #[derive(Clone)]
 pub(crate) struct TaskTrackers {
     // we don't use `JoinSet` here because we wish to
     // share this tracker with many tasks
+    /// tracker for tasks created within this crate
     pub local: TaskTracker,
+    /// tracker provided by some dependant crate
     pub external: TaskTracker,
 }
 
@@ -107,17 +112,19 @@ impl TaskTrackers {
         }
     }
 
+    /// See [TaskTracker::close]
     pub fn close(&self) {
         self.local.close();
-        self.external.close();
     }
 
-    /// Should be cancel-safe, just like `TaskTracker::wait()`
+    /// See [TaskTracker::wait]
     pub async fn wait(&self) {
         self.local.wait().await;
-        self.external.wait().await;
     }
 
+    /// Tracks the task in both local and external trackers.
+    ///
+    /// See [TaskTracker::track_future]
     pub fn track_future<F>(&self, future: F) -> impl Future<Output = F::Output>
     where
         F: Future,
