@@ -12,13 +12,13 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ProtobufAny {
-    #[serde(rename = "@type", skip_serializing_if = "Option::is_none")]
-    pub at_type: Option<String>,
+pub struct HealthCheckResponseMetadata {
+    #[serde(rename = "latest_block", skip_serializing_if = "Option::is_none")]
+    pub latest_block: Option<models::LatestBlock>,
 }
 
-impl ProtobufAny {
-    pub fn new() -> ProtobufAny {
-        ProtobufAny { at_type: None }
+impl HealthCheckResponseMetadata {
+    pub fn new() -> HealthCheckResponseMetadata {
+        HealthCheckResponseMetadata { latest_block: None }
     }
 }
