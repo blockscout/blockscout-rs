@@ -73,4 +73,5 @@ test-utils = [
     "dep:pretty_assertions",
     "dep:wiremock",
     "dep:hex-literal",
+    "dep:serde_json",
 ]

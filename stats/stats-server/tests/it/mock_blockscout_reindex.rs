@@ -12,7 +12,7 @@ use stats::tests::{
 };
 use stats_proto::blockscout::stats::v1::{self as proto_v1, BatchUpdateChartsResult};
 use stats_server::{auth::ApiKey, stats};
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
 use url::Url;
 
 use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single_key};
