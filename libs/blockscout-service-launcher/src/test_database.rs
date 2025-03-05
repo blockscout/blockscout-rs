@@ -144,18 +144,10 @@ impl TestDbGuard {
     }
 
     pub async fn close_all(&self) -> (Result<(), DbErr>, Result<(), DbErr>) {
-        // remove `get_postgres_connection_pool` as soon as
-        // https://github.com/SeaQL/sea-orm/pull/2511 is available
-        // to work with other connections
-        self.conn_with_db
-            .get_postgres_connection_pool()
-            .close()
-            .await;
-        self.conn_without_db
-            .get_postgres_connection_pool()
-            .close()
-            .await;
-        (Ok(()), Ok(()))
+        (
+            self.conn_with_db.close_by_ref().await,
+            self.conn_without_db.close_by_ref().await,
+        )
     }
 
     pub async fn close_all_unwrap(self) {
