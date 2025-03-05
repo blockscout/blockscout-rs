@@ -1,7 +1,11 @@
 use crate::types::chains::Chain;
-use entity::chains::{ActiveModel, Column, Entity, Model};
+use entity::{
+    api_keys,
+    chains::{ActiveModel, Column, Entity, Model},
+};
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
+    QuerySelect,
 };
 
 pub async fn upsert_many<C>(db: &C, chains: Vec<Chain>) -> Result<(), DbErr>
@@ -32,9 +36,14 @@ where
     Ok(())
 }
 
-pub async fn list_chains<C>(db: &C) -> Result<Vec<Model>, DbErr>
+pub async fn list_chains<C>(db: &C, only_active: bool) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait,
 {
-    Entity::find().all(db).await
+    let mut query = Entity::find();
+    if only_active {
+        // Filter out chains without active api keys
+        query = query.distinct_on([Column::Id]).inner_join(api_keys::Entity);
+    }
+    query.all(db).await
 }

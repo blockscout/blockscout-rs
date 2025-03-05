@@ -66,14 +66,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             Some((id, chain).into())
         })
         .collect::<Vec<_>>();
-    repository::chains::upsert_many(&db, blockscout_chains.clone()).await?;
+    repository::chains::upsert_many(&db, blockscout_chains).await?;
 
     let dapp_client = dapp::new_client(settings.service.dapp_client.url)?;
     let token_info_client = token_info::new_client(settings.service.token_info_client.url)?;
 
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
         db,
-        blockscout_chains,
         dapp_client,
         token_info_client,
         settings.service.api,
