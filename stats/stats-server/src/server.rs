@@ -84,7 +84,7 @@ async fn init_stats_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnec
     Ok(db)
 }
 
-async fn init_blockscout_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnection>> {
+async fn connect_to_blockscout_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnection>> {
     let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     // we'd like to have each batch to resolve in under 1 hour
@@ -200,7 +200,7 @@ pub async fn stats(
 
     let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
     let db = init_stats_db(&settings).await?;
-    let blockscout = init_blockscout_db(&settings).await?;
+    let blockscout = connect_to_blockscout_db(&settings).await?;
 
     create_charts_if_needed(&db, &charts).await?;
 
