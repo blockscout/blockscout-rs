@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, future::Future, path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
     auth::{ApiKey, AuthorizationProvider},
@@ -17,8 +17,6 @@ use blockscout_service_launcher::{
     database::{DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings},
     launcher::{self, GracefulShutdownHandler, LaunchSettings},
 };
-use futures::FutureExt;
-use itertools::Itertools;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use stats::metrics;
 use stats_proto::blockscout::stats::v1::{
@@ -27,7 +25,7 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
 };
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
 const SERVICE_NAME: &str = "stats";
@@ -122,27 +120,27 @@ async fn create_charts_if_needed(
     Ok(())
 }
 
-type WaiterHandle = JoinHandle<Result<(), anyhow::Error>>;
-
-/// Returns `(<waiter spawned task join handle>, <listener>)`
-fn init_and_spawn_waiter(
-    tracker: &TaskTracker,
+/// Returns `(<waiter task>, <listener>)`
+fn init_waiter(
     settings: &Settings,
-) -> anyhow::Result<(Option<WaiterHandle>, Option<IndexingStatusListener>)> {
+) -> anyhow::Result<(
+    Option<impl Future<Output = anyhow::Result<()>>>,
+    Option<IndexingStatusListener>,
+)> {
     let blockscout_api_config = init_blockscout_api_client(settings)?;
     let (status_waiter, status_listener) = blockscout_api_config
         .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone()))
         .unzip();
-    let status_waiter_handle = status_waiter.map(|w| {
-        tracker.spawn(async move {
+    let status_task = status_waiter.map(|w| {
+        async move {
             w.run().await?;
             // we don't want to finish on success because of the way
             // the tasks are handled here
             sleep_indefinitely().await;
-            Ok(())
-        })
+            anyhow::Result::<()>::Ok(())
+        }
     });
-    Ok((status_waiter_handle, status_listener))
+    Ok((status_task, status_listener))
 }
 
 fn init_authorization(api_keys: HashMap<String, ApiKey>) -> Arc<AuthorizationProvider> {
@@ -150,6 +148,31 @@ fn init_authorization(api_keys: HashMap<String, ApiKey>) -> Arc<AuthorizationPro
         tracing::warn!("No api keys found in settings, provide them to make use of authorization-protected endpoints")
     }
     Arc::new(AuthorizationProvider::new(api_keys))
+}
+
+pub fn spawn_and_track<F>(
+    futures: &mut JoinSet<F::Output>,
+    tracker: &TaskTracker,
+    future: F,
+) -> tokio::task::AbortHandle
+where
+    F: Future,
+    F: Send + 'static,
+    F::Output: Send,
+{
+    futures.spawn(tracker.track_future(future))
+}
+
+async fn on_termination(
+    db: &DatabaseConnection,
+    blockscout: &DatabaseConnection,
+    shutdown: &GracefulShutdownHandler,
+    futures: &mut JoinSet<anyhow::Result<()>>,
+) {
+    db.get_postgres_connection_pool().close().await;
+    blockscout.get_postgres_connection_pool().close().await;
+    shutdown.shutdown_token.cancel();
+    futures.abort_all();
 }
 
 pub async fn stats(
@@ -177,9 +200,17 @@ pub async fn stats(
 
     create_charts_if_needed(&db, &charts).await?;
 
+    if settings.metrics.enabled {
+        metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
+    }
+
     let shutdown = shutdown.unwrap_or_default();
-    let (status_waiter_handle, status_listener) =
-        init_and_spawn_waiter(&shutdown.task_tracker, &settings)?;
+    let mut futures = JoinSet::new();
+
+    let (status_waiter_task, status_listener) = init_waiter(&settings)?;
+    if let Some(status_waiter_task) = status_waiter_task {
+        spawn_and_track(&mut futures, &shutdown.task_tracker, status_waiter_task);
+    }
 
     let update_service = Arc::new(
         UpdateService::new(
@@ -190,9 +221,8 @@ pub async fn stats(
         )
         .await?,
     );
-
     let update_service_cloned = update_service.clone();
-    let update_service_handle = shutdown.task_tracker.spawn(async move {
+    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
         update_service_cloned
             .run(
                 settings.concurrent_start_updates,
@@ -202,12 +232,7 @@ pub async fn stats(
             .await;
         Ok(())
     });
-
-    if settings.metrics.enabled {
-        metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
-    }
     let authorization = init_authorization(settings.api_keys);
-
     let read_service = Arc::new(
         ReadService::new(
             db.clone(),
@@ -219,7 +244,6 @@ pub async fn stats(
         )
         .await?,
     );
-
     let health = Arc::new(HealthService::default());
     let grpc_router = grpc_router(read_service.clone(), health.clone());
     let http_router = HttpRouter {
@@ -233,35 +257,16 @@ pub async fn stats(
         metrics: settings.metrics,
         graceful_shutdown: shutdown.clone(),
     };
-    let servers_handle = shutdown
-        .task_tracker
-        .spawn(async move { launcher::launch(launch_settings, http_router, grpc_router).await });
+    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
+        launcher::launch(launch_settings, http_router, grpc_router).await
+    });
+    let shutdown_cloned = shutdown.clone();
+    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
+        shutdown_cloned.shutdown_token.cancelled().await;
+        Ok(())
+    });
 
-    let mut spawned = vec![update_service_handle, servers_handle];
-    if let Some(status_waiter_handle) = status_waiter_handle {
-        spawned.push(status_waiter_handle);
-    }
-    let futures = [async move {
-        shutdown.shutdown_token.cancelled().await;
-        Ok(Ok(()))
-    }]
-    .into_iter()
-    .map(|t| t.boxed());
-
-    let to_abort = spawned
-        .iter()
-        .map(|join_handle| join_handle.abort_handle())
-        .collect_vec();
-    let all_tasks = spawned
-        .into_iter()
-        .map(|join| join.boxed())
-        .chain(futures)
-        .collect_vec();
-    let (res, _, _) = futures::future::select_all(all_tasks).await;
-    db.get_postgres_connection_pool().close().await;
-    blockscout.get_postgres_connection_pool().close().await;
-    for a in to_abort.into_iter() {
-        a.abort()
-    }
-    res?
+    let res = futures.join_next().await;
+    on_termination(&db, &blockscout, &shutdown, &mut futures).await;
+    res.expect("task set is not empty")?
 }
