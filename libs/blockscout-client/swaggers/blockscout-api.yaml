@@ -1648,7 +1648,7 @@ paths:
           description: unexpected error
       tags:
         - proxy
-  /api/v1/health:
+  /api/health:
     get:
       tags:
         - Health
@@ -1659,7 +1659,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/v1HealthCheckResponse'
+                $ref: '#/components/schemas/HealthCheckResponse'
         default:
           description: An unexpected error response.
           content:
@@ -3782,8 +3782,9 @@ components:
       properties:
         '@type':
           type: string
-      additionalProperties:
-        type: object
+        additionalProperties:
+          type: object
+      required: []
     rpcStatus:
       type: object
       properties:
@@ -3796,32 +3797,40 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/protobufAny'
-    v1Data:
-      title: |-
-        "data": {
-        "cache_latest_block_inserted_at": "2024-06-12 10:01:47.000000Z",
-        "cache_latest_block_number": "20075019",
-        "latest_block_inserted_at": "2024-06-12 10:01:47.000000Z",
-        "latest_block_number": "20075019"
-        },
-        "healthy": true
+      required: []
+    LatestBlock:
       type: object
       properties:
-        cache_latest_block_inserted_at:
-          type: string
-        cache_latest_block_number:
-          type: string
-        latest_block_inserted_at:
-          type: string
-        latest_block_number:
-          type: string
-    v1HealthCheckResponse:
+        cache:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+            mber:
+              type: string
+        db:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+            number:
+              type: string
+      required: []
+    HealthCheckResponse:
       type: object
       properties:
         healthy:
           type: boolean
-        data:
-          $ref: '#/components/schemas/v1Data'
+        metadata:
+          type: object
+          properties:
+            latest_block:
+              $ref: '#/components/schemas/LatestBlock'
+            healthy:
+              type: boolean
+      required: []
   parameters:
     addressHash:
       name: address_hash

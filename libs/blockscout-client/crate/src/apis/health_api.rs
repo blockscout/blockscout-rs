@@ -23,8 +23,8 @@ pub enum HealthError {
 
 pub async fn health(
     configuration: &configuration::Configuration,
-) -> Result<models::V1HealthCheckResponse, Error<HealthError>> {
-    let uri_str = format!("{}/api/v1/health", configuration.base_path);
+) -> Result<models::HealthCheckResponse, Error<HealthError>> {
+    let uri_str = format!("{}/api/health", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
     if let Some(ref user_agent) = configuration.user_agent {

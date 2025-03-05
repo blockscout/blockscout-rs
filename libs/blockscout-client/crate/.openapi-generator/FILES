@@ -68,9 +68,14 @@ src/models/get_transaction_token_transfers_200_response.rs
 src/models/get_txs_200_response.rs
 src/models/get_txs_chart_200_response.rs
 src/models/get_write_methods_200_response_inner.rs
+src/models/health_check_response.rs
+src/models/health_check_response_metadata.rs
 src/models/holder.rs
 src/models/indexing_status.rs
 src/models/internal_transaction.rs
+src/models/latest_block.rs
+src/models/latest_block_cache.rs
+src/models/latest_block_db.rs
 src/models/log.rs
 src/models/market_chart_item.rs
 src/models/mod.rs
@@ -134,9 +139,7 @@ src/models/transaction_chart_item.rs
 src/models/transaction_reward.rs
 src/models/transaction_summary.rs
 src/models/transaction_summary_obj.rs
-src/models/v1_data.rs
 src/models/v1_entry_point_indexer_status.rs
-src/models/v1_health_check_response.rs
 src/models/v1_indexer_status.rs
 src/models/watchlist_name.rs
 src/models/withdrawal.rs

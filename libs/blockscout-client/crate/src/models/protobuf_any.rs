@@ -15,10 +15,18 @@ use serde::{Deserialize, Serialize};
 pub struct ProtobufAny {
     #[serde(rename = "@type", skip_serializing_if = "Option::is_none")]
     pub at_type: Option<String>,
+    #[serde(
+        rename = "additionalProperties",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub additional_properties: Option<serde_json::Value>,
 }
 
 impl ProtobufAny {
     pub fn new() -> ProtobufAny {
-        ProtobufAny { at_type: None }
+        ProtobufAny {
+            at_type: None,
+            additional_properties: None,
+        }
     }
 }

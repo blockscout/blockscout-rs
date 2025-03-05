@@ -12,18 +12,18 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct V1HealthCheckResponse {
+pub struct HealthCheckResponse {
     #[serde(rename = "healthy", skip_serializing_if = "Option::is_none")]
     pub healthy: Option<bool>,
-    #[serde(rename = "data", skip_serializing_if = "Option::is_none")]
-    pub data: Option<models::V1Data>,
+    #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<models::HealthCheckResponseMetadata>,
 }
 
-impl V1HealthCheckResponse {
-    pub fn new() -> V1HealthCheckResponse {
-        V1HealthCheckResponse {
+impl HealthCheckResponse {
+    pub fn new() -> HealthCheckResponse {
+        HealthCheckResponse {
             healthy: None,
-            data: None,
+            metadata: None,
         }
     }
 }
