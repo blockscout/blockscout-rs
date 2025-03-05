@@ -67,6 +67,19 @@ async fn sleep_indefinitely() {
     tokio::time::sleep(Duration::from_secs(u64::MAX)).await;
 }
 
+fn spawn_and_track<F>(
+    futures: &mut JoinSet<F::Output>,
+    tracker: &TaskTracker,
+    future: F,
+) -> tokio::task::AbortHandle
+where
+    F: Future,
+    F: Send + 'static,
+    F::Output: Send,
+{
+    futures.spawn(tracker.track_future(future))
+}
+
 async fn init_stats_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnection>> {
     let database_settings = DatabaseSettings {
         connect: DatabaseConnectSettings::Url(settings.db_url.clone()),
@@ -110,7 +123,6 @@ async fn create_charts_if_needed(
     db: &DatabaseConnection,
     charts: &RuntimeSetup,
 ) -> anyhow::Result<()> {
-    // TODO: maybe run this with migrations or have special config
     for group_entry in charts.update_groups.values() {
         group_entry
             .group
@@ -148,19 +160,6 @@ fn init_authorization(api_keys: HashMap<String, ApiKey>) -> Arc<AuthorizationPro
         tracing::warn!("No api keys found in settings, provide them to make use of authorization-protected endpoints")
     }
     Arc::new(AuthorizationProvider::new(api_keys))
-}
-
-pub fn spawn_and_track<F>(
-    futures: &mut JoinSet<F::Output>,
-    tracker: &TaskTracker,
-    future: F,
-) -> tokio::task::AbortHandle
-where
-    F: Future,
-    F: Send + 'static,
-    F::Output: Send,
-{
-    futures.spawn(tracker.track_future(future))
 }
 
 async fn on_termination(
