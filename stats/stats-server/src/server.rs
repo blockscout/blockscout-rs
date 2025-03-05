@@ -25,7 +25,7 @@ use stats_proto::blockscout::stats::v1::{
     stats_service_actix::route_stats_service,
     stats_service_server::{StatsService, StatsServiceServer},
 };
-use tokio::task::{JoinHandle, JoinSet};
+use tokio::task::JoinSet;
 use tokio_util::task::TaskTracker;
 
 const SERVICE_NAME: &str = "stats";
@@ -169,8 +169,12 @@ async fn on_termination(
     shutdown: &GracefulShutdownHandler,
     futures: &mut JoinSet<anyhow::Result<()>>,
 ) {
-    db.get_postgres_connection_pool().close().await;
-    blockscout.get_postgres_connection_pool().close().await;
+    if let Err(e) = db.close_by_ref().await {
+        tracing::error!("Failed to close stats db connection upon termination: {e:?}");
+    }
+    if let Err(e) = blockscout.close_by_ref().await {
+        tracing::error!("Failed to close blockscout db connection upon termination: {e:?}");
+    }
     shutdown.shutdown_token.cancel();
     futures.abort_all();
 }
