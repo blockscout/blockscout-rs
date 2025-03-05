@@ -4,7 +4,7 @@ use crate::{
         sourcify_verifier_server::SourcifyVerifier, VerifyFromEtherscanSourcifyRequest,
         VerifyResponse, VerifySourcifyRequest,
     },
-    settings::{Extensions, SourcifySettings},
+    settings::SourcifySettings,
     types::{
         VerifyFromEtherscanSourcifyRequestWrapper, VerifyResponseWrapper,
         VerifySourcifyRequestWrapper,
@@ -19,13 +19,8 @@ pub struct SourcifyVerifierService {
 }
 
 impl SourcifyVerifierService {
-    pub async fn new(
-        settings: SourcifySettings, /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_variables)] extensions: Extensions,
-    ) -> anyhow::Result<Self> {
-        /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_mut)]
-        let mut client = {
+    pub async fn new(settings: SourcifySettings) -> anyhow::Result<Self> {
+        let client = {
             SourcifyApiClient::new(
                 settings.api_url,
                 settings.request_timeout,
@@ -33,13 +28,6 @@ impl SourcifyVerifierService {
             )
             .expect("failed to build sourcify client")
         };
-
-        #[cfg(feature = "sig-provider-extension")]
-        if let Some(sig_provider) = extensions.sig_provider {
-            // TODO(#221): create only one instance of middleware/connection
-            client = client
-                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
-        }
 
         Ok(Self {
             client: Arc::new(client),

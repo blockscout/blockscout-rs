@@ -81,9 +81,6 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
     // If case of success, we allow middlewares to process success and only then return it to the caller;
     // Otherwise, we just return an error
     let success = Success::from((compiler_input, result));
-    if let Some(middleware) = client.middleware() {
-        middleware.call(&success).await;
-    }
 
     Ok(success)
 }
