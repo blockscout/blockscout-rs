@@ -148,12 +148,7 @@ async fn test_reupdate_works() {
     );
     blockscout_db.close_all_unwrap().await;
     stats_db.close_all_unwrap().await;
-    // todo: add method for these (+timeout)
-    shutdown.shutdown_token.cancel();
-    shutdown.task_tracker.close();
-    timeout(Duration::from_secs(15), shutdown.task_tracker.wait())
-        .await
-        .unwrap();
+    shutdown.cancel_wait_timeout(None).await.unwrap();
 }
 
 async fn get_new_txns(base: &Url) -> Vec<proto_v1::Point> {
