@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use blockscout_service_launcher::{
     // launcher::GracefulShutdownHandler,
+    launcher::GracefulShutdownHandler,
     test_server::{init_server, send_get_request},
 };
 use stats::tests::{
@@ -46,25 +47,16 @@ pub async fn run_tests_with_charts_not_updated(variant: &str) {
     let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
     // will not update at all
     settings.force_update_on_start = None;
-    // let shutdown = GracefulShutdownHandler::new();
-    // let shutdown_cloned = shutdown.clone();
-    init_server(
-        || {
-            stats(
-                settings,
-                //  None
-            )
-        },
-        &base,
-    )
-    .await;
+    let shutdown = GracefulShutdownHandler::new();
+    let shutdown_cloned = shutdown.clone();
+    init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
 
     // No update so no need to wait too long
     sleep(Duration::from_secs(3)).await;
 
     test_lines_counters_not_updated_ok(base).await;
     // stats_db.close_all_unwrap().await;
-    // shutdown.cancel_wait_timeout(None).await.unwrap();
+    shutdown.cancel_wait_timeout(None).await.unwrap();
 }
 
 pub async fn test_lines_counters_not_updated_ok(base: Url) {
