@@ -4599,6 +4599,7 @@ dependencies = [
  "rust_decimal",
  "rust_decimal_macros",
  "sea-orm",
+ "serde_json",
  "stats-proto",
  "thiserror 1.0.69",
  "tokio",

@@ -19,15 +19,13 @@ use wiremock::{
 
 pub async fn default_mock_blockscout_api() -> MockServer {
     mock_blockscout_api(
-        ResponseTemplate::new(200).set_body_string(
-            r#"{
+        ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "finished_indexing": true,
             "finished_indexing_blocks": true,
             "indexed_blocks_ratio": "1.00",
             "indexed_internal_transactions_ratio": "1.00"
-        }"#,
-        ),
-        Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true))),
+        })),
+        Some(ResponseTemplate::new(200).set_body_json(user_ops_status_response_json(true))),
     )
     .await
 }
@@ -53,24 +51,22 @@ pub async fn mock_blockscout_api(
     mock_server
 }
 
-pub fn user_ops_status_response_json(past_finished: bool) -> String {
-    format!(
-        r#"{{
-        "finished_past_indexing": {past_finished},
-        "v06": {{
+pub fn user_ops_status_response_json(past_finished: bool) -> serde_json::Value {
+    serde_json::json!({
+        "finished_past_indexing": past_finished,
+        "v06": {
             "enabled": true,
             "live": false,
             "past_db_logs_indexing_finished": false,
             "past_rpc_logs_indexing_finished": false
-        }},
-        "v07": {{
+        },
+        "v07": {
             "enabled": true,
             "live": false,
             "past_db_logs_indexing_finished": false,
             "past_rpc_logs_indexing_finished": false
-        }}
-    }}"#
-    )
+        }
+    })
 }
 
 pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date: NaiveDate) {

@@ -39,14 +39,12 @@ pub async fn run_tests_with_nothing_indexed() {
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(
-        ResponseTemplate::new(200).set_body_string(
-            r#"{
-                "finished_indexing": false,
-                "finished_indexing_blocks": false,
-                "indexed_blocks_ratio": "0.10",
-                "indexed_internal_transactions_ratio": null
-            }"#,
-        ),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "finished_indexing": false,
+            "finished_indexing_blocks": false,
+            "indexed_blocks_ratio": "0.10",
+            "indexed_internal_transactions_ratio": null
+        })),
         // will error getting user ops status
         None,
     )
@@ -86,15 +84,13 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = mock_blockscout_api(
-        ResponseTemplate::new(200).set_body_string(
-            r#"{
-                "finished_indexing": true,
-                "finished_indexing_blocks": true,
-                "indexed_blocks_ratio": "1.00",
-                "indexed_internal_transactions_ratio": "1.00"
-            }"#,
-        ),
-        Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(false))),
+        ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "finished_indexing": true,
+            "finished_indexing_blocks": true,
+            "indexed_blocks_ratio": "1.00",
+            "indexed_internal_transactions_ratio": "1.00"
+        })),
+        Some(ResponseTemplate::new(200).set_body_json(user_ops_status_response_json(false))),
     )
     .await;
     let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);

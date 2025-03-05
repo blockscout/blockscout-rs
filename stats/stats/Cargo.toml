@@ -42,6 +42,7 @@ blockscout-service-launcher = { workspace = true, features = [
 ], optional = true }
 wiremock = { workspace = true, optional = true }
 hex-literal = { version = "0.4.1", optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 sea-orm = { workspace = true, features = [
@@ -62,6 +63,7 @@ blockscout-service-launcher = { workspace = true, features = [
 ] }
 wiremock = { workspace = true }
 hex-literal = "0.4.1"
+serde_json = { workspace = true }
 
 [features]
 default = []

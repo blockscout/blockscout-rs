@@ -376,15 +376,13 @@ mod tests {
                 user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
             },
             None,
-            ResponseTemplate::new(200).set_body_string(
-                r#"{
-                    "finished_indexing": true,
-                    "finished_indexing_blocks": true,
-                    "indexed_blocks_ratio": "1.00",
-                    "indexed_internal_transactions_ratio": "1"
-                }"#,
-            ),
-            Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true))),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "finished_indexing": true,
+                "finished_indexing_blocks": true,
+                "indexed_blocks_ratio": "1.00",
+                "indexed_internal_transactions_ratio": "1"
+            })),
+            Some(ResponseTemplate::new(200).set_body_json(user_ops_status_response_json(true))),
         )
         .await
         .expect("must not timeout")
@@ -397,14 +395,12 @@ mod tests {
                 user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
             },
             None,
-            ResponseTemplate::new(200).set_body_string(
-                r#"{
-                    "finished_indexing": false,
-                    "finished_indexing_blocks": false,
-                    "indexed_blocks_ratio": "0.80",
-                    "indexed_internal_transactions_ratio": "0.80"
-                }"#,
-            ),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "finished_indexing": false,
+                "finished_indexing_blocks": false,
+                "indexed_blocks_ratio": "0.80",
+                "indexed_internal_transactions_ratio": "0.80"
+            })),
             None,
         )
         .await
@@ -417,14 +413,12 @@ mod tests {
                 user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
             },
             None,
-            ResponseTemplate::new(200).set_body_string(
-                r#"{
-                    "finished_indexing": false,
-                    "finished_indexing_blocks": true,
-                    "indexed_blocks_ratio": "0.80",
-                    "indexed_internal_transactions_ratio": "1.00"
-                }"#,
-            ),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "finished_indexing": false,
+                "finished_indexing_blocks": true,
+                "indexed_blocks_ratio": "0.80",
+                "indexed_internal_transactions_ratio": "1.00"
+            })),
             None,
         )
         .await
@@ -437,14 +431,12 @@ mod tests {
                 user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
             },
             None,
-            ResponseTemplate::new(200).set_body_string(
-                r#"{
-                    "finished_indexing": true,
-                    "finished_indexing_blocks": false,
-                    "indexed_blocks_ratio": "1.00",
-                    "indexed_internal_transactions_ratio": "0.80"
-                }"#,
-            ),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "finished_indexing": true,
+                "finished_indexing_blocks": false,
+                "indexed_blocks_ratio": "1.00",
+                "indexed_internal_transactions_ratio": "0.80"
+            })),
             None,
         )
         .await
@@ -457,15 +449,13 @@ mod tests {
                 user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
             },
             None,
-            ResponseTemplate::new(200).set_body_string(
-                r#"{
-                    "finished_indexing": true,
-                    "finished_indexing_blocks": true,
-                    "indexed_blocks_ratio": "1.00",
-                    "indexed_internal_transactions_ratio": "1.00"
-                }"#,
-            ),
-            Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(false))),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "finished_indexing": true,
+                "finished_indexing_blocks": true,
+                "indexed_blocks_ratio": "1.00",
+                "indexed_internal_transactions_ratio": "1.00"
+            })),
+            Some(ResponseTemplate::new(200).set_body_json(user_ops_status_response_json(false))),
         )
         .await
         .expect_err("must time out");
@@ -477,15 +467,13 @@ mod tests {
                 user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
             },
             None,
-            ResponseTemplate::new(200).set_body_string(
-                r#"{
-                    "finished_indexing": true,
-                    "finished_indexing_blocks": false,
-                    "indexed_blocks_ratio": "1.00",
-                    "indexed_internal_transactions_ratio": "0.80"
-                }"#,
-            ),
-            Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true))),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "finished_indexing": true,
+                "finished_indexing_blocks": false,
+                "indexed_blocks_ratio": "1.00",
+                "indexed_internal_transactions_ratio": "0.80"
+            })),
+            Some(ResponseTemplate::new(200).set_body_json(user_ops_status_response_json(true))),
         )
         .await
         .expect("must not timeout")
@@ -503,18 +491,16 @@ mod tests {
             },
             Some(Duration::from_millis(500)),
             ResponseTemplate::new(200)
-                .set_body_string(
-                    r#"{
-                        "finished_indexing": false,
-                        "finished_indexing_blocks": false,
-                        "indexed_blocks_ratio": "1.0",
-                        "indexed_internal_transactions_ratio": "1.0"
-                    }"#,
-                )
+                .set_body_json(serde_json::json!({
+                    "finished_indexing": false,
+                    "finished_indexing_blocks": false,
+                    "indexed_blocks_ratio": "1.0",
+                    "indexed_internal_transactions_ratio": "1.0"
+                }))
                 .set_delay(Duration::from_millis(50)),
             Some(
                 ResponseTemplate::new(200)
-                    .set_body_string(user_ops_status_response_json(true))
+                    .set_body_json(user_ops_status_response_json(true))
                     .set_delay(Duration::from_millis(50)),
             ),
         )
@@ -534,16 +520,14 @@ mod tests {
             },
             None,
             ResponseTemplate::new(200)
-                .set_body_string(
-                    r#"{
-                        "finished_indexing": false,
-                        "finished_indexing_blocks": false,
-                        "indexed_blocks_ratio": "0.80",
-                        "indexed_internal_transactions_ratio": "0.80"
-                    }"#,
-                )
+                .set_body_json(serde_json::json!({
+                    "finished_indexing": false,
+                    "finished_indexing_blocks": false,
+                    "indexed_blocks_ratio": "0.80",
+                    "indexed_internal_transactions_ratio": "0.80"
+                }))
                 .set_delay(Duration::MAX),
-            Some(ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true))),
+            Some(ResponseTemplate::new(200).set_body_json(user_ops_status_response_json(true))),
         )
         .await
         .expect_err("must time out");
@@ -555,17 +539,15 @@ mod tests {
                 user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
             },
             None,
-            ResponseTemplate::new(200).set_body_string(
-                r#"{
-                    "finished_indexing": false,
-                    "finished_indexing_blocks": false,
-                    "indexed_blocks_ratio": "0.80",
-                    "indexed_internal_transactions_ratio": "0.80"
-                }"#,
-            ),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "finished_indexing": false,
+                "finished_indexing_blocks": false,
+                "indexed_blocks_ratio": "0.80",
+                "indexed_internal_transactions_ratio": "0.80"
+            })),
             Some(
                 ResponseTemplate::new(200)
-                    .set_body_string(user_ops_status_response_json(true))
+                    .set_body_json(user_ops_status_response_json(true))
                     .set_delay(Duration::MAX),
             ),
         )
@@ -580,18 +562,16 @@ mod tests {
             },
             None,
             ResponseTemplate::new(200)
-                .set_body_string(
-                    r#"{
-                        "finished_indexing": false,
-                        "finished_indexing_blocks": false,
-                        "indexed_blocks_ratio": "0.80",
-                        "indexed_internal_transactions_ratio": "0.80"
-                    }"#,
-                )
+                .set_body_json(serde_json::json!({
+                    "finished_indexing": false,
+                    "finished_indexing_blocks": false,
+                    "indexed_blocks_ratio": "0.80",
+                    "indexed_internal_transactions_ratio": "0.80"
+                }))
                 .set_delay(Duration::MAX),
             Some(
                 ResponseTemplate::new(200)
-                    .set_body_string(user_ops_status_response_json(true))
+                    .set_body_json(user_ops_status_response_json(true))
                     .set_delay(Duration::MAX),
             ),
         )
@@ -610,14 +590,12 @@ mod tests {
                 user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
             },
             Some(Duration::from_millis(500)),
-            ResponseTemplate::new(200).set_body_string(
-                r#"{
-                    "finished_indexing": false,
-                    "finished_indexing_blocks": false,
-                    "indexed_blocks_ratio": null,
-                    "indexed_internal_transactions_ratio": null
-                }"#,
-            ),
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "finished_indexing": false,
+                "finished_indexing_blocks": false,
+                "indexed_blocks_ratio": null,
+                "indexed_internal_transactions_ratio": null
+            })),
             None,
         )
         .await
@@ -656,15 +634,13 @@ mod tests {
         let timeout = Some(Duration::from_millis(2000));
         let s = IndexingStatus::MOST_RESTRICTIVE;
         let r = |code: u16| ResponseTemplate::new(code);
-        let ok_b = ResponseTemplate::new(200).set_body_string(
-            r#"{
-                "finished_indexing": true,
-                "finished_indexing_blocks": true,
-                "indexed_blocks_ratio": "1.00",
-                "indexed_internal_transactions_ratio": "1.00"
-            }"#,
-        );
-        let ok_u = ResponseTemplate::new(200).set_body_string(user_ops_status_response_json(true));
+        let ok_b = ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "finished_indexing": true,
+            "finished_indexing_blocks": true,
+            "indexed_blocks_ratio": "1.00",
+            "indexed_internal_transactions_ratio": "1.00"
+        }));
+        let ok_u = ResponseTemplate::new(200).set_body_json(user_ops_status_response_json(true));
         let config_b_off = StartConditionSettings {
             blocks_ratio: ToggleableThreshold::disabled(),
             internal_transactions_ratio: ToggleableThreshold::disabled(),
