@@ -116,12 +116,12 @@ impl TaskTrackers {
     }
 
     /// See [TaskTracker::close]
-    pub fn close(&self) {
+    pub fn close_local(&self) {
         self.local.close();
     }
 
     /// See [TaskTracker::wait]
-    pub async fn wait(&self) {
+    pub async fn wait_local(&self) {
         self.local.wait().await;
     }
 
