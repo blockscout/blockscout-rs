@@ -99,6 +99,9 @@ database-1 = [
     "dep:sea-orm-1",
     "dep:sea-orm-migration-1",
 ]
+# 0_12 introduces conflicts with native sqlite library
+# and thus not supported
+# see https://github.com/launchbadge/sqlx/issues/3556
 database-0_11 = [
     "database",
     "dep:sea-orm-0_11",
