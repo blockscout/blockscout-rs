@@ -2,8 +2,6 @@ pub mod solidity;
 pub mod sourcify;
 pub mod vyper;
 
-pub mod middleware;
-
 mod common_types;
 mod compiler;
 mod consts;
@@ -24,8 +22,6 @@ pub use consts::{
     DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST,
     DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
 };
-
-pub use middleware::Middleware;
 
 pub use crate::sourcify::Error as SourcifyError;
 pub use batch_verifier::{BatchError, BatchMatch, BatchSuccess, BatchVerificationResult};

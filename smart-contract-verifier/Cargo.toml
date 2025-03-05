@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "sig-provider-extension",
     "smart-contract-verifier",
     "smart-contract-verifier-proto",
     "smart-contract-verifier-server",
@@ -9,7 +8,6 @@ members = [
 ]
 
 [workspace.dependencies]
-sig-provider-extension = { path = "sig-provider-extension" }
 smart-contract-verifier = { path = "smart-contract-verifier" }
 smart-contract-verifier-proto = { path = "smart-contract-verifier-proto" }
 smart-contract-verifier-server = { path = "smart-contract-verifier-server" }
@@ -64,7 +62,6 @@ serde_json = { version = "1" }
 serde_path_to_error = { version = "0.1.16" }
 serde_with = { version = "3" }
 sha2 = { version = "0.10" }
-sig-provider-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "b1bdb48" }
 solidity-metadata = { version = "1.1.0" }
 sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "c4261d0" }
 sscanf = { version = "0.3" }
