@@ -62,8 +62,6 @@ components:
           properties:
             latest_block:
               $ref: '#/components/schemas/LatestBlock'
-            healthy:
-              type: boolean
     v1Data:
       type: object
       properties:

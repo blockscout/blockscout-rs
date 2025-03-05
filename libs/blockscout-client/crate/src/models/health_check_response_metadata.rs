@@ -15,15 +15,10 @@ use serde::{Deserialize, Serialize};
 pub struct HealthCheckResponseMetadata {
     #[serde(rename = "latest_block", skip_serializing_if = "Option::is_none")]
     pub latest_block: Option<models::LatestBlock>,
-    #[serde(rename = "healthy", skip_serializing_if = "Option::is_none")]
-    pub healthy: Option<bool>,
 }
 
 impl HealthCheckResponseMetadata {
     pub fn new() -> HealthCheckResponseMetadata {
-        HealthCheckResponseMetadata {
-            latest_block: None,
-            healthy: None,
-        }
+        HealthCheckResponseMetadata { latest_block: None }
     }
 }
