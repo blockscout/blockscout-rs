@@ -19,35 +19,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthCheckResponse'
-        default:
-          description: An unexpected error response.
+  /api/v1/health:
+    get:
+      tags:
+        - Health
+      operationId: HealthV1
+      responses:
+        "200":
+          description: A successful response.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/rpcStatus'
+                $ref: '#/components/schemas/v1HealthCheckResponse'
 components:
   schemas:
-    protobufAny:
-      type: object
-      properties:
-        '@type':
-          type: string
-        additionalProperties:
-          type: object
-      required: []
-    rpcStatus:
-      type: object
-      properties:
-        code:
-          type: integer
-          format: int32
-        message:
-          type: string
-        details:
-          type: array
-          items:
-            $ref: '#/components/schemas/protobufAny'
-      required: []
     LatestBlock:
       type: object
       properties:
@@ -67,7 +52,6 @@ components:
               format: date-time
             number:
               type: string
-      required: []
     HealthCheckResponse:
       type: object
       properties:
@@ -80,5 +64,22 @@ components:
               $ref: '#/components/schemas/LatestBlock'
             healthy:
               type: boolean
-      required: []
+    v1Data:
+      type: object
+      properties:
+        cache_latest_block_inserted_at:
+          type: string
+        cache_latest_block_number:
+          type: string
+        latest_block_inserted_at:
+          type: string
+        latest_block_number:
+          type: string
+    v1HealthCheckResponse:
+      type: object
+      properties:
+        healthy:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/v1Data'
 x-original-swagger-version: "2.0"

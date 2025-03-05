@@ -82,7 +82,6 @@ src/models/mod.rs
 src/models/nft_change.rs
 src/models/nft_instance.rs
 src/models/output_and_names.rs
-src/models/protobuf_any.rs
 src/models/query_read_method_200_response_inner.rs
 src/models/raw_trace.rs
 src/models/raw_trace_action.rs
@@ -99,7 +98,6 @@ src/models/recaptcha_body.rs
 src/models/refetch_token_instance_metadata_200_response.rs
 src/models/refetch_token_instance_metadata_403_response.rs
 src/models/reward.rs
-src/models/rpc_status.rs
 src/models/search_200_response.rs
 src/models/search_200_response_items_inner.rs
 src/models/search_result_address_or_contract.rs
@@ -139,7 +137,9 @@ src/models/transaction_chart_item.rs
 src/models/transaction_reward.rs
 src/models/transaction_summary.rs
 src/models/transaction_summary_obj.rs
+src/models/v1_data.rs
 src/models/v1_entry_point_indexer_status.rs
+src/models/v1_health_check_response.rs
 src/models/v1_indexer_status.rs
 src/models/watchlist_name.rs
 src/models/withdrawal.rs
