@@ -16,6 +16,30 @@ async fn health(blockscout: Stubr) {
         .await
         .expect("Failed to get health");
     assert_eq!(health.healthy, Some(true));
+    assert_eq!(
+        health
+            .metadata
+            .expect("metadata is None")
+            .latest_block
+            .expect("latest_block is None")
+            .db
+            .expect("db is None")
+            .number
+            .expect("number is None"),
+        "21979873"
+    );
+    let health_v1 = health_api::health_v1(&config)
+        .await
+        .expect("Failed to get health");
+    assert_eq!(health_v1.healthy, Some(true));
+    assert_eq!(
+        health_v1
+            .data
+            .expect("data is None")
+            .latest_block_number
+            .expect("latest_block_number is None"),
+        "21879216"
+    );
 }
 
 #[rstest]
