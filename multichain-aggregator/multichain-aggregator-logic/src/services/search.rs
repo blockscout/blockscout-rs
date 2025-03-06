@@ -188,6 +188,7 @@ pub enum SearchTerm {
     BlockNumber(alloy_primitives::BlockNumber),
     Dapp(String),
     TokenInfo(String),
+    ContractName(String),
 }
 
 struct SearchContext<'a> {
@@ -285,6 +286,24 @@ impl SearchTerm {
 
                 results.tokens.extend(tokens);
             }
+            SearchTerm::ContractName(query) => {
+                let (addresses, _) = addresses::list(
+                    db,
+                    None,
+                    Some(query),
+                    None,
+                    None,
+                    QUICK_SEARCH_NUM_ITEMS,
+                    None,
+                )
+                .await?;
+                let addresses: Vec<_> = addresses
+                    .into_iter()
+                    .map(Address::try_from)
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                results.addresses.extend(addresses);
+            }
         }
 
         Ok(results)
@@ -310,6 +329,7 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
 
     if query.len() >= MIN_QUERY_LENGTH {
         terms.push(SearchTerm::TokenInfo(query.to_string()));
+        terms.push(SearchTerm::ContractName(query.to_string()));
     }
 
     terms.push(SearchTerm::Dapp(query.to_string()));
@@ -338,6 +358,7 @@ mod tests {
             parse_search_terms("0x00"),
             vec![
                 SearchTerm::TokenInfo("0x00".to_string()),
+                SearchTerm::ContractName("0x00".to_string()),
                 SearchTerm::Dapp("0x00".to_string()),
             ]
         );
@@ -347,6 +368,7 @@ mod tests {
             vec![
                 SearchTerm::BlockNumber(1234),
                 SearchTerm::TokenInfo("1234".to_string()),
+                SearchTerm::ContractName("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
             ]
         );
