@@ -180,7 +180,9 @@ message Chain {
   string icon_url = 4;
 }
 
-message ListChainsRequest {}
+message ListChainsRequest {
+  optional bool only_active = 1;
+}
 
 message ListChainsResponse {
   repeated Chain items = 1;

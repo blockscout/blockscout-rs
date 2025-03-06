@@ -11,7 +11,7 @@ use api_client_framework::HttpApiClient;
 use multichain_aggregator_logic::{
     clients::dapp,
     error::ServiceError,
-    services::{api_key_manager::ApiKeyManager, import, search},
+    services::{api_key_manager::ApiKeyManager, chains, import, search},
     types,
 };
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
@@ -26,8 +26,6 @@ use tonic::{Request, Response, Status};
 pub struct MultichainAggregator {
     repo: ReadWriteRepo,
     api_key_manager: ApiKeyManager,
-    // Cached chains
-    chains: Vec<types::chains::Chain>,
     dapp_client: HttpApiClient,
     token_info_client: HttpApiClient,
     api_settings: ApiSettings,
@@ -36,7 +34,6 @@ pub struct MultichainAggregator {
 impl MultichainAggregator {
     pub fn new(
         repo: ReadWriteRepo,
-        chains: Vec<types::chains::Chain>,
         dapp_client: HttpApiClient,
         token_info_client: HttpApiClient,
         api_settings: ApiSettings,
@@ -44,7 +41,6 @@ impl MultichainAggregator {
         Self {
             api_key_manager: ApiKeyManager::new(repo.write_db().clone()),
             repo,
-            chains,
             dapp_client,
             token_info_client,
             api_settings,
@@ -86,13 +82,17 @@ impl MultichainAggregatorService for MultichainAggregator {
 
     async fn list_chains(
         &self,
-        _request: Request<ListChainsRequest>,
+        request: Request<ListChainsRequest>,
     ) -> Result<Response<ListChainsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let only_active = inner.only_active.unwrap_or(false);
+        let chains = chains::list_chains_cached(self.repo.read_db(), only_active).await?;
+
         Ok(Response::new(ListChainsResponse {
-            items: self
-                .chains
-                .iter()
-                .filter_map(|c| c.clone().try_into().ok())
+            items: chains
+                .into_iter()
+                .filter_map(|c| c.try_into().ok())
                 .collect(),
         }))
     }
@@ -277,15 +277,13 @@ impl MultichainAggregatorService for MultichainAggregator {
                 tracing::error!(error = ?err, "failed to list marketplace chains");
                 Status::internal("failed to list marketplace chains")
             })?;
-        let items = chain_ids
+
+        let chains = chains::list_chains_cached(self.repo.read_db(), false).await?;
+
+        let items = chains
             .into_iter()
-            .filter_map(|c| {
-                let chain_id = types::ChainId::from_str(&c).ok()?;
-                self.chains
-                    .iter()
-                    .find(|cc| cc.id == chain_id)
-                    .and_then(|c| c.clone().try_into().ok())
-            })
+            .filter(|c| chain_ids.contains(&c.id.to_string()))
+            .filter_map(|c| c.try_into().ok())
             .collect::<Vec<_>>();
 
         Ok(Response::new(ListDappChainsResponse { items }))
