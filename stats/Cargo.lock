@@ -109,7 +109,8 @@ dependencies = [
 [[package]]
 name = "actix-prost"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost?rev=82c79b6#82c79b6117f4b01b6b8320365176691c03318c9e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4b21f38250c741c5c7138cef4725b98b0f545ae7924d0b671e5c9bb8acd17b2"
 dependencies = [
  "actix-http",
  "actix-web",
@@ -124,7 +125,8 @@ dependencies = [
 [[package]]
 name = "actix-prost-build"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost?rev=82c79b6#82c79b6117f4b01b6b8320365176691c03318c9e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9097e836af1944d20403bda1c187f0b9ffaafa59425627f2ea2900cd7956fed2"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -140,7 +142,8 @@ dependencies = [
 [[package]]
 name = "actix-prost-macros"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/actix-prost?rev=82c79b6#82c79b6117f4b01b6b8320365176691c03318c9e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9677f9a2fe25823dee9f03383a02f4741f4d2009309f5e79b99f80643676a658"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -836,7 +839,8 @@ source = "git+https://github.com/blockscout/blockscout-rs?rev=980634e#980634e7ad
 [[package]]
 name = "blockscout-service-launcher"
 version = "0.18.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=add4b6c#add4b6ca6a083fcd460fcf2b5113593fac100021"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "087aeee353791366619f5e95fc1a62d776297a8c22ef1d23d9f66632484f0d93"
 dependencies = [
  "actix-cors",
  "actix-web",

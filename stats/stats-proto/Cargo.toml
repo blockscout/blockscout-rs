@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "82c79b6" }
-actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "82c79b6" }
+actix-prost = "0.1.0"
+actix-prost-macros = "0.1.0"
 actix-web = "4"
 prost = "0.13"
 tonic = "0.12"
@@ -17,6 +17,6 @@ async-trait = "0.1"
 serde_json = { workspace = true }
 
 [build-dependencies]
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "82c79b6" }
+actix-prost-build = "0.1.0"
 tonic-build = "0.12"
 prost-build = "0.13"
