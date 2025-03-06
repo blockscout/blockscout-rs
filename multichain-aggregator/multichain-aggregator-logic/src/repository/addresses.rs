@@ -1,8 +1,4 @@
-use super::paginate_cursor;
-use crate::{
-    error::ParseError,
-    types::{addresses::Address, ChainId},
-};
+use crate::types::{addresses::Address, ChainId};
 use alloy_primitives::Address as AddressAlloy;
 use entity::{
     addresses::{ActiveModel, Column, Entity, Model},
@@ -11,7 +7,7 @@ use entity::{
 use regex::Regex;
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, Iterable, QueryFilter, QueryTrait,
+    EntityTrait, IntoSimpleExpr, Iterable, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
 };
 use std::sync::OnceLock;
 
@@ -24,10 +20,6 @@ pub async fn upsert_many<C>(db: &C, mut addresses: Vec<Address>) -> Result<(), D
 where
     C: ConnectionTrait,
 {
-    if addresses.is_empty() {
-        return Ok(());
-    }
-
     addresses.sort_by(|a, b| (a.hash, a.chain_id).cmp(&(b.hash, b.chain_id)));
     let addresses = addresses.into_iter().map(|address| {
         let model: Model = address.into();
@@ -44,13 +36,14 @@ where
                 .value(Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
         )
-        .exec(db)
+        .do_nothing()
+        .exec_without_returning(db)
         .await?;
 
     Ok(())
 }
 
-pub async fn list_addresses_paginated<C>(
+pub async fn list<C>(
     db: &C,
     address: Option<AddressAlloy>,
     query: Option<String>,
@@ -62,7 +55,7 @@ pub async fn list_addresses_paginated<C>(
 where
     C: ConnectionTrait,
 {
-    let mut c = Entity::find()
+    let addresses = Entity::find()
         .apply_if(chain_id, |q, chain_id| {
             q.filter(Column::ChainId.eq(chain_id))
         })
@@ -79,20 +72,46 @@ where
         .apply_if(token_types, |q, token_types| {
             q.filter(Column::TokenType.is_in(token_types))
         })
-        .cursor_by((Column::Hash, Column::ChainId));
+        .apply_if(page_token, |q, page_token| {
+            q.filter(
+                Expr::tuple([
+                    Column::Hash.into_simple_expr(),
+                    Column::ChainId.into_simple_expr(),
+                ])
+                .gte(Expr::tuple([
+                    page_token.0.as_slice().into(),
+                    page_token.1.into(),
+                ])),
+            )
+        })
+        // Because of ORDER BY (primary_key) and LIMIT clauses, query planner chooses to use pk index
+        // instead of specialized indexes on filtered columns, which almost always results in a seqscan
+        // because in our case data is sparse (especially for text columns). To prevent it, we wrap
+        // the ordered columns in a COALESCE which makes query planner think it is an expression
+        // and disregards the primary key index.
+        .order_by_asc(Expr::cust_with_exprs(
+            "COALESCE($1)",
+            [Column::Hash.into_simple_expr()],
+        ))
+        .order_by_asc(Expr::cust_with_exprs(
+            "COALESCE($1)",
+            [Column::ChainId.into_simple_expr()],
+        ))
+        .limit(page_size + 1)
+        .all(db)
+        .await?;
 
-    if let Some(page_token) = page_token {
-        c.after((page_token.0.as_slice(), page_token.1));
+    match addresses.get(page_size as usize) {
+        Some(a) => Ok((
+            addresses[..page_size as usize].to_vec(),
+            Some((
+                // unwrap is safe here because addresses are validated prior to being inserted
+                AddressAlloy::try_from(a.hash.as_slice()).unwrap(),
+                a.chain_id,
+            )),
+        )),
+        None => Ok((addresses, None)),
     }
-
-    paginate_cursor(db, c, page_size, |u| {
-        (
-            // unwrap is safe here because addresses are validated prior to being inserted
-            AddressAlloy::try_from(u.hash.as_slice()).unwrap(),
-            u.chain_id,
-        )
-    })
-    .await
 }
 
 fn non_primary_columns() -> impl Iterator<Item = Column> {
@@ -102,10 +121,6 @@ fn non_primary_columns() -> impl Iterator<Item = Column> {
             Column::Hash | Column::ChainId | Column::CreatedAt | Column::UpdatedAt
         )
     })
-}
-
-pub fn try_parse_address(query: &str) -> Result<alloy_primitives::Address, ParseError> {
-    query.parse().map_err(ParseError::from)
 }
 
 fn prepare_ts_query(query: &str) -> String {

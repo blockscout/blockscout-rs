@@ -18,7 +18,9 @@ pub struct Settings {
     #[serde(default)]
     pub jaeger: JaegerSettings,
     pub database: DatabaseSettings,
-
+    // Optional database read-only replica. If provided, all search queries will be redirected to this database.
+    #[serde(default)]
+    pub replica_database: Option<DatabaseSettings>,
     pub service: ServiceSettings,
 }
 
@@ -78,6 +80,7 @@ impl Settings {
                 create_database: Default::default(),
                 run_migrations: Default::default(),
             },
+            replica_database: Default::default(),
             service: ServiceSettings {
                 dapp_client: DappClientSettings {
                     url: Url::parse("http://localhost:8050").unwrap(),
