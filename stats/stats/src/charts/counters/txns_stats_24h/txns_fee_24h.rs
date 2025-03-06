@@ -4,6 +4,7 @@ use crate::{
         local_db::DirectPointLocalDbChartSource,
     },
     gettable_const,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::TimespanValue,
     ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
@@ -47,7 +48,10 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 

@@ -1,7 +1,9 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, future::Future, path::PathBuf, str::FromStr, time::Duration};
 
 use blockscout_service_launcher::{
-    launcher::ConfigSettings, test_database::TestDbGuard, test_server::get_test_server_settings,
+    launcher::ConfigSettings,
+    test_database::TestDbGuard,
+    test_server::{get_test_server_settings, send_get_request},
 };
 use reqwest::{RequestBuilder, Response};
 use stats_proto::blockscout::stats::v1 as proto_v1;
@@ -9,7 +11,10 @@ use stats_server::{
     auth::{ApiKey, API_KEY_NAME},
     Settings,
 };
-use tokio::task::JoinSet;
+use tokio::{
+    task::JoinSet,
+    time::{error::Elapsed, sleep},
+};
 use url::Url;
 use wiremock::MockServer;
 
@@ -24,11 +29,64 @@ pub async fn send_arbitrary_request(request: RequestBuilder) -> Response {
         .unwrap_or_else(|_| panic!("Failed to send request"));
 
     if !response.status().is_success() {
-        let status = response.status();
-        let message = response.text().await.expect("Read body as text");
-        panic!("Invalid status code (success expected). Status: {status}. Message: {message}")
+        panic!("{}", response_panic_message(response).await);
     }
     response
+}
+
+pub(crate) async fn response_panic_message(response: Response) -> String {
+    let status = response.status();
+    let message = response.text().await.expect("Read body as text");
+    format!("Invalid status code (success expected). Status: {status}. Message: {message}")
+}
+
+pub enum ChartSubset {
+    Independent,
+    #[allow(unused)]
+    BlocksDependent,
+    InternalTransactionsDependent,
+    #[allow(unused)]
+    UserOpsDependent,
+    AllCharts,
+}
+
+pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
+    wait_until(Duration::from_secs(300), || async {
+        let statuses: proto_v1::UpdateStatus =
+            send_get_request(base, "/api/v1/update-status").await;
+        let matching_status = match subset {
+            ChartSubset::Independent => statuses.independent_status(),
+            ChartSubset::BlocksDependent => statuses.blocks_dependent_status(),
+            ChartSubset::InternalTransactionsDependent => {
+                statuses.internal_transactions_dependent_status()
+            }
+            ChartSubset::UserOpsDependent => statuses.user_ops_dependent_status(),
+            ChartSubset::AllCharts => statuses.all_status(),
+        };
+        if matching_status == proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate {
+            return true;
+        }
+        false
+    })
+    .await
+    .expect("Did not reach required indexing status in time");
+}
+
+pub async fn wait_until<F, Fut>(timeout: Duration, condition_fut: F) -> Result<(), Elapsed>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = bool>,
+{
+    let wait_job = async {
+        loop {
+            let future = condition_fut();
+            if future.await {
+                return;
+            }
+            sleep(Duration::from_millis(250)).await;
+        }
+    };
+    tokio::time::timeout(timeout, wait_job).await
 }
 
 pub async fn enabled_resolutions(
@@ -57,6 +115,10 @@ pub fn get_test_stats_settings(
     settings.blockscout_db_url = blockscout_db.db_url();
     settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());
     settings.enable_all_arbitrum = true;
+    settings.metrics.enabled = false;
+    settings.jaeger.enabled = false;
+    // initialized separately to prevent errors (with `try_init`)
+    settings.tracing.enabled = false;
     (settings, base)
 }
 

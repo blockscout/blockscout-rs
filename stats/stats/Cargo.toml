@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 entity = { path = "./entity" }
-blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "d5125c0" }
+blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "26eed65" }
 blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "980634e" }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
@@ -37,11 +37,12 @@ tracing-subscriber = { version = "0.3", features = [
     "env-filter",
 ], optional = true }
 blockscout-service-launcher = { workspace = true, features = [
-    "database-1_0",
+    "database-1",
     "test-database",
 ], optional = true }
 wiremock = { workspace = true, optional = true }
 hex-literal = { version = "0.4.1", optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 sea-orm = { workspace = true, features = [
@@ -55,20 +56,22 @@ rust_decimal_macros = "1.27"
 
 # test-utils
 pretty_assertions = "1.2"
-tracing-subscriber = { version = "0.3", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 blockscout-service-launcher = { workspace = true, features = [
-    "database-1_0",
+    "database-1",
     "test-database",
 ] }
 wiremock = { workspace = true }
 hex-literal = "0.4.1"
+serde_json = { workspace = true }
 
 [features]
-default = [  ]
+default = []
 test-utils = [
     "dep:tracing-subscriber",
     "dep:blockscout-service-launcher",
     "dep:pretty_assertions",
     "dep:wiremock",
     "dep:hex-literal",
+    "dep:serde_json",
 ]

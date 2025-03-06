@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::{
     counters::{NewOperationalTxns24h, TotalOperationalTxns, YesterdayOperationalTxns},
+    indexing_status::BlockscoutIndexingStatus,
     lines::{NewOperationalTxns, NewOperationalTxnsWindow, OperationalTxnsGrowth},
-    ChartProperties, IndexingStatus,
+    ChartProperties,
 };
 use std::{
     collections::{BTreeSet, HashMap},
@@ -121,7 +122,9 @@ pub fn handle_disable_internal_transactions(
         let charts_dependant_on_internal_transactions =
             RuntimeSetup::all_members_indexing_status_requirements()
                 .into_iter()
-                .filter(|(_k, req)| req == &IndexingStatus::InternalTransactionsIndexed)
+                .filter(|(_k, req)| {
+                    req.blockscout == BlockscoutIndexingStatus::InternalTransactionsIndexed
+                })
                 .map(|(k, _req)| k.into_name());
         let to_disable: BTreeSet<_> = charts_dependant_on_internal_transactions.collect();
 
@@ -205,6 +208,7 @@ impl Default for LimitsSettings {
 pub struct StartConditionSettings {
     pub blocks_ratio: ToggleableThreshold,
     pub internal_transactions_ratio: ToggleableThreshold,
+    pub user_ops_past_indexing_finished: ToggleableCheck,
     pub check_period_secs: u32,
 }
 
@@ -214,8 +218,18 @@ impl Default for StartConditionSettings {
             // in some networks it's always almost 1
             blocks_ratio: ToggleableThreshold::default(),
             internal_transactions_ratio: ToggleableThreshold::default(),
+            user_ops_past_indexing_finished: ToggleableCheck::default(),
             check_period_secs: 5,
         }
+    }
+}
+
+impl StartConditionSettings {
+    pub fn blockscout_checks_enabled(&self) -> bool {
+        self.blocks_ratio.enabled || self.internal_transactions_ratio.enabled
+    }
+    pub fn user_ops_checks_enabled(&self) -> bool {
+        self.user_ops_past_indexing_finished.enabled
     }
 }
 
@@ -255,6 +269,18 @@ impl ToggleableThreshold {
 impl Default for ToggleableThreshold {
     fn default() -> Self {
         Self::enabled(0.98)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ToggleableCheck {
+    pub enabled: bool,
+}
+
+impl Default for ToggleableCheck {
+    fn default() -> Self {
+        Self { enabled: true }
     }
 }
 
