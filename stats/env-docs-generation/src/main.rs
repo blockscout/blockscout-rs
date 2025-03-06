@@ -5,7 +5,7 @@ fn main() {
     run_env_collector_cli::<Settings>(
         "STATS",
         "README.md",
-        "env-docs-generation/example_configs/empty.json",
+        "env-docs-generation/example_configs/service.json",
         PrefixFilter::blacklist(&[
             "STATS__SERVER",
             "STATS__TRACING",

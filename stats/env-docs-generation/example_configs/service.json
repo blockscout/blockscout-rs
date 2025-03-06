@@ -1,0 +1,7 @@
+{
+    "api_keys": {
+        "<key_name>": {
+            "key": "very_secure_key_value"
+        }
+    }
+}

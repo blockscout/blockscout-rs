@@ -79,7 +79,7 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__CONCURRENT_START_UPDATES` | | Amount of concurrent charts update on start | `3` |
 | `STATS__DEFAULT_SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
 | `STATS__LIMITS__REQUESTED_POINTS_LIMIT` | | Maximum allowed number of requested points | `182500` |
-| `STATS__BLOCKSCOUT_API_URL` | see descri​ption | URL to Blockscout API. Used for [conditional update start](#conditional-start). Required unless `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE`  is set to `true`. | `null` |
+| `STATS__BLOCKSCOUT_API_URL` | | URL to Blockscout API. Used for [conditional update start](#conditional-start). Required unless `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE`  is set to `true`. | `null` |
 | `STATS__CONDITIONAL_START__CHECK_PERIOD_SECS` | | Base time between start condition checking | `5` |
 | `STATS__CONDITIONAL_START__BLOCKS_RATIO__ENABLED` | | Enable `blocks_ratio` threshold | `true` |
 | `STATS__CONDITIONAL_START__BLOCKS_RATIO__THRESHOLD` | | Value for `blocks_ratio` threshold | `0.98` |
@@ -89,6 +89,7 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE` | | Disable requirement for blockscout api url setting. Turns off corresponding features if the api setting is not set | `false` |
 | `STATS__DISABLE_INTERNAL_TRANSACTIONS` | | Disable functionality that utilizes internal transactions. In particular, disable internal transactions ratio check for starting the service and related charts (`newContracts`, `lastNewContracts`, and `contractsGrowth`). It has a higher priority than config files and respective envs. | `false` |
 | `STATS__ENABLE_ALL_ARBITRUM` | | Enable Arbitrum-specific charts. Variable for convenience only, the same can be done manually in configs. | `false` |
+| `STATS__API_KEYS__<KEY_NAME>__KEY` | true | e.g. `very_secure_key_value` | |
 
 [anchor]: <> (anchors.envs.end.service)
 
