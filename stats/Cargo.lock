@@ -799,7 +799,7 @@ dependencies = [
 [[package]]
 name = "blockscout-db"
 version = "0.3.0+blockscout.6.10.1"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=add4b6c#add4b6ca6a083fcd460fcf2b5113593fac100021"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=26eed65#26eed6545b89921c64bcb3c24bd36e9ba2ae132f"
 dependencies = [
  "blockscout-db-entity",
  "blockscout-db-migration",
@@ -808,7 +808,7 @@ dependencies = [
 [[package]]
 name = "blockscout-db-entity"
 version = "0.4.0+blockscout.6.10.1"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=add4b6c#add4b6ca6a083fcd460fcf2b5113593fac100021"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=26eed65#26eed6545b89921c64bcb3c24bd36e9ba2ae132f"
 dependencies = [
  "sea-orm",
 ]
@@ -816,7 +816,7 @@ dependencies = [
 [[package]]
 name = "blockscout-db-migration"
 version = "0.3.0+blockscout.6.8.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=add4b6c#add4b6ca6a083fcd460fcf2b5113593fac100021"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=26eed65#26eed6545b89921c64bcb3c24bd36e9ba2ae132f"
 dependencies = [
  "async-std",
  "sea-orm-migration",
@@ -1449,7 +1449,7 @@ dependencies = [
 [[package]]
 name = "env-collector"
 version = "0.1.1"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=20b179a#20b179a444f1c6c26ad3d17aa97908ca16aeaf72"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=26eed65#26eed6545b89921c64bcb3c24bd36e9ba2ae132f"
 dependencies = [
  "anyhow",
  "config 0.14.1",
