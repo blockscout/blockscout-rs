@@ -30,6 +30,102 @@ use tokio_util::task::TaskTracker;
 
 const SERVICE_NAME: &str = "stats";
 
+pub async fn stats(
+    mut settings: Settings,
+    shutdown: Option<GracefulShutdownHandler>,
+) -> Result<(), anyhow::Error> {
+    blockscout_service_launcher::tracing::init_logs(
+        SERVICE_NAME,
+        &settings.tracing,
+        &settings.jaeger,
+    )?;
+    let mut charts_config = read_charts_config(&settings.charts_config)?;
+    let layout_config = read_layout_config(&settings.layout_config)?;
+    let update_groups_config = read_update_groups_config(&settings.update_groups_config)?;
+    handle_enable_all_arbitrum(settings.enable_all_arbitrum, &mut charts_config);
+    handle_disable_internal_transactions(
+        settings.disable_internal_transactions,
+        &mut settings.conditional_start,
+        &mut charts_config,
+    );
+
+    let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
+    let db = init_stats_db(&settings).await?;
+    let blockscout = connect_to_blockscout_db(&settings).await?;
+
+    create_charts_if_needed(&db, &charts).await?;
+
+    if settings.metrics.enabled {
+        metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
+    }
+
+    let shutdown = shutdown.unwrap_or_default();
+    let mut futures = JoinSet::new();
+
+    let (status_waiter_task, status_listener) = init_waiter(&settings)?;
+    if let Some(status_waiter_task) = status_waiter_task {
+        spawn_and_track(&mut futures, &shutdown.task_tracker, status_waiter_task);
+    }
+
+    let update_service = Arc::new(
+        UpdateService::new(
+            db.clone(),
+            blockscout.clone(),
+            charts.clone(),
+            status_listener,
+        )
+        .await?,
+    );
+    let update_service_cloned = update_service.clone();
+    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
+        update_service_cloned
+            .run(
+                settings.concurrent_start_updates,
+                settings.default_schedule,
+                settings.force_update_on_start,
+            )
+            .await;
+        Ok(())
+    });
+    let authorization = init_authorization(settings.api_keys);
+    let read_service = Arc::new(
+        ReadService::new(
+            db.clone(),
+            blockscout.clone(),
+            charts,
+            update_service,
+            authorization,
+            settings.limits.into(),
+        )
+        .await?,
+    );
+    let health = Arc::new(HealthService::default());
+    let grpc_router = grpc_router(read_service.clone(), health.clone());
+    let http_router = HttpRouter {
+        stats: read_service,
+        health: health.clone(),
+        swagger_path: settings.swagger_file,
+    };
+    let launch_settings = LaunchSettings {
+        service_name: SERVICE_NAME.to_string(),
+        server: settings.server,
+        metrics: settings.metrics,
+        graceful_shutdown: shutdown.clone(),
+    };
+    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
+        launcher::launch(launch_settings, http_router, grpc_router).await
+    });
+    let shutdown_cloned = shutdown.clone();
+    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
+        shutdown_cloned.shutdown_token.cancelled().await;
+        Ok(())
+    });
+
+    let res = futures.join_next().await;
+    on_termination(&db, &blockscout, &shutdown, &mut futures).await;
+    res.expect("task set is not empty")?
+}
+
 #[derive(Clone)]
 struct HttpRouter<S: StatsService> {
     stats: Arc<S>,
@@ -176,100 +272,4 @@ async fn on_termination(
     }
     shutdown.shutdown_token.cancel();
     futures.abort_all();
-}
-
-pub async fn stats(
-    mut settings: Settings,
-    shutdown: Option<GracefulShutdownHandler>,
-) -> Result<(), anyhow::Error> {
-    blockscout_service_launcher::tracing::init_logs(
-        SERVICE_NAME,
-        &settings.tracing,
-        &settings.jaeger,
-    )?;
-    let mut charts_config = read_charts_config(&settings.charts_config)?;
-    let layout_config = read_layout_config(&settings.layout_config)?;
-    let update_groups_config = read_update_groups_config(&settings.update_groups_config)?;
-    handle_enable_all_arbitrum(settings.enable_all_arbitrum, &mut charts_config);
-    handle_disable_internal_transactions(
-        settings.disable_internal_transactions,
-        &mut settings.conditional_start,
-        &mut charts_config,
-    );
-
-    let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
-    let db = init_stats_db(&settings).await?;
-    let blockscout = connect_to_blockscout_db(&settings).await?;
-
-    create_charts_if_needed(&db, &charts).await?;
-
-    if settings.metrics.enabled {
-        metrics::initialize_metrics(charts.charts_info.keys().map(|f| f.as_str()));
-    }
-
-    let shutdown = shutdown.unwrap_or_default();
-    let mut futures = JoinSet::new();
-
-    let (status_waiter_task, status_listener) = init_waiter(&settings)?;
-    if let Some(status_waiter_task) = status_waiter_task {
-        spawn_and_track(&mut futures, &shutdown.task_tracker, status_waiter_task);
-    }
-
-    let update_service = Arc::new(
-        UpdateService::new(
-            db.clone(),
-            blockscout.clone(),
-            charts.clone(),
-            status_listener,
-        )
-        .await?,
-    );
-    let update_service_cloned = update_service.clone();
-    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
-        update_service_cloned
-            .run(
-                settings.concurrent_start_updates,
-                settings.default_schedule,
-                settings.force_update_on_start,
-            )
-            .await;
-        Ok(())
-    });
-    let authorization = init_authorization(settings.api_keys);
-    let read_service = Arc::new(
-        ReadService::new(
-            db.clone(),
-            blockscout.clone(),
-            charts,
-            update_service,
-            authorization,
-            settings.limits.into(),
-        )
-        .await?,
-    );
-    let health = Arc::new(HealthService::default());
-    let grpc_router = grpc_router(read_service.clone(), health.clone());
-    let http_router = HttpRouter {
-        stats: read_service,
-        health: health.clone(),
-        swagger_path: settings.swagger_file,
-    };
-    let launch_settings = LaunchSettings {
-        service_name: SERVICE_NAME.to_string(),
-        server: settings.server,
-        metrics: settings.metrics,
-        graceful_shutdown: shutdown.clone(),
-    };
-    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
-        launcher::launch(launch_settings, http_router, grpc_router).await
-    });
-    let shutdown_cloned = shutdown.clone();
-    spawn_and_track(&mut futures, &shutdown.task_tracker, async move {
-        shutdown_cloned.shutdown_token.cancelled().await;
-        Ok(())
-    });
-
-    let res = futures.join_next().await;
-    on_termination(&db, &blockscout, &shutdown, &mut futures).await;
-    res.expect("task set is not empty")?
 }
