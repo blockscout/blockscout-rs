@@ -43,7 +43,7 @@ fn default_start_timestamp() -> u64 {
 }
 
 fn default_polling_interval() -> time::Duration {
-    time::Duration::from_secs(1)
+    time::Duration::from_secs(0)
 }
 
 fn default_retry_interval() -> time::Duration {
@@ -55,7 +55,7 @@ fn default_restart_delay() -> time::Duration {
 }
 
 fn default_catchup_interval() -> time::Duration {
-    time::Duration::from_secs(1)
+    time::Duration::from_secs(0)
 }
 
 impl Default for IndexerSettings {

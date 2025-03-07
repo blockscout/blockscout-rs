@@ -1,0 +1,12 @@
+database:
+  connect:
+    url: "postgres://postgres:postgres@database:5432/blockscout"
+  create_database: true
+  run_migrations: true
+indexer:
+  concurrency: 5
+  client:
+    url: "https://turin.data.tac.build/"
+  start_timestamp: 1713849600
+  polling_interval: 1
+  catchup_interval: 1
