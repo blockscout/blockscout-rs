@@ -18,6 +18,7 @@ fn compile(
         .bytes(["."])
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
+        // Rename token_type enum values
         .field_attribute(".blockscout.multichainAggregator.v1.BatchImportRequest.AddressImport.token_type", "#[serde(default)]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_20", "#[serde(rename = \"ERC-20\")]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_721", "#[serde(rename = \"ERC-721\")]")

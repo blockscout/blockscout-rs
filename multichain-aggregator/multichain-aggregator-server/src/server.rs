@@ -4,11 +4,14 @@ use crate::{
         multichain_aggregator_service_actix::route_multichain_aggregator_service,
         multichain_aggregator_service_server::MultichainAggregatorServiceServer,
     },
-    services::{HealthService, MultichainAggregator},
+    services::{HealthService, MultichainAggregator, ReadWriteRepo},
     settings::Settings,
 };
 use blockscout_chains::BlockscoutChainsClient;
-use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings};
+use blockscout_service_launcher::{
+    database,
+    launcher::{self, LaunchSettings},
+};
 use migration::Migrator;
 use multichain_aggregator_logic::{
     clients::{dapp, token_info},
@@ -53,6 +56,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
 
     let db = database::initialize_postgres::<Migrator>(&settings.database).await?;
+    let replica_db = if let Some(db) = settings.replica_database {
+        Some(database::initialize_postgres::<Migrator>(&db).await?)
+    } else {
+        None
+    };
+
+    let repo = ReadWriteRepo::new(db, replica_db);
 
     // Initialize/update Blockscout chains
     let blockscout_chains = BlockscoutChainsClient::builder()
@@ -66,14 +76,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             Some((id, chain).into())
         })
         .collect::<Vec<_>>();
-    repository::chains::upsert_many(&db, blockscout_chains.clone()).await?;
+    repository::chains::upsert_many(repo.write_db(), blockscout_chains).await?;
 
     let dapp_client = dapp::new_client(settings.service.dapp_client.url)?;
     let token_info_client = token_info::new_client(settings.service.token_info_client.url)?;
 
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
-        db,
-        blockscout_chains,
+        repo,
         dapp_client,
         token_info_client,
         settings.service.api,

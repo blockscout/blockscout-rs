@@ -279,12 +279,20 @@ impl ReadService {
         query_time: DateTime<Utc>,
     ) -> Option<proto_v1::Counter> {
         let query_handle = get_counter_query_handle(&name, chart_entry)?;
-        let counter = self
+        match self
             .query_counter_with_handle(name, chart_entry.settings.clone(), query_handle, query_time)
             .await
-            .inspect_err(|e| tracing::error!("Failed to query counter: {:?}", e))
-            .ok()?;
-        Some(counter)
+        {
+            Ok(counter_data) => Some(counter_data),
+            Err(ChartError::NoCounterData(k)) => {
+                tracing::warn!("No data for counter: {:?}", k);
+                None
+            }
+            Err(e) => {
+                tracing::error!("Failed to query counter: {:?}", e);
+                None
+            }
+        }
     }
 
     async fn query_counter(
@@ -531,6 +539,15 @@ impl StatsService for ReadService {
             total_verified_contracts,
             new_verified_contracts_24h,
         }))
+    }
+
+    async fn get_update_status(
+        &self,
+        _request: Request<proto_v1::GetUpdateStatusRequest>,
+    ) -> Result<Response<proto_v1::UpdateStatus>, Status> {
+        Ok(Response::new(
+            self.update_service.get_initial_update_status().await,
+        ))
     }
 
     async fn batch_update_charts(

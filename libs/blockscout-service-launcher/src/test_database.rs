@@ -142,6 +142,19 @@ impl TestDbGuard {
             &name[..MAX_DATABASE_NAME_LEN - HASH_SUFFIX_STRING_LEN - 1]
         )
     }
+
+    pub async fn close_all(&self) -> (Result<(), DbErr>, Result<(), DbErr>) {
+        (
+            self.conn_with_db.close_by_ref().await,
+            self.conn_without_db.close_by_ref().await,
+        )
+    }
+
+    pub async fn close_all_unwrap(self) {
+        let (res_with_db, res_without_db) = self.close_all().await;
+        res_with_db.expect("couldn't close connection with database");
+        res_without_db.expect("couldn't close connection without database");
+    }
 }
 
 impl Deref for TestDbGuard {

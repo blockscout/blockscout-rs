@@ -7,7 +7,7 @@ servers:
 tags:
   - name: Health
 paths:
-  /api/v1/health:
+  /api/health:
     get:
       tags:
         - Health
@@ -18,43 +18,51 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/v1HealthCheckResponse'
-        default:
-          description: An unexpected error response.
+                $ref: '#/components/schemas/HealthCheckResponse'
+  /api/v1/health:
+    get:
+      tags:
+        - Health
+      operationId: HealthV1
+      responses:
+        "200":
+          description: A successful response.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/rpcStatus'
+                $ref: '#/components/schemas/v1HealthCheckResponse'
 components:
   schemas:
-    protobufAny:
+    LatestBlock:
       type: object
       properties:
-        '@type':
-          type: string
-      additionalProperties:
-        type: object
-    rpcStatus:
+        cache:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+            mber:
+              type: string
+        db:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+            number:
+              type: string
+    HealthCheckResponse:
       type: object
       properties:
-        code:
-          type: integer
-          format: int32
-        message:
-          type: string
-        details:
-          type: array
-          items:
-            $ref: '#/components/schemas/protobufAny'
+        healthy:
+          type: boolean
+        metadata:
+          type: object
+          properties:
+            latest_block:
+              $ref: '#/components/schemas/LatestBlock'
     v1Data:
-      title: |-
-        "data": {
-        "cache_latest_block_inserted_at": "2024-06-12 10:01:47.000000Z",
-        "cache_latest_block_number": "20075019",
-        "latest_block_inserted_at": "2024-06-12 10:01:47.000000Z",
-        "latest_block_number": "20075019"
-        },
-        "healthy": true
       type: object
       properties:
         cache_latest_block_inserted_at:

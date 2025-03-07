@@ -6,7 +6,10 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use tokio::{task::JoinHandle, time::timeout};
+use tokio::{
+    task::JoinHandle,
+    time::{sleep, timeout},
+};
 
 fn get_free_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -32,8 +35,8 @@ where
 }
 
 pub struct TestServerSettings {
-    healthcheck_timeout: Duration,
-    base: Url,
+    pub healthcheck_timeout: Duration,
+    pub base: Url,
 }
 
 impl TestServerSettings {
@@ -68,6 +71,7 @@ impl TestServerSettings {
                         break;
                     }
                 }
+                sleep(Duration::from_millis(100)).await;
             }
         };
         // Wait for the server to start
@@ -105,7 +109,7 @@ async fn send_annotated_request<Response: for<'a> serde::Deserialize<'a>>(
     let response = request
         .send()
         .await
-        .unwrap_or_else(|_| panic!("{annotation}Failed to send request"));
+        .unwrap_or_else(|e| panic!("{annotation}Failed to send request: {}", e.without_url()));
 
     // Assert that status code is success
     if !response.status().is_success() {
