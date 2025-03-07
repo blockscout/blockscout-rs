@@ -155,7 +155,7 @@ impl SolidityVerifier for SolidityVerifierService {
 
         let maybe_verification_request =
             solidity::standard_json::VerificationRequestNew::try_from(request);
-        let mut verification_request = match maybe_verification_request {
+        let verification_request = match maybe_verification_request {
             Ok(request) => request,
             Err(err @ StandardJsonParseError::InvalidContent(_)) => {
                 let response = VerifyResponseWrapper::err(err).into_inner();
@@ -168,41 +168,21 @@ impl SolidityVerifier for SolidityVerifierService {
             }
         };
 
-        verification_request.compiler_version = common::normalize_request_compiler_version(
-            &self.client.compilers().all_versions(),
-            &verification_request.compiler_version,
-        )?;
-
         let result =
-            solidity::standard_json::verify_new(self.client.clone(), verification_request).await;
+            solidity::standard_json::verify(self.client.clone(), verification_request).await;
 
-        let response = if let Ok(verification_success) = result {
-            tracing::info!(match_type=?verification_success.match_type, "verification succeeded");
-            VerifyResponseWrapper::ok(verification_success)
-        } else {
-            let err = result.unwrap_err();
-            tracing::info!(err=%err, "verification failed");
-            match err {
-                VerificationError::Compilation(_)
-                | VerificationError::NoMatchingContracts
-                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
-                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    return Err(Status::invalid_argument(err.to_string()));
-                }
-                VerificationError::Internal(err) => {
-                    tracing::error!("internal error: {err:#?}");
-                    return Err(Status::internal(err.to_string()));
-                }
-            }
+        let verify_response = match result {
+            Ok(value) => types::verification_result::process_verification_result(value)?,
+            Err(error) => types::verification_result::process_error(error)?,
         };
 
         metrics::count_verify_contract(
             &chain_id.unwrap_or_default(),
             "solidity",
-            response.status().as_str_name(),
+            verify_response.status().as_str_name(),
             "standard-json",
         );
-        Ok(Response::new(response.into_inner()))
+        Ok(Response::new(verify_response))
     }
 
     async fn batch_verify_multi_part(

@@ -3,6 +3,7 @@ use verification_common::{
     verifier_alliance::{CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts},
 };
 
+#[derive(Clone, Debug)]
 pub struct OnChainCode {
     runtime: Option<Vec<u8>>,
     creation: Option<Vec<u8>>,
@@ -31,21 +32,14 @@ impl OnChainCode {
     }
 }
 
-struct RecompiledCode {
-    runtime: Vec<u8>,
-    creation: Vec<u8>,
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct RecompiledCode {
+    pub runtime: Vec<u8>,
+    pub creation: Vec<u8>,
 }
 
-impl RecompiledCode {
-    pub fn new(runtime_code: Vec<u8>, creation_code: Vec<u8>) -> Self {
-        Self {
-            runtime: runtime_code,
-            creation: creation_code,
-        }
-    }
-}
-
-enum VerificationResult {
+#[derive(Clone, Debug)]
+pub enum VerificationResult {
     Failure,
     RuntimeMatch {
         runtime_match: Match,
@@ -59,7 +53,7 @@ enum VerificationResult {
     },
 }
 
-fn verify_contract(
+pub fn verify_contract(
     on_chain_code: OnChainCode,
     recompiled_code: RecompiledCode,
     compilation_artifacts: CompilationArtifacts,

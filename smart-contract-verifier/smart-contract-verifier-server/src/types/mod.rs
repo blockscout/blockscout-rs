@@ -10,6 +10,7 @@ pub mod zksolc_standard_json;
 
 pub mod batch_verification;
 mod lookup_methods;
+pub mod verification_result;
 
 pub use self::sourcify::VerifySourcifyRequestWrapper;
 pub use errors::StandardJsonParseError;

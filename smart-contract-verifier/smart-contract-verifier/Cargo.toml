@@ -20,7 +20,7 @@ ethabi = { workspace = true }
 ethers-core = { workspace = true }
 ethers-solc = { workspace = true, features = ["async"] }
 foundry-compilers = { workspace = true, features = ["async"] }
-foundry-compilers-new = { workspace = true }
+foundry-compilers-new = { workspace = true, features = ["async"] }
 futures = { workspace = true }
 hex = { workspace = true }
 lazy_static = { workspace = true }
