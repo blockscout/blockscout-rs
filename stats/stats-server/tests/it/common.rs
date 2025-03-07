@@ -19,7 +19,7 @@ use url::Url;
 use wiremock::MockServer;
 
 pub fn setup_single_key(settings: &mut Settings, key: ApiKey) {
-    settings.api_keys = HashMap::from([("test_key".to_string(), key)]);
+    settings.api_keys = HashMap::from([("test_key".to_string(), key.key)]);
 }
 
 pub async fn send_arbitrary_request(request: RequestBuilder) -> Response {
