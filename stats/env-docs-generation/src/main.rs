@@ -5,6 +5,8 @@ fn main() {
     run_env_collector_cli::<Settings>(
         "STATS",
         "README.md",
+        // it's not meant to be read from the file, but it is used to give example
+        // values as well as for map var to be generated
         "env-docs-generation/example_configs/service.json",
         PrefixFilter::blacklist(&[
             "STATS__SERVER",
