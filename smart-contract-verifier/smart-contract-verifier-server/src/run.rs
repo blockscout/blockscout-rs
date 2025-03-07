@@ -84,29 +84,19 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let solidity_verifier = match settings.solidity.enabled {
         true => Some(Arc::new(
-            SolidityVerifierService::new(
-                settings.solidity,
-                compilers_lock.clone(),
-                settings.extensions.solidity,
-            )
-            .await?,
+            SolidityVerifierService::new(settings.solidity, compilers_lock.clone()).await?,
         )),
         false => None,
     };
     let vyper_verifier = match settings.vyper.enabled {
         true => Some(Arc::new(
-            VyperVerifierService::new(
-                settings.vyper,
-                compilers_lock.clone(),
-                settings.extensions.vyper,
-            )
-            .await?,
+            VyperVerifierService::new(settings.vyper, compilers_lock.clone()).await?,
         )),
         false => None,
     };
     let sourcify_verifier = match settings.sourcify.enabled {
         true => Some(Arc::new(
-            SourcifyVerifierService::new(settings.sourcify, settings.extensions.sourcify).await?,
+            SourcifyVerifierService::new(settings.sourcify).await?,
         )),
         false => None,
     };

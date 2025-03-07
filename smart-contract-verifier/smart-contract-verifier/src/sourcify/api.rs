@@ -61,10 +61,6 @@ pub async fn verify(
             let success = Success::try_from((files, match_type))
                 .map_err(|err| Error::Validation(err.to_string()))?;
 
-            if let Some(middleware) = sourcify_client.middleware() {
-                middleware.call(&success).await;
-            }
-
             Ok(success)
         }
         ApiVerificationResponse::Error { error } => Err(Error::Verification(error)),
@@ -104,10 +100,6 @@ pub async fn verify_from_etherscan(
         .map_err(error_handler::process_sourcify_error)?;
 
     let success = Success::try_from(source_files)?;
-
-    if let Some(middleware) = sourcify_client.middleware() {
-        middleware.call(&success).await;
-    }
 
     Ok(success)
 }
