@@ -89,7 +89,7 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE` | | Disable requirement for blockscout api url setting. Turns off corresponding features if the api setting is not set | `false` |
 | `STATS__DISABLE_INTERNAL_TRANSACTIONS` | | Disable functionality that utilizes internal transactions. In particular, disable internal transactions ratio check for starting the service and related charts (`newContracts`, `lastNewContracts`, and `contractsGrowth`). It has a higher priority than config files and respective envs. | `false` |
 | `STATS__ENABLE_ALL_ARBITRUM` | | Enable Arbitrum-specific charts. Variable for convenience only, the same can be done manually in configs. | `false` |
-| `STATS__API_KEYS__<KEY_NAME>__KEY` | true | e.g. `very_secure_key_value` | required if you want access to key-protected functinoality |
+| `STATS__API_KEYS__<KEY_NAME>` | | E.g. `very_secure_key_value`. Allows access to key-protected functinoality | `null` |
 
 [anchor]: <> (anchors.envs.end.service)
 

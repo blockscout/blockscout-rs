@@ -22,7 +22,6 @@ use std::{
 use tracing::warn;
 
 use crate::{
-    auth::ApiKey,
     config::{self, types::AllChartSettings},
     RuntimeSetup,
 };
@@ -60,7 +59,7 @@ pub struct Settings {
     pub update_groups_config: PathBuf,
     /// Location of swagger file to serve
     pub swagger_file: PathBuf,
-    pub api_keys: HashMap<String, ApiKey>,
+    pub api_keys: HashMap<String, String>,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,

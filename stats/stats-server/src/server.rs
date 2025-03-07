@@ -251,10 +251,14 @@ fn init_waiter(
     Ok((status_task, status_listener))
 }
 
-fn init_authorization(api_keys: HashMap<String, ApiKey>) -> Arc<AuthorizationProvider> {
+fn init_authorization(api_keys: HashMap<String, String>) -> Arc<AuthorizationProvider> {
     if api_keys.is_empty() {
         tracing::warn!("No api keys found in settings, provide them to make use of authorization-protected endpoints")
     }
+    let api_keys = api_keys
+        .into_iter()
+        .map(|(name, key)| (name, ApiKey::new(key)))
+        .collect();
     Arc::new(AuthorizationProvider::new(api_keys))
 }
 
