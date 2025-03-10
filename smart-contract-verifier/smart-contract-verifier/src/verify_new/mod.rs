@@ -12,9 +12,9 @@ pub use verifier::{compile_and_verify, OnChainContract, VerificationResult, Veri
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("compiler not found: {0}")]
+    #[error("Compiler version not found: {0}")]
     CompilerNotFound(String),
-    #[error("compilation error: {0:#?}")]
+    #[error("Compilation error: {0:#?}")]
     Compilation(Vec<String>),
     #[error("{0:#?}")]
     Internal(#[from] anyhow::Error),

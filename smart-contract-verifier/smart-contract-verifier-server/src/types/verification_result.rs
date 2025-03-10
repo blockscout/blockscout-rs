@@ -13,7 +13,7 @@ use verification_common::verifier_alliance::{CborAuxdata, CompilationArtifacts, 
 
 pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
     match error {
-        err @ Error::CompilerNotFound(_) => Err(Status::invalid_argument(format!("{err:?}"))),
+        err @ Error::CompilerNotFound(_) => Err(Status::invalid_argument(err.to_string())),
         err @ Error::Internal(_) => {
             let formatted_error = format!("{err:#?}");
             tracing::error!(err = formatted_error, "internal error");
@@ -37,7 +37,7 @@ pub fn process_verification_result(
 ) -> Result<v2::VerifyResponse, Status> {
     if value.is_empty() {
         let response = v2::VerifyResponse {
-            message: "no contract could be verified with provided data".to_string(),
+            message: "No contract could be verified with provided data".to_string(),
             status: v2::verify_response::Status::Failure.into(),
             source: None,
             extra_data: None,
