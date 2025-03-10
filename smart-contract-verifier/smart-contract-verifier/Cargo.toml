@@ -46,6 +46,7 @@ tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 verification-common = { workspace = true }
+vyper-cbor-auxdata = { workspace = true }
 
 era-compiler-common = { workspace = true }
 

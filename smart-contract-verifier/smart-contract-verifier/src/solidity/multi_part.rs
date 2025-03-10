@@ -70,6 +70,7 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
     let compiler_version = request.compiler_version;
 
     let verifier = ContractVerifier::new(
+        false,
         client.compilers(),
         &compiler_version,
         request.creation_bytecode,
@@ -91,9 +92,6 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
             // If any error, it is uncorrectable and should be returned immediately, otherwise
             // we allow middlewares to process success and only then return it to the caller
             let success = Success::from((compiler_input, result?));
-            if let Some(middleware) = client.middleware() {
-                middleware.call(&success).await;
-            }
 
             return Ok(success);
         }

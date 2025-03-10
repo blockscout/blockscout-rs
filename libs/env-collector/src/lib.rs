@@ -670,6 +670,12 @@ mod tests {
                 "",
             ),
             var(
+                "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__CONNECT_LAZY",
+                Some("`false`"),
+                false,
+                "",
+            ),
+            var(
                 "TEST_SERVICE__DATABASE__CONNECT_OPTIONS__IDLE_TIMEOUT",
                 Some("`null`"),
                 false,
@@ -733,6 +739,7 @@ mod tests {
 | `TEST_SERVICE__TEST5_WITH_UNICODE`                            | false       |                  | `false`       |
 | `TEST_SERVICE__STRING_WITH_DEFAULT`                           | false       |                  | `kekek`       |
 | `TEST_SERVICE__DATABASE__CONNECT__URL`                        | true        | e.g. `test-url`  |               |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__CONNECT_LAZY`       | false       |                  | `false`       |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__ACQUIRE_TIMEOUT` | | | `null` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__CONNECT_TIMEOUT` | | | `null` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__IDLE_TIMEOUT` | | | `null` |
@@ -840,6 +847,7 @@ mod tests {
 | `TEST_SERVICE__DATABASE__CONNECT__URL` | true | e.g. `test-url` | |
 | `TEST_SERVICE__TEST` | true | e.g. `value` | |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__ACQUIRE_TIMEOUT` | | | `null` |
+| `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__CONNECT_LAZY` | | | `false` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__CONNECT_TIMEOUT` | | | `null` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__IDLE_TIMEOUT` | | | `null` |
 | `TEST_SERVICE__DATABASE__CONNECT_OPTIONS__MAX_CONNECTIONS` | | | `null` |

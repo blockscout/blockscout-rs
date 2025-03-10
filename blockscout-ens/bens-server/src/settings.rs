@@ -57,6 +57,8 @@ impl Default for SubgraphsReaderSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ProtocolSettings {
+    #[serde(default)]
+    pub disabled: bool,
     pub tld_list: NonEmpty<Tld>,
     pub network_id: i64,
     pub subgraph_name: String,

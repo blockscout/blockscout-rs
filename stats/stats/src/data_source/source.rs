@@ -7,7 +7,11 @@ use sea_orm::{DatabaseConnection, DbErr};
 use tracing::instrument;
 use tynm::type_name;
 
-use crate::{range::UniversalRange, ChartError, IndexingStatus};
+use crate::{
+    indexing_status::{IndexingStatus, IndexingStatusTrait},
+    range::UniversalRange,
+    ChartError,
+};
 
 use super::types::UpdateContext;
 

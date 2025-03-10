@@ -7,7 +7,7 @@ use crate::{
         VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     },
     services::common,
-    settings::{Extensions, SoliditySettings},
+    settings::SoliditySettings,
     types,
     types::{
         LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, StandardJsonParseError,
@@ -35,8 +35,6 @@ impl SolidityVerifierService {
     pub async fn new(
         settings: SoliditySettings,
         compilers_threads_semaphore: Arc<Semaphore>,
-        /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_variables)] extensions: Extensions,
     ) -> anyhow::Result<Self> {
         let solc_validator = Arc::new(SolcValidator::default());
         let fetcher = common::initialize_fetcher(
@@ -54,16 +52,7 @@ impl SolidityVerifierService {
         );
         compilers.load_from_dir(&settings.compilers_dir).await;
 
-        /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_mut)]
-        let mut client = SolidityClient::new(compilers);
-
-        #[cfg(feature = "sig-provider-extension")]
-        if let Some(sig_provider) = extensions.sig_provider {
-            // TODO(#221): create only one instance of middleware/connection
-            client = client
-                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
-        }
+        let client = SolidityClient::new(compilers);
 
         Ok(Self {
             client: Arc::new(client),

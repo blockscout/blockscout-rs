@@ -34,6 +34,7 @@ impl From<StandardJsonContent> for CompilerInput {
 pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
     let compiler_input = CompilerInput::from(request.content);
     let verifier = ContractVerifier::new(
+        false,
         client.compilers(),
         &request.compiler_version,
         request.creation_bytecode,
@@ -44,9 +45,6 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
 
     // If case of success, we allow middlewares to process success and only then return it to the caller
     let success = Success::from((compiler_input, result));
-    if let Some(middleware) = client.middleware() {
-        middleware.call(&success).await;
-    }
 
     Ok(success)
 }

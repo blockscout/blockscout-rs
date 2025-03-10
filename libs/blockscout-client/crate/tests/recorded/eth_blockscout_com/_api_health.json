@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/health"
+  },
+  "response": {
+    "status": 200,
+    "body": "{\"metadata\":{\"latest_block\":{\"cache\":{\"timestamp\":\"2025-03-05 09:45:11.000000Z\",\"number\":\"21979873\"},\"db\":{\"timestamp\":\"2025-03-05 09:45:11.000000Z\",\"number\":\"21979873\"}}},\"healthy\":true}",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

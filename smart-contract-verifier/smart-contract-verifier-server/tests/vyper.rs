@@ -30,13 +30,9 @@ async fn global_service() -> &'static Arc<VyperVerifierService> {
         .get_or_init(|| async {
             let settings = Settings::default();
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = VyperVerifierService::new(
-                settings.vyper,
-                Arc::new(compilers_lock),
-                settings.extensions.vyper,
-            )
-            .await
-            .expect("couldn't initialize the service");
+            let service = VyperVerifierService::new(settings.vyper, Arc::new(compilers_lock))
+                .await
+                .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
@@ -536,5 +532,12 @@ mod standard_json {
         };
         let verification_response = get_verification_response(&test_case).await;
         validate_verification_response(&initial_test_case, verification_response);
+    }
+
+    #[tokio::test]
+    async fn verify_contracts_with_integrity_hashes_inside_cbor_auxdata() {
+        let test_case =
+            vyper_types::from_file::<StandardJson>("standard_json_contracts_with_integrity_hashes");
+        test_success(test_case).await;
     }
 }

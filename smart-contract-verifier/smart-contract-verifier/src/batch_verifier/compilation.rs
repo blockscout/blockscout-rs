@@ -74,6 +74,7 @@ mod solidity {
                 }
 
                 let parsed_contract = parse_contract(
+                    false,
                     file_name.clone(),
                     contract_name.clone(),
                     &compiler_output.sources.clone(),
@@ -109,16 +110,21 @@ mod solidity {
     }
 
     fn parse_contract(
+        is_vyper: bool,
         file_name: String,
         contract_name: String,
         source_files: &lossless_compiler_output::SourceFiles,
         contract: &lossless_compiler_output::Contract,
         modified_contract: &lossless_compiler_output::Contract,
     ) -> Result<ParsedContract, anyhow::Error> {
-        let (creation_code, creation_cbor_auxdata) =
-            parse_code_details(&contract.evm.bytecode, &modified_contract.evm.bytecode)
-                .context("parse creation code details")?;
+        let (creation_code, creation_cbor_auxdata) = parse_code_details(
+            is_vyper,
+            &contract.evm.bytecode,
+            &modified_contract.evm.bytecode,
+        )
+        .context("parse creation code details")?;
         let (runtime_code, runtime_cbor_auxdata) = parse_code_details(
+            is_vyper,
             &contract.evm.deployed_bytecode.bytecode,
             &modified_contract.evm.deployed_bytecode.bytecode,
         )
@@ -143,14 +149,15 @@ mod solidity {
     }
 
     fn parse_code_details(
+        is_vyper: bool,
         code: &lossless_compiler_output::Bytecode,
         modified_code: &lossless_compiler_output::Bytecode,
     ) -> Result<(Bytes, CborAuxdata), anyhow::Error> {
         let code = preprocess_code(code).context("preprocess original output")?;
         let modified_code = preprocess_code(modified_code).context("preprocess modified output")?;
 
-        let bytecode_parts =
-            crate::verifier::split(&code, &modified_code).context("split on bytecode parts")?;
+        let bytecode_parts = crate::verifier::split(is_vyper, &code, &modified_code)
+            .context("split on bytecode parts")?;
         let cbor_auxdata = cbor_auxdata::generate(&bytecode_parts);
 
         Ok((code, cbor_auxdata))
