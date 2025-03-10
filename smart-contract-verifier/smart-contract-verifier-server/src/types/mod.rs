@@ -1,5 +1,4 @@
 mod errors;
-mod solidity_multi_part;
 mod source;
 mod sourcify;
 mod sourcify_from_etherscan;
@@ -15,7 +14,6 @@ pub mod verification_result;
 pub use self::sourcify::VerifySourcifyRequestWrapper;
 pub use errors::StandardJsonParseError;
 pub use lookup_methods::{LookupMethodsRequestWrapper, LookupMethodsResponseWrapper};
-pub use solidity_multi_part::VerifySolidityMultiPartRequestWrapper;
 pub use sourcify_from_etherscan::VerifyFromEtherscanSourcifyRequestWrapper;
 pub use verify_response::VerifyResponseWrapper;
 pub use vyper_multi_part::VerifyVyperMultiPartRequestWrapper;

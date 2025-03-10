@@ -9,18 +9,15 @@ use crate::{
     services::common,
     settings::SoliditySettings,
     types,
-    types::{
-        LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, VerifyResponseWrapper,
-        VerifySolidityMultiPartRequestWrapper,
-    },
+    types::{LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, VerifyResponseWrapper},
 };
 use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity, solidity::standard_json::StandardJsonParseError, Compilers,
-    SolcValidator, SolidityClient, SolidityCompiler, VerificationError,
+    find_methods, solidity, solidity::RequestParseError, Compilers, SolcValidator, SolidityClient,
+    SolidityCompiler,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    BytecodeType, LookupMethodsRequest, LookupMethodsResponse,
+    LookupMethodsRequest, LookupMethodsResponse,
 };
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -65,72 +62,51 @@ impl SolidityVerifier for SolidityVerifierService {
         &self,
         request: Request<VerifySolidityMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        let request: VerifySolidityMultiPartRequestWrapper = request.into_inner().into();
+        let request = request.into_inner();
+
         let chain_id = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.chain_id.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.chain_id.clone());
         let contract_address = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.contract_address.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.contract_address.clone());
         tracing::info!(
-            chain_id = chain_id,
-            contract_address = contract_address,
-            "Solidity multi-part verification request received"
+            chain_id =? chain_id,
+            contract_address =? contract_address,
+            "solidity multi-part verification request received"
         );
 
-        tracing::debug!(
-            bytecode = request.bytecode,
-            bytecode_type = BytecodeType::try_from(request.bytecode_type)
-                .unwrap()
-                .as_str_name(),
-            compiler_version = request.compiler_version,
-            evm_version = request.evm_version,
-            optimization_runs = request.optimization_runs,
-            source_files = ?request.source_files,
-            libraries = ?request.libraries,
-            "Request details"
-        );
-
-        let mut verification_request: solidity::multi_part::VerificationRequest =
-            request.try_into()?;
-        verification_request.compiler_version = common::normalize_request_compiler_version(
-            &self.client.compilers().all_versions(),
-            &verification_request.compiler_version,
-        )?;
-
-        let result = solidity::multi_part::verify(self.client.clone(), verification_request).await;
-
-        let response = if let Ok(verification_success) = result {
-            tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
-            VerifyResponseWrapper::ok(verification_success)
-        } else {
-            let err = result.unwrap_err();
-            tracing::info!(err=%err, "Request processing failed");
-            match err {
-                VerificationError::Compilation(_)
-                | VerificationError::NoMatchingContracts
-                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
-                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    return Err(Status::invalid_argument(err.to_string()));
-                }
-                VerificationError::Internal(err) => {
-                    tracing::error!("internal error: {err:#?}");
-                    return Err(Status::internal(err.to_string()));
-                }
+        let maybe_verification_request =
+            solidity::multi_part::VerificationRequestNew::try_from(request);
+        let verification_request = match maybe_verification_request {
+            Ok(request) => request,
+            Err(err @ RequestParseError::InvalidContent(_)) => {
+                let response = VerifyResponseWrapper::err(err).into_inner();
+                tracing::info!(response=?response, "request processed");
+                return Ok(Response::new(response));
+            }
+            Err(err @ RequestParseError::BadRequest(_)) => {
+                tracing::info!(err=%err, "bad request");
+                return Err(Status::invalid_argument(err.to_string()));
             }
         };
 
+        let result = solidity::multi_part::verify(self.client.clone(), verification_request).await;
+
+        let verify_response = match result {
+            Ok(value) => types::verification_result::process_verification_result(value)?,
+            Err(error) => types::verification_result::process_error(error)?,
+        };
+
         metrics::count_verify_contract(
-            chain_id.as_ref(),
+            &chain_id.unwrap_or_default(),
             "solidity",
-            response.status().as_str_name(),
+            verify_response.status().as_str_name(),
             "multi-part",
         );
-        Ok(Response::new(response.into_inner()))
+        Ok(Response::new(verify_response))
     }
 
     async fn verify_standard_json(
@@ -157,12 +133,12 @@ impl SolidityVerifier for SolidityVerifierService {
             solidity::standard_json::VerificationRequestNew::try_from(request);
         let verification_request = match maybe_verification_request {
             Ok(request) => request,
-            Err(err @ StandardJsonParseError::InvalidContent(_)) => {
+            Err(err @ RequestParseError::InvalidContent(_)) => {
                 let response = VerifyResponseWrapper::err(err).into_inner();
                 tracing::info!(response=?response, "request processed");
                 return Ok(Response::new(response));
             }
-            Err(err @ StandardJsonParseError::BadRequest(_)) => {
+            Err(err @ RequestParseError::BadRequest(_)) => {
                 tracing::info!(err=%err, "bad request");
                 return Err(Status::invalid_argument(err.to_string()));
             }

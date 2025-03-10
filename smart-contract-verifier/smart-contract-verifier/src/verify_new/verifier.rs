@@ -12,6 +12,7 @@ use verification_common::verifier_alliance::{
 
 /// The contract to be verified.
 // may be extended with contract metadata (address and chain_id) later
+#[derive(Clone, Debug)]
 pub struct OnChainContract {
     pub on_chain_code: OnChainCode,
 }

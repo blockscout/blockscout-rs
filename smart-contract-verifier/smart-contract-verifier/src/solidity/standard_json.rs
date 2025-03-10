@@ -7,7 +7,7 @@ use bytes::Bytes;
 use foundry_compilers::CompilerInput;
 use std::sync::Arc;
 
-pub use standard_json_new::{verify, StandardJsonParseError, VerificationRequestNew};
+pub use standard_json_new::{verify, VerificationRequestNew};
 mod standard_json_new {
     use super::*;
     use crate::verify_new;
@@ -47,26 +47,17 @@ mod standard_json_new {
         Ok(result)
     }
 
-    pub use proto::StandardJsonParseError;
     mod proto {
         use super::*;
-        use crate::verify_new::SolcInput;
+        use crate::{solidity::RequestParseError, verify_new::SolcInput};
         use anyhow::Context;
         use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
             BytecodeType, VerifySolidityStandardJsonRequest,
         };
         use std::str::FromStr;
 
-        #[derive(thiserror::Error, Debug)]
-        pub enum StandardJsonParseError {
-            #[error("content is not a valid standard json: {0}")]
-            InvalidContent(#[from] serde_path_to_error::Error<serde_json::Error>),
-            #[error("{0:#}")]
-            BadRequest(#[from] anyhow::Error),
-        }
-
         impl TryFrom<VerifySolidityStandardJsonRequest> for VerificationRequestNew {
-            type Error = StandardJsonParseError;
+            type Error = RequestParseError;
 
             fn try_from(request: VerifySolidityStandardJsonRequest) -> Result<Self, Self::Error> {
                 let code_value = blockscout_display_bytes::decode_hex(&request.bytecode)

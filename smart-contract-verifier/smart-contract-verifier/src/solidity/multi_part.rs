@@ -1,16 +1,241 @@
-use super::{client::Client, types::Success};
-use crate::{
-    compiler::DetailedVersion,
-    verifier::{ContractVerifier, Error},
-    BatchError, BatchVerificationResult, Contract,
-};
+use super::client::Client;
+use crate::{compiler::DetailedVersion, BatchError, BatchVerificationResult, Contract};
 use bytes::Bytes;
 use foundry_compilers::{
-    artifacts::{BytecodeHash, Libraries, Settings, SettingsMetadata, Source, Sources},
+    artifacts::{Libraries, Settings, Source, Sources},
     CompilerInput, EvmVersion,
 };
-use semver::VersionReq;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+
+pub use multi_part_new::{verify, VerificationRequestNew};
+mod multi_part_new {
+    use crate::{
+        verify_new::{self, SolcInput},
+        DetailedVersion, OnChainCode, SolidityClient as Client,
+    };
+    use alloy_core::primitives::Address;
+    use foundry_compilers_new::{
+        artifacts,
+        artifacts::solc::{BytecodeHash, SettingsMetadata},
+    };
+    use semver::VersionReq;
+    use std::{collections::BTreeMap, ffi::OsStr, path::PathBuf, sync::Arc};
+
+    pub struct VerificationRequestNew {
+        pub on_chain_code: OnChainCode,
+        pub compiler_version: DetailedVersion,
+        pub content: Content,
+
+        // metadata
+        pub chain_id: Option<String>,
+        pub contract_address: Option<Address>,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Content {
+        pub sources: BTreeMap<PathBuf, String>,
+        pub evm_version: Option<artifacts::EvmVersion>,
+        pub optimization_runs: Option<usize>,
+        pub contract_libraries: BTreeMap<String, String>,
+    }
+
+    impl From<Content> for Vec<SolcInput> {
+        fn from(content: Content) -> Self {
+            let mut settings = artifacts::solc::Settings::default();
+            if let Some(optimization_runs) = content.optimization_runs {
+                settings.optimizer.enabled = Some(true);
+                settings.optimizer.runs = Some(optimization_runs);
+            }
+
+            // we have to know filename for library, but we don't know,
+            // so we assume that every file MAY contain all libraries
+            let libs = content
+                .sources
+                .keys()
+                .map(|filename| (PathBuf::from(filename), content.contract_libraries.clone()))
+                .collect();
+            settings.libraries = artifacts::solc::Libraries { libs };
+
+            settings.evm_version = content.evm_version;
+
+            let sources: artifacts::Sources = content
+                .sources
+                .into_iter()
+                .map(|(name, content)| (name, artifacts::Source::new(content)))
+                .collect();
+            let inputs: Vec<_> = input_from_sources_and_settings(sources, settings.clone())
+                .into_iter()
+                .map(SolcInput)
+                .collect();
+            inputs
+        }
+    }
+
+    pub async fn verify(
+        client: Arc<Client>,
+        request: VerificationRequestNew,
+    ) -> Result<verify_new::VerificationResult, verify_new::Error> {
+        let to_verify = vec![verify_new::OnChainContract {
+            on_chain_code: request.on_chain_code,
+        }];
+        let compilers = client.new_compilers();
+
+        let solc_inputs: Vec<SolcInput> = request.content.into();
+        for solc_input in solc_inputs {
+            for metadata in settings_metadata(&request.compiler_version) {
+                let mut solc_input = solc_input.clone();
+                solc_input.0.settings.metadata = metadata;
+
+                let results = verify_new::compile_and_verify(
+                    to_verify.clone(),
+                    compilers,
+                    &request.compiler_version,
+                    solc_input,
+                )
+                .await?;
+                let result = results
+                    .into_iter()
+                    .next()
+                    .expect("we sent exactly one contract to verify");
+
+                if result.is_empty() {
+                    continue;
+                }
+
+                return Ok(result);
+            }
+        }
+
+        // no contracts could be verified
+        Ok(vec![])
+    }
+
+    fn input_from_sources_and_settings(
+        sources: artifacts::Sources,
+        settings: artifacts::solc::Settings,
+    ) -> Vec<artifacts::SolcInput> {
+        let mut solidity_sources = BTreeMap::new();
+        let mut yul_sources = BTreeMap::new();
+        for (path, source) in sources {
+            if path.extension() == Some(OsStr::new("yul")) {
+                yul_sources.insert(path, source);
+            } else {
+                solidity_sources.insert(path, source);
+            }
+        }
+        let mut res = Vec::new();
+        if !solidity_sources.is_empty() {
+            res.push(artifacts::SolcInput {
+                language: artifacts::SolcLanguage::Solidity,
+                sources: artifacts::Sources(solidity_sources),
+                settings: Default::default(),
+            });
+        }
+        if !yul_sources.is_empty() {
+            res.push(artifacts::SolcInput {
+                language: artifacts::SolcLanguage::Yul,
+                sources: artifacts::Sources(yul_sources),
+                settings,
+            });
+        }
+        res
+    }
+
+    /// Iterates through possible bytecode if required and creates
+    /// a corresponding variants of settings metadata for each of them.
+    ///
+    /// Multi-file input type does not specify it explicitly, thus, we may
+    /// have to iterate through all possible options.
+    ///
+    /// See "settings_metadata" (https://docs.soliditylang.org/en/v0.8.15/using-the-compiler.html?highlight=compiler%20input#input-description)
+    fn settings_metadata(compiler_version: &DetailedVersion) -> Vec<Option<SettingsMetadata>> {
+        // Options are sorted by their probability of occurring
+        const BYTECODE_HASHES: [BytecodeHash; 3] =
+            [BytecodeHash::Ipfs, BytecodeHash::None, BytecodeHash::Bzzr1];
+
+        if VersionReq::parse("<0.6.0")
+            .unwrap()
+            .matches(compiler_version.version())
+        {
+            [None].into()
+        } else {
+            BYTECODE_HASHES
+                .map(|hash| Some(SettingsMetadata::from(hash)))
+                .into()
+        }
+    }
+
+    mod proto {
+        use super::*;
+        use crate::solidity::RequestParseError;
+        use anyhow::Context;
+        use foundry_compilers_new::artifacts::solc::EvmVersion;
+        use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+            BytecodeType, VerifySolidityMultiPartRequest,
+        };
+        use std::str::FromStr;
+
+        impl TryFrom<VerifySolidityMultiPartRequest> for VerificationRequestNew {
+            type Error = RequestParseError;
+
+            fn try_from(request: VerifySolidityMultiPartRequest) -> Result<Self, Self::Error> {
+                let code_value = blockscout_display_bytes::decode_hex(&request.bytecode)
+                    .context("bytecode is not valid hex")?;
+                let on_chain_code = match request.bytecode_type() {
+                    BytecodeType::Unspecified => {
+                        Err(anyhow::anyhow!("bytecode type is unspecified"))?
+                    }
+                    BytecodeType::CreationInput => OnChainCode::creation(code_value),
+                    BytecodeType::DeployedBytecode => OnChainCode::runtime(code_value),
+                };
+
+                let compiler_version = DetailedVersion::from_str(&request.compiler_version)
+                    .context("invalid compiler version")?;
+
+                let sources: BTreeMap<PathBuf, String> = request
+                    .source_files
+                    .into_iter()
+                    .map(|(name, content)| (PathBuf::from(name), content))
+                    .collect();
+
+                let evm_version = match request.evm_version {
+                    Some(version) if version != "default" => Some(
+                        EvmVersion::from_str(&version)
+                            .map_err(|err| anyhow::anyhow!("invalid evm_version: {err}"))?,
+                    ),
+                    _ => None,
+                };
+
+                let (chain_id, contract_address) = match request.metadata {
+                    None => (None, None),
+                    Some(metadata) => {
+                        let chain_id = metadata.chain_id;
+                        let contract_address = metadata
+                            .contract_address
+                            .map(|value| alloy_core::primitives::Address::from_str(&value))
+                            .transpose()
+                            .ok()
+                            .flatten();
+                        (chain_id, contract_address)
+                    }
+                };
+
+                Ok(Self {
+                    on_chain_code,
+                    compiler_version,
+                    content: Content {
+                        sources,
+                        evm_version,
+                        optimization_runs: request.optimization_runs.map(|i| i as usize),
+                        contract_libraries: request.libraries,
+                    },
+                    chain_id,
+                    contract_address,
+                })
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequest {
@@ -63,65 +288,6 @@ impl From<MultiFileContent> for Vec<CompilerInput> {
             .map(|input| input.settings(settings.clone()))
             .collect();
         inputs
-    }
-}
-
-pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
-    let compiler_version = request.compiler_version;
-
-    let verifier = ContractVerifier::new(
-        false,
-        client.compilers(),
-        &compiler_version,
-        request.creation_bytecode,
-        request.deployed_bytecode,
-        request.chain_id,
-    )?;
-
-    let compiler_inputs: Vec<CompilerInput> = request.content.into();
-    for mut compiler_input in compiler_inputs {
-        for metadata in settings_metadata(&compiler_version) {
-            compiler_input.settings.metadata = metadata;
-            let result = verifier.verify(&compiler_input).await;
-
-            // If no matching contracts have been found, try the next settings metadata option
-            if let Err(Error::NoMatchingContracts) = result {
-                continue;
-            }
-
-            // If any error, it is uncorrectable and should be returned immediately, otherwise
-            // we allow middlewares to process success and only then return it to the caller
-            let success = Success::from((compiler_input, result?));
-
-            return Ok(success);
-        }
-    }
-
-    // No contracts could be verified
-    Err(Error::NoMatchingContracts)
-}
-
-/// Iterates through possible bytecode if required and creates
-/// a corresponding variants of settings metadata for each of them.
-///
-/// Multi-file input type does not specify it explicitly, thus, we may
-/// have to iterate through all possible options.
-///
-/// See "settings_metadata" (https://docs.soliditylang.org/en/v0.8.15/using-the-compiler.html?highlight=compiler%20input#input-description)
-fn settings_metadata(compiler_version: &DetailedVersion) -> Vec<Option<SettingsMetadata>> {
-    // Options are sorted by their probability of occurring
-    const BYTECODE_HASHES: [BytecodeHash; 3] =
-        [BytecodeHash::Ipfs, BytecodeHash::None, BytecodeHash::Bzzr1];
-
-    if VersionReq::parse("<0.6.0")
-        .unwrap()
-        .matches(compiler_version.version())
-    {
-        [None].into()
-    } else {
-        BYTECODE_HASHES
-            .map(|hash| Some(SettingsMetadata::from(hash)))
-            .into()
     }
 }
 
