@@ -8,7 +8,6 @@ mod verifier;
 
 pub use evm_compilers::EvmCompilersPool;
 pub use solc_compiler::{SolcCompiler, SolcInput};
-pub use verification::{OnChainCode, RecompiledCode};
 pub use verifier::{compile_and_verify, OnChainContract, VerificationResult, VerifyingContract};
 
 #[derive(Debug, thiserror::Error)]

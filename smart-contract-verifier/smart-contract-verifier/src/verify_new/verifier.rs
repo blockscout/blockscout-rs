@@ -2,11 +2,9 @@ use super::{
     compilation,
     compilation::CompilationResult,
     evm_compilers::{EvmCompiler, EvmCompilersPool},
-    verification,
-    verification::OnChainCode,
-    Error,
+    verification, Error,
 };
-use crate::{DetailedVersion, FullyQualifiedName, Language};
+use crate::{DetailedVersion, FullyQualifiedName, Language, OnChainCode};
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts,

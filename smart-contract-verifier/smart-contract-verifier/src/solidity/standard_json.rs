@@ -1,7 +1,7 @@
 use super::client::Client;
 use crate::{
-    batch_verifier::BatchError, compiler::DetailedVersion, verify_new::OnChainCode,
-    BatchVerificationResult, Contract,
+    batch_verifier::BatchError, compiler::DetailedVersion, BatchVerificationResult, Contract,
+    OnChainCode,
 };
 use bytes::Bytes;
 use foundry_compilers::CompilerInput;

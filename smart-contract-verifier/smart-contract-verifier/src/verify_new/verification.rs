@@ -1,36 +1,8 @@
+use crate::OnChainCode;
 use verification_common::{
     verifier_alliance,
     verifier_alliance::{CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts},
 };
-
-#[derive(Clone, Debug)]
-pub struct OnChainCode {
-    runtime: Option<Vec<u8>>,
-    creation: Option<Vec<u8>>,
-}
-
-impl OnChainCode {
-    pub fn runtime(runtime_code: Vec<u8>) -> Self {
-        Self {
-            runtime: Some(runtime_code),
-            creation: None,
-        }
-    }
-
-    pub fn creation(creation_code: Vec<u8>) -> Self {
-        Self {
-            runtime: None,
-            creation: Some(creation_code),
-        }
-    }
-
-    pub fn complete(runtime_code: Vec<u8>, creation_code: Vec<u8>) -> Self {
-        Self {
-            runtime: Some(runtime_code),
-            creation: Some(creation_code),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct RecompiledCode {
