@@ -124,17 +124,17 @@ mod multi_part_new {
             }
         }
         let mut res = Vec::new();
-        if !solidity_sources.is_empty() {
-            res.push(artifacts::SolcInput {
-                language: artifacts::SolcLanguage::Solidity,
-                sources: artifacts::Sources(solidity_sources),
-                settings: Default::default(),
-            });
-        }
         if !yul_sources.is_empty() {
             res.push(artifacts::SolcInput {
                 language: artifacts::SolcLanguage::Yul,
                 sources: artifacts::Sources(yul_sources),
+                settings: settings.clone(),
+            });
+        }
+        if !solidity_sources.is_empty() {
+            res.push(artifacts::SolcInput {
+                language: artifacts::SolcLanguage::Solidity,
+                sources: artifacts::Sources(solidity_sources),
                 settings,
             });
         }
