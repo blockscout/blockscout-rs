@@ -251,9 +251,6 @@ impl<'a> MatchBuilder<'a> {
             None if !constructor_arguments.is_empty() => {
                 self.invalid_constructor_arguments = true;
             }
-            Some(_constructor) if constructor_arguments.is_empty() => {
-                self.invalid_constructor_arguments = true;
-            }
             Some(constructor)
                 if constructor
                     .abi_decode_input(constructor_arguments, true)
@@ -262,6 +259,7 @@ impl<'a> MatchBuilder<'a> {
                 self.invalid_constructor_arguments = true;
             }
             None => {}
+            Some(_constructor) if constructor_arguments.is_empty() => {}
             Some(_constructor) => {
                 self.compiled_code.extend(constructor_arguments);
                 self.transformations
