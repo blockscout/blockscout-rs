@@ -50,9 +50,9 @@ pub trait EvmCompiler {
 
 pub struct Compilers<C> {
     cache: DownloadCache<DetailedVersion>,
-    fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
+    pub(crate) fetcher: Arc<dyn Fetcher<Version = DetailedVersion>>,
     evm_compiler: C,
-    threads_semaphore: Arc<Semaphore>,
+    pub(crate) threads_semaphore: Arc<Semaphore>,
 }
 
 impl<C> Compilers<C>
