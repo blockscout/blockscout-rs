@@ -553,6 +553,7 @@
         "specific": {
           "type": "ens_like",
           "native_token_contract": "0x0000000000000000000000000000000000000000",
+          "empty_label_hash": "0x702d9dc001440f23c84ab0d0d63e1dd6b0d62b077c2d9a4694ef997a19ddd38a"
         },
         "meta": {
           "short_name": "SPACE ID",
