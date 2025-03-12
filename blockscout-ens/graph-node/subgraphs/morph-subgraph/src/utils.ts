@@ -4,7 +4,7 @@ import { Account, Domain } from "../generated/schema";
 // @ts-ignore
 const NETWORK = "{{network}}"
 
-export let BASE_NODE_HASH = "b8d5774ade4492991dce6d60a4b058ae904534abd252bc4b60bf5f7a683e2a2f" // mainnet base node hash
+export let BASE_NODE_HASH = "afd4db0f727fe64e5523d0ebcc83d3cc7f59e715ffe6accd2ab8443967ddc925" // mainnet base node hash
 
 // @ts-ignore
 if (NETWORK == "morph-testnet") {
