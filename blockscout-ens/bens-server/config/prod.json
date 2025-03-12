@@ -81,6 +81,14 @@
           "story"
         ]
       },
+      "7000": {
+        "blockscout": {
+          "url": "https://zetachain.blockscout.com/"
+        },
+        "use_protocols": [
+          "zeta"
+        ]
+      },
       "10200": {
         "blockscout": {
           "url": "https://gnosis-chiado.blockscout.com"
