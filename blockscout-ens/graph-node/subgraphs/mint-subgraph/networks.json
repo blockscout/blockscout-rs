@@ -1,0 +1,38 @@
+{
+  "mint-mainnet": {
+    "Registry": {
+      "address": "0x5dc881dda4e4a8d312be3544ad13118d1a04cb17",
+      "startBlock": 2226817
+    },
+    "Resolver": {
+      "startBlock": 2226817
+    },
+    "RegistrarController": {
+      "address": "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7",
+      "startBlock": 2226817
+    },
+    "Base": {
+      "address": "0x5c6cb93b1fc4e0a1274d07852cbd7ebd201b6593",
+      "startBlock": 2226817
+    },
+    "": ""
+  },
+  "mint-sepolia": {
+    "Registry": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Resolver": {
+      "startBlock": 0
+    },
+    "RegistrarController": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Base": {
+      "address": "",
+      "startBlock": 0
+    },
+    "": ""
+  }
+}
