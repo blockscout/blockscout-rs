@@ -10,16 +10,17 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 
 ## Current supported domains
 
-| Subgraph Name | Network | TLD | Note |
-|--------------|---------|-----|------|
-| ens-subgraph | Ethereum | .eth |      |
-| rns-subgraph | Rootstock | .rsk |      |
-| genome-subgraph | Gnosis | .gno | SpaceID contracts |
-| bns-subgraph | Base | .base |      |
-| mode-subgraph | Mode | .mode | SpaceID contracts |
-| lightlink-subgraph | Lightlink | .ll | SpaceID contracts |
-| zns-subgraph | Polygon | .poly |      |
+| Subgraph Name       | Network   | TLD   | Note |
+|---------------------|-----------|-------|------|
+| ens-subgraph        | Ethereum  | .eth  |      |
+| rns-subgraph        | Rootstock | .rsk  |      |
+| genome-subgraph     | Gnosis    | .gno  | SpaceID contracts |
+| bns-subgraph        | Base      | .base |      |
+| mode-subgraph       | Mode      | .mode | SpaceID contracts |
+| lightlink-subgraph  | Lightlink | .ll   | SpaceID contracts |
+| zns-subgraph        | Polygon   | .poly |      |
 | d3-connect-subgraph | Shibarium | .shib |      |
+| zeta-subgraph       | Zeta      | .zeta | SpaceID contracts |
 
 
 ## Envs

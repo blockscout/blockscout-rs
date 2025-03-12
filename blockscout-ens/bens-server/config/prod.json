@@ -535,6 +535,24 @@
           "icon_url": "https://i.imgur.com/yYc2C6V.png",
           "docs_url": "https://docs.space.id/"
         }
+      },
+      "zeta": {
+        "tld_list": ["zeta"],
+        "network_id": 7000,
+        "subgraph_name": "zeta-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x0000000000000000000000000000000000000000",
+          "empty_label_hash": "0x8cd6dbd33b537c3bbd338c88dc2308df525654de6a3384b9b62c231b2e44e3b0"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
       }
     }
   }

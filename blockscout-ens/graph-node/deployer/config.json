@@ -89,6 +89,11 @@
         "subgraph_path": "../subgraphs/story-subgraph",
         "subgraph_name": "story-subgraph",
         "network": "story-mainnet"
+    },
+    "zeta": {
+      "subgraph_path": "../subgraphs/zeta-subgraph",
+      "subgraph_name": "zeta-subgraph",
+      "network": "zeta-mainnet"
     }
   }
 }
