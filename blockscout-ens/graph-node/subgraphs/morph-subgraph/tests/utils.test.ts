@@ -15,7 +15,7 @@ describe("Utils", () => {
 
     assert.bytesEquals(
       Bytes.fromHexString('0x38a7804a53792b0cdefe3e7271b0b85422d620ea4a82df7b7bf750a6d4b297a4'),
-      Bytes.fromByteArray(hashByName('levvv.eth'))
+      Bytes.fromByteArray(hashByName('levvv.mph'))
     )
   })
 });
