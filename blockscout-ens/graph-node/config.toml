@@ -67,4 +67,8 @@ provider = [
     { label = "story-mainnet", url = "https://frequent-hidden-telescope.story-mainnet.quiknode.pro/9934ef7bc4e5bcc89ef9768b5ca2f39fcb937c46", features = [] }
 ]
 shard = "primary"
-
+[chains.gravity-mainnet]
+provider = [
+    { label = "gravity-mainnet", url = "https://rpc-gravity-mainnet-0.t.conduit.xyz/2TyU4Jp6mb7pi6CW4c9HvSDizEwVKMSiv", features = [] }
+]
+shard = "primary"
