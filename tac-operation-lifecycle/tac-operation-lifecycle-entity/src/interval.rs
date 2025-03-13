@@ -10,6 +10,7 @@ pub struct Model {
     pub start: i64,
     pub end: i64,
     pub timestamp: i64,
+    pub status: i16,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

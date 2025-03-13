@@ -1,6 +1,6 @@
 use std::{
-    cmp::max,
-    sync::{atomic::AtomicU64, Arc},
+    cmp::{max, min},
+    sync::{atomic::AtomicU64, Arc}, time::Duration,
 };
 
 use anyhow::Error;
@@ -73,16 +73,19 @@ impl Indexer {
     //generate intervals between current epoch and watermark and save them to db
     #[instrument(name = "save_intervals", skip_all, level = "info")]
     pub async fn save_intervals(&self) -> anyhow::Result<()> {
-        let current_timestamp = chrono::Utc::now().timestamp() as u64;
+        let now = chrono::Utc::now().timestamp() as u64;
         let watermark = self.watermark.load(std::sync::atomic::Ordering::Acquire);
         let batch_size = 1000; // Adjust this based on your needs and database performance
         let catch_up_interval = self.settings.catchup_interval.as_secs() as u64;
-        let intervals: Vec<interval::ActiveModel> = (watermark as u64..current_timestamp)
+        let intervals: Vec<interval::ActiveModel> = (watermark as u64..now)
+            .step_by(catch_up_interval as usize)
             .map(|timestamp| interval::ActiveModel {
                 start: ActiveValue::Set(timestamp as i64),
-                end: ActiveValue::Set((timestamp + catch_up_interval) as i64),
+                //we don't want to save intervals that are in the future
+                end: ActiveValue::Set(min(timestamp + catch_up_interval, now) as i64),
                 timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
                 id: ActiveValue::NotSet,
+                status:sea_orm::ActiveValue::Set(0 as i16)
             })
             .collect();
 
@@ -98,7 +101,6 @@ impl Indexer {
             {
                 Ok(_) => {
                     // Update watermark to the end of the last interval in this batch
-                    let last_interval_end = watermark + (batch_size as u64) * catch_up_interval;
                     
                     // Find existing watermark or create new one
                     let existing_watermark = watermark::Entity::find()
@@ -108,11 +110,11 @@ impl Indexer {
                     let watermark_model = match existing_watermark {
                         Some(w) => watermark::ActiveModel {
                             id: ActiveValue::Unchanged(w.id),
-                            timestamp: ActiveValue::Set(last_interval_end as i64),
+                            timestamp: ActiveValue::Set(now as i64),
                         },
                         None => watermark::ActiveModel {
                             id: ActiveValue::NotSet,
-                            timestamp: ActiveValue::Set(last_interval_end as i64),
+                            timestamp: ActiveValue::Set(now as i64),
                         },
                     };
 
@@ -120,13 +122,14 @@ impl Indexer {
                     watermark_model.save(&tx).await?;
                     
                     // Update the in-memory watermark
-                    self.watermark.store(last_interval_end, std::sync::atomic::Ordering::Release);
                     
-                    tx.commit().await?;
+                    self.watermark.store(now, std::sync::atomic::Ordering::Release);
+                    
+                    tx.commit().await?; 
                     tracing::info!(
                         "Successfully saved batch of {} intervals and updated watermark to {}",
                         chunk.len(),
-                        last_interval_end
+                        now
                     );
                 }
                 Err(e) => {
@@ -143,53 +146,75 @@ impl Indexer {
     pub fn watermark(&self) -> u64 {
         self.watermark.load(std::sync::atomic::Ordering::Acquire)
     }
-    #[instrument(name = "get_next_interval", skip_all, level = "info")]
-    pub async fn get_next_interval(&self) -> anyhow::Result<()> {
-        let current_timestamp = chrono::Utc::now().timestamp();
-        let watermark = self.watermark.load(std::sync::atomic::Ordering::Acquire);
-        let next_interval = interval::ActiveModel {
-            start: ActiveValue::Set(watermark as i64),
-            end: ActiveValue::Set(watermark as i64 + self.settings.catchup_interval.as_secs() as i64),
-            timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
-            id: ActiveValue::NotSet,
-        };
-        // let intervals = (watermark as i64..current_timestamp as i64)
-        //     .map(|timestamp| interval::ActiveModel {
-        //         start: ActiveValue::Set(timestamp),
-        //         end: ActiveValue::Set(timestamp + self.settings.catchup_interval.as_secs() as i64),
-        //         timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
-        //         id: ActiveValue::NotSet,
-        //     })
-        //     .collect::<Vec<_>>();
-
-        // tracing::info!("saving {} intervals", intervals.len());
-        //intitiate a transaction
-        // let tx = self.db.begin().await?;
-        // //save intervals to db
-        // interval::Entity::insert_many(intervals)
-        //     .exec_with_returning(&tx)
-        //     .await?;
-        // //commit the transaction
-        // tx.commit().await?;
-
-        Ok(())
-    }
+    
 
     pub async fn process_job_with_retries(&self, _job: &Job) -> () {
         tracing::info!("processing job");
         ()
     }
+    pub fn poll_for_new_jobs(&self) -> BoxStream<'_, Job> {
+        use sea_orm::{QueryOrder, QuerySelect, QueryTrait};
+        
+        Box::pin(async_stream::stream! {
+            loop {
+                let txn = match self.db.begin().await {
+                    Ok(txn) => txn,
+                    Err(e) => {
+                        tracing::error!("Failed to begin transaction: {}", e);
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        continue;
+                    }
+                };
+
+                // Find pending intervals
+                let pending_intervals = interval::Entity::find()
+                
+                    .filter(interval::Column::Status.eq(0))
+                    .order_by(interval::Column::Start, sea_orm::Order::Desc)
+                    .limit(100)
+                    // .for_update()
+                    // .skip_locked()
+                    .all(&txn)
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::error!("Failed to fetch pending intervals: {}", e);
+                        vec![]
+                    });
+
+                //update status to in-progress
+                for interval in pending_intervals {
+                    let mut interval: interval::ActiveModel = interval.into();
+                    interval.status = sea_orm::ActiveValue::Set(1);
+                    
+                    if let Ok(updated) = interval.update(&txn).await {
+                        println!("updated interval: {:?}", updated);
+                        yield Job {
+                            start: updated.start as u64,
+                            end: updated.end as u64,
+                        };
+                    }
+                }
+
+                // Commit transaction
+                if let Err(e) = txn.commit().await {
+                    tracing::error!("Failed to commit transaction: {}", e);
+                } else {
+                    println!("Transaction committed successfully");
+                }
+
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        })
+    }
+
     #[instrument(name = "indexer", skip_all, level = "info")]
     pub async fn start(&self) -> anyhow::Result<()> {
         tracing::warn!("starting indexer");
         self.save_intervals().await?;
-        let mut stream = stream::SelectAll::<BoxStream<Job>>::new();
-        stream.push(Box::pin(self.catch_up()));
-        // stream.push(Box::pin(self.retry_failed_jobs()));
-        let stream =
-            select_with_strategy(Box::pin(self.poll_for_new_jobs()), stream, |_: &mut ()| {
-                PollNext::Left
-            });
+        
+        let mut stream = stream::SelectAll::<BoxStream<'_, Job>>::new();
+        // stream.push(Box::pin(self.catch_up()));
+        stream.push(self.poll_for_new_jobs());
 
         stream
             .for_each_concurrent(Some(self.settings.concurrency as usize), |job| async move {
@@ -198,24 +223,6 @@ impl Indexer {
             .await;
 
         Ok(())
-    }
-
-    fn poll_for_new_jobs(&self) -> impl Stream<Item = Job> + '_ {
-        repeat_with(move || async {
-            sleep(self.settings.polling_interval).await;
-            tracing::info!("polling for new jobs");
-            Ok(vec![Job {
-                start: 1,
-                end: 100,
-            }])
-        }).filter_map(|fut| async {
-            fut.await
-                .map_err(
-                    |err: Error| tracing::error!(error = ?err, "failed to retrieve unprocessed jobs"),
-                )
-                .ok()
-        }).take_while(|jobs| future::ready(!jobs.is_empty()))
-        .flat_map(stream::iter)
     }
 
     fn catch_up(&self) -> impl Stream<Item = Job> + '_ {
