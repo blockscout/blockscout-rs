@@ -61,6 +61,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Interval::Start).big_integer().not_null())
                     .col(ColumnDef::new(Interval::End).big_integer().not_null())
                     .col(ColumnDef::new(Interval::Timestamp).big_integer().not_null())
+                    .col(ColumnDef::new(Interval::Status).small_unsigned().not_null())
                     .to_owned(),
             )
             .await?;
@@ -131,6 +132,7 @@ enum Interval {
     Start,
     End,
     Timestamp,
+    Status,
 }
 
 #[derive(Iden)]
