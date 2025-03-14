@@ -42,7 +42,7 @@ mod tests {
 
     use tac_operation_lifecycle_logic::{settings::IndexerSettings, Indexer};
     use tac_operation_lifecycle_entity::interval;
-    use migration::sea_orm::EntityTrait;
+    use migration::sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
     use super::*;
     
     #[tokio::test]
@@ -133,6 +133,21 @@ mod tests {
                         "Job interval {:?} doesn't match catchup_interval {}", 
                         (job.end - job.start), catchup_interval.as_secs());
 
+                    // After each job, verify its interval is marked as in-progress
+                    let intervals = interval::Entity::find()
+                        .filter(interval::Column::Start.eq(job.start as i64))
+                        .filter(interval::Column::End.eq(job.end as i64))
+                        .one(db.client().as_ref())
+                        .await.unwrap();
+
+                    if let Some(interval) = intervals {
+                        assert_eq!(interval.status, 1, 
+                            "Interval with start={}, end={} not marked as in-progress", 
+                            interval.start, interval.end);
+                    } else {
+                        panic!("Could not find interval for job {:?}", job);
+                    }
+
                     received_jobs.push(job);
 
                     if received_jobs.len() >= tasks_number as usize {
@@ -164,7 +179,7 @@ mod tests {
 
         
         for interval in intervals {
-            println!("interval: {:?}", interval);
+            // println!("interval: {:?}", interval);
             assert_eq!(interval.status, 1, "Interval {} not marked as in-progress", interval.id);
         }
     }
