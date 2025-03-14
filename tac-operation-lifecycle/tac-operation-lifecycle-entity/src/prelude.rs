@@ -2,5 +2,5 @@
 
 pub use super::interval::Entity as Interval;
 pub use super::operation::Entity as Operation;
-pub use super::status::Entity as Status;
+pub use super::operation_stage::Entity as OperationStage;
 pub use super::watermark::Entity as Watermark;

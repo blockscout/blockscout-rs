@@ -19,20 +19,30 @@ use sea_orm::{ActiveValue, DatabaseConnection, EntityTrait, QueryFilter, Transac
 use settings::IndexerSettings;
 use tac_operation_lifecycle_entity::{interval, watermark};
 use tokio::time::sleep;
+use chrono;
+use tracing::{instrument, Instrument};
+use sea_orm::ActiveModelTrait;
+
+#[derive(Debug, Clone)]
+pub struct Job {
+    pub interval: interval::Model,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum OrderDirection {
+    /// Process intervals from newest to oldest (for new jobs)
+    Descending,
+    /// Process intervals from oldest to newest (for catch up)
+    Ascending,
+}
+
 pub struct Indexer {
     client: Client,
     settings: IndexerSettings,
     watermark: AtomicU64,
     db: Arc<DatabaseConnection>,
 }
-use chrono;
-use tracing::{instrument, Instrument};
-use sea_orm::ActiveModelTrait;
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub struct Job {
-    pub start: u64,
-    pub end: u64,
-}
+
 impl Indexer {
     pub async fn new(
         settings: IndexerSettings,
@@ -85,7 +95,8 @@ impl Indexer {
                 end: ActiveValue::Set(min(timestamp + catch_up_interval, now) as i64),
                 timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
                 id: ActiveValue::NotSet,
-                status:sea_orm::ActiveValue::Set(0 as i16)
+                status:sea_orm::ActiveValue::Set(0 as i16),
+                next_retry: ActiveValue::Set(0 as i64),
             })
             .collect();
 
@@ -148,13 +159,81 @@ impl Indexer {
     }
     
 
-    pub async fn process_job_with_retries(&self, _job: &Job) -> () {
-        tracing::info!("processing job");
-        ()
+    pub async fn process_job_with_retries(&self, job: &Job) -> () {
+        use sea_orm::Set;
+        use tac_operation_lifecycle_entity::{interval, operation};
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        match self.client.get_operations(job.interval.start as u64, job.interval.end as u64).await {
+            Ok(operations) => {
+                // Start a transaction
+                let txn = match self.db.begin().await {
+                    Ok(txn) => txn,
+                    Err(e) => {
+                        tracing::error!("Failed to begin transaction: {}", e);
+                        return;
+                    }
+                };
+
+                // Save all operations
+                for op in operations {
+                    let operation_model = operation::ActiveModel {
+                        operation_id: Set(op.operation_id.parse().unwrap_or(0)),
+                        timestamp: Set(op.timestamp as i64),
+                        status: Set(0), // Status 0 means pending
+                        next_retry: Set(None),
+                    };
+
+                    if let Err(e) = operation_model.insert(&txn).await {
+                        tracing::error!("Failed to insert operation: {}", e);
+                        let _ = txn.rollback().await;
+                        return;
+                    }
+                }
+
+                // Update interval status to finished (2)
+                let mut interval_model: interval::ActiveModel = job.interval.clone().into();
+                interval_model.status = Set(2);
+                
+                if let Err(e) = interval_model.update(&txn).await {
+                    tracing::error!("Failed to update interval status: {}", e);
+                    let _ = txn.rollback().await;
+                    return;
+                }
+
+                // Commit transaction
+                if let Err(e) = txn.commit().await {
+                    tracing::error!("Failed to commit transaction: {}", e);
+                    return;
+                }
+
+                tracing::info!("Successfully processed job: id={}, start={}, end={}", 
+                    job.interval.id, job.interval.start, job.interval.end);
+            }
+            Err(e) => {
+                tracing::error!("Failed to get operations: {}", e);
+                
+                let retries = job.interval.status as u32;
+                let base_delay = 5; // 5 seconds base delay
+                let next_retry = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64 + (base_delay * 2i64.pow(retries)) as i64;
+
+                // Update interval with next retry timestamp and increment retry count
+                let mut interval_model: interval::ActiveModel = job.interval.clone().into();
+                interval_model.next_retry = Set(next_retry);
+                interval_model.status = Set((retries + 1) as i16);
+
+                if let Err(update_err) = interval_model.update(self.db.as_ref()).await {
+                    tracing::error!("Failed to update interval next_retry: {}", update_err);
+                }
+            }
+        }
     }
 
-    pub fn poll_for_new_jobs(&self) -> BoxStream<'_, Job> {
-        use sea_orm::{Statement, FromQueryResult};
+    pub fn job_stream(&self, direction: OrderDirection) -> BoxStream<'_, Job> {
+        use sea_orm::Statement;
         
         Box::pin(async_stream::stream! {
             loop {
@@ -168,17 +247,22 @@ impl Indexer {
                     }
                 };
 
-                // Find and lock a single pending interval with highest priority
+                // Find and lock a single pending interval with specified ordering
+                let order_by = match direction {
+                    OrderDirection::Descending => "DESC",
+                    OrderDirection::Ascending => "ASC",
+                };
+
                 let stmt = Statement::from_sql_and_values(
                     sea_orm::DatabaseBackend::Postgres,
-                    r#"
-                    SELECT id, start, "end", timestamp, status
+                    &format!(r#"
+                    SELECT id, start, "end", timestamp, status, next_retry
                     FROM interval
                     WHERE status = 0
-                    ORDER BY start DESC
+                    ORDER BY start {}
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
-                    "#,
+                    "#, order_by),
                     vec![]
                 );
 
@@ -208,7 +292,7 @@ impl Indexer {
                     UPDATE interval
                     SET status = 1
                     WHERE id = $1
-                    RETURNING id, start, "end", timestamp, status
+                    RETURNING id, start, "end", timestamp, status, next_retry
                     "#,
                     vec![pending_interval.id.into()]
                 );
@@ -225,8 +309,7 @@ impl Indexer {
                             }
 
                             yield Job {
-                                start: updated.start as u64,
-                                end: updated.end as u64,
+                                interval: updated,
                             };
                         }
                         Ok(None) => {
@@ -252,8 +335,8 @@ impl Indexer {
         self.save_intervals().await?;
         
         let mut stream = stream::SelectAll::<BoxStream<'_, Job>>::new();
-        // stream.push(Box::pin(self.catch_up()));
-        stream.push(self.poll_for_new_jobs());
+        stream.push(self.job_stream(OrderDirection::Ascending)); // For catch up
+        stream.push(self.job_stream(OrderDirection::Descending)); // For new jobs
 
         stream
             .for_each_concurrent(Some(self.settings.concurrency as usize), |job| async move {
@@ -262,22 +345,5 @@ impl Indexer {
             .await;
 
         Ok(())
-    }
-
-    fn catch_up(&self) -> impl Stream<Item = Job> + '_ {
-        repeat_with(move || async {
-            sleep(self.settings.polling_interval).await;
-            tracing::info!("catching up");
-            Ok(vec![Job { start: 1, end: 100 }])
-        })
-        .filter_map(|fut| async {
-            fut.await
-            .map_err(
-                |err: Error| tracing::error!(error = ?err, "failed to retrieve unprocessed jobs"),
-            )
-            .ok()
-        })
-        .take_while(|jobs| future::ready(!jobs.is_empty()))
-        .flat_map(stream::iter)
     }
 }
