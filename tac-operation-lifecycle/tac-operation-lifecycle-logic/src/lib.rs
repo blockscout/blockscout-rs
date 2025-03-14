@@ -308,37 +308,11 @@ impl Indexer {
                     interval: updated_interval.clone(),
                 };
 
-                // Yield the job first
+                // Yield the job and continue
                 yield IndexerJob::Interval(job.clone());
-
-                // Then attempt to fetch operations
-                match self.fetch_operations(&job).await {
-                    Ok(_) => {
-                        // Success case is handled inside fetch_operations (sets status to 2)
-                        tracing::info!("Successfully fetched operations for interval {}", job.interval.id);
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to fetch operations: {}", e);
-                        
-                        // Schedule retry
-                        let retries = job.interval.retry_count;
-                        let base_delay = 5; // 5 seconds base delay
-                        let next_retry = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs() as i64 + (base_delay * 2i64.pow(retries as u32)) as i64;
-
-                        // Update interval with next retry timestamp and increment retry count
-                        let mut interval_model: interval::ActiveModel = job.interval.into();
-                        interval_model.next_retry = Set(next_retry);
-                        interval_model.retry_count = Set(retries + 1);
-                        interval_model.status = Set(0); // Reset status to pending
-
-                        if let Err(update_err) = interval_model.update(self.db.as_ref()).await {
-                            tracing::error!("Failed to update interval for retry: {}", update_err);
-                        }
-                    }
-                }
+                
+                // Sleep a bit before next iteration to prevent tight loop
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
         })
     }
@@ -498,15 +472,60 @@ impl Indexer {
             }
     }
 
+    fn prio_left(_: &mut ()) -> PollNext { PollNext::Left }
+
     #[instrument(name = "indexer", skip_all, level = "info")]
     pub async fn start(&self) -> anyhow::Result<()> {
+        use futures::stream::{select_with_strategy, PollNext};
+
         tracing::warn!("starting indexer");
         self.save_intervals().await?;
         
-        let mut stream = stream::SelectAll::<BoxStream<'_, IndexerJob>>::new();
-        stream.push(self.operations_stream(OrderDirection::Ascending)); // For catch up
-        stream.push(self.operations_stream(OrderDirection::Descending)); // For new jobs
-        stream.push(self.operation_stages_stream()); // Add operation stream
+        // Create prioritized streams
+        let high_priority = self.operations_stream(OrderDirection::Descending);
+        let low_priority = self.operations_stream(OrderDirection::Ascending);
+        let operations = self.operation_stages_stream();
+
+        // Combine streams with prioritization (high priority first)
+        let interval_stream = select_with_strategy(high_priority, low_priority, Self::prio_left);
+        let mut combined_stream = select_with_strategy(interval_stream, operations, Self::prio_left);
+
+        // Process the prioritized stream
+        while let Some(job) = combined_stream.next().await {
+            match job {
+                IndexerJob::Interval(job) => {
+                    match self.fetch_operations(&job).await {
+                        Ok(_) => {
+                            tracing::info!("Successfully fetched operations for interval {}", job.interval.id);
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to fetch operations: {}", e);
+                            
+                            // Schedule retry with exponential backoff
+                            let retries = job.interval.retry_count;
+                            let base_delay = 5; // 5 seconds base delay
+                            let next_retry = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs() as i64 + (base_delay * 2i64.pow(retries as u32)) as i64;
+
+                            // Update interval with next retry timestamp and increment retry count
+                            let mut interval_model: interval::ActiveModel = job.interval.into();
+                            interval_model.next_retry = Set(next_retry);
+                            interval_model.retry_count = Set(retries + 1);
+                            interval_model.status = Set(0); // Reset status to pending
+
+                            if let Err(update_err) = interval_model.update(self.db.as_ref()).await {
+                                tracing::error!("Failed to update interval for retry: {}", update_err);
+                            }
+                        }
+                    }
+                }
+                IndexerJob::Operation(job) => {
+                    self.process_operation_with_retries(&job).await;
+                }
+            }
+        }
 
         Ok(())
     }
