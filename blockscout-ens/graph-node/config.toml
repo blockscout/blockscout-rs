@@ -69,6 +69,6 @@ provider = [
 shard = "primary"
 [chains.gravity-mainnet]
 provider = [
-    { label = "gravity-mainnet", url = "https://rpc-gravity-mainnet-0.t.conduit.xyz/2TyU4Jp6mb7pi6CW4c9HvSDizEwVKMSiv", features = [] }
+    { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }
 ]
 shard = "primary"
