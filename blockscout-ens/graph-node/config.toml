@@ -70,6 +70,6 @@ shard = "primary"
 
 [chains.zeta-mainnet]
 provider = [
-    { label = "zeta-mainnet", url = "https://zetachain-evm.blockpi.network/v1/rpc/7d8d8c745895bda27cce0e1c9f080a856364c288", features = [] }
+    { label = "zeta-mainnet", url = "https://zeta-chain.drpc.org", features = [] }
 ]
 shard = "primary"
