@@ -10,6 +10,7 @@ pub struct Model {
     pub timestamp: i64,
     pub next_retry: Option<i64>,
     pub status: i16,
+    pub retry_count: i16,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
