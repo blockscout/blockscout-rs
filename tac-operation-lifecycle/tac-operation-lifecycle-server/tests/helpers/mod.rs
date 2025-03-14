@@ -108,7 +108,7 @@ mod tests {
         // Test both directions
         for direction in [OrderDirection::Descending, OrderDirection::Ascending] {
             // Get the stream of jobs
-            let mut job_stream = indexer.fetch_interval_stream(direction);
+            let mut job_stream = indexer.operations_stream(direction);
             
             // Collect all jobs from the stream (we'll break after getting expected number)
             let mut received_jobs = Vec::new();
