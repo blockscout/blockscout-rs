@@ -24,6 +24,7 @@ use tokio::time::sleep;
 use chrono;
 use tracing::{instrument, Instrument};
 use sea_orm::ActiveModelTrait;
+use sea_orm::Set;
 
 #[derive(Debug, Clone)]
 pub struct Job {
@@ -173,83 +174,47 @@ impl Indexer {
     }
     
 
-    pub async fn fetch_operations(&self, job: &Job) -> () {
+    pub async fn fetch_operations(&self, job: &Job) -> Result<(), Error> {
         use sea_orm::Set;
         use tac_operation_lifecycle_entity::{interval, operation};
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        match self.client.get_operations(job.interval.start as u64, job.interval.end as u64).await {
-            Ok(operations) => {
-                // Start a transaction
-                let txn = match self.db.begin().await {
-                    Ok(txn) => txn,
-                    Err(e) => {
-                        tracing::error!("Failed to begin transaction: {}", e);
-                        return;
-                    }
-                };
+        let operations = self.client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
+        
+        // Start a transaction
+        let txn = self.db.begin().await?;
 
-                // Save all operations
-                for op in operations {
-                    let operation_model = operation::ActiveModel {
-                        operation_id: Set(op.operation_id.parse().unwrap_or(0)),
-                        timestamp: Set(op.timestamp as i64),
-                        status: Set(0), // Status 0 means pending
-                        next_retry: Set(None),
-                        retry_count: Set(0), // Initialize retry count
-                    };
+        // Save all operations
+        for op in operations {
+            let operation_model = operation::ActiveModel {
+                operation_id: Set(op.operation_id.parse().unwrap_or(0)),
+                timestamp: Set(op.timestamp as i64),
+                status: Set(0), // Status 0 means pending
+                next_retry: Set(None),
+                retry_count: Set(0), // Initialize retry count
+            };
 
-                    if let Err(e) = operation_model.insert(&txn).await {
-                        tracing::error!("Failed to insert operation: {}", e);
-                        let _ = txn.rollback().await;
-                        return;
-                    }
-                }
-
-                // Update interval status to finished (2)
-                let mut interval_model: interval::ActiveModel = job.interval.clone().into();
-                interval_model.status = Set(2);
-                
-                if let Err(e) = interval_model.update(&txn).await {
-                    tracing::error!("Failed to update interval status: {}", e);
-                    let _ = txn.rollback().await;
-                    return;
-                }
-
-                // Commit transaction
-                if let Err(e) = txn.commit().await {
-                    tracing::error!("Failed to commit transaction: {}", e);
-                    return;
-                }
-
-                tracing::info!("Successfully processed job: id={}, start={}, end={}", 
-                    job.interval.id, job.interval.start, job.interval.end);
-            }
-            Err(e) => {
-                tracing::error!("Failed to get operations: {}", e);
-                
-                let retries = job.interval.retry_count;
-                let base_delay = 5; // 5 seconds base delay
-                let next_retry = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as i64 + (base_delay * 2i64.pow(retries as u32)) as i64;
-
-                // Update interval with next retry timestamp and increment retry count
-                let mut interval_model: interval::ActiveModel = job.interval.clone().into();
-                interval_model.next_retry = Set(next_retry);
-                interval_model.retry_count = Set(retries + 1);
-                interval_model.status = Set(0); // Keep status as pending
-
-                if let Err(update_err) = interval_model.update(self.db.as_ref()).await {
-                    tracing::error!("Failed to update interval next_retry: {}", update_err);
-                }
-            }
+            operation_model.insert(&txn).await?;
         }
+
+        // Update interval status to finished (2)
+        let mut interval_model: interval::ActiveModel = job.interval.clone().into();
+        interval_model.status = Set(2);
+        
+        interval_model.update(&txn).await?;
+
+        // Commit transaction
+        txn.commit().await?;
+
+        tracing::info!("Successfully processed job: id={}, start={}, end={}", 
+            job.interval.id, job.interval.start, job.interval.end);
+
+        Ok(())
     }
 
     pub fn operations_stream(&self, direction: OrderDirection) -> BoxStream<'_, IndexerJob> {
         use sea_orm::Statement;
+        use std::time::{SystemTime, UNIX_EPOCH};
         
         Box::pin(async_stream::stream! {
             loop {
@@ -272,7 +237,7 @@ impl Indexer {
                 let stmt = Statement::from_sql_and_values(
                     sea_orm::DatabaseBackend::Postgres,
                     &format!(r#"
-                    SELECT id, start, "end", timestamp, status, next_retry
+                    SELECT id, start, "end", timestamp, status, next_retry, retry_count
                     FROM interval
                     WHERE status = 0
                     ORDER BY start {}
@@ -301,32 +266,29 @@ impl Indexer {
                         }
                     };
 
-                // Update the interval status
+                // Update the interval status to in-progress (1)
                 let update_stmt = Statement::from_sql_and_values(
                     sea_orm::DatabaseBackend::Postgres,
                     r#"
                     UPDATE interval
                     SET status = 1
                     WHERE id = $1
-                    RETURNING id, start, "end", timestamp, status, next_retry
+                    RETURNING id, start, "end", timestamp, status, next_retry, retry_count
                     "#,
                     vec![pending_interval.id.into()]
                 );
 
-                match interval::Entity::find()
+                let updated_interval = match interval::Entity::find()
                     .from_raw_sql(update_stmt)
                     .one(&txn)
                     .await {
                         Ok(Some(updated)) => {
-                            // Commit the transaction before yielding
+                            // Commit the transaction before proceeding
                             if let Err(e) = txn.commit().await {
                                 tracing::error!("Failed to commit transaction: {}", e);
                                 continue;
                             }
-
-                            yield IndexerJob::Interval(Job {
-                                interval: updated,
-                            });
+                            updated
                         }
                         Ok(None) => {
                             tracing::error!("Failed to update interval: no rows returned");
@@ -340,7 +302,43 @@ impl Indexer {
                             tokio::time::sleep(Duration::from_millis(500)).await;
                             continue;
                         }
+                    };
+
+                let job = Job {
+                    interval: updated_interval.clone(),
+                };
+
+                // Yield the job first
+                yield IndexerJob::Interval(job.clone());
+
+                // Then attempt to fetch operations
+                match self.fetch_operations(&job).await {
+                    Ok(_) => {
+                        // Success case is handled inside fetch_operations (sets status to 2)
+                        tracing::info!("Successfully fetched operations for interval {}", job.interval.id);
                     }
+                    Err(e) => {
+                        tracing::error!("Failed to fetch operations: {}", e);
+                        
+                        // Schedule retry
+                        let retries = job.interval.retry_count;
+                        let base_delay = 5; // 5 seconds base delay
+                        let next_retry = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs() as i64 + (base_delay * 2i64.pow(retries as u32)) as i64;
+
+                        // Update interval with next retry timestamp and increment retry count
+                        let mut interval_model: interval::ActiveModel = job.interval.into();
+                        interval_model.next_retry = Set(next_retry);
+                        interval_model.retry_count = Set(retries + 1);
+                        interval_model.status = Set(0); // Reset status to pending
+
+                        if let Err(update_err) = interval_model.update(self.db.as_ref()).await {
+                            tracing::error!("Failed to update interval for retry: {}", update_err);
+                        }
+                    }
+                }
             }
         })
     }
