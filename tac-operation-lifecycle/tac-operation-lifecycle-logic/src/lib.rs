@@ -152,11 +152,13 @@ impl Indexer {
         tracing::info!("processing job");
         ()
     }
+
     pub fn poll_for_new_jobs(&self) -> BoxStream<'_, Job> {
-        use sea_orm::{QueryOrder, QuerySelect, QueryTrait};
+        use sea_orm::{Statement, FromQueryResult};
         
         Box::pin(async_stream::stream! {
             loop {
+                // Start transaction
                 let txn = match self.db.begin().await {
                     Ok(txn) => txn,
                     Err(e) => {
@@ -166,43 +168,80 @@ impl Indexer {
                     }
                 };
 
-                // Find pending intervals
-                let pending_intervals = interval::Entity::find()
-                
-                    .filter(interval::Column::Status.eq(0))
-                    .order_by(interval::Column::Start, sea_orm::Order::Desc)
-                    .limit(100)
-                    // .for_update()
-                    // .skip_locked()
-                    .all(&txn)
-                    .await
-                    .unwrap_or_else(|e| {
-                        tracing::error!("Failed to fetch pending intervals: {}", e);
-                        vec![]
-                    });
+                // Find and lock a single pending interval with highest priority
+                let stmt = Statement::from_sql_and_values(
+                    sea_orm::DatabaseBackend::Postgres,
+                    r#"
+                    SELECT id, start, "end", timestamp, status
+                    FROM interval
+                    WHERE status = 0
+                    ORDER BY start DESC
+                    LIMIT 1
+                    FOR UPDATE SKIP LOCKED
+                    "#,
+                    vec![]
+                );
 
-                //update status to in-progress
-                for interval in pending_intervals {
-                    let mut interval: interval::ActiveModel = interval.into();
-                    interval.status = sea_orm::ActiveValue::Set(1);
-                    
-                    if let Ok(updated) = interval.update(&txn).await {
-                        println!("updated interval: {:?}", updated);
-                        yield Job {
-                            start: updated.start as u64,
-                            end: updated.end as u64,
-                        };
+                let pending_interval = match interval::Entity::find()
+                    .from_raw_sql(stmt)
+                    .one(&txn)
+                    .await {
+                        Ok(Some(interval)) => interval,
+                        Ok(None) => {
+                            // No pending intervals, release transaction and wait
+                            let _ = txn.commit().await;
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            continue;
+                        },
+                        Err(e) => {
+                            tracing::error!("Failed to fetch pending interval: {}", e);
+                            let _ = txn.rollback().await;
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            continue;
+                        }
+                    };
+
+                // Update the interval status
+                let update_stmt = Statement::from_sql_and_values(
+                    sea_orm::DatabaseBackend::Postgres,
+                    r#"
+                    UPDATE interval
+                    SET status = 1
+                    WHERE id = $1
+                    RETURNING id, start, "end", timestamp, status
+                    "#,
+                    vec![pending_interval.id.into()]
+                );
+
+                match interval::Entity::find()
+                    .from_raw_sql(update_stmt)
+                    .one(&txn)
+                    .await {
+                        Ok(Some(updated)) => {
+                            // Commit the transaction before yielding
+                            if let Err(e) = txn.commit().await {
+                                tracing::error!("Failed to commit transaction: {}", e);
+                                continue;
+                            }
+
+                            yield Job {
+                                start: updated.start as u64,
+                                end: updated.end as u64,
+                            };
+                        }
+                        Ok(None) => {
+                            tracing::error!("Failed to update interval: no rows returned");
+                            let _ = txn.rollback().await;
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            continue;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to update interval: {}", e);
+                            let _ = txn.rollback().await;
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            continue;
+                        }
                     }
-                }
-
-                // Commit transaction
-                if let Err(e) = txn.commit().await {
-                    tracing::error!("Failed to commit transaction: {}", e);
-                } else {
-                    println!("Transaction committed successfully");
-                }
-
-                tokio::time::sleep(Duration::from_millis(500)).await;
             }
         })
     }
