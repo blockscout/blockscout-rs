@@ -40,7 +40,7 @@ mod tests {
     use std::time;
     use rand::Rng;
 
-    use tac_operation_lifecycle_logic::{settings::IndexerSettings, Indexer};
+    use tac_operation_lifecycle_logic::{settings::IndexerSettings, Indexer, OrderDirection};
     use tac_operation_lifecycle_entity::interval;
     use migration::sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
     use super::*;
@@ -83,11 +83,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_poll_for_new_jobs() {
+    async fn test_job_stream() {
         use std::collections::HashSet;
 
         // Initialize test database and create indexer with test settings
-        let db = init_db("test_poll_jobs", "test").await;
+        let db = init_db("test_job_stream", "test").await;
         let catchup_interval = time::Duration::from_secs(10); // Use fixed interval for predictable testing
         let tasks_number = 5; // Use fixed number of tasks for predictable testing
         let current_epoch = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs();
@@ -105,82 +105,86 @@ mod tests {
         // Save intervals first
         indexer.save_intervals().await.unwrap();
 
-        // Get the stream of jobs
-        let mut job_stream = indexer.poll_for_new_jobs();
-        
-        // Collect all jobs from the stream (we'll break after getting expected number)
-        let mut received_jobs = Vec::new();
-        let mut seen_intervals = HashSet::new();
+        // Test both directions
+        for direction in [OrderDirection::Descending, OrderDirection::Ascending] {
+            // Get the stream of jobs
+            let mut job_stream = indexer.job_stream(direction);
+            
+            // Collect all jobs from the stream (we'll break after getting expected number)
+            let mut received_jobs = Vec::new();
+            let mut seen_intervals = HashSet::new();
 
-        // We'll collect jobs for a short time to get the initial batch
-        let timeout = tokio::time::sleep(tokio::time::Duration::from_secs(1));
-        tokio::pin!(timeout);
+            // We'll collect jobs for a short time to get the initial batch
+            let timeout = tokio::time::sleep(tokio::time::Duration::from_secs(1));
+            tokio::pin!(timeout);
 
-        loop {
-            tokio::select! {
-                Some(job) = job_stream.next() => {
-                    // Ensure we haven't seen this interval before
-                    let interval_key = (job.start, job.end);
-                    assert!(!seen_intervals.contains(&interval_key), "Received duplicate interval: {:?}", interval_key);
-                    seen_intervals.insert(interval_key);
-                    
-                    // Verify job timestamps are within expected range
-                    assert!(job.start >= start_timestamp, "Job start time {} is before start_timestamp {}", job.start, start_timestamp);
-                    assert!(job.end <= current_epoch, "Job end time {} is after current_epoch {}", job.end, current_epoch);
-                    
-                    // Verify job interval matches catchup_interval
-                    assert_eq!(job.end - job.start, catchup_interval.as_secs(), 
-                        "Job interval {:?} doesn't match catchup_interval {}", 
-                        (job.end - job.start), catchup_interval.as_secs());
+            loop {
+                tokio::select! {
+                    Some(job) = job_stream.next() => {
+                        // Ensure we haven't seen this interval before
+                        let interval_key = (job.interval.start, job.interval.end);
+                        let (start, end) = interval_key;
+                        assert!(!seen_intervals.contains(&interval_key), "Received duplicate interval: {:?}", interval_key);
+                        seen_intervals.insert(interval_key);
+                        
+                        // Verify job timestamps are within expected range
+                        assert!(start >= start_timestamp as i64, "Job start time {} is before start_timestamp {}", start, start_timestamp);
+                        assert!(end <= current_epoch as i64, "Job end time {} is after current_epoch {}", end, current_epoch);
+                        
+                        // Verify job interval matches catchup_interval
+                        assert_eq!(end - start, catchup_interval.as_secs() as i64, 
+                            "Job interval {:?} doesn't match catchup_interval {}", 
+                            (end - start), catchup_interval.as_secs());
 
-                    // After each job, verify its interval is marked as in-progress
-                    let intervals = interval::Entity::find()
-                        .filter(interval::Column::Start.eq(job.start as i64))
-                        .filter(interval::Column::End.eq(job.end as i64))
-                        .one(db.client().as_ref())
-                        .await.unwrap();
+                        // After each job, verify its interval is marked as in-progress
+                        let intervals = interval::Entity::find()
+                            .filter(interval::Column::Start.eq(start))
+                            .filter(interval::Column::End.eq(end))
+                            .one(db.client().as_ref())
+                            .await.unwrap();
 
-                    if let Some(interval) = intervals {
-                        assert_eq!(interval.status, 1, 
-                            "Interval with start={}, end={} not marked as in-progress", 
-                            interval.start, interval.end);
-                    } else {
-                        panic!("Could not find interval for job {:?}", job);
+                        if let Some(interval) = intervals {
+                            assert_eq!(interval.status, 1, 
+                                "Interval with start={}, end={} not marked as in-progress", 
+                                start, end);
+                        } else {
+                            panic!("Could not find interval for job {:?}", job);
+                        }
+
+                        received_jobs.push(job);
+
+                        if received_jobs.len() >= tasks_number as usize {
+                            break;
+                        }
                     }
-
-                    received_jobs.push(job);
-
-                    if received_jobs.len() >= tasks_number as usize {
+                    _ = &mut timeout => {
                         break;
                     }
                 }
-                _ = &mut timeout => {
-                    break;
+            }
+
+            // Verify we received all expected jobs
+            assert_eq!(received_jobs.len(), tasks_number as usize, 
+                "Did not receive expected number of jobs. Got {}, expected {}", 
+                received_jobs.len(), tasks_number);
+
+            // Verify jobs are in the correct order based on direction
+            for i in 1..received_jobs.len() {
+                match direction {
+                    OrderDirection::Descending => {
+                        assert!(received_jobs[i-1].interval.start > received_jobs[i].interval.start, 
+                            "Jobs not in descending order: {:?} before {:?}", 
+                            received_jobs[i-1], received_jobs[i]);
+                    }
+                    OrderDirection::Ascending => {
+                        assert!(received_jobs[i-1].interval.start < received_jobs[i].interval.start, 
+                            "Jobs not in ascending order: {:?} before {:?}", 
+                            received_jobs[i-1], received_jobs[i]);
+                    }
                 }
             }
-        }
 
-        // Verify we received all expected jobs
-        assert_eq!(received_jobs.len(), tasks_number as usize, 
-            "Did not receive expected number of jobs. Got {}, expected {}", 
-            received_jobs.len(), tasks_number);
-
-        // Verify jobs are in descending order by start time
-        for i in 1..received_jobs.len() {
-            assert!(received_jobs[i-1].start > received_jobs[i].start, 
-                "Jobs not in descending order: {:?} before {:?}", 
-                received_jobs[i-1], received_jobs[i]);
-        }
-
-        // Verify all intervals are now marked as in-progress
-        let intervals = interval::Entity::find()
-            .all(db.client().as_ref())
-            .await.unwrap();
-
-        
-        for interval in intervals {
-            // println!("interval: {:?}", interval);
-            assert_eq!(interval.status, 1, "Interval {} not marked as in-progress", interval.id);
+           
         }
     }
 }
