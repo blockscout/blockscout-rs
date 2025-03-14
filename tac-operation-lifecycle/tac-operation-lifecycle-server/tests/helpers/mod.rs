@@ -40,7 +40,7 @@ mod tests {
     use std::time;
     use rand::Rng;
 
-    use tac_operation_lifecycle_logic::{settings::IndexerSettings, Indexer, OrderDirection};
+    use tac_operation_lifecycle_logic::{settings::IndexerSettings, Indexer, IndexerJob, OrderDirection};
     use tac_operation_lifecycle_entity::interval;
     use migration::sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
     use super::*;
@@ -121,40 +121,49 @@ mod tests {
             loop {
                 tokio::select! {
                     Some(job) = job_stream.next() => {
-                        // Ensure we haven't seen this interval before
-                        let interval_key = (job.interval.start, job.interval.end);
-                        let (start, end) = interval_key;
-                        assert!(!seen_intervals.contains(&interval_key), "Received duplicate interval: {:?}", interval_key);
-                        seen_intervals.insert(interval_key);
-                        
-                        // Verify job timestamps are within expected range
-                        assert!(start >= start_timestamp as i64, "Job start time {} is before start_timestamp {}", start, start_timestamp);
-                        assert!(end <= current_epoch as i64, "Job end time {} is after current_epoch {}", end, current_epoch);
-                        
-                        // Verify job interval matches catchup_interval
-                        assert_eq!(end - start, catchup_interval.as_secs() as i64, 
-                            "Job interval {:?} doesn't match catchup_interval {}", 
-                            (end - start), catchup_interval.as_secs());
+                        // Pattern match on the job type
+                        match job {
+                            IndexerJob::Interval(interval_job) => {
+                                // Ensure we haven't seen this interval before
+                                let interval_key = (interval_job.interval.start, interval_job.interval.end);
+                                let (start, end) = interval_key;
+                                assert!(!seen_intervals.contains(&interval_key), "Received duplicate interval: {:?}", interval_key);
+                                seen_intervals.insert(interval_key);
+                                
+                                // Verify job timestamps are within expected range
+                                assert!(start >= start_timestamp as i64, "Job start time {} is before start_timestamp {}", start, start_timestamp);
+                                assert!(end <= current_epoch as i64, "Job end time {} is after current_epoch {}", end, current_epoch);
+                                
+                                // Verify job interval matches catchup_interval
+                                assert_eq!(end - start, catchup_interval.as_secs() as i64, 
+                                    "Job interval {:?} doesn't match catchup_interval {}", 
+                                    (end - start), catchup_interval.as_secs());
 
-                        // After each job, verify its interval is marked as in-progress
-                        let intervals = interval::Entity::find()
-                            .filter(interval::Column::Start.eq(start))
-                            .filter(interval::Column::End.eq(end))
-                            .one(db.client().as_ref())
-                            .await.unwrap();
+                                // After each job, verify its interval is marked as in-progress
+                                let intervals = interval::Entity::find()
+                                    .filter(interval::Column::Start.eq(start))
+                                    .filter(interval::Column::End.eq(end))
+                                    .one(db.client().as_ref())
+                                    .await.unwrap();
 
-                        if let Some(interval) = intervals {
-                            assert_eq!(interval.status, 1, 
-                                "Interval with start={}, end={} not marked as in-progress", 
-                                start, end);
-                        } else {
-                            panic!("Could not find interval for job {:?}", job);
-                        }
+                                if let Some(interval) = intervals {
+                                    assert_eq!(interval.status, 1, 
+                                        "Interval with start={}, end={} not marked as in-progress", 
+                                        start, end);
+                                } else {
+                                    panic!("Could not find interval for job {:?}", interval_job);
+                                }
 
-                        received_jobs.push(job);
+                                received_jobs.push(interval_job);
 
-                        if received_jobs.len() >= tasks_number as usize {
-                            break;
+                                if received_jobs.len() >= tasks_number as usize {
+                                    break;
+                                }
+                            },
+                            IndexerJob::Operation(_) => {
+                                // Skip operation jobs in this test as we're only testing intervals
+                                continue;
+                            }
                         }
                     }
                     _ = &mut timeout => {

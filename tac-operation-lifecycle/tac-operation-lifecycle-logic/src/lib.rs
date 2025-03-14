@@ -35,6 +35,12 @@ pub struct OperationJob {
     pub operation: operation::Model,
 }
 
+#[derive(Debug, Clone)]
+pub enum IndexerJob {
+    Interval(Job),
+    Operation(OperationJob),
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum OrderDirection {
     /// Process intervals from newest to oldest (for new jobs)
@@ -242,7 +248,7 @@ impl Indexer {
         }
     }
 
-    pub fn fetch_interval_stream(&self, direction: OrderDirection) -> BoxStream<'_, Job> {
+    pub fn fetch_interval_stream(&self, direction: OrderDirection) -> BoxStream<'_, IndexerJob> {
         use sea_orm::Statement;
         
         Box::pin(async_stream::stream! {
@@ -318,9 +324,9 @@ impl Indexer {
                                 continue;
                             }
 
-                            yield Job {
+                            yield IndexerJob::Interval(Job {
                                 interval: updated,
-                            };
+                            });
                         }
                         Ok(None) => {
                             tracing::error!("Failed to update interval: no rows returned");
@@ -339,7 +345,7 @@ impl Indexer {
         })
     }
 
-    pub fn fetch_operation_stream(&self) -> BoxStream<'_, OperationJob> {
+    pub fn fetch_operation_stream(&self) -> BoxStream<'_, IndexerJob> {
         Box::pin(async_stream::stream! {
             loop {
                 // Start transaction
@@ -408,9 +414,9 @@ impl Indexer {
                                 continue;
                             }
 
-                            yield OperationJob {
+                            yield IndexerJob::Operation(OperationJob {
                                 operation: updated,
-                            };
+                            });
                         }
                         Ok(None) => {
                             tracing::error!("Failed to update operation: no rows returned");
@@ -499,24 +505,10 @@ impl Indexer {
         tracing::warn!("starting indexer");
         self.save_intervals().await?;
         
-        let mut stream = stream::SelectAll::<BoxStream<'_, Job>>::new();
+        let mut stream = stream::SelectAll::<BoxStream<'_, IndexerJob>>::new();
         stream.push(self.fetch_interval_stream(OrderDirection::Ascending)); // For catch up
         stream.push(self.fetch_interval_stream(OrderDirection::Descending)); // For new jobs
-
-        
-        let operation_stream = self.fetch_operation_stream();
-
-        // stream.push(operation_stream);
-        // let (interval_stream, operation_stream) = futures::join!(
-        //     stream
-        //         .for_each_concurrent(Some(self.settings.concurrency as usize), |job| async move {
-        //             self.fetch_operations(&job).await
-        //         }),
-        //     operation_stream
-        //         .for_each_concurrent(Some(self.settings.concurrency as usize), |job| async move {
-        //             self.process_operation_with_retries(&job).await
-        //         })
-        // );
+        stream.push(self.fetch_operation_stream()); // Add operation stream
 
         Ok(())
     }
