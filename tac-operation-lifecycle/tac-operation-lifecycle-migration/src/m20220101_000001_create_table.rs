@@ -23,6 +23,8 @@ impl MigrationTrait for Migration {
                             .big_integer()
                             .not_null(),
                     )
+                    .col(ColumnDef::new(Operation::NextRetry).big_integer())
+                    .col(ColumnDef::new(Operation::Status).small_unsigned().not_null())
                     .to_owned(),
             )
             .await?;
@@ -30,18 +32,18 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(Status::Table)
+                    .table(OperationStage::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(Status::Id)
+                        ColumnDef::new(OperationStage::Id)
                             .integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Status::OperationId).integer().not_null())
-                    .col(ColumnDef::new(Status::Status).string().not_null())
-                    .col(ColumnDef::new(Status::Timestamp).big_integer().not_null())
+                    .col(ColumnDef::new(OperationStage::OperationId).integer().not_null())
+                    .col(ColumnDef::new(OperationStage::Stage).string().not_null())
+                    .col(ColumnDef::new(OperationStage::Timestamp).big_integer().not_null())
                     .to_owned(),
             )
             .await?;
@@ -62,6 +64,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Interval::End).big_integer().not_null())
                     .col(ColumnDef::new(Interval::Timestamp).big_integer().not_null())
                     .col(ColumnDef::new(Interval::Status).small_unsigned().not_null())
+                    .col(ColumnDef::new(Interval::NextRetry).big_integer().not_null())
                     .to_owned(),
             )
             .await?;
@@ -80,7 +83,7 @@ impl MigrationTrait for Migration {
             .create_foreign_key(
                 ForeignKey::create()
                     .name("fk_operation_status")
-                    .from(Status::Table, Status::OperationId)
+                    .from(OperationStage::Table, OperationStage::OperationId)
                     .to(Operation::Table, Operation::OperationId)
                     .on_delete(ForeignKeyAction::Cascade)
                     .to_owned(),
@@ -92,7 +95,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(Status::Table).to_owned())
+            .drop_table(Table::drop().table(OperationStage::Table).to_owned())
             .await?;
         manager
             .drop_table(Table::drop().table(Operation::Table).to_owned())
@@ -114,14 +117,16 @@ enum Operation {
     Table,
     OperationId,
     Timestamp,
+    NextRetry,
+    Status,
 }
 
 #[derive(Iden)]
-enum Status {
+enum OperationStage {
     Id,
     Table,
     OperationId,
-    Status,
+    Stage,
     Timestamp,
 }
 
@@ -133,6 +138,7 @@ enum Interval {
     End,
     Timestamp,
     Status,
+    NextRetry,
 }
 
 #[derive(Iden)]

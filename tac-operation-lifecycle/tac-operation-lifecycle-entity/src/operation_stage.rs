@@ -3,24 +3,30 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "operation")]
+#[sea_orm(table_name = "operation_stage")]
 pub struct Model {
     #[sea_orm(primary_key)]
+    pub id: i32,
     pub operation_id: i32,
+    pub stage: String,
     pub timestamp: i64,
-    pub next_retry: Option<i64>,
-    pub status: i16,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::operation_stage::Entity")]
-    OperationStage,
+    #[sea_orm(
+        belongs_to = "super::operation::Entity",
+        from = "Column::OperationId",
+        to = "super::operation::Column::OperationId",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Operation,
 }
 
-impl Related<super::operation_stage::Entity> for Entity {
+impl Related<super::operation::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::OperationStage.def()
+        Relation::Operation.def()
     }
 }
 
