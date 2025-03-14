@@ -248,7 +248,7 @@ impl Indexer {
         }
     }
 
-    pub fn fetch_interval_stream(&self, direction: OrderDirection) -> BoxStream<'_, IndexerJob> {
+    pub fn operations_stream(&self, direction: OrderDirection) -> BoxStream<'_, IndexerJob> {
         use sea_orm::Statement;
         
         Box::pin(async_stream::stream! {
@@ -345,7 +345,7 @@ impl Indexer {
         })
     }
 
-    pub fn fetch_operation_stream(&self) -> BoxStream<'_, IndexerJob> {
+    pub fn operation_stages_stream(&self) -> BoxStream<'_, IndexerJob> {
         Box::pin(async_stream::stream! {
             loop {
                 // Start transaction
@@ -506,9 +506,9 @@ impl Indexer {
         self.save_intervals().await?;
         
         let mut stream = stream::SelectAll::<BoxStream<'_, IndexerJob>>::new();
-        stream.push(self.fetch_interval_stream(OrderDirection::Ascending)); // For catch up
-        stream.push(self.fetch_interval_stream(OrderDirection::Descending)); // For new jobs
-        stream.push(self.fetch_operation_stream()); // Add operation stream
+        stream.push(self.operations_stream(OrderDirection::Ascending)); // For catch up
+        stream.push(self.operations_stream(OrderDirection::Descending)); // For new jobs
+        stream.push(self.operation_stages_stream()); // Add operation stream
 
         Ok(())
     }
