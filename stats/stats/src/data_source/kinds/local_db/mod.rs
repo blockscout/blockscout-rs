@@ -365,7 +365,7 @@ mod tests {
 
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalTxns::update_recursively(&cx).await.unwrap();
-        assert_eq!("57", get_counter::<TotalTxns>(&cx).await.value);
+        assert_eq!("58", get_counter::<TotalTxns>(&cx).await.value);
 
         // Reindex blockscout data
         imitate_reindex(&blockscout, current_date).await;
@@ -379,7 +379,7 @@ mod tests {
             .unwrap();
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalTxns::update_recursively(&cx).await.unwrap();
-        assert_eq!("65", get_counter::<TotalTxns>(&cx).await.value);
+        assert_eq!("66", get_counter::<TotalTxns>(&cx).await.value);
     }
 
     mod update_itself_is_triggered_once_per_group {

@@ -190,7 +190,7 @@ mod tests {
                 ("2022-11-09", "1"),
                 ("2022-11-10", "3"),
                 ("2022-11-11", "4"),
-                ("2023-03-01", "1"),
+                ("2023-03-01", "2"),
             ],
         )
         .await;
@@ -201,7 +201,7 @@ mod tests {
     async fn update_new_accounts_weekly() {
         simple_test_chart_with_migration_variants::<NewAccountsWeekly>(
             "update_new_accounts_weekly",
-            vec![("2022-11-07", "8"), ("2023-02-27", "1")],
+            vec![("2022-11-07", "8"), ("2023-02-27", "2")],
         )
         .await;
     }
@@ -211,7 +211,7 @@ mod tests {
     async fn update_new_accounts_monthly() {
         simple_test_chart_with_migration_variants::<NewAccountsMonthly>(
             "update_new_accounts_monthly",
-            vec![("2022-11-01", "8"), ("2023-03-01", "1")],
+            vec![("2022-11-01", "8"), ("2023-03-01", "2")],
         )
         .await;
     }
@@ -221,7 +221,7 @@ mod tests {
     async fn update_new_accounts_yearly() {
         simple_test_chart_with_migration_variants::<NewAccountsYearly>(
             "update_new_accounts_yearly",
-            vec![("2022-01-01", "8"), ("2023-01-01", "1")],
+            vec![("2022-01-01", "8"), ("2023-01-01", "2")],
         )
         .await;
     }
