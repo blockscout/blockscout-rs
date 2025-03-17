@@ -7,9 +7,11 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub operation_id: i32,
-    pub stage: String,
+    pub operation_id: String,
+    pub stage_type_id: i32,
+    pub success: bool,
     pub timestamp: i64,
+    pub note: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -17,16 +19,38 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::operation::Entity",
         from = "Column::OperationId",
-        to = "super::operation::Column::OperationId",
+        to = "super::operation::Column::Id",
         on_update = "NoAction",
         on_delete = "Cascade"
     )]
     Operation,
+    #[sea_orm(
+        belongs_to = "super::stage_type::Entity",
+        from = "Column::StageTypeId",
+        to = "super::stage_type::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Restrict"
+    )]
+    StageType,
+    #[sea_orm(has_many = "super::transaction::Entity")]
+    Transaction,
 }
 
 impl Related<super::operation::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Operation.def()
+    }
+}
+
+impl Related<super::stage_type::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::StageType.def()
+    }
+}
+
+impl Related<super::transaction::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Transaction.def()
     }
 }
 

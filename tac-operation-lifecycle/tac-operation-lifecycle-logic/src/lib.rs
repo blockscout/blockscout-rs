@@ -110,7 +110,7 @@ impl Indexer {
                 timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
                 id: ActiveValue::NotSet,
                 status:sea_orm::ActiveValue::Set(0 as i16),
-                next_retry: ActiveValue::Set(0 as i64),
+                next_retry: ActiveValue::Set(None),
                 retry_count: ActiveValue::Set(0 as i16),
             })
             .collect();
@@ -177,7 +177,7 @@ impl Indexer {
     pub async fn fetch_operations(&self, job: &Job) -> Result<(), Error> {
         use sea_orm::Set;
         use tac_operation_lifecycle_entity::{interval, operation};
-        use std::time::{SystemTime, UNIX_EPOCH};
+        
 
         let operations = self.client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
         
@@ -187,7 +187,8 @@ impl Indexer {
         // Save all operations
         for op in operations {
             let operation_model = operation::ActiveModel {
-                operation_id: Set(op.operation_id.parse().unwrap_or(0)),
+                id: Set(op.operation_id),
+                operation_type: Set(None),
                 timestamp: Set(op.timestamp as i64),
                 status: Set(0), // Status 0 means pending
                 next_retry: Set(None),
@@ -369,10 +370,10 @@ impl Indexer {
                     r#"
                     UPDATE operation
                     SET status = 1
-                    WHERE operation_id = $1
-                    RETURNING operation_id, timestamp, status, next_retry
+                    WHERE id = $1
+                    RETURNING id, operation_type, timestamp, status, next_retry
                     "#,
-                    vec![pending_operation.operation_id.into()]
+                    vec![pending_operation.id.into()]
                 );
 
                 match operation::Entity::find()
@@ -413,7 +414,7 @@ impl Indexer {
 
         let client = reqwest::Client::new();
         let request_body = serde_json::json!({
-            "operationIds": [format!("0x{:x}", job.operation.operation_id)]
+            "operationIds": [job.operation.id]
         });
 
         match client
@@ -449,7 +450,7 @@ impl Indexer {
                         return;
                     }
 
-                    tracing::info!("Successfully processed operation: id={}", job.operation.operation_id);
+                    tracing::info!("Successfully processed operation: id={}", job.operation.id);
                 }
                 _ => {
                     let retries = job.operation.retry_count;
@@ -488,7 +489,7 @@ impl Indexer {
 
         // Combine streams with prioritization (high priority first)
         let interval_stream = select_with_strategy(high_priority, low_priority, Self::prio_left);
-        let mut combined_stream = select_with_strategy(interval_stream, operations, Self::prio_left);
+        let mut combined_stream = select_with_strategy(operations, interval_stream, Self::prio_left);
 
         // Process the prioritized stream
         while let Some(job) = combined_stream.next().await {
@@ -511,7 +512,7 @@ impl Indexer {
 
                             // Update interval with next retry timestamp and increment retry count
                             let mut interval_model: interval::ActiveModel = job.interval.into();
-                            interval_model.next_retry = Set(next_retry);
+                            interval_model.next_retry = Set(Some(next_retry));
                             interval_model.retry_count = Set(retries + 1);
                             interval_model.status = Set(0); // Reset status to pending
 
