@@ -39,6 +39,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::time;
+    use futures::stream::select_all;
     use rand::Rng;
 
     use tac_operation_lifecycle_logic::{settings::IndexerSettings, Indexer, IndexerJob, OrderDirection};
@@ -54,10 +55,10 @@ mod tests {
         let lag = tasks_number * catchup_interval.as_secs();
         let current_epoch = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs();
         let start_timestamp =  current_epoch - lag;
-        println!("start_timestamp: {}", start_timestamp);
-        println!("catchup_interval: {}", catchup_interval.as_secs());
-        println!("tasks_number: {}", tasks_number); 
-        println!("current_epoch: {}", current_epoch);
+        tracing::debug!("start_timestamp: {}", start_timestamp);
+        tracing::debug!("catchup_interval: {}", catchup_interval.as_secs());
+        tracing::debug!("tasks_number: {}", tasks_number); 
+        tracing::debug!("current_epoch: {}", current_epoch);
         let indexer_settings = IndexerSettings {
             concurrency: 1,
             //random catchup interval from 1 to 100
@@ -113,9 +114,9 @@ mod tests {
         indexer.save_intervals(current_epoch).await.unwrap();
 
         // Create prioritized streams like in the actual implementation
-        let high_priority = indexer.operations_stream(OrderDirection::Descending);
-        let low_priority = indexer.operations_stream(OrderDirection::Ascending);
-        let mut interval_stream = select_with_strategy(high_priority, low_priority, prio_left);
+        let high_priority = indexer.interval_stream(OrderDirection::Descending);
+        let low_priority = indexer.interval_stream(OrderDirection::Ascending);
+        let mut combined_stream = select_with_strategy(high_priority, low_priority, prio_left);
         
         // Collect jobs from the prioritized stream
         let mut received_jobs = Vec::new();
@@ -128,11 +129,11 @@ mod tests {
         let mut all_jobs_received = false;
         while !all_jobs_received {
             tokio::select! {
-                Some(job) = interval_stream.next() => {
+                Some(job) = combined_stream.next() => {
                     match job {
                         IndexerJob::Interval(interval_job) => {
                             let thread_id = std::thread::current().id();
-                            println!("Thread {:?} Received interval job: {:?}", thread_id, interval_job);
+                            tracing::debug!("Thread {:?} Received interval job: {:?}", thread_id, interval_job);
                             // Ensure we haven't seen this interval before
                             let interval_key = (interval_job.interval.start, interval_job.interval.end);
                             let (start, end) = interval_key;
@@ -164,10 +165,10 @@ mod tests {
                             }
 
                             received_jobs.push(interval_job);
-                            println!("Received {} jobs", received_jobs.len());
+                            tracing::debug!("Received {} jobs", received_jobs.len());
 
                             if received_jobs.len() >= tasks_number as usize {
-                                println!("all jobs received");
+                                tracing::debug!("all jobs received");
                                 all_jobs_received = true;
                             }
                         },
@@ -183,10 +184,10 @@ mod tests {
             }
         }
 
-        println!("--------------------------------");
-        println!("Received {} jobs", received_jobs.len());
-        println!("all_jobs_received: {}", all_jobs_received);
-        println!("--------------------------------");
+        tracing::debug!("--------------------------------");
+        tracing::debug!("Received {} jobs", received_jobs.len());
+        tracing::debug!("all_jobs_received: {}", all_jobs_received);
+        tracing::debug!("--------------------------------");
 
         // Verify we received all expected jobs
         assert_eq!(received_jobs.len(), tasks_number as usize, 
@@ -195,7 +196,7 @@ mod tests {
 
         // TODO:instead of checking each consecutive pair, we could verify that all jobs
         // from the high-priority range are processed before any jobs from the low-priority range
-        
+
         // for i in 1..received_jobs.len() {
         //     assert!(received_jobs[i-1].interval.start > received_jobs[i].interval.start, 
         //         "Jobs not in descending order: {:?} before {:?}", 
@@ -303,7 +304,11 @@ mod tests {
         assert_eq!(intervals_number, jobs_number as usize);
 
         // Get the stream of jobs
-        let mut job_stream = indexer.operations_stream(OrderDirection::Ascending);
+        let  interval_stream = indexer.interval_stream(OrderDirection::Ascending);
+
+        let  operations_stream = indexer.operations_stream();
+
+        let mut job_stream = select_all(vec![interval_stream, operations_stream]);
         
         // Process the stream and verify the sequence of events
         let mut operation_id_fetched = false;
@@ -313,13 +318,13 @@ mod tests {
         let timeout = tokio::time::sleep(tokio::time::Duration::from_secs(5));
         tokio::pin!(timeout);
 
-        loop {
+        while !operation_id_fetched || !stage_history_fetched || !interval_processed {
             tokio::select! {
                 Some(job) = job_stream.next() => {
                     match job {
                         IndexerJob::Interval(interval_job) => {
                             // Process the interval job
-                            println!("Processing interval job: {:?}", interval_job);
+                            tracing::warn!("Processing interval job: {:?}", interval_job);
                             if let Err(e) = indexer.fetch_operations(&interval_job).await {
                                 panic!("Failed to fetch operations: {}", e);
                             }
@@ -354,10 +359,6 @@ mod tests {
                         }
                     }
 
-                    // Break if we've verified all conditions
-                    if operation_id_fetched && stage_history_fetched && interval_processed {
-                        break;
-                    }
                 }
                 _ = &mut timeout => {
                     panic!("Test timed out before all conditions were met");

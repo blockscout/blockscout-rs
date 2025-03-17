@@ -11,6 +11,7 @@ pub struct Model {
     pub timestamp: i64,
     pub next_retry: Option<i64>,
     pub status: i32,
+    #[sea_orm(column_name = "retry_count")]
     pub retry_count: i32,
 }
 
