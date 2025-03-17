@@ -3,6 +3,7 @@ pub mod new_operational_txns;
 pub mod new_operational_txns_window;
 pub mod new_txns;
 pub mod new_txns_window;
+pub mod op_stack_new_operational_txns;
 pub mod operational_txns_growth;
 pub mod txns_fee;
 pub mod txns_growth;

@@ -18,6 +18,9 @@ use user_ops::*;
 mod mock;
 
 pub use new_txns_window::WINDOW as NEW_TXNS_WINDOW_RANGE;
+pub use transactions::op_stack_new_operational_txns::{
+    ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH,
+};
 
 pub use aa_wallets_growth::{
     AccountAbstractionWalletsGrowth, AccountAbstractionWalletsGrowthMonthly,
