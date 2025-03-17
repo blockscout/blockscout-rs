@@ -38,7 +38,7 @@ async-stream = "0.3.6"
 tokio = "1.22"
 chrono = "0.4.39"
 #tonic = { version = "0.8", features = ["tls-roots"] }
-#tracing-subscriber = { version = "0.3", features = ["env-filter"]}
+tracing-subscriber = { version = "0.3", features = ["env-filter"]}
 
 [dev-dependencies]
 blockscout-service-launcher = { version = "0.17.0", features = [ 

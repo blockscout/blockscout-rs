@@ -96,8 +96,8 @@ impl Indexer {
 
     //generate intervals between current epoch and watermark and save them to db
     #[instrument(name = "save_intervals", skip_all, level = "info")]
-    pub async fn save_intervals(&self) -> anyhow::Result<()> {
-        let now = chrono::Utc::now().timestamp() as u64;
+    pub async fn save_intervals(&self,now: u64) -> anyhow::Result<usize> {
+        
         let watermark = self.watermark.load(std::sync::atomic::Ordering::Acquire);
         let batch_size = 1000; // Adjust this based on your needs and database performance
         let catch_up_interval = self.settings.catchup_interval.as_secs() as u64;
@@ -107,7 +107,7 @@ impl Indexer {
                 start: ActiveValue::Set(timestamp as i64),
                 //we don't want to save intervals that are in the future
                 end: ActiveValue::Set(min(timestamp + catch_up_interval, now) as i64),
-                timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
+                timestamp: ActiveValue::Set(timestamp as i64),
                 id: ActiveValue::NotSet,
                 status:sea_orm::ActiveValue::Set(0 as i16),
                 next_retry: ActiveValue::Set(None),
@@ -166,7 +166,7 @@ impl Indexer {
             }
         }
 
-        Ok(())
+        Ok(intervals.len())
     }
 
     pub fn watermark(&self) -> u64 {
@@ -177,9 +177,14 @@ impl Indexer {
     pub async fn fetch_operations(&self, job: &Job) -> Result<(), Error> {
         use sea_orm::Set;
         use tac_operation_lifecycle_entity::{interval, operation};
-        
+        use std::thread;
+
+        let thread_id = thread::current().id();
+        println!("[Thread {:?}] Processing interval job: {:?}", thread_id, job);
 
         let operations = self.client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
+        
+        println!("[Thread {:?}] Operations: {:#?}", thread_id, operations);
         
         // Start a transaction
         let txn = self.db.begin().await?;
@@ -187,7 +192,7 @@ impl Indexer {
         // Save all operations
         for op in operations {
             let operation_model = operation::ActiveModel {
-                id: Set(op.operation_id),
+                id: Set(op.id),
                 operation_type: Set(None),
                 timestamp: Set(op.timestamp as i64),
                 status: Set(0), // Status 0 means pending
@@ -195,7 +200,24 @@ impl Indexer {
                 retry_count: Set(0), // Initialize retry count
             };
 
-            operation_model.insert(&txn).await?;
+            println!("[Thread {:?}] Attempting to insert operation: {:?}", thread_id, operation_model);
+            
+            // Use on_conflict().do_nothing() with proper error handling
+            match operation::Entity::insert(operation_model)
+                .on_conflict(
+                    sea_orm::sea_query::OnConflict::column(operation::Column::Id)
+                        .do_nothing()
+                        .to_owned(),
+                )
+                .exec(&txn)
+                .await {
+                    Ok(_) => println!("[Thread {:?}] Successfully inserted or skipped operation", thread_id),
+                    Err(e) => {
+                        println!("[Thread {:?}] Error inserting operation: {:?}", thread_id, e);
+                        // Don't fail the entire batch for a single operation
+                        continue;
+                    }
+                }
         }
 
         // Update interval status to finished (2)
@@ -207,8 +229,8 @@ impl Indexer {
         // Commit transaction
         txn.commit().await?;
 
-        tracing::info!("Successfully processed job: id={}, start={}, end={}", 
-            job.interval.id, job.interval.start, job.interval.end);
+        tracing::info!("[Thread {:?}] Successfully processed job: id={}, start={}, end={}", 
+            thread_id, job.interval.id, job.interval.start, job.interval.end);
 
         Ok(())
     }
@@ -480,7 +502,7 @@ impl Indexer {
         use futures::stream::{select_with_strategy, PollNext};
 
         tracing::warn!("starting indexer");
-        self.save_intervals().await?;
+        self.save_intervals(chrono::Utc::now().timestamp() as u64).await?;
         
         // Create prioritized streams
         let high_priority = self.operations_stream(OrderDirection::Descending);
