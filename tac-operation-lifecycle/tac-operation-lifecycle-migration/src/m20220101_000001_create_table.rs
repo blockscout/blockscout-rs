@@ -38,8 +38,8 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Operation::OperationType).string().not_null())
-                    .col(ColumnDef::new(Operation::Timestamp).timestamp().not_null())
+                    .col(ColumnDef::new(Operation::OperationType).string().null())
+                    .col(ColumnDef::new(Operation::Timestamp).big_integer().not_null())
                     .col(ColumnDef::new(Operation::NextRetry).big_integer().null())
                     .col(ColumnDef::new(Operation::Status).integer().not_null())
                     .col(ColumnDef::new(Operation::RetryCount).integer().not_null())
