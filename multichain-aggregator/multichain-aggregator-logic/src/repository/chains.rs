@@ -38,12 +38,12 @@ where
     Ok(())
 }
 
-pub async fn list_chains<C>(db: &C, only_active: bool) -> Result<Vec<Model>, DbErr>
+pub async fn list_chains<C>(db: &C, with_active_api_keys: bool) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait,
 {
     let mut query = Entity::find();
-    if only_active {
+    if with_active_api_keys {
         // Filter out chains without active api keys
         query = query.distinct_on([Column::Id]).inner_join(api_keys::Entity);
     }

@@ -31,6 +31,8 @@ pub struct ServiceSettings {
     pub token_info_client: TokenInfoClientSettings,
     #[serde(default)]
     pub api: ApiSettings,
+    #[serde(default)]
+    pub fetch_chains: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -92,6 +94,7 @@ impl Settings {
                     default_page_size: default_default_page_size(),
                     max_page_size: default_max_page_size(),
                 },
+                fetch_chains: false,
             },
         }
     }
