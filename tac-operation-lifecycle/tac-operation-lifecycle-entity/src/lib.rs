@@ -5,4 +5,6 @@ pub mod prelude;
 pub mod interval;
 pub mod operation;
 pub mod operation_stage;
+pub mod stage_type;
+pub mod transaction;
 pub mod watermark;

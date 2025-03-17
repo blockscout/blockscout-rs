@@ -11,7 +11,7 @@ pub struct Model {
     pub end: i64,
     pub timestamp: i64,
     pub status: i16,
-    pub next_retry: i64,
+    pub next_retry: Option<i64>,
     pub retry_count: i16,
 }
 
