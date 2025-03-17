@@ -180,11 +180,11 @@ impl Indexer {
         use std::thread;
 
         let thread_id = thread::current().id();
-        println!("[Thread {:?}] Processing interval job: {:?}", thread_id, job);
+        tracing::debug!("[Thread {:?}] Processing interval job: {:?}", thread_id, job);
 
         let operations = self.client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
         
-        println!("[Thread {:?}] Operations: {:#?}", thread_id, operations);
+        tracing::debug!("[Thread {:?}] Operations: {:#?}", thread_id, operations);
         
         // Start a transaction
         let txn = self.db.begin().await?;
@@ -200,7 +200,7 @@ impl Indexer {
                 retry_count: Set(0), // Initialize retry count
             };
 
-            println!("[Thread {:?}] Attempting to insert operation: {:?}", thread_id, operation_model);
+            tracing::debug!("[Thread {:?}] Attempting to insert operation: {:?}", thread_id, operation_model);
             
             // Use on_conflict().do_nothing() with proper error handling
             match operation::Entity::insert(operation_model)
@@ -211,9 +211,9 @@ impl Indexer {
                 )
                 .exec(&txn)
                 .await {
-                    Ok(_) => println!("[Thread {:?}] Successfully inserted or skipped operation", thread_id),
+                    Ok(_) => tracing::debug!("[Thread {:?}] Successfully inserted or skipped operation", thread_id),
                     Err(e) => {
-                        println!("[Thread {:?}] Error inserting operation: {:?}", thread_id, e);
+                        tracing::debug!("[Thread {:?}] Error inserting operation: {:?}", thread_id, e);
                         // Don't fail the entire batch for a single operation
                         continue;
                     }
@@ -235,7 +235,7 @@ impl Indexer {
         Ok(())
     }
 
-    pub fn operations_stream(&self, direction: OrderDirection) -> BoxStream<'_, IndexerJob> {
+    pub fn interval_stream(&self, direction: OrderDirection) -> BoxStream<'_, IndexerJob> {
         use sea_orm::Statement;
         use std::time::{SystemTime, UNIX_EPOCH};
         
@@ -259,14 +259,8 @@ impl Indexer {
 
                 let stmt = Statement::from_sql_and_values(
                     sea_orm::DatabaseBackend::Postgres,
-                    &format!(r#"
-                    SELECT id, start, "end", timestamp, status, next_retry, retry_count
-                    FROM interval
-                    WHERE status = 0
-                    ORDER BY start {}
-                    LIMIT 1
-                    FOR UPDATE SKIP LOCKED
-                    "#, order_by),
+                    &format!(r#" SELECT id, start, "end", timestamp, status, next_retry, retry_count FROM interval WHERE status = 0 ORDER BY start {} LIMIT 1 FOR UPDATE SKIP LOCKED "#, 
+                    order_by),
                     vec![]
                 );
 
@@ -292,12 +286,7 @@ impl Indexer {
                 // Update the interval status to in-progress (1)
                 let update_stmt = Statement::from_sql_and_values(
                     sea_orm::DatabaseBackend::Postgres,
-                    r#"
-                    UPDATE interval
-                    SET status = 1
-                    WHERE id = $1
-                    RETURNING id, start, "end", timestamp, status, next_retry, retry_count
-                    "#,
+                    r#" UPDATE interval SET status = 1 WHERE id = $1 RETURNING id, start, "end", timestamp, status, next_retry, retry_count "#,
                     vec![pending_interval.id.into()]
                 );
 
@@ -340,7 +329,7 @@ impl Indexer {
         })
     }
 
-    pub fn operation_stages_stream(&self) -> BoxStream<'_, IndexerJob> {
+    pub fn operations_stream(&self) -> BoxStream<'_, IndexerJob> {
         Box::pin(async_stream::stream! {
             loop {
                 // Start transaction
@@ -356,14 +345,7 @@ impl Indexer {
                 // Find and lock a single pending operation
                 let stmt = Statement::from_sql_and_values(
                     sea_orm::DatabaseBackend::Postgres,
-                    r#"
-                    SELECT operation_id, timestamp, status, next_retry
-                    FROM operation
-                    WHERE status = 0
-                    ORDER BY timestamp ASC
-                    LIMIT 1
-                    FOR UPDATE SKIP LOCKED
-                    "#,
+                    r#"SELECT id, operation_type,timestamp, next_retry,status, retry_count FROM operation WHERE status = 0 ORDER BY timestamp ASC LIMIT 1 FOR UPDATE SKIP LOCKED"#,
                     vec![]
                 );
 
@@ -389,12 +371,7 @@ impl Indexer {
                 // Update the operation status to in-progress (1)
                 let update_stmt = Statement::from_sql_and_values(
                     sea_orm::DatabaseBackend::Postgres,
-                    r#"
-                    UPDATE operation
-                    SET status = 1
-                    WHERE id = $1
-                    RETURNING id, operation_type, timestamp, status, next_retry
-                    "#,
+                    r#"UPDATE operation SET status = 1 WHERE id = $1 RETURNING id, operation_type, timestamp, status, next_retry, retry_count"#,
                     vec![pending_operation.id.into()]
                 );
 
@@ -505,9 +482,9 @@ impl Indexer {
         self.save_intervals(chrono::Utc::now().timestamp() as u64).await?;
         
         // Create prioritized streams
-        let high_priority = self.operations_stream(OrderDirection::Descending);
-        let low_priority = self.operations_stream(OrderDirection::Ascending);
-        let operations = self.operation_stages_stream();
+        let high_priority = self.interval_stream(OrderDirection::Descending);
+        let low_priority = self.interval_stream(OrderDirection::Ascending);
+        let operations = self.operations_stream();
 
         // Combine streams with prioritization (high priority first)
         let interval_stream = select_with_strategy(high_priority, low_priority, Self::prio_left);
