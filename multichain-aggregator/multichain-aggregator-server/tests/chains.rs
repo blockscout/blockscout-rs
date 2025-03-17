@@ -13,7 +13,7 @@ use wiremock::{
 
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn test_startup_works() {
+async fn test_fetch_chains() {
     let db = helpers::init_db("test", "startup_works").await;
 
     chains::upsert_many(
@@ -53,11 +53,37 @@ async fn test_startup_works() {
 
     let response: proto::ListChainsResponse =
         test_server::send_get_request(&base, "/api/v1/chains?only_active=true").await;
+    assert_eq!(
+        response.items,
+        vec![
+            proto::Chain {
+                id: "2".to_string(),
+                name: "Chain 2".to_string(),
+                explorer_url: "https://test2".to_string(),
+                icon_url: "https://test2".to_string(),
+            },
+            proto::Chain {
+                id: "3".to_string(),
+                name: "Chain 3".to_string(),
+                explorer_url: "https://test3".to_string(),
+                icon_url: "https://test3".to_string(),
+            },
+        ]
+    );
+
+    let response: proto::ListChainsResponse =
+        test_server::send_get_request(&base, "/api/v1/chains").await;
     let mut chains = response.items;
     chains.sort_by_key(|c| c.id.clone());
     assert_eq!(
         chains,
         vec![
+            proto::Chain {
+                id: "1".to_string(),
+                name: "Chain 1".to_string(),
+                explorer_url: "https://test1".to_string(),
+                icon_url: "https://test1".to_string(),
+            },
             proto::Chain {
                 id: "2".to_string(),
                 name: "Chain 2".to_string(),

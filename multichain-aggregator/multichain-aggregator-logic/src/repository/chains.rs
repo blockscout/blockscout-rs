@@ -5,7 +5,7 @@ use entity::{
 };
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
-    QuerySelect,
+    QueryOrder, QuerySelect,
 };
 
 pub async fn upsert_many<C>(db: &C, chains: Vec<Chain>) -> Result<(), DbErr>
@@ -42,7 +42,7 @@ pub async fn list_chains<C>(db: &C, with_active_api_keys: bool) -> Result<Vec<Mo
 where
     C: ConnectionTrait,
 {
-    let mut query = Entity::find();
+    let mut query = Entity::find().order_by_asc(Column::Id);
     if with_active_api_keys {
         // Filter out chains without active api keys
         query = query.distinct_on([Column::Id]).inner_join(api_keys::Entity);
