@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sea-orm = { version = "^0", optional = true }
-sea-orm-migration = { version = "^0", optional = true }
+sea-orm = { version = "1.0", optional = true }
+sea-orm-migration = { version = "1.0", optional = true }
 
 [features]
 entity = [
