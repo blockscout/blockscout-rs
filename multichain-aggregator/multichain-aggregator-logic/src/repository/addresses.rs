@@ -7,7 +7,7 @@ use entity::{
 use regex::Regex;
 use sea_orm::{
     prelude::Expr,
-    sea_query::{Alias, ColumnRef, CommonTableExpression, OnConflict, Query, WithClause},
+    sea_query::{Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WithClause},
     ActiveValue::NotSet,
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult, IntoSimpleExpr, Iterable,
     Order, QuerySelect,
@@ -61,6 +61,7 @@ where
     // Materialize addresses CTE when searching by contract_name.
     // Otherwise, query planner chooses a suboptimal plan.
     let is_cte_materialized = query.is_some();
+    let addresses_cte_iden = Alias::new("addresses").into_iden();
     let addresses_cte = CommonTableExpression::new()
         .query(
             QuerySelect::query(&mut Entity::find())
@@ -74,12 +75,12 @@ where
                 .to_owned(),
         )
         .materialized(is_cte_materialized)
-        .table_name(Alias::new("addresses"))
+        .table_name(addresses_cte_iden.clone())
         .to_owned();
 
     let base_select = Query::select()
         .column(ColumnRef::Asterisk)
-        .from(Alias::new("addresses")) // NOTE: this is the CTE reference
+        .from(addresses_cte_iden)
         .apply_if(chain_id, |q, chain_id| {
             q.and_where(Column::ChainId.eq(chain_id));
         })
