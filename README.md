@@ -1,20 +1,20 @@
 <h1 align="center">Blockscout Rust Services</h1>
 
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/smart-contract-verifier.yml">
-   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/smart-contract-verifier.yml?branch=main&label=smart-contract-verifier&logo=github&style=plastic">
-</a> 
+   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/smart-contract-verifier.yml?branch=main&label=smart-contract-verifier&logo=github&style=flat-square"><!--
+--></a> 
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/sig-provider.yml">
-   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/sig-provider.yml?branch=main&label=sig-provider&logo=github&style=plastic">
-</a> 
+   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/sig-provider.yml?branch=main&label=sig-provider&logo=github&style=flat-square"><!--
+--></a> 
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/multichain-search.yml">
-   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/multichain-search.yml?branch=main&label=multichain-search&logo=github&style=plastic">
-</a> 
+   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/multichain-search.yml?branch=main&label=multichain-search&logo=github&style=flat-square"><!--
+--></a> 
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/visualizer.yml">
-   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/visualizer.yml?branch=main&label=visualizer&logo=github&style=plastic">
-</a>
+   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/visualizer.yml?branch=main&label=visualizer&logo=github&style=flat-square"><!--
+--></a>
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/eth-bytecode-db.yml">
-   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/eth-bytecode-db.yml?branch=main&label=eth-bytecode-db&logo=github&style=plastic">
-</a>
+   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/eth-bytecode-db.yml?branch=main&label=eth-bytecode-db&logo=github&style=flat-square"><!--
+--></a>
 
 
 A set of services used by [Blockscout](https://blockscout.com/) blockchain explorer, written in Rust.
