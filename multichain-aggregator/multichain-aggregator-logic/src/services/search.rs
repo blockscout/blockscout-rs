@@ -45,7 +45,7 @@ pub async fn search_addresses(
         db,
         address,
         query,
-        chain_id,
+        chain_id.map(|v| vec![v]),
         token_types,
         page_size,
         page_token,
@@ -65,7 +65,7 @@ pub async fn search_hashes(
     db: &DatabaseConnection,
     query: String,
     hash_type: Option<HashType>,
-    chain_id: Option<ChainId>,
+    chain_ids: Option<Vec<ChainId>>,
     page_size: u64,
     page_token: Option<ChainId>,
 ) -> Result<(Vec<Hash>, Option<ChainId>), ServiceError> {
@@ -75,7 +75,7 @@ pub async fn search_hashes(
     };
 
     let (hashes, page_token) =
-        hashes::list(db, hash, hash_type, chain_id, page_size, page_token).await?;
+        hashes::list(db, hash, hash_type, chain_ids, page_size, page_token).await?;
 
     Ok((
         hashes
@@ -89,7 +89,7 @@ pub async fn search_hashes(
 pub async fn search_tokens(
     token_info_client: &HttpApiClient,
     query: String,
-    chain_id: Option<ChainId>,
+    chain_id: Vec<ChainId>,
     page_size: u64,
     page_token: Option<String>,
 ) -> Result<(Vec<Token>, Option<String>), ServiceError> {
@@ -124,7 +124,7 @@ pub async fn search_dapps(
     dapp_client: &HttpApiClient,
     query: Option<String>,
     categories: Option<String>,
-    chain_ids: Option<String>,
+    chain_ids: Vec<ChainId>,
 ) -> Result<Vec<MarketplaceDapp>, ServiceError> {
     let res = dapp_client
         .request(&search_dapps::SearchDapps {
@@ -151,6 +151,7 @@ pub async fn quick_search(
     dapp_client: &HttpApiClient,
     token_info_client: &HttpApiClient,
     query: String,
+    chain_ids: &[ChainId],
 ) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
 
@@ -159,6 +160,7 @@ pub async fn quick_search(
         db,
         dapp_client,
         token_info_client,
+        chain_ids,
     };
 
     // Each search term produces its own `SearchResults` struct.
@@ -195,6 +197,7 @@ struct SearchContext<'a> {
     db: &'a DatabaseConnection,
     dapp_client: &'a HttpApiClient,
     token_info_client: &'a HttpApiClient,
+    chain_ids: &'a [ChainId],
 }
 
 impl SearchTerm {
@@ -209,8 +212,15 @@ impl SearchTerm {
 
         match self {
             SearchTerm::Hash(hash) => {
-                let (hashes, _) =
-                    hashes::list(db, hash, None, None, QUICK_SEARCH_NUM_ITEMS, None).await?;
+                let (hashes, _) = hashes::list(
+                    db,
+                    hash,
+                    None,
+                    Some(search_context.chain_ids.to_vec()),
+                    QUICK_SEARCH_NUM_ITEMS,
+                    None,
+                )
+                .await?;
                 let (blocks, transactions): (Vec<_>, Vec<_>) = hashes
                     .into_iter()
                     .map(Hash::try_from)
@@ -226,7 +236,7 @@ impl SearchTerm {
                     db,
                     Some(address),
                     None,
-                    None,
+                    Some(search_context.chain_ids.to_vec()),
                     None,
                     QUICK_SEARCH_NUM_ITEMS,
                     None,
@@ -254,6 +264,7 @@ impl SearchTerm {
                 let (block_ranges, _) = block_ranges::list_matching_block_ranges_paginated(
                     db,
                     block_number,
+                    Some(search_context.chain_ids.to_vec()),
                     QUICK_SEARCH_NUM_ITEMS,
                     None,
                 )
@@ -269,8 +280,13 @@ impl SearchTerm {
                 results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
-                let dapps =
-                    search_dapps(search_context.dapp_client, Some(query), None, None).await?;
+                let dapps = search_dapps(
+                    search_context.dapp_client,
+                    Some(query),
+                    None,
+                    search_context.chain_ids.to_vec(),
+                )
+                .await?;
 
                 results.dapps.extend(dapps);
             }
@@ -278,7 +294,7 @@ impl SearchTerm {
                 let (tokens, _) = search_tokens(
                     search_context.token_info_client,
                     query,
-                    None,
+                    search_context.chain_ids.to_vec(),
                     QUICK_SEARCH_NUM_ITEMS,
                     None,
                 )
@@ -287,20 +303,16 @@ impl SearchTerm {
                 results.tokens.extend(tokens);
             }
             SearchTerm::ContractName(query) => {
-                let (addresses, _) = addresses::list(
+                let addresses = addresses::uniform_chain_search(
                     db,
-                    None,
-                    Some(query),
-                    None,
-                    None,
-                    QUICK_SEARCH_NUM_ITEMS,
-                    None,
+                    query,
+                    Some(vec![]),
+                    search_context.chain_ids.to_vec(),
                 )
-                .await?;
-                let addresses: Vec<_> = addresses
-                    .into_iter()
-                    .map(Address::try_from)
-                    .collect::<Result<Vec<_>, _>>()?;
+                .await?
+                .into_iter()
+                .map(Address::try_from)
+                .collect::<Result<Vec<_>, _>>()?;
 
                 results.addresses.extend(addresses);
             }

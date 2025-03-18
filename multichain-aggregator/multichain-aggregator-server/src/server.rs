@@ -86,6 +86,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         dapp_client,
         token_info_client,
         settings.service.api,
+        settings.service.quick_search_chains,
     ));
 
     let router = Router {
