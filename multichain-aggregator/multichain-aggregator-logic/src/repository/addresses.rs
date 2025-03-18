@@ -6,8 +6,11 @@ use entity::{
 };
 use regex::Regex;
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, IntoSimpleExpr, Iterable, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+    prelude::Expr,
+    sea_query::{Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WithClause},
+    ActiveValue::NotSet,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult, IntoSimpleExpr, Iterable,
+    Order, QuerySelect,
 };
 use std::sync::OnceLock;
 
@@ -55,25 +58,40 @@ pub async fn list<C>(
 where
     C: ConnectionTrait,
 {
-    let addresses = Entity::find()
+    // Materialize addresses CTE when searching by contract_name.
+    // Otherwise, query planner chooses a suboptimal plan.
+    let is_cte_materialized = query.is_some();
+    let addresses_cte_iden = Alias::new("addresses").into_iden();
+    let addresses_cte = CommonTableExpression::new()
+        .query(
+            QuerySelect::query(&mut Entity::find())
+                .apply_if(query, |q, query| {
+                    let ts_query = prepare_ts_query(&query);
+                    q.and_where(Expr::cust_with_expr(
+                        "to_tsvector('english', contract_name) @@ to_tsquery($1)",
+                        ts_query,
+                    ));
+                })
+                .to_owned(),
+        )
+        .materialized(is_cte_materialized)
+        .table_name(addresses_cte_iden.clone())
+        .to_owned();
+
+    let base_select = Query::select()
+        .column(ColumnRef::Asterisk)
+        .from(addresses_cte_iden)
         .apply_if(chain_id, |q, chain_id| {
-            q.filter(Column::ChainId.eq(chain_id))
+            q.and_where(Column::ChainId.eq(chain_id));
         })
         .apply_if(address, |q, address| {
-            q.filter(Column::Hash.eq(address.as_slice()))
-        })
-        .apply_if(query, |q, query| {
-            let ts_query = prepare_ts_query(&query);
-            q.filter(Expr::cust_with_expr(
-                "to_tsvector('english', contract_name) @@ to_tsquery($1)",
-                ts_query,
-            ))
+            q.and_where(Column::Hash.eq(address.as_slice()));
         })
         .apply_if(token_types, |q, token_types| {
-            q.filter(Column::TokenType.is_in(token_types))
+            q.and_where(Column::TokenType.is_in(token_types));
         })
         .apply_if(page_token, |q, page_token| {
-            q.filter(
+            q.and_where(
                 Expr::tuple([
                     Column::Hash.into_simple_expr(),
                     Column::ChainId.into_simple_expr(),
@@ -82,22 +100,21 @@ where
                     page_token.0.as_slice().into(),
                     page_token.1.into(),
                 ])),
-            )
+            );
         })
-        // Because of ORDER BY (primary_key) and LIMIT clauses, query planner chooses to use pk index
-        // instead of specialized indexes on filtered columns, which almost always results in a seqscan
-        // because in our case data is sparse (especially for text columns). To prevent it, we wrap
-        // the ordered columns in a COALESCE which makes query planner think it is an expression
-        // and disregards the primary key index.
-        .order_by_asc(Expr::cust_with_exprs(
-            "COALESCE($1)",
-            [Column::Hash.into_simple_expr()],
-        ))
-        .order_by_asc(Expr::cust_with_exprs(
-            "COALESCE($1)",
-            [Column::ChainId.into_simple_expr()],
-        ))
+        .order_by_columns(vec![
+            (Column::Hash, Order::Asc),
+            (Column::ChainId, Order::Asc),
+        ])
         .limit(page_size + 1)
+        .to_owned();
+
+    let query = WithClause::new()
+        .cte(addresses_cte)
+        .to_owned()
+        .query(base_select);
+
+    let addresses = Model::find_by_statement(db.get_database_backend().build(&query))
         .all(db)
         .await?;
 
