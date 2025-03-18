@@ -1,18 +1,24 @@
 import { BigInt, ByteArray, Bytes, crypto, ethereum, log } from "@graphprotocol/graph-ts";
 import { Account, Domain } from "../generated/schema";
 
+// @ts-ignore
+const NETWORK = "{{network}}"
+
 
 // note that this has is not the same as nodehash(gno):
 // https://github.com/Space-ID/sid-toolkit/blob/be208b012afe5b5cad2ed3b633b13f7b5ca71ba9/contracts/base/Base.sol#L80-L85
+export let BASE_NODE_HASH = "b610db9c8c31e1a841d7e46f0184e3ae40589639b590138de0de5df028245ce2";
 
-// export const BASE_NODE_HASH = "TODO: add value when base contract will be deployed"
-// export const BASE_NODE      = ".gno"
-// export const COIN_TYPE      = 2147483748 // 2**31 | 100
-
-export const BASE_NODE_HASH = "634ae5e4e77ee5a262a820f4a9eacd51ac137dd75989e5a5d993f5b1db797fba"
-export const BASE_NODE      = ".gno"
-export const COIN_TYPE      = 2147493848 // 2**31 | 10200
-
+// @ts-ignore
+if (NETWORK == "gnosis-chiado") {
+    BASE_NODE_HASH = "634ae5e4e77ee5a262a820f4a9eacd51ac137dd75989e5a5d993f5b1db797fba";
+}
+export let BASE_NODE = ".gno";
+export let COIN_TYPE = 2147483748;
+// @ts-ignore
+if (NETWORK == "gnosis-chiado") {
+    COIN_TYPE = 2147493848;
+}
 
 export const ROOT_NODE =
   "0x0000000000000000000000000000000000000000000000000000000000000000";

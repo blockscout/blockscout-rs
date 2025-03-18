@@ -33,13 +33,9 @@ async fn global_service() -> &'static Arc<SolidityVerifierService> {
         .get_or_init(|| async {
             let settings = Settings::default();
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = SolidityVerifierService::new(
-                settings.solidity,
-                Arc::new(compilers_lock),
-                settings.extensions.solidity,
-            )
-            .await
-            .expect("couldn't initialize the service");
+            let service = SolidityVerifierService::new(settings.solidity, Arc::new(compilers_lock))
+                .await
+                .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
@@ -178,7 +174,6 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
     let verification_result_constructor_arguments = verification_result
         .constructor_arguments
         .map(|args| DisplayBytes::from_str(&args).unwrap());
-    let expected_constructor_argument = expected_constructor_argument.map(DisplayBytes::from);
     assert_eq!(
         verification_result_constructor_arguments, expected_constructor_argument,
         "Invalid constructor args"

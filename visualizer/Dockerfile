@@ -8,6 +8,8 @@ FROM chef AS build
 COPY --from=plan /app/recipe.json recipe.json
 # Build dependencies - this is the caching Docker layer!
 RUN cargo chef cook --release --recipe-path recipe.json
+# Include proto common definitions (will be used in a `build-contexts` section)
+COPY --from=proto . /proto
 # Build application
 COPY . .
 RUN cargo build --release

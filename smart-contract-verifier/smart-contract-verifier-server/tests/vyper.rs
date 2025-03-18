@@ -11,7 +11,9 @@ use blockscout_display_bytes::Bytes as DisplayBytes;
 use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    source::SourceType, verify_response::Status, vyper_verifier_actix::route_vyper_verifier,
+    source::{MatchType, SourceType},
+    verify_response::Status,
+    vyper_verifier_actix::route_vyper_verifier,
     VerifyResponse,
 };
 use smart_contract_verifier_server::{Settings, VyperVerifierService};
@@ -28,13 +30,9 @@ async fn global_service() -> &'static Arc<VyperVerifierService> {
         .get_or_init(|| async {
             let settings = Settings::default();
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = VyperVerifierService::new(
-                settings.vyper,
-                Arc::new(compilers_lock),
-                settings.extensions.vyper,
-            )
-            .await
-            .expect("couldn't initialize the service");
+            let service = VyperVerifierService::new(settings.vyper, Arc::new(compilers_lock))
+                .await
+                .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
@@ -56,8 +54,8 @@ async fn test_setup<T: TestCase>(test_case: &T) -> ServiceResponse {
         .await
 }
 
-async fn test_success(test_case: impl TestCase) {
-    let response = test_setup(&test_case).await;
+async fn get_verification_response<T: TestCase>(test_case: &T) -> VerifyResponse {
+    let response = test_setup(test_case).await;
     if !response.status().is_success() {
         let status = response.status();
         let body = read_body(response).await;
@@ -77,9 +75,27 @@ async fn test_success(test_case: impl TestCase) {
         "Verification extra_data is absent"
     );
 
-    let verification_result = verification_response
-        .source
-        .expect("Verification source is absent");
+    assert!(
+        verification_response.source.is_some(),
+        "Verification source is absent"
+    );
+
+    verification_response
+}
+
+fn validate_verification_response<T: TestCase>(
+    test_case: &T,
+    verification_response: VerifyResponse,
+) {
+    let verification_result = verification_response.source.unwrap();
+
+    // Vyper always results in partial matches, as currently there is no way to
+    // check if the source code is exact.
+    assert_eq!(
+        verification_result.match_type(),
+        MatchType::Partial,
+        "Invalid match type"
+    );
 
     let abi: Option<Result<ethabi::Contract, _>> = verification_result
         .abi
@@ -207,6 +223,33 @@ async fn test_success(test_case: impl TestCase) {
             "Invalid deployed bytecode artifacts"
         )
     }
+
+    assert_eq!(
+        test_case.is_blueprint(),
+        verification_result.is_blueprint,
+        "Invalid is_blueprint value"
+    );
+
+    let extra_data = verification_response
+        .extra_data
+        .expect("Missing extra data");
+    if let Some(expected_local_creation_code) = test_case.expected_local_creation_code() {
+        assert_eq!(
+            expected_local_creation_code, extra_data.local_creation_input_parts,
+            "Invalid local creation code"
+        );
+    }
+    if let Some(expected_local_runtime_code) = test_case.expected_local_runtime_code() {
+        assert_eq!(
+            expected_local_runtime_code, extra_data.local_deployed_bytecode_parts,
+            "Invalid local runtime code"
+        );
+    }
+}
+
+async fn test_success(test_case: impl TestCase) {
+    let verification_response = get_verification_response(&test_case).await;
+    validate_verification_response(&test_case, verification_response);
 }
 
 async fn test_failure(test_case: impl TestCase, expected_message: &str) {
@@ -257,7 +300,10 @@ async fn test_error(test_case: impl TestCase, expected_status: StatusCode, expec
 }
 
 mod flattened {
-    use super::{test_error, test_failure, test_success, vyper_types};
+    use super::{
+        get_verification_response, test_error, test_failure, test_success,
+        validate_verification_response, vyper_types,
+    };
     use actix_web::http::StatusCode;
     use vyper_types::Flattened;
 
@@ -325,6 +371,37 @@ mod flattened {
         };
         test_success(test_case).await;
     }
+
+    #[tokio::test]
+    async fn blueprint_contract() {
+        let mut test_case = vyper_types::from_file::<Flattened>("blueprint");
+        test_success(test_case.clone()).await;
+
+        test_case.use_deployed_bytecode = true;
+        test_success(test_case).await;
+    }
+
+    #[tokio::test]
+    async fn accepts_partially_matching_compiler_version_commit_hashes() {
+        let initial_test_case = vyper_types::from_file::<Flattened>("simple");
+        // provided commit hash is a prefix of the one used in the list
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.pop();
+            test_case
+        };
+        let verification_response = get_verification_response(&test_case).await;
+        validate_verification_response(&initial_test_case, verification_response);
+
+        // the commit hash from the list is a prefix of the provided one
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.push_str("1234");
+            test_case
+        };
+        let verification_response = get_verification_response(&test_case).await;
+        validate_verification_response(&initial_test_case, verification_response);
+    }
 }
 
 mod multi_part {
@@ -361,7 +438,9 @@ mod multi_part {
 }
 
 mod standard_json {
-    use super::{test_success, vyper_types};
+    use super::{
+        get_verification_response, test_success, validate_verification_response, vyper_types,
+    };
     use crate::{test_error, test_failure};
     use actix_web::http::StatusCode;
     use vyper_types::StandardJson;
@@ -422,6 +501,43 @@ mod standard_json {
                 Some("0x0123456789012345678901234567890123456789".to_string());
             test_case
         };
+        test_success(test_case).await;
+    }
+
+    #[tokio::test]
+    async fn interfaces_in_sources_from_0_4_0() {
+        let test_case =
+            vyper_types::from_file::<StandardJson>("standard_json_interfaces_in_sources");
+        test_success(test_case.clone()).await;
+    }
+
+    #[tokio::test]
+    async fn accepts_partially_matching_compiler_version_commit_hashes() {
+        let initial_test_case =
+            vyper_types::from_file::<StandardJson>("standard_json_interfaces_in_sources");
+        // provided commit hash is a prefix of the one used in the list
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.pop();
+            test_case
+        };
+        let verification_response = get_verification_response(&test_case).await;
+        validate_verification_response(&initial_test_case, verification_response);
+
+        // the commit hash from the list is a prefix of the provided one
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.push_str("1234");
+            test_case
+        };
+        let verification_response = get_verification_response(&test_case).await;
+        validate_verification_response(&initial_test_case, verification_response);
+    }
+
+    #[tokio::test]
+    async fn verify_contracts_with_integrity_hashes_inside_cbor_auxdata() {
+        let test_case =
+            vyper_types::from_file::<StandardJson>("standard_json_contracts_with_integrity_hashes");
         test_success(test_case).await;
     }
 }

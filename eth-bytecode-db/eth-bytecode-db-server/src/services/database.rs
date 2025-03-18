@@ -1,10 +1,10 @@
 use crate::{
     proto::{
-        database_server::Database, BatchSearchEventDescriptionsRequest,
-        BatchSearchEventDescriptionsResponse, BytecodeType, SearchAllSourcesRequest,
-        SearchAllSourcesResponse, SearchAllianceSourcesRequest, SearchEventDescriptionsRequest,
-        SearchEventDescriptionsResponse, SearchSourcesRequest, SearchSourcesResponse,
-        SearchSourcifySourcesRequest, Source, VerifyResponse,
+        database_server::Database, AllianceStats, BatchSearchEventDescriptionsRequest,
+        BatchSearchEventDescriptionsResponse, BytecodeType, GetAllianceStatsRequest,
+        SearchAllSourcesRequest, SearchAllSourcesResponse, SearchAllianceSourcesRequest,
+        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesRequest,
+        SearchSourcesResponse, SearchSourcifySourcesRequest, Source, VerifyResponse,
     },
     types::{BytecodeTypeWrapper, EventDescriptionWrapper, SourceWrapper, VerifyResponseWrapper},
 };
@@ -12,7 +12,7 @@ use amplify::Wrapper;
 use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use eth_bytecode_db::{
-    search::{self, BytecodeRemote},
+    search::{self},
     verification,
     verification::sourcify_from_etherscan,
 };
@@ -154,9 +154,29 @@ impl Database for DatabaseService {
             search_alliance_sources_task,
             search_sourcify_sources_task
         );
-        let eth_bytecode_db_sources = eth_bytecode_db_sources?;
-        let alliance_sources = alliance_sources.transpose()?.unwrap_or_default();
-        let mut sourcify_source = sourcify_source.transpose()?.flatten();
+
+        let trace_error = |source: &str, err: &tonic::Status| {
+            tracing::warn!(
+                contract_address = contract_address,
+                chain_id = chain_id,
+                status =? err,
+                "Looking for sources in {source} database failed"
+            );
+        };
+
+        let eth_bytecode_db_sources = eth_bytecode_db_sources
+            .inspect_err(|err| trace_error("eth_bytecode_db", err))
+            .unwrap_or_default();
+        let alliance_sources = alliance_sources
+            .transpose()
+            .inspect_err(|err| trace_error("alliance", err))
+            .unwrap_or_default()
+            .unwrap_or_default();
+        let mut sourcify_source = sourcify_source
+            .transpose()
+            .inspect_err(|err| trace_error("sourcify", err))
+            .unwrap_or_default()
+            .flatten();
 
         // Importing contracts from etherscan may be quite expensive operation.
         // For that reason, we try to use that approach only if no other sources have been found.
@@ -243,6 +263,26 @@ impl Database for DatabaseService {
             responses,
         }))
     }
+
+    async fn get_alliance_stats(
+        &self,
+        _request: tonic::Request<GetAllianceStatsRequest>,
+    ) -> Result<tonic::Response<AllianceStats>, tonic::Status> {
+        let result = verification::alliance_stats::stats(self.client.clone())
+            .await
+            .map_err(|err| {
+                tonic::Status::internal(format!(
+                    "Error while retrieving verifier alliance stats: {err}"
+                ))
+            })?
+            .map(|stats| AllianceStats {
+                total_contracts: stats.total_contracts,
+                contracts_per_provider: stats.contracts_per_provider,
+            })
+            .unwrap_or_default();
+
+        Ok(tonic::Response::new(result))
+    }
 }
 
 impl DatabaseService {
@@ -251,15 +291,13 @@ impl DatabaseService {
         bytecode_type: BytecodeType,
         bytecode: &str,
     ) -> Result<Vec<Source>, tonic::Status> {
-        let bytecode_remote = BytecodeRemote {
-            bytecode_type: BytecodeTypeWrapper::from_inner(bytecode_type).try_into()?,
-            data: DisplayBytes::from_str(bytecode)
-                .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err}")))?
-                .0,
-        };
+        let code_type = BytecodeTypeWrapper::from_inner(bytecode_type).try_into()?;
+        let code = DisplayBytes::from_str(bytecode)
+            .map_err(|err| tonic::Status::invalid_argument(format!("Invalid bytecode: {err}")))?
+            .0;
 
         let mut matches =
-            search::eth_bytecode_db_find_contract(self.client.db_client.as_ref(), &bytecode_remote)
+            search::eth_bytecode_db_find_contract(self.client.db_client.as_ref(), code_type, code)
                 .await
                 .map_err(|err| tonic::Status::internal(err.to_string()))?;
         matches.sort_by_key(|m| m.updated_at);
@@ -322,7 +360,10 @@ impl DatabaseService {
             contract_address.to_vec(),
         )
         .await
-        .map_err(|err| tonic::Status::internal(err.to_string()))?
+        .map_err(|err| {
+            tracing::error!("error while retrieving alliance sources: {err:#?}");
+            tonic::Status::internal(err.to_string())
+        })?
         .into_iter()
         .map(|source| SourceWrapper::from(source).into_inner())
         .collect();

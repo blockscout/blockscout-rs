@@ -16,7 +16,7 @@
         "sourceMap": "141:390:0:-:0;;;;;;;;;;;;;;;;;;;",
         "linkReferences": {},
         "cborAuxdata": {
-            "0": {
+            "1": {
                 "offset": 315,
                 "value": "0xa26469706673582212209cf080560a22e48532a3c59a60bbcfa49685f5d254902dd489ba35f94060dcf764736f6c63430008120033"
             }
@@ -27,7 +27,7 @@
         "linkReferences": {},
         "immutableReferences": {}, 
         "cborAuxdata": {
-            "0": {
+            "1": {
                 "offset": 283,
                 "value": "0xa26469706673582212209cf080560a22e48532a3c59a60bbcfa49685f5d254902dd489ba35f94060dcf764736f6c63430008120033"
             }

@@ -1,0 +1,211 @@
+syntax = "proto3";
+
+package blockscout.multichainAggregator.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
+
+service MultichainAggregatorService {
+  rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
+  rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
+  rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
+  rpc ListTransactions(ListTransactionsRequest)
+  returns (ListTransactionsResponse) {}
+  rpc ListNfts(ListNftsRequest) returns (ListNftsResponse) {}
+  rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
+  rpc ListDapps(ListDappsRequest) returns (ListDappsResponse) {}
+  rpc ListDappChains(ListDappChainsRequest) returns (ListDappChainsResponse) {}
+  rpc ListDappCategories(ListDappCategoriesRequest)
+      returns (ListDappCategoriesResponse) {}
+}
+
+enum TokenType {
+  TOKEN_TYPE_UNSPECIFIED = 0;
+  TOKEN_TYPE_ERC_20 = 1;
+  TOKEN_TYPE_ERC_721 = 2;
+  TOKEN_TYPE_ERC_1155 = 3;
+  TOKEN_TYPE_ERC_404 = 4;
+}
+
+enum HashType {
+  HASH_TYPE_BLOCK = 0;
+  HASH_TYPE_TRANSACTION = 1;
+}
+
+message Pagination {
+  string page_token = 1;
+  uint32 page_size = 2;
+}
+
+message Address {
+  string hash = 1;
+  optional string ens_name = 2;
+  optional string contract_name = 3;
+  optional string token_name = 4;
+  TokenType token_type = 5;
+  optional bool is_contract = 6;
+  optional bool is_verified_contract = 7;
+  optional bool is_token = 8;
+  string chain_id = 9;
+}
+
+message BlockRange {
+  uint64 min_block_number = 1;
+  uint64 max_block_number = 2;
+  string chain_id = 3;
+}
+
+message Hash {
+  string hash = 1;
+  HashType hash_type = 2;
+  string chain_id = 3;
+}
+
+message MarketplaceDapp {
+  string id = 1;
+  string title = 2;
+  string logo = 3;
+  string short_description = 4;
+  string chain_id = 5;
+}
+
+message Token {
+  string address = 1;
+  string icon_url = 2;
+  string name = 3;
+  string symbol = 4;
+  string chain_id = 5;
+}
+
+message BatchImportRequest {
+  message AddressImport {
+    string hash = 1;
+    optional string ens_name = 2;
+    optional string contract_name = 3;
+    optional string token_name = 4;
+    TokenType token_type = 5;
+    optional bool is_contract = 6;
+    optional bool is_verified_contract = 7;
+    optional bool is_token = 8;
+  }
+
+  message HashImport {
+    string hash = 1;
+    HashType hash_type = 2;
+  }
+
+  message BlockRangeImport {
+    uint64 min_block_number = 1;
+    uint64 max_block_number = 2;
+  }
+
+  string chain_id = 1;
+  repeated AddressImport addresses = 2;
+  repeated BlockRangeImport block_ranges = 3;
+  repeated HashImport hashes = 4;
+  string api_key = 5;
+}
+
+message BatchImportResponse { string status = 1; }
+
+message QuickSearchRequest { string q = 1; }
+
+message QuickSearchResponse {
+  message ChainBlockNumber {
+    int64 chain_id = 1;
+    uint64 block_number = 2;
+  }
+
+  repeated Address addresses = 1;
+  repeated Hash blocks = 2;
+  repeated Hash transactions = 3;
+  repeated ChainBlockNumber block_numbers = 4;
+  repeated MarketplaceDapp dapps = 5;
+  repeated Token tokens = 6;
+  repeated Address nfts = 7;
+}
+
+message ListAddressesRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListAddressesResponse {
+  repeated Address items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListTokensRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListTokensResponse {
+  repeated Token items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListTransactionsRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListTransactionsResponse {
+  repeated Hash items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListNftsRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListNftsResponse {
+  repeated Address items = 1;
+  Pagination next_page_params = 2;
+}
+
+message Chain {
+  string id = 1;
+  string name = 2;
+  string explorer_url = 3;
+  string icon_url = 4;
+}
+
+message ListChainsRequest {
+  optional bool only_active = 1;
+}
+
+message ListChainsResponse {
+  repeated Chain items = 1;
+}
+
+message ListDappsRequest {
+  optional string q = 1;
+  optional string categories = 2;
+  optional string chain_ids = 3;
+}
+
+message ListDappsResponse {
+  repeated MarketplaceDapp items = 1;
+}
+
+message ListDappChainsRequest {}
+
+message ListDappChainsResponse {
+  repeated Chain items = 1;
+}
+
+message ListDappCategoriesRequest {}
+
+message ListDappCategoriesResponse {
+  repeated string items = 1;
+}

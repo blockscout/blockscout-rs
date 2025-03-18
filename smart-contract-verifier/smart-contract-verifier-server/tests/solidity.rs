@@ -28,13 +28,9 @@ async fn global_service() -> &'static Arc<SolidityVerifierService> {
         .get_or_init(|| async {
             let settings = Settings::default();
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = SolidityVerifierService::new(
-                settings.solidity,
-                Arc::new(compilers_lock),
-                settings.extensions.solidity,
-            )
-            .await
-            .expect("couldn't initialize the service");
+            let service = SolidityVerifierService::new(settings.solidity, Arc::new(compilers_lock))
+                .await
+                .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
@@ -56,7 +52,10 @@ async fn test_setup<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) -> 
         .await
 }
 
-async fn test_success<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) {
+async fn get_verification_response<T: TestCase>(
+    test_case: &T,
+    bytecode_type: BytecodeType,
+) -> VerifyResponse {
     let response = test_setup(test_case, bytecode_type).await;
     if !response.status().is_success() {
         let status = response.status();
@@ -77,6 +76,18 @@ async fn test_success<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) {
         "Verification extra_data is absent"
     );
 
+    assert!(
+        verification_response.source.is_some(),
+        "Verification source is absent"
+    );
+
+    verification_response
+}
+
+fn validate_verification_response<T: TestCase>(
+    test_case: &T,
+    verification_response: VerifyResponse,
+) {
     let source = verification_response
         .source
         .expect("Verification source is absent");
@@ -260,6 +271,11 @@ async fn test_success<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) {
     }
 }
 
+async fn test_success<T: TestCase>(test_case: &T, bytecode_type: BytecodeType) {
+    let verification_response = get_verification_response(test_case, bytecode_type).await;
+    validate_verification_response(test_case, verification_response);
+}
+
 async fn _test_failure<T: TestCase>(
     test_case: &T,
     bytecode_type: BytecodeType,
@@ -318,7 +334,7 @@ async fn _test_error<T: TestCase>(
 
 mod success_tests {
     use super::*;
-    use solidity_types::Flattened;
+    use solidity_types::{Flattened, StandardJson};
 
     #[tokio::test]
     async fn returns_compilation_related_artifacts() {
@@ -334,17 +350,89 @@ mod success_tests {
         test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 
-    // TODO: is not working right now, as auxdata is not retrieved for contracts compiled without metadata hash.
-    // #[tokio::test]
-    // async fn returns_compilation_related_artifacts_with_no_metadata_hash() {
-    //     let test_case = solidity_types::from_file::<StandardJson>("no_metadata_hash");
-    //     test_success(test_case).await;
-    // }
+    #[tokio::test]
+    async fn returns_compilation_related_artifacts_with_no_metadata_hash() {
+        // Now auxdata is not retrieved for contracts compiled without metadata hash.
+        // TODO: should be removed, when that is fixed
+        let remove_cbor_auxdata_from_artifacts = |artifacts: &mut serde_json::Value| {
+            artifacts
+                .as_object_mut()
+                .map(|artifacts| artifacts.remove("cborAuxdata"))
+        };
+
+        let mut test_case = solidity_types::from_file::<StandardJson>("no_metadata_hash");
+        test_case
+            .expected_creation_input_artifacts
+            .as_mut()
+            .map(remove_cbor_auxdata_from_artifacts);
+        test_case
+            .expected_deployed_bytecode_artifacts
+            .as_mut()
+            .map(remove_cbor_auxdata_from_artifacts);
+
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
+    }
 
     #[tokio::test]
     async fn verifies_runtime_code_with_immutables() {
         let test_case = solidity_types::from_file::<Flattened>("immutables");
         test_success(&test_case, BytecodeType::CreationInput).await;
         test_success(&test_case, BytecodeType::DeployedBytecode).await;
+    }
+
+    #[tokio::test]
+    async fn supports_cancun_evm_version() {
+        let test_case = solidity_types::from_file::<StandardJson>("cancun");
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
+    }
+
+    #[tokio::test]
+    async fn flattened_accepts_partially_matching_compiler_version_commit_hashes() {
+        // provided commit hash is a prefix of the one used in the list
+        let initial_test_case = solidity_types::from_file::<Flattened>("simple_storage");
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.pop();
+            test_case
+        };
+        let verification_response =
+            get_verification_response(&test_case, BytecodeType::CreationInput).await;
+        validate_verification_response(&initial_test_case, verification_response);
+
+        // the commit hash from the list is a prefix of the provided one
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.push_str("1234");
+            test_case
+        };
+        let verification_response =
+            get_verification_response(&test_case, BytecodeType::CreationInput).await;
+        validate_verification_response(&initial_test_case, verification_response);
+    }
+
+    #[tokio::test]
+    async fn standard_json_accepts_partially_matching_compiler_version_commit_hashes() {
+        // provided commit hash is a prefix of the one used in the list
+        let initial_test_case = solidity_types::from_file::<StandardJson>("cancun");
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.pop();
+            test_case
+        };
+        let verification_response =
+            get_verification_response(&test_case, BytecodeType::CreationInput).await;
+        validate_verification_response(&initial_test_case, verification_response);
+
+        // the commit hash from the list is a prefix of the provided one
+        let test_case = {
+            let mut test_case = initial_test_case.clone();
+            test_case.compiler_version.push_str("1234");
+            test_case
+        };
+        let verification_response =
+            get_verification_response(&test_case, BytecodeType::CreationInput).await;
+        validate_verification_response(&initial_test_case, verification_response);
     }
 }

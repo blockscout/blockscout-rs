@@ -1,0 +1,20 @@
+{
+    "template_values": {
+        "<variable_name>": "some_value"
+    },
+    "counters": {
+        "<counter_name>": {
+            "enabled": true,
+            "title": "Some title with {{<variable_name>}}",
+            "description": "Some description"
+        }
+    },
+    "line_charts": {
+        "<line_chart_name>": {
+            "enabled": true,
+            "title": "Some line chart title",
+            "description": "Some description with {{<variable_name>}}",
+            "units": "{{<variable_name>}}"
+        }
+    }
+}

@@ -1,13 +1,14 @@
 use crate::{
-    proto::{health_server::HealthServer, solidity_visualizer_server::SolidityVisualizerServer},
+    proto::{
+        health_actix::route_health, health_server::HealthServer,
+        solidity_visualizer_actix::route_solidity_visualizer,
+        solidity_visualizer_server::SolidityVisualizerServer,
+    },
     services::{HealthService, SolidityVisualizerService},
     settings::Settings,
 };
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings, tracing};
 use std::sync::Arc;
-use visualizer_proto::blockscout::visualizer::v1::{
-    health_actix::route_health, solidity_visualizer_actix::route_solidity_visualizer,
-};
 
 const SERVICE_NAME: &str = "visualizer";
 

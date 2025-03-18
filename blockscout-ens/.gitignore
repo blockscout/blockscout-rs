@@ -1,3 +1,6 @@
-data
-node_modules
 .env
+.env.*
+!.env.dev
+
+d3example/
+bens-server/benchmark

@@ -5,7 +5,7 @@ use crate::{
     },
     Error, SourcifyError, VerifyFromEtherscanError,
 };
-use blockscout_display_bytes::Bytes as DisplayBytes;
+use blockscout_display_bytes::ToHex;
 use bytes::Bytes;
 use reqwest::{Response, StatusCode};
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
@@ -126,9 +126,14 @@ impl Client {
         chain_id: &str,
         contract_address: Bytes,
     ) -> Result<GetSourceFilesResponse, Error<EmptyCustomError>> {
-        let contract_address = DisplayBytes::from(contract_address);
-        let url =
-            self.generate_url(format!("files/any/{}/{}", chain_id, contract_address).as_str());
+        let url = self.generate_url(
+            format!(
+                "files/any/{}/{}",
+                chain_id,
+                ToHex::to_hex(&contract_address)
+            )
+            .as_str(),
+        );
 
         let response = self
             .reqwest_client
@@ -148,7 +153,6 @@ impl Client {
         chain_id: &str,
         contract_address: Bytes,
     ) -> Result<VerifyFromEtherscanResponse, Error<VerifyFromEtherscanError>> {
-        let contract_address = DisplayBytes::from(contract_address);
         let url = self.generate_url("verify/etherscan");
 
         #[derive(Serialize)]
@@ -160,7 +164,7 @@ impl Client {
 
         let request = Request {
             chain_id,
-            address: contract_address.to_string(),
+            address: ToHex::to_hex(&contract_address),
         };
 
         let response = self
@@ -251,6 +255,7 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use blockscout_display_bytes::decode_hex;
     use governor::{
         clock::DefaultClock,
         middleware::NoOpMiddleware,
@@ -263,7 +268,7 @@ mod tests {
     use std::num::NonZeroU32;
 
     fn parse_contract_address(contract_address: &str) -> Bytes {
-        DisplayBytes::from_str(contract_address).unwrap().0
+        decode_hex(contract_address).unwrap().into()
     }
 
     static RATE_LIMITER_MIDDLEWARE: OnceCell<
@@ -283,6 +288,8 @@ mod tests {
     fn client() -> Client {
         let rate_limiter = rate_limiter_middleware().clone();
         ClientBuilder::default()
+            .try_base_url("https://staging.sourcify.dev/server/")
+            .unwrap()
             .max_retries(3)
             .with_arc_middleware(rate_limiter)
             .build()
@@ -298,26 +305,31 @@ mod tests {
             "status": "full",
             "files": [
                 {
-                    "name": "library-map.json",
-                    "path": "/home/app/repository/contracts/full_match/5/0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52/library-map.json",
-                    "content": "{\"__$54103d3e1543ebb87230c9454f838057a5$__\":\"6b88c55cfbd4eda1320f802b724193cab062ccce\"}"
+                    "name": "Example.sol",
+                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/sources/contracts/Example.sol",
+                    "content": "library Lib {\n    function sum(uint256 a, uint256 b) external returns (uint256) {\n        return a + b;\n    }\n}\n\ncontract A {\n    function sum(uint256 a, uint256 b) external returns (uint256) {\n        return Lib.sum(a, b);\n    }\n}\n"
                 },
                 {
                     "name": "metadata.json",
-                    "path": "/home/app/repository/contracts/full_match/5/0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52/metadata.json",
-                    "content": "{\"compiler\":{\"version\":\"0.6.8+commit.0bbfe453\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"anonymous\":false,\"inputs\":[],\"name\":\"SourcifySolidity14\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"input\",\"type\":\"address\"}],\"name\":\"identity\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"contracts/project:/ExternalTestMultiple.sol\":\"ExternalTestMultiple\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":300},\"remappings\":[]},\"sources\":{\"contracts/project:/ExternalTestMultiple.sol\":{\"keccak256\":\"0xc40380283b7d4a97da5e247fbb7b795f6241cfe3d86e34493d87528dfcb4d56b\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://86ec578963cb912c4b912f066390e564c54ea1bc5fb1a55aa4e4c77bb92b07ba\",\"dweb:/ipfs/QmeqihJa8kUjbNHNCpFRHkq1scCbjjFvaUN2gWEJCNEx1Q\"]},\"contracts/project_/ExternalTestMultiple.sol\":{\"keccak256\":\"0xff9e0ddd21b0579491371fe8d4f7e09254ffc7af9382ba287ef8d2a2fd1ce8e2\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://1f516a34091c829a18a8c5dd13fbd82f44b532e7dea6fed9f60ae731c9042d74\",\"dweb:/ipfs/QmZqm6CLGUKQ3RJCLAZy5CWo2ScLzV2r5JXWNWfBwbGCsK\"]}},\"version\":1}"
+                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/metadata.json",
+                    "content": "{\"compiler\":{\"version\":\"0.8.20+commit.a1b79de6\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"a\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"b\",\"type\":\"uint256\"}],\"name\":\"sum\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/Example.sol\":\"A\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"contracts/Example.sol\":{\"keccak256\":\"0x74f0b08e915377a73ed19a56ae3bfce73f4a75c2b9c76ce3c450c2e3f35ad730\",\"urls\":[\"bzz-raw://57df7d0de4fd2c829d638021ea6ed9845fe04c6ad68ed9bd516ca82295ffbfea\",\"dweb:/ipfs/QmR8QjtWYAW2RuyvZVKJMNS3Wp38rRQP33FxviuRdf1Vek\"]}},\"version\":1}"
                 },
                 {
-                    "name": "ExternalTestMultiple.sol",
-                    "path": "/home/app/repository/contracts/full_match/5/0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52/sources/contracts/project_/ExternalTestMultiple.sol",
-                    "content": "//SPDX-License-Identifier: MIT\r\npragma solidity ^0.6.8;\r\n\r\nlibrary ExternalTestLibraryMultiple {\r\n  function pop(address[] storage list) external returns (address out) {\r\n    out = list[list.length - 1];\r\n    list.pop();\r\n  }\r\n}\r\n"
+                    "name": "creator-tx-hash.txt",
+                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/creator-tx-hash.txt",
+                    "content": "0x4b511e8d9bcd56407bc348631d04a673b39c859a036e5cd49df7526a8de29b93"
+                },
+                {
+                    "name": "library-map.json",
+                    "path": "contracts/full_match/11155111/0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D/library-map.json",
+                    "content": "{\"__$50698f9fab9190debff1c0247749d3c3d0$__\":\"0xf145e3a26c6706f64d95dc8d9d45022d8b3d676b\"}"
                 }
             ]
         })).unwrap();
 
-            let chain_id = "5";
+            let chain_id = "11155111";
             let contract_address =
-                parse_contract_address("0x027f1fe8BbC2a7E9fE97868E82c6Ec6939086c52");
+                parse_contract_address("0x4E7095a3519A33dF3D25774c2F9D7a89eB99745D");
 
             let result = client()
                 .get_source_files_any(chain_id, contract_address)
@@ -360,7 +372,7 @@ mod tests {
 
         #[tokio::test]
         async fn get_source_files_any() {
-            let chain_id = "5";
+            let chain_id = "11155111";
             let contract_address =
                 parse_contract_address("0x847F2d0c193E90963aAD7B2791aAE8d7310dFF6A");
 
@@ -386,7 +398,7 @@ mod tests {
 
         #[tokio::test]
         async fn get_source_files_any_invalid_argument() {
-            let chain_id = "5";
+            let chain_id = "11155111";
             let contract_address = parse_contract_address("0xcafecafecafecafe");
 
             let result = client()
@@ -401,7 +413,7 @@ mod tests {
 
         #[tokio::test]
         async fn verify_from_etherscan_invalid_argument() {
-            let chain_id = "5";
+            let chain_id = "11155111";
             let contract_address = parse_contract_address("0xcafecafecafecafe");
 
             let result = client()
@@ -467,9 +479,9 @@ mod tests {
 
         #[tokio::test]
         async fn verify_from_etherscan_contract_not_verified() {
-            let chain_id = "5";
+            let chain_id = "11155111";
             let contract_address =
-                parse_contract_address("0x847F2d0c193E90963aAD7B2791aAE8d7310dFF6A");
+                parse_contract_address("0xa4E5DF47af3Cf0746DF6337E3F45286887e86680");
 
             let result = client()
                 .verify_from_etherscan(chain_id, contract_address)
@@ -477,12 +489,11 @@ mod tests {
                 .expect_err("error expected");
             assert!(
                 matches!(
-                    result,
-                    Error::Sourcify(SourcifyError::Custom(
-                        VerifyFromEtherscanError::ContractNotVerified(_)
-                    ))
+                    &result,
+                    Error::Sourcify(SourcifyError::NotFound(message))
+                    if message.contains("not verified on Etherscan")
                 ),
-                "expected: 'SourcifyError::ContractNotVerified', got: {result:?}"
+                "expected: 'SourcifyError::NotFound with not verified on etherscan message', got: {result:?}"
             );
         }
 

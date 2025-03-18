@@ -21,3 +21,4 @@ Template for blockscout Rust service
 🔧   Initializing a fresh Git repository
 ✨   Done! New project created /Users/levlymarenko/poa/blockscout-rs/test-project
 ```
+

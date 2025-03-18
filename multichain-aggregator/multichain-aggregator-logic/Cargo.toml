@@ -1,0 +1,34 @@
+[package]
+name = "multichain-aggregator-logic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+multichain-aggregator-entity = { workspace = true }
+multichain-aggregator-proto = { workspace = true }
+anyhow = { workspace = true }
+api-client-framework = { workspace = true }
+blockscout-chains = { workspace = true }
+cached = { workspace = true, features = [
+  "proc_macro",
+  "tokio",
+  "async",
+  "async_tokio_rt_multi_thread",
+] }
+tracing = { workspace = true }
+sea-orm = { workspace = true }
+alloy-primitives = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+thiserror = { workspace = true }
+tonic = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+url = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true }
+pretty_assertions = { workspace = true }

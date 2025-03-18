@@ -24,7 +24,7 @@ services:
     environment:
       ## optional: if provided, would be used as a configuration file
       USER_OPS_INDEXER__CONFIG: /app/config.toml
-      USER_OPS_INDEXER__DATABASE__URL: postgres://postgres:@database:5432/blockscout
+      USER_OPS_INDEXER__DATABASE__CONNECT__URL: postgres://postgres:@database:5432/blockscout
       USER_OPS_INDEXER__DATABASE__CREATE_DATABASE: true
       USER_OPS_INDEXER__DATABASE__RUN_MIGRATIONS: true
     env_file:

@@ -3,15 +3,6 @@ ipfs_url := "http://127.0.0.1:5001"
 network := "{{ cookiecutter.network }}"
 name := "{{ cookiecutter.project_slug }}"
 {% raw %}
-init:
-    yarn install
-
-codegen:
-    yarn codegen
-
-build:
-    yarn build
-
 create:
     yarn graph create --node {{graph_node_url}} {{name}}
 

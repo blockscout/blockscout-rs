@@ -10,13 +10,15 @@ RUN cargo chef cook --release --recipe-path recipe.json
 
 FROM chef AS build
 
+# Include proto common definitions (`proto` must be passed as build context)
+COPY --from=proto . /proto
 COPY . .
 COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release
 
-FROM ubuntu:20.04 as run
-RUN apt-get update && apt-get install -y libssl1.1 libssl-dev ca-certificates
+FROM ubuntu:24.04 as run
+RUN apt-get update && apt-get install -y libssl3 libssl-dev ca-certificates
 
 WORKDIR /app
 ENV APP_USER=app
@@ -31,5 +33,10 @@ RUN chown -R $APP_USER:$APP_USER /app
 USER app
 
 COPY ./config/charts.json ./config/charts.json
+COPY ./config/layout.json ./config/layout.json
+COPY ./config/update_groups.json ./config/update_groups.json
+
+ENV STATS__SWAGGER_FILE=/app/static/stats.swagger.yaml
+COPY ./stats-proto/swagger/stats.swagger.yaml $STATS__SWAGGER_FILE
 
 CMD ["./stats-server"]

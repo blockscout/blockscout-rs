@@ -56,8 +56,14 @@ impl Error {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerificationSuccess {
+    pub url: String,
+    pub match_type: eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::source::MatchType,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VerificationResponse {
     CompilationFailed(Error),
     InvalidContracts(Vec<Option<Error>>),
-    Results(Vec<Result<String, Error>>),
+    Results(Vec<Result<VerificationSuccess, Error>>),
 }

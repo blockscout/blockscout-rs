@@ -1,8 +1,11 @@
-use super::{bytecodes_comparison::extract_constructor_args, BytecodeRemote};
+use super::{
+    bytecodes_comparison::extract_constructor_args,
+    types::{BytecodeRemote, BytecodeType},
+};
 use crate::{verification, verification::SourceType};
 use anyhow::Context;
 use bytes::Bytes;
-use entity::{files, sea_orm_active_enums::BytecodeType, sources};
+use entity::{files, sources};
 use ethabi::Constructor;
 use sea_orm::{
     prelude::{DateTime, DbErr},
@@ -28,6 +31,7 @@ pub struct MatchContract {
     pub deployed_bytecode_artifacts: Option<String>,
     pub raw_creation_input: Vec<u8>,
     pub raw_deployed_bytecode: Vec<u8>,
+    pub is_blueprint: bool,
 }
 
 impl MatchContract {
@@ -59,17 +63,19 @@ impl MatchContract {
         match_type: verification::MatchType,
     ) -> Result<Self, anyhow::Error> {
         let constructor = get_constructor(source.abi.clone()).context("source has invalid abi")?;
-        let is_creation_input = remote.bytecode_type == BytecodeType::CreationInput;
+        let has_constructor_args = remote.bytecode_type == BytecodeType::CreationCode;
         let local_raw = match remote.bytecode_type {
-            BytecodeType::CreationInput => &source.raw_creation_input,
-            BytecodeType::DeployedBytecode => &source.raw_deployed_bytecode,
+            BytecodeType::CreationCode | BytecodeType::CreationCodeWithoutConstructor => {
+                &source.raw_creation_input
+            }
+            BytecodeType::RuntimeCode => &source.raw_deployed_bytecode,
         };
         let local_raw = Bytes::copy_from_slice(local_raw);
         let constructor_args = extract_constructor_args(
             &remote.data,
             &local_raw,
             constructor.as_ref(),
-            is_creation_input,
+            has_constructor_args,
         )
         .map_err(|e| {
             tracing::error!("failed to extract constructor: {}", e);
@@ -100,6 +106,7 @@ impl MatchContract {
                 .map(|value| value.to_string()),
             raw_creation_input: source.raw_creation_input,
             raw_deployed_bytecode: source.raw_deployed_bytecode,
+            is_blueprint: false,
         };
 
         Ok(match_contract)
@@ -123,7 +130,7 @@ mod tests {
     use super::*;
     use crate::verification::MatchType;
     use blockscout_display_bytes::Bytes as DisplayBytes;
-    use entity::{files, sea_orm_active_enums::BytecodeType};
+    use entity::files;
     use pretty_assertions::assert_eq;
     use std::str::FromStr;
 
@@ -180,7 +187,7 @@ mod tests {
         }];
 
         let remote = BytecodeRemote {
-            bytecode_type: BytecodeType::CreationInput,
+            bytecode_type: BytecodeType::CreationCode,
             data: DisplayBytes::from_str(
                 &[NUMBER_MAIN_PART, NUMBER_META_PART, NUMBER_ARGS_PART].join(""),
             )
@@ -224,7 +231,7 @@ mod tests {
         let source = source();
 
         let remote = BytecodeRemote {
-            bytecode_type: BytecodeType::CreationInput,
+            bytecode_type: BytecodeType::CreationCode,
             data: DisplayBytes::from_str(
                 &[NUMBER_MAIN_PART, NUMBER_META_PART, invalid_args].join(""),
             )

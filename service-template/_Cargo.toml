@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = [
+    {% if logic -%}
+    "{{project-name}}-logic",
+    {% endif -%}
+    {% if entity -%}
+    "{{project-name}}-entity",
+    {% endif -%}
+    {% if migrations -%}
+    "{{project-name}}-migration",
+    {% endif -%}
+    "{{project-name}}-proto",
+    "{{project-name}}-server",
+]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.12.1"

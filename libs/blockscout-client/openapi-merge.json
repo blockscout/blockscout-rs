@@ -1,0 +1,11 @@
+{
+  "inputs": [
+    {
+      "inputFile": "swaggers/blockscout-api-v2.yaml"
+    },
+    {
+      "inputFile": "swaggers/blockscout-api-v1.yaml"
+    }
+  ],
+  "output": "swaggers/blockscout-api.yaml"
+}

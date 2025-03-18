@@ -7,8 +7,9 @@
 use ethers_solc::{
     artifacts::Severity,
     error::{SolcError, SolcIoError},
-    CompilerInput, CompilerOutput,
+    CompilerOutput,
 };
+use foundry_compilers::CompilerInput;
 use std::{collections::BTreeMap, path::Path, process::Stdio};
 use tokio::process::Command;
 
@@ -28,11 +29,8 @@ mod serde_helpers {
 
 mod types {
     use super::serde_helpers;
-    use ethers_solc::{
-        artifacts::{Contract, Libraries},
-        error::SolcError,
-        CompilerInput, CompilerOutput,
-    };
+    use ethers_solc::{artifacts::Contract, error::SolcError, CompilerOutput};
+    use foundry_compilers::{artifacts::Libraries, CompilerInput};
     use serde::{Deserialize, Serialize};
     use std::{
         collections::{BTreeMap, HashMap},
@@ -270,11 +268,9 @@ pub async fn compile_using_cli(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compiler::{Fetcher, ListFetcher, Version};
-    use ethers_solc::{
-        artifacts::{Settings, Source},
-        Artifact,
-    };
+    use crate::compiler::{DetailedVersion, Fetcher, ListFetcher};
+    use ethers_solc::Artifact;
+    use foundry_compilers::artifacts::{Settings, Source};
     use hex::ToHex;
     use pretty_assertions::assert_eq;
     use std::{collections::HashSet, env::temp_dir, path::PathBuf, str::FromStr};
@@ -465,7 +461,7 @@ mod tests {
         }
     }
 
-    async fn get_solc(ver: &Version) -> PathBuf {
+    async fn get_solc(ver: &DetailedVersion) -> PathBuf {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/"))
@@ -493,7 +489,7 @@ mod tests {
     #[tokio::test]
     async fn compile() {
         for ver in &["v0.4.8+commit.60cc1668", "v0.4.10+commit.f0d539ae"] {
-            let version = Version::from_str(ver).expect("valid version");
+            let version = DetailedVersion::from_str(ver).expect("valid version");
             let solc = get_solc(&version).await;
 
             let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();

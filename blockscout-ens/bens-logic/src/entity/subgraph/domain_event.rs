@@ -1,4 +1,4 @@
-use ethers::types::{Address, TxHash};
+use alloy::primitives::{Address, TxHash};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, sqlx::FromRow)]
 pub struct DomainEventTransaction {

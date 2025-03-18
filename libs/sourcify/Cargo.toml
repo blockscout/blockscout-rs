@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.71"
 bytes = "1.4.0"
-blockscout-display-bytes = "1.0.0"
+blockscout-display-bytes = "1.1.0"
 reqwest = { version = "0.11.18", features = ["json"] }
 reqwest-middleware = "0.2.2"
 reqwest-retry = "0.3.0"

@@ -1,11 +1,11 @@
 use bens_logic::{
     entity::subgraph::domain_event::DomainEvent,
-    hash_name::hex,
-    subgraphs_reader::{EventSort, GetDomainHistoryInput},
+    hex,
+    subgraph::{EventSort, GetDomainHistoryInput},
 };
 use bens_proto::blockscout::bens::v1 as proto;
 
-use super::{order_direction_from_inner, ConversionError};
+use super::{address_from_logic, order_direction_from_inner, ConversionError};
 
 pub fn list_domain_events_from_inner(
     inner: proto::ListDomainEventsRequest,
@@ -17,13 +17,15 @@ pub fn list_domain_events_from_inner(
         name: inner.name,
         sort,
         order,
+        protocol_id: inner.protocol_id,
     })
 }
 
-pub fn event_from_logic(e: DomainEvent) -> Result<proto::DomainEvent, ConversionError> {
-    let from_address = Some(proto::Address {
-        hash: hex(e.from_address),
-    });
+pub fn event_from_logic(
+    e: DomainEvent,
+    chain_id: i64,
+) -> Result<proto::DomainEvent, ConversionError> {
+    let from_address = Some(address_from_logic(&e.from_address, chain_id));
     Ok(proto::DomainEvent {
         transaction_hash: hex(e.transaction_hash),
         timestamp: e.timestamp,
@@ -36,7 +38,7 @@ pub fn event_sort_from_inner(inner: &str) -> Result<EventSort, ConversionError> 
     match inner {
         "" | "timestamp" => Ok(EventSort::BlockNumber),
         _ => Err(ConversionError::UserRequest(format!(
-            "unknow sort field '{inner}'"
+            "unknown sort field '{inner}'"
         ))),
     }
 }

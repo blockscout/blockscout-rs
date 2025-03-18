@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-display-bytes"
-version = "1.0.0"
+version = "1.1.0"
 description = "Wrapper type around Bytes to deserialize/serialize \"0x\" prefixed hex strings."
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
@@ -11,8 +11,10 @@ categories = ["encoding"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytes = "1.3"
+bytes = "1"
 ethers-core = { version = "1.0", optional = true}
 hex = "0.4"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_with = "3.0"
 thiserror = "1.0"

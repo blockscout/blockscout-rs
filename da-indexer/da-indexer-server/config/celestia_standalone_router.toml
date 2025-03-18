@@ -1,0 +1,25 @@
+[server.http]
+enabled = true
+addr = "0.0.0.0:8050"
+max_body_size = 2097152
+
+[server.grpc]
+enabled = false
+addr = "0.0.0.0:8051"
+
+[metrics]
+enabled = true
+addr = "0.0.0.0:6060"
+route = "/metrics"
+
+[jaeger]
+enabled = false
+agent_endpoint = "localhost:6831"
+
+[tracing]
+enabled = true
+format = "default"
+
+[l2_router]
+routes_path = "./da-indexer-server/config/celestia_routes.toml"
+

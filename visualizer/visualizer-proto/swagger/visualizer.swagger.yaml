@@ -1,10 +1,10 @@
 swagger: "2.0"
 info:
-  title: visualizer.proto
+  title: health/v1/health.proto
   version: version not set
 tags:
-  - name: SolidityVisualizer
   - name: Health
+  - name: SolidityVisualizer
 consumes:
   - application/json
 produces:
@@ -53,8 +53,15 @@ paths:
   /health:
     get:
       summary: |-
-        If the requested service is unknown, the call will fail with status
-        NOT_FOUND.
+        Check gets the health of the specified service. If the requested service
+        is unknown, the call will fail with status NOT_FOUND. If the caller does
+        not specify a service name, the server should respond with its overall
+        health status.
+      description: |-
+        Clients should set a deadline when calling Check, and can declare the
+        server unhealthy if they do not receive a timely response.
+
+        Check implementations should be idempotent and side effect free.
       operationId: Health_Check
       responses:
         "200":
@@ -99,6 +106,7 @@ definitions:
       details:
         type: array
         items:
+          type: object
           $ref: '#/definitions/protobufAny'
   v1HealthCheckResponse:
     type: object

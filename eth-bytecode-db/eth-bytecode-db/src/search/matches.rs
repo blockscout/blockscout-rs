@@ -4,7 +4,7 @@ use super::{
     MatchContract,
 };
 use crate::metrics;
-use entity::{bytecode_parts, bytecodes, parts};
+use entity::{bytecode_parts, bytecodes, parts, sea_orm_active_enums};
 use sea_orm::{
     entity::prelude::*, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Statement,
     TransactionTrait,
@@ -66,7 +66,7 @@ where
     C: ConnectionTrait + TransactionTrait,
 {
     let data = hex::encode(&remote.data);
-    let r#type = remote.bytecode_type.clone();
+    let r#type: sea_orm_active_enums::BytecodeType = remote.bytecode_type.into();
 
     let part_ids = find_part_id_candidates(db, &data).await?;
     let bytecode_ids: Vec<i64> = bytecodes::Entity::find()

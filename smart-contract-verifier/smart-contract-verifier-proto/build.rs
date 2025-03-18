@@ -19,6 +19,10 @@ fn compile(
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde]")
         .field_attribute(
+            ".blockscout.smartContractVerifier.v2.HealthCheckRequest.service",
+            "#[serde(default)]"
+        )
+        .field_attribute(
             ".blockscout.smartContractVerifier.v2.VerifyVyperMultiPartRequest.interfaces",
             "#[serde(default)]"
         )
@@ -47,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     compile(
         &[
             "proto/v2/smart-contract-verifier.proto",
+            "proto/v2/zksync-solidity.proto",
             "proto/v2/health.proto",
         ],
         &["proto"],

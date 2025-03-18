@@ -1,0 +1,8 @@
+[server.http]
+enabled = true
+addr = "0.0.0.0:8050"
+
+[database]
+connect.url = "postgres://postgres:postgres@localhost:5432/multichain_aggregator"
+create_database = true
+run_migrations = true

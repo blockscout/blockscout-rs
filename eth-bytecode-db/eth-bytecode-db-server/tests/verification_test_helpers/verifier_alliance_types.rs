@@ -134,12 +134,20 @@ impl TestCase {
                     .expect("`constructorArguments` must be a string")
                     .to_string()
             });
-        let match_type = if self
-            .creation_values
-            .as_ref()
-            .and_then(|values| values.as_object().unwrap().get("cborAuxdata"))
-            .is_some()
-        {
+
+        let has_auxdata = |value: serde_json::Value| {
+            !value
+                .as_object()
+                .and_then(|value| value.get("cborAuxdata"))
+                .and_then(|auxdata| auxdata.as_object().cloned())
+                .unwrap_or_default()
+                .is_empty()
+        };
+
+        let has_auxdata_artifact = has_auxdata(self.creation_code_artifacts.clone());
+        let has_auxdata_transformation =
+            has_auxdata(self.creation_values.clone().unwrap_or_default());
+        let match_type = if !has_auxdata_artifact || has_auxdata_transformation {
             smart_contract_verifier_v2::source::MatchType::Partial
         } else {
             smart_contract_verifier_v2::source::MatchType::Full
@@ -158,6 +166,7 @@ impl TestCase {
             compilation_artifacts: Some(self.compilation_artifacts.to_string()),
             creation_input_artifacts: Some(self.creation_code_artifacts.to_string()),
             deployed_bytecode_artifacts: Some(self.runtime_code_artifacts.to_string()),
+            is_blueprint: false,
         }
     }
 
@@ -173,7 +182,7 @@ impl TestCase {
             #[derive(Clone, Debug, Deserialize)]
             #[serde(rename_all = "camelCase")]
             struct CodeArtifacts {
-                pub cbor_auxdata: BTreeMap<String, CborAuxdata>,
+                pub cbor_auxdata: Option<BTreeMap<String, CborAuxdata>>,
             }
 
             let code_artifacts: CodeArtifacts =
@@ -181,6 +190,7 @@ impl TestCase {
             let ordered_auxdata = {
                 let mut auxdata = code_artifacts
                     .cbor_auxdata
+                    .unwrap_or_default()
                     .into_values()
                     .collect::<Vec<_>>();
                 auxdata.sort_by_key(|auxdata| auxdata.offset);
@@ -212,6 +222,16 @@ impl TestCase {
                     };
                 parts.push(metadata_part);
             }
+            // For cases with no cbor auxdata parts
+            if main_range_start != code.len() {
+                let main_part =
+                    smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                        r#type: "main".to_string(),
+                        data: DisplayBytes::from(code[main_range_start..].to_vec()).to_string(),
+                    };
+                parts.push(main_part)
+            }
+
             parts
         };
 

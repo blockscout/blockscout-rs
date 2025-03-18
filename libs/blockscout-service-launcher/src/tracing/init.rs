@@ -5,6 +5,7 @@ use opentelemetry::{
     trace::TraceError,
 };
 use std::marker::Send;
+use tracing::Metadata;
 use tracing_subscriber::{
     filter::LevelFilter, fmt::format::FmtSpan, layer::SubscriberExt, prelude::*, Layer,
 };
@@ -13,6 +14,20 @@ pub fn init_logs(
     service_name: &str,
     tracing_settings: &TracingSettings,
     jaeger_settings: &JaegerSettings,
+) -> Result<(), anyhow::Error> {
+    init_logs_with_filter(
+        service_name,
+        tracing_settings,
+        jaeger_settings,
+        tracing_subscriber::filter::filter_fn(move |_| true),
+    )
+}
+
+pub fn init_logs_with_filter<F: Fn(&Metadata) -> bool + Send + Sync + 'static>(
+    service_name: &str,
+    tracing_settings: &TracingSettings,
+    jaeger_settings: &JaegerSettings,
+    filter: tracing_subscriber::filter::FilterFn<F>,
 ) -> Result<(), anyhow::Error> {
     // If tracing is disabled, there is nothing to initialize
     if !tracing_settings.enabled {
@@ -36,6 +51,7 @@ pub fn init_logs(
                     .with_default_directive(LevelFilter::INFO.into())
                     .from_env_lossy(),
             )
+            .with_filter(filter)
             .boxed(),
         TracingFormat::Json => tracing_subscriber::fmt::layer()
             .json()
@@ -48,6 +64,7 @@ pub fn init_logs(
                     .with_default_directive(LevelFilter::INFO.into())
                     .from_env_lossy(),
             )
+            .with_filter(filter)
             .boxed(),
     };
     layers.push(stdout_layer);

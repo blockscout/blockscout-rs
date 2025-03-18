@@ -1,26 +1,29 @@
 use crate::{
     metrics,
     proto::{
-        solidity_verifier_server::SolidityVerifier, ListCompilerVersionsRequest,
-        ListCompilerVersionsResponse, VerifyResponse, VerifySolidityMultiPartRequest,
-        VerifySolidityStandardJsonRequest,
+        solidity_verifier_server::SolidityVerifier, BatchVerifyResponse,
+        BatchVerifySolidityMultiPartRequest, BatchVerifySolidityStandardJsonRequest,
+        ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyResponse,
+        VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     },
-    settings::{Extensions, FetcherSettings, S3FetcherSettings, SoliditySettings},
+    services::common,
+    settings::SoliditySettings,
+    types,
     types::{
         LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, StandardJsonParseError,
         VerifyResponseWrapper, VerifySolidityMultiPartRequestWrapper,
         VerifySolidityStandardJsonRequestWrapper,
     },
 };
-use s3::{creds::Credentials, Bucket, Region};
+use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity, Compilers, Fetcher, ListFetcher, S3Fetcher, SolcValidator,
-    SolidityClient, SolidityCompiler, VerificationError,
+    find_methods, solidity, Compilers, SolcValidator, SolidityClient, SolidityCompiler,
+    VerificationError,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     BytecodeType, LookupMethodsRequest, LookupMethodsResponse,
 };
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
@@ -32,49 +35,24 @@ impl SolidityVerifierService {
     pub async fn new(
         settings: SoliditySettings,
         compilers_threads_semaphore: Arc<Semaphore>,
-        /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_variables)] extensions: Extensions,
     ) -> anyhow::Result<Self> {
-        let dir = settings.compilers_dir.clone();
-        let schedule = settings.refresh_versions_schedule;
-        let validator = Arc::new(SolcValidator::default());
-        let fetcher: Arc<dyn Fetcher> = match settings.fetcher {
-            FetcherSettings::List(list_settings) => Arc::new(
-                ListFetcher::new(
-                    list_settings.list_url,
-                    settings.compilers_dir,
-                    Some(schedule),
-                    Some(validator),
-                )
-                .await?,
-            ),
-            FetcherSettings::S3(s3_settings) => Arc::new(
-                S3Fetcher::new(
-                    new_bucket(&s3_settings)?,
-                    settings.compilers_dir,
-                    Some(schedule),
-                    Some(validator),
-                )
-                .await?,
-            ),
-        };
+        let solc_validator = Arc::new(SolcValidator::default());
+        let fetcher = common::initialize_fetcher(
+            settings.fetcher,
+            settings.compilers_dir.clone(),
+            settings.refresh_versions_schedule,
+            Some(solc_validator),
+        )
+        .await
+        .context("solidity fetcher initialization")?;
         let compilers = Compilers::new(
             fetcher,
             SolidityCompiler::new(),
             compilers_threads_semaphore,
         );
-        compilers.load_from_dir(&dir).await;
+        compilers.load_from_dir(&settings.compilers_dir).await;
 
-        /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_mut)]
-        let mut client = SolidityClient::new(compilers);
-
-        #[cfg(feature = "sig-provider-extension")]
-        if let Some(sig_provider) = extensions.sig_provider {
-            // TODO(#221): create only one instance of middleware/connection
-            client = client
-                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
-        }
+        let client = SolidityClient::new(compilers);
 
         Ok(Self {
             client: Arc::new(client),
@@ -107,7 +85,7 @@ impl SolidityVerifier for SolidityVerifierService {
 
         tracing::debug!(
             bytecode = request.bytecode,
-            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+            bytecode_type = BytecodeType::try_from(request.bytecode_type)
                 .unwrap()
                 .as_str_name(),
             compiler_version = request.compiler_version,
@@ -118,7 +96,14 @@ impl SolidityVerifier for SolidityVerifierService {
             "Request details"
         );
 
-        let result = solidity::multi_part::verify(self.client.clone(), request.try_into()?).await;
+        let mut verification_request: solidity::multi_part::VerificationRequest =
+            request.try_into()?;
+        verification_request.compiler_version = common::normalize_request_compiler_version(
+            &self.client.compilers().all_versions(),
+            &verification_request.compiler_version,
+        )?;
+
+        let result = solidity::multi_part::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
             tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
@@ -172,7 +157,7 @@ impl SolidityVerifier for SolidityVerifierService {
 
         tracing::debug!(
             bytecode = request.bytecode,
-            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+            bytecode_type = BytecodeType::try_from(request.bytecode_type)
                 .unwrap()
                 .as_str_name(),
             compiler_version = request.compiler_version,
@@ -180,7 +165,7 @@ impl SolidityVerifier for SolidityVerifierService {
             "Request details"
         );
 
-        let verification_request = {
+        let mut verification_request: solidity::standard_json::VerificationRequest = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
                 match err {
@@ -197,6 +182,11 @@ impl SolidityVerifier for SolidityVerifierService {
             }
             request.unwrap()
         };
+        verification_request.compiler_version = common::normalize_request_compiler_version(
+            &self.client.compilers().all_versions(),
+            &verification_request.compiler_version,
+        )?;
+
         let result =
             solidity::standard_json::verify(self.client.clone(), verification_request).await;
 
@@ -229,6 +219,76 @@ impl SolidityVerifier for SolidityVerifierService {
         Ok(Response::new(response.into_inner()))
     }
 
+    async fn batch_verify_multi_part(
+        &self,
+        request: Request<BatchVerifySolidityMultiPartRequest>,
+    ) -> Result<Response<BatchVerifyResponse>, Status> {
+        let request = request.into_inner();
+
+        let contracts =
+            types::batch_verification::from_proto_contracts_to_inner(&request.contracts)?;
+        let compiler_version = types::batch_verification::from_proto_compiler_version_to_inner(
+            &request.compiler_version,
+        )?;
+
+        let content = types::batch_verification::from_proto_solidity_multi_part_content_to_inner(
+            request.sources,
+            request.evm_version,
+            request.optimization_runs,
+            request.libraries,
+        )?;
+
+        let verification_request = solidity::multi_part::BatchVerificationRequest {
+            contracts,
+            compiler_version,
+            content,
+        };
+
+        let result =
+            solidity::multi_part::batch_verify(self.client.clone(), verification_request).await;
+
+        match result {
+            Ok(results) => types::batch_verification::process_verification_results(results),
+            Err(err) => types::batch_verification::process_batch_error(err),
+        }
+    }
+
+    async fn batch_verify_standard_json(
+        &self,
+        request: Request<BatchVerifySolidityStandardJsonRequest>,
+    ) -> Result<Response<BatchVerifyResponse>, Status> {
+        let request = request.into_inner();
+
+        let contracts =
+            types::batch_verification::from_proto_contracts_to_inner(&request.contracts)?;
+        let compiler_version = types::batch_verification::from_proto_compiler_version_to_inner(
+            &request.compiler_version,
+        )?;
+
+        let input = match serde_json::from_str::<foundry_compilers::CompilerInput>(&request.input) {
+            Ok(input) => input,
+            Err(err) => {
+                return Ok(types::batch_verification::compilation_error(format!(
+                    "Invalid standard json: {err}"
+                )))
+            }
+        };
+
+        let verification_request = solidity::standard_json::BatchVerificationRequest {
+            contracts,
+            compiler_version,
+            content: solidity::standard_json::StandardJsonContent { input },
+        };
+
+        let result =
+            solidity::standard_json::batch_verify(self.client.clone(), verification_request).await;
+
+        match result {
+            Ok(results) => types::batch_verification::process_verification_results(results),
+            Err(err) => types::batch_verification::process_batch_error(err),
+        }
+    }
+
     async fn list_compiler_versions(
         &self,
         _request: Request<ListCompilerVersionsRequest>,
@@ -248,38 +308,4 @@ impl SolidityVerifier for SolidityVerifierService {
         let response = LookupMethodsResponseWrapper::from(methods);
         Ok(Response::new(response.into()))
     }
-}
-
-fn new_region(region: Option<String>, endpoint: Option<String>) -> Option<Region> {
-    let region = region.unwrap_or_default();
-    if let Some(endpoint) = endpoint {
-        return Some(Region::Custom { region, endpoint });
-    }
-
-    // try to match with AWS regions, fail otherwise
-    let region = Region::from_str(&region).ok()?;
-    match region {
-        Region::Custom {
-            region: _,
-            endpoint: _,
-        } => None,
-        region => Some(region),
-    }
-}
-
-fn new_bucket(settings: &S3FetcherSettings) -> anyhow::Result<Arc<Bucket>> {
-    let region = new_region(settings.region.clone(), settings.endpoint.clone())
-        .ok_or_else(|| anyhow::anyhow!("got invalid region/endpoint settings"))?;
-    let bucket = Arc::new(Bucket::new(
-        &settings.bucket,
-        region,
-        Credentials::new(
-            settings.access_key.as_deref(),
-            settings.secret_key.as_deref(),
-            None,
-            None,
-            None,
-        )?,
-    )?);
-    Ok(bucket)
 }

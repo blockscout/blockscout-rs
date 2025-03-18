@@ -13,14 +13,14 @@ impl TryFrom<LookupMethodsRequestWrapper> for LookupMethodsRequest {
     type Error = tonic::Status;
 
     fn try_from(request: LookupMethodsRequestWrapper) -> Result<Self, Self::Error> {
-        let bytecode = DisplayBytes::from_str(&request.bytecode)
+        let bytecode = DisplayBytes::from_str(&request.0.bytecode)
             .map_err(|e| tonic::Status::invalid_argument(format!("Invalid bytecode: {e:?}")))?
             .0;
-        let abi = Abi::load(request.abi.as_bytes())
+        let abi = Abi::load(request.0.abi.as_bytes())
             .map_err(|e| tonic::Status::invalid_argument(format!("Invalid abi: {e:?}")))?;
-        let source_map = sourcemap::parse(&request.source_map)
+        let source_map = sourcemap::parse(&request.0.source_map)
             .map_err(|e| tonic::Status::invalid_argument(format!("Invalid source_map: {e:?}")))?;
-        let file_ids = request.file_ids.clone();
+        let file_ids = request.0.file_ids.clone();
 
         Ok(Self {
             bytecode,

@@ -1,15 +1,43 @@
 swagger: "2.0"
 info:
-  title: stats.proto
+  title: Stats service
   version: version not set
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
 tags:
   - name: StatsService
   - name: Health
+schemes:
+  - https
 consumes:
   - application/json
 produces:
   - application/json
 paths:
+  /api/v1/charts/batch-update:
+    post:
+      operationId: StatsService_BatchUpdateCharts
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1BatchUpdateChartsResult'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1BatchUpdateChartsRequest'
+      tags:
+        - Instances
+      security:
+        - ApiKeyAuth: []
   /api/v1/counters:
     get:
       operationId: StatsService_GetCounters
@@ -65,6 +93,73 @@ paths:
           in: query
           required: false
           type: string
+        - name: resolution
+          in: query
+          required: false
+          type: string
+          enum:
+            - RESOLUTION_UNSPECIFIED
+            - DAY
+            - WEEK
+            - MONTH
+            - YEAR
+          default: RESOLUTION_UNSPECIFIED
+      tags:
+        - StatsService
+  /api/v1/pages/contracts:
+    get:
+      operationId: StatsService_GetContractsPageStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ContractsPageStats'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
+  /api/v1/pages/main:
+    get:
+      operationId: StatsService_GetMainPageStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1MainPageStats'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
+  /api/v1/pages/transactions:
+    get:
+      operationId: StatsService_GetTransactionsPageStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1TransactionsPageStats'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
+  /api/v1/update-status:
+    get:
+      operationId: StatsService_GetUpdateStatus
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1UpdateStatus'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
       tags:
         - StatsService
   /health:
@@ -118,6 +213,67 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1BatchUpdateChartRejection:
+    type: object
+    properties:
+      name:
+        type: string
+      reason:
+        type: string
+  v1BatchUpdateChartsRequest:
+    type: object
+    properties:
+      chart_names:
+        type: array
+        items:
+          type: string
+      from:
+        type: string
+        title: Default is today
+      update_later:
+        type: boolean
+  v1BatchUpdateChartsResult:
+    type: object
+    properties:
+      total:
+        type: integer
+        format: int64
+      total_rejected:
+        type: integer
+        format: int64
+      accepted:
+        type: array
+        items:
+          type: string
+      rejected:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1BatchUpdateChartRejection'
+  v1ChartSubsetUpdateStatus:
+    type: string
+    enum:
+      - PENDING
+      - WAITING_FOR_STARTING_CONDITION
+      - RUNNING_INITIAL_UPDATE
+      - COMPLETED_INITIAL_UPDATE
+    default: PENDING
+    title: |-
+      - PENDING: No actions were taken yet for some charts
+       - WAITING_FOR_STARTING_CONDITION: Some charts are waiting for starting condition
+       - RUNNING_INITIAL_UPDATE: Some charts are still running initial update
+       - COMPLETED_INITIAL_UPDATE: Initial updates were completed for all charts
+  v1ContractsPageStats:
+    type: object
+    properties:
+      total_contracts:
+        $ref: '#/definitions/v1Counter'
+      new_contracts_24h:
+        $ref: '#/definitions/v1Counter'
+      total_verified_contracts:
+        $ref: '#/definitions/v1Counter'
+      new_verified_contracts_24h:
+        $ref: '#/definitions/v1Counter'
   v1Counter:
     type: object
     properties:
@@ -152,6 +308,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Point'
+      info:
+        $ref: '#/definitions/v1LineChartInfo'
   v1LineChartInfo:
     type: object
     properties:
@@ -163,6 +321,10 @@ definitions:
         type: string
       units:
         type: string
+      resolutions:
+        type: array
+        items:
+          type: string
   v1LineChartSection:
     type: object
     properties:
@@ -183,11 +345,87 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1LineChartSection'
+  v1MainPageStats:
+    type: object
+    properties:
+      average_block_time:
+        $ref: '#/definitions/v1Counter'
+      total_addresses:
+        $ref: '#/definitions/v1Counter'
+      total_blocks:
+        $ref: '#/definitions/v1Counter'
+      total_transactions:
+        $ref: '#/definitions/v1Counter'
+      yesterday_transactions:
+        $ref: '#/definitions/v1Counter'
+      total_operational_transactions:
+        $ref: '#/definitions/v1Counter'
+      yesterday_operational_transactions:
+        $ref: '#/definitions/v1Counter'
+      daily_new_transactions:
+        $ref: '#/definitions/v1LineChart'
+      daily_new_operational_transactions:
+        $ref: '#/definitions/v1LineChart'
   v1Point:
     type: object
     properties:
       date:
         type: string
+      date_to:
+        type: string
       value:
         type: string
+      is_approximate:
+        type: boolean
     title: All integers are encoded as strings to prevent data loss
+  v1Resolution:
+    type: string
+    enum:
+      - RESOLUTION_UNSPECIFIED
+      - DAY
+      - WEEK
+      - MONTH
+      - YEAR
+    default: RESOLUTION_UNSPECIFIED
+  v1TransactionsPageStats:
+    type: object
+    properties:
+      pending_transactions_30m:
+        $ref: '#/definitions/v1Counter'
+      transactions_fee_24h:
+        $ref: '#/definitions/v1Counter'
+      average_transactions_fee_24h:
+        $ref: '#/definitions/v1Counter'
+      transactions_24h:
+        $ref: '#/definitions/v1Counter'
+      operational_transactions_24h:
+        $ref: '#/definitions/v1Counter'
+  v1UpdateStatus:
+    type: object
+    properties:
+      all_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts
+      independent_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts that are independent from any indexing
+      blocks_dependent_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts that depend on indexing blocks
+      internal_transactions_dependent_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts that depend on indexing internal transactions and blocks
+      user_ops_dependent_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts that depend on indexing user operations and internal transactions
+    title: |-
+      Each field represents status of charts with corresponding dependency
+      as well as all charts with weaker requirements
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    name: x-api-key
+    in: header
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs

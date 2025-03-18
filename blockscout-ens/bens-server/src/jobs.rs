@@ -1,5 +1,5 @@
 use anyhow::Context;
-use bens_logic::subgraphs_reader::SubgraphReader;
+use bens_logic::subgraph::SubgraphReader;
 use std::sync::Arc;
 use tokio_cron_scheduler::Job;
 

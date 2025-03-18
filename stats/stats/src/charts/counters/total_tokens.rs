@@ -1,64 +1,69 @@
 use crate::{
-    charts::{insert::DateValue, updater::ChartFullUpdater},
-    UpdateError,
+    data_source::{
+        kinds::{
+            local_db::DirectPointLocalDbChartSource,
+            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
+        },
+        types::BlockscoutMigrations,
+    },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
-use async_trait::async_trait;
+
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, Statement};
+use sea_orm::{DbBackend, Statement};
 
-#[derive(Default, Debug)]
-pub struct TotalTokens {}
+pub struct TotalTokensStatement;
 
-#[async_trait]
-impl ChartFullUpdater for TotalTokens {
-    async fn get_values(
-        &self,
-        blockscout: &DatabaseConnection,
-    ) -> Result<Vec<DateValue>, UpdateError> {
-        let data = DateValue::find_by_statement(Statement::from_string(
+impl StatementForOne for TotalTokensStatement {
+    fn get_statement(_: &BlockscoutMigrations) -> Statement {
+        Statement::from_string(
             DbBackend::Postgres,
             r#"
-            SELECT 
-                (
-                    SELECT count(*)::text
-                        FROM tokens
-                ) AS "value",
-                (
-                    SELECT max(timestamp)::date as "date" 
-                        FROM blocks
-                        WHERE blocks.consensus = true
-                ) AS "date"
-            "#
-            .into(),
-        ))
-        .one(blockscout)
-        .await
-        .map_err(UpdateError::BlockscoutDB)?
-        .ok_or_else(|| UpdateError::Internal("query returned nothing".into()))?;
-
-        Ok(vec![data])
+                SELECT 
+                    (
+                        SELECT count(*)::text
+                            FROM tokens
+                    ) AS "value",
+                    (
+                        SELECT max(timestamp)::date as "date" 
+                            FROM blocks
+                            WHERE blocks.consensus = true
+                    ) AS "date"
+            "#,
+        )
     }
 }
 
-#[async_trait]
-impl crate::Chart for TotalTokens {
-    fn name(&self) -> &str {
-        "totalTokens"
-    }
+pub type TotalTokensRemote = RemoteDatabaseSource<PullOne<TotalTokensStatement, NaiveDate, String>>;
 
-    fn chart_type(&self) -> ChartType {
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "totalTokens".into()
+    }
+}
+
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
+
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
-
-    async fn update(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
+
+pub type TotalTokens = DirectPointLocalDbChartSource<TotalTokensRemote, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -68,7 +73,6 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_tokens() {
-        let counter = TotalTokens::default();
-        simple_test_counter("update_total_tokens", counter, "4").await;
+        simple_test_counter::<TotalTokens>("update_total_tokens", "4", None).await;
     }
 }

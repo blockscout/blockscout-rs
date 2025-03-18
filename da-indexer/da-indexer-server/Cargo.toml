@@ -1,0 +1,31 @@
+[package]
+name = "da-indexer-server"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+da-indexer-proto = { path = "../da-indexer-proto" }
+da-indexer-logic = { path = "../da-indexer-logic" }
+da-indexer-migration = { path = "../da-indexer-migration" }
+actix-web = "4.2"
+anyhow = "1.0"
+async-trait = "0.1"
+blockscout-service-launcher = { workspace = true, features = ["database-0_12" ] }
+config = "0.14"
+sea-orm = "0.12.2"
+serde = "1.0"
+serde_json = "1.0.96"
+tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
+tonic = "0.8"
+tracing = "0.1"
+base64 = "0.22.0"
+hex = "0.4.3"
+blockscout-display-bytes = "1.0.0"
+
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = [ "test-server","test-database"] }
+pretty_assertions = "1.3"
+reqwest = { version = "0.12", features = ["json"]}
+

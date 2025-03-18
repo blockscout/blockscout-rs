@@ -4,7 +4,11 @@ use crate::{
     settings::Settings,
 };
 use anyhow::Context;
-use bens_logic::subgraphs_reader::{blockscout::BlockscoutClient, NetworkInfo, SubgraphReader};
+use bens_logic::{
+    blockscout::BlockscoutClient,
+    protocols::{Network, ProtocolInfo},
+    subgraph::SubgraphReader,
+};
 use bens_proto::blockscout::bens::v1::{
     domains_extractor_actix::route_domains_extractor,
     domains_extractor_server::DomainsExtractorServer, health_actix::route_health,
@@ -12,7 +16,7 @@ use bens_proto::blockscout::bens::v1::{
 };
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 use sqlx::postgres::PgPoolOptions;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio_cron_scheduler::JobScheduler;
 
 const SERVICE_NAME: &str = "bens";
@@ -58,54 +62,78 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .await
             .context("database connect")?,
     );
+    if settings.database.run_migrations {
+        tracing::info!("running migrations");
+        bens_logic::migrations::run(&pool).await?;
+    }
     let networks = settings
         .subgraphs_reader
         .networks
         .into_iter()
         .map(|(id, network)| {
-            let blockscout_client = BlockscoutClient::new(
+            let blockscout_client = Arc::new(BlockscoutClient::new(
                 network.blockscout.url,
                 network.blockscout.max_concurrent_requests,
                 network.blockscout.timeout,
-            );
+            ));
             (
                 id,
-                NetworkInfo {
+                Network {
                     blockscout_client,
-                    subgraph_configs: network
-                        .subgraphs
-                        .into_iter()
-                        .map(|(name, settings)| {
-                            (
-                                name,
-                                bens_logic::subgraphs_reader::SubgraphSettings::from(settings),
-                            )
-                        })
-                        .collect(),
+                    use_protocols: network.use_protocols,
+                    rpc_url: network.rpc_url,
                 },
             )
         })
-        .collect();
-
-    tracing::info!("found networks from config: {networks:?}");
-
-    let subgraph_reader = Arc::new(
-        SubgraphReader::initialize(pool, networks)
-            .await
-            .context("failed to initialize subgraph-reader")?,
+        .collect::<HashMap<_, _>>();
+    tracing::info!(
+        "networks from config: {}",
+        serde_json::json!(networks
+            .iter()
+            .map(|(id, n)| (id, n.use_protocols.iter().collect::<Vec<_>>()))
+            .collect::<HashMap<_, _>>())
     );
+    let protocols = settings
+        .subgraphs_reader
+        .protocols
+        .into_iter()
+        .filter(|(_, p)| !p.disabled)
+        .map(|(name, p)| {
+            (
+                name.clone(),
+                ProtocolInfo {
+                    slug: name,
+                    network_id: p.network_id,
+                    tld_list: p.tld_list,
+                    subgraph_name: p.subgraph_name,
+                    address_resolve_technique: p.address_resolve_technique,
+                    meta: p.meta.0,
+                    protocol_specific: p.protocol_specific.0,
+                },
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    tracing::info!(
+        "protocols from config: {:?}",
+        protocols.keys().collect::<Vec<_>>()
+    );
+
+    let subgraph_reader = SubgraphReader::initialize(pool, networks, protocols)
+        .await
+        .context("failed to initialize subgraph-reader")?;
+    let subgraph_reader = Arc::new(subgraph_reader);
     let domains_extractor = Arc::new(DomainsExtractorService::new(subgraph_reader.clone()));
 
-    if settings.subgraphs_reader.cache_enabled {
-        let scheduler = JobScheduler::new().await?;
-        scheduler
-            .add(jobs::refresh_cache_job(
-                &settings.subgraphs_reader.refresh_cache_schedule,
-                subgraph_reader.clone(),
-            )?)
-            .await?;
-        scheduler.start().await?;
-    }
+    let scheduler = JobScheduler::new().await?;
+    scheduler
+        .add(jobs::refresh_cache_job(
+            &settings.subgraphs_reader.refresh_cache_schedule,
+            subgraph_reader.clone(),
+        )?)
+        .await?;
+    tracing::info!("starting job scheduler");
+    scheduler.start().await?;
 
     let router = Router {
         domains_extractor,
@@ -121,5 +149,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
     };
 
+    tracing::info!("launching web service");
     launcher::launch(&launch_settings, http_router, grpc_router).await
 }

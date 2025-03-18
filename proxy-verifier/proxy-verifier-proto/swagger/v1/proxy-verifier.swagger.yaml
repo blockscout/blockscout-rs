@@ -197,7 +197,8 @@ definitions:
     type: string
     enum:
       - STATUS_UNSPECIFIED
-      - SUCCESS
+      - PARTIALLY_VERIFIED
+      - FULLY_VERIFIED
       - FAILURE
       - INTERNAL_ERROR
     default: STATUS_UNSPECIFIED

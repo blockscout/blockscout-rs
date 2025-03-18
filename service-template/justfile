@@ -31,23 +31,25 @@ test-with-db *args:
 
 stop-test-postgres:
     just docker-name="{{docker-name}}-test" stop-postgres
-{% endraw -%}
-
+{% endraw %}
 run:
-    {{crate_name| upcase}}__DATABASE__URL={% raw %}{{DATABASE_URL}}{% endraw %} cargo run --bin {{project-name}}-server
+    {% if database -%}
+    {{crate_name| upcase}}__DATABASE__CONNECT__URL={% raw %}{{DATABASE_URL}}{% endraw %} \
+    {% endif -%}
+    cargo run --bin {{project-name}}-server
 
-
-{% if entity %}
-generate-entities: 
-    just {{project-name}}-logic/generate-entities
-{% endif -%}
-{% if migrations %}
+{% if entity -%}
+generate-entities:
+    sea-orm-cli generate entity --lib -o {{project-name}}-entity/src
+{% endif %}
+{% if migrations -%}
 new-migration name:
-    just {{project-name}}-logic/new-migration {% raw -%}{{name}}{% endraw %}
+    sea-orm-cli migrate generate -d {{project-name}}-migration {% raw %}{{name}}{% endraw %}
 
 migrate-up:
-    just {{project-name}}-logic/migrate-up
+    sea-orm-cli migrate -d {{project-name}}-migration up
 
 migrate-down:
-    just {{project-name}}-logic/migrate-down
+    sea-orm-cli migrate -d {{project-name}}-migration down
 {% endif %}
+

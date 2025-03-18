@@ -1,0 +1,131 @@
+use blockscout_client::apis::{configuration::Configuration, *};
+use pretty_assertions::assert_eq;
+use rstest::*;
+use stubr::Stubr;
+
+const DEFAULT_TOKEN_HASH: &str = "0xB87b96868644d99Cc70a8565BA7311482eDEBF6e";
+const DEFAULT_CONTRACT_HASH: &str = "0x8FD4596d4E7788a71F82dAf4119D069a84E7d3f3";
+const DEFAULT_TOKEN_INSTANCE_NUMBER: i32 = 1;
+const DEFAULT_TX_HASH: &str = "0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e";
+
+#[rstest]
+#[tokio::test]
+async fn health(blockscout: Stubr) {
+    let config = get_config_from_stubr(&blockscout);
+    let health = health_api::health(&config)
+        .await
+        .expect("Failed to get health");
+    assert_eq!(health.healthy, Some(true));
+    assert_eq!(
+        health
+            .metadata
+            .expect("metadata is None")
+            .latest_block
+            .expect("latest_block is None")
+            .db
+            .expect("db is None")
+            .number
+            .expect("number is None"),
+        "21979873"
+    );
+    let health_v1 = health_api::health_v1(&config)
+        .await
+        .expect("Failed to get health");
+    assert_eq!(health_v1.healthy, Some(true));
+    assert_eq!(
+        health_v1
+            .data
+            .expect("data is None")
+            .latest_block_number
+            .expect("latest_block_number is None"),
+        "21879216"
+    );
+}
+
+#[rstest]
+#[tokio::test]
+async fn blocks(blockscout: Stubr) {
+    let config = get_config_from_stubr(&blockscout);
+    let blocks = blocks_api::get_blocks(&config, None)
+        .await
+        .expect("Failed to get blocks");
+    assert!(!blocks.items.is_empty());
+}
+
+#[rstest]
+#[tokio::test]
+async fn transactions(blockscout: Stubr) {
+    let config = get_config_from_stubr(&blockscout);
+    let transactions = transactions_api::get_txs(&config, None, None, None)
+        .await
+        .expect("Failed to get transactions");
+    assert!(!transactions.items.is_empty());
+}
+
+#[rstest]
+#[tokio::test]
+async fn internal_transactions(blockscout: Stubr) {
+    let config = get_config_from_stubr(&blockscout);
+    let internal_transactions =
+        transactions_api::get_transaction_internal_txs(&config, DEFAULT_TX_HASH)
+            .await
+            .expect("Failed to get transactions");
+    assert!(!internal_transactions.items.is_empty());
+}
+
+#[rstest]
+#[tokio::test]
+async fn smart_contracts(blockscout: Stubr) {
+    let config = get_config_from_stubr(&blockscout);
+    let smart_contracts = smart_contracts_api::get_smart_contracts(&config, None, None)
+        .await
+        .expect("Failed to get transactions");
+    assert!(!smart_contracts.items.is_empty());
+    let _smart_contract = smart_contracts_api::get_smart_contract(&config, DEFAULT_CONTRACT_HASH)
+        .await
+        .expect("Failed to get transactions");
+}
+
+#[rstest]
+#[tokio::test]
+async fn tokens(blockscout: Stubr) {
+    let config = get_config_from_stubr(&blockscout);
+    let tokens = tokens_api::get_tokens_list(&config, None, None)
+        .await
+        .expect("Failed to get transactions");
+    assert!(!tokens.items.is_empty());
+
+    let _token = tokens_api::get_token(&config, DEFAULT_TOKEN_HASH)
+        .await
+        .expect("Failed to get transactions");
+    let token_instances = tokens_api::get_nft_instances(&config, DEFAULT_TOKEN_HASH)
+        .await
+        .expect("Failed to get transactions");
+    assert!(!token_instances.items.is_empty());
+
+    let _token_instance =
+        tokens_api::get_nft_instance(&config, DEFAULT_TOKEN_HASH, DEFAULT_TOKEN_INSTANCE_NUMBER)
+            .await
+            .expect("Failed to get transactions");
+}
+
+#[rstest]
+#[tokio::test]
+async fn the_transaction(blockscout: Stubr) {
+    let config = get_config_from_stubr(&blockscout);
+    transactions_api::get_tx(
+        &config,
+        "0xf7d09142363203b4c572bac2be3599de91260eb6131b57663832490e7eeaf213",
+    )
+    .await
+    .expect("Failed to get transaction");
+}
+
+#[fixture]
+fn blockscout() -> Stubr {
+    Stubr::start_blocking("tests/recorded/eth_blockscout_com")
+}
+
+fn get_config_from_stubr(stubr: &Stubr) -> Configuration {
+    Configuration::new(stubr.uri().parse().unwrap()).with_client_max_retry(3)
+}

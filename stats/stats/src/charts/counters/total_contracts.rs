@@ -1,64 +1,78 @@
 use crate::{
-    charts::{
-        create_chart,
-        insert::DateValue,
-        updater::{last_point, ChartDependentUpdater},
+    data_source::{
+        kinds::{
+            local_db::DirectPointLocalDbChartSource,
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
+        },
+        UpdateContext,
     },
-    lines::ContractsGrowth,
-    UpdateError,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    range::UniversalRange,
+    types::timespans::DateValue,
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
-use async_trait::async_trait;
+
+use blockscout_db::entity::addresses;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
-use std::sync::Arc;
+use sea_orm::{prelude::*, QuerySelect};
 
-#[derive(Default)]
-pub struct TotalContracts {
-    parent: Arc<ContractsGrowth>,
-}
+pub struct TotalContractsQueryBehaviour;
 
-impl TotalContracts {
-    pub fn new(parent: Arc<ContractsGrowth>) -> Self {
-        Self { parent }
+impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
+    type Output = DateValue<String>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        _range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Self::Output, ChartError> {
+        let value = addresses::Entity::find()
+            .select_only()
+            .filter(addresses::Column::ContractCode.is_not_null())
+            // seems to not introduce a significant performance penalty
+            .filter(addresses::Column::InsertedAt.lte(cx.time))
+            .count(cx.blockscout)
+            .await
+            .map_err(ChartError::BlockscoutDB)?;
+        let timespan = cx.time.date_naive();
+        Ok(DateValue::<String> {
+            timespan,
+            value: value.to_string(),
+        })
     }
 }
 
-#[async_trait]
-impl ChartDependentUpdater<ContractsGrowth> for TotalContracts {
-    fn parent(&self) -> Arc<ContractsGrowth> {
-        self.parent.clone()
-    }
+pub type TotalContractsRemote = RemoteDatabaseSource<TotalContractsQueryBehaviour>;
 
-    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        let last = last_point(parent_data);
-        Ok(last.into_iter().collect())
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "totalContracts".into()
     }
 }
 
-#[async_trait]
-impl crate::Chart for TotalContracts {
-    fn name(&self) -> &str {
-        "totalContracts"
-    }
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
 
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
-
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        self.parent.create(db).await?;
-        create_chart(db, self.name().into(), self.chart_type()).await
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
-
-    async fn update(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
+
+// todo: reconsider once #845 is solved
+// https://github.com/blockscout/blockscout-rs/issues/845
+// i.e. set dependency to LastPointChart<ContractsGrowth>
+pub type TotalContracts = DirectPointLocalDbChartSource<TotalContractsRemote, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -68,7 +82,6 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_contracts() {
-        let counter = TotalContracts::default();
-        simple_test_counter("update_total_contracts", counter, "23").await;
+        simple_test_counter::<TotalContracts>("update_total_contracts", "23", None).await;
     }
 }

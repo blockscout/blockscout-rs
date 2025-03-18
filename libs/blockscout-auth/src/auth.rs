@@ -69,7 +69,7 @@ pub async fn auth_from_tokens(
     blockscout_api_key: Option<&str>,
 ) -> Result<AuthSuccess, Error> {
     let mut url = blockscout_host
-        .join("/api/account/v1/authenticate")
+        .join("/api/account/v2/authenticate")
         .expect("should be valid url");
     url.set_query(
         blockscout_api_key

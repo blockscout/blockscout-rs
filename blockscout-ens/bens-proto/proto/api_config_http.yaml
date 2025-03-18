@@ -23,6 +23,9 @@ http:
       post: /api/v1/{chain_id}/addresses:batch-resolve-names
       body: "*"
 
+    - selector: blockscout.bens.v1.DomainsExtractor.GetProtocols
+      get: /api/v1/{chain_id}/protocols
+
     #################### Health ####################
 
     - selector: blockscout.bens.v1.Health.Check

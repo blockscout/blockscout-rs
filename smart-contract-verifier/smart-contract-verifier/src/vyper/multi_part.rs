@@ -4,11 +4,11 @@ use super::{
     types::Success,
 };
 use crate::{
-    compiler::Version,
+    compiler::DetailedVersion,
     verifier::{ContractVerifier, Error},
 };
 use bytes::Bytes;
-use ethers_solc::{
+use foundry_compilers::{
     artifacts::{Source, Sources},
     EvmVersion,
 };
@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 pub struct VerificationRequest {
     pub deployed_bytecode: Bytes,
     pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: Version,
+    pub compiler_version: DetailedVersion,
 
     pub content: MultiFileContent,
 
@@ -69,6 +69,7 @@ impl TryFrom<MultiFileContent> for CompilerInput {
 pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
     let compiler_input = CompilerInput::try_from(request.content)?;
     let verifier = ContractVerifier::new(
+        true,
         client.compilers(),
         &request.compiler_version,
         request.creation_bytecode,
@@ -80,9 +81,6 @@ pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result
     // If case of success, we allow middlewares to process success and only then return it to the caller;
     // Otherwise, we just return an error
     let success = Success::from((compiler_input, result));
-    if let Some(middleware) = client.middleware() {
-        middleware.call(&success).await;
-    }
 
     Ok(success)
 }

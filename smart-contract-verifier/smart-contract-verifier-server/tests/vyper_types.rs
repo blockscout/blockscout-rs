@@ -1,6 +1,8 @@
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{de::DeserializeOwned, Deserialize};
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BytecodeType;
+use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
+    verify_response::extra_data::BytecodePart, BytecodeType,
+};
 use std::{borrow::Cow, collections::BTreeMap, path::PathBuf, str::FromStr};
 
 const TEST_CASES_DIR: &str = "tests/test_cases_vyper";
@@ -41,6 +43,18 @@ pub trait TestCase {
     fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
         None
     }
+
+    fn is_blueprint(&self) -> bool {
+        false
+    }
+
+    fn expected_local_creation_code(&self) -> Option<Vec<BytecodePart>> {
+        None
+    }
+
+    fn expected_local_runtime_code(&self) -> Option<Vec<BytecodePart>> {
+        None
+    }
 }
 
 pub fn from_file<T: TestCase + DeserializeOwned>(test_case: &str) -> T {
@@ -62,10 +76,17 @@ pub struct Flattened {
     pub expected_compiler_artifacts: Option<serde_json::Value>,
     pub expected_creation_input_artifacts: Option<serde_json::Value>,
     pub expected_deployed_bytecode_artifacts: Option<serde_json::Value>,
+    #[serde(default)]
+    pub is_blueprint: bool,
+    pub expected_local_creation_code: Option<Vec<BytecodePart>>,
+    pub expected_local_runtime_code: Option<Vec<BytecodePart>>,
 
     // Verification metadata related values
     pub chain_id: Option<String>,
     pub contract_address: Option<String>,
+
+    #[serde(default)]
+    pub use_deployed_bytecode: bool,
 }
 
 fn default_flattened_contract_name() -> String {
@@ -78,9 +99,20 @@ impl TestCase for Flattened {
     }
 
     fn to_request(&self) -> serde_json::Value {
+        let (bytecode, bytecode_type) = if self.use_deployed_bytecode {
+            (
+                &self.deployed_bytecode,
+                BytecodeType::DeployedBytecode.as_str_name(),
+            )
+        } else {
+            (
+                &self.creation_bytecode,
+                BytecodeType::CreationInput.as_str_name(),
+            )
+        };
         serde_json::json!({
-            "bytecode": self.creation_bytecode,
-            "bytecodeType": BytecodeType::CreationInput.as_str_name(),
+            "bytecode": bytecode,
+            "bytecodeType": bytecode_type,
             "compilerVersion": self.compiler_version,
             "evmVersion": self.evm_version,
             "sourceFiles": {
@@ -128,10 +160,23 @@ impl TestCase for Flattened {
     fn deployed_bytecode_artifacts(&self) -> Option<serde_json::Value> {
         self.expected_deployed_bytecode_artifacts.clone()
     }
+
+    fn is_blueprint(&self) -> bool {
+        self.is_blueprint
+    }
+
+    fn expected_local_creation_code(&self) -> Option<Vec<BytecodePart>> {
+        self.expected_local_creation_code.clone()
+    }
+
+    fn expected_local_runtime_code(&self) -> Option<Vec<BytecodePart>> {
+        self.expected_local_runtime_code.clone()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct MultiPart {
+    #[allow(unused)]
     pub deployed_bytecode: String,
     pub creation_bytecode: String,
     pub compiler_version: String,
@@ -141,6 +186,8 @@ pub struct MultiPart {
     pub source_files: BTreeMap<String, String>,
     pub interfaces: BTreeMap<String, String>,
     pub expected_constructor_argument: Option<DisplayBytes>,
+    #[serde(default)]
+    pub is_blueprint: bool,
 
     // Verification metadata related values
     pub chain_id: Option<String>,
@@ -200,10 +247,15 @@ impl TestCase for MultiPart {
         });
         sources.chain(interfaces).collect()
     }
+
+    fn is_blueprint(&self) -> bool {
+        self.is_blueprint
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct StandardJson {
+    #[allow(unused)]
     pub deployed_bytecode: String,
     pub creation_bytecode: String,
     pub compiler_version: String,
@@ -212,6 +264,8 @@ pub struct StandardJson {
     #[serde(deserialize_with = "StandardJson::deserialize_input")]
     pub input: String,
     pub expected_constructor_argument: Option<DisplayBytes>,
+    #[serde(default)]
+    pub is_blueprint: bool,
 
     // Verification metadata related values
     pub chain_id: Option<String>,
@@ -339,5 +393,9 @@ impl TestCase for StandardJson {
                 panic!("bytecode metadata is not a bool")
             }
         })
+    }
+
+    fn is_blueprint(&self) -> bool {
+        self.is_blueprint
     }
 }

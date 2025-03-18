@@ -9,5 +9,5 @@ name = "entity"
 path = "src/lib.rs"
 
 [dependencies]
-sea-orm = { version = "0.12.2", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
+sea-orm = { version = "1.0.1", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
 

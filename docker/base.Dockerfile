@@ -1,4 +1,4 @@
-ARG CARGO_CHEF_VERSION=0.1.62-rust-1.75-buster
+ARG CARGO_CHEF_VERSION=0.1.71-rust-1.85
 FROM lukemathwalker/cargo-chef:${CARGO_CHEF_VERSION}
 
 ARG PROTOC_VERSION=25.2
@@ -13,8 +13,7 @@ RUN case ${TARGETARCH} in \
     esac \
         && wget https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${TARGETARCH}.zip -O ./protoc.zip \
         && unzip protoc.zip \
-        && mv ./include/* /usr/include/ \
-        && mv ./bin/protoc /usr/bin/protoc
+        && mv ./include/* /usr/include/
 
 RUN case ${TARGETARCH} in \
         "amd64") TARGETARCH=x86_64 ;; \

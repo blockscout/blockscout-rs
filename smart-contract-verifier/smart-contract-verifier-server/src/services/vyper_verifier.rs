@@ -5,15 +5,15 @@ use crate::{
         ListCompilerVersionsResponse, VerifyResponse, VerifyVyperMultiPartRequest,
         VerifyVyperStandardJsonRequest,
     },
-    settings::{Extensions, FetcherSettings, VyperSettings},
+    services::common,
+    settings::VyperSettings,
     types::{
         StandardJsonParseError, VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper,
         VerifyVyperStandardJsonRequestWrapper,
     },
 };
-use smart_contract_verifier::{
-    vyper, Compilers, ListFetcher, VerificationError, VyperClient, VyperCompiler,
-};
+use anyhow::Context;
+use smart_contract_verifier::{vyper, Compilers, VerificationError, VyperClient, VyperCompiler};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
@@ -26,38 +26,19 @@ impl VyperVerifierService {
     pub async fn new(
         settings: VyperSettings,
         compilers_threads_semaphore: Arc<Semaphore>,
-        /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_variables)] extensions: Extensions,
     ) -> anyhow::Result<Self> {
-        let dir = settings.compilers_dir.clone();
-        let list_url = match settings.fetcher {
-            FetcherSettings::List(s) => s.list_url,
-            FetcherSettings::S3(_) => {
-                return Err(anyhow::anyhow!("S3 fetcher for vyper not supported"))
-            }
-        };
-        let fetcher = Arc::new(
-            ListFetcher::new(
-                list_url,
-                settings.compilers_dir,
-                Some(settings.refresh_versions_schedule),
-                None,
-            )
-            .await?,
-        );
+        let fetcher = common::initialize_fetcher(
+            settings.fetcher,
+            settings.compilers_dir.clone(),
+            settings.refresh_versions_schedule,
+            None,
+        )
+        .await
+        .context("vyper fetcher initialization")?;
         let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
-        compilers.load_from_dir(&dir).await;
+        compilers.load_from_dir(&settings.compilers_dir).await;
 
-        /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_mut)]
-        let mut client = VyperClient::new(compilers);
-
-        #[cfg(feature = "sig-provider-extension")]
-        if let Some(sig_provider) = extensions.sig_provider {
-            // TODO(#221): create only one instance of middleware/connection
-            client = client
-                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
-        }
+        let client = VyperClient::new(compilers);
 
         Ok(Self {
             client: Arc::new(client),
@@ -90,7 +71,7 @@ impl VyperVerifier for VyperVerifierService {
 
         tracing::debug!(
             bytecode = request.bytecode,
-            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+            bytecode_type = BytecodeType::try_from(request.bytecode_type)
                 .unwrap()
                 .as_str_name(),
             compiler_version = request.compiler_version,
@@ -100,7 +81,14 @@ impl VyperVerifier for VyperVerifierService {
             "Request details"
         );
 
-        let result = vyper::multi_part::verify(self.client.clone(), request.try_into()?).await;
+        let mut verification_request: vyper::multi_part::VerificationRequest =
+            request.try_into()?;
+        verification_request.compiler_version = common::normalize_request_compiler_version(
+            &self.client.compilers().all_versions(),
+            &verification_request.compiler_version,
+        )?;
+
+        let result = vyper::multi_part::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {
             tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
@@ -154,7 +142,7 @@ impl VyperVerifier for VyperVerifierService {
 
         tracing::debug!(
             bytecode = request.bytecode,
-            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+            bytecode_type = BytecodeType::try_from(request.bytecode_type)
                 .unwrap()
                 .as_str_name(),
             compiler_version = request.compiler_version,
@@ -162,7 +150,7 @@ impl VyperVerifier for VyperVerifierService {
             "Request details"
         );
 
-        let verification_request = {
+        let mut verification_request: vyper::standard_json::VerificationRequest = {
             let request: Result<_, StandardJsonParseError> = request.try_into();
             if let Err(err) = request {
                 match err {
@@ -177,6 +165,11 @@ impl VyperVerifier for VyperVerifierService {
             }
             request.unwrap()
         };
+        verification_request.compiler_version = common::normalize_request_compiler_version(
+            &self.client.compilers().all_versions(),
+            &verification_request.compiler_version,
+        )?;
+
         let result = vyper::standard_json::verify(self.client.clone(), verification_request).await;
 
         let response = if let Ok(verification_success) = result {

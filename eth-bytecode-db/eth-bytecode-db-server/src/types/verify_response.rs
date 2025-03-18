@@ -49,6 +49,7 @@ mod tests {
             raw_deployed_bytecode: vec![],
             creation_input_parts: vec![],
             deployed_bytecode_parts: vec![],
+            is_blueprint: false,
         };
 
         let expected = proto::VerifyResponse {

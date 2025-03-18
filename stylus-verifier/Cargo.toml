@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "stylus-verifier-logic",
+    "stylus-verifier-proto",
+    "stylus-verifier-server",
+]
+
+[workspace.dependencies]
+stylus-verifier-logic = { path = "stylus-verifier-logic" }
+stylus-verifier-proto = { path = "stylus-verifier-proto" }
+stylus-verifier-server = { path = "stylus-verifier-server" }
+
+alloy-json-abi = { version = "0.8.3" }
+actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-web = { version = "4" }
+anyhow = { version = "1.0.87" }
+async-trait = { version = "0.1.82" }
+blockscout-display-bytes = { version = "1.1.0" }
+blockscout-service-launcher = { version = "0.13.1" }
+bollard = { version = "0.17.1" }
+bytes = { version = "1.7.1" }
+flate2 = { version = "1.0.34" }
+futures-util = { version = "0.3.30" }
+git2 = { version = "0.19.0" }
+pretty_assertions = { version = "1.4.0" }
+prost = { version = "0.11" }
+prost-build = { version = "0.11" }
+reqwest = { version = "0.12.7" }
+semver = { version = "1.0.23" }
+serde = { version = "1" }
+serde_json = { version = "1.0.128" }
+serde_with = { version = "3.9" }
+tar = { version = "0.4.42" }
+tempfile = { version = "3.12.0" }
+thiserror = { version = "1.0.63" }
+tokio = { version = "1.40.0" }
+toml = { version = "0.8.19" }
+tonic = { version = "0.8" }
+tonic-build = { version = "0.8" }
+tracing = { version = "0.1.40" }
+url = { version = "2.5.2" }
+uuid = { version = "1.10.0" }

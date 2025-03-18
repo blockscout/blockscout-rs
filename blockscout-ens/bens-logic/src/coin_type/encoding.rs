@@ -1,11 +1,11 @@
-use ethers::{types::Address, utils::to_checksum};
+use alloy::primitives::Address;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum Encoding {
-    CheckSummedHex(Option<u8>),
+    CheckSummedHex(Option<u64>),
 }
 
 impl Encoding {
@@ -13,7 +13,7 @@ impl Encoding {
         match self {
             Self::CheckSummedHex(chain_id) => {
                 let address = Address::from_str(address)?;
-                Ok(to_checksum(&address, *chain_id))
+                Ok(address.to_checksum(*chain_id))
             }
         }
     }

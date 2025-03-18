@@ -11,7 +11,7 @@ use ethers_solc::CompilerOutput;
 pub struct Success {
     pub compiler_input: CompilerInput,
     pub compiler_output: CompilerOutput,
-    pub compiler_version: compiler::Version,
+    pub compiler_version: compiler::DetailedVersion,
     pub file_path: String,
     pub contract_name: String,
     pub abi: Option<serde_json::Value>,
@@ -21,6 +21,7 @@ pub struct Success {
     pub compilation_artifacts: serde_json::Value,
     pub creation_input_artifacts: serde_json::Value,
     pub deployed_bytecode_artifacts: serde_json::Value,
+    pub is_blueprint: bool,
 }
 
 impl From<(CompilerInput, verifier::Success)> for Success {
@@ -38,6 +39,7 @@ impl From<(CompilerInput, verifier::Success)> for Success {
             compilation_artifacts: success.compilation_artifacts,
             creation_input_artifacts: success.creation_input_artifacts,
             deployed_bytecode_artifacts: success.deployed_bytecode_artifacts,
+            is_blueprint: success.is_blueprint,
         }
     }
 }

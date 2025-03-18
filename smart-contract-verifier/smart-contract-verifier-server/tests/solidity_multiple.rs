@@ -34,13 +34,9 @@ async fn global_service() -> &'static Arc<SolidityVerifierService> {
         .get_or_init(|| async {
             let settings = Settings::default();
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = SolidityVerifierService::new(
-                settings.solidity,
-                Arc::new(compilers_lock),
-                settings.extensions.solidity,
-            )
-            .await
-            .expect("couldn't initialize the service");
+            let service = SolidityVerifierService::new(settings.solidity, Arc::new(compilers_lock))
+                .await
+                .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
@@ -240,7 +236,8 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid optimization"
     );
     assert_eq!(
-        result_compiler_settings.optimizer.runs, input.optimization_runs,
+        result_compiler_settings.optimizer.runs,
+        input.optimization_runs.or(Some(200)),
         "Invalid optimization runs"
     );
     assert_eq!(

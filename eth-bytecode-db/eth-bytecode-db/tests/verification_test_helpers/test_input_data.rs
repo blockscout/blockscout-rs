@@ -45,6 +45,7 @@ impl<T> TestInputData<T> {
             ),
             creation_input_parts,
             deployed_bytecode_parts,
+            is_blueprint: verifier_source.is_blueprint,
         };
 
         let verifier_response = smart_contract_verifier_v2::VerifyResponse {
@@ -142,6 +143,7 @@ pub fn input_data_1<T>(request: T, source_type: SourceType) -> TestInputData<T> 
         deployed_bytecode_artifacts: Some(
             "{ \"sourceMap\": \"10:11:12:-:0;;;;;;;;;;;;;;;;;;;\" }".to_string(),
         ),
+        is_blueprint: false,
     };
 
     let verifier_extra_data = smart_contract_verifier_v2::verify_response::ExtraData {

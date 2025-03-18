@@ -16,11 +16,11 @@
         "sourceMap": "240:322:0:-:0;;;;;;;;;;;;;;;;;;;",
         "linkReferences": {},
         "cborAuxdata": {
-            "0": {
+            "1": {
                 "offset": 3833,
                 "value": "0xa2646970667358221220eb466f038036d841adf3b5de7e47acee2082756933748c230241209b1f46dd3664736f6c63430008120033"
             },
-            "1": {
+            "2": {
                 "offset": 3886,
                 "value": "0xa2646970667358221220992223d63790203b6dd174a62d5bcad5d8d63eba85aa04eecd13acacf21ab57064736f6c63430008120033"
             }
@@ -31,11 +31,11 @@
         "linkReferences": {},
         "immutableReferences": {}, 
         "cborAuxdata": {
-            "0": {
+            "1": {
                 "offset": 3801,
                 "value": "0xa2646970667358221220eb466f038036d841adf3b5de7e47acee2082756933748c230241209b1f46dd3664736f6c63430008120033"
             },
-            "1": {
+            "2": {
                 "offset": 3854,
                 "value": "0xa2646970667358221220992223d63790203b6dd174a62d5bcad5d8d63eba85aa04eecd13acacf21ab57064736f6c63430008120033"
             }

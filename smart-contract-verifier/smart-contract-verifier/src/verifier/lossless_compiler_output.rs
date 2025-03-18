@@ -5,53 +5,53 @@ use std::collections::BTreeMap;
 pub struct CompilerOutput {
     #[serde(default)]
     pub contracts: BTreeMap<String, BTreeMap<String, Contract>>,
+    #[serde(default)]
+    pub sources: SourceFiles,
+}
+
+pub type SourceFiles = BTreeMap<String, SourceFile>;
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct SourceFile {
+    pub id: u32,
+    pub ast: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Contract {
-    /// The Ethereum Contract Metadata.
-    /// See <https://docs.soliditylang.org/en/develop/metadata.html>
+    /// The Ethereum Contract ABI.
+    /// See https://docs.soliditylang.org/en/develop/abi-spec.html
     pub abi: Option<serde_json::Value>,
-    #[serde(default)]
     pub userdoc: Option<serde_json::Value>,
-    #[serde(default)]
     pub devdoc: Option<serde_json::Value>,
-    #[serde(default)]
     pub storage_layout: Option<serde_json::Value>,
     /// EVM-related outputs
-    #[serde(default)]
-    pub evm: Option<Evm>,
+    pub evm: Evm,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Evm {
-    pub bytecode: Option<Bytecode>,
-    #[serde(default)]
-    pub deployed_bytecode: Option<DeployedBytecode>,
+    pub bytecode: Bytecode,
+    pub deployed_bytecode: DeployedBytecode,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Bytecode {
+    pub object: foundry_compilers::artifacts::BytecodeObject,
     /// The source mapping as a string. See the source mapping definition.
-    #[serde(default)]
     pub source_map: Option<String>,
     /// If given, this is an unlinked object.
-    #[serde(default)]
     pub link_references: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DeployedBytecode {
-    /// The source mapping as a string. See the source mapping definition.
-    #[serde(default)]
-    pub source_map: Option<String>,
-    /// If given, this is an unlinked object.
-    #[serde(default)]
-    pub link_references: Option<serde_json::Value>,
-    #[serde(default)]
+    #[serde(flatten)]
+    pub bytecode: Bytecode,
+
     pub immutable_references: Option<serde_json::Value>,
 }

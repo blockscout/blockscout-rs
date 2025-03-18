@@ -36,6 +36,27 @@ async fn test_returns_valid_source(service: MockVyperVerifierService) {
 #[tokio::test]
 #[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
+async fn test_propagates_is_blueprint_in_response() {
+    let default_request = VerifyVyperStandardJsonRequest {
+        bytecode: "".to_string(),
+        bytecode_type: BytecodeType::CreationInput.into(),
+        compiler_version: "".to_string(),
+        input: "".to_string(),
+        metadata: None,
+    };
+    let source_type = verification::SourceType::Vyper;
+    test_cases::test_propagates_is_blueprint_in_response::<MockVyperVerifierService, _>(
+        TEST_SUITE_NAME,
+        default_request,
+        source_type,
+    )
+    .await;
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
 async fn test_verify_then_search(service: MockVyperVerifierService) {
     let default_request = VerifyVyperStandardJsonRequest {
         bytecode: "".to_string(),

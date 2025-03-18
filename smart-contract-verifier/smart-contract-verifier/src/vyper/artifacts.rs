@@ -1,7 +1,6 @@
-use crate::verifier;
-use ethers_solc::artifacts::{
+use foundry_compilers::artifacts::{
     output_selection::{FileOutputSelection, OutputSelection},
-    serde_helpers,
+    serde_helpers, Source, Sources,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,22 +15,11 @@ pub type Interfaces = BTreeMap<PathBuf, Interface>;
 #[serde(rename_all = "camelCase")]
 pub struct CompilerInput {
     pub language: String,
-    pub sources: ethers_solc::artifacts::Sources,
+    pub sources: Sources,
     #[serde(default)]
     pub interfaces: Interfaces,
     #[serde(default)]
     pub settings: Settings,
-}
-
-impl verifier::CompilerInput for CompilerInput {
-    fn modify(mut self) -> Self {
-        self.sources.iter_mut().for_each(|(_file, source)| {
-            let mut modified_content = source.content.as_ref().clone();
-            modified_content.push(' ');
-            source.content = std::sync::Arc::new(modified_content);
-        });
-        self
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,7 +30,7 @@ pub struct Settings {
         with = "serde_helpers::display_from_str_opt",
         skip_serializing_if = "Option::is_none"
     )]
-    pub evm_version: Option<ethers_solc::EvmVersion>,
+    pub evm_version: Option<foundry_compilers::EvmVersion>,
     /// Indicates whether or not optimizations are turned on.
     /// This is true by default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -57,6 +45,12 @@ pub struct Settings {
     /// checking, but will not generate any outputs apart from errors.
     #[serde(default)]
     pub output_selection: FileOutputSelection,
+    #[serde(
+        rename = "search_paths",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub search_paths: Vec<String>,
 }
 
 impl Default for Settings {
@@ -66,6 +60,7 @@ impl Default for Settings {
             evm_version: None,
             optimize: None,
             bytecode_metadata: None,
+            search_paths: Vec::new(),
         }
     }
 }
@@ -89,7 +84,7 @@ mod interfaces {
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(untagged)]
 pub enum Interface {
-    Vyper(ethers_solc::artifacts::Source),
+    Vyper(Source),
     Abi(interfaces::AbiSource),
     ContractTypes(interfaces::ContractTypesSource),
 }
@@ -120,9 +115,7 @@ impl Interface {
                 _ => Err(anyhow::anyhow!("\"{path:?}\" is an invalid interface")),
             }
         } else {
-            Ok(Interface::Vyper(ethers_solc::artifacts::Source::new(
-                content,
-            )))
+            Ok(Interface::Vyper(Source::new(content)))
         }
     }
 
@@ -229,7 +222,7 @@ mod tests {
             (
                 vyper_data.0,
                 vyper_data.1.to_string(),
-                Interface::Vyper(ethers_solc::artifacts::Source::new(vyper_data.1)),
+                Interface::Vyper(Source::new(vyper_data.1)),
             ),
             (
                 contract_types_data.0,
@@ -274,7 +267,7 @@ mod tests {
 
         let test_data = [
             (
-                Interface::Vyper(ethers_solc::artifacts::Source::new(vyper_content)),
+                Interface::Vyper(Source::new(vyper_content)),
                 "@external\r\n@payable\r\ndef exchange_multiple(_route: address[9], _swap_params: uint256[3][4], _amount: uint256, _expected: uint256, _pools: address[4]) -> uint256: \r\n    pass\r\n\r\n@external\r\n@view\r\ndef get_exchange_multiple_amount(_route: address[9], _swap_params: uint256[3][4], _amount: uint256, _pools: address[4]) -> uint256: \r\n    pass"
             ),
             (

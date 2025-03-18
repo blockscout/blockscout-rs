@@ -55,5 +55,5 @@ fn default_eth_bytecode_db_max_retries() -> u32 {
 }
 
 fn default_eth_bytecode_db_http_url() -> url::Url {
-    url::Url::from_str("http://eth-bytecode-db.services.blockscout.com").unwrap()
+    url::Url::from_str("https://eth-bytecode-db.services.blockscout.com").unwrap()
 }

@@ -1,64 +1,69 @@
 use crate::{
-    charts::{
-        create_chart,
-        insert::DateValue,
-        updater::{last_point, ChartDependentUpdater},
+    data_source::{
+        kinds::{
+            data_manipulation::map::MapToString,
+            local_db::DirectPointLocalDbChartSource,
+            remote_db::{PullOneValue, RemoteDatabaseSource, StatementFromUpdateTime},
+        },
+        types::BlockscoutMigrations,
     },
-    lines::VerifiedContractsGrowth,
-    UpdateError,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
-use async_trait::async_trait;
+
+use blockscout_db::entity::smart_contracts;
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::prelude::*;
-use std::sync::Arc;
+use sea_orm::{
+    sea_query::{Asterisk, Func, IntoColumnRef},
+    ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, QueryTrait, Statement,
+};
 
-#[derive(Default)]
-pub struct TotalVerifiedContracts {
-    parent: Arc<VerifiedContractsGrowth>,
-}
+pub struct TotalVerifiedContractsStatement;
 
-impl TotalVerifiedContracts {
-    pub fn new(parent: Arc<VerifiedContractsGrowth>) -> Self {
-        Self { parent }
+impl StatementFromUpdateTime for TotalVerifiedContractsStatement {
+    fn get_statement(
+        update_time: DateTime<Utc>,
+        _completed_migrations: &BlockscoutMigrations,
+    ) -> Statement {
+        smart_contracts::Entity::find()
+            .select_only()
+            .filter(smart_contracts::Column::InsertedAt.lte(update_time))
+            .expr_as(Func::count(Asterisk.into_column_ref()), "value")
+            .build(DbBackend::Postgres)
     }
 }
 
-#[async_trait]
-impl ChartDependentUpdater<VerifiedContractsGrowth> for TotalVerifiedContracts {
-    fn parent(&self) -> Arc<VerifiedContractsGrowth> {
-        self.parent.clone()
-    }
+pub type TotalVerifiedContractsRemote =
+    RemoteDatabaseSource<PullOneValue<TotalVerifiedContractsStatement, NaiveDate, i64>>;
 
-    async fn get_values(&self, parent_data: Vec<DateValue>) -> Result<Vec<DateValue>, UpdateError> {
-        let last = last_point(parent_data);
-        Ok(last.into_iter().collect())
+pub struct Properties;
+
+impl Named for Properties {
+    fn name() -> String {
+        "totalVerifiedContracts".into()
     }
 }
 
-#[async_trait]
-impl crate::Chart for TotalVerifiedContracts {
-    fn name(&self) -> &str {
-        "totalVerifiedContracts"
-    }
+impl ChartProperties for Properties {
+    type Resolution = NaiveDate;
 
-    fn chart_type(&self) -> ChartType {
+    fn chart_type() -> ChartType {
         ChartType::Counter
     }
-
-    async fn create(&self, db: &DatabaseConnection) -> Result<(), DbErr> {
-        self.parent.create(db).await?;
-        create_chart(db, self.name().into(), self.chart_type()).await
+    fn missing_date_policy() -> MissingDatePolicy {
+        MissingDatePolicy::FillPrevious
     }
-
-    async fn update(
-        &self,
-        db: &DatabaseConnection,
-        blockscout: &DatabaseConnection,
-        force_full: bool,
-    ) -> Result<(), UpdateError> {
-        self.update_with_values(db, blockscout, force_full).await
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
+
+pub type TotalVerifiedContracts =
+    DirectPointLocalDbChartSource<MapToString<TotalVerifiedContractsRemote>, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -68,7 +73,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_verified_contracts() {
-        let counter = TotalVerifiedContracts::default();
-        simple_test_counter("update_total_verified_contracts", counter, "3").await;
+        simple_test_counter::<TotalVerifiedContracts>("update_total_verified_contracts", "3", None)
+            .await;
     }
 }

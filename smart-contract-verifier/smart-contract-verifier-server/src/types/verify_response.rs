@@ -164,9 +164,9 @@ mod tests {
     use super::{extra_data::bytecode_part::BytecodePartWrapper, *};
     use crate::proto::verify_response::extra_data::BytecodePart;
     use blockscout_display_bytes::Bytes as DisplayBytes;
-    use ethers_solc::CompilerInput;
+    use foundry_compilers::CompilerInput;
     use pretty_assertions::assert_eq;
-    use smart_contract_verifier::{MatchType, SoliditySuccess, Version};
+    use smart_contract_verifier::{DetailedVersion, MatchType, SoliditySuccess};
     use std::str::FromStr;
 
     #[test]
@@ -178,7 +178,7 @@ mod tests {
                 settings: Default::default(),
             },
             compiler_output: Default::default(),
-            compiler_version: Version::from_str("v0.8.17+commit.8df45f5f").unwrap(),
+            compiler_version: DetailedVersion::from_str("v0.8.17+commit.8df45f5f").unwrap(),
             file_path: "file_path".to_string(),
             contract_name: "contract_name".to_string(),
             abi: None,
