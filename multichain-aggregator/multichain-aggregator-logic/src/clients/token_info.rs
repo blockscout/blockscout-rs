@@ -4,6 +4,7 @@ use api_client_framework::{
 };
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
+use serde_with::{formats::CommaSeparator, serde_as, StringWithSeparator};
 use url::Url;
 
 pub fn new_client(url: Url) -> Result<Client, Error> {
@@ -15,11 +16,13 @@ pub struct SearchTokenInfos {
     pub params: SearchTokenInfosParams,
 }
 
+#[serde_as]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Clone, Debug, Default, PartialEq)]
 pub struct SearchTokenInfosParams {
     pub query: String,
-    pub chain_id: Option<ChainId>,
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, ChainId>")]
+    pub chain_id: Vec<ChainId>,
     pub page_size: Option<u32>,
     pub page_token: Option<String>,
 }
