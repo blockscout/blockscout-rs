@@ -1,0 +1,22 @@
+[package]
+name = "explorer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+explorer-entity = { path = "../explorer-entity" }
+explorer-migration = { path = "../explorer-migration" }
+job-queue = { path = "../job-queue", features = ["logic"] }
+reqwest-rate-limiter = { path = "../../libs/reqwest-rate-limiter" }
+
+anyhow = { version = "1.0.97", default-features = false }
+api-client-framework = { version = "0.1.0", default-features = false }
+blockscout-display-bytes = { version = "1.1.0", default-features = false }
+blockscout-service-launcher = { version = "0.18.0", default-features = false, features = ["launcher", "database-1", "tracing"] }
+futures = { version = "0.3.31", default-features = false }
+sea-orm = { version = "1.1.7", default-features = false }
+serde = { version = "1.0.219", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0.140", default-features = false }
+url = { version = "2.5.4", default-features = false, features = ["serde"] }
+tokio = { version = "1.44.1", default-features = false, features = ["rt-multi-thread", "macros"] }
+tracing = { version = "0.1.41", default-features = false, features = ["std"] }

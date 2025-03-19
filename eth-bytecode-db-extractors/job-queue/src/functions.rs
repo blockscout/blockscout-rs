@@ -1,7 +1,6 @@
 use super::entity as job_queue;
 use crate::entity::JobStatus;
 use sea_orm::{
-    prelude::Uuid,
     sea_query::{LockBehavior, LockType, SelectStatement},
     ActiveModelTrait,
     ActiveValue::Set,
@@ -11,7 +10,7 @@ use sea_orm::{
 
 pub async fn mark_as_success<C: ConnectionTrait>(
     db: &C,
-    id: Uuid,
+    id: i64,
     message: Option<String>,
 ) -> Result<(), DbErr> {
     update_status(db, JobStatus::Success, id, message).await
@@ -19,7 +18,7 @@ pub async fn mark_as_success<C: ConnectionTrait>(
 
 pub async fn mark_as_error<C: ConnectionTrait>(
     db: &C,
-    id: Uuid,
+    id: i64,
     message: Option<String>,
 ) -> Result<(), DbErr> {
     update_status(db, JobStatus::Error, id, message).await
@@ -28,7 +27,7 @@ pub async fn mark_as_error<C: ConnectionTrait>(
 async fn update_status<C: ConnectionTrait>(
     db: &C,
     new_status: JobStatus,
-    id: Uuid,
+    id: i64,
     message: Option<String>,
 ) -> Result<(), DbErr> {
     job_queue::ActiveModel {
@@ -42,7 +41,7 @@ async fn update_status<C: ConnectionTrait>(
     .map(|_| ())
 }
 
-pub async fn next_job_id<C: ConnectionTrait>(db: &C) -> Result<Option<Uuid>, DbErr> {
+pub async fn next_job_id<C: ConnectionTrait>(db: &C) -> Result<Option<i64>, DbErr> {
     let noop_filter = |select| select;
     next_job_id_with_filter(db, noop_filter).await
 }
@@ -50,14 +49,14 @@ pub async fn next_job_id<C: ConnectionTrait>(db: &C) -> Result<Option<Uuid>, DbE
 pub async fn next_job_id_with_filter<C: ConnectionTrait, F>(
     db: &C,
     related_tables_filter: F,
-) -> Result<Option<Uuid>, DbErr>
+) -> Result<Option<i64>, DbErr>
 where
     F: Fn(Select<job_queue::Entity>) -> Select<job_queue::Entity>,
 {
     let statement = next_job_id_statement(related_tables_filter);
     Ok(db.query_one(statement).await?.map(|query_result| {
         query_result
-            .try_get_by::<Uuid, _>("id")
+            .try_get_by::<i64, _>("id")
             .expect("error while try_get_by id")
     }))
 }

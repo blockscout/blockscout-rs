@@ -1,0 +1,12 @@
+[package]
+name = "explorer-entity"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "explorer_entity"
+path = "src/lib.rs"
+
+[dependencies]
+sea-orm = { version = "1" }
+job-queue = { path = "../job-queue", features = ["entity"] }
