@@ -355,9 +355,11 @@ mod success_tests {
         // Now auxdata is not retrieved for contracts compiled without metadata hash.
         // TODO: should be removed, when that is fixed
         let remove_cbor_auxdata_from_artifacts = |artifacts: &mut serde_json::Value| {
-            artifacts
-                .as_object_mut()
-                .map(|artifacts| artifacts.remove("cborAuxdata"))
+            artifacts.as_object_mut().map(|artifacts| {
+                if let Some(value) = artifacts.get_mut("cborAuxdata") {
+                    *value = serde_json::Value::Object(Default::default());
+                }
+            })
         };
 
         let mut test_case = solidity_types::from_file::<StandardJson>("no_metadata_hash");
@@ -434,5 +436,12 @@ mod success_tests {
         let verification_response =
             get_verification_response(&test_case, BytecodeType::CreationInput).await;
         validate_verification_response(&initial_test_case, verification_response);
+    }
+
+    #[tokio::test]
+    async fn supports_manually_linked_libraries() {
+        let test_case = solidity_types::from_file::<StandardJson>("libraries_manually_linked");
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 }

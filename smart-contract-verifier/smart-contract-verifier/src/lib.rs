@@ -13,6 +13,7 @@ mod verifier;
 mod batch_verifier;
 #[cfg(test)]
 mod tests;
+pub mod verify_new;
 pub mod zksync;
 
 pub(crate) use blockscout_display_bytes::Bytes as DisplayBytes;
@@ -24,7 +25,7 @@ pub use consts::{
 
 pub use crate::sourcify::Error as SourcifyError;
 pub use batch_verifier::{BatchError, BatchMatch, BatchSuccess, BatchVerificationResult};
-pub use common_types::{Contract, MatchType};
+pub use common_types::{Contract, FullyQualifiedName, Language, MatchType, OnChainCode};
 pub use compiler::{
     CompactVersion, Compilers, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher,
     Version,

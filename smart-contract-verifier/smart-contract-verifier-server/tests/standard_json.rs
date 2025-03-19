@@ -404,7 +404,7 @@ mod error_tests {
             contract_dir,
             test_input,
             StatusCode::BAD_REQUEST,
-            Some("Invalid compiler version"),
+            Some("invalid compiler version"),
         )
         .await;
     }
