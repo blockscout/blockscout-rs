@@ -105,7 +105,7 @@ impl MigrationTrait for Migration {
 
             COMMENT ON COLUMN "sources"."raw_deployed_bytecode" IS 'The result of local compilation. May be used for searching for full matches';
 
-            COMMENT ON TABLE "verified_contracts" IS 'The table contains historic data that are not required for the verificaiton     in general, but what we still would like to store as it may be useful for     further processing. Contains information about contracts being verified via
+            COMMENT ON TABLE "verified_contracts" IS 'The table contains historic data that are not required for the verification     in general, but what we still would like to store as it may be useful for     further processing. Contains information about contracts being verified via
             the service.';
 
             ALTER TABLE "source_files" ADD FOREIGN KEY ("source_id") REFERENCES "sources" ("id");
