@@ -13,6 +13,8 @@ pub enum ServiceError {
     Convert(#[from] ParseError),
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
+    #[error("external api error: {0}")]
+    ExternalApi(#[from] api_client_framework::Error),
     #[error("db error: {0}")]
     Db(#[from] DbErr),
     #[error("not found: {0}")]
@@ -41,6 +43,7 @@ impl From<ServiceError> for tonic::Status {
             ServiceError::Internal(_) => Code::Internal,
             ServiceError::NotFound(_) => Code::NotFound,
             ServiceError::Db(_) => Code::Internal,
+            ServiceError::ExternalApi(_) => Code::Internal,
         };
         tonic::Status::new(code, err.to_string())
     }

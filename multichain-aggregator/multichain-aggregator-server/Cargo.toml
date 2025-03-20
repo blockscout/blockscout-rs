@@ -29,3 +29,4 @@ url = { workspace = true, features = ["serde"] }
 blockscout-service-launcher = { workspace = true, features = [ "test-server","test-database"] }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true, features = ["json"]}
+wiremock = { workspace = true }

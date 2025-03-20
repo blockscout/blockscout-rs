@@ -87,14 +87,28 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let only_active = inner.only_active.unwrap_or(false);
-        let chains = chains::list_chains_cached(self.repo.read_db(), only_active).await?;
+        let chains = if only_active {
+            let token_info_client = &self.token_info_client;
+            let dapp_client = &self.dapp_client;
+            chains::list_active_chains(
+                self.repo.read_db(),
+                &[
+                    chains::ChainSource::Repository,
+                    chains::ChainSource::TokenInfo { token_info_client },
+                    chains::ChainSource::Dapp { dapp_client },
+                ],
+            )
+            .await?
+        } else {
+            chains::list_repo_chains_cached(self.repo.read_db(), false).await?
+        };
 
-        Ok(Response::new(ListChainsResponse {
-            items: chains
-                .into_iter()
-                .filter_map(|c| c.try_into().ok())
-                .collect(),
-        }))
+        let items = chains
+            .into_iter()
+            .filter_map(|c| c.try_into().ok())
+            .collect();
+
+        Ok(Response::new(ListChainsResponse { items }))
     }
 
     async fn list_addresses(
@@ -269,22 +283,16 @@ impl MultichainAggregatorService for MultichainAggregator {
         &self,
         _request: Request<ListDappChainsRequest>,
     ) -> Result<Response<ListDappChainsResponse>, Status> {
-        let chain_ids = self
-            .dapp_client
-            .request(&dapp::list_chains::ListChains {})
-            .await
-            .map_err(|err| {
-                tracing::error!(error = ?err, "failed to list marketplace chains");
-                Status::internal("failed to list marketplace chains")
-            })?;
-
-        let chains = chains::list_chains_cached(self.repo.read_db(), false).await?;
-
-        let items = chains
-            .into_iter()
-            .filter(|c| chain_ids.contains(&c.id.to_string()))
-            .filter_map(|c| c.try_into().ok())
-            .collect::<Vec<_>>();
+        let items = chains::list_active_chains(
+            self.repo.read_db(),
+            &[chains::ChainSource::Dapp {
+                dapp_client: &self.dapp_client,
+            }],
+        )
+        .await?
+        .into_iter()
+        .filter_map(|c| c.try_into().ok())
+        .collect();
 
         Ok(Response::new(ListDappChainsResponse { items }))
     }

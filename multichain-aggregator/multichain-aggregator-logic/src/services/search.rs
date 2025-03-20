@@ -1,8 +1,5 @@
 use crate::{
-    clients::{
-        dapp::search_dapps,
-        token_info::{SearchTokenInfos, SearchTokenInfosParams},
-    },
+    clients::{dapp::search_dapps, token_info::search_token_infos},
     error::ServiceError,
     repository::{addresses, block_ranges, hashes},
     types::{
@@ -97,8 +94,8 @@ pub async fn search_tokens(
         return Ok((vec![], None));
     }
 
-    let token_info_search_endpoint = SearchTokenInfos {
-        params: SearchTokenInfosParams {
+    let token_info_search_endpoint = search_token_infos::SearchTokenInfos {
+        params: search_token_infos::SearchTokenInfosParams {
             query,
             chain_id,
             page_size: Some(page_size as u32),

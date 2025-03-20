@@ -10,10 +10,12 @@ pub struct Token {
     pub chain_id: ChainId,
 }
 
-impl TryFrom<clients::token_info::TokenInfo> for Token {
+impl TryFrom<clients::token_info::search_token_infos::TokenInfo> for Token {
     type Error = ParseError;
 
-    fn try_from(v: clients::token_info::TokenInfo) -> Result<Self, Self::Error> {
+    fn try_from(
+        v: clients::token_info::search_token_infos::TokenInfo,
+    ) -> Result<Self, Self::Error> {
         Ok(Self {
             address: v.token_address.parse().map_err(ParseError::from)?,
             icon_url: v.icon_url,
