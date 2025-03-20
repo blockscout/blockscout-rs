@@ -89,6 +89,11 @@
         "subgraph_path": "../subgraphs/story-subgraph",
         "subgraph_name": "story-subgraph",
         "network": "story-mainnet"
+    },
+    "mint": {
+      "subgraph_path": "../subgraphs/mint-subgraph",
+      "subgraph_name": "mint-subgraph",
+      "network": "mint-mainnet"
     }
   }
 }
