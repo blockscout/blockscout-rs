@@ -4,35 +4,32 @@ package blockscout.stats.v1;
 
 import "protoc-gen-openapiv2/options/annotations.proto";
 
-
 option go_package = "github.com/blockscout/blockscout-rs/stats";
-
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   info: {
-    title: "Stats service";
+    title: "Stats service"
     contact: {
-      name: "Blockscout";
-      url: "https://blockscout.com";
-      email: "support@blockscout.com";
-    };
-  };
-  schemes: [HTTPS],
+      name: "Blockscout"
+      url: "https://blockscout.com"
+      email: "support@blockscout.com"
+    }
+  }
+  schemes: [HTTPS]
   external_docs: {
-    url: "https://github.com/blockscout/blockscout-rs";
-    description: "More about blockscout microservices";
+    url: "https://github.com/blockscout/blockscout-rs"
+    description: "More about blockscout microservices"
   }
   security_definitions: {
     security: {
-      key: "ApiKeyAuth";
+      key: "ApiKeyAuth"
       value: {
-        type: TYPE_API_KEY;
-        in: IN_HEADER;
-        name: "x-api-key";
+        type: TYPE_API_KEY
+        in: IN_HEADER
+        name: "x-api-key"
       }
     }
   }
 };
-
 
 service StatsService {
   rpc GetCounters(GetCountersRequest) returns (Counters);
@@ -49,7 +46,7 @@ service StatsService {
       }
       tags: "Instances"
     };
-  };
+  }
 }
 
 message GetCountersRequest {}
@@ -62,7 +59,9 @@ message Counter {
   string description = 5;
 }
 
-message Counters { repeated Counter counters = 1; }
+message Counters {
+  repeated Counter counters = 1;
+}
 
 enum Resolution {
   RESOLUTION_UNSPECIFIED = 0;
@@ -91,7 +90,9 @@ message LineChartSection {
   repeated LineChartInfo charts = 3;
 }
 
-message LineCharts { repeated LineChartSection sections = 1; }
+message LineCharts {
+  repeated LineChartSection sections = 1;
+}
 
 message GetLineChartRequest {
   string name = 1;
@@ -152,7 +153,7 @@ message ContractsPageStats {
 message GetUpdateStatusRequest {}
 
 enum ChartSubsetUpdateStatus {
-  // No actions were taken yet for some charts 
+  // No actions were taken yet for some charts
   PENDING = 0;
   // Some charts are waiting for starting condition
   WAITING_FOR_STARTING_CONDITION = 1;
