@@ -1,14 +1,6 @@
 use super::client::Client;
-use crate::{
-    compiler::DetailedVersion, verify_new, BatchError, BatchVerificationResult, Contract,
-    OnChainContract,
-};
-use bytes::Bytes;
-use foundry_compilers::{
-    artifacts::{Libraries, Settings, Source, Sources},
-    CompilerInput, EvmVersion,
-};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use crate::{compiler::DetailedVersion, verify_new, OnChainContract};
+use std::sync::Arc;
 
 use crate::verify_new::SolcInput;
 
@@ -127,7 +119,7 @@ mod multi_part_new {
         let mut solidity_sources = BTreeMap::new();
         let mut yul_sources = BTreeMap::new();
         for (path, source) in sources {
-            if path.extension() == Some(OsStr::new("yul")) {
+            if path == PathBuf::from(".yul") || path.extension() == Some(OsStr::new("yul")) {
                 yul_sources.insert(path, source);
             } else {
                 solidity_sources.insert(path, source);
@@ -176,102 +168,11 @@ mod multi_part_new {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerificationRequest {
-    pub deployed_bytecode: Bytes,
-    pub creation_bytecode: Option<Bytes>,
-    pub compiler_version: DetailedVersion,
-
-    pub content: MultiFileContent,
-
-    // Required for the metrics. Has no functional meaning.
-    // In case if chain_id has not been provided, results in empty string.
-    pub chain_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MultiFileContent {
-    pub sources: BTreeMap<PathBuf, String>,
-    pub evm_version: Option<EvmVersion>,
-    pub optimization_runs: Option<usize>,
-    pub contract_libraries: Option<BTreeMap<String, String>>,
-}
-
-impl From<MultiFileContent> for Vec<CompilerInput> {
-    fn from(content: MultiFileContent) -> Self {
-        let mut settings = Settings::default();
-        if let Some(optimization_runs) = content.optimization_runs {
-            settings.optimizer.enabled = Some(true);
-            settings.optimizer.runs = Some(optimization_runs);
-        }
-
-        if let Some(libs) = content.contract_libraries {
-            // we have to know filename for library, but we don't know,
-            // so we assume that every file MAY contains all libraries
-            let libs = content
-                .sources
-                .keys()
-                .map(|filename| (PathBuf::from(filename), libs.clone()))
-                .collect();
-            settings.libraries = Libraries { libs };
-        }
-        settings.evm_version = content.evm_version;
-
-        let sources: Sources = content
-            .sources
-            .into_iter()
-            .map(|(name, content)| (name, Source::new(content)))
-            .collect();
-        let inputs: Vec<_> = input_from_sources(sources)
-            .into_iter()
-            .map(|input| input.settings(settings.clone()))
-            .collect();
-        inputs
-    }
-}
-
-const SOLIDITY: &str = "Solidity";
-const YUL: &str = "Yul";
-
-fn input_from_sources(sources: Sources) -> Vec<CompilerInput> {
-    let mut solidity_sources = BTreeMap::new();
-    let mut yul_sources = BTreeMap::new();
-    for (path, source) in sources {
-        if path.to_str().unwrap_or_default().ends_with(".yul") {
-            yul_sources.insert(path, source);
-        } else {
-            solidity_sources.insert(path, source);
-        }
-    }
-    let mut res = Vec::new();
-    if !solidity_sources.is_empty() {
-        res.push(CompilerInput {
-            language: SOLIDITY.to_string(),
-            sources: solidity_sources,
-            settings: Default::default(),
-        });
-    }
-    if !yul_sources.is_empty() {
-        res.push(CompilerInput {
-            language: YUL.to_string(),
-            sources: yul_sources,
-            settings: Default::default(),
-        });
-    }
-    res
-}
-
-pub struct BatchVerificationRequest {
-    pub contracts: Vec<Contract>,
-    pub compiler_version: DetailedVersion,
-    pub content: MultiFileContent,
-}
-
 #[derive(Clone, Debug)]
 pub struct BatchVerificationRequestNew {
     pub contracts: Vec<OnChainContract>,
     pub compiler_version: DetailedVersion,
-    pub content: multi_part_new::Content,
+    pub content: Content,
 }
 
 pub async fn batch_verify(
@@ -299,7 +200,9 @@ pub async fn batch_verify(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use foundry_compilers_new::artifacts::EvmVersion;
     use pretty_assertions::assert_eq;
+    use std::{collections::BTreeMap, path::PathBuf};
 
     fn sources(sources: &[(&str, &str)]) -> BTreeMap<PathBuf, String> {
         sources
@@ -308,8 +211,8 @@ mod tests {
             .collect()
     }
 
-    fn test_to_input(multi_part: MultiFileContent, expected: Vec<&str>) {
-        let inputs: Vec<CompilerInput> = multi_part.into();
+    fn test_to_input(multi_part: Content, expected: Vec<&str>) {
+        let inputs: Vec<SolcInput> = multi_part.into();
         assert_eq!(
             inputs.len(),
             expected.len(),
@@ -324,30 +227,27 @@ mod tests {
 
     #[test]
     fn multi_part_to_input() {
-        let multi_part = MultiFileContent {
+        let multi_part = Content {
             sources: sources(&[("source.sol", "pragma")]),
             evm_version: Some(EvmVersion::London),
             optimization_runs: Some(200),
-            contract_libraries: Some(BTreeMap::from([(
-                "some_library".into(),
-                "some_address".into(),
-            )])),
+            contract_libraries: BTreeMap::from([("some_library".into(), "some_address".into())]),
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
         test_to_input(multi_part, vec![expected]);
-        let multi_part = MultiFileContent {
+        let multi_part = Content {
             sources: sources(&[("source.sol", "")]),
             evm_version: Some(EvmVersion::SpuriousDragon),
             optimization_runs: None,
-            contract_libraries: None,
+            contract_libraries: BTreeMap::new(),
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
         test_to_input(multi_part, vec![expected]);
     }
 
     #[test]
     fn yul_and_solidity_to_inputs() {
-        let multi_part = MultiFileContent {
+        let multi_part = Content {
             sources: sources(&[
                 ("source.sol", "pragma"),
                 ("source2.yul", "object \"A\" {}"),
@@ -355,10 +255,10 @@ mod tests {
             ]),
             evm_version: Some(EvmVersion::London),
             optimization_runs: Some(200),
-            contract_libraries: None,
+            contract_libraries: BTreeMap::new(),
         };
-        let expected_solidity = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
-        let expected_yul = r#"{"language":"Yul","sources":{".yul":{"content":"object \"A\" {}"},"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode","evm.deployedBytecode","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
-        test_to_input(multi_part, vec![expected_solidity, expected_yul]);
+        let expected_solidity = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
+        let expected_yul = r#"{"language":"Yul","sources":{".yul":{"content":"object \"A\" {}"},"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
+        test_to_input(multi_part, vec![expected_yul, expected_solidity]);
     }
 }

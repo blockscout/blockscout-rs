@@ -1,6 +1,5 @@
 use super::client::Client;
 use crate::{compiler::DetailedVersion, verify_new, OnChainCode};
-use foundry_compilers::CompilerInput;
 use std::sync::Arc;
 
 use crate::{verify_new::SolcInput, OnChainContract};
@@ -45,16 +44,6 @@ mod standard_json_new {
             .expect("we sent exactly one contract to verify");
 
         Ok(result)
-    }
-}
-
-pub struct StandardJsonContent {
-    pub input: CompilerInput,
-}
-
-impl From<StandardJsonContent> for CompilerInput {
-    fn from(content: StandardJsonContent) -> Self {
-        content.input
     }
 }
 
