@@ -62,7 +62,11 @@ construct_update_group!(TotalBlocksGroup {
 });
 
 construct_update_group!(YesterdayTxnsGroup {
-    charts: [YesterdayTxns, YesterdayOperationalTxns]
+    charts: [
+        YesterdayTxns,
+        OpStackYesterdayOperationalTxns,
+        YesterdayOperationalTxns,
+    ]
 });
 
 construct_update_group!(AverageBlockRewardsGroup {
@@ -164,6 +168,7 @@ construct_update_group!(TxnsStats24hGroup {
         AverageTxnFee24h,
         NewTxns24h,
         TxnsFee24h,
+        OpStackNewOperationalTxns24h,
         NewOperationalTxns24h,
     ]
 });
@@ -220,11 +225,24 @@ construct_update_group!(NewTxnsGroup {
         TxnsGrowthWeekly,
         TxnsGrowthMonthly,
         TxnsGrowthYearly,
+        OpStackNewOperationalTxns,
+        OpStackNewOperationalTxnsWeekly,
+        OpStackNewOperationalTxnsMonthly,
+        OpStackNewOperationalTxnsYearly,
+        OpStackOperationalTxnsGrowth,
+        OpStackOperationalTxnsGrowthWeekly,
+        OpStackOperationalTxnsGrowthMonthly,
+        OpStackOperationalTxnsGrowthYearly,
+        OpStackTotalOperationalTxns,
     ],
 });
 
 construct_update_group!(NewTxnsWindowGroup {
-    charts: [NewTxnsWindow, NewOperationalTxnsWindow],
+    charts: [
+        NewTxnsWindow,
+        OpStackNewOperationalTxnsWindow,
+        NewOperationalTxnsWindow
+    ],
 });
 
 construct_update_group!(NewUserOpsGroup {

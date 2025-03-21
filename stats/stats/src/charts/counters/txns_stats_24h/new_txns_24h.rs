@@ -65,7 +65,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns_24h_1() {
-        simple_test_counter::<NewTxns24h>("update_new_txns_24h_1", "1", None).await;
+        simple_test_counter::<NewTxns24h>("update_new_txns_24h_1", "2", None).await;
     }
 
     #[tokio::test]

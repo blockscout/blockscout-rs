@@ -73,6 +73,7 @@ pub trait TimespanValueTrait {
     type Value;
 
     fn parts(&self) -> (&Self::Timespan, &Self::Value);
+    fn parts_mut(&mut self) -> (&mut Self::Timespan, &mut Self::Value);
     fn into_parts(self) -> (Self::Timespan, Self::Value);
     fn from_parts(t: Self::Timespan, v: Self::Value) -> Self;
 }
@@ -83,6 +84,10 @@ impl<T, V> TimespanValueTrait for TimespanValue<T, V> {
 
     fn parts(&self) -> (&Self::Timespan, &Self::Value) {
         (&self.timespan, &self.value)
+    }
+
+    fn parts_mut(&mut self) -> (&mut Self::Timespan, &mut Self::Value) {
+        (&mut self.timespan, &mut self.value)
     }
 
     fn into_parts(self) -> (Self::Timespan, Self::Value) {
@@ -97,15 +102,33 @@ impl<T, V> TimespanValueTrait for TimespanValue<T, V> {
     }
 }
 
+pub trait TimespanTrait {
+    type Timespan;
+    fn timespan(&self) -> &Self::Timespan;
+    fn timespan_mut(&mut self) -> &mut Self::Timespan;
+}
+
+impl<T: TimespanValueTrait> TimespanTrait for T {
+    type Timespan = T::Timespan;
+
+    fn timespan(&self) -> &Self::Timespan {
+        self.parts().0
+    }
+
+    fn timespan_mut(&mut self) -> &mut Self::Timespan {
+        self.parts_mut().0
+    }
+}
+
 // generic to unify the parameters
-pub trait ZeroTimespanValue<T>: TimespanValueTrait<Timespan = T> + Sized
+pub trait ZeroTimespanValue<T>: TimespanTrait<Timespan = T> + Sized
 where
     Self::Timespan: Ord,
 {
     fn with_zero_value(timespan: Self::Timespan) -> Self;
 
     fn relevant_or_zero(self, current_timespan: Self::Timespan) -> Self {
-        if self.parts().0 < &current_timespan {
+        if self.timespan() < &current_timespan {
             Self::with_zero_value(current_timespan)
         } else {
             self

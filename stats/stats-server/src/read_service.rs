@@ -20,12 +20,16 @@ use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
     counters::{
         AverageBlockTime, AverageTxnFee24h, NewContracts24h, NewOperationalTxns24h, NewTxns24h,
-        NewVerifiedContracts24h, PendingTxns30m, TotalAddresses, TotalBlocks, TotalContracts,
-        TotalOperationalTxns, TotalTxns, TotalVerifiedContracts, TxnsFee24h,
+        NewVerifiedContracts24h, OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns,
+        OpStackYesterdayOperationalTxns, PendingTxns30m, TotalAddresses, TotalBlocks,
+        TotalContracts, TotalOperationalTxns, TotalTxns, TotalVerifiedContracts, TxnsFee24h,
         YesterdayOperationalTxns, YesterdayTxns,
     },
     data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
-    lines::{NewOperationalTxnsWindow, NewTxnsWindow, NEW_TXNS_WINDOW_RANGE},
+    lines::{
+        NewOperationalTxnsWindow, NewTxnsWindow, OpStackNewOperationalTxnsWindow,
+        NEW_TXNS_WINDOW_RANGE,
+    },
     query_dispatch::{CounterHandle, LineHandle, QuerySerializedDyn},
     range::UniversalRange,
     types::{Timespan, TimespanDuration},
@@ -148,7 +152,8 @@ fn get_counter_query_handle(name: &str, counter: &EnabledChartEntry) -> Option<C
 
 impl ReadService {
     pub fn main_page_charts() -> Vec<String> {
-        // ensure that changes to api are reflected here
+        // ensure that changes to api are reflected here;
+        // add new fields to the vec below
         #[allow(clippy::no_effect)]
         proto_v1::MainPageStats {
             average_block_time: None,
@@ -158,8 +163,11 @@ impl ReadService {
             yesterday_transactions: None,
             total_operational_transactions: None,
             yesterday_operational_transactions: None,
+            op_stack_total_operational_transactions: None,
+            op_stack_yesterday_operational_transactions: None,
             daily_new_transactions: None,
             daily_new_operational_transactions: None,
+            op_stack_daily_new_operational_transactions: None,
         };
         vec![
             AverageBlockTime::name(),
@@ -169,13 +177,17 @@ impl ReadService {
             YesterdayTxns::name(),
             TotalOperationalTxns::name(),
             YesterdayOperationalTxns::name(),
+            OpStackTotalOperationalTxns::name(),
+            OpStackYesterdayOperationalTxns::name(),
             NewTxnsWindow::name(),
             NewOperationalTxnsWindow::name(),
+            OpStackNewOperationalTxnsWindow::name(),
         ]
     }
 
     pub fn contracts_page_charts() -> Vec<String> {
         // ensure that changes to api are reflected here
+        // add new fields to the vec below
         #[allow(clippy::no_effect)]
         proto_v1::ContractsPageStats {
             total_contracts: None,
@@ -193,6 +205,7 @@ impl ReadService {
 
     pub fn transactions_page_charts() -> Vec<String> {
         // ensure that changes to api are reflected here
+        // add new fields to the vec below
         #[allow(clippy::no_effect)]
         proto_v1::TransactionsPageStats {
             pending_transactions_30m: None,
@@ -200,6 +213,7 @@ impl ReadService {
             average_transactions_fee_24h: None,
             transactions_24h: None,
             operational_transactions_24h: None,
+            op_stack_operational_transactions_24h: None,
         };
         vec![
             PendingTxns30m::name(),
@@ -207,6 +221,7 @@ impl ReadService {
             AverageTxnFee24h::name(),
             NewTxns24h::name(),
             NewOperationalTxns24h::name(),
+            OpStackNewOperationalTxns24h::name(),
         ]
     }
 }
@@ -463,8 +478,11 @@ impl StatsService for ReadService {
             yesterday_transactions,
             total_operational_transactions,
             yesterday_operational_transactions,
+            op_stack_total_operational_transactions,
+            op_stack_yesterday_operational_transactions,
             daily_new_transactions,
             daily_new_operational_transactions,
+            op_stack_daily_new_operational_transactions,
         ) = join!(
             self.query_counter(AverageBlockTime::name(), now),
             self.query_counter(TotalAddresses::name(), now),
@@ -473,8 +491,15 @@ impl StatsService for ReadService {
             self.query_counter(YesterdayTxns::name(), now),
             self.query_counter(TotalOperationalTxns::name(), now),
             self.query_counter(YesterdayOperationalTxns::name(), now),
+            self.query_counter(OpStackTotalOperationalTxns::name(), now),
+            self.query_counter(OpStackYesterdayOperationalTxns::name(), now),
             self.query_window_chart(NewTxnsWindow::name(), NEW_TXNS_WINDOW_RANGE, now),
             self.query_window_chart(NewOperationalTxnsWindow::name(), NEW_TXNS_WINDOW_RANGE, now),
+            self.query_window_chart(
+                OpStackNewOperationalTxnsWindow::name(),
+                NEW_TXNS_WINDOW_RANGE,
+                now
+            ),
         );
 
         Ok(Response::new(proto_v1::MainPageStats {
@@ -485,8 +510,11 @@ impl StatsService for ReadService {
             yesterday_transactions,
             total_operational_transactions,
             yesterday_operational_transactions,
+            op_stack_total_operational_transactions,
+            op_stack_yesterday_operational_transactions,
             daily_new_transactions,
             daily_new_operational_transactions,
+            op_stack_daily_new_operational_transactions,
         }))
     }
 
@@ -501,12 +529,14 @@ impl StatsService for ReadService {
             average_transactions_fee_24h,
             transactions_24h,
             operational_transactions_24h,
+            op_stack_operational_transactions_24h,
         ) = join!(
             self.query_counter(PendingTxns30m::name(), now),
             self.query_counter(TxnsFee24h::name(), now),
             self.query_counter(AverageTxnFee24h::name(), now),
             self.query_counter(NewTxns24h::name(), now),
             self.query_counter(NewOperationalTxns24h::name(), now),
+            self.query_counter(OpStackNewOperationalTxns24h::name(), now),
         );
         Ok(Response::new(proto_v1::TransactionsPageStats {
             pending_transactions_30m,
@@ -514,6 +544,7 @@ impl StatsService for ReadService {
             average_transactions_fee_24h,
             transactions_24h,
             operational_transactions_24h,
+            op_stack_operational_transactions_24h,
         }))
     }
 

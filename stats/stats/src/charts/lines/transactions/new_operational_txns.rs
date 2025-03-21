@@ -1,3 +1,8 @@
+/// Operational transactions - metrics originally designed for Arbitrum.
+/// They represent number of transactions excluding a one-per-block system transaction.
+///
+/// Because of the strict definition, it is simply calculated as a difference
+/// between number of transactions and number of blocks.
 use std::fmt::Debug;
 
 use crate::{
@@ -130,7 +135,7 @@ mod tests {
                 ("2022-12-01", "5"),
                 ("2023-01-01", "0"),
                 ("2023-02-01", "4"),
-                ("2023-03-01", "0"),
+                ("2023-03-01", "1"),
             ],
         )
         .await;

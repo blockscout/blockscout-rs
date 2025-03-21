@@ -8,9 +8,15 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::{
-    counters::{NewOperationalTxns24h, TotalOperationalTxns, YesterdayOperationalTxns},
+    counters::{
+        NewOperationalTxns24h, OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns,
+        OpStackYesterdayOperationalTxns, TotalOperationalTxns, YesterdayOperationalTxns,
+    },
     indexing_status::BlockscoutIndexingStatus,
-    lines::{NewOperationalTxns, NewOperationalTxnsWindow, OperationalTxnsGrowth},
+    lines::{
+        NewOperationalTxns, NewOperationalTxnsWindow, OpStackNewOperationalTxns,
+        OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth, OperationalTxnsGrowth,
+    },
     ChartProperties,
 };
 use std::{
@@ -48,6 +54,8 @@ pub struct Settings {
     pub disable_internal_transactions: bool,
     /// Enable arbitrum-specific charts
     pub enable_all_arbitrum: bool,
+    /// Enable op-stack-specific charts
+    pub enable_all_op_stack: bool,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -98,6 +106,7 @@ impl Default for Settings {
             ignore_blockscout_api_absence: false,
             disable_internal_transactions: false,
             enable_all_arbitrum: false,
+            enable_all_op_stack: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
@@ -148,36 +157,68 @@ pub fn handle_disable_internal_transactions(
     }
 }
 
+fn enable_charts(
+    to_enable: &[&str],
+    charts: &mut config::charts::Config<AllChartSettings>,
+    charts_name_for_logs: &str,
+) {
+    for enable_key in to_enable {
+        let settings = match (
+            charts.lines.get_mut(*enable_key),
+            charts.counters.get_mut(*enable_key),
+        ) {
+            (Some(settings), _) => settings,
+            (_, Some(settings)) => settings,
+            _ => {
+                warn!(
+                    "Could not enable '{charts_name_for_logs}'-specific chart {enable_key}: \
+                    chart not found in settings. \
+                    This should not be a problem for running the service.",
+                );
+                continue;
+            }
+        };
+        settings.enabled = true;
+    }
+}
+
 pub fn handle_enable_all_arbitrum(
     enable_all_arbitrum: bool,
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
     if enable_all_arbitrum {
-        for enable_key in [
-            NewOperationalTxns::key().name(),
-            NewOperationalTxnsWindow::key().name(),
-            TotalOperationalTxns::key().name(),
-            NewOperationalTxns24h::key().name(),
-            OperationalTxnsGrowth::key().name(),
-            YesterdayOperationalTxns::key().name(),
-        ] {
-            let settings = match (
-                charts.lines.get_mut(enable_key),
-                charts.counters.get_mut(enable_key),
-            ) {
-                (Some(settings), _) => settings,
-                (_, Some(settings)) => settings,
-                _ => {
-                    warn!(
-                        "Could not enable arbitrum-specific chart {}: chart not found in settings. \
-                        This should not be a problem for running the service.",
-                        enable_key
-                    );
-                    continue;
-                }
-            };
-            settings.enabled = true;
-        }
+        enable_charts(
+            &[
+                NewOperationalTxns::key().name(),
+                NewOperationalTxnsWindow::key().name(),
+                TotalOperationalTxns::key().name(),
+                NewOperationalTxns24h::key().name(),
+                OperationalTxnsGrowth::key().name(),
+                YesterdayOperationalTxns::key().name(),
+            ],
+            charts,
+            "arbitrum",
+        )
+    }
+}
+
+pub fn handle_enable_all_op_stack(
+    enable_all_op_stack: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all_op_stack {
+        enable_charts(
+            &[
+                OpStackNewOperationalTxns::key().name(),
+                OpStackNewOperationalTxnsWindow::key().name(),
+                OpStackTotalOperationalTxns::key().name(),
+                OpStackNewOperationalTxns24h::key().name(),
+                OpStackOperationalTxnsGrowth::key().name(),
+                OpStackYesterdayOperationalTxns::key().name(),
+            ],
+            charts,
+            "op-stack",
+        )
     }
 }
 

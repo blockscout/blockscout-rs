@@ -43,6 +43,7 @@ impl StatementFromRange for NewBlocks24hStatement {
     }
 }
 
+// todo: cleanup
 // caching is not needed but I don't want to make another type just for this
 //
 // btw the caching should solve the problem with not storing `NewBlocks24h` in local
