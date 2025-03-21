@@ -5532,6 +5532,7 @@ dependencies = [
  "rust-s3",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "serde_with",
  "smart-contract-verifier",
  "smart-contract-verifier-proto",

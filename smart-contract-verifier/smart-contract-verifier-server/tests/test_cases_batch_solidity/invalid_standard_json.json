@@ -15,7 +15,7 @@
   },
   "response": {
     "compilationFailure": {
-      "message": "Invalid standard json"
+      "message": "content is not a valid standard json"
     }
   }
 }

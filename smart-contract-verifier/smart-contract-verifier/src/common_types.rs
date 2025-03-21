@@ -62,6 +62,14 @@ pub enum Language {
     Vyper,
 }
 
+/// The contract to be verified.
+#[derive(Clone, Debug)]
+pub struct OnChainContract {
+    pub code: OnChainCode,
+    pub chain_id: Option<String>,
+    pub address: Option<alloy_core::primitives::Address>,
+}
+
 #[derive(Clone, Debug)]
 pub struct OnChainCode {
     pub(crate) runtime: Option<Vec<u8>>,
