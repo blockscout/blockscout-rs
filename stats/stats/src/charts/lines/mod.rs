@@ -17,10 +17,10 @@ use user_ops::*;
 #[cfg(test)]
 mod mock;
 
-pub use new_txns_window::WINDOW as NEW_TXNS_WINDOW_RANGE;
-pub use transactions::op_stack_new_operational_txns::{
+pub use new_txns::op_stack_operational::{
     ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH,
 };
+pub use new_txns_window::WINDOW as NEW_TXNS_WINDOW_RANGE;
 
 pub use aa_wallets_growth::{
     AccountAbstractionWalletsGrowth, AccountAbstractionWalletsGrowthMonthly,
@@ -36,6 +36,10 @@ pub use active_paymasters::ActivePaymasters;
 pub use new_aa_wallets::{
     NewAccountAbstractionWallets, NewAccountAbstractionWalletsMonthly,
     NewAccountAbstractionWalletsWeekly, NewAccountAbstractionWalletsYearly,
+};
+pub use op_stack_operational_txns_growth::{
+    OpStackOperationalTxnsGrowth, OpStackOperationalTxnsGrowthMonthly,
+    OpStackOperationalTxnsGrowthWeekly, OpStackOperationalTxnsGrowthYearly,
 };
 #[rustfmt::skip]
 pub use active_recurring_accounts::{
@@ -128,7 +132,10 @@ pub use verified_contracts_growth::{
 pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub(crate) use new_blocks::NewBlocksStatement;
 pub(crate) use new_native_coin_transfers::NewNativeCoinTransfersInt;
-pub(crate) use new_txns::{NewTxnsInt, NewTxnsStatement};
+pub(crate) use new_txns::{
+    op_stack_operational::transactions_filter as op_stack_operational_transactions_filter,
+    NewTxnsCombinedStatement, NewTxnsInt,
+};
 pub(crate) use new_txns_window::NewTxnsWindowInt;
 
 #[cfg(test)]

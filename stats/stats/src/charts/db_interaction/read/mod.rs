@@ -1,6 +1,5 @@
 use std::ops::Range;
 
-use blockscout::get_min_date_blockscout;
 use chrono::{DateTime, Utc};
 use sea_orm::DbErr;
 use thiserror::Error;

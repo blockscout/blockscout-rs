@@ -6,68 +6,26 @@
 //! Does not include last day, even as incomplete day.
 
 use crate::{
-    data_source::{
-        kinds::{
-            data_manipulation::map::{MapParseTo, StripExt},
-            local_db::{
-                parameters::{
-                    update::clear_and_query_all::ClearAllAndPassVec, DefaultCreate, DefaultQueryVec,
-                },
-                LocalDbChartSource,
+    data_source::kinds::{
+        data_manipulation::map::{Map, MapParseTo, StripExt},
+        local_db::{
+            parameters::{
+                update::clear_and_query_all::ClearAllAndPassVec, DefaultCreate, DefaultQueryVec,
             },
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
+            LocalDbChartSource,
         },
-        types::BlockscoutMigrations,
-        UpdateContext,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    lines::NewTxnsStatement,
-    range::UniversalRange,
-    types::{Timespan, TimespanDuration, TimespanValue},
-    utils::day_start,
-    ChartError, ChartProperties, IndexingStatus, Named,
+    types::new_txns::ExtractAllTxns,
+    ChartProperties, IndexingStatus, Named,
 };
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{FromQueryResult, Statement};
 
-pub const WINDOW: u64 = 30;
+use super::NewTxnsWindowCombinedRemote;
 
-fn new_txns_window_statement(
-    update_day: NaiveDate,
-    completed_migrations: &BlockscoutMigrations,
-) -> Statement {
-    // `update_day` is not included because the data would
-    // be incomplete.
-    let window =
-        day_start(&update_day.saturating_sub(TimespanDuration::from_timespan_repeats(WINDOW)))
-            ..day_start(&update_day);
-    NewTxnsStatement::get_statement(Some(window), completed_migrations)
-}
-
-pub struct NewTxnsWindowQuery;
-
-impl RemoteQueryBehaviour for NewTxnsWindowQuery {
-    type Output = Vec<TimespanValue<NaiveDate, String>>;
-
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Vec<TimespanValue<NaiveDate, String>>, ChartError> {
-        let update_day = cx.time.date_naive();
-        let query = new_txns_window_statement(update_day, &cx.blockscout_applied_migrations);
-        let mut data = TimespanValue::<NaiveDate, String>::find_by_statement(query)
-            .all(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?;
-        // linear time for sorted sequences
-        data.sort_unstable_by(|a, b| a.timespan.cmp(&b.timespan));
-        Ok(data)
-    }
-}
-
-pub type NewTxnsWindowRemote = RemoteDatabaseSource<NewTxnsWindowQuery>;
+pub type NewTxnsWindowRemote = Map<NewTxnsWindowCombinedRemote, ExtractAllTxns>;
 
 pub struct Properties;
 
@@ -107,8 +65,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateParameters},
+        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
         query_dispatch::QuerySerialized,
+        range::UniversalRange,
         tests::{
             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
             point_construction::dt,

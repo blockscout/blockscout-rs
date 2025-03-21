@@ -16,7 +16,7 @@
 //! [types in `local_db`](`crate::data_source::kinds::local_db`) is largely
 //! helpful.
 
-mod query;
+pub mod query;
 
 use std::{
     future::Future,
@@ -34,8 +34,9 @@ use crate::{
 };
 
 pub use query::{
-    PullAllWithAndSort, PullEachWith, PullOne, PullOne24hCached, PullOneValue, StatementForOne,
-    StatementFromRange, StatementFromTimespan, StatementFromUpdateTime,
+    PullAllWithAndSort, PullAllWithAndSortCached, PullEachWith, PullOne, PullOne24hCached,
+    PullOneValue, StatementForOne, StatementFromRange, StatementFromTimespan,
+    StatementFromUpdateTime,
 };
 
 /// See [module-level documentation](self)

@@ -4,6 +4,7 @@ use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use sea_orm::{FromQueryResult, Statement, TryGetable};
 
 use crate::{
+    charts::db_interaction::read::cached::find_one_value_cached,
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, Cacheable, UpdateContext, WrappedValue},
@@ -120,18 +121,9 @@ where
             &cx.blockscout_applied_migrations,
         );
 
-        let value = if let Some(cached) = cx.cache.get::<Value>(&query).await {
-            cached
-        } else {
-            let find_by_statement = Value::find_by_statement(query.clone());
-            let value = find_by_statement
-                .one(cx.blockscout)
-                .await
-                .map_err(ChartError::BlockscoutDB)?
-                .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
-            cx.cache.insert(&query, value.clone()).await;
-            value
-        };
+        let value = find_one_value_cached(cx, query)
+            .await?
+            .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
 
         Ok(TimespanValue {
             timespan: update_time.date_naive(),

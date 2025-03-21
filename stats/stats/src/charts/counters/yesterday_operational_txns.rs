@@ -3,7 +3,7 @@ use crate::{
         kinds::{
             data_manipulation::map::{Map, MapParseTo},
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
+            remote_db::{query::query_yesterday_data, RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         UpdateContext,
     },
@@ -17,10 +17,7 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 
-use super::{
-    yesterday_txns::{query_yesterday_data, YesterdayTxnsInt},
-    CalculateOperationalTxns,
-};
+use super::{yesterday_txns::YesterdayTxnsInt, CalculateOperationalTxns};
 
 pub struct YesterdayBlocksQuery;
 

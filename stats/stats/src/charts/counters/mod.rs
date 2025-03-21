@@ -9,6 +9,7 @@ mod last_new_verified_contracts;
 mod new_contracts_24h;
 mod new_operational_txns_24h;
 mod new_verified_contracts_24h;
+mod op_stack_total_operational_txns;
 mod pending_txns;
 mod total_aa_wallets;
 mod total_accounts;
