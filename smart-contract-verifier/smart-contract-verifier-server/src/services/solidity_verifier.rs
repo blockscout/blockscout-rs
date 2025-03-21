@@ -167,32 +167,30 @@ impl SolidityVerifier for SolidityVerifierService {
     ) -> Result<Response<BatchVerifyResponse>, Status> {
         let request = request.into_inner();
 
-        let contracts =
-            types::batch_verification::from_proto_contracts_to_inner(&request.contracts)?;
-        let compiler_version = types::batch_verification::from_proto_compiler_version_to_inner(
-            &request.compiler_version,
-        )?;
-
-        let content = types::batch_verification::from_proto_solidity_multi_part_content_to_inner(
-            request.sources,
-            request.evm_version,
-            request.optimization_runs,
-            request.libraries,
-        )?;
-
-        let verification_request = solidity::multi_part::BatchVerificationRequest {
-            contracts,
-            compiler_version,
-            content,
+        let maybe_verification_request =
+            solidity::multi_part::BatchVerificationRequestNew::try_from(request);
+        let verification_request = match maybe_verification_request {
+            Ok(request) => request,
+            Err(err @ RequestParseError::InvalidContent(_)) => {
+                let response = types::batch_verification::compilation_error_new(err.to_string());
+                tracing::info!(response=?response, "request processed");
+                return Ok(Response::new(response));
+            }
+            Err(err @ RequestParseError::BadRequest(_)) => {
+                tracing::info!(err=%err, "bad request");
+                return Err(Status::invalid_argument(err.to_string()));
+            }
         };
 
         let result =
             solidity::multi_part::batch_verify(self.client.clone(), verification_request).await;
 
-        match result {
-            Ok(results) => types::batch_verification::process_verification_results(results),
-            Err(err) => types::batch_verification::process_batch_error(err),
-        }
+        let verify_response = match result {
+            Ok(value) => types::batch_verification::process_verification_results_new(value)?,
+            Err(error) => types::batch_verification::process_error(error)?,
+        };
+
+        Ok(Response::new(verify_response))
     }
 
     async fn batch_verify_standard_json(

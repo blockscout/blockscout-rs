@@ -4,80 +4,10 @@ use crate::{
 use anyhow::Context;
 use foundry_compilers_new::artifacts::EvmVersion;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    BatchVerifySolidityStandardJsonRequest, Contract, VerifySolidityMultiPartRequest,
-    VerifySolidityStandardJsonRequest,
+    BatchVerifySolidityMultiPartRequest, BatchVerifySolidityStandardJsonRequest, Contract,
+    VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
 };
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
-
-impl TryFrom<VerifySolidityMultiPartRequest> for solidity::multi_part::VerificationRequestNew {
-    type Error = RequestParseError;
-
-    fn try_from(request: VerifySolidityMultiPartRequest) -> Result<Self, Self::Error> {
-        let on_chain_code = helpers::decode_on_chain_code_from_value_and_type(
-            &request.bytecode,
-            request.bytecode_type(),
-        )?;
-
-        let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
-
-        let sources: BTreeMap<PathBuf, String> = request
-            .source_files
-            .into_iter()
-            .map(|(name, content)| (PathBuf::from(name), content))
-            .collect();
-
-        let evm_version = match request.evm_version {
-            Some(version) if version != "default" => Some(
-                EvmVersion::from_str(&version)
-                    .map_err(|err| anyhow::anyhow!("invalid evm_version: {err}"))?,
-            ),
-            _ => None,
-        };
-
-        let (chain_id, address) = helpers::decode_verification_metadata(request.metadata);
-
-        Ok(Self {
-            on_chain_code,
-            compiler_version,
-            content: solidity::multi_part::Content {
-                sources,
-                evm_version,
-                optimization_runs: request.optimization_runs.map(|i| i as usize),
-                contract_libraries: request.libraries,
-            },
-            chain_id,
-            address,
-        })
-    }
-}
-
-impl TryFrom<VerifySolidityStandardJsonRequest>
-    for solidity::standard_json::VerificationRequestNew
-{
-    type Error = RequestParseError;
-
-    fn try_from(request: VerifySolidityStandardJsonRequest) -> Result<Self, Self::Error> {
-        let on_chain_code = helpers::decode_on_chain_code_from_value_and_type(
-            &request.bytecode,
-            request.bytecode_type(),
-        )?;
-
-        let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
-
-        let deserializer = &mut serde_json::Deserializer::from_str(&request.input);
-        let input: SolcInput = serde_path_to_error::deserialize(deserializer)?;
-
-        let (chain_id, address) = helpers::decode_verification_metadata(request.metadata);
-
-        Ok(Self {
-            on_chain_code,
-            compiler_version,
-            content: input,
-            chain_id,
-            address,
-        })
-    }
-}
 
 impl TryFrom<Contract> for OnChainContract {
     type Error = RequestParseError;
@@ -109,6 +39,57 @@ impl TryFrom<Contract> for OnChainContract {
     }
 }
 
+impl TryFrom<VerifySolidityMultiPartRequest> for solidity::multi_part::VerificationRequestNew {
+    type Error = RequestParseError;
+
+    fn try_from(request: VerifySolidityMultiPartRequest) -> Result<Self, Self::Error> {
+        let on_chain_code = helpers::decode_on_chain_code_from_value_and_type(
+            &request.bytecode,
+            request.bytecode_type(),
+        )?;
+        let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
+        let content = build_solidity_multi_part_content(
+            request.source_files,
+            request.evm_version,
+            request.optimization_runs.map(|value| value as u32),
+            request.libraries,
+        )?;
+        let (chain_id, address) = helpers::decode_verification_metadata(request.metadata);
+
+        Ok(Self {
+            on_chain_code,
+            compiler_version,
+            content,
+            chain_id,
+            address,
+        })
+    }
+}
+
+impl TryFrom<VerifySolidityStandardJsonRequest>
+    for solidity::standard_json::VerificationRequestNew
+{
+    type Error = RequestParseError;
+
+    fn try_from(request: VerifySolidityStandardJsonRequest) -> Result<Self, Self::Error> {
+        let on_chain_code = helpers::decode_on_chain_code_from_value_and_type(
+            &request.bytecode,
+            request.bytecode_type(),
+        )?;
+        let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
+        let content = build_solidity_standard_json_content(request.input)?;
+        let (chain_id, address) = helpers::decode_verification_metadata(request.metadata);
+
+        Ok(Self {
+            on_chain_code,
+            compiler_version,
+            content,
+            chain_id,
+            address,
+        })
+    }
+}
+
 impl TryFrom<BatchVerifySolidityStandardJsonRequest>
     for solidity::standard_json::BatchVerificationRequestNew
 {
@@ -122,16 +103,75 @@ impl TryFrom<BatchVerifySolidityStandardJsonRequest>
             .collect::<Result<Vec<_>, _>>()?;
 
         let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
-
-        let deserializer = &mut serde_json::Deserializer::from_str(&request.input);
-        let input: SolcInput = serde_path_to_error::deserialize(deserializer)?;
+        let content = build_solidity_standard_json_content(request.input)?;
 
         Ok(Self {
             contracts,
             compiler_version,
-            content: input,
+            content,
         })
     }
+}
+
+impl TryFrom<BatchVerifySolidityMultiPartRequest>
+    for solidity::multi_part::BatchVerificationRequestNew
+{
+    type Error = RequestParseError;
+
+    fn try_from(request: BatchVerifySolidityMultiPartRequest) -> Result<Self, Self::Error> {
+        let contracts = request
+            .contracts
+            .into_iter()
+            .map(OnChainContract::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
+        let content = build_solidity_multi_part_content(
+            request.sources,
+            request.evm_version,
+            request.optimization_runs,
+            request.libraries,
+        )?;
+
+        Ok(Self {
+            contracts,
+            compiler_version,
+            content,
+        })
+    }
+}
+
+fn build_solidity_standard_json_content(
+    solc_input: String,
+) -> Result<SolcInput, RequestParseError> {
+    let deserializer = &mut serde_json::Deserializer::from_str(&solc_input);
+    Ok(serde_path_to_error::deserialize(deserializer)?)
+}
+
+fn build_solidity_multi_part_content(
+    sources: BTreeMap<String, String>,
+    evm_version: Option<String>,
+    optimization_runs: Option<u32>,
+    libraries: BTreeMap<String, String>,
+) -> Result<solidity::multi_part::Content, RequestParseError> {
+    let sources: BTreeMap<PathBuf, String> = sources
+        .into_iter()
+        .map(|(name, content)| (PathBuf::from(name), content))
+        .collect();
+
+    let evm_version = match evm_version {
+        Some(version) if version != "default" => Some(
+            EvmVersion::from_str(&version)
+                .map_err(|err| anyhow::anyhow!("invalid evm_version: {err}"))?,
+        ),
+        _ => None,
+    };
+
+    Ok(solidity::multi_part::Content {
+        sources,
+        evm_version,
+        optimization_runs,
+        contract_libraries: libraries,
+    })
 }
 
 mod helpers {

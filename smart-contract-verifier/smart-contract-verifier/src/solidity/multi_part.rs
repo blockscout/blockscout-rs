@@ -1,5 +1,8 @@
 use super::client::Client;
-use crate::{compiler::DetailedVersion, BatchError, BatchVerificationResult, Contract};
+use crate::{
+    compiler::DetailedVersion, verify_new, BatchError, BatchVerificationResult, Contract,
+    OnChainContract,
+};
 use bytes::Bytes;
 use foundry_compilers::{
     artifacts::{Libraries, Settings, Source, Sources},
@@ -7,7 +10,10 @@ use foundry_compilers::{
 };
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
+use crate::verify_new::SolcInput;
+
 pub use multi_part_new::{verify, Content, VerificationRequestNew};
+
 mod multi_part_new {
     use crate::{
         verify_new::{self, SolcInput},
@@ -35,7 +41,7 @@ mod multi_part_new {
     pub struct Content {
         pub sources: BTreeMap<PathBuf, String>,
         pub evm_version: Option<artifacts::EvmVersion>,
-        pub optimization_runs: Option<usize>,
+        pub optimization_runs: Option<u32>,
         pub contract_libraries: BTreeMap<String, String>,
     }
 
@@ -44,17 +50,19 @@ mod multi_part_new {
             let mut settings = artifacts::solc::Settings::default();
             if let Some(optimization_runs) = content.optimization_runs {
                 settings.optimizer.enabled = Some(true);
-                settings.optimizer.runs = Some(optimization_runs);
+                settings.optimizer.runs = Some(optimization_runs as usize);
             }
 
-            // we have to know filename for library, but we don't know,
-            // so we assume that every file MAY contain all libraries
-            let libs = content
-                .sources
-                .keys()
-                .map(|filename| (PathBuf::from(filename), content.contract_libraries.clone()))
-                .collect();
-            settings.libraries = artifacts::solc::Libraries { libs };
+            if !content.contract_libraries.is_empty() {
+                // we have to know filename for library, but we don't know,
+                // so we assume that every file MAY contain all libraries
+                let libs = content
+                    .sources
+                    .keys()
+                    .map(|filename| (PathBuf::from(filename), content.contract_libraries.clone()))
+                    .collect();
+                settings.libraries = artifacts::solc::Libraries { libs };
+            }
 
             settings.evm_version = content.evm_version;
 
@@ -259,28 +267,33 @@ pub struct BatchVerificationRequest {
     pub content: MultiFileContent,
 }
 
+#[derive(Clone, Debug)]
+pub struct BatchVerificationRequestNew {
+    pub contracts: Vec<OnChainContract>,
+    pub compiler_version: DetailedVersion,
+    pub content: multi_part_new::Content,
+}
+
 pub async fn batch_verify(
     client: Arc<Client>,
-    request: BatchVerificationRequest,
-) -> Result<Vec<BatchVerificationResult>, BatchError> {
-    let compiler_inputs: Vec<CompilerInput> = request.content.into();
+    request: BatchVerificationRequestNew,
+) -> Result<Vec<verify_new::VerificationResult>, verify_new::Error> {
+    let to_verify = request.contracts;
+    let compilers = client.new_compilers();
 
-    if compiler_inputs.len() != 1 {
-        return Err(BatchError::Compilation(vec![
-            "Either `.sol` or `.yul` files should exist. Not both.".to_string(),
+    let solc_inputs: Vec<SolcInput> = request.content.into();
+    if solc_inputs.len() != 1 {
+        return Err(verify_new::Error::Compilation(vec![
+            "exactly one of `.sol` or `.yul` files should exist".to_string(),
         ]));
     }
-    let compiler_input = compiler_inputs.into_iter().next().unwrap();
 
-    let verification_result = crate::batch_verifier::verify_solidity(
-        client.compilers(),
-        request.compiler_version,
-        request.contracts,
-        &compiler_input,
-    )
-    .await?;
+    let content = solc_inputs.into_iter().next().unwrap();
+    let results =
+        verify_new::compile_and_verify(to_verify, compilers, &request.compiler_version, content)
+            .await?;
 
-    Ok(verification_result)
+    Ok(results)
 }
 
 #[cfg(test)]
