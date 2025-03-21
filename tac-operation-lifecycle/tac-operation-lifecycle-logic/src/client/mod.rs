@@ -27,7 +27,7 @@ impl Client {
     }
 
     pub async fn get_operations(&self, start: u64, end: u64) -> Result<Operations, Error> {
-        let url = format!("{}/operationIds?from={}&to={}", self.rpc.url, start, end);
+        let url = format!("{}/operationIds?from={}&till={}", self.url(), start, end);
         debug!("Fetching operations from URL: {}", url);
         let response: Response = reqwest::get(url).await?;
         let status = response.status();
@@ -53,6 +53,74 @@ impl Client {
                 Err(e.into())
             }
         }
+    }
+
+    pub async fn get_operations_v2(&self, start: u64, end: u64) -> Result<Operations, Error> {
+        let url = format!("{}/operation-ids?from={}&till={}", self.url(), start, end);
+        debug!("Fetching operations from URL: {}", url);
+        let response: Response = reqwest::get(url).await?;
+        let status = response.status();
+        debug!("Response status: {}", status);
+        
+        let text = response.text().await?;
+        debug!("Raw response body: {}", text);
+        
+        if text.is_empty() {
+            error!("Received empty response from server");
+            return Ok(Vec::new());
+        }
+        
+        #[derive(Deserialize)]
+        struct OperationResponse {
+            response: ResponseData,
+        }
+
+        #[derive(Deserialize)]
+        struct ResponseData {
+            total: u32,
+            operations: Operations,
+        }
+        
+        match serde_json::from_str::<OperationResponse>(&text) {
+            Ok(response) => Ok(response.response.operations),
+            Err(e) => {
+                error!("Failed to parse response: {}", e);
+                Err(e.into())
+            }
+        }
+    }
+
+    pub async fn get_operation_stages_v2(&self, id: &str) -> Result<(), Error> {
+        let client = reqwest::Client::new();
+        let request_body = serde_json::json!({
+            "operationIds": [id]
+        });
+
+        match client
+            .post(format!("{}/stage-profiling", self.url()))
+            .header("accept", "application/json")
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        let text = response.text().await?;
+                        tracing::info!("Raw stage-profiling response body: {}", text);
+                        
+                        Ok(())
+                    } else {
+                        Err(anyhow::anyhow!("HTTP error {}: {}", response.status().as_u16(), response.status().as_str()))
+                    }
+                }
+                Err(e) => {
+                    Err(e.into())
+                }
+            }
+    }
+
+    fn url(&self) -> &str {
+        self.rpc.url.strip_suffix("/").unwrap_or(self.rpc.url.as_str())
     }
 }
 

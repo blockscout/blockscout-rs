@@ -55,7 +55,7 @@ fn default_restart_delay() -> time::Duration {
 }
 
 fn default_catchup_interval() -> time::Duration {
-    time::Duration::from_secs(0)
+    time::Duration::from_secs(5)
 }
 
 impl Default for IndexerSettings {

@@ -49,4 +49,6 @@ migrate-up:
 migrate-down:
     sea-orm-cli migrate -d tac-operation-lifecycle-migration down
 
-
+flush-database:
+    sea-orm-cli migrate -d tac-operation-lifecycle-migration down
+    sea-orm-cli migrate -d tac-operation-lifecycle-migration up

@@ -6,7 +6,7 @@ database:
 indexer:
   concurrency: 5
   client:
-    url: "https://turin.data.tac.build/"
-  start_timestamp: 1713849600
+    url: "https://data.turin.tac.build/"
+  start_timestamp: 1741554000
   polling_interval: 1
-  catchup_interval: 1
+  catchup_interval: 10

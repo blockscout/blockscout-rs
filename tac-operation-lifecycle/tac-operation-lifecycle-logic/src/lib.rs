@@ -97,10 +97,10 @@ impl Indexer {
     //generate intervals between current epoch and watermark and save them to db
     #[instrument(name = "save_intervals", skip_all, level = "info")]
     pub async fn save_intervals(&self,now: u64) -> anyhow::Result<usize> {
-        
+        let time_interval = self.settings.catchup_interval.as_secs();
         let watermark = self.watermark.load(std::sync::atomic::Ordering::Acquire);
         let batch_size = 1000; // Adjust this based on your needs and database performance
-        let catch_up_interval = self.settings.catchup_interval.as_secs() as u64;
+        let catch_up_interval = time_interval;
         let intervals: Vec<interval::ActiveModel> = (watermark as u64..now)
             .step_by(catch_up_interval as usize)
             .map(|timestamp| interval::ActiveModel {
@@ -115,7 +115,7 @@ impl Indexer {
             })
             .collect();
 
-        tracing::info!("Total intervals to save: {}", intervals.len());
+        tracing::info!("Total {}s intervals to save: {} ({}..{})", time_interval, intervals.len(), watermark, now);
 
         // Process intervals in batches
         for chunk in intervals.chunks(batch_size) {
@@ -174,7 +174,7 @@ impl Indexer {
     }
     
 
-    pub async fn fetch_operations(&self, job: &Job) -> Result<(), Error> {
+    pub async fn fetch_operations(&self, job: &Job) -> Result<usize, Error> {
         use sea_orm::Set;
         use tac_operation_lifecycle_entity::{interval, operation};
         use std::thread;
@@ -182,9 +182,12 @@ impl Indexer {
         let thread_id = thread::current().id();
         tracing::debug!("[Thread {:?}] Processing interval job: {:?}", thread_id, job);
 
-        let operations = self.client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
+        let operations = self.client.get_operations_v2(job.interval.start as u64, job.interval.end as u64).await?;
+        let ops_num = operations.len();
         
-        tracing::debug!("[Thread {:?}] Operations: {:#?}", thread_id, operations);
+        if ops_num > 0 {
+            tracing::info!("[Thread {:?}] Fetched {} op_ids: {:#?}", thread_id, ops_num, operations);
+        }
         
         // Start a transaction
         let txn = self.db.begin().await?;
@@ -232,7 +235,7 @@ impl Indexer {
         tracing::info!("[Thread {:?}] Successfully processed job: id={}, start={}, end={}", 
             thread_id, job.interval.id, job.interval.start, job.interval.end);
 
-        Ok(())
+        Ok(ops_num)
     }
 
     pub fn interval_stream(&self, direction: OrderDirection) -> BoxStream<'_, IndexerJob> {
@@ -330,6 +333,7 @@ impl Indexer {
     }
 
     pub fn operations_stream(&self) -> BoxStream<'_, IndexerJob> {
+        const LOOP_DELAY_INTERVAL_MS: u64 = 2000;
         Box::pin(async_stream::stream! {
             loop {
                 // Start transaction
@@ -337,7 +341,7 @@ impl Indexer {
                     Ok(txn) => txn,
                     Err(e) => {
                         tracing::error!("Failed to begin transaction: {}", e);
-                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        tokio::time::sleep(Duration::from_millis(LOOP_DELAY_INTERVAL_MS)).await;
                         continue;
                     }
                 };
@@ -357,13 +361,13 @@ impl Indexer {
                         Ok(None) => {
                             // No pending operations, release transaction and wait
                             let _ = txn.commit().await;
-                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            tokio::time::sleep(Duration::from_millis(LOOP_DELAY_INTERVAL_MS)).await;
                             continue;
                         },
                         Err(e) => {
                             tracing::error!("Failed to fetch pending operation: {}", e);
                             let _ = txn.rollback().await;
-                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            tokio::time::sleep(Duration::from_millis(LOOP_DELAY_INTERVAL_MS)).await;
                             continue;
                         }
                     };
@@ -393,13 +397,13 @@ impl Indexer {
                         Ok(None) => {
                             tracing::error!("Failed to update operation: no rows returned");
                             let _ = txn.rollback().await;
-                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            tokio::time::sleep(Duration::from_millis(LOOP_DELAY_INTERVAL_MS)).await;
                             continue;
                         }
                         Err(e) => {
                             tracing::error!("Failed to update operation: {}", e);
                             let _ = txn.rollback().await;
-                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            tokio::time::sleep(Duration::from_millis(LOOP_DELAY_INTERVAL_MS)).await;
                             continue;
                         }
                     }
@@ -411,48 +415,37 @@ impl Indexer {
         use sea_orm::Set;
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        let client = reqwest::Client::new();
-        let request_body = serde_json::json!({
-            "operationIds": [job.operation.id]
-        });
-
-        match client
-            .post("https://data.turin.tac.build/stage-profiling")
-            .header("accept", "application/json")
-            .header("Content-Type", "application/json")
-            .json(&request_body)
-            .send()
-            .await {
-                Ok(response) if response.status().is_success() => {
-                    // Start a transaction
-                    let txn = match self.db.begin().await {
-                        Ok(txn) => txn,
-                        Err(e) => {
-                            tracing::error!("Failed to begin transaction: {}", e);
-                            return;
-                        }
-                    };
-
-                    // Update operation status to completed (2)
-                    let mut operation_model: operation::ActiveModel = job.operation.clone().into();
-                    operation_model.status = Set(2);
-                    
-                    if let Err(e) = operation_model.update(&txn).await {
-                        tracing::error!("Failed to update operation status: {}", e);
-                        let _ = txn.rollback().await;
+        match self.client.get_operation_stages_v2(&job.operation.id).await {
+            Ok(()) => {
+                // Start a transaction
+                let txn = match self.db.begin().await {
+                    Ok(txn) => txn,
+                    Err(e) => {
+                        tracing::error!("Failed to begin transaction: {}", e);
                         return;
                     }
+                };
 
-                    // Commit transaction
-                    if let Err(e) = txn.commit().await {
-                        tracing::error!("Failed to commit transaction: {}", e);
-                        return;
-                    }
-
-                    tracing::info!("Successfully processed operation: id={}", job.operation.id);
+                // Update operation status to completed (2)
+                let mut operation_model: operation::ActiveModel = job.operation.clone().into();
+                operation_model.status = Set(2);
+                
+                if let Err(e) = operation_model.update(&txn).await {
+                    tracing::error!("Failed to update operation status: {}", e);
+                    let _ = txn.rollback().await;
+                    return;
                 }
-                _ => {
-                    let retries = job.operation.retry_count;
+
+                // Commit transaction
+                if let Err(e) = txn.commit().await {
+                    tracing::error!("Failed to commit transaction: {}", e);
+                    return;
+                }
+
+                tracing::info!("Successfully processed operation: id={}", job.operation.id);
+            }
+            _ => {
+                let retries = job.operation.retry_count;
                     let base_delay = 5; // 5 seconds base delay
                     let next_retry = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
@@ -468,8 +461,8 @@ impl Indexer {
                     if let Err(update_err) = operation_model.update(self.db.as_ref()).await {
                         tracing::error!("Failed to update operation next_retry: {}", update_err);
                     }
-                }
             }
+        }
     }
 
     fn prio_left(_: &mut ()) -> PollNext { PollNext::Left }
@@ -495,8 +488,10 @@ impl Indexer {
             match job {
                 IndexerJob::Interval(job) => {
                     match self.fetch_operations(&job).await {
-                        Ok(_) => {
-                            tracing::info!("Successfully fetched operations for interval {}", job.interval.id);
+                        Ok(num) => {
+                            if num > 0 {
+                                tracing::info!("Successfully fetched {} operations for interval {}", num, job.interval.id);
+                            }
                         }
                         Err(e) => {
                             tracing::error!("Failed to fetch operations: {}", e);
