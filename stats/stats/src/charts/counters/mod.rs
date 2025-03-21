@@ -33,6 +33,7 @@ pub use last_new_verified_contracts::LastNewVerifiedContracts;
 pub use new_contracts_24h::NewContracts24h;
 pub use new_operational_txns_24h::NewOperationalTxns24h;
 pub use new_verified_contracts_24h::NewVerifiedContracts24h;
+pub use op_stack_total_operational_txns::OpStackTotalOperationalTxns;
 pub use pending_txns::PendingTxns30m;
 pub use total_aa_wallets::TotalAccountAbstractionWallets;
 pub use total_accounts::TotalAccounts;
@@ -47,10 +48,13 @@ pub use total_txns::TotalTxns;
 pub use total_user_ops::TotalUserOps;
 pub use total_verified_contracts::TotalVerifiedContracts;
 pub use txns_stats_24h::{
-    average_txn_fee_24h::AverageTxnFee24h, new_txns_24h::NewTxns24h, txns_fee_24h::TxnsFee24h,
+    average_txn_fee_24h::AverageTxnFee24h, new_txns_24h::NewTxns24h,
+    op_stack_new_operational_txns_24h::OpStackNewOperationalTxns24h, txns_fee_24h::TxnsFee24h,
 };
 pub use yesterday_operational_txns::YesterdayOperationalTxns;
-pub use yesterday_txns::YesterdayTxns;
+pub use yesterday_txns::{
+    op_stack_yesterday_operational_txns::OpStackYesterdayOperationalTxns, YesterdayTxns,
+};
 
 pub(crate) use total_blocks::TotalBlocksInt;
 pub(crate) use total_operational_txns::CalculateOperationalTxns;

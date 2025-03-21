@@ -14,8 +14,8 @@ use crate::{
     ChartError,
 };
 
-mod new_txns_window;
-mod op_stack_operational;
+pub mod new_txns_window;
+pub mod op_stack_operational;
 
 pub use new_txns_window::{NewTxnsWindow, NewTxnsWindowInt};
 

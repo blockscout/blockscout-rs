@@ -37,6 +37,11 @@ pub use new_aa_wallets::{
     NewAccountAbstractionWallets, NewAccountAbstractionWalletsMonthly,
     NewAccountAbstractionWalletsWeekly, NewAccountAbstractionWalletsYearly,
 };
+pub use new_txns::op_stack_operational::{
+    OpStackNewOperationalTxns, OpStackNewOperationalTxnsMonthly, OpStackNewOperationalTxnsWeekly,
+    OpStackNewOperationalTxnsYearly,
+};
+pub use new_txns_window::op_stack_operational::OpStackNewOperationalTxnsWindow;
 pub use op_stack_operational_txns_growth::{
     OpStackOperationalTxnsGrowth, OpStackOperationalTxnsGrowthMonthly,
     OpStackOperationalTxnsGrowthWeekly, OpStackOperationalTxnsGrowthYearly,

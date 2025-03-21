@@ -61,6 +61,8 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
             "newTxns",
             "txnsFee",
             "txnsGrowth",
+            "opStackNewOperationalTxns",
+            "opStackOperationalTxnsGrowth",
             "newOperationalTxns",
             "operationalTxnsGrowth",
             "txnsSuccessRate",
@@ -171,12 +173,14 @@ pub async fn test_counters_ok(base: Url, blockscout_indexed: bool, user_ops_inde
         "totalAddresses",
         "totalBlocks",
         "totalTxns",
+        "opStackTotalOperationalTxns",
         "totalOperationalTxns",
         // transactions
         "pendingTxns30m",
         "txnsFee24h",
         "averageTxnFee24h",
         "newTxns24h",
+        "opStackNewOperationalTxns24h",
         "newOperationalTxns24h",
         // contracts
         "totalContracts",

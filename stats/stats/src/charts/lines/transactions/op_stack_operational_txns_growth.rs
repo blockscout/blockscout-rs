@@ -78,7 +78,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_op_stack_operational_txns_growth() {
         simple_test_chart::<OpStackOperationalTxnsGrowth>(
-            "update_op_stack__operational_txns_growth",
+            "update_op_stack_operational_txns_growth",
             vec![
                 ("2022-11-09", "6"),
                 ("2022-11-10", "20"),

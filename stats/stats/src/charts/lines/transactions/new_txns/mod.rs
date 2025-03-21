@@ -15,7 +15,9 @@ use crate::{
 
 pub mod new_txns;
 pub mod op_stack_operational;
-pub use new_txns::*;
+pub use new_txns::{
+    NewTxns, NewTxnsInt, NewTxnsMonthly, NewTxnsMonthlyInt, NewTxnsWeekly, NewTxnsYearly,
+};
 
 pub struct NewTxnsCombinedStatement;
 
