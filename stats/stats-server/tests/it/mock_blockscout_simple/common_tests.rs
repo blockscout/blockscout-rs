@@ -173,7 +173,7 @@ pub async fn test_counters_ok(base: Url, blockscout_indexed: bool, user_ops_inde
         "totalAddresses",
         "totalBlocks",
         "totalTxns",
-        "opStackTotalOperationalTxns",
+        // 'opStackTotalOperationalTxns' needs indexed blockscout
         "totalOperationalTxns",
         // transactions
         "pendingTxns30m",
@@ -197,6 +197,7 @@ pub async fn test_counters_ok(base: Url, blockscout_indexed: bool, user_ops_inde
             "totalAccounts",
             // "totalNativeCoinHolders", // disabled
             "totalNativeCoinTransfers",
+            "opStackTotalOperationalTxns",
             // on a different page; they are checked by other endpoint tests and
             // `check_all_enabled_charts_have_endpoints`.
 
