@@ -7,11 +7,11 @@ use foundry_compilers::{
 };
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
-pub use multi_part_new::{verify, VerificationRequestNew};
+pub use multi_part_new::{verify, Content, VerificationRequestNew};
 mod multi_part_new {
     use crate::{
         verify_new::{self, SolcInput},
-        DetailedVersion, OnChainCode, SolidityClient as Client,
+        DetailedVersion, OnChainCode, OnChainContract, SolidityClient as Client,
     };
     use alloy_core::primitives::Address;
     use foundry_compilers_new::{
@@ -28,7 +28,7 @@ mod multi_part_new {
 
         // metadata
         pub chain_id: Option<String>,
-        pub contract_address: Option<Address>,
+        pub address: Option<Address>,
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,8 +75,10 @@ mod multi_part_new {
         client: Arc<Client>,
         request: VerificationRequestNew,
     ) -> Result<verify_new::VerificationResult, verify_new::Error> {
-        let to_verify = vec![verify_new::OnChainContract {
-            on_chain_code: request.on_chain_code,
+        let to_verify = vec![OnChainContract {
+            code: request.on_chain_code,
+            chain_id: request.chain_id,
+            address: request.address,
         }];
         let compilers = client.new_compilers();
 
@@ -162,77 +164,6 @@ mod multi_part_new {
             BYTECODE_HASHES
                 .map(|hash| Some(SettingsMetadata::from(hash)))
                 .into()
-        }
-    }
-
-    mod proto {
-        use super::*;
-        use crate::solidity::RequestParseError;
-        use anyhow::Context;
-        use foundry_compilers_new::artifacts::solc::EvmVersion;
-        use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-            BytecodeType, VerifySolidityMultiPartRequest,
-        };
-        use std::str::FromStr;
-
-        impl TryFrom<VerifySolidityMultiPartRequest> for VerificationRequestNew {
-            type Error = RequestParseError;
-
-            fn try_from(request: VerifySolidityMultiPartRequest) -> Result<Self, Self::Error> {
-                let code_value = blockscout_display_bytes::decode_hex(&request.bytecode)
-                    .context("bytecode is not valid hex")?;
-                let on_chain_code = match request.bytecode_type() {
-                    BytecodeType::Unspecified => {
-                        Err(anyhow::anyhow!("bytecode type is unspecified"))?
-                    }
-                    BytecodeType::CreationInput => OnChainCode::creation(code_value),
-                    BytecodeType::DeployedBytecode => OnChainCode::runtime(code_value),
-                };
-
-                let compiler_version = DetailedVersion::from_str(&request.compiler_version)
-                    .context("invalid compiler version")?;
-
-                let sources: BTreeMap<PathBuf, String> = request
-                    .source_files
-                    .into_iter()
-                    .map(|(name, content)| (PathBuf::from(name), content))
-                    .collect();
-
-                let evm_version = match request.evm_version {
-                    Some(version) if version != "default" => Some(
-                        EvmVersion::from_str(&version)
-                            .map_err(|err| anyhow::anyhow!("invalid evm_version: {err}"))?,
-                    ),
-                    _ => None,
-                };
-
-                let (chain_id, contract_address) = match request.metadata {
-                    None => (None, None),
-                    Some(metadata) => {
-                        let chain_id = metadata.chain_id;
-                        let contract_address = metadata
-                            .contract_address
-                            .map(|value| alloy_core::primitives::Address::from_str(&value))
-                            .transpose()
-                            .ok()
-                            .flatten();
-                        (chain_id, contract_address)
-                    }
-                };
-
-                Ok(Self {
-                    on_chain_code,
-                    compiler_version,
-                    content: Content {
-                        sources,
-                        evm_version,
-                        optimization_runs: request.optimization_runs.map(|i| i as usize),
-                        contract_libraries: request.libraries,
-                    },
-                    chain_id,
-                    contract_address,
-                })
-            }
         }
     }
 }

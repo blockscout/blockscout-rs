@@ -11,6 +11,7 @@ mod scheduler;
 mod verifier;
 
 mod batch_verifier;
+mod proto_conversions;
 #[cfg(test)]
 mod tests;
 pub mod verify_new;
@@ -25,7 +26,9 @@ pub use consts::{
 
 pub use crate::sourcify::Error as SourcifyError;
 pub use batch_verifier::{BatchError, BatchMatch, BatchSuccess, BatchVerificationResult};
-pub use common_types::{Contract, FullyQualifiedName, Language, MatchType, OnChainCode};
+pub use common_types::{
+    Contract, FullyQualifiedName, Language, MatchType, OnChainCode, OnChainContract,
+};
 pub use compiler::{
     CompactVersion, Compilers, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher,
     Version,

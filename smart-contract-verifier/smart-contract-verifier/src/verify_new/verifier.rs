@@ -4,18 +4,11 @@ use super::{
     evm_compilers::{EvmCompiler, EvmCompilersPool},
     verification, Error,
 };
-use crate::{DetailedVersion, FullyQualifiedName, Language, OnChainCode};
+use crate::{DetailedVersion, FullyQualifiedName, Language, OnChainContract};
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts,
 };
-
-/// The contract to be verified.
-// may be extended with contract metadata (address and chain_id) later
-#[derive(Clone, Debug)]
-pub struct OnChainContract {
-    pub on_chain_code: OnChainCode,
-}
 
 pub struct VerifyingContract {
     pub fully_qualified_name: FullyQualifiedName,
@@ -58,7 +51,7 @@ fn verify_on_chain_contract(
     let mut successes = vec![];
     for (fully_qualified_name, contract_artifacts) in &compilation_result.artifacts {
         let verify_contract_result = verification::verify_contract(
-            contract.on_chain_code.clone(),
+            contract.code.clone(),
             contract_artifacts.code.clone(),
             contract_artifacts.compilation_artifacts.clone(),
             contract_artifacts.creation_code_artifacts.clone(),
