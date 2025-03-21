@@ -126,9 +126,12 @@ message MainPageStats {
   optional Counter yesterday_transactions = 5;
   optional Counter total_operational_transactions = 6;
   optional Counter yesterday_operational_transactions = 7;
+  optional Counter op_stack_total_operational_transactions = 10;
+  optional Counter op_stack_yesterday_operational_transactions = 11;
 
   optional LineChart daily_new_transactions = 8;
   optional LineChart daily_new_operational_transactions = 9;
+  optional LineChart op_stack_daily_new_operational_transactions = 12;
 }
 
 message GetTransactionsPageStatsRequest {}
@@ -139,6 +142,7 @@ message TransactionsPageStats {
   optional Counter average_transactions_fee_24h = 3;
   optional Counter transactions_24h = 4;
   optional Counter operational_transactions_24h = 5;
+  optional Counter op_stack_operational_transactions_24h = 6;
 }
 
 message GetContractsPageStatsRequest {}

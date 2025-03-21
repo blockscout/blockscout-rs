@@ -217,7 +217,7 @@ pub async fn test_counters_ok(base: Url, blockscout_indexed: bool, user_ops_inde
     );
 }
 
-pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
+pub async fn test_main_page_ok(base: Url, expect_chain_specific: bool, blockscout_indexed: bool) {
     let main_page: MainPageStats = send_get_request(&base, "/api/v1/pages/main").await;
     let MainPageStats {
         average_block_time,
@@ -227,8 +227,11 @@ pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
         yesterday_transactions,
         total_operational_transactions,
         yesterday_operational_transactions,
+        op_stack_total_operational_transactions,
+        op_stack_yesterday_operational_transactions,
         daily_new_transactions,
         daily_new_operational_transactions,
+        op_stack_daily_new_operational_transactions,
     } = main_page;
     let mut counters = array_of_variables_with_names!([
         average_block_time,
@@ -238,11 +241,17 @@ pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
         yesterday_transactions,
     ])
     .to_vec();
-    if expect_arbitrum {
+    if expect_chain_specific {
         counters.extend(array_of_variables_with_names!([
             total_operational_transactions,
             yesterday_operational_transactions,
+            op_stack_yesterday_operational_transactions,
         ]));
+        if blockscout_indexed {
+            counters.extend(array_of_variables_with_names!([
+                op_stack_total_operational_transactions,
+            ]));
+        }
     }
     for (name, counter) in counters {
         let counter =
@@ -252,9 +261,10 @@ pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
     }
 
     let mut window_line_charts = array_of_variables_with_names!([daily_new_transactions]).to_vec();
-    if expect_arbitrum {
+    if expect_chain_specific {
         window_line_charts.extend(array_of_variables_with_names!([
-            daily_new_operational_transactions
+            daily_new_operational_transactions,
+            op_stack_daily_new_operational_transactions
         ]));
     }
     for (name, window_chart) in window_line_charts {
@@ -267,13 +277,14 @@ pub async fn test_main_page_ok(base: Url, expect_arbitrum: bool) {
     }
 }
 
-pub async fn test_transactions_page_ok(base: Url, expect_arbitrum: bool) {
+pub async fn test_transactions_page_ok(base: Url, expect_chain_specific: bool) {
     let TransactionsPageStats {
         pending_transactions_30m,
         transactions_fee_24h,
         average_transactions_fee_24h,
         transactions_24h,
         operational_transactions_24h,
+        op_stack_operational_transactions_24h,
     } = send_get_request(&base, "/api/v1/pages/transactions").await;
     let mut counters = array_of_variables_with_names!([
         pending_transactions_30m,
@@ -282,9 +293,10 @@ pub async fn test_transactions_page_ok(base: Url, expect_arbitrum: bool) {
         transactions_24h,
     ])
     .to_vec();
-    if expect_arbitrum {
+    if expect_chain_specific {
         counters.extend(array_of_variables_with_names!([
-            operational_transactions_24h
+            operational_transactions_24h,
+            op_stack_operational_transactions_24h
         ]));
     }
     for (name, counter) in counters {
