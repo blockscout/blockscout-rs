@@ -49,16 +49,19 @@ where
     Ok(())
 }
 
-fn prepare_address_search_cte(query: Option<String>, name: impl IntoIden) -> CommonTableExpression {
+fn prepare_address_search_cte(
+    contract_name_query: Option<String>,
+    cte_name: impl IntoIden,
+) -> CommonTableExpression {
     // Materialize addresses CTE when searching by contract_name.
     // Otherwise, query planner chooses a suboptimal plan.
     // If query is not provided, this CTE will be folded by the optimizer.
-    let is_cte_materialized = query.is_some();
+    let is_cte_materialized = contract_name_query.is_some();
 
     CommonTableExpression::new()
         .query(
             QuerySelect::query(&mut Entity::find())
-                .apply_if(query, |q, query| {
+                .apply_if(contract_name_query, |q, query| {
                     let ts_query = prepare_ts_query(&query);
                     q.and_where(Expr::cust_with_expr(
                         "to_tsvector('english', contract_name) @@ to_tsquery($1)",
@@ -68,13 +71,13 @@ fn prepare_address_search_cte(query: Option<String>, name: impl IntoIden) -> Com
                 .to_owned(),
         )
         .materialized(is_cte_materialized)
-        .table_name(name)
+        .table_name(cte_name)
         .to_owned()
 }
 
 pub async fn uniform_chain_search<C>(
     db: &C,
-    query: String,
+    contract_name_query: String,
     token_types: Option<Vec<db_enum::TokenType>>,
     chain_ids: Vec<ChainId>,
 ) -> Result<Vec<Model>, DbErr>
@@ -86,7 +89,8 @@ where
     }
 
     let addresses_cte_iden = Alias::new("addresses").into_iden();
-    let addresses_cte = prepare_address_search_cte(Some(query), addresses_cte_iden.clone());
+    let addresses_cte =
+        prepare_address_search_cte(Some(contract_name_query), addresses_cte_iden.clone());
 
     let row_number = Expr::custom_keyword(Alias::new("ROW_NUMBER()"));
     let ranked_addresses_iden = Alias::new("ranked_addresses").into_iden();
@@ -144,7 +148,7 @@ where
 pub async fn list<C>(
     db: &C,
     address: Option<AddressAlloy>,
-    query: Option<String>,
+    contract_name_query: Option<String>,
     chain_ids: Option<Vec<ChainId>>,
     token_types: Option<Vec<db_enum::TokenType>>,
     page_size: u64,
@@ -154,7 +158,7 @@ where
     C: ConnectionTrait,
 {
     let addresses_cte_iden = Alias::new("addresses").into_iden();
-    let addresses_cte = prepare_address_search_cte(query, addresses_cte_iden.clone());
+    let addresses_cte = prepare_address_search_cte(contract_name_query, addresses_cte_iden.clone());
 
     let base_select = Query::select()
         .column(ColumnRef::Asterisk)
