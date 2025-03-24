@@ -75,7 +75,7 @@
       },
       "1514": {
         "blockscout": {
-          "url": "https://www.storyscan.xyz/"
+          "url": "https://www.storyscan.io/"
         },
         "use_protocols": [
           "story"
@@ -193,6 +193,14 @@
         },
         "use_protocols": [
           "ens", "zns-ink"
+        ]
+      },
+      "80094": {
+        "blockscout": {
+          "url": "https://bera.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
         ]
       },
       "130": {
@@ -545,15 +553,14 @@
         }
       },
       "gravity": {
-        "disabled": true,
         "tld_list": ["g"],
-        "network_id": 1624,
+        "network_id": 1625,
         "subgraph_name": "gravity-subgraph",
         "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "ens_like",
-          "native_token_contract": "0x0000000000000000000000000000000000000000",
-          "empty_label_hash": "0x702d9dc001440f23c84ab0d0d63e1dd6b0d62b077c2d9a4694ef997a19ddd38a"
+          "native_token_contract": "0xf8d9d86a4594ffc975ca9c760c5887bd9a3b6232",
+          "empty_label_hash": "0x438c16e05212074ed5b2d4beba06988729060b93431f68bf346c93c64a1ce640"
         },
         "meta": {
           "short_name": "SPACE ID",

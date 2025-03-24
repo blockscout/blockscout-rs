@@ -36,6 +36,14 @@
         ],
         "rpc_url": "https://puppynet.shibrpc.com"
       },
+      "1625": {
+        "blockscout": {
+          "url": "https://explorer.gravity.xyz/"
+        },
+        "use_protocols": [
+          "gravity"
+        ]
+      },
       "33111": {
         "blockscout": {
           "url": "https://curtis.explorer.caldera.xyz/"
@@ -192,6 +200,25 @@
           "type": "ens_like",
           "native_token_contract": "0xff829d3ea4d8f25bf8be2d8774c080a8046cb7e1",
           "empty_label_hash": "0x699d90c22b22a5d5d34ff98b3e55748d93f2f4564862200c93b7d5d90b511710"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "gravity": {
+        "disabled": true,
+        "tld_list": ["g"],
+        "network_id": 1625,
+        "subgraph_name": "gravity-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xf8d9d86a4594ffc975ca9c760c5887bd9a3b6232",
+          "empty_label_hash": "0x438c16e05212074ed5b2d4beba06988729060b93431f68bf346c93c64a1ce640"
         },
         "meta": {
           "short_name": "SPACE ID",
