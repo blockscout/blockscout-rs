@@ -68,6 +68,10 @@ fn prepare_address_search_cte(
                         ts_query,
                     ));
                 })
+                // Apply a hard limit in case we materialize the CTE
+                .apply_if(is_cte_materialized.then_some(10_000), |q, limit| {
+                    q.limit(limit);
+                })
                 .to_owned(),
         )
         .materialized(is_cte_materialized)
@@ -88,6 +92,11 @@ where
         return Ok(vec![]);
     }
 
+    let ts_rank_ordering = Expr::cust_with_expr(
+        "ts_rank(to_tsvector('english', contract_name), to_tsquery($1))",
+        prepare_ts_query(&contract_name_query),
+    );
+
     let addresses_cte_iden = Alias::new("addresses").into_iden();
     let addresses_cte =
         prepare_address_search_cte(Some(contract_name_query), addresses_cte_iden.clone());
@@ -100,7 +109,10 @@ where
                 .column(ColumnRef::TableAsterisk(addresses_cte_iden.clone()))
                 .expr_window_as(
                     row_number,
-                    WindowStatement::partition_by(Column::ChainId),
+                    WindowStatement::partition_by(Column::ChainId)
+                        .order_by_expr(ts_rank_ordering, Order::Desc)
+                        .order_by(Column::Hash, Order::Asc)
+                        .to_owned(),
                     Alias::new("rn"),
                 )
                 .from(addresses_cte_iden.clone())
