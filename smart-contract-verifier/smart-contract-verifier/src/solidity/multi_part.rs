@@ -1,118 +1,142 @@
 use super::client::Client;
-use crate::{compiler::DetailedVersion, verify_new, OnChainContract};
-use std::sync::Arc;
+use crate::{
+    compiler::DetailedVersion, verify_new, verify_new::SolcInput, OnChainCode, OnChainContract,
+};
+use alloy_core::primitives::Address;
+use foundry_compilers_new::artifacts;
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
-use crate::verify_new::SolcInput;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Content {
+    pub sources: BTreeMap<PathBuf, String>,
+    pub evm_version: Option<artifacts::EvmVersion>,
+    pub optimization_runs: Option<u32>,
+    pub contract_libraries: BTreeMap<String, String>,
+}
 
-pub use multi_part_new::{verify, Content, VerificationRequestNew};
+impl From<Content> for Vec<SolcInput> {
+    fn from(content: Content) -> Self {
+        let mut settings = artifacts::solc::Settings::default();
+        if let Some(optimization_runs) = content.optimization_runs {
+            settings.optimizer.enabled = Some(true);
+            settings.optimizer.runs = Some(optimization_runs as usize);
+        }
 
-mod multi_part_new {
-    use crate::{
-        verify_new::{self, SolcInput},
-        DetailedVersion, OnChainCode, OnChainContract, SolidityClient as Client,
-    };
-    use alloy_core::primitives::Address;
+        if !content.contract_libraries.is_empty() {
+            // we have to know filename for library, but we don't know,
+            // so we assume that every file MAY contain all libraries
+            let libs = content
+                .sources
+                .keys()
+                .map(|filename| (PathBuf::from(filename), content.contract_libraries.clone()))
+                .collect();
+            settings.libraries = artifacts::solc::Libraries { libs };
+        }
+
+        settings.evm_version = content.evm_version;
+
+        let sources: artifacts::Sources = content
+            .sources
+            .into_iter()
+            .map(|(name, content)| (name, artifacts::Source::new(content)))
+            .collect();
+        let inputs: Vec<_> = helpers::input_from_sources_and_settings(sources, settings.clone())
+            .into_iter()
+            .map(SolcInput)
+            .collect();
+        inputs
+    }
+}
+
+pub struct VerificationRequest {
+    pub on_chain_code: OnChainCode,
+    pub compiler_version: DetailedVersion,
+    pub content: Content,
+
+    // metadata
+    pub chain_id: Option<String>,
+    pub address: Option<Address>,
+}
+
+pub async fn verify(
+    client: Arc<Client>,
+    request: VerificationRequest,
+) -> Result<verify_new::VerificationResult, verify_new::Error> {
+    let to_verify = vec![OnChainContract {
+        code: request.on_chain_code,
+        chain_id: request.chain_id,
+        address: request.address,
+    }];
+    let compilers = client.new_compilers();
+
+    let solc_inputs: Vec<SolcInput> = request.content.into();
+    for solc_input in solc_inputs {
+        for metadata in helpers::settings_metadata(&request.compiler_version) {
+            let mut solc_input = solc_input.clone();
+            solc_input.0.settings.metadata = metadata;
+
+            let results = verify_new::compile_and_verify(
+                to_verify.clone(),
+                compilers,
+                &request.compiler_version,
+                solc_input,
+            )
+            .await?;
+            let result = results
+                .into_iter()
+                .next()
+                .expect("we sent exactly one contract to verify");
+
+            if result.is_empty() {
+                continue;
+            }
+
+            return Ok(result);
+        }
+    }
+
+    // no contracts could be verified
+    Ok(vec![])
+}
+#[derive(Clone, Debug)]
+pub struct BatchVerificationRequest {
+    pub contracts: Vec<OnChainContract>,
+    pub compiler_version: DetailedVersion,
+    pub content: Content,
+}
+
+pub async fn batch_verify(
+    client: Arc<Client>,
+    request: BatchVerificationRequest,
+) -> Result<Vec<verify_new::VerificationResult>, verify_new::Error> {
+    let to_verify = request.contracts;
+    let compilers = client.new_compilers();
+
+    let solc_inputs: Vec<SolcInput> = request.content.into();
+    if solc_inputs.len() != 1 {
+        return Err(verify_new::Error::Compilation(vec![
+            "exactly one of `.sol` or `.yul` files should exist".to_string(),
+        ]));
+    }
+
+    let content = solc_inputs.into_iter().next().unwrap();
+    let results =
+        verify_new::compile_and_verify(to_verify, compilers, &request.compiler_version, content)
+            .await?;
+
+    Ok(results)
+}
+
+mod helpers {
+    use crate::DetailedVersion;
     use foundry_compilers_new::{
         artifacts,
-        artifacts::solc::{BytecodeHash, SettingsMetadata},
+        artifacts::{BytecodeHash, SettingsMetadata},
     };
     use semver::VersionReq;
-    use std::{collections::BTreeMap, ffi::OsStr, path::PathBuf, sync::Arc};
+    use std::{collections::BTreeMap, ffi::OsStr, path::PathBuf};
 
-    pub struct VerificationRequestNew {
-        pub on_chain_code: OnChainCode,
-        pub compiler_version: DetailedVersion,
-        pub content: Content,
-
-        // metadata
-        pub chain_id: Option<String>,
-        pub address: Option<Address>,
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct Content {
-        pub sources: BTreeMap<PathBuf, String>,
-        pub evm_version: Option<artifacts::EvmVersion>,
-        pub optimization_runs: Option<u32>,
-        pub contract_libraries: BTreeMap<String, String>,
-    }
-
-    impl From<Content> for Vec<SolcInput> {
-        fn from(content: Content) -> Self {
-            let mut settings = artifacts::solc::Settings::default();
-            if let Some(optimization_runs) = content.optimization_runs {
-                settings.optimizer.enabled = Some(true);
-                settings.optimizer.runs = Some(optimization_runs as usize);
-            }
-
-            if !content.contract_libraries.is_empty() {
-                // we have to know filename for library, but we don't know,
-                // so we assume that every file MAY contain all libraries
-                let libs = content
-                    .sources
-                    .keys()
-                    .map(|filename| (PathBuf::from(filename), content.contract_libraries.clone()))
-                    .collect();
-                settings.libraries = artifacts::solc::Libraries { libs };
-            }
-
-            settings.evm_version = content.evm_version;
-
-            let sources: artifacts::Sources = content
-                .sources
-                .into_iter()
-                .map(|(name, content)| (name, artifacts::Source::new(content)))
-                .collect();
-            let inputs: Vec<_> = input_from_sources_and_settings(sources, settings.clone())
-                .into_iter()
-                .map(SolcInput)
-                .collect();
-            inputs
-        }
-    }
-
-    pub async fn verify(
-        client: Arc<Client>,
-        request: VerificationRequestNew,
-    ) -> Result<verify_new::VerificationResult, verify_new::Error> {
-        let to_verify = vec![OnChainContract {
-            code: request.on_chain_code,
-            chain_id: request.chain_id,
-            address: request.address,
-        }];
-        let compilers = client.new_compilers();
-
-        let solc_inputs: Vec<SolcInput> = request.content.into();
-        for solc_input in solc_inputs {
-            for metadata in settings_metadata(&request.compiler_version) {
-                let mut solc_input = solc_input.clone();
-                solc_input.0.settings.metadata = metadata;
-
-                let results = verify_new::compile_and_verify(
-                    to_verify.clone(),
-                    compilers,
-                    &request.compiler_version,
-                    solc_input,
-                )
-                .await?;
-                let result = results
-                    .into_iter()
-                    .next()
-                    .expect("we sent exactly one contract to verify");
-
-                if result.is_empty() {
-                    continue;
-                }
-
-                return Ok(result);
-            }
-        }
-
-        // no contracts could be verified
-        Ok(vec![])
-    }
-
-    fn input_from_sources_and_settings(
+    pub fn input_from_sources_and_settings(
         sources: artifacts::Sources,
         settings: artifacts::solc::Settings,
     ) -> Vec<artifacts::SolcInput> {
@@ -150,7 +174,7 @@ mod multi_part_new {
     /// have to iterate through all possible options.
     ///
     /// See "settings_metadata" (https://docs.soliditylang.org/en/v0.8.15/using-the-compiler.html?highlight=compiler%20input#input-description)
-    fn settings_metadata(compiler_version: &DetailedVersion) -> Vec<Option<SettingsMetadata>> {
+    pub fn settings_metadata(compiler_version: &DetailedVersion) -> Vec<Option<SettingsMetadata>> {
         // Options are sorted by their probability of occurring
         const BYTECODE_HASHES: [BytecodeHash; 3] =
             [BytecodeHash::Ipfs, BytecodeHash::None, BytecodeHash::Bzzr1];
@@ -166,35 +190,6 @@ mod multi_part_new {
                 .into()
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct BatchVerificationRequestNew {
-    pub contracts: Vec<OnChainContract>,
-    pub compiler_version: DetailedVersion,
-    pub content: Content,
-}
-
-pub async fn batch_verify(
-    client: Arc<Client>,
-    request: BatchVerificationRequestNew,
-) -> Result<Vec<verify_new::VerificationResult>, verify_new::Error> {
-    let to_verify = request.contracts;
-    let compilers = client.new_compilers();
-
-    let solc_inputs: Vec<SolcInput> = request.content.into();
-    if solc_inputs.len() != 1 {
-        return Err(verify_new::Error::Compilation(vec![
-            "exactly one of `.sol` or `.yul` files should exist".to_string(),
-        ]));
-    }
-
-    let content = solc_inputs.into_iter().next().unwrap();
-    let results =
-        verify_new::compile_and_verify(to_verify, compilers, &request.compiler_version, content)
-            .await?;
-
-    Ok(results)
 }
 
 #[cfg(test)]

@@ -11,7 +11,7 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::{
 use tonic::Status;
 use verification_common::verifier_alliance;
 
-pub fn compilation_error_new(message: impl Into<String>) -> BatchVerifyResponse {
+pub fn compilation_error(message: impl Into<String>) -> BatchVerifyResponse {
     BatchVerifyResponse {
         verification_result: Some(
             proto::batch_verify_response::VerificationResult::CompilationFailure(
@@ -31,16 +31,16 @@ pub fn process_error(error: Error) -> Result<BatchVerifyResponse, Status> {
             tracing::error!(err = formatted_error, "internal error");
             Err(Status::internal(formatted_error))
         }
-        err @ Error::Compilation(_) => Ok(compilation_error_new(err.to_string())),
+        err @ Error::Compilation(_) => Ok(compilation_error(err.to_string())),
     }
 }
 
-pub fn process_verification_results_new(
+pub fn process_verification_results(
     values: Vec<VerificationResult>,
 ) -> Result<BatchVerifyResponse, Status> {
     let items = values
         .into_iter()
-        .map(process_verification_result_new)
+        .map(process_verification_result)
         .collect::<Result<_, _>>()?;
 
     Ok(BatchVerifyResponse {
@@ -52,7 +52,7 @@ pub fn process_verification_results_new(
     })
 }
 
-fn process_verification_result_new(
+fn process_verification_result(
     value: VerificationResult,
 ) -> Result<proto::ContractVerificationResult, Status> {
     if value.is_empty() {

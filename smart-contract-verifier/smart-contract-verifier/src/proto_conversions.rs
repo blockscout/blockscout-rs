@@ -39,7 +39,7 @@ impl TryFrom<Contract> for OnChainContract {
     }
 }
 
-impl TryFrom<VerifySolidityMultiPartRequest> for solidity::multi_part::VerificationRequestNew {
+impl TryFrom<VerifySolidityMultiPartRequest> for solidity::multi_part::VerificationRequest {
     type Error = RequestParseError;
 
     fn try_from(request: VerifySolidityMultiPartRequest) -> Result<Self, Self::Error> {
@@ -66,9 +66,7 @@ impl TryFrom<VerifySolidityMultiPartRequest> for solidity::multi_part::Verificat
     }
 }
 
-impl TryFrom<VerifySolidityStandardJsonRequest>
-    for solidity::standard_json::VerificationRequestNew
-{
+impl TryFrom<VerifySolidityStandardJsonRequest> for solidity::standard_json::VerificationRequest {
     type Error = RequestParseError;
 
     fn try_from(request: VerifySolidityStandardJsonRequest) -> Result<Self, Self::Error> {
@@ -91,7 +89,7 @@ impl TryFrom<VerifySolidityStandardJsonRequest>
 }
 
 impl TryFrom<BatchVerifySolidityStandardJsonRequest>
-    for solidity::standard_json::BatchVerificationRequestNew
+    for solidity::standard_json::BatchVerificationRequest
 {
     type Error = RequestParseError;
 
@@ -114,7 +112,7 @@ impl TryFrom<BatchVerifySolidityStandardJsonRequest>
 }
 
 impl TryFrom<BatchVerifySolidityMultiPartRequest>
-    for solidity::multi_part::BatchVerificationRequestNew
+    for solidity::multi_part::BatchVerificationRequest
 {
     type Error = RequestParseError;
 

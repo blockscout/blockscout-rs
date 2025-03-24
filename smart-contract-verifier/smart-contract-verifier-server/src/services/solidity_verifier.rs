@@ -79,7 +79,7 @@ impl SolidityVerifier for SolidityVerifierService {
         );
 
         let maybe_verification_request =
-            solidity::multi_part::VerificationRequestNew::try_from(request);
+            solidity::multi_part::VerificationRequest::try_from(request);
         let verification_request = match maybe_verification_request {
             Ok(request) => request,
             Err(err @ RequestParseError::InvalidContent(_)) => {
@@ -130,7 +130,7 @@ impl SolidityVerifier for SolidityVerifierService {
         );
 
         let maybe_verification_request =
-            solidity::standard_json::VerificationRequestNew::try_from(request);
+            solidity::standard_json::VerificationRequest::try_from(request);
         let verification_request = match maybe_verification_request {
             Ok(request) => request,
             Err(err @ RequestParseError::InvalidContent(_)) => {
@@ -168,11 +168,11 @@ impl SolidityVerifier for SolidityVerifierService {
         let request = request.into_inner();
 
         let maybe_verification_request =
-            solidity::multi_part::BatchVerificationRequestNew::try_from(request);
+            solidity::multi_part::BatchVerificationRequest::try_from(request);
         let verification_request = match maybe_verification_request {
             Ok(request) => request,
             Err(err @ RequestParseError::InvalidContent(_)) => {
-                let response = types::batch_verification::compilation_error_new(err.to_string());
+                let response = types::batch_verification::compilation_error(err.to_string());
                 tracing::info!(response=?response, "request processed");
                 return Ok(Response::new(response));
             }
@@ -186,7 +186,7 @@ impl SolidityVerifier for SolidityVerifierService {
             solidity::multi_part::batch_verify(self.client.clone(), verification_request).await;
 
         let verify_response = match result {
-            Ok(value) => types::batch_verification::process_verification_results_new(value)?,
+            Ok(value) => types::batch_verification::process_verification_results(value)?,
             Err(error) => types::batch_verification::process_error(error)?,
         };
 
@@ -200,11 +200,11 @@ impl SolidityVerifier for SolidityVerifierService {
         let request = request.into_inner();
 
         let maybe_verification_request =
-            solidity::standard_json::BatchVerificationRequestNew::try_from(request);
+            solidity::standard_json::BatchVerificationRequest::try_from(request);
         let verification_request = match maybe_verification_request {
             Ok(request) => request,
             Err(err @ RequestParseError::InvalidContent(_)) => {
-                let response = types::batch_verification::compilation_error_new(err.to_string());
+                let response = types::batch_verification::compilation_error(err.to_string());
                 tracing::info!(response=?response, "request processed");
                 return Ok(Response::new(response));
             }
@@ -218,7 +218,7 @@ impl SolidityVerifier for SolidityVerifierService {
             solidity::standard_json::batch_verify(self.client.clone(), verification_request).await;
 
         let verify_response = match result {
-            Ok(value) => types::batch_verification::process_verification_results_new(value)?,
+            Ok(value) => types::batch_verification::process_verification_results(value)?,
             Err(error) => types::batch_verification::process_error(error)?,
         };
 
