@@ -20,6 +20,7 @@ pub mod search_dapps {
 
     #[serde_as]
     #[derive(Serialize, Clone, Debug, Default, PartialEq)]
+    #[serde(rename_all = "camelCase")]
     pub struct SearchDappsParams {
         pub title: Option<String>,
         pub categories: Option<String>,
