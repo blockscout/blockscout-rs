@@ -47,6 +47,13 @@ impl TryFrom<VerifySolidityMultiPartRequest> for solidity::multi_part::Verificat
             &request.bytecode,
             request.bytecode_type(),
         )?;
+        let (chain_id, address) = helpers::decode_verification_metadata(request.metadata);
+        let contract = OnChainContract {
+            code: on_chain_code,
+            chain_id,
+            address,
+        };
+
         let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
         let content = build_solidity_multi_part_content(
             request.source_files,
@@ -54,14 +61,11 @@ impl TryFrom<VerifySolidityMultiPartRequest> for solidity::multi_part::Verificat
             request.optimization_runs.map(|value| value as u32),
             request.libraries,
         )?;
-        let (chain_id, address) = helpers::decode_verification_metadata(request.metadata);
 
         Ok(Self {
-            on_chain_code,
+            contract,
             compiler_version,
             content,
-            chain_id,
-            address,
         })
     }
 }
@@ -74,16 +78,20 @@ impl TryFrom<VerifySolidityStandardJsonRequest> for solidity::standard_json::Ver
             &request.bytecode,
             request.bytecode_type(),
         )?;
-        let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
-        let content = build_solidity_standard_json_content(request.input)?;
         let (chain_id, address) = helpers::decode_verification_metadata(request.metadata);
-
-        Ok(Self {
-            on_chain_code,
-            compiler_version,
-            content,
+        let contract = OnChainContract {
+            code: on_chain_code,
             chain_id,
             address,
+        };
+
+        let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
+        let content = build_solidity_standard_json_content(request.input)?;
+
+        Ok(Self {
+            contract,
+            compiler_version,
+            content,
         })
     }
 }

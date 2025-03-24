@@ -1,8 +1,5 @@
 use super::client::Client;
-use crate::{
-    compiler::DetailedVersion, verify_new, verify_new::SolcInput, OnChainCode, OnChainContract,
-};
-use alloy_core::primitives::Address;
+use crate::{compiler::DetailedVersion, verify_new, verify_new::SolcInput, OnChainContract};
 use foundry_compilers_new::artifacts;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
@@ -49,24 +46,16 @@ impl From<Content> for Vec<SolcInput> {
 }
 
 pub struct VerificationRequest {
-    pub on_chain_code: OnChainCode,
+    pub contract: OnChainContract,
     pub compiler_version: DetailedVersion,
     pub content: Content,
-
-    // metadata
-    pub chain_id: Option<String>,
-    pub address: Option<Address>,
 }
 
 pub async fn verify(
     client: Arc<Client>,
     request: VerificationRequest,
 ) -> Result<verify_new::VerificationResult, verify_new::Error> {
-    let to_verify = vec![OnChainContract {
-        code: request.on_chain_code,
-        chain_id: request.chain_id,
-        address: request.address,
-    }];
+    let to_verify = vec![request.contract];
     let compilers = client.new_compilers();
 
     let solc_inputs: Vec<SolcInput> = request.content.into();
