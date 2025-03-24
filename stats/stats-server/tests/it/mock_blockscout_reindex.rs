@@ -206,9 +206,6 @@ pub async fn test_incorrect_reupdate_requests(base: &Url, key: ApiKey) {
         .await
         .unwrap_or_else(|_| panic!("Failed to send request"));
     assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
-
-    // should not test correct request because the update process will break other tests
-    // and correct cases are tested in `mock_blockscout_reindex`
 }
 
 async fn get_new_txns(base: &Url) -> Vec<proto_v1::Point> {
