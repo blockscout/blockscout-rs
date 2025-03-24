@@ -182,7 +182,7 @@ impl Indexer {
         let thread_id = thread::current().id();
         tracing::debug!("[Thread {:?}] Processing interval job: {:?}", thread_id, job);
 
-        let operations = self.client.get_operations_v2(job.interval.start as u64, job.interval.end as u64).await?;
+        let operations = self.client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
         let ops_num = operations.len();
         
         if ops_num > 0 {
@@ -415,8 +415,8 @@ impl Indexer {
         use sea_orm::Set;
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        match self.client.get_operation_stages_v2(&job.operation.id).await {
-            Ok(()) => {
+        match self.client.get_operation_stages(&job.operation.id).await {
+            Ok(_) => {
                 // Start a transaction
                 let txn = match self.db.begin().await {
                     Ok(txn) => txn,
@@ -512,7 +512,7 @@ impl Indexer {
 
                             if let Err(update_err) = interval_model.update(self.db.as_ref()).await {
                                 tracing::error!("Failed to update interval for retry: {}", update_err);
-                            }
+                            }   
                         }
                     }
                 }

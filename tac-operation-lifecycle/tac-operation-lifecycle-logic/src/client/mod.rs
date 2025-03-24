@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Error;
 use reqwest::Response;
 use serde::Deserialize;
@@ -6,20 +8,15 @@ use tracing::{debug, error};
 
 pub mod settings;
 
+pub mod models;
+use models::operations::{Operations, OperationIdsApiResponse};
+use models::profiling::{OperationData, StageProfilingApiResponse};
+
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Client {
     rpc: RpcSettings,
 }
 
-
-#[derive(Deserialize, Debug)]
-pub struct Operation {
-    #[serde(rename = "operation_id")]
-    pub id: String,
-    pub timestamp: u64,
-}
-
-type Operations = Vec<Operation>;
 
 impl Client {
     pub fn new(rpc: RpcSettings) -> Self {
@@ -27,35 +24,6 @@ impl Client {
     }
 
     pub async fn get_operations(&self, start: u64, end: u64) -> Result<Operations, Error> {
-        let url = format!("{}/operationIds?from={}&till={}", self.url(), start, end);
-        debug!("Fetching operations from URL: {}", url);
-        let response: Response = reqwest::get(url).await?;
-        let status = response.status();
-        debug!("Response status: {}", status);
-        
-        let text = response.text().await?;
-        debug!("Raw response body: {}", text);
-        
-        if text.is_empty() {
-            error!("Received empty response from server");
-            return Ok(Vec::new());
-        }
-        
-        #[derive(Deserialize)]
-        struct OperationResponse {
-            response: Operations,
-        }
-        
-        match serde_json::from_str::<OperationResponse>(&text) {
-            Ok(response) => Ok(response.response),
-            Err(e) => {
-                error!("Failed to parse response: {}", e);
-                Err(e.into())
-            }
-        }
-    }
-
-    pub async fn get_operations_v2(&self, start: u64, end: u64) -> Result<Operations, Error> {
         let url = format!("{}/operation-ids?from={}&till={}", self.url(), start, end);
         debug!("Fetching operations from URL: {}", url);
         let response: Response = reqwest::get(url).await?;
@@ -66,22 +34,11 @@ impl Client {
         debug!("Raw response body: {}", text);
         
         if text.is_empty() {
-            error!("Received empty response from server");
+            tracing::error!("Received empty response from server");
             return Ok(Vec::new());
         }
         
-        #[derive(Deserialize)]
-        struct OperationResponse {
-            response: ResponseData,
-        }
-
-        #[derive(Deserialize)]
-        struct ResponseData {
-            total: u32,
-            operations: Operations,
-        }
-        
-        match serde_json::from_str::<OperationResponse>(&text) {
+        match serde_json::from_str::<OperationIdsApiResponse>(&text) {
             Ok(response) => Ok(response.response.operations),
             Err(e) => {
                 error!("Failed to parse response: {}", e);
@@ -90,7 +47,7 @@ impl Client {
         }
     }
 
-    pub async fn get_operation_stages_v2(&self, id: &str) -> Result<(), Error> {
+    pub async fn get_operation_stages(&self, id: &str) -> Result<HashMap<String, OperationData>, Error> {
         let client = reqwest::Client::new();
         let request_body = serde_json::json!({
             "operationIds": [id]
@@ -106,9 +63,20 @@ impl Client {
                 Ok(response) => {
                     if response.status().is_success() {
                         let text = response.text().await?;
-                        tracing::info!("Raw stage-profiling response body: {}", text);
+                        debug!("Raw response body: {}", text);
                         
-                        Ok(())
+                        if text.is_empty() {
+                            tracing::error!("Received empty response from server");
+                            return Ok(HashMap::new());
+                        }
+                        
+                        match serde_json::from_str::<StageProfilingApiResponse>(&text) {
+                            Ok(response) => Ok(response.response),
+                            Err(e) => {
+                                error!("Failed to parse response: {}", e);
+                                Err(e.into())
+                            }
+                        }
                     } else {
                         Err(anyhow::anyhow!("HTTP error {}: {}", response.status().as_u16(), response.status().as_str()))
                     }
