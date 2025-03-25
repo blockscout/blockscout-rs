@@ -1,28 +1,28 @@
 specVersion: 0.0.4
-description: Subgraph to index Zeta Subgraph
-repository: https://github.com/blockscout/blokcscout-rs
+description: Subgraph to index Mint Subgraph
+repository: https://github.com/blockscout/blockscout-rs
 schema:
-  file: schema.graphql
+  file: ./schema.graphql
 dataSources:
   - kind: ethereum/contract
     name: Registry
-    network: zeta
+    network: mint-mainnet
     source:
       abi: Registry
-      address: "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17"
-      startBlock: 2341839
+      address: "0x5dc881dda4e4a8d312be3544ad13118d1a04cb17"
+      startBlock: 2226817
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
-      file: Registry/Registry.wasm
+      file: ./src/Registry.ts
       entities:
         - Domain
         - Account
         - Resolver
       abis:
         - name: Registry
-          file: Registry/abis/Registry.json
+          file: ./abis/Registry.json
       eventHandlers:
         - event: Transfer(indexed bytes32,address)
           handler: handleTransfer
@@ -32,17 +32,19 @@ dataSources:
           handler: handleNewResolver
         - event: NewTTL(indexed bytes32,uint64)
           handler: handleNewTTL
+
+
   - kind: ethereum/contract
     name: Resolver
-    network: zeta
+    network: mint-mainnet
     source:
       abi: Resolver
-      startBlock: 2342062
+      startBlock: 2226817
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
-      file: Resolver/Resolver.wasm
+      file: ./src/Resolver.ts
       entities:
         - AddrChanged
         - MulticoinAddrChanged
@@ -54,7 +56,7 @@ dataSources:
         - InterfaceChanged
       abis:
         - name: Resolver
-          file: Resolver/abis/Resolver.json
+          file: ./abis/Resolver.json
       eventHandlers:
         - event: ABIChanged(indexed bytes32,indexed uint256)
           handler: handleABIChanged
@@ -74,16 +76,16 @@ dataSources:
           handler: handleTextChanged
   - kind: ethereum/contract
     name: Base
-    network: zeta
+    network: mint-mainnet
     source:
       abi: Base
-      address: "0xfcd0df2d5b1023c3ce210bed17c3bcf40d4ed5cd"
-      startBlock: 2358728
+      address: "0x5c6cb93b1fc4e0a1274d07852cbd7ebd201b6593"
+      startBlock: 2226817
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
-      file: Base/Base.wasm
+      file: ./src/Base.ts
       entities:
         - Registration
         - NameRegistered
@@ -91,7 +93,7 @@ dataSources:
         - NameTransferred
       abis:
         - name: Base
-          file: Base/abis/Base.json
+          file: ./abis/Base.json
       eventHandlers:
         - event: NameRegistered(indexed uint256,indexed address,uint256)
           handler: handleNameRegistered
@@ -99,25 +101,27 @@ dataSources:
           handler: handleNameRenewed
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleNameTransferred
+
   - kind: ethereum/contract
     name: RegistrarController
-    network: zeta
+    network: mint-mainnet
     source:
       abi: RegistrarController
-      address: "0xD7b837A0E388B4c25200983bdAa3EF3A83ca86b7"
-      startBlock: 2341951
+      address: "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7"
+      startBlock: 2226817
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
-      file: RegistrarController/RegistrarController.wasm
+      file: ./src/RegistrarController.ts
       entities:
         - Registration
       abis:
         - name: RegistrarController
-          file: RegistrarController/abis/RegistrarController.json
+          file: ./abis/RegistrarController.json
       eventHandlers:
-        - event: NameRegistered(uint256,string,indexed bytes32,indexed address,uint256,uint256)
+        - event: NameRegistered(uint256,string,indexed bytes32,indexed
+            address,uint256,uint256)
           handler: handleNameRegisteredByController
         - event: NameRenewed(uint256,string,indexed bytes32,uint256,uint256)
           handler: handleNameRenewedByController
