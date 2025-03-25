@@ -37,6 +37,8 @@ pub struct ServiceSettings {
     #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
     #[serde(default = "default_quick_search_chains")]
     pub quick_search_chains: Vec<i64>,
+    #[serde(default)]
+    pub fetch_chains: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -99,6 +101,7 @@ impl Settings {
                     max_page_size: default_max_page_size(),
                 },
                 quick_search_chains: default_quick_search_chains(),
+                fetch_chains: false,
             },
         }
     }

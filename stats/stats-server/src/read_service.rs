@@ -563,9 +563,19 @@ impl StatsService for ReadService {
             .from
             .map(|s| NaiveDate::from_str(&s))
             .transpose()
-            .map_err(|e| {
-                Status::invalid_argument(format!("`from` should be a valid date: {}", e))
-            })?;
+            .map_err(|e| Status::invalid_argument(format!("`from` should be a valid date: {}", e)))?
+            .map(|update_from| {
+                let current_date = Utc::now().date_naive();
+                if update_from <= current_date {
+                    Ok(update_from)
+                } else {
+                    Err(Status::invalid_argument(format!(
+                        "`from` should not be from a future; current date: {}",
+                        current_date
+                    )))
+                }
+            })
+            .transpose()?;
         let update_later = request.update_later.unwrap_or(false);
         let result = self
             .update_service

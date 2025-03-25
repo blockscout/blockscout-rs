@@ -7,7 +7,6 @@ use crate::{
     services::{HealthService, MultichainAggregator, ReadWriteRepo},
     settings::Settings,
 };
-use blockscout_chains::BlockscoutChainsClient;
 use blockscout_service_launcher::{
     database,
     launcher::{self, LaunchSettings},
@@ -15,7 +14,7 @@ use blockscout_service_launcher::{
 use migration::Migrator;
 use multichain_aggregator_logic::{
     clients::{dapp, token_info},
-    repository,
+    services::chains::fetch_and_upsert_blockscout_chains,
 };
 use std::sync::Arc;
 
@@ -64,19 +63,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let repo = ReadWriteRepo::new(db, replica_db);
 
-    // Initialize/update Blockscout chains
-    let blockscout_chains = BlockscoutChainsClient::builder()
-        .with_max_retries(0)
-        .build()
-        .fetch_all()
-        .await?
-        .into_iter()
-        .filter_map(|(id, chain)| {
-            let id = id.parse::<i64>().ok()?;
-            Some((id, chain).into())
-        })
-        .collect::<Vec<_>>();
-    repository::chains::upsert_many(repo.write_db(), blockscout_chains).await?;
+    if settings.service.fetch_chains {
+        fetch_and_upsert_blockscout_chains(repo.write_db()).await?;
+    }
 
     let dapp_client = dapp::new_client(settings.service.dapp_client.url)?;
     let token_info_client = token_info::new_client(settings.service.token_info_client.url)?;
