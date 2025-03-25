@@ -1,58 +1,49 @@
-use std::ops::Range;
-
 use crate::{
+    charts::db_interaction::utils::interval_24h_filter,
     data_source::{
         kinds::{
-            data_manipulation::map::{Map, MapParseTo, StripWrapper},
+            data_manipulation::map::Map,
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOne24hCached, RemoteDatabaseSource, StatementFromRange},
+            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
         },
-        types::{BlockscoutMigrations, WrappedValue},
+        types::BlockscoutMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    utils::sql_with_range_filter_opt,
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
+use blockscout_db::entity::blocks;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use migration::{Asterisk, Func, IntoColumnRef};
+use sea_orm::{
+    ColumnTrait, DbBackend, EntityTrait, IntoSimpleExpr, QueryFilter, QuerySelect, QueryTrait,
+    Statement,
+};
 
 use super::{CalculateOperationalTxns, NewTxns24hInt};
 
 pub struct NewBlocks24hStatement;
 
-impl StatementFromRange for NewBlocks24hStatement {
+impl StatementFromUpdateTime for NewBlocks24hStatement {
     fn get_statement(
-        range: Option<Range<DateTime<Utc>>>,
+        update_time: DateTime<Utc>,
         _completed_migrations: &BlockscoutMigrations,
     ) -> Statement {
-        sql_with_range_filter_opt!(
-            DbBackend::Postgres,
-            r#"
-                SELECT
-                    COUNT(*)::TEXT as value
-                FROM public.blocks
-                WHERE
-                    blocks.timestamp != to_timestamp(0) AND
-                    consensus = true {filter};
-            "#,
-            [],
-            "blocks.timestamp",
-            range
-        )
+        blocks::Entity::find()
+            .select_only()
+            .filter(blocks::Column::Timestamp.ne(DateTime::UNIX_EPOCH))
+            .filter(blocks::Column::Consensus.eq(true))
+            .filter(interval_24h_filter(
+                blocks::Column::Timestamp.into_simple_expr(),
+                update_time,
+            ))
+            .expr_as(Func::count(Asterisk.into_column_ref()), "value")
+            .build(DbBackend::Postgres)
     }
 }
 
-// todo: cleanup
-// caching is not needed but I don't want to make another type just for this
-//
-// btw the caching should solve the problem with not storing `NewBlocks24h` in local
-// db while not introducing any new unnecessary entries to the db. so it should be safe
-// to use this in other places as well (in terms of efficiency)
-pub type NewBlocks24h =
-    RemoteDatabaseSource<PullOne24hCached<NewBlocks24hStatement, WrappedValue<String>>>;
-
-pub type NewBlocks24hInt = MapParseTo<StripWrapper<NewBlocks24h>, i64>;
+pub type NewBlocks24hInt =
+    RemoteDatabaseSource<PullOneNowValue<NewBlocks24hStatement, NaiveDate, i64>>;
 
 pub struct Properties;
 
@@ -94,9 +85,7 @@ mod tests {
     async fn update_new_operational_txns_24h() {
         simple_test_counter::<NewOperationalTxns24h>(
             "update_new_operational_txns_24h",
-            // block at `2022-11-11T00:00:00` is not counted because
-            // the relation is 'less than' in query
-            "11",
+            "10",
             Some(dt("2022-11-11T00:00:00")),
         )
         .await;

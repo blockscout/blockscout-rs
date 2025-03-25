@@ -26,28 +26,24 @@ pub trait StatementForOne {
 /// `P` - Type of point to retrieve within query.
 /// `DateValue<String>` can be used to avoid parsing the values,
 /// but `DateValue<Decimal>` or other types can be useful sometimes.
-pub struct PullOne<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
+pub struct PullOne<S, Value>(PhantomData<(S, Value)>)
 where
     S: StatementForOne,
-    Resolution: Ord + Send,
-    Value: Send,
-    TimespanValue<Resolution, Value>: FromQueryResult;
+    Value: FromQueryResult + Send;
 
-impl<S, Resolution, Value> RemoteQueryBehaviour for PullOne<S, Resolution, Value>
+impl<S, Value> RemoteQueryBehaviour for PullOne<S, Value>
 where
     S: StatementForOne,
-    Resolution: Ord + Send,
-    Value: Send,
-    TimespanValue<Resolution, Value>: FromQueryResult,
+    Value: FromQueryResult + Send,
 {
-    type Output = TimespanValue<Resolution, Value>;
+    type Output = Value;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
+    ) -> Result<Value, ChartError> {
         let query = S::get_statement(&cx.blockscout_applied_migrations);
-        let data = TimespanValue::<Resolution, Value>::find_by_statement(query)
+        let data = Value::find_by_statement(query)
             .one(cx.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?
@@ -64,13 +60,13 @@ pub trait StatementFromUpdateTime {
 }
 
 /// Just like `PullOne` but timespan is taken from update time
-pub struct PullOneValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
+pub struct PullOneNowValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
 where
     S: StatementFromUpdateTime,
     Resolution: Timespan + Ord + Send,
     Value: Send + TryGetable;
 
-impl<S, Resolution, Value> RemoteQueryBehaviour for PullOneValue<S, Resolution, Value>
+impl<S, Resolution, Value> RemoteQueryBehaviour for PullOneNowValue<S, Resolution, Value>
 where
     S: StatementFromUpdateTime,
     Resolution: Timespan + Ord + Send,

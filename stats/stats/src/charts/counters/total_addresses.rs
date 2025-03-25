@@ -8,7 +8,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    types::timespans::DateValue,
+    types::{timespans::DateValue, TimespanValue},
     ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use blockscout_db::entity::addresses;
@@ -40,7 +40,7 @@ impl StatementForOne for TotalAddressesStatement {
 }
 
 pub type TotalAddressesRemote =
-    RemoteDatabaseSource<PullOne<TotalAddressesStatement, NaiveDate, String>>;
+    RemoteDatabaseSource<PullOne<TotalAddressesStatement, TimespanValue<NaiveDate, String>>>;
 
 pub struct Properties;
 
