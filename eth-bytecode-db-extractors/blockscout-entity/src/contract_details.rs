@@ -55,4 +55,17 @@ impl Related<super::contract_addresses::Entity> for Entity {
     }
 }
 
+impl Related<super::job_queue::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::contract_addresses::Relation::JobQueue.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(
+            super::contract_addresses::Relation::ContractDetails
+                .def()
+                .rev(),
+        )
+    }
+}
+
 impl ActiveModelBehavior for ActiveModel {}
