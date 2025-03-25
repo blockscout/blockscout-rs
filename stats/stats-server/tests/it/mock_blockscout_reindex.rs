@@ -4,7 +4,7 @@ use blockscout_service_launcher::{
     launcher::GracefulShutdownHandler,
     test_server::{init_server, send_get_request},
 };
-use chrono::NaiveDate;
+use chrono::{Days, NaiveDate, Utc};
 use pretty_assertions::assert_eq;
 use stats::tests::{
     init_db::init_db_all,
@@ -12,7 +12,10 @@ use stats::tests::{
     simple_test::{chart_output_to_expected, map_str_tuple_to_owned},
 };
 use stats_proto::blockscout::stats::v1::{self as proto_v1, BatchUpdateChartsResult};
-use stats_server::{auth::ApiKey, stats};
+use stats_server::{
+    auth::{ApiKey, API_KEY_NAME},
+    stats,
+};
 use tokio::time::sleep;
 use url::Url;
 
@@ -45,6 +48,8 @@ async fn test_reupdate_works() {
     // Sleep until server will start and calculate all values
     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
     sleep(Duration::from_secs(2 * wait_multiplier)).await;
+
+    test_incorrect_reupdate_requests(&base, api_key.clone()).await;
 
     let data = get_new_txns(&base).await;
     assert_eq!(
@@ -154,6 +159,54 @@ async fn test_reupdate_works() {
     blockscout_db.close_all_unwrap().await;
     stats_db.close_all_unwrap().await;
     shutdown.cancel_wait_timeout(None).await.unwrap();
+}
+
+pub async fn test_incorrect_reupdate_requests(base: &Url, key: ApiKey) {
+    let mut request = reqwest::Client::new().request(
+        reqwest::Method::POST,
+        base.join("/api/v1/charts/batch-update").unwrap(),
+    );
+    request = request.json(&proto_v1::BatchUpdateChartsRequest {
+        chart_names: vec!["txnsGrowth".to_string()],
+        from: Some("2023-01-01".to_string()),
+        update_later: None,
+    });
+    let request_without_key = request.try_clone().unwrap();
+    let response = request_without_key
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("Failed to send request"));
+    assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    let incorrect_key = "321".to_string();
+    assert_ne!(key.key, incorrect_key);
+    let request_with_incorrect_key = request
+        .try_clone()
+        .unwrap()
+        .header(API_KEY_NAME, &incorrect_key);
+    let response = request_with_incorrect_key
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("Failed to send request"));
+    assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    let request_correct = request.header(API_KEY_NAME, &key.key);
+
+    let tomorrow = Utc::now().checked_add_days(Days::new(1)).unwrap();
+    let request_with_future_from =
+        request_correct
+            .try_clone()
+            .unwrap()
+            .json(&proto_v1::BatchUpdateChartsRequest {
+                chart_names: vec!["txnsGrowth".to_string()],
+                from: Some(tomorrow.format("%Y-%m-%d").to_string()),
+                update_later: None,
+            });
+    let response = request_with_future_from
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("Failed to send request"));
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
 async fn get_new_txns(base: &Url) -> Vec<proto_v1::Point> {

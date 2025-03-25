@@ -44,5 +44,6 @@ ethers-solc = { workspace = true, features = ["svm-solc"] }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
 rstest = { workspace = true }
+serde_path_to_error = { workspace = true }
 stdext = { workspace = true }
 tempfile = { workspace = true }
