@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
@@ -13,10 +13,10 @@ pub struct OperationData {
     pub stages: HashMap<StageType, Stage>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum OperationType {
-    PENDING,
+    Pending,
     TacTonTac,
     TacTon,
     TonTac,

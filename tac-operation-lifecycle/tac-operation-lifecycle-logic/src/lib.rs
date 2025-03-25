@@ -4,11 +4,11 @@ use std::{
 };
 
 use anyhow::Error;
-use client::Client;
+use client::{models::profiling::{OperationType, StageType}, Client};
 use reqwest;
 use serde::{Deserialize, Serialize};
-use sea_orm::{Statement, ActiveValue, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
-use tac_operation_lifecycle_entity::{interval, operation, watermark};
+use sea_orm::{ActiveValue::{self, NotSet}, DatabaseConnection, EntityTrait, QueryFilter, Statement, TransactionTrait};
+use tac_operation_lifecycle_entity::{interval, operation, watermark, stage_type, operation_stage};
 
 pub mod client;
 pub mod settings;
@@ -48,6 +48,48 @@ pub enum OrderDirection {
     Descending,
     /// Process intervals from oldest to newest (for catch up)
     Ascending,
+}
+
+impl OperationType {
+    pub fn to_id(&self) -> i32 {
+        match self {
+            OperationType::Pending => 1,
+            OperationType::TacTonTac => 2,
+            OperationType::TacTon => 3,
+            OperationType::TonTac => 4,
+            OperationType::Rollback => 5,
+            OperationType::Unknown => 6,
+            OperationType::ErrorType => 0,
+        }
+    }
+
+    pub fn to_string(&self) -> String { // SCREAMING_SNAKE_CASE
+        serde_json::to_string(self)
+            .unwrap()
+            .trim_matches('"')
+            .to_string()
+    }
+
+    pub fn is_finalized(&self) -> bool {
+        self == &OperationType::Pending
+    }
+}
+
+impl StageType {
+    pub fn to_id(&self) -> i32 {
+        match self {
+            StageType::CollectedInTAC => 1,
+            StageType::IncludedInTACConsensus => 2,
+            StageType::ExecutedInTAC => 3,
+            StageType::CollectedInTON => 4,
+            StageType::IncludedInTONConsensus => 5,
+            StageType::ExecutedInTON => 6,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
 }
 
 pub struct Indexer {
@@ -167,6 +209,42 @@ impl Indexer {
         }
 
         Ok(intervals.len())
+    }
+
+    pub async fn ensure_stages_types_exist(&self) -> Result<(), sea_orm::DbErr> {
+        let mut num_stages_added = 0;
+        for op_type in [
+            StageType::CollectedInTAC,
+            StageType::IncludedInTACConsensus,
+            StageType::ExecutedInTAC,
+            StageType::CollectedInTON,
+            StageType::IncludedInTONConsensus,
+            StageType::ExecutedInTON,
+        ] {
+            let stage_id = op_type.to_id();
+            let stage_name = op_type.to_string();
+    
+            if stage_type::Entity::find()
+                .filter(stage_type::Column::Id.eq(stage_id))
+                .one(self.db.as_ref())
+                .await?
+                .is_none()
+            {
+                let new_stage = stage_type::ActiveModel {
+                    id: Set(stage_id),
+                    name: Set(stage_name),
+                };
+                new_stage.insert(self.db.as_ref()).await?;
+
+                num_stages_added = num_stages_added + 1;
+            }
+        }
+
+        if num_stages_added > 0 {
+            tracing::info!("Added {} stage types to the database", num_stages_added);
+        }
+
+        Ok(())
     }
 
     pub fn watermark(&self) -> u64 {
@@ -411,12 +489,14 @@ impl Indexer {
         })
     }
 
-    pub async fn process_operation_with_retries(&self, job: &OperationJob) -> () {
+    pub async fn process_operation_with_retries(&self, jobs: Vec<&OperationJob>) -> () {
         use sea_orm::Set;
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        match self.client.get_operation_stages(&job.operation.id).await {
-            Ok(_) => {
+        let op_ids: Vec<&str> = jobs.iter().map(|j| j.operation.id.as_str()).collect();
+
+        match self.client.get_operations_stages(op_ids.clone()).await {
+            Ok(operations_map) => {
                 // Start a transaction
                 let txn = match self.db.begin().await {
                     Ok(txn) => txn,
@@ -426,14 +506,59 @@ impl Indexer {
                     }
                 };
 
-                // Update operation status to completed (2)
-                let mut operation_model: operation::ActiveModel = job.operation.clone().into();
-                operation_model.status = Set(2);
-                
-                if let Err(e) = operation_model.update(&txn).await {
-                    tracing::error!("Failed to update operation status: {}", e);
-                    let _ = txn.rollback().await;
-                    return;
+                for (op_id, operation_data) in operations_map.iter() {
+                    // Find an associated operation in the input operations vector
+                    match jobs.iter().find(|j| &j.operation.id == op_id) {
+                        Some(job) => {
+                            // Update operation type and status
+                            let mut operation_model: operation::ActiveModel = job.operation.clone().into();
+                            if operation_data.operationType.is_finalized() {
+                                operation_model.status = Set(2);    // assume completed status
+                            }
+                            operation_model.operation_type = Set(Some(operation_data.operationType.to_string()));
+                            
+                            if let Err(e) = operation_model.update(&txn).await {
+                                tracing::error!("Failed to update operation status: {}", e);
+                                let _ = txn.rollback().await;
+                                return;
+                            }
+
+                            // Store operation stages
+                            for (stage_type, stage_data) in operation_data.stages.iter() {
+                                if let Some(data) = &stage_data.stage_data {
+                                    let stage_model = operation_stage::ActiveModel {
+                                        id: NotSet,
+                                        operation_id: Set(op_id.to_string()),
+                                        stage_type_id: Set(stage_type.to_id()),
+                                        success: Set(data.success),
+                                        timestamp: Set(data.timestamp as i64),
+                                        note: Set(data.note.clone()),
+                                    };
+                                    
+                                    match operation_stage::Entity::insert(stage_model)
+                                        .on_conflict(
+                                            sea_orm::sea_query::OnConflict::column(operation::Column::Id)
+                                                .do_nothing()
+                                                .to_owned(),
+                                        )
+                                        .exec(&txn)
+                                        .await {
+                                            Ok(_) => tracing::debug!("Successfully inserted stage for op_id {}", op_id),
+                                            Err(e) => {
+                                                tracing::debug!("Error inserting stage: {:?}", e);
+                                                // Don't fail the entire batch for a single operation
+                                                continue;
+                                            }
+                                        }
+
+                                    // TODO: store transactions for this stage
+                                }
+                            }
+                        },
+                        None => {
+                            tracing::error!("Stage profiling response contains unknown operation (id = {}). Skipping...", op_id);
+                        }
+                    }
                 }
 
                 // Commit transaction
@@ -442,10 +567,11 @@ impl Indexer {
                     return;
                 }
 
-                tracing::info!("Successfully processed operation: id={}", job.operation.id);
+                tracing::info!("Successfully processed operations: id={}", op_ids.join(","));
             }
             _ => {
-                let retries = job.operation.retry_count;
+                let _ = jobs.iter().map(|job| async {
+                    let retries = job.operation.retry_count;
                     let base_delay = 5; // 5 seconds base delay
                     let next_retry = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
@@ -461,6 +587,7 @@ impl Indexer {
                     if let Err(update_err) = operation_model.update(self.db.as_ref()).await {
                         tracing::error!("Failed to update operation next_retry: {}", update_err);
                     }
+                });
             }
         }
     }
@@ -470,6 +597,8 @@ impl Indexer {
     #[instrument(name = "indexer", skip_all, level = "info")]
     pub async fn start(&self) -> anyhow::Result<()> {
         use futures::stream::{select_with_strategy, PollNext};
+
+        self.ensure_stages_types_exist().await?;
 
         tracing::warn!("starting indexer");
         self.save_intervals(chrono::Utc::now().timestamp() as u64).await?;
@@ -517,7 +646,7 @@ impl Indexer {
                     }
                 }
                 IndexerJob::Operation(job) => {
-                    self.process_operation_with_retries(&job).await;
+                    self.process_operation_with_retries([&job].to_vec()).await;
                 }
             }
         }
