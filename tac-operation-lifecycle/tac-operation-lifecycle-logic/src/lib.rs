@@ -4,11 +4,11 @@ use std::{
 };
 
 use anyhow::Error;
-use client::{models::profiling::{OperationType, StageType}, Client};
+use client::{models::profiling::{BlockchainType, OperationType, StageType}, Client};
 use reqwest;
 use serde::{Deserialize, Serialize};
 use sea_orm::{ActiveValue::{self, NotSet}, DatabaseConnection, EntityTrait, QueryFilter, Statement, TransactionTrait};
-use tac_operation_lifecycle_entity::{interval, operation, watermark, stage_type, operation_stage};
+use tac_operation_lifecycle_entity::{interval, operation, operation_stage, stage_type, transaction, watermark};
 
 pub mod client;
 pub mod settings;
@@ -87,6 +87,12 @@ impl StageType {
         }
     }
 
+    pub fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl BlockchainType {
     pub fn to_string(&self) -> String {
         format!("{:?}", self)
     }
@@ -541,17 +547,33 @@ impl Indexer {
                                                 .do_nothing()
                                                 .to_owned(),
                                         )
-                                        .exec(&txn)
+                                        .exec_with_returning(&txn)
                                         .await {
-                                            Ok(_) => tracing::debug!("Successfully inserted stage for op_id {}", op_id),
+                                            Ok(inserted_stage) => {
+                                                tracing::debug!("Successfully inserted stage for op_id {}", op_id);
+
+                                                // store transactions for this stage
+                                                for tx in data.transactions.iter() {
+                                                    let tx_model = transaction::ActiveModel {
+                                                        id: NotSet,
+                                                        stage_id: Set(inserted_stage.id),
+                                                        hash: Set(tx.hash.clone()),
+                                                        blockchain_type: Set(tx.blockchain_type.to_string()),
+                                                    };
+
+                                                    match transaction::Entity::insert(tx_model).exec(&txn).await {
+                                                        Ok(_) => tracing::debug!("Successfully inserted transaction for stage_id {}", inserted_stage.id),
+                                                        Err(e) => tracing::error!("Error inserting transaction: {:?}", e),
+                                                    }
+                                                }
+
+                                            },
                                             Err(e) => {
                                                 tracing::debug!("Error inserting stage: {:?}", e);
                                                 // Don't fail the entire batch for a single operation
                                                 continue;
                                             }
                                         }
-
-                                    // TODO: store transactions for this stage
                                 }
                             }
                         },
