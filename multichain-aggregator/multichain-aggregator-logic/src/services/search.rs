@@ -15,7 +15,10 @@ use crate::{
 use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
 use sea_orm::DatabaseConnection;
-use std::str::FromStr;
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
@@ -197,6 +200,34 @@ struct SearchContext<'a> {
     chain_ids: &'a [ChainId],
 }
 
+fn filter_and_sort_by_priority<T>(
+    items: Vec<T>,
+    get_chain_id: impl Fn(&T) -> ChainId,
+    search_context: &SearchContext<'_>,
+) -> Vec<T> {
+    // Filter to keep only one item per chain_id,
+    // assuming they are already presented in a relevant order.
+    let mut seen_chain_ids = HashSet::new();
+    let mut filtered_items = items
+        .into_iter()
+        .filter(|item| seen_chain_ids.insert(get_chain_id(item)))
+        .collect::<Vec<_>>();
+
+    let chain_id_priority = search_context
+        .chain_ids
+        .iter()
+        .enumerate()
+        .map(|(idx, &chain_id)| (chain_id, idx))
+        .collect::<HashMap<_, _>>();
+    filtered_items.sort_by_key(|item| {
+        chain_id_priority
+            .get(&get_chain_id(item))
+            .unwrap_or(&usize::MAX)
+    });
+
+    filtered_items
+}
+
 impl SearchTerm {
     #[instrument(skip_all, level = "info", fields(term = ?self), err)]
     async fn search(
@@ -218,10 +249,14 @@ impl SearchTerm {
                     None,
                 )
                 .await?;
-                let (blocks, transactions): (Vec<_>, Vec<_>) = hashes
+                let hashes = hashes
                     .into_iter()
                     .map(Hash::try_from)
-                    .collect::<Result<Vec<_>, _>>()?
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let hashes = filter_and_sort_by_priority(hashes, |h| h.chain_id, search_context);
+
+                let (blocks, transactions): (Vec<_>, Vec<_>) = hashes
                     .into_iter()
                     .partition(|h| h.hash_type == HashType::Block);
 
@@ -243,6 +278,10 @@ impl SearchTerm {
                     .into_iter()
                     .map(Address::try_from)
                     .collect::<Result<Vec<_>, _>>()?;
+
+                let addresses =
+                    filter_and_sort_by_priority(addresses, |a| a.chain_id, search_context);
+
                 let nfts = addresses
                     .iter()
                     .filter(|a| {
@@ -253,8 +292,13 @@ impl SearchTerm {
                     })
                     .cloned()
                     .collect::<Vec<_>>();
+                let non_token_addresses = addresses
+                    .iter()
+                    .filter(|a| a.token_type.is_none())
+                    .cloned()
+                    .collect::<Vec<_>>();
 
-                results.addresses.extend(addresses);
+                results.addresses.extend(non_token_addresses);
                 results.nfts.extend(nfts);
             }
             SearchTerm::BlockNumber(block_number) => {
@@ -274,6 +318,9 @@ impl SearchTerm {
                     })
                     .collect::<Vec<_>>();
 
+                let block_numbers =
+                    filter_and_sort_by_priority(block_numbers, |b| b.chain_id, search_context);
+
                 results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
@@ -285,6 +332,8 @@ impl SearchTerm {
                 )
                 .await?;
 
+                let dapps = filter_and_sort_by_priority(dapps, |d| d.chain_id, search_context);
+
                 results.dapps.extend(dapps);
             }
             SearchTerm::TokenInfo(query) => {
@@ -292,10 +341,15 @@ impl SearchTerm {
                     search_context.token_info_client,
                     query,
                     search_context.chain_ids.to_vec(),
-                    QUICK_SEARCH_NUM_ITEMS,
+                    // TODO: temporary increase number of tokens to improve search quality
+                    // until we have a dedicated endpoint for quick search which returns
+                    // only one token per chain_id.
+                    QUICK_SEARCH_NUM_ITEMS * 2,
                     None,
                 )
                 .await?;
+
+                let tokens = filter_and_sort_by_priority(tokens, |t| t.chain_id, search_context);
 
                 results.tokens.extend(tokens);
             }

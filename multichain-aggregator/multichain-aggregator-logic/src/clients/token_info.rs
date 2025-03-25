@@ -48,6 +48,7 @@ pub mod search_token_infos {
     pub struct SearchTokenInfosParams {
         pub query: String,
         #[serde_as(as = "StringWithSeparator::<CommaSeparator, ChainId>")]
+        #[serde(skip_serializing_if = "Vec::is_empty")]
         pub chain_id: Vec<ChainId>,
         pub page_size: Option<u32>,
         pub page_token: Option<String>,
