@@ -170,7 +170,7 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
                     },
                 )
             }
-            EntryPointVersion::V07 => {
+            EntryPointVersion::V07 | EntryPointVersion::V08 => {
                 user_ops_indexer_proto::blockscout::user_ops_indexer::v1::user_op::Raw::RawV07(
                     user_ops_indexer_proto::blockscout::user_ops_indexer::v1::RawUserOpV07 {
                         sender: v.sender.to_string(),
