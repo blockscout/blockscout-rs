@@ -14,10 +14,10 @@ use crate::{
     ChartError,
 };
 
-pub mod new_txns_window;
+pub mod all_new_txns_window;
 pub mod op_stack_operational;
 
-pub use new_txns_window::{NewTxnsWindow, NewTxnsWindowInt};
+pub use all_new_txns_window::{NewTxnsWindow, NewTxnsWindowInt};
 
 use super::new_txns::NewTxnsCombinedStatement;
 

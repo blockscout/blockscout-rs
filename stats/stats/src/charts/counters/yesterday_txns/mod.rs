@@ -14,9 +14,9 @@ use crate::{
     ChartError,
 };
 
+pub mod all_yesterday_txns;
 pub mod op_stack_yesterday_operational_txns;
-pub mod yesterday_txns;
-pub use yesterday_txns::{YesterdayTxns, YesterdayTxnsInt};
+pub use all_yesterday_txns::{YesterdayTxns, YesterdayTxnsInt};
 
 pub struct YesterdayTxnsCombinedQuery;
 

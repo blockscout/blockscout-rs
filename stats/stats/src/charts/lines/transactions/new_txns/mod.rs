@@ -13,9 +13,9 @@ use crate::{
     QueryAllBlockTimestampRange,
 };
 
-pub mod new_txns;
+pub mod all_new_txns;
 pub mod op_stack_operational;
-pub use new_txns::{
+pub use all_new_txns::{
     NewTxns, NewTxnsInt, NewTxnsMonthly, NewTxnsMonthlyInt, NewTxnsWeekly, NewTxnsYearly,
 };
 
