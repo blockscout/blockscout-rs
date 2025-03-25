@@ -5,6 +5,7 @@ use crate::{
     types::{chains::Chain, ChainId},
 };
 use api_client_framework::HttpApiClient;
+use blockscout_chains::BlockscoutChainsClient;
 use cached::proc_macro::{cached, once};
 use sea_orm::DatabaseConnection;
 use std::collections::HashSet;
@@ -106,4 +107,23 @@ pub async fn list_active_chains(
         .collect::<Vec<_>>();
 
     Ok(items)
+}
+
+pub async fn fetch_and_upsert_blockscout_chains(
+    db: &DatabaseConnection,
+) -> Result<(), ServiceError> {
+    let blockscout_chains = BlockscoutChainsClient::builder()
+        .with_max_retries(0)
+        .build()
+        .fetch_all()
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to fetch blockscout chains: {:?}", e))?
+        .into_iter()
+        .filter_map(|(id, chain)| {
+            let id = id.parse::<i64>().ok()?;
+            Some((id, chain).into())
+        })
+        .collect::<Vec<_>>();
+    repository::chains::upsert_many(db, blockscout_chains).await?;
+    Ok(())
 }
