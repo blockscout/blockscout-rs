@@ -9,4 +9,4 @@ indexer:
     url: "https://data.turin.tac.build/"
   start_timestamp: 1741554000
   polling_interval: 1
-  catchup_interval: 10
+  catchup_interval: 300

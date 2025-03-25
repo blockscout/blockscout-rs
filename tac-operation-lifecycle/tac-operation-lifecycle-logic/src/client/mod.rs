@@ -47,10 +47,10 @@ impl Client {
         }
     }
 
-    pub async fn get_operation_stages(&self, id: &str) -> Result<HashMap<String, OperationData>, Error> {
+    pub async fn get_operations_stages(&self, id: Vec<&str>) -> Result<HashMap<String, OperationData>, Error> {
         let client = reqwest::Client::new();
         let request_body = serde_json::json!({
-            "operationIds": [id]
+            "operationIds": id
         });
 
         match client
@@ -67,7 +67,7 @@ impl Client {
                         
                         if text.is_empty() {
                             tracing::error!("Received empty response from server");
-                            return Ok(HashMap::new());
+                            return Err(anyhow::anyhow!("Received empty response from server"));
                         }
                         
                         match serde_json::from_str::<StageProfilingApiResponse>(&text) {
