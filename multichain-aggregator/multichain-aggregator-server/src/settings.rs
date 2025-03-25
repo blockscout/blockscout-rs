@@ -4,6 +4,7 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::{Deserialize, Serialize};
+use serde_with::{formats::CommaSeparator, serde_as, StringWithSeparator};
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,6 +25,7 @@ pub struct Settings {
     pub service: ServiceSettings,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceSettings {
@@ -31,6 +33,10 @@ pub struct ServiceSettings {
     pub token_info_client: TokenInfoClientSettings,
     #[serde(default)]
     pub api: ApiSettings,
+    // Chains that will be used for quick search (ordered by priority).
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
+    #[serde(default = "default_quick_search_chains")]
+    pub quick_search_chains: Vec<i64>,
     #[serde(default)]
     pub fetch_chains: bool,
 }
@@ -94,6 +100,7 @@ impl Settings {
                     default_page_size: default_default_page_size(),
                     max_page_size: default_max_page_size(),
                 },
+                quick_search_chains: default_quick_search_chains(),
                 fetch_chains: false,
             },
         }
@@ -106,4 +113,10 @@ fn default_max_page_size() -> u32 {
 
 fn default_default_page_size() -> u32 {
     50
+}
+
+fn default_quick_search_chains() -> Vec<i64> {
+    vec![
+        1, 8453, 57073, 698, 109, 7777777, 100, 10, 42161, 690, 534352,
+    ]
 }
