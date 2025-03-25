@@ -70,7 +70,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type NewOperationalTxns24h = DirectPointLocalDbChartSource<
+pub type ArbitrumNewOperationalTxns24h = DirectPointLocalDbChartSource<
     Map<(NewBlocks24hInt, NewTxns24hInt), CalculateOperationalTxns<Properties>>,
     Properties,
 >;
@@ -82,9 +82,9 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_new_operational_txns_24h() {
-        simple_test_counter::<NewOperationalTxns24h>(
-            "update_new_operational_txns_24h",
+    async fn update_arbitrum_new_operational_txns_24h() {
+        simple_test_counter::<ArbitrumNewOperationalTxns24h>(
+            "update_arbitrum_new_operational_txns_24h",
             "10",
             Some(dt("2022-11-11T00:00:00")),
         )

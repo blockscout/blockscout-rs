@@ -58,14 +58,14 @@ singleton_groups!(
 // Therefore, we put the dependant (`TotalOperationalTxns`) in the same
 // group as its heaviest dependency (`TotalBlocks`).
 construct_update_group!(TotalBlocksGroup {
-    charts: [TotalBlocks, TotalOperationalTxns]
+    charts: [TotalBlocks, ArbitrumTotalOperationalTxns]
 });
 
 construct_update_group!(YesterdayTxnsGroup {
     charts: [
         YesterdayTxns,
         OpStackYesterdayOperationalTxns,
-        YesterdayOperationalTxns,
+        ArbitrumYesterdayOperationalTxns,
     ]
 });
 
@@ -139,14 +139,14 @@ construct_update_group!(NewBlocksGroup {
         NewBlocksMonthly,
         NewBlocksYearly,
         // if the following are enabled, then NewTxns is updated as well
-        NewOperationalTxns,
-        NewOperationalTxnsWeekly,
-        NewOperationalTxnsMonthly,
-        NewOperationalTxnsYearly,
-        OperationalTxnsGrowth,
-        OperationalTxnsGrowthWeekly,
-        OperationalTxnsGrowthMonthly,
-        OperationalTxnsGrowthYearly
+        ArbitrumNewOperationalTxns,
+        ArbitrumNewOperationalTxnsWeekly,
+        ArbitrumNewOperationalTxnsMonthly,
+        ArbitrumNewOperationalTxnsYearly,
+        ArbitrumOperationalTxnsGrowth,
+        ArbitrumOperationalTxnsGrowthWeekly,
+        ArbitrumOperationalTxnsGrowthMonthly,
+        ArbitrumOperationalTxnsGrowthYearly
     ]
 });
 
@@ -169,7 +169,7 @@ construct_update_group!(TxnsStats24hGroup {
         NewTxns24h,
         TxnsFee24h,
         OpStackNewOperationalTxns24h,
-        NewOperationalTxns24h,
+        ArbitrumNewOperationalTxns24h,
     ]
 });
 
@@ -241,7 +241,7 @@ construct_update_group!(NewTxnsWindowGroup {
     charts: [
         NewTxnsWindow,
         OpStackNewOperationalTxnsWindow,
-        NewOperationalTxnsWindow
+        ArbirumNewOperationalTxnsWindow
     ],
 });
 

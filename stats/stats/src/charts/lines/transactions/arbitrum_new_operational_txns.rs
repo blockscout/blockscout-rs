@@ -52,7 +52,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub struct CalculateOperationalTxnsVec;
+pub struct ArbitrumCalculateOperationalTxnsVec;
 
 type Input<Resolution> = (
     // newBlocks
@@ -61,7 +61,7 @@ type Input<Resolution> = (
     Vec<TimespanValue<Resolution, i64>>,
 );
 
-impl<Resolution> MapFunction<Input<Resolution>> for CalculateOperationalTxnsVec
+impl<Resolution> MapFunction<Input<Resolution>> for ArbitrumCalculateOperationalTxnsVec
 where
     Resolution: Timespan + Send + Ord + Debug,
 {
@@ -94,25 +94,26 @@ define_and_impl_resolution_properties!(
     base_impl: Properties
 );
 
-pub type NewOperationalTxns = DirectVecLocalDbChartSource<
-    Map<(NewBlocksInt, NewTxnsInt), CalculateOperationalTxnsVec>,
+pub type ArbitrumNewOperationalTxns = DirectVecLocalDbChartSource<
+    Map<(NewBlocksInt, NewTxnsInt), ArbitrumCalculateOperationalTxnsVec>,
     BatchMaxDays,
     Properties,
 >;
-pub type NewOperationalTxnsInt = MapParseTo<StripExt<NewOperationalTxns>, i64>;
-pub type NewOperationalTxnsWeekly = DirectVecLocalDbChartSource<
-    MapToString<SumLowerResolution<NewOperationalTxnsInt, Week>>,
+pub type ArbitrumNewOperationalTxnsInt = MapParseTo<StripExt<ArbitrumNewOperationalTxns>, i64>;
+pub type ArbitrumNewOperationalTxnsWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<ArbitrumNewOperationalTxnsInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
-pub type NewOperationalTxnsMonthly = DirectVecLocalDbChartSource<
-    MapToString<SumLowerResolution<NewOperationalTxnsInt, Month>>,
+pub type ArbitrumNewOperationalTxnsMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<ArbitrumNewOperationalTxnsInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewOperationalTxnsMonthlyInt = MapParseTo<StripExt<NewOperationalTxnsMonthly>, i64>;
-pub type NewOperationalTxnsYearly = DirectVecLocalDbChartSource<
-    MapToString<SumLowerResolution<NewOperationalTxnsMonthlyInt, Year>>,
+pub type ArbitrumNewOperationalTxnsMonthlyInt =
+    MapParseTo<StripExt<ArbitrumNewOperationalTxnsMonthly>, i64>;
+pub type ArbitrumNewOperationalTxnsYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<ArbitrumNewOperationalTxnsMonthlyInt, Year>>,
     Batch30Years,
     YearlyProperties,
 >;
@@ -124,9 +125,9 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_new_operational_txns() {
-        simple_test_chart::<NewOperationalTxns>(
-            "update_new_operational_txns",
+    async fn update_arbitrum_new_operational_txns() {
+        simple_test_chart::<ArbitrumNewOperationalTxns>(
+            "update_arbitrum_new_operational_txns",
             vec![
                 ("2022-11-09", "5"),
                 ("2022-11-10", "11"),

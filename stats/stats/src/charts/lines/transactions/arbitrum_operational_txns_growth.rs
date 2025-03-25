@@ -17,7 +17,7 @@ use crate::{
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
-use super::new_operational_txns::NewOperationalTxns;
+use super::arbitrum_new_operational_txns::ArbitrumNewOperationalTxns;
 
 pub struct Properties;
 
@@ -48,22 +48,26 @@ define_and_impl_resolution_properties!(
     base_impl: Properties
 );
 
-pub type OperationalTxnsGrowth =
-    DailyCumulativeLocalDbChartSource<MapParseTo<StripExt<NewOperationalTxns>, i64>, Properties>;
-pub type OperationalTxnsGrowthInt = MapParseTo<StripExt<OperationalTxnsGrowth>, i64>;
-pub type OperationalTxnsGrowthWeekly = DirectVecLocalDbChartSource<
-    MapToString<LastValueLowerResolution<OperationalTxnsGrowthInt, Week>>,
+pub type ArbitrumOperationalTxnsGrowth = DailyCumulativeLocalDbChartSource<
+    MapParseTo<StripExt<ArbitrumNewOperationalTxns>, i64>,
+    Properties,
+>;
+pub type ArbitrumOperationalTxnsGrowthInt =
+    MapParseTo<StripExt<ArbitrumOperationalTxnsGrowth>, i64>;
+pub type ArbitrumOperationalTxnsGrowthWeekly = DirectVecLocalDbChartSource<
+    MapToString<LastValueLowerResolution<ArbitrumOperationalTxnsGrowthInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
-pub type OperationalTxnsGrowthMonthly = DirectVecLocalDbChartSource<
-    MapToString<LastValueLowerResolution<OperationalTxnsGrowthInt, Month>>,
+pub type ArbitrumOperationalTxnsGrowthMonthly = DirectVecLocalDbChartSource<
+    MapToString<LastValueLowerResolution<ArbitrumOperationalTxnsGrowthInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
-pub type OperationalTxnsGrowthMonthlyInt = MapParseTo<StripExt<OperationalTxnsGrowthMonthly>, i64>;
-pub type OperationalTxnsGrowthYearly = DirectVecLocalDbChartSource<
-    MapToString<LastValueLowerResolution<OperationalTxnsGrowthMonthlyInt, Year>>,
+pub type ArbitrumOperationalTxnsGrowthMonthlyInt =
+    MapParseTo<StripExt<ArbitrumOperationalTxnsGrowthMonthly>, i64>;
+pub type ArbitrumOperationalTxnsGrowthYearly = DirectVecLocalDbChartSource<
+    MapToString<LastValueLowerResolution<ArbitrumOperationalTxnsGrowthMonthlyInt, Year>>,
     Batch30Years,
     YearlyProperties,
 >;
@@ -75,9 +79,9 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_operational_txns_growth() {
-        simple_test_chart::<OperationalTxnsGrowth>(
-            "update_operational_txns_growth",
+    async fn update_arbitrum_operational_txns_growth() {
+        simple_test_chart::<ArbitrumOperationalTxnsGrowth>(
+            "update_arbitrum_operational_txns_growth",
             vec![
                 ("2022-11-09", "5"),
                 ("2022-11-10", "16"),

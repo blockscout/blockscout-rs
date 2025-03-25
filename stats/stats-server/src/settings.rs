@@ -9,13 +9,14 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::{
     counters::{
-        NewOperationalTxns24h, OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns,
-        OpStackYesterdayOperationalTxns, TotalOperationalTxns, YesterdayOperationalTxns,
+        ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
+        ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
+        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
     },
     indexing_status::BlockscoutIndexingStatus,
     lines::{
-        NewOperationalTxns, NewOperationalTxnsWindow, OpStackNewOperationalTxns,
-        OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth, OperationalTxnsGrowth,
+        ArbirumNewOperationalTxnsWindow, ArbitrumNewOperationalTxns, ArbitrumOperationalTxnsGrowth,
+        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
     },
     ChartProperties,
 };
@@ -189,12 +190,12 @@ pub fn handle_enable_all_arbitrum(
     if enable_all_arbitrum {
         enable_charts(
             &[
-                NewOperationalTxns::key().name(),
-                NewOperationalTxnsWindow::key().name(),
-                TotalOperationalTxns::key().name(),
-                NewOperationalTxns24h::key().name(),
-                OperationalTxnsGrowth::key().name(),
-                YesterdayOperationalTxns::key().name(),
+                ArbitrumNewOperationalTxns::key().name(),
+                ArbirumNewOperationalTxnsWindow::key().name(),
+                ArbitrumTotalOperationalTxns::key().name(),
+                ArbitrumNewOperationalTxns24h::key().name(),
+                ArbitrumOperationalTxnsGrowth::key().name(),
+                ArbitrumYesterdayOperationalTxns::key().name(),
             ],
             charts,
             "arbitrum",

@@ -19,15 +19,16 @@ use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
     counters::{
-        AverageBlockTime, AverageTxnFee24h, NewContracts24h, NewOperationalTxns24h, NewTxns24h,
-        NewVerifiedContracts24h, OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns,
-        OpStackYesterdayOperationalTxns, PendingTxns30m, TotalAddresses, TotalBlocks,
-        TotalContracts, TotalOperationalTxns, TotalTxns, TotalVerifiedContracts, TxnsFee24h,
-        YesterdayOperationalTxns, YesterdayTxns,
+        ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
+        ArbitrumYesterdayOperationalTxns, AverageBlockTime, AverageTxnFee24h, NewContracts24h,
+        NewTxns24h, NewVerifiedContracts24h, OpStackNewOperationalTxns24h,
+        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns, PendingTxns30m,
+        TotalAddresses, TotalBlocks, TotalContracts, TotalTxns, TotalVerifiedContracts, TxnsFee24h,
+        YesterdayTxns,
     },
     data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
     lines::{
-        NewOperationalTxnsWindow, NewTxnsWindow, OpStackNewOperationalTxnsWindow,
+        ArbirumNewOperationalTxnsWindow, NewTxnsWindow, OpStackNewOperationalTxnsWindow,
         NEW_TXNS_WINDOW_RANGE,
     },
     query_dispatch::{CounterHandle, LineHandle, QuerySerializedDyn},
@@ -175,12 +176,12 @@ impl ReadService {
             TotalBlocks::name(),
             TotalTxns::name(),
             YesterdayTxns::name(),
-            TotalOperationalTxns::name(),
-            YesterdayOperationalTxns::name(),
+            ArbitrumTotalOperationalTxns::name(),
+            ArbitrumYesterdayOperationalTxns::name(),
             OpStackTotalOperationalTxns::name(),
             OpStackYesterdayOperationalTxns::name(),
             NewTxnsWindow::name(),
-            NewOperationalTxnsWindow::name(),
+            ArbirumNewOperationalTxnsWindow::name(),
             OpStackNewOperationalTxnsWindow::name(),
         ]
     }
@@ -220,7 +221,7 @@ impl ReadService {
             TxnsFee24h::name(),
             AverageTxnFee24h::name(),
             NewTxns24h::name(),
-            NewOperationalTxns24h::name(),
+            ArbitrumNewOperationalTxns24h::name(),
             OpStackNewOperationalTxns24h::name(),
         ]
     }
@@ -489,12 +490,16 @@ impl StatsService for ReadService {
             self.query_counter(TotalBlocks::name(), now),
             self.query_counter(TotalTxns::name(), now),
             self.query_counter(YesterdayTxns::name(), now),
-            self.query_counter(TotalOperationalTxns::name(), now),
-            self.query_counter(YesterdayOperationalTxns::name(), now),
+            self.query_counter(ArbitrumTotalOperationalTxns::name(), now),
+            self.query_counter(ArbitrumYesterdayOperationalTxns::name(), now),
             self.query_counter(OpStackTotalOperationalTxns::name(), now),
             self.query_counter(OpStackYesterdayOperationalTxns::name(), now),
             self.query_window_chart(NewTxnsWindow::name(), NEW_TXNS_WINDOW_RANGE, now),
-            self.query_window_chart(NewOperationalTxnsWindow::name(), NEW_TXNS_WINDOW_RANGE, now),
+            self.query_window_chart(
+                ArbirumNewOperationalTxnsWindow::name(),
+                NEW_TXNS_WINDOW_RANGE,
+                now
+            ),
             self.query_window_chart(
                 OpStackNewOperationalTxnsWindow::name(),
                 NEW_TXNS_WINDOW_RANGE,
@@ -535,7 +540,7 @@ impl StatsService for ReadService {
             self.query_counter(TxnsFee24h::name(), now),
             self.query_counter(AverageTxnFee24h::name(), now),
             self.query_counter(NewTxns24h::name(), now),
-            self.query_counter(NewOperationalTxns24h::name(), now),
+            self.query_counter(ArbitrumNewOperationalTxns24h::name(), now),
             self.query_counter(OpStackNewOperationalTxns24h::name(), now),
         );
         Ok(Response::new(proto_v1::TransactionsPageStats {
