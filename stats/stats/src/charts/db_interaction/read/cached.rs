@@ -47,7 +47,7 @@ where
             .await
             .map_err(ChartError::BlockscoutDB)?;
         // can't use sort_*_by_key: https://github.com/rust-lang/rust/issues/34162
-        data.sort_unstable_by(|a, b| a.timespan().cmp(&b.timespan()));
+        data.sort_unstable_by(|a, b| a.timespan().cmp(b.timespan()));
         cx.cache.insert(&query, data.clone()).await;
         Ok(data)
     }
