@@ -1,6 +1,7 @@
 mod helpers;
 
-use blockscout_service_launcher::test_server;
+use blockscout_service_launcher::{database, test_server};
+use migration::Migrator;
 use multichain_aggregator_logic::{repository::chains, types::chains::Chain};
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1 as proto;
 use pretty_assertions::assert_eq;
@@ -14,7 +15,7 @@ use wiremock::{
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_fetch_chains() {
-    let db = helpers::init_db("test", "startup_works").await;
+    let db = database!(Migrator);
 
     chains::upsert_many(
         db.client().as_ref(),
