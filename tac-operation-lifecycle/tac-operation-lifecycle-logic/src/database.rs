@@ -1,10 +1,20 @@
 use std::{cmp::min, collections::HashMap, sync::Arc, thread};
 use anyhow::anyhow;
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ActiveValue::{self, NotSet}, ColumnTrait, Condition, DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder, Set, Statement, TransactionTrait
+    sea_query::{ArrayType, OnConflict},
+    Value,
+    ActiveModelTrait,
+    ActiveValue::{self, NotSet},
+    DatabaseConnection,
+    DatabaseTransaction,
+    EntityTrait,
+    Set,
+    Statement,
+    TransactionTrait,
 };
 use tac_operation_lifecycle_entity::{interval, operation, operation_stage, stage_type, transaction, watermark};
 use crate::client::models::operations::Operations as ApiOperations;
+use crate::client::models::profiling::OperationData as ApiOperationData;
 
 #[derive(Debug, Clone, Copy)]
 pub enum OrderDirection {
@@ -128,10 +138,11 @@ impl TacDatabase {
             {
                 Ok(_) => {
                     // Update watermark to the end of the last interval in this batch
+                    // [assume bathes are sorted by `start` field ascending at that point]
                     let mut updated_watermark: Option<u64> = None;
                     if let Some(last_interval_from_batch) = chunk.last() {
                         updated_watermark = Some(last_interval_from_batch.end.clone().unwrap() as u64);
-                        self.set_watermark_internal(&tx, updated_watermark.unwrap());
+                        let _ = self.set_watermark_internal(&tx, updated_watermark.unwrap()).await;
                     }
                     
                     tx.commit().await?; 
@@ -264,7 +275,7 @@ impl TacDatabase {
         }
     }
 
-    // Extract up to `num` intervals in the pending state with status switching to `processing`
+    // Extract up to `num` intervals in the pending state and switch them status to `processing`
     pub async fn pull_pending_intervals(&self, num: usize, order: OrderDirection) -> anyhow::Result<Vec<interval::Model>> {
         // Start transaction
         let txn = match self.db.begin().await {
@@ -277,23 +288,19 @@ impl TacDatabase {
 
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            &format!(r#" SELECT id, start, "end", timestamp, status, next_retry, retry_count FROM interval WHERE status = 0 ORDER BY start {} LIMIT {} FOR UPDATE SKIP LOCKED "#, 
-            order.sql_order_string(),
-            num),
+            &format!(r#" SELECT id, start, "end", timestamp, status, next_retry, retry_count FROM interval WHERE status = {} ORDER BY start {} LIMIT {} FOR UPDATE SKIP LOCKED "#, 
+                EntityStatus::Pending.to_id(),
+                order.sql_order_string(),
+                num
+            ),
             vec![]
         );
 
-        let pending_interval = match interval::Entity::find()
+        let pending_intervals = match interval::Entity::find()
             .from_raw_sql(stmt)
-            .one(&txn)
+            .all(&txn)
             .await {
-                Ok(Some(interval)) => interval,
-                Ok(None) => {
-                    // No pending intervals, release transaction and return void array
-                    let _ = txn.commit().await;
-
-                    return Ok([].to_vec());
-                },
+                Ok(intervals) => intervals,
                 Err(e) => {
                     tracing::error!("Failed to fetch pending interval: {}", e);
                     let _ = txn.rollback().await;
@@ -305,38 +312,213 @@ impl TacDatabase {
         // Update the interval status to in-progress (1)
         let update_stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            r#" UPDATE interval SET status = 1 WHERE id = $1 RETURNING id, start, "end", timestamp, status, next_retry, retry_count "#,
-            vec![pending_interval.id.into()]
+            r#"UPDATE interval SET status = $1 WHERE id = ANY($2) RETURNING id, start, "end", timestamp, status, next_retry, retry_count"#,
+            vec![
+                Value::SmallInt(Some(EntityStatus::Processing.to_id())),
+                Value::Array(ArrayType::Int, Some(Box::new(pending_intervals.iter().map(|i| i.id.into()).collect()))),
+            ]
         );
 
-        let updated_interval = match interval::Entity::find()
+        match interval::Entity::find()
             .from_raw_sql(update_stmt)
             .all(&txn)
             .await {
                 Ok(updated_list) => {
                     // Commit the transaction before proceeding
                     if let Err(e) = txn.commit().await {
-                        tracing::error!("Failed to commit transaction: {}", e);
+                        tracing::error!("Failed to pull intervals: {}", e);
                         
                         return Err(e.into());
                     }
 
-                    updated_list
-                }
-                Ok(None) => {
-                    tracing::error!("Failed to update interval: no rows returned");
-                    let _ = txn.rollback().await;
-                    tokio::time::sleep(Duration::from_millis(500)).await;
-                    continue;
+                    Ok(updated_list)
                 }
                 Err(e) => {
-                    tracing::error!("Failed to update interval: {}", e);
+                    tracing::error!("Failed to pull intervals: {}", e);
                     let _ = txn.rollback().await;
-                    tokio::time::sleep(Duration::from_millis(500)).await;
-                    continue;
+                    
+                    Err(e.into())
+                }
+            }
+    }
+
+    // Extract up to `num` operations in the pending state and switch them status to `processing`
+    pub async fn pull_pending_operations(&self, num: usize, order: OrderDirection) -> anyhow::Result<Vec<operation::Model>> {
+        // Start transaction
+        let txn = match self.db.begin().await {
+            Ok(txn) => txn,
+            Err(e) => {
+                tracing::error!("Failed to begin transaction: {}", e);
+                return Err(anyhow!(e));
+            }
+        };
+
+        // Find and lock pending operations
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            format!(r#"SELECT id, operation_type,timestamp, next_retry,status, retry_count FROM operation WHERE status = {} ORDER BY timestamp {} LIMIT {} FOR UPDATE SKIP LOCKED"#,
+                EntityStatus::Pending.to_id(),
+                order.sql_order_string(),
+                num
+            ),
+            vec![]
+        );
+        let pending_operations = match operation::Entity::find()
+            .from_raw_sql(stmt)
+            .all(&txn)
+            .await {
+                Ok(operations) => operations,
+                Err(e) => {
+                    tracing::error!("Failed to fetch pending operations: {}", e);
+                    let _ = txn.rollback().await;
+                    
+                    return Err(e.into());
                 }
             };
 
-        Ok([].to_vec())
+        // Update the operations status to in-progress (1)
+        let update_stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"UPDATE operation SET status = $1 WHERE id = ANY($2) RETURNING id, operation_type, timestamp, status, next_retry, retry_count"#,
+            vec![
+                Value::SmallInt(Some(EntityStatus::Processing.to_id())),
+                Value::Array(ArrayType::String, Some(Box::new(pending_operations.iter().map(|o| o.id.clone().into()).collect()))),
+            ]
+        );
+
+        match operation::Entity::find()
+            .from_raw_sql(update_stmt)
+            .all(&txn)
+            .await {
+                Ok(updated_list) => {
+                    // Commit the transaction before proceeding
+                    if let Err(e) = txn.commit().await {
+                        tracing::error!("Failed to pull operations: {}", e);
+                        
+                        return Err(e.into());
+                    }
+
+                    Ok(updated_list)
+                }
+                Err(e) => {
+                    tracing::error!("Failed to pull operations: {}", e);
+                    let _ = txn.rollback().await;
+                    
+                    Err(e.into())
+                }
+            }
+    }
+
+    pub async fn set_operation_data(&self, operation: &operation::Model, operation_data: &ApiOperationData) -> anyhow::Result<()> {
+        let txn = match self.db.begin().await {
+            Ok(txn) => txn,
+            Err(e) => {
+                tracing::error!("Failed to begin transaction: {}", e);
+                return Err(anyhow!(e));
+            }
+        };
+
+        // Update operation type and status
+        let mut operation_model: operation::ActiveModel = operation.clone().into();
+        if operation_data.operation_type.is_finalized() {
+            operation_model.status = Set(EntityStatus::Finalized.to_id().into());    // assume completed status
+        }
+        operation_model.operation_type = Set(Some(operation_data.operation_type.to_string()));
+        
+        if let Err(e) = operation_model.update(&txn).await {
+            tracing::error!("Failed to update operation status: {}", e);
+            let _ = txn.rollback().await;
+
+            return Err(e.into());
+        }
+
+        // Store operation stages
+        for (stage_type, stage_data) in operation_data.stages.iter() {
+            if let Some(data) = &stage_data.stage_data {
+                let stage_model = operation_stage::ActiveModel {
+                    id: NotSet,
+                    operation_id: Set(operation.id.clone()),
+                    stage_type_id: Set(stage_type.to_id()),
+                    success: Set(data.success),
+                    timestamp: Set(data.timestamp as i64),
+                    note: Set(data.note.clone()),
+                };
+                
+                // TODO: Update operation_stage if existing
+                match operation_stage::Entity::insert(stage_model)
+                    .on_conflict(
+                        sea_orm::sea_query::OnConflict::column(operation::Column::Id)
+                            .do_nothing()
+                            .to_owned(),
+                    )
+                    .exec_with_returning(&txn)
+                    .await {
+                        Ok(inserted_stage) => {
+                            tracing::debug!("Successfully inserted stage {} for op_id {}", inserted_stage.stage_type_id, operation.id);
+
+                            // TODO: Remove existing transactions for this stage first (selected by stage_id)
+
+                            // store transactions for this stage
+                            for tx in data.transactions.iter() {
+                                let tx_model = transaction::ActiveModel {
+                                    id: NotSet,
+                                    stage_id: Set(inserted_stage.id),
+                                    hash: Set(tx.hash.clone()),
+                                    blockchain_type: Set(tx.blockchain_type.to_string()),
+                                };
+
+                                match transaction::Entity::insert(tx_model).exec(&txn).await {
+                                    Ok(_) => tracing::debug!("Successfully inserted transaction for stage_id {}", inserted_stage.id),
+                                    Err(e) => tracing::error!("Error inserting transaction: {:?}", e),
+                                }
+                            }
+
+                        },
+                        Err(e) => {
+                            tracing::debug!("Error inserting stage: {:?}", e);
+                            // Don't fail the entire batch for a single operation
+                            continue;
+                        }
+                    }
+            }
+        }
+
+        // Commit transaction
+        match txn.commit().await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub async fn set_interval_retry(&self, interval: &interval::Model, retry_after_delay_sec: i64) -> anyhow::Result<()> {
+        // Update interval with next retry timestamp and increment retry count
+        let mut interval_model: interval::ActiveModel = interval.clone().into();
+        interval_model.next_retry = Set(Some(chrono::Utc::now().timestamp() + retry_after_delay_sec));
+        interval_model.retry_count = Set(interval.retry_count + 1);
+        interval_model.status = Set(EntityStatus::Pending.to_id()); // Reset status to pending
+
+        match interval_model.update(self.db.as_ref()).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                tracing::error!("Failed to update interval {} for retry: {}", interval.id, e);
+                Err(e.into())
+            }
+        }
+    }
+
+    pub async fn set_operation_retry(&self, operation: &operation::Model, retry_after_delay_sec: i64) -> anyhow::Result<()> {
+        // Update operation with next retry timestamp and increment retry count
+        let mut operation_model: operation::ActiveModel = operation.clone().into();
+        operation_model.next_retry = Set(Some(chrono::Utc::now().timestamp() + retry_after_delay_sec));
+        operation_model.retry_count = Set(operation.retry_count + 1);
+        operation_model.status = Set(EntityStatus::Pending.to_id().into()); // Reset status to pending
+
+        match operation_model.update(self.db.as_ref()).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                tracing::error!("Failed to update operation {} for retry: {}", operation.id, e);
+                Err(e.into())
+            }
+        }
     }
 }

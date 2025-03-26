@@ -4,8 +4,8 @@ use blockscout_service_launcher::launcher::ConfigSettings;
 use config::{Config, File};
 use migration::Migrator;
 use tac_operation_lifecycle_server::{Settings, run};
-use tac_operation_lifecycle_logic::{Indexer, client::Client as TacClient};
-use blockscout_service_launcher::{database};
+use tac_operation_lifecycle_logic::Indexer;
+use blockscout_service_launcher::database;
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
 
