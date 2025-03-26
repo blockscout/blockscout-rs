@@ -1,0 +1,38 @@
+{
+  "gravity-mainnet": {
+    "Registry": {
+      "address": "0x5dc881dda4e4a8d312be3544ad13118d1a04cb17",
+      "startBlock": 32241640
+    },
+    "Resolver": {
+      "startBlock": 32241640
+    },
+    "RegistrarController": {
+      "address": "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7",
+      "startBlock": 32241640
+    },
+    "Base": {
+      "address": "0xf8d9d86a4594ffc975ca9c760c5887bd9a3b6232",
+      "startBlock": 32241640
+    },
+    "": ""
+  },
+  "gravity-faucet": {
+    "Registry": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Resolver": {
+      "startBlock": 0
+    },
+    "RegistrarController": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Base": {
+      "address": "",
+      "startBlock": 0
+    },
+    "": ""
+  }
+}
