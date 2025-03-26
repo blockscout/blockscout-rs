@@ -8,7 +8,7 @@ pub struct StageProfilingApiResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct OperationData {
-    pub operationType: OperationType,
+    pub operation_type: OperationType,
     #[serde(flatten)]
     pub stages: HashMap<StageType, Stage>,
 }

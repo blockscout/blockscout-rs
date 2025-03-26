@@ -7,7 +7,7 @@ use std::time;
 use serde::Deserialize;
 use serde_with::serde_as;
 
-use crate::client::{settings::RpcSettings, Client};
+use crate::client::settings::RpcSettings;
 
 // #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 // #[serde(tag = "type")]
