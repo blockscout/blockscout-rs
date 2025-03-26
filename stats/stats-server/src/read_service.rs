@@ -401,7 +401,7 @@ impl ReadService {
                 .resolutions
                 .into_iter()
                 .filter(|(resolution, _)| {
-                    let chart_res_key = ChartKey::new(chart_id.clone(), resolution.clone());
+                    let chart_res_key = ChartKey::new(chart_id.clone(), *resolution);
                     !waiting_for_starting_condition.contains(&chart_res_key)
                 })
                 .collect();
