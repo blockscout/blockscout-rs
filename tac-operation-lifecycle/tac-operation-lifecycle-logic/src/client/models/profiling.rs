@@ -55,10 +55,10 @@ pub struct StageData {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum BlockchainType {
-    TAC,
-    TON,
+    Tac,
+    Ton,
     #[serde(other)]
-    UNKNOWN,
+    Unknown,
 }
 
 #[derive(Debug, Deserialize)]

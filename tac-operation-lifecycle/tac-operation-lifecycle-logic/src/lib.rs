@@ -1,10 +1,10 @@
 use std::{
-    cmp::{max, min},
-    sync::{atomic::AtomicU64, Arc}, time::Duration,
+    cmp::{max, min}, collections::HashMap, sync::{atomic::AtomicU64, Arc}, time::Duration
 };
 
 use anyhow::Error;
 use client::{models::profiling::{BlockchainType, OperationType, StageType}, Client};
+use database::TacDatabase;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use sea_orm::{ActiveValue::{self, NotSet}, DatabaseConnection, EntityTrait, QueryFilter, Statement, TransactionTrait};
@@ -12,6 +12,7 @@ use tac_operation_lifecycle_entity::{interval, operation, operation_stage, stage
 
 pub mod client;
 pub mod settings;
+pub mod database;
 
 use futures::{
     future,
@@ -40,14 +41,6 @@ pub struct OperationJob {
 pub enum IndexerJob {
     Interval(Job),
     Operation(OperationJob),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum OrderDirection {
-    /// Process intervals from newest to oldest (for new jobs)
-    Descending,
-    /// Process intervals from oldest to newest (for catch up)
-    Ascending,
 }
 
 impl OperationType {
@@ -102,7 +95,8 @@ pub struct Indexer {
     client: Client,
     settings: IndexerSettings,
     watermark: AtomicU64,
-    db: Arc<DatabaseConnection>,
+    //db: Arc<DatabaseConnection>,
+    database: Arc<TacDatabase>,
 }
 
 impl Indexer {
@@ -121,134 +115,54 @@ impl Indexer {
             client: Client::new(settings.client.clone()),
             settings,
             watermark: AtomicU64::new(watermark),
-            db,
+            //db,
+            database: Arc::new(TacDatabase::new(db)),
         })
     }
 }
 
 impl Indexer {
-    pub async fn find_inconsistent_intervals(&self) -> anyhow::Result<()> {
-        let intervals = interval::Entity::find()
-            .filter(
-                interval::Column::Start
-                    .gt(self.watermark.load(std::sync::atomic::Ordering::Acquire) as i64),
-            )
-            .all(self.db.as_ref())
-            .await?;
+    // pub async fn find_inconsistent_intervals(&self) -> anyhow::Result<()> {
+    //     let intervals = interval::Entity::find()
+    //         .filter(
+    //             interval::Column::Start
+    //                 .gt(self.watermark.load(std::sync::atomic::Ordering::Acquire) as i64),
+    //         )
+    //         .all(self.db.as_ref())
+    //         .await?;
 
-        for interval in intervals {
-            tracing::error!("Interval {} is inconsistent", interval.id);
-        }
-        Ok(())
-    }
+    //     for interval in intervals {
+    //         tracing::error!("Interval {} is inconsistent", interval.id);
+    //     }
+    //     Ok(())
+    // }
 
     //generate intervals between current epoch and watermark and save them to db
     #[instrument(name = "save_intervals", skip_all, level = "info")]
-    pub async fn save_intervals(&self,now: u64) -> anyhow::Result<usize> {
-        let time_interval = self.settings.catchup_interval.as_secs();
-        let watermark = self.watermark.load(std::sync::atomic::Ordering::Acquire);
-        let batch_size = 1000; // Adjust this based on your needs and database performance
-        let catch_up_interval = time_interval;
-        let intervals: Vec<interval::ActiveModel> = (watermark as u64..now)
-            .step_by(catch_up_interval as usize)
-            .map(|timestamp| interval::ActiveModel {
-                start: ActiveValue::Set(timestamp as i64),
-                //we don't want to save intervals that are in the future
-                end: ActiveValue::Set(min(timestamp + catch_up_interval, now) as i64),
-                timestamp: ActiveValue::Set(timestamp as i64),
-                id: ActiveValue::NotSet,
-                status:sea_orm::ActiveValue::Set(0 as i16),
-                next_retry: ActiveValue::Set(None),
-                retry_count: ActiveValue::Set(0 as i16),
-            })
-            .collect();
-
-        tracing::info!("Total {}s intervals to save: {} ({}..{})", time_interval, intervals.len(), watermark, now);
-
-        // Process intervals in batches
-        for chunk in intervals.chunks(batch_size) {
-            let tx = self.db.begin().await?;
-            
-            match interval::Entity::insert_many(chunk.to_vec())
-                .exec_with_returning(&tx)
-                .await
-            {
-                Ok(_) => {
-                    // Update watermark to the end of the last interval in this batch
-                    
-                    // Find existing watermark or create new one
-                    let existing_watermark = watermark::Entity::find()
-                        .one(&tx)
-                        .await?;
-
-                    let watermark_model = match existing_watermark {
-                        Some(w) => watermark::ActiveModel {
-                            id: ActiveValue::Unchanged(w.id),
-                            timestamp: ActiveValue::Set(now as i64),
-                        },
-                        None => watermark::ActiveModel {
-                            id: ActiveValue::NotSet,
-                            timestamp: ActiveValue::Set(now as i64),
-                        },
-                    };
-
-                    // Save the updated watermark
-                    watermark_model.save(&tx).await?;
-                    
-                    // Update the in-memory watermark
-                    
-                    self.watermark.store(now, std::sync::atomic::Ordering::Release);
-                    
-                    tx.commit().await?; 
-                    tracing::info!(
-                        "Successfully saved batch of {} intervals and updated watermark to {}",
-                        chunk.len(),
-                        now
-                    );
-                }
-                Err(e) => {
-                    tx.rollback().await?;
-                    tracing::error!("Failed to save batch: {}", e);
-                    return Err(e.into());
-                }
-            }
-        }
-
-        Ok(intervals.len())
+    pub async fn save_intervals(&self, now: u64) -> anyhow::Result<usize> {
+        let watermark = self.database.get_watermark().await?;
+        let catchup_period = self.settings.catchup_interval.as_secs();
+        let global_start = self.settings.start_timestamp;
+        
+        self.database.generate_pending_intervals(max(watermark, global_start), now, catchup_period).await
     }
 
     pub async fn ensure_stages_types_exist(&self) -> Result<(), sea_orm::DbErr> {
-        let mut num_stages_added = 0;
-        for op_type in [
+        let stages_types = [
             StageType::CollectedInTAC,
             StageType::IncludedInTACConsensus,
             StageType::ExecutedInTAC,
             StageType::CollectedInTON,
             StageType::IncludedInTONConsensus,
             StageType::ExecutedInTON,
-        ] {
-            let stage_id = op_type.to_id();
-            let stage_name = op_type.to_string();
-    
-            if stage_type::Entity::find()
-                .filter(stage_type::Column::Id.eq(stage_id))
-                .one(self.db.as_ref())
-                .await?
-                .is_none()
-            {
-                let new_stage = stage_type::ActiveModel {
-                    id: Set(stage_id),
-                    name: Set(stage_name),
-                };
-                new_stage.insert(self.db.as_ref()).await?;
+        ];
 
-                num_stages_added = num_stages_added + 1;
-            }
-        }
+        let stages_map: HashMap<i32, String> = stages_types
+            .iter()
+            .map(|stage| (stage.to_id(), stage.to_string()))
+            .collect();
 
-        if num_stages_added > 0 {
-            tracing::info!("Added {} stage types to the database", num_stages_added);
-        }
+        self.database.register_stage_types(&stages_map).await;
 
         Ok(())
     }
@@ -259,8 +173,6 @@ impl Indexer {
     
 
     pub async fn fetch_operations(&self, job: &Job) -> Result<usize, Error> {
-        use sea_orm::Set;
-        use tac_operation_lifecycle_entity::{interval, operation};
         use std::thread;
 
         let thread_id = thread::current().id();
@@ -271,50 +183,10 @@ impl Indexer {
         
         if ops_num > 0 {
             tracing::info!("[Thread {:?}] Fetched {} op_ids: {:#?}", thread_id, ops_num, operations);
-        }
-        
-        // Start a transaction
-        let txn = self.db.begin().await?;
-
-        // Save all operations
-        for op in operations {
-            let operation_model = operation::ActiveModel {
-                id: Set(op.id),
-                operation_type: Set(None),
-                timestamp: Set(op.timestamp as i64),
-                status: Set(0), // Status 0 means pending
-                next_retry: Set(None),
-                retry_count: Set(0), // Initialize retry count
-            };
-
-            tracing::debug!("[Thread {:?}] Attempting to insert operation: {:?}", thread_id, operation_model);
-            
-            // Use on_conflict().do_nothing() with proper error handling
-            match operation::Entity::insert(operation_model)
-                .on_conflict(
-                    sea_orm::sea_query::OnConflict::column(operation::Column::Id)
-                        .do_nothing()
-                        .to_owned(),
-                )
-                .exec(&txn)
-                .await {
-                    Ok(_) => tracing::debug!("[Thread {:?}] Successfully inserted or skipped operation", thread_id),
-                    Err(e) => {
-                        tracing::debug!("[Thread {:?}] Error inserting operation: {:?}", thread_id, e);
-                        // Don't fail the entire batch for a single operation
-                        continue;
-                    }
-                }
+            self.database.insert_pending_operations(&operations).await?
         }
 
-        // Update interval status to finished (2)
-        let mut interval_model: interval::ActiveModel = job.interval.clone().into();
-        interval_model.status = Set(2);
-        
-        interval_model.update(&txn).await?;
-
-        // Commit transaction
-        txn.commit().await?;
+        self.database.set_interval_status(job.interval.id, IntervalStatus::Finalized.to_id()).await?;
 
         tracing::info!("[Thread {:?}] Successfully processed job: id={}, start={}, end={}", 
             thread_id, job.interval.id, job.interval.start, job.interval.end);

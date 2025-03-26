@@ -346,7 +346,7 @@ mod tests {
                         },
                         IndexerJob::Operation(operation_job) => {
                             // Process the operation job
-                            indexer.process_operation_with_retries(&operation_job).await;
+                            indexer.process_operation_with_retries([&operation_job].to_vec()).await;
                             
                             // Verify operation ID matches our mock
                             assert_eq!(
