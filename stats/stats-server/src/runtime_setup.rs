@@ -35,7 +35,8 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
+/// Chart enabled by config
+#[derive(Debug, Clone)]
 pub struct EnabledChartEntry {
     pub settings: EnabledChartSettings,
     /// Static information presented as dynamic object
@@ -70,7 +71,7 @@ impl EnabledChartEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnabledResolutionEntry {
     pub name: String,
     pub missing_date_policy: stats::MissingDatePolicy,

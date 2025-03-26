@@ -30,7 +30,7 @@ use stats::{
     range::UniversalRange,
     types::{Timespan, TimespanDuration},
     utils::day_start,
-    ChartError, Named, RequestedPointsLimit, ResolutionKind,
+    ChartError, ChartKey, Named, RequestedPointsLimit, ResolutionKind,
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use tokio::join;
@@ -383,6 +383,35 @@ impl ReadService {
         transactions.chart = data_reversed;
         Some(transactions)
     }
+
+    async fn enabled_and_not_waiting_for_starting_condition_charts_info(
+        &self,
+    ) -> BTreeMap<String, EnabledChartEntry> {
+        let all_enabled = self.charts.charts_info.clone();
+        let waiting_for_starting_condition = self
+            .update_service
+            .initial_update_tracker()
+            .get_all_charts_with_exact_status(
+                &proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition,
+            )
+            .await;
+        let mut enabled_and_not_waiting_for_starting_condition = BTreeMap::new();
+        for (chart_id, mut entry) in all_enabled {
+            let not_waiting_resolutions = entry
+                .resolutions
+                .into_iter()
+                .filter(|(resolution, _)| {
+                    let chart_res_key = ChartKey::new(chart_id.clone(), *resolution);
+                    !waiting_for_starting_condition.contains(&chart_res_key)
+                })
+                .collect();
+            entry.resolutions = not_waiting_resolutions;
+            if !entry.resolutions.is_empty() {
+                enabled_and_not_waiting_for_starting_condition.insert(chart_id, entry);
+            }
+        }
+        enabled_and_not_waiting_for_starting_condition
+    }
 }
 
 #[async_trait]
@@ -444,7 +473,10 @@ impl StatsService for ReadService {
         _request: Request<proto_v1::GetLineChartsRequest>,
     ) -> Result<Response<proto_v1::LineCharts>, Status> {
         let layout = self.charts.lines_layout.clone();
-        let sections = add_chart_info_to_layout(layout, &self.charts.charts_info);
+        let filtered_charts_info = self
+            .enabled_and_not_waiting_for_starting_condition_charts_info()
+            .await;
+        let sections = add_chart_info_to_layout(layout, &filtered_charts_info);
 
         Ok(Response::new(proto_v1::LineCharts { sections }))
     }
