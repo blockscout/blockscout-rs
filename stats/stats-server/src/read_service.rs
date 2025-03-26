@@ -32,7 +32,7 @@ use stats::{
     utils::day_start,
     ChartError, ChartKey, Named, RequestedPointsLimit, ResolutionKind,
 };
-use stats_proto::blockscout::stats::v1::{self as proto_v1};
+use stats_proto::blockscout::stats::v1 as proto_v1;
 use tokio::join;
 use tonic::{Request, Response, Status};
 

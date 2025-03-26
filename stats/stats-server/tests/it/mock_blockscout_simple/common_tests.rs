@@ -127,6 +127,7 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
             send_get_request(&base, &format!("/api/v1/lines/{line_name}")).await;
     }
 
+    // should not return charts that are disabled or waiting for indexing
     assert_eq!(enabled_resolutions, HashMap::new());
 }
 
