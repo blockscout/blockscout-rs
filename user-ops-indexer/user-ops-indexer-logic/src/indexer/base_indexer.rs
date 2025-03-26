@@ -190,11 +190,12 @@ impl<P: Provider, L: IndexerLogic + Sync + Send> Indexer<P, L> {
             } else {
                 rpc_refetch_block_number.saturating_add_signed(past_db_logs_end_block as i64)
             };
+            let mut missed_txs_streams = Vec::new();
             for entry_point in self.logic.entry_points() {
                 tracing::info!(
                     from_block,
                     to_block,
-                    entry_point = entry_point.to_string(),
+                    ?entry_point,
                     "fetching missed tx hashes in db"
                 );
                 let missed_txs = repository::user_op::stream_unprocessed_logs_tx_hashes(
@@ -206,14 +207,14 @@ impl<P: Provider, L: IndexerLogic + Sync + Send> Indexer<P, L> {
                 )
                 .await?
                 .map(Job::from);
-
-                stream_jobs.push(Box::pin(missed_txs.do_after(self.tx.send(
-                    IndexerStatusMessage::new(
-                        L::VERSION,
-                        EntryPointIndexerStatusMessage::PastDbLogsIndexingFinished,
-                    ),
-                ))));
+                missed_txs_streams.push(Box::pin(missed_txs));
             }
+            stream_jobs.push(Box::pin(stream::select_all(missed_txs_streams).do_after(
+                self.tx.send(IndexerStatusMessage::new(
+                    L::VERSION,
+                    EntryPointIndexerStatusMessage::PastDbLogsIndexingFinished,
+                )),
+            )));
         }
 
         if self.settings.past_rpc_logs_indexer.enabled {

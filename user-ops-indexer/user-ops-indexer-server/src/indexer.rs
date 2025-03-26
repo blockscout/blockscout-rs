@@ -20,7 +20,7 @@ pub async fn run(
 
     let mut status = IndexerStatus::default();
     status.v06.enabled = settings.indexer.entrypoints.v06;
-    status.v07.enabled = settings.indexer.entrypoints.v07;
+    status.v07_v08.enabled = settings.indexer.entrypoints.v07 || settings.indexer.entrypoints.v08;
     let status = Arc::new(RwLock::new(status));
     let status_res = status.clone();
 
