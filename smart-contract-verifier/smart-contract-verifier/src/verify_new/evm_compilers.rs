@@ -5,7 +5,6 @@ use crate::{
 };
 use anyhow::Context;
 use async_trait::async_trait;
-use foundry_compilers_new::CompilationError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -41,6 +40,12 @@ pub trait CompilerInput: Serialize {
     fn settings(&self) -> Value;
 
     fn sources(&self) -> BTreeMap<String, String>;
+}
+
+pub trait CompilationError:
+    foundry_compilers_new::CompilationError + for<'de> Deserialize<'de>
+{
+    fn formatted_message(&self) -> String;
 }
 
 pub struct CompileResult<CompilerOutput> {
@@ -138,7 +143,7 @@ where
     let mut errors = Vec::new();
     for error in output_errors.errors {
         if error.is_error() {
-            errors.push(error.to_string())
+            errors.push(error.formatted_message());
         }
     }
     if !errors.is_empty() {

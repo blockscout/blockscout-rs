@@ -14,6 +14,10 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 pub struct SolcInput(pub artifacts::SolcInput);
 
 impl evm_compilers::CompilerInput for SolcInput {
+    fn normalize_output_selection(&mut self, _version: &semver::Version) {
+        self.0.settings.output_selection = OutputSelection::complete_output_selection();
+    }
+
     fn modified_copy(&self) -> Self {
         let mut copy = self.clone();
         copy.0.sources.iter_mut().for_each(|(_file, source)| {
@@ -22,10 +26,6 @@ impl evm_compilers::CompilerInput for SolcInput {
             source.content = Arc::new(modified_content);
         });
         copy
-    }
-
-    fn normalize_output_selection(&mut self, _version: &semver::Version) {
-        self.0.settings.output_selection = OutputSelection::complete_output_selection();
     }
 
     fn language(&self) -> Language {
@@ -50,6 +50,14 @@ impl evm_compilers::CompilerInput for SolcInput {
             );
         }
         sources
+    }
+}
+
+impl evm_compilers::CompilationError for artifacts::solc::Error {
+    fn formatted_message(&self) -> String {
+        self.formatted_message
+            .clone()
+            .unwrap_or(self.message.clone())
     }
 }
 

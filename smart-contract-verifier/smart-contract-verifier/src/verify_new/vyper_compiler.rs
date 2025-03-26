@@ -66,6 +66,14 @@ impl evm_compilers::CompilerInput for VyperInput {
     }
 }
 
+impl evm_compilers::CompilationError for artifacts::vyper::VyperCompilationError {
+    fn formatted_message(&self) -> String {
+        self.formatted_message
+            .clone()
+            .unwrap_or(self.message.clone())
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct VyperCompiler {}
 
