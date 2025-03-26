@@ -50,6 +50,7 @@ pub struct HttpServerSettings {
     pub addr: SocketAddr,
     pub max_body_size: usize,
     pub cors: CorsSettings,
+    pub base_path: Option<String>,
 }
 
 impl Default for HttpServerSettings {
@@ -59,6 +60,7 @@ impl Default for HttpServerSettings {
             addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
             max_body_size: 2 * 1024 * 1024, // 2 Mb - default Actix value
             cors: Default::default(),
+            base_path: None,
         }
     }
 }

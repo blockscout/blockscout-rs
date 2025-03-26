@@ -137,6 +137,7 @@ where
     let json_cfg = actix_web::web::JsonConfig::default().limit(settings.max_body_size);
     let cors_settings = settings.cors.clone();
     let cors_enabled = cors_settings.enabled;
+    let base_path = settings.base_path.clone();
     let server = if let Some(metrics) = metrics {
         HttpServer::new(move || {
             let cors = cors_settings.clone().build();
@@ -145,7 +146,7 @@ where
                 .wrap(metrics.clone())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
-                .configure(configure_router(&http))
+                .configure(configure_router(&http, base_path.clone()))
         })
         .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)
@@ -158,7 +159,7 @@ where
                 .wrap(TracingLogger::<CompactRootSpanBuilder>::new())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
-                .configure(configure_router(&http))
+                .configure(configure_router(&http, base_path.clone()))
         })
         .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)
