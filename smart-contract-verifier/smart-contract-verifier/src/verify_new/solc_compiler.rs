@@ -59,6 +59,7 @@ pub struct SolcCompiler {}
 #[async_trait]
 impl evm_compilers::EvmCompiler for SolcCompiler {
     type CompilerInput = SolcInput;
+    type CompilationError = artifacts::solc::Error;
 
     async fn compile(
         compiler_path: &Path,

@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::Context;
 use async_trait::async_trait;
-use nonempty::NonEmpty;
+use foundry_compilers_new::CompilationError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -19,6 +19,7 @@ use tokio::sync::Semaphore;
 #[async_trait]
 pub trait EvmCompiler {
     type CompilerInput: CompilerInput;
+    type CompilationError: CompilationError + for<'de> Deserialize<'de>;
     // TODO: parameterize version via: `type Version: Version`
 
     async fn compile(
@@ -40,10 +41,6 @@ pub trait CompilerInput: Serialize {
     fn settings(&self) -> Value;
 
     fn sources(&self) -> BTreeMap<String, String>;
-}
-
-pub trait CompilerOutput: for<'de> Deserialize<'de> {
-    fn check_errors(&self) -> Option<NonEmpty<String>>;
 }
 
 pub struct CompileResult<CompilerOutput> {
@@ -117,12 +114,36 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
 
         let raw = C::compile(compiler_path, compiler_version, input).await?;
 
+        validate_no_errors::<C::CompilationError>(&raw)?;
         let output: SharedCompilerOutput =
             serde_path_to_error::deserialize(&raw).context("deserializing compiler output")?;
-        if let Some(errors) = output.check_errors() {
-            return Err(Error::Compilation(errors.into()));
-        }
 
         Ok(CompileResult { output, raw })
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CompilerOutputErrors<E> {
+    #[serde(default = "Vec::new")]
+    pub errors: Vec<E>,
+}
+
+fn validate_no_errors<E>(raw_output: &Value) -> Result<(), Error>
+where
+    E: CompilationError + for<'de> Deserialize<'de>,
+{
+    let output_errors: CompilerOutputErrors<E> = serde_path_to_error::deserialize(raw_output)
+        .context("deserializing compiler output errors")?;
+
+    let mut errors = Vec::new();
+    for error in output_errors.errors {
+        if error.is_error() {
+            errors.push(error.to_string())
+        }
+    }
+    if !errors.is_empty() {
+        return Err(Error::Compilation(errors));
+    }
+
+    Ok(())
 }
