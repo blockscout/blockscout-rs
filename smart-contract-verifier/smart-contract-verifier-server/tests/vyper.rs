@@ -477,7 +477,7 @@ mod standard_json {
         test_error(
             test_case,
             StatusCode::BAD_REQUEST,
-            "Invalid compiler version",
+            "invalid compiler version",
         )
         .await;
     }

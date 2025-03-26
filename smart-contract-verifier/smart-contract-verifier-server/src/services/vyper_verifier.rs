@@ -7,10 +7,8 @@ use crate::{
     },
     services::common,
     settings::VyperSettings,
-    types::{
-        StandardJsonParseError, VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper,
-        VerifyVyperStandardJsonRequestWrapper,
-    },
+    types,
+    types::{VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper},
 };
 use anyhow::Context;
 use smart_contract_verifier::{vyper, Compilers, VerificationError, VyperClient, VyperCompiler};
@@ -123,82 +121,41 @@ impl VyperVerifier for VyperVerifierService {
         &self,
         request: Request<VerifyVyperStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        let request: VerifyVyperStandardJsonRequestWrapper = request.into_inner().into();
+        let request = request.into_inner();
+
         let chain_id = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.chain_id.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.chain_id.clone());
         let contract_address = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.contract_address.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.contract_address.clone());
         tracing::info!(
-            chain_id = chain_id,
-            contract_address = contract_address,
-            "Vyper standard-json verification request received"
+            chain_id =? chain_id,
+            contract_address =? contract_address,
+            "vyper standard-json verification request received"
         );
 
-        tracing::debug!(
-            bytecode = request.bytecode,
-            bytecode_type = BytecodeType::try_from(request.bytecode_type)
-                .unwrap()
-                .as_str_name(),
-            compiler_version = request.compiler_version,
-            input = request.input,
-            "Request details"
-        );
-
-        let mut verification_request: vyper::standard_json::VerificationRequest = {
-            let request: Result<_, StandardJsonParseError> = request.try_into();
-            if let Err(err) = request {
-                match err {
-                    StandardJsonParseError::InvalidContent(_) => {
-                        let response = VerifyResponseWrapper::err(err).into_inner();
-                        return Ok(Response::new(response));
-                    }
-                    StandardJsonParseError::BadRequest(_) => {
-                        return Err(Status::invalid_argument(err.to_string()));
-                    }
-                }
-            }
-            request.unwrap()
-        };
-        verification_request.compiler_version = common::normalize_request_compiler_version(
-            &self.client.compilers().all_versions(),
-            &verification_request.compiler_version,
-        )?;
+        let maybe_verification_request =
+            vyper::standard_json::VerificationRequest::try_from(request);
+        let verification_request =
+            common::process_solo_verification_request_conversion!(maybe_verification_request);
 
         let result = vyper::standard_json::verify(self.client.clone(), verification_request).await;
 
-        let response = if let Ok(verification_success) = result {
-            tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
-            VerifyResponseWrapper::ok(verification_success)
-        } else {
-            let err = result.unwrap_err();
-            tracing::info!(err=%err, "Request processing failed");
-            match err {
-                VerificationError::Compilation(_)
-                | VerificationError::NoMatchingContracts
-                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
-                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    return Err(Status::invalid_argument(err.to_string()));
-                }
-                VerificationError::Internal(err) => {
-                    tracing::error!("internal error: {err:#?}");
-                    return Err(Status::internal(err.to_string()));
-                }
-            }
+        let verify_response = match result {
+            Ok(value) => types::verification_result::process_verification_result(value)?,
+            Err(error) => types::verification_result::process_error(error)?,
         };
 
         metrics::count_verify_contract(
-            chain_id.as_ref(),
+            &chain_id.unwrap_or_default(),
             "vyper",
-            response.status().as_str_name(),
+            verify_response.status().as_str_name(),
             "standard-json",
         );
-        return Ok(Response::new(response.into_inner()));
+        Ok(Response::new(verify_response))
     }
 
     async fn list_compiler_versions(

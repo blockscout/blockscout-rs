@@ -100,3 +100,39 @@ pub fn normalize_request_compiler_version(
         )))
     }
 }
+
+macro_rules! process_solo_verification_request_conversion {
+    ($maybe_verification_request:expr) => {
+        match $maybe_verification_request {
+            Ok(request) => request,
+            Err(err @ smart_contract_verifier::RequestParseError::InvalidContent(_)) => {
+                let response = $crate::types::VerifyResponseWrapper::err(err).into_inner();
+                tracing::info!(response=?response, "request processed");
+                return Ok(Response::new(response));
+            }
+            Err(err @ smart_contract_verifier::RequestParseError::BadRequest(_)) => {
+                tracing::info!(err=%err, "bad request");
+                return Err(tonic::Status::invalid_argument(err.to_string()));
+            }
+        }
+    };
+}
+pub(crate) use process_solo_verification_request_conversion;
+
+macro_rules! process_batch_verification_request_conversion {
+    ($maybe_verification_request:expr) => {
+        match $maybe_verification_request {
+            Ok(request) => request,
+            Err(err @ smart_contract_verifier::RequestParseError::InvalidContent(_)) => {
+                let response = $crate::types::batch_verification::compilation_error(err.to_string());
+                tracing::info!(response=?response, "request processed");
+                return Ok(Response::new(response));
+            }
+            Err(err @ smart_contract_verifier::RequestParseError::BadRequest(_)) => {
+                tracing::info!(err=%err, "bad request");
+                return Err(tonic::Status::invalid_argument(err.to_string()));
+            }
+        }
+    };
+}
+pub(crate) use process_batch_verification_request_conversion;
