@@ -19,12 +19,14 @@ pub mod search_dapps {
     }
 
     #[serde_as]
+    #[serde_with::skip_serializing_none]
     #[derive(Serialize, Clone, Debug, Default, PartialEq)]
     #[serde(rename_all = "camelCase")]
     pub struct SearchDappsParams {
         pub title: Option<String>,
         pub categories: Option<String>,
         #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
+        #[serde(skip_serializing_if = "Vec::is_empty")]
         pub chain_ids: Vec<i64>,
     }
 
