@@ -210,7 +210,10 @@ fn filter_and_sort_by_priority<T>(
     let mut seen_chain_ids = HashSet::new();
     let mut filtered_items = items
         .into_iter()
-        .filter(|item| seen_chain_ids.insert(get_chain_id(item)))
+        .filter(|item| {
+            let chain_id = get_chain_id(item);
+            search_context.chain_ids.contains(&chain_id) && seen_chain_ids.insert(chain_id)
+        })
         .collect::<Vec<_>>();
 
     let chain_id_priority = search_context
