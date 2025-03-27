@@ -2,15 +2,17 @@ use std::{cmp::min, collections::HashMap, sync::Arc, thread};
 use anyhow::anyhow;
 use sea_orm::{
     sea_query::{ArrayType, OnConflict},
-    Value,
     ActiveModelTrait,
     ActiveValue::{self, NotSet},
+    ColumnTrait,
     DatabaseConnection,
     DatabaseTransaction,
     EntityTrait,
+    QueryFilter,
     Set,
     Statement,
     TransactionTrait,
+    Value,
 };
 use tac_operation_lifecycle_entity::{interval, operation, operation_stage, stage_type, transaction, watermark};
 use crate::client::models::operations::Operations as ApiOperations;
@@ -227,21 +229,25 @@ impl TacDatabase {
         Ok(())
     }
 
-    pub async fn set_interval_status(&self, interval_id: i32, status: EntityStatus) -> anyhow::Result<()> {
+    pub async fn set_interval_status(&self, interval_model: &interval::Model, status: EntityStatus) -> anyhow::Result<()> {
+        let mut interval_active: interval::ActiveModel = interval_model.clone().into();
+        interval_active.status = Set(status.to_id());
+
+        // Saving changes
+        interval_active.update(self.db.as_ref()).await.map_err(|e| {
+            tracing::error!("Failed to update interval {} status to {}: {:?}", interval_model.id, status.to_string(), e);
+            anyhow!(e)
+        })?;
+
+        //tracing::info!("Successfully updated interval {} status to {}", interval_id, status.to_string());
+        Ok(())
+    }
+
+    pub async fn set_interval_status_by_id(&self, interval_id: i32, status: EntityStatus) -> anyhow::Result<()> {
         // Found record by PK
         match interval::Entity::find_by_id(interval_id).one(self.db.as_ref()).await? {
             Some(interval_model) => {
-                let mut interval_active: interval::ActiveModel = interval_model.into();
-                interval_active.status = Set(status.to_id());
-
-                // Saving changes
-                interval_active.update(self.db.as_ref()).await.map_err(|e| {
-                    tracing::error!("Failed to update interval {} status to {}: {:?}", interval_id, status.to_string(), e);
-                    anyhow!(e)
-                })?;
-
-                tracing::info!("Successfully updated interval {} status to {}", interval_id, status.to_string());
-                Ok(())
+                self.set_interval_status(&interval_model, status).await
             }
             None => {
                 let err = anyhow!("Cannot update interval {} status to {}: not found", interval_id, status.to_string());
@@ -251,21 +257,25 @@ impl TacDatabase {
         }
     }
 
-    pub async fn set_operation_status(&self, op_id: &String, status: EntityStatus) -> anyhow::Result<()> {
+    pub async fn set_operation_status(&self, operation_model: &operation::Model, status: EntityStatus) -> anyhow::Result<()> {
+        let mut operation_active: operation::ActiveModel = operation_model.clone().into();
+        operation_active.status = Set(status.to_id() as i32);
+
+        // Saving changes
+        operation_active.update(self.db.as_ref()).await.map_err(|e| {
+            tracing::error!("Failed to update operation {} status to {}: {:?}", operation_model.id, status.to_string(), e);
+            anyhow!(e)
+        })?;
+
+        tracing::info!("Successfully updated operation {} status to {}", operation_model.id, status.to_string());
+        Ok(())
+    }
+
+    pub async fn set_operation_status_by_id(&self, op_id: &String, status: EntityStatus) -> anyhow::Result<()> {
         // Found record by PK
         match operation::Entity::find_by_id(op_id).one(self.db.as_ref()).await? {
-            Some(interval_model) => {
-                let mut interval_active: operation::ActiveModel = interval_model.into();
-                interval_active.status = Set(status.to_id() as i32);
-
-                // Saving changes
-                interval_active.update(self.db.as_ref()).await.map_err(|e| {
-                    tracing::error!("Failed to update operation {} status to {}: {:?}", op_id, status.to_string(), e);
-                    anyhow!(e)
-                })?;
-
-                tracing::info!("Successfully updated operation {} status to {}", op_id, status.to_string());
-                Ok(())
+            Some(operation_model) => {
+                self.set_operation_status(&operation_model, status).await
             }
             None => {
                 let err = anyhow!("Cannot update operation {} status to {}: not found", op_id, status.to_string());
@@ -325,11 +335,13 @@ impl TacDatabase {
             .await {
                 Ok(updated_list) => {
                     // Commit the transaction before proceeding
+                    //let start = Instant::now();
                     if let Err(e) = txn.commit().await {
                         tracing::error!("Failed to pull intervals: {}", e);
                         
                         return Err(e.into());
                     }
+                    //tracing::error!("Time taken to COMMIT {} INTERVALS: {} ms", pending_intervals.len(), start.elapsed().as_millis());
 
                     Ok(updated_list)
                 }
@@ -387,16 +399,18 @@ impl TacDatabase {
         );
 
         match operation::Entity::find()
-            .from_raw_sql(update_stmt)
-            .all(&txn)
+              .from_raw_sql(update_stmt)
+              .all(&txn)
             .await {
                 Ok(updated_list) => {
                     // Commit the transaction before proceeding
+                    //let start = Instant::now();
                     if let Err(e) = txn.commit().await {
                         tracing::error!("Failed to pull operations: {}", e);
                         
                         return Err(e.into());
                     }
+                    //tracing::error!("Time taken to COMMIT {} OPERATIONS: {} ms", pending_operations.len(), start.elapsed().as_millis());
 
                     Ok(updated_list)
                 }
@@ -417,6 +431,17 @@ impl TacDatabase {
                 return Err(anyhow!(e));
             }
         };
+
+        // Remove associated stages with transactions
+        if let Err(e) = operation_stage::Entity::delete_many()
+            .filter(operation_stage::Column::OperationId.eq(&operation.id))
+            .exec(&txn)
+            .await
+        {
+            tracing::error!("Failed to delete existing stages for operation {}: {}", operation.id, e);
+            let _ = txn.rollback().await;
+            return Err(e.into());
+        }
 
         // Update operation type and status
         let mut operation_model: operation::ActiveModel = operation.clone().into();

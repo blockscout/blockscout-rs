@@ -40,7 +40,7 @@ impl OperationType {
     pub fn to_id(&self) -> i32 {
         match self {
             OperationType::Pending => 1,
-            OperationType::TacTonTac => 2,
+            OperationType::TonTacTon => 2,
             OperationType::TacTon => 3,
             OperationType::TonTac => 4,
             OperationType::Rollback => 5,
@@ -175,11 +175,11 @@ impl Indexer {
         let ops_num = operations.len();
         
         if ops_num > 0 {
-            tracing::info!("[Thread {:?}] Fetched {} op_ids: {:#?}", thread_id, ops_num, operations);
+            tracing::info!("[Thread {:?}] Fetched {} operation_ids: [\n\t{}\n]", thread_id, ops_num, operations.iter().map(|o| o.id.clone()).collect::<Vec<_>>().join(",\n\t"));
             self.database.insert_pending_operations(&operations).await?
         }
 
-        self.database.set_interval_status(job.interval.id, EntityStatus::Finalized).await?;
+        self.database.set_interval_status(&job.interval, EntityStatus::Finalized).await?;
 
         tracing::info!("[Thread {:?}] Successfully processed job: id={}, start={}, end={}", 
             thread_id, job.interval.id, job.interval.start, job.interval.end);
@@ -251,6 +251,12 @@ impl Indexer {
                     match jobs.iter().find(|j| &j.operation.id == op_id) {
                         Some(job) => {
                             let _ = self.database.set_operation_data(&job.operation, operation_data).await;
+
+                            if operation_data.operation_type != OperationType::Pending {
+                                let _ = self.database.set_operation_status(&job.operation, EntityStatus::Finalized).await;
+                            } else {
+                                // TODO: Add operation to the fast-retry queue
+                            }
                         },
                         None => {
                             tracing::error!("Stage profiling response contains unknown operation (id = {}). Skipping...", op_id);
@@ -258,7 +264,7 @@ impl Indexer {
                     }
                 }
 
-                tracing::info!("Successfully processed operations: id={}", op_ids.join(","));
+                tracing::info!("Successfully processed operations: [{}]", op_ids.join(","));
             }
             _ => {
                 let _ = jobs.iter().map(|job| async {
