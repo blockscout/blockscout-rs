@@ -47,6 +47,27 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_operation_status_timestamp")
+                    .table(Operation::Table)
+                    .col(Operation::Status)
+                    .col(Operation::Timestamp)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_operation_id")
+                    .table(Operation::Table)
+                    .col(Operation::Id)
+                    .to_owned(),
+            )
+            .await?;
+
             manager
             .create_table(
                 Table::create()
@@ -65,6 +86,27 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Interval::Status).small_unsigned().not_null())
                     .col(ColumnDef::new(Interval::NextRetry).big_integer().null())
                     .col(ColumnDef::new(Interval::RetryCount).small_unsigned().not_null())
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_interval_status_start")
+                    .table(Interval::Table)
+                    .col(Interval::Status)
+                    .col(Interval::Start)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_interval_id")
+                    .table(Interval::Table)
+                    .col(Interval::Id)
                     .to_owned(),
             )
             .await?;
@@ -224,7 +266,6 @@ enum Operation {
 
 #[derive(Iden)]
 enum WaterMark {
-    Table,
     Id,
     Timestamp,
 }

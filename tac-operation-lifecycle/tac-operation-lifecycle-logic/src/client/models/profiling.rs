@@ -8,6 +8,7 @@ pub struct StageProfilingApiResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct OperationData {
+    #[serde(rename = "operationType")]
     pub operation_type: OperationType,
     #[serde(flatten)]
     pub stages: HashMap<StageType, Stage>,
@@ -17,8 +18,11 @@ pub struct OperationData {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum OperationType {
     Pending,
-    TacTonTac,
+    #[serde(rename = "TON-TAC-TON")]
+    TonTacTon,
+    #[serde(rename = "TAC-TON")]
     TacTon,
+    #[serde(rename = "TON-TAC")]
     TonTac,
     Rollback,
     Unknown,

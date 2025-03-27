@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use blockscout_service_launcher::launcher::ConfigSettings;
-use config::{Config, File};
 use migration::Migrator;
 use tac_operation_lifecycle_server::{Settings, run};
 use tac_operation_lifecycle_logic::Indexer;
