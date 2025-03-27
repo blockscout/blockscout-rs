@@ -25,7 +25,7 @@ defaults:
 jobs:
   test:
     name: Unit, doc and integration tests
-    runs-on: ubuntu-latest-large
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:17.2
@@ -49,8 +49,19 @@ jobs:
         with:
           working-directory: stats
 
+      - name: Increase swapfile
+        id: swapfile
+        run: |
+          sudo swapoff -a
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          sudo swapon --show
+
       - name: Build
         id: build
+        if: steps.swapfile.outcome == 'success'
         run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
 
       - name: ENVs in documentation
