@@ -15,6 +15,8 @@ async fn subgraphs_reading_works(pool: PgPool) {
     get_protocols_scenario(base.clone(), &settings).await;
     eth_protocol_scenario(base.clone(), &settings).await;
     genome_protocol_scenario(base.clone(), &settings).await;
+    //1337 - это надо юзать
+    // только в different_protocols_scenario возврашается 2
     different_protocols_scenario(base.clone(), &settings).await;
 }
 
@@ -104,7 +106,9 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     let page_token = "1571902007".to_string();
     let (actual, expected) = check_list_result(
         &base,
-        "/api/v1/1/domains:lookup",
+        "/api/v1/1337/domains:lookup",
+        //tut mozhet bit квери с именем - тогда возвращаем 5
+        //на этой ручке может быть 
         HashMap::from_iter([("page_size".into(), "2".into())]),
         expected_domains[0..2].to_vec(),
         Some((2, Some(page_token.clone()))),
@@ -113,7 +117,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     assert_eq!(actual, expected);
     let (actual, expected) = check_list_result(
         &base,
-        "/api/v1/1/domains:lookup",
+        "/api/v1/1337/domains:lookup",
         HashMap::from_iter([
             ("page_size".into(), "2".into()),
             ("page_token".into(), page_token.to_string()),

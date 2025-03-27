@@ -622,6 +622,26 @@ mod tests {
                 .map(|output| output.domain.name.as_deref())
                 .collect::<Vec<_>>(),
         );
+
+        let result = reader
+        .lookup_domain_name(LookupDomainInput {
+            network_id: 1337,
+            name: Some("abcnews".to_string()),
+            only_active: false,
+            pagination: Default::default(),
+            maybe_filter_protocols: None,
+        })
+        .await
+        .expect("failed to get abcnews domains");
+    assert_eq!(result.next_page_token, None);
+    let result = result.items;
+    assert_eq!(
+        vec![Some("abcnews.eth")],
+        result
+            .iter()
+            .map(|output| output.domain.name.as_deref())
+            .collect::<Vec<_>>(),
+    );
     }
 
     #[sqlx::test(migrations = "tests/migrations")]

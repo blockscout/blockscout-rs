@@ -324,10 +324,10 @@ impl Protocoler {
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
         if name.contains('.') {
-            println!(
-                "name {}", name
-            );
+            println!("Exact name requested: {name}");
+            println!("Exact network_id requested: {network_id}");
             let direct = self.fetch_domain_options(name, network_id, maybe_filter)?;
+    
             if direct.is_empty() {
                 Err(ProtocolError::InvalidName {
                     name: name.to_string(),
@@ -337,6 +337,18 @@ impl Protocoler {
                 Ok(direct.into_iter().take(1).collect())
             }
         } else {
+            println!("Generating domain suggestions for: {name}");
+            println!("Generating network_id domain suggestions for: {network_id}");
+            println!(">> Checking networks before tlds");
+            dbg!(&self.networks);
+            let network_opt = self.networks.get(&network_id);
+            println!("network_opt = {:?}", network_opt);
+            if network_opt.is_none() {
+                println!("We have no network with ID = {}", network_id);
+            }
+            let network = network_opt.ok_or_else(|| ProtocolError::NetworkNotFound(network_id))?;
+            println!("Got network = {:?}", network);
+    
             let tlds = self
                 .networks
                 .get(&network_id)
@@ -346,11 +358,9 @@ impl Protocoler {
                 .filter_map(|protocol_name| self.protocols.get(protocol_name))
                 .flat_map(|protocol| protocol.info.tld_list.iter().cloned())
                 .collect::<Vec<Tld>>();
-
-                println!(
-                    "tlds {:?}", tlds
-                );
-
+    
+            println!("tlds = {:?}", tlds);
+    
             let all_names_with_protocols: Vec<_> = tlds
                 .into_iter()
                 .map(|tld| format!("{}.{}", name, tld.0))
@@ -358,9 +368,12 @@ impl Protocoler {
                     self.fetch_domain_options(&name_with_tld, network_id, maybe_filter.clone())
                         .unwrap_or_default()
                 })
-                .take(MAX_NAMES_LIMIT)
+                .take(5)
                 .collect();
-
+    
+            println!("all_names_with_protocols = {:?}", all_names_with_protocols);
+    
+            // 3. Проверяем, пустой ли результат
             if all_names_with_protocols.is_empty() {
                 Err(ProtocolError::InvalidName {
                     name: name.to_string(),
@@ -371,6 +384,8 @@ impl Protocoler {
             }
         }
     }
+    
+    
 
     pub fn main_name_in_network(
         &self,
