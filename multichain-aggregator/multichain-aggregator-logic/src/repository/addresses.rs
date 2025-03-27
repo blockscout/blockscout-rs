@@ -12,8 +12,8 @@ use sea_orm::{
         WithClause,
     },
     ActiveValue::NotSet,
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult, IntoSimpleExpr, Iterable,
-    Order, QuerySelect,
+    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoSimpleExpr,
+    Iterable, Order, QuerySelect,
 };
 use std::sync::OnceLock;
 
@@ -60,7 +60,9 @@ fn prepare_address_search_cte(
 
     CommonTableExpression::new()
         .query(
-            QuerySelect::query(&mut Entity::find())
+            Query::select()
+                .column(ColumnRef::Asterisk)
+                .from(Entity.table_ref())
                 .apply_if(contract_name_query, |q, query| {
                     let ts_query = prepare_ts_query(&query);
                     q.and_where(Expr::cust_with_expr(
@@ -172,8 +174,8 @@ where
     let addresses_cte_iden = Alias::new("addresses").into_iden();
     let addresses_cte = prepare_address_search_cte(contract_name_query, addresses_cte_iden.clone());
 
-    let base_select = Query::select()
-        .column(ColumnRef::Asterisk)
+    let base_select = QuerySelect::query(&mut Entity::find())
+        .from_clear()
         .from(addresses_cte_iden)
         .apply_if(chain_ids, |q, chain_ids| {
             if !chain_ids.is_empty() {
