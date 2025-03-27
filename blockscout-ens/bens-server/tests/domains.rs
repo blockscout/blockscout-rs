@@ -15,6 +15,8 @@ async fn subgraphs_reading_works(pool: PgPool) {
     get_protocols_scenario(base.clone(), &settings).await;
     eth_protocol_scenario(base.clone(), &settings).await;
     genome_protocol_scenario(base.clone(), &settings).await;
+    //1337 - это надо юзать
+    // только в different_protocols_scenario возврашается 2
     different_protocols_scenario(base.clone(), &settings).await;
 }
 
@@ -55,14 +57,23 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     let context = utils::settings_context(settings);
 
     // get detailed domain
-    let request: Value = send_get_request(&base, "/api/v1/1/domains/vitalik.eth").await;
+    let request: Value = send_get_request(&base, "/api/v1/1/domains/vitalik").await;
+    println!("{:?}", request);
     let vitalik_detailed_json = data_file_as_json!("domains/vitalik_eth/detailed.json", &context);
     assert_eq!(request, vitalik_detailed_json.clone());
     // get detailed domain with emojied name and with wrapped token
-    let request: Value = send_get_request(&base, "/api/v1/1/domains/wa🇬🇲i.eth").await;
+    let request: Value = send_get_request(&base, "/api/v1/1/domains/wa🇬🇲i").await;
     assert_eq!(
         request,
         data_file_as_json!("domains/wai_eth/detailed.json", &context)
+    );
+
+    let request: Value = send_get_request(&base, "/api/v1/1/domains/abcnews").await;
+    println!("{:?}", request);
+
+    assert_eq!(
+        request,
+        data_file_as_json!("domains/abcnews_eth/detailed.json", &context)
     );
 
     // get events
@@ -70,7 +81,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     let expected_events = expected_events.as_array().unwrap().clone();
     let (actual, expected) = check_list_result(
         &base,
-        "/api/v1/1/domains/vitalik.eth/events",
+        "/api/v1/1/domains/vitalik/events",
         Default::default(),
         expected_events.clone(),
         None,
@@ -79,7 +90,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     assert_eq!(actual, expected);
     let (actual, expected) = check_list_result(
         &base,
-        "/api/v1/1/domains/vitalik.eth/events",
+        "/api/v1/1/domains/vitalik/events",
         HashMap::from_iter([("sort".to_owned(), "timestamp".to_owned())]),
         expected_events.clone(),
         None,
@@ -95,7 +106,9 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     let page_token = "1571902007".to_string();
     let (actual, expected) = check_list_result(
         &base,
-        "/api/v1/1/domains:lookup",
+        "/api/v1/1337/domains:lookup",
+        //tut mozhet bit квери с именем - тогда возвращаем 5
+        //на этой ручке может быть 
         HashMap::from_iter([("page_size".into(), "2".into())]),
         expected_domains[0..2].to_vec(),
         Some((2, Some(page_token.clone()))),
@@ -104,7 +117,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     assert_eq!(actual, expected);
     let (actual, expected) = check_list_result(
         &base,
-        "/api/v1/1/domains:lookup",
+        "/api/v1/1337/domains:lookup",
         HashMap::from_iter([
             ("page_size".into(), "2".into()),
             ("page_token".into(), page_token.to_string()),
@@ -265,7 +278,7 @@ async fn genome_protocol_scenario(base: Url, settings: &Settings) {
 
 async fn different_protocols_scenario(base: Url, settings: &Settings) {
     let context = utils::settings_context(settings);
-    let request: Value = send_get_request(&base, "/api/v1/1337/domains/levvv.gno").await;
+    let request: Value = send_get_request(&base, "/api/v1/1337/domains/levvv").await;
     assert_eq!(
         request,
         data_file_as_json!("domains/levvv_gno/detailed.json", &context)

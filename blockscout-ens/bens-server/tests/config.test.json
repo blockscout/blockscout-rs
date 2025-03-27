@@ -14,26 +14,19 @@
         "blockscout": {
           "url": "http://localhost"
         },
-        "use_protocols": [
-          "ens"
-        ]
+        "use_protocols": ["ens"]
       },
       "10200": {
         "blockscout": {
           "url": "http://localhost"
         },
-        "use_protocols": [
-          "genome"
-        ]
+        "use_protocols": ["genome"]
       },
       "1337": {
         "blockscout": {
           "url": "http://localhost"
         },
-        "use_protocols": [
-          "ens",
-          "genome"
-        ]
+        "use_protocols": ["ens", "genome"]
       }
     },
     "protocols": {
