@@ -49,15 +49,11 @@ jobs:
         with:
           working-directory: stats
 
-      - name: Increase swapfile
+      - name: Set Swap Space
         id: swapfile
-        run: |
-          sudo swapoff -a
-          sudo fallocate -l 14G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          sudo swapon --show
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 10
 
       - name: Build
         id: build
