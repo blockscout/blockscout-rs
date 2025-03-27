@@ -7,7 +7,10 @@ use crate::{
     health::HealthService,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
-    settings::{handle_disable_internal_transactions, handle_enable_all_arbitrum, Settings},
+    settings::{
+        handle_disable_internal_transactions, handle_enable_all_arbitrum,
+        handle_enable_all_op_stack, Settings,
+    },
     update_service::UpdateService,
 };
 
@@ -43,6 +46,7 @@ pub async fn stats(
     let layout_config = read_layout_config(&settings.layout_config)?;
     let update_groups_config = read_update_groups_config(&settings.update_groups_config)?;
     handle_enable_all_arbitrum(settings.enable_all_arbitrum, &mut charts_config);
+    handle_enable_all_op_stack(settings.enable_all_op_stack, &mut charts_config);
     handle_disable_internal_transactions(
         settings.disable_internal_transactions,
         &mut settings.conditional_start,

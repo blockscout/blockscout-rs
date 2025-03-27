@@ -58,11 +58,15 @@ singleton_groups!(
 // Therefore, we put the dependant (`TotalOperationalTxns`) in the same
 // group as its heaviest dependency (`TotalBlocks`).
 construct_update_group!(TotalBlocksGroup {
-    charts: [TotalBlocks, TotalOperationalTxns]
+    charts: [TotalBlocks, ArbitrumTotalOperationalTxns]
 });
 
 construct_update_group!(YesterdayTxnsGroup {
-    charts: [YesterdayTxns, YesterdayOperationalTxns]
+    charts: [
+        YesterdayTxns,
+        OpStackYesterdayOperationalTxns,
+        ArbitrumYesterdayOperationalTxns,
+    ]
 });
 
 construct_update_group!(AverageBlockRewardsGroup {
@@ -135,14 +139,14 @@ construct_update_group!(NewBlocksGroup {
         NewBlocksMonthly,
         NewBlocksYearly,
         // if the following are enabled, then NewTxns is updated as well
-        NewOperationalTxns,
-        NewOperationalTxnsWeekly,
-        NewOperationalTxnsMonthly,
-        NewOperationalTxnsYearly,
-        OperationalTxnsGrowth,
-        OperationalTxnsGrowthWeekly,
-        OperationalTxnsGrowthMonthly,
-        OperationalTxnsGrowthYearly
+        ArbitrumNewOperationalTxns,
+        ArbitrumNewOperationalTxnsWeekly,
+        ArbitrumNewOperationalTxnsMonthly,
+        ArbitrumNewOperationalTxnsYearly,
+        ArbitrumOperationalTxnsGrowth,
+        ArbitrumOperationalTxnsGrowthWeekly,
+        ArbitrumOperationalTxnsGrowthMonthly,
+        ArbitrumOperationalTxnsGrowthYearly
     ]
 });
 
@@ -164,7 +168,8 @@ construct_update_group!(TxnsStats24hGroup {
         AverageTxnFee24h,
         NewTxns24h,
         TxnsFee24h,
-        NewOperationalTxns24h,
+        OpStackNewOperationalTxns24h,
+        ArbitrumNewOperationalTxns24h,
     ]
 });
 
@@ -220,11 +225,24 @@ construct_update_group!(NewTxnsGroup {
         TxnsGrowthWeekly,
         TxnsGrowthMonthly,
         TxnsGrowthYearly,
+        OpStackNewOperationalTxns,
+        OpStackNewOperationalTxnsWeekly,
+        OpStackNewOperationalTxnsMonthly,
+        OpStackNewOperationalTxnsYearly,
+        OpStackOperationalTxnsGrowth,
+        OpStackOperationalTxnsGrowthWeekly,
+        OpStackOperationalTxnsGrowthMonthly,
+        OpStackOperationalTxnsGrowthYearly,
+        OpStackTotalOperationalTxns,
     ],
 });
 
 construct_update_group!(NewTxnsWindowGroup {
-    charts: [NewTxnsWindow, NewOperationalTxnsWindow],
+    charts: [
+        NewTxnsWindow,
+        OpStackNewOperationalTxnsWindow,
+        ArbitrumNewOperationalTxnsWindow
+    ],
 });
 
 construct_update_group!(NewUserOpsGroup {

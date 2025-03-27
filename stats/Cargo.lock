@@ -4591,6 +4591,7 @@ dependencies = [
  "chrono",
  "entity",
  "futures",
+ "hex",
  "hex-literal",
  "itertools 0.13.0",
  "lazy_static",

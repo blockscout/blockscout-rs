@@ -77,7 +77,7 @@ where
     }
 }
 
-pub type TotalOperationalTxns = DirectPointLocalDbChartSource<
+pub type ArbitrumTotalOperationalTxns = DirectPointLocalDbChartSource<
     Map<(TotalBlocksInt, TotalTxnsInt), CalculateOperationalTxns<Properties>>,
     Properties,
 >;
@@ -89,9 +89,13 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_total_operational_txns() {
-        // 48 - 13 (txns - blocks)
-        simple_test_counter::<TotalOperationalTxns>("update_total_operational_txns", "44", None)
-            .await;
+    async fn update_arbitrum_total_operational_txns() {
+        // 58 - 13 (txns - blocks)
+        simple_test_counter::<ArbitrumTotalOperationalTxns>(
+            "update_arbitrum_total_operational_txns",
+            "45",
+            None,
+        )
+        .await;
     }
 }

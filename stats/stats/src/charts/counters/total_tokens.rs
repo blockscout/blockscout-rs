@@ -7,6 +7,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    types::TimespanValue,
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
@@ -36,7 +37,8 @@ impl StatementForOne for TotalTokensStatement {
     }
 }
 
-pub type TotalTokensRemote = RemoteDatabaseSource<PullOne<TotalTokensStatement, NaiveDate, String>>;
+pub type TotalTokensRemote =
+    RemoteDatabaseSource<PullOne<TotalTokensStatement, TimespanValue<NaiveDate, String>>>;
 
 pub struct Properties;
 

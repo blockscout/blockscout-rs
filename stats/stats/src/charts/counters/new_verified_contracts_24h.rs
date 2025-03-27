@@ -4,7 +4,7 @@ use crate::{
         kinds::{
             data_manipulation::map::MapToString,
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOneValue, RemoteDatabaseSource, StatementFromUpdateTime},
+            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
         },
         types::BlockscoutMigrations,
     },
@@ -37,7 +37,7 @@ impl StatementFromUpdateTime for NewVerifiedContracts24hStatement {
 }
 
 pub type NewVerifiedContracts24hRemote =
-    RemoteDatabaseSource<PullOneValue<NewVerifiedContracts24hStatement, NaiveDate, i64>>;
+    RemoteDatabaseSource<PullOneNowValue<NewVerifiedContracts24hStatement, NaiveDate, i64>>;
 
 pub struct Properties;
 

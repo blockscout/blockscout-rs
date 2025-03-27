@@ -8,7 +8,7 @@ use sea_orm::{
 use tokio::sync::Mutex;
 use tracing::warn;
 
-use crate::counters::TxnsStatsValue;
+use crate::{counters::TxnsStatsValue, types::new_txns::NewTxnsCombinedPoint};
 
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
@@ -142,6 +142,8 @@ pub enum CacheValue {
     ValueString(String),
     ValueOptionF64(Option<f64>),
     ValueTxnsStats(TxnsStatsValue),
+    ValueNewTxnsCombined(NewTxnsCombinedPoint),
+    VecTxnWindow(Vec<NewTxnsCombinedPoint>),
 }
 
 pub trait Cacheable {
@@ -172,6 +174,8 @@ macro_rules! impl_cacheable {
 }
 
 impl_cacheable!(TxnsStatsValue, ValueTxnsStats);
+impl_cacheable!(NewTxnsCombinedPoint, ValueNewTxnsCombined);
+impl_cacheable!(Vec<NewTxnsCombinedPoint>, VecTxnWindow);
 // for testing
 impl_cacheable!(String, ValueString);
 impl_cacheable!(Option<f64>, ValueOptionF64);

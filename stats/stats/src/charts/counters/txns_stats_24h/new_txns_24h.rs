@@ -65,7 +65,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_txns_24h_1() {
-        simple_test_counter::<NewTxns24h>("update_new_txns_24h_1", "1", None).await;
+        simple_test_counter::<NewTxns24h>("update_new_txns_24h_1", "2", None).await;
     }
 
     #[tokio::test]
@@ -73,8 +73,6 @@ mod tests {
     async fn update_new_txns_24h_2() {
         simple_test_counter::<NewTxns24h>(
             "update_new_txns_24h_2",
-            // block at `2022-11-11T00:00:00` is not counted because
-            // the relation is 'less than' in query
             "14",
             Some(dt("2022-11-11T00:00:00")),
         )

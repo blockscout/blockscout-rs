@@ -17,6 +17,9 @@ use user_ops::*;
 #[cfg(test)]
 mod mock;
 
+pub use new_txns::op_stack_operational::{
+    ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH,
+};
 pub use new_txns_window::WINDOW as NEW_TXNS_WINDOW_RANGE;
 
 pub use aa_wallets_growth::{
@@ -34,6 +37,15 @@ pub use new_aa_wallets::{
     NewAccountAbstractionWallets, NewAccountAbstractionWalletsMonthly,
     NewAccountAbstractionWalletsWeekly, NewAccountAbstractionWalletsYearly,
 };
+pub use new_txns::op_stack_operational::{
+    OpStackNewOperationalTxns, OpStackNewOperationalTxnsMonthly, OpStackNewOperationalTxnsWeekly,
+    OpStackNewOperationalTxnsYearly,
+};
+pub use new_txns_window::op_stack_operational::OpStackNewOperationalTxnsWindow;
+pub use op_stack_operational_txns_growth::{
+    OpStackOperationalTxnsGrowth, OpStackOperationalTxnsGrowthMonthly,
+    OpStackOperationalTxnsGrowthWeekly, OpStackOperationalTxnsGrowthYearly,
+};
 #[rustfmt::skip]
 pub use active_recurring_accounts::{
     ActiveRecurringAccountsDailyRecurrence120Days, ActiveRecurringAccountsMonthlyRecurrence120Days,
@@ -48,6 +60,15 @@ pub use active_recurring_accounts::{
 pub use active_recurring_accounts::{
     ActiveRecurringAccountsDailyRecurrence90Days, ActiveRecurringAccountsMonthlyRecurrence90Days,
     ActiveRecurringAccountsWeeklyRecurrence90Days, ActiveRecurringAccountsYearlyRecurrence90Days,
+};
+pub use arbitrum_new_operational_txns::{
+    ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsMonthly,
+    ArbitrumNewOperationalTxnsWeekly, ArbitrumNewOperationalTxnsYearly,
+};
+pub use arbitrum_new_operational_txns_window::ArbitrumNewOperationalTxnsWindow;
+pub use arbitrum_operational_txns_growth::{
+    ArbitrumOperationalTxnsGrowth, ArbitrumOperationalTxnsGrowthMonthly,
+    ArbitrumOperationalTxnsGrowthWeekly, ArbitrumOperationalTxnsGrowthYearly,
 };
 pub use average_block_rewards::{
     AverageBlockRewards, AverageBlockRewardsMonthly, AverageBlockRewardsWeekly,
@@ -91,11 +112,6 @@ pub use new_native_coin_transfers::{
     NewNativeCoinTransfers, NewNativeCoinTransfersMonthly, NewNativeCoinTransfersWeekly,
     NewNativeCoinTransfersYearly,
 };
-pub use new_operational_txns::{
-    NewOperationalTxns, NewOperationalTxnsMonthly, NewOperationalTxnsWeekly,
-    NewOperationalTxnsYearly,
-};
-pub use new_operational_txns_window::NewOperationalTxnsWindow;
 pub use new_txns::{NewTxns, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
 pub use new_txns_window::NewTxnsWindow;
 pub use new_user_ops::{
@@ -104,10 +120,6 @@ pub use new_user_ops::{
 pub use new_verified_contracts::{
     NewVerifiedContracts, NewVerifiedContractsMonthly, NewVerifiedContractsWeekly,
     NewVerifiedContractsYearly,
-};
-pub use operational_txns_growth::{
-    OperationalTxnsGrowth, OperationalTxnsGrowthMonthly, OperationalTxnsGrowthWeekly,
-    OperationalTxnsGrowthYearly,
 };
 pub use txns_fee::{TxnsFee, TxnsFeeMonthly, TxnsFeeWeekly, TxnsFeeYearly};
 pub use txns_growth::{TxnsGrowth, TxnsGrowthMonthly, TxnsGrowthWeekly, TxnsGrowthYearly};
@@ -125,7 +137,10 @@ pub use verified_contracts_growth::{
 pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub(crate) use new_blocks::NewBlocksStatement;
 pub(crate) use new_native_coin_transfers::NewNativeCoinTransfersInt;
-pub(crate) use new_txns::{NewTxnsInt, NewTxnsStatement};
+pub(crate) use new_txns::{
+    op_stack_operational::transactions_filter as op_stack_operational_transactions_filter,
+    NewTxnsCombinedStatement, NewTxnsInt,
+};
 pub(crate) use new_txns_window::NewTxnsWindowInt;
 
 #[cfg(test)]

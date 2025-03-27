@@ -1,83 +1,30 @@
-use std::ops::Range;
-
 use crate::{
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::{
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-                DirectVecLocalDbChartSource,
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
+    data_source::kinds::{
+        data_manipulation::{
+            map::{Map, MapParseTo, MapToString, StripExt},
+            resolutions::sum::SumLowerResolution,
         },
-        types::BlockscoutMigrations,
+        local_db::{
+            parameters::update::batching::parameters::{
+                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
+            },
+            DirectVecLocalDbChartSource,
+        },
     },
     define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
-    utils::sql_with_range_filter_opt,
+    types::{
+        new_txns::ExtractAllTxns,
+        timespans::{Month, Week, Year},
+    },
     ChartProperties, Named,
 };
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
 
-pub struct NewTxnsStatement;
+use super::NewTxnsCombinedRemote;
 
-impl StatementFromRange for NewTxnsStatement {
-    fn get_statement(
-        range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
-    ) -> Statement {
-        // do not filter by `!= to_timestamp(0)` because
-        // 1. it allows to use index `transactions_block_consensus_index`
-        // 2. there is no reason not to count genesis transactions
-        if completed_migrations.denormalization {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
-                    SELECT
-                        date(t.block_timestamp) as date,
-                        COUNT(*)::TEXT as value
-                    FROM transactions t
-                    WHERE
-                        t.block_consensus = true {filter}
-                    GROUP BY date;
-                "#,
-                [],
-                "t.block_timestamp",
-                range
-            )
-        } else {
-            sql_with_range_filter_opt!(
-                DbBackend::Postgres,
-                r#"
-                    SELECT
-                        date(b.timestamp) as date,
-                        COUNT(*)::TEXT as value
-                    FROM transactions t
-                    JOIN blocks       b ON t.block_hash = b.hash
-                    WHERE
-                        b.consensus = true {filter}
-                    GROUP BY date;
-                "#,
-                [],
-                "b.timestamp",
-                range
-            )
-        }
-    }
-}
-
-pub type NewTxnsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<NewTxnsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
->;
+pub type NewTxnsRemote = Map<NewTxnsCombinedRemote, ExtractAllTxns>;
 
 pub struct Properties;
 
@@ -143,7 +90,7 @@ mod tests {
                 ("2022-12-01", "6"),
                 ("2023-01-01", "1"),
                 ("2023-02-01", "5"),
-                ("2023-03-01", "1"),
+                ("2023-03-01", "2"),
             ],
         )
         .await;
@@ -159,7 +106,7 @@ mod tests {
                 ("2022-11-28", "6"),
                 ("2022-12-26", "1"),
                 ("2023-01-30", "5"),
-                ("2023-02-27", "1"),
+                ("2023-02-27", "2"),
             ],
         )
         .await;
@@ -175,7 +122,7 @@ mod tests {
                 ("2022-12-01", "6"),
                 ("2023-01-01", "1"),
                 ("2023-02-01", "5"),
-                ("2023-03-01", "1"),
+                ("2023-03-01", "2"),
             ],
         )
         .await;
@@ -186,7 +133,7 @@ mod tests {
     async fn update_new_txns_yearly() {
         simple_test_chart_with_migration_variants::<NewTxnsYearly>(
             "update_new_txns_yearly",
-            vec![("2022-01-01", "48"), ("2023-01-01", "7")],
+            vec![("2022-01-01", "48"), ("2023-01-01", "8")],
         )
         .await;
     }

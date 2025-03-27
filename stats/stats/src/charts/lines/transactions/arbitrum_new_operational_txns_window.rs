@@ -1,14 +1,13 @@
-//! New transactions for the last N days (usually 30).
+//! New operational transactions for the last N days
+//! (usually 30).
 //!
-//! Allowed to work on a non-indexed networks, as it
-//! recalculates whole N day window/range each time.
-//!
-//! Does not include last day, even as incomplete day.
+//! Basically an extension of [super::NewTxnsWindow]
+//! but for operational txns
 
 use crate::{
     data_source::{
         kinds::{
-            data_manipulation::map::{MapParseTo, StripExt},
+            data_manipulation::map::{Map, MapParseTo},
             local_db::{
                 parameters::{
                     update::clear_and_query_all::ClearAllAndPassVec, DefaultCreate, DefaultQueryVec,
@@ -21,7 +20,7 @@ use crate::{
         UpdateContext,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    lines::NewTxnsStatement,
+    lines::{NewBlocksStatement, NewTxnsWindowInt, NEW_TXNS_WINDOW_RANGE},
     range::UniversalRange,
     types::{Timespan, TimespanDuration, TimespanValue},
     utils::day_start,
@@ -32,23 +31,25 @@ use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{FromQueryResult, Statement};
 
-pub const WINDOW: u64 = 30;
+use super::arbitrum_new_operational_txns::ArbitrumCalculateOperationalTxnsVec;
 
-fn new_txns_window_statement(
+fn new_blocks_window_statement(
     update_day: NaiveDate,
     completed_migrations: &BlockscoutMigrations,
 ) -> Statement {
     // `update_day` is not included because the data would
     // be incomplete.
-    let window =
-        day_start(&update_day.saturating_sub(TimespanDuration::from_timespan_repeats(WINDOW)))
-            ..day_start(&update_day);
-    NewTxnsStatement::get_statement(Some(window), completed_migrations)
+    let window = day_start(
+        &update_day.saturating_sub(TimespanDuration::from_timespan_repeats(
+            NEW_TXNS_WINDOW_RANGE,
+        )),
+    )..day_start(&update_day);
+    NewBlocksStatement::get_statement(Some(window), completed_migrations)
 }
 
-pub struct NewTxnsWindowQuery;
+pub struct NewBlocksWindowQuery;
 
-impl RemoteQueryBehaviour for NewTxnsWindowQuery {
+impl RemoteQueryBehaviour for NewBlocksWindowQuery {
     type Output = Vec<TimespanValue<NaiveDate, String>>;
 
     async fn query_data(
@@ -56,7 +57,7 @@ impl RemoteQueryBehaviour for NewTxnsWindowQuery {
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<TimespanValue<NaiveDate, String>>, ChartError> {
         let update_day = cx.time.date_naive();
-        let query = new_txns_window_statement(update_day, &cx.blockscout_applied_migrations);
+        let query = new_blocks_window_statement(update_day, &cx.blockscout_applied_migrations);
         let mut data = TimespanValue::<NaiveDate, String>::find_by_statement(query)
             .all(cx.blockscout)
             .await
@@ -67,13 +68,16 @@ impl RemoteQueryBehaviour for NewTxnsWindowQuery {
     }
 }
 
-pub type NewTxnsWindowRemote = RemoteDatabaseSource<NewTxnsWindowQuery>;
+// should only be used in this chart for query efficiency.
+// because is not directly stored in local DB.
+pub type NewBlocksWindowRemote = RemoteDatabaseSource<NewBlocksWindowQuery>;
+pub type NewBlocksWindowRemoteInt = MapParseTo<NewBlocksWindowRemote, i64>;
 
 pub struct Properties;
 
 impl Named for Properties {
     fn name() -> String {
-        "newTxnsWindow".into()
+        "newOperationalTxnsWindow".into()
     }
 }
 
@@ -83,6 +87,7 @@ impl ChartProperties for Properties {
     fn chart_type() -> ChartType {
         ChartType::Line
     }
+
     fn indexing_status_requirement() -> IndexingStatus {
         IndexingStatus {
             blockscout: BlockscoutIndexingStatus::NoneIndexed,
@@ -91,15 +96,20 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type NewTxnsWindow = LocalDbChartSource<
-    NewTxnsWindowRemote,
+pub type ArbitrumNewOperationalTxnsWindowCalculation =
+    Map<(NewBlocksWindowRemoteInt, NewTxnsWindowInt), ArbitrumCalculateOperationalTxnsVec>;
+pub type ArbitrumNewOperationalTxnsWindow = LocalDbChartSource<
+    ArbitrumNewOperationalTxnsWindowCalculation,
     (),
     DefaultCreate<Properties>,
-    ClearAllAndPassVec<NewTxnsWindowRemote, DefaultQueryVec<Properties>, Properties>,
+    ClearAllAndPassVec<
+        ArbitrumNewOperationalTxnsWindowCalculation,
+        DefaultQueryVec<Properties>,
+        Properties,
+    >,
     DefaultQueryVec<Properties>,
     Properties,
 >;
-pub type NewTxnsWindowInt = MapParseTo<StripExt<NewTxnsWindow>, i64>;
 
 #[cfg(test)]
 mod tests {
@@ -118,10 +128,12 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_txns_window_clears_and_overwrites() {
-        let (init_time, db, blockscout) =
-            prepare_chart_test::<NewTxnsWindow>("update_txns_window_clears_and_overwrites", None)
-                .await;
+    async fn update_arbitrum_operational_txns_window_clears_and_overwrites() {
+        let (init_time, db, blockscout) = prepare_chart_test::<ArbitrumNewOperationalTxnsWindow>(
+            "update_arbitrum_operational_txns_window_clears_and_overwrites",
+            None,
+        )
+        .await;
         {
             let current_date = init_time.date_naive();
             fill_mock_blockscout_data(&blockscout, current_date).await;
@@ -136,18 +148,25 @@ mod tests {
             force_full: false,
         };
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-        NewTxnsWindow::update_recursively(&cx).await.unwrap();
+        ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
+            .await
+            .unwrap();
         assert_eq!(
             &chart_output_to_expected(
-                NewTxnsWindow::query_data_static(&cx, UniversalRange::full(), None, false)
-                    .await
-                    .unwrap()
+                ArbitrumNewOperationalTxnsWindow::query_data_static(
+                    &cx,
+                    UniversalRange::full(),
+                    None,
+                    false
+                )
+                .await
+                .unwrap()
             ),
             &map_str_tuple_to_owned(vec![
-                ("2022-11-09", "6"),
-                ("2022-11-10", "14"),
-                ("2022-11-11", "16"),
-                ("2022-11-12", "6"),
+                ("2022-11-09", "5"),
+                ("2022-11-10", "11"),
+                ("2022-11-11", "12"),
+                ("2022-11-12", "5"),
                 // update day is not included
             ]),
         );
@@ -155,19 +174,26 @@ mod tests {
         let current_time = dt("2022-12-10T00:00:00").and_utc();
         parameters.update_time_override = Some(current_time);
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-        NewTxnsWindow::update_recursively(&cx).await.unwrap();
+        ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
+            .await
+            .unwrap();
         assert_eq!(
             &chart_output_to_expected(
-                NewTxnsWindow::query_data_static(&cx, UniversalRange::full(), None, false)
-                    .await
-                    .unwrap()
+                ArbitrumNewOperationalTxnsWindow::query_data_static(
+                    &cx,
+                    UniversalRange::full(),
+                    None,
+                    false
+                )
+                .await
+                .unwrap()
             ),
             &map_str_tuple_to_owned(vec![
                 // values outside the window are removed
-                ("2022-11-10", "14"),
-                ("2022-11-11", "16"),
-                ("2022-11-12", "6"),
-                ("2022-12-01", "6"),
+                ("2022-11-10", "11"),
+                ("2022-11-11", "12"),
+                ("2022-11-12", "5"),
+                ("2022-12-01", "5"),
             ]),
         );
 
@@ -176,19 +202,26 @@ mod tests {
         let current_time = dt("2022-12-11T00:00:00").and_utc();
         parameters.update_time_override = Some(current_time);
         let cx = UpdateContext::from_params_now_or_override(parameters);
-        NewTxnsWindow::update_recursively(&cx).await.unwrap();
+        ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
+            .await
+            .unwrap();
         assert_eq!(
             &chart_output_to_expected(
-                NewTxnsWindow::query_data_static(&cx, UniversalRange::full(), None, false)
-                    .await
-                    .unwrap()
+                ArbitrumNewOperationalTxnsWindow::query_data_static(
+                    &cx,
+                    UniversalRange::full(),
+                    None,
+                    false
+                )
+                .await
+                .unwrap()
             ),
             &map_str_tuple_to_owned(vec![
                 // values outside the window are removed
                 // new values within the window are added
-                ("2022-11-11", "20"),
-                ("2022-11-12", "6"),
-                ("2022-12-01", "6"),
+                ("2022-11-11", "16"),
+                ("2022-11-12", "5"),
+                ("2022-12-01", "5"),
             ]),
         );
     }

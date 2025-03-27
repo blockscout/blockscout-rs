@@ -4,6 +4,7 @@ use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use sea_orm::{FromQueryResult, Statement, TryGetable};
 
 use crate::{
+    charts::db_interaction::read::cached::find_one_value_cached,
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, Cacheable, UpdateContext, WrappedValue},
@@ -25,28 +26,24 @@ pub trait StatementForOne {
 /// `P` - Type of point to retrieve within query.
 /// `DateValue<String>` can be used to avoid parsing the values,
 /// but `DateValue<Decimal>` or other types can be useful sometimes.
-pub struct PullOne<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
+pub struct PullOne<S, Value>(PhantomData<(S, Value)>)
 where
     S: StatementForOne,
-    Resolution: Ord + Send,
-    Value: Send,
-    TimespanValue<Resolution, Value>: FromQueryResult;
+    Value: FromQueryResult + Send;
 
-impl<S, Resolution, Value> RemoteQueryBehaviour for PullOne<S, Resolution, Value>
+impl<S, Value> RemoteQueryBehaviour for PullOne<S, Value>
 where
     S: StatementForOne,
-    Resolution: Ord + Send,
-    Value: Send,
-    TimespanValue<Resolution, Value>: FromQueryResult,
+    Value: FromQueryResult + Send,
 {
-    type Output = TimespanValue<Resolution, Value>;
+    type Output = Value;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
+    ) -> Result<Value, ChartError> {
         let query = S::get_statement(&cx.blockscout_applied_migrations);
-        let data = TimespanValue::<Resolution, Value>::find_by_statement(query)
+        let data = Value::find_by_statement(query)
             .one(cx.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?
@@ -63,13 +60,13 @@ pub trait StatementFromUpdateTime {
 }
 
 /// Just like `PullOne` but timespan is taken from update time
-pub struct PullOneValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
+pub struct PullOneNowValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
 where
     S: StatementFromUpdateTime,
     Resolution: Timespan + Ord + Send,
     Value: Send + TryGetable;
 
-impl<S, Resolution, Value> RemoteQueryBehaviour for PullOneValue<S, Resolution, Value>
+impl<S, Resolution, Value> RemoteQueryBehaviour for PullOneNowValue<S, Resolution, Value>
 where
     S: StatementFromUpdateTime,
     Resolution: Timespan + Ord + Send,
@@ -120,18 +117,9 @@ where
             &cx.blockscout_applied_migrations,
         );
 
-        let value = if let Some(cached) = cx.cache.get::<Value>(&query).await {
-            cached
-        } else {
-            let find_by_statement = Value::find_by_statement(query.clone());
-            let value = find_by_statement
-                .one(cx.blockscout)
-                .await
-                .map_err(ChartError::BlockscoutDB)?
-                .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
-            cx.cache.insert(&query, value.clone()).await;
-            value
-        };
+        let value = find_one_value_cached(cx, query)
+            .await?
+            .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
 
         Ok(TimespanValue {
             timespan: update_time.date_naive(),

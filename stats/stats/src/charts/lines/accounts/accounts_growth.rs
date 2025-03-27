@@ -79,7 +79,7 @@ mod tests {
                 ("2022-11-09", "1"),
                 ("2022-11-10", "4"),
                 ("2022-11-11", "8"),
-                ("2023-03-01", "9"),
+                ("2023-03-01", "10"),
             ],
         )
         .await;
@@ -90,7 +90,7 @@ mod tests {
     async fn update_accounts_growth_weekly() {
         simple_test_chart::<AccountsGrowthWeekly>(
             "update_accounts_growth_weekly",
-            vec![("2022-11-07", "8"), ("2023-02-27", "9")],
+            vec![("2022-11-07", "8"), ("2023-02-27", "10")],
         )
         .await;
     }
@@ -100,7 +100,7 @@ mod tests {
     async fn update_accounts_growth_monthly() {
         simple_test_chart::<AccountsGrowthMonthly>(
             "update_accounts_growth_monthly",
-            vec![("2022-11-01", "8"), ("2023-03-01", "9")],
+            vec![("2022-11-01", "8"), ("2023-03-01", "10")],
         )
         .await;
     }
@@ -110,7 +110,7 @@ mod tests {
     async fn update_accounts_growth_yearly() {
         simple_test_chart::<AccountsGrowthYearly>(
             "update_accounts_growth_yearly",
-            vec![("2022-01-01", "8"), ("2023-01-01", "9")],
+            vec![("2022-01-01", "8"), ("2023-01-01", "10")],
         )
         .await;
     }

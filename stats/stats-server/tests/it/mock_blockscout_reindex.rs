@@ -5,6 +5,7 @@ use blockscout_service_launcher::{
     test_server::{init_server, send_get_request},
 };
 use chrono::{Days, NaiveDate, Utc};
+use pretty_assertions::assert_eq;
 use stats::tests::{
     init_db::init_db_all,
     mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data, imitate_reindex},
@@ -61,7 +62,7 @@ async fn test_reupdate_works() {
             ("2022-12-01", "6"),
             ("2023-01-01", "1"),
             ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
+            ("2023-03-01", "2"),
         ])
     );
     imitate_reindex(&blockscout_db, max_date).await;
@@ -93,7 +94,7 @@ async fn test_reupdate_works() {
             ("2022-12-01", "6"),
             ("2023-01-01", "3"),
             ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
+            ("2023-03-01", "2"),
         ])
     );
 
@@ -123,7 +124,7 @@ async fn test_reupdate_works() {
             ("2022-12-01", "6"),
             ("2023-01-01", "3"),
             ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
+            ("2023-03-01", "2"),
         ])
     );
 
@@ -152,7 +153,7 @@ async fn test_reupdate_works() {
             ("2022-12-01", "6"),
             ("2023-01-01", "3"),
             ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
+            ("2023-03-01", "2"),
         ])
     );
     blockscout_db.close_all_unwrap().await;
