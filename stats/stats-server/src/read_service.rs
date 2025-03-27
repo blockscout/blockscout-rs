@@ -28,7 +28,7 @@ use stats::{
     },
     data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
     lines::{
-        ArbirumNewOperationalTxnsWindow, NewTxnsWindow, OpStackNewOperationalTxnsWindow,
+        ArbitrumNewOperationalTxnsWindow, NewTxnsWindow, OpStackNewOperationalTxnsWindow,
         NEW_TXNS_WINDOW_RANGE,
     },
     query_dispatch::{CounterHandle, LineHandle, QuerySerializedDyn},
@@ -181,7 +181,7 @@ impl ReadService {
             OpStackTotalOperationalTxns::name(),
             OpStackYesterdayOperationalTxns::name(),
             NewTxnsWindow::name(),
-            ArbirumNewOperationalTxnsWindow::name(),
+            ArbitrumNewOperationalTxnsWindow::name(),
             OpStackNewOperationalTxnsWindow::name(),
         ]
     }
@@ -496,7 +496,7 @@ impl StatsService for ReadService {
             self.query_counter(OpStackYesterdayOperationalTxns::name(), now),
             self.query_window_chart(NewTxnsWindow::name(), NEW_TXNS_WINDOW_RANGE, now),
             self.query_window_chart(
-                ArbirumNewOperationalTxnsWindow::name(),
+                ArbitrumNewOperationalTxnsWindow::name(),
                 NEW_TXNS_WINDOW_RANGE,
                 now
             ),

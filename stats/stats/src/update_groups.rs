@@ -241,7 +241,7 @@ construct_update_group!(NewTxnsWindowGroup {
     charts: [
         NewTxnsWindow,
         OpStackNewOperationalTxnsWindow,
-        ArbirumNewOperationalTxnsWindow
+        ArbitrumNewOperationalTxnsWindow
     ],
 });
 

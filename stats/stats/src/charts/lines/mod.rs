@@ -65,7 +65,7 @@ pub use arbitrum_new_operational_txns::{
     ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsMonthly,
     ArbitrumNewOperationalTxnsWeekly, ArbitrumNewOperationalTxnsYearly,
 };
-pub use arbitrum_new_operational_txns_window::ArbirumNewOperationalTxnsWindow;
+pub use arbitrum_new_operational_txns_window::ArbitrumNewOperationalTxnsWindow;
 pub use arbitrum_operational_txns_growth::{
     ArbitrumOperationalTxnsGrowth, ArbitrumOperationalTxnsGrowthMonthly,
     ArbitrumOperationalTxnsGrowthWeekly, ArbitrumOperationalTxnsGrowthYearly,

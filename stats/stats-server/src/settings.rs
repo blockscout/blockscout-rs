@@ -15,8 +15,9 @@ use stats::{
     },
     indexing_status::BlockscoutIndexingStatus,
     lines::{
-        ArbirumNewOperationalTxnsWindow, ArbitrumNewOperationalTxns, ArbitrumOperationalTxnsGrowth,
-        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
+        ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
+        ArbitrumOperationalTxnsGrowth, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow,
+        OpStackOperationalTxnsGrowth,
     },
     ChartProperties,
 };
@@ -191,7 +192,7 @@ pub fn handle_enable_all_arbitrum(
         enable_charts(
             &[
                 ArbitrumNewOperationalTxns::key().name(),
-                ArbirumNewOperationalTxnsWindow::key().name(),
+                ArbitrumNewOperationalTxnsWindow::key().name(),
                 ArbitrumTotalOperationalTxns::key().name(),
                 ArbitrumNewOperationalTxns24h::key().name(),
                 ArbitrumOperationalTxnsGrowth::key().name(),

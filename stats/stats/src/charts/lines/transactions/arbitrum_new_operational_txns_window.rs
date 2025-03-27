@@ -98,7 +98,7 @@ impl ChartProperties for Properties {
 
 pub type ArbitrumNewOperationalTxnsWindowCalculation =
     Map<(NewBlocksWindowRemoteInt, NewTxnsWindowInt), ArbitrumCalculateOperationalTxnsVec>;
-pub type ArbirumNewOperationalTxnsWindow = LocalDbChartSource<
+pub type ArbitrumNewOperationalTxnsWindow = LocalDbChartSource<
     ArbitrumNewOperationalTxnsWindowCalculation,
     (),
     DefaultCreate<Properties>,
@@ -129,7 +129,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_arbitrum_operational_txns_window_clears_and_overwrites() {
-        let (init_time, db, blockscout) = prepare_chart_test::<ArbirumNewOperationalTxnsWindow>(
+        let (init_time, db, blockscout) = prepare_chart_test::<ArbitrumNewOperationalTxnsWindow>(
             "update_arbitrum_operational_txns_window_clears_and_overwrites",
             None,
         )
@@ -148,12 +148,12 @@ mod tests {
             force_full: false,
         };
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-        ArbirumNewOperationalTxnsWindow::update_recursively(&cx)
+        ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
             .await
             .unwrap();
         assert_eq!(
             &chart_output_to_expected(
-                ArbirumNewOperationalTxnsWindow::query_data_static(
+                ArbitrumNewOperationalTxnsWindow::query_data_static(
                     &cx,
                     UniversalRange::full(),
                     None,
@@ -174,12 +174,12 @@ mod tests {
         let current_time = dt("2022-12-10T00:00:00").and_utc();
         parameters.update_time_override = Some(current_time);
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-        ArbirumNewOperationalTxnsWindow::update_recursively(&cx)
+        ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
             .await
             .unwrap();
         assert_eq!(
             &chart_output_to_expected(
-                ArbirumNewOperationalTxnsWindow::query_data_static(
+                ArbitrumNewOperationalTxnsWindow::query_data_static(
                     &cx,
                     UniversalRange::full(),
                     None,
@@ -202,12 +202,12 @@ mod tests {
         let current_time = dt("2022-12-11T00:00:00").and_utc();
         parameters.update_time_override = Some(current_time);
         let cx = UpdateContext::from_params_now_or_override(parameters);
-        ArbirumNewOperationalTxnsWindow::update_recursively(&cx)
+        ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
             .await
             .unwrap();
         assert_eq!(
             &chart_output_to_expected(
-                ArbirumNewOperationalTxnsWindow::query_data_static(
+                ArbitrumNewOperationalTxnsWindow::query_data_static(
                     &cx,
                     UniversalRange::full(),
                     None,
