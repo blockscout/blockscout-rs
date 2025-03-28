@@ -70,7 +70,7 @@ mod tests {
         // let settings = Settings::default("postgres://postgres:postgres@database:5432/blockscout".to_string());
         // let server = init_tac_operation_lifecycle_server(db.db_url(), |settings| settings).await;
         let indexer = Indexer::new(indexer_settings, db.client()).await.unwrap();
-        let intervals_number = indexer.save_intervals(current_epoch).await.unwrap();
+        let intervals_number = indexer.generate_historical_intervals(current_epoch).await.unwrap();
         let intervals = interval::Entity::find()
             .all(db.client().as_ref())
             .await.unwrap();
@@ -111,7 +111,7 @@ mod tests {
         let indexer = Indexer::new(indexer_settings, db.client()).await.unwrap();
         
         // Save intervals first
-        indexer.save_intervals(current_epoch).await.unwrap();
+        indexer.generate_historical_intervals(current_epoch).await.unwrap();
 
         // Create prioritized streams like in the actual implementation
         let high_priority = indexer.interval_stream(OrderDirection::Descending);
@@ -300,7 +300,7 @@ mod tests {
         let indexer = Indexer::new(indexer_settings, db.client()).await.unwrap();
         
         // Save intervals and start indexing
-        let intervals_number = indexer.save_intervals(current_epoch).await.unwrap();
+        let intervals_number = indexer.generate_historical_intervals(current_epoch).await.unwrap();
         assert_eq!(intervals_number, jobs_number as usize);
 
         // Get the stream of jobs
