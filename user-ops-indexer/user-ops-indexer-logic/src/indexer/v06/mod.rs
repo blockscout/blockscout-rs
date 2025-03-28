@@ -22,10 +22,11 @@ sol!(IEntrypointV06, "./src/indexer/v06/abi.json");
 
 #[derive(Debug, Clone)]
 pub struct IndexerV06 {
-    pub entry_point: Address,
+    pub entry_points: Vec<Address>,
 }
 
 struct ExtendedUserOperation {
+    entry_point: Address,
     user_op: UserOperation,
     bundler: Address,
     aggregator: Option<Address>,
@@ -39,8 +40,12 @@ impl IndexerLogic for IndexerV06 {
 
     const BEFORE_EXECUTION_SIGNATURE: B256 = IEntrypointV06::BeforeExecution::SIGNATURE_HASH;
 
-    fn entry_point(&self) -> Address {
-        self.entry_point
+    fn entry_points(&self) -> Vec<Address> {
+        self.entry_points.clone()
+    }
+
+    fn matches_entry_point(&self, address: Address) -> bool {
+        self.entry_points.contains(&address)
     }
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool {
@@ -52,8 +57,9 @@ impl IndexerLogic for IndexerV06 {
         &self,
         receipt: &TransactionReceipt,
         bundle_index: usize,
+        entry_point: Address,
         calldata: &Bytes,
-        log_bundle: &[&[Log]],
+        bundle_logs: &[Log],
     ) -> anyhow::Result<Vec<UserOp>> {
         let decoded_calldata = IEntrypointV06Calls::abi_decode(calldata, true)?;
         let user_ops: Vec<ExtendedUserOperation> = match decoded_calldata {
@@ -65,6 +71,7 @@ impl IndexerLogic for IndexerV06 {
                         .userOps
                         .into_iter()
                         .map(move |op| ExtendedUserOperation {
+                            entry_point,
                             user_op: op,
                             bundler: cd.beneficiary,
                             aggregator: Some(agg_ops.aggregator),
@@ -76,6 +83,7 @@ impl IndexerLogic for IndexerV06 {
                 .ops
                 .into_iter()
                 .map(|op| ExtendedUserOperation {
+                    entry_point,
                     user_op: op,
                     bundler: cd.beneficiary,
                     aggregator: None,
@@ -84,16 +92,33 @@ impl IndexerLogic for IndexerV06 {
                 .collect(),
             _ => bail!("can't recognize calldata selector in {}", calldata),
         };
-        if user_ops.len() != log_bundle.len() {
+        let mut user_ops_logs = Vec::new();
+        let mut start = 0;
+        let mut end = 0;
+        for op in &user_ops {
+            while let Some(log) = bundle_logs.get(end) {
+                end += 1;
+                if let Some(Ok(e)) =
+                    self.match_and_parse::<IEntrypointV06::UserOperationEvent>(entry_point, log)
+                {
+                    if e.sender == op.user_op.sender && e.nonce == op.user_op.nonce {
+                        user_ops_logs.push(&bundle_logs[start..end]);
+                        start = end;
+                        break;
+                    }
+                }
+            }
+        }
+        if user_ops.len() != user_ops_logs.len() {
             bail!(
                 "number of user ops in calldata and logs don't match {} != {}",
                 user_ops.len(),
-                log_bundle.len()
+                user_ops_logs.len()
             )
         }
         Ok(user_ops
             .into_iter()
-            .zip(log_bundle.iter())
+            .zip(user_ops_logs)
             .enumerate()
             .filter_map(|(j, (user_op, logs))| {
                 match self.build_user_op_model(
@@ -135,19 +160,28 @@ impl IndexerV06 {
     ) -> anyhow::Result<UserOp> {
         let user_op_event = logs
             .last()
-            .and_then(|log| self.match_and_parse::<IEntrypointV06::UserOperationEvent>(log))
+            .and_then(|log| {
+                self.match_and_parse::<IEntrypointV06::UserOperationEvent>(user_op.entry_point, log)
+            })
             .transpose()?
             .ok_or(anyhow!("last log doesn't match UserOperationEvent"))?;
         let revert_event = logs
             .iter()
-            .find_map(|log| self.match_and_parse::<IEntrypointV06::UserOperationRevertReason>(log))
+            .find_map(|log| {
+                self.match_and_parse::<IEntrypointV06::UserOperationRevertReason>(
+                    user_op.entry_point,
+                    log,
+                )
+            })
             .transpose()?;
 
         let tx_deposits: Vec<Address> = receipt
             .inner
             .logs()
             .iter()
-            .filter_map(|log| self.match_and_parse::<IEntrypointV06::Deposited>(log))
+            .filter_map(|log| {
+                self.match_and_parse::<IEntrypointV06::Deposited>(user_op.entry_point, log)
+            })
             .filter_map(Result::ok)
             .map(|e| e.account)
             .collect();
@@ -156,7 +190,7 @@ impl IndexerV06 {
         let paymaster = extract_address(&user_op.user_op.paymasterAndData);
         let sender = user_op.user_op.sender;
         let (user_logs_start_index, user_logs_count) =
-            extract_user_logs_boundaries(logs, self.entry_point, paymaster);
+            extract_user_logs_boundaries(logs, user_op.entry_point, paymaster);
         Ok(UserOp {
             hash: user_op_event.userOpHash,
             sender,
@@ -172,7 +206,7 @@ impl IndexerV06 {
             signature: user_op.user_op.signature,
             aggregator: user_op.aggregator,
             aggregator_signature: user_op.aggregator_signature,
-            entry_point: self.entry_point,
+            entry_point: user_op.entry_point,
             entry_point_version: EntryPointVersion::V06,
             transaction_hash: receipt.transaction_hash,
             block_number: receipt.block_number.unwrap_or(0),

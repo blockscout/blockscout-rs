@@ -72,7 +72,9 @@ pub trait IndexerLogic {
 
     const BEFORE_EXECUTION_SIGNATURE: B256;
 
-    fn entry_point(&self) -> Address;
+    fn entry_points(&self) -> Vec<Address>;
+
+    fn matches_entry_point(&self, address: Address) -> bool;
 
     fn matches_handler_calldata(calldata: &Bytes) -> bool;
 
@@ -80,21 +82,17 @@ pub trait IndexerLogic {
         &self,
         receipt: &TransactionReceipt,
         bundle_index: usize,
+        entry_point: Address,
         calldata: &Bytes,
-        log_bundle: &[&[Log]],
+        bundle_logs: &[Log],
     ) -> anyhow::Result<Vec<UserOp>>;
-    fn user_operation_event_matcher(&self, log: &Log) -> bool {
-        log.address() == self.entry_point()
-            && log.topic0() == Some(&Self::USER_OPERATION_EVENT_SIGNATURE)
-    }
 
-    fn before_execution_matcher(&self, log: &Log) -> bool {
-        log.address() == self.entry_point()
-            && log.topic0() == Some(&Self::BEFORE_EXECUTION_SIGNATURE)
-    }
-
-    fn match_and_parse<T: SolEvent>(&self, log: &Log) -> Option<sol_types::Result<T>> {
-        if log.address() == self.entry_point() && log.topic0() == Some(&T::SIGNATURE_HASH) {
+    fn match_and_parse<T: SolEvent>(
+        &self,
+        entry_point: Address,
+        log: &Log,
+    ) -> Option<sol_types::Result<T>> {
+        if log.address() == entry_point && log.topic0() == Some(&T::SIGNATURE_HASH) {
             Some(T::decode_log(&log.inner, true).map(|l| l.data))
         } else {
             None
@@ -102,7 +100,7 @@ pub trait IndexerLogic {
     }
     fn base_tx_logs_filter(&self) -> Filter {
         Filter::new()
-            .address(self.entry_point())
+            .address(self.entry_points())
             .event_signature(Self::BEFORE_EXECUTION_SIGNATURE)
     }
 }
@@ -192,23 +190,31 @@ impl<P: Provider, L: IndexerLogic + Sync + Send> Indexer<P, L> {
             } else {
                 rpc_refetch_block_number.saturating_add_signed(past_db_logs_end_block as i64)
             };
-            tracing::info!(from_block, to_block, "fetching missed tx hashes in db");
-            let missed_txs = repository::user_op::stream_unprocessed_logs_tx_hashes(
-                &self.db,
-                self.logic.entry_point(),
-                L::USER_OPERATION_EVENT_SIGNATURE,
-                from_block,
-                to_block,
-            )
-            .await?
-            .map(Job::from);
-
-            stream_jobs.push(Box::pin(missed_txs.do_after(self.tx.send(
-                IndexerStatusMessage::new(
+            let mut missed_txs_streams = Vec::new();
+            for entry_point in self.logic.entry_points() {
+                tracing::info!(
+                    from_block,
+                    to_block,
+                    ?entry_point,
+                    "fetching missed tx hashes in db"
+                );
+                let missed_txs = repository::user_op::stream_unprocessed_logs_tx_hashes(
+                    &self.db,
+                    entry_point,
+                    L::USER_OPERATION_EVENT_SIGNATURE,
+                    from_block,
+                    to_block,
+                )
+                .await?
+                .map(Job::from);
+                missed_txs_streams.push(Box::pin(missed_txs));
+            }
+            stream_jobs.push(Box::pin(stream::select_all(missed_txs_streams).do_after(
+                self.tx.send(IndexerStatusMessage::new(
                     L::VERSION,
                     EntryPointIndexerStatusMessage::PastDbLogsIndexingFinished,
-                ),
-            ))));
+                )),
+            )));
         }
 
         if self.settings.past_rpc_logs_indexer.enabled {
@@ -358,61 +364,67 @@ impl<P: Provider, L: IndexerLogic + Sync + Send> Indexer<P, L> {
 
         // we split by bundles using BeforeExecution event as a beacon, almost all transaction will contain a single bundle only
         // then we split each bundle into logs batches for respective user operations
-        let log_bundles: Vec<Vec<&[Log]>> = receipt
-            .inner
-            .logs()
-            .split(|log| self.logic.before_execution_matcher(log))
-            .skip(1)
-            .map(|logs| {
-                logs.split_inclusive(|log| self.logic.user_operation_event_matcher(log))
-                    .filter(|logs| {
-                        logs.last()
-                            .is_some_and(|log| self.logic.user_operation_event_matcher(log))
-                    })
-                    .collect()
+        let logs = receipt.inner.logs();
+        let vec_bundle_logs: Vec<&[Log]> = logs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, log)| {
+                if self.logic.matches_entry_point(log.address())
+                    && log.topic0() == Some(&L::BEFORE_EXECUTION_SIGNATURE)
+                {
+                    Some(&logs[i + 1..])
+                } else {
+                    None
+                }
             })
             .collect();
-        tracing::info!(bundles_count = log_bundles.len(), "found user op bundles");
+        tracing::info!(
+            bundles_count = vec_bundle_logs.len(),
+            "found user op bundles"
+        );
 
-        let calldatas: Vec<Bytes> =
-            if log_bundles.len() == 1 && tx.to() == Some(self.logic.entry_point()) {
-                vec![tx.input().clone()]
-            } else {
-                tracing::info!(
-                    "tx contains more than one bundle or was sent indirectly, fetching tx trace"
-                );
-                self.client
-                    .common_trace_transaction(tx_hash, trace_client)
-                    .await?
-                    .into_iter()
-                    .filter_map(|t| {
-                        if t.typ == TraceType::Call
-                            && t.to == Some(self.logic.entry_point())
-                            && L::matches_handler_calldata(&t.input)
-                        {
-                            Some(t.input)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            };
+        let calldatas: Vec<(Address, Bytes)> = if vec_bundle_logs.len() == 1
+            && tx.to().is_some_and(|to| self.logic.matches_entry_point(to))
+        {
+            vec![(tx.to().unwrap(), tx.input().clone())]
+        } else {
+            tracing::info!(
+                "tx contains more than one bundle or was sent indirectly, fetching tx trace"
+            );
+            self.client
+                .common_trace_transaction(tx_hash, trace_client)
+                .await?
+                .into_iter()
+                .filter_map(|t| {
+                    if t.typ == TraceType::Call
+                        && t.status
+                        && t.to.is_some_and(|to| self.logic.matches_entry_point(to))
+                        && L::matches_handler_calldata(&t.input)
+                    {
+                        Some((t.to.unwrap(), t.input))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
 
-        if calldatas.len() != log_bundles.len() {
+        if calldatas.len() != vec_bundle_logs.len() {
             bail!(
                 "number of calls to entrypoint and log batches don't match for {}: {} != {}",
                 tx_hash,
                 calldatas.len(),
-                log_bundles.len()
+                vec_bundle_logs.len()
             )
         }
 
         let user_ops: Vec<UserOp> = calldatas
             .iter()
-            .zip(log_bundles.iter())
+            .zip(vec_bundle_logs)
             .enumerate()
-            .map(|(i, (calldata, log_bundle))| {
-                self.logic.parse_user_ops(&receipt, i, calldata, log_bundle)
+            .map(|(i, ((entry_point, calldata), bundle_logs))| {
+                self.logic
+                    .parse_user_ops(&receipt, i, *entry_point, calldata, bundle_logs)
             })
             .filter_map(|b| {
                 // user ops parsing logic won't be retried, since we don't propagate the error here
@@ -422,14 +434,8 @@ impl<P: Provider, L: IndexerLogic + Sync + Send> Indexer<P, L> {
             .flatten()
             .collect();
 
-        let total = log_bundles.iter().flatten().count();
         let parsed = user_ops.len();
-        tracing::info!(
-            total,
-            parsed,
-            missed = total - parsed,
-            "found and parsed user ops",
-        );
+        tracing::info!(parsed, "found and parsed user ops");
         if parsed > 0 {
             repository::user_op::upsert_many(&self.db, user_ops).await?;
         }
@@ -462,37 +468,43 @@ mod tests {
     };
     use alloy::{
         primitives::{address, b256, bytes, U256},
-        providers::{ProviderBuilder, RootProvider},
-        transports::BoxTransport,
+        providers::{mock::Asserter, Provider, ProviderBuilder},
     };
     use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
     use sea_orm::EntityTrait;
+    use std::fs;
 
-    const ETH_RPC_URL: &str = "https://eth.drpc.org";
+    fn load_test_responses(test_name: &str) -> Vec<serde_json::Value> {
+        let path = format!("src/indexer/tests/fixtures/{}.json", test_name);
+        let data = fs::read_to_string(path).expect("Unable to read test fixture file");
+        serde_json::from_str(&data).expect("Unable to parse test fixture JSON")
+    }
 
-    async fn connect_rpc() -> RootProvider<BoxTransport> {
-        ProviderBuilder::new()
-            .on_builtin(ETH_RPC_URL)
-            .await
-            .expect("can't connect")
+    fn mock_rpc_with_responses(test_name: &str) -> impl Provider {
+        let mock = Asserter::new();
+        for response in load_test_responses(test_name) {
+            mock.push_success(&response);
+        }
+        ProviderBuilder::new().on_mocked_client(mock)
     }
 
     #[tokio::test]
     async fn handle_tx_v06_ok() {
         let db = get_shared_db().await;
-        // TODO: use mocked connection, alloy::transports::ipc::MockIpcServer from alloy seems broken at v0.8.3
-        let client = connect_rpc().await;
+        let client = mock_rpc_with_responses("handle_tx_v06_ok");
 
         // just some random tx from mainnet
         let tx_hash = b256!("f9f60f6dc99663c6ce4912ef92fe6a122bb90585e47b5f213efca1705be26d6e");
-        let entry_point = EntrypointsSettings::default().v06_entry_point;
+        let entry_points = EntrypointsSettings::default().v06_entry_point;
 
         let (tx, _) = mpsc::channel(100);
         let indexer = Indexer::new(
             client,
             db.clone(),
             Default::default(),
-            v06::IndexerV06 { entry_point },
+            v06::IndexerV06 {
+                entry_points: entry_points.clone(),
+            },
             tx,
         );
         indexer
@@ -520,7 +532,7 @@ mod tests {
             signature: bytes!("000000000000000000000000000000000000000000000000000000000065793a092c25c7a7c5e4bc46467324e2845caf1ccae767786e07806ca720f8a6b83356bc7d43a63a96b34507cfe7c424db37f351d71851ae9318e8d5c3d9f17c8bdb744c1c"),
             aggregator: None,
             aggregator_signature: None,
-            entry_point,
+            entry_point: entry_points[0],
             entry_point_version: EntryPointVersion::V06,
             transaction_hash: tx_hash,
             block_number: 18774992,
@@ -543,15 +555,15 @@ mod tests {
             timestamp: None,
         })
     }
+
     #[tokio::test]
     async fn handle_tx_v06_with_tracing_ok() {
         let db = get_shared_db().await;
-        // TODO: use mocked connection, alloy::transports::ipc::MockIpcServer from alloy seems broken at v0.8.3
-        let client = connect_rpc().await;
+        let client = mock_rpc_with_responses("handle_tx_v06_with_tracing_ok");
 
         // just some random tx from mainnet
         let tx_hash = b256!("d69a2233e7ff9034d21f588ffde16ef30dee6ddc4814fa4ecd4a1355630b1730");
-        let entry_point = EntrypointsSettings::default().v06_entry_point;
+        let entry_points = EntrypointsSettings::default().v06_entry_point;
         let op_hash = b256!("e5df829d25b3b0a043a658eb460cf74898eb0ad72a526dba0cd509ed2b83f796");
 
         let (tx, _) = mpsc::channel(100);
@@ -559,7 +571,9 @@ mod tests {
             client,
             db.clone(),
             Default::default(),
-            v06::IndexerV06 { entry_point },
+            v06::IndexerV06 {
+                entry_points: entry_points.clone(),
+            },
             tx,
         );
         for trace_client in [TraceClient::Debug, TraceClient::Trace] {
@@ -589,7 +603,7 @@ mod tests {
                 signature: bytes!("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000001700000000000000000000000000000000000000000000000000000000000000013259e664945ba8945c3198dfbfc83dd1c654a7d284dd48b3f4c80544a281938960d7a8386af33457c88801d6e59aa95f374978f0cf400952eea08a15ad68aa7d0000000000000000000000000000000000000000000000000000000000000025f198086b2db17256731bc456673b96bcef23f51d1fbacdd7c4379ef65465572f1d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008a7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a224d624230784b7177593773684c3461574c31714f5f315668794c4773433632764354682d544342464c704d222c226f726967696e223a2268747470733a2f2f6b6579732e636f696e626173652e636f6d222c2263726f73734f726967696e223a66616c73657d00000000000000000000000000000000000000000000"),
                 aggregator: None,
                 aggregator_signature: None,
-                entry_point,
+                entry_point: entry_points[0],
                 entry_point_version: EntryPointVersion::V06,
                 transaction_hash: tx_hash,
                 block_number: 21478047,
@@ -617,19 +631,21 @@ mod tests {
     #[tokio::test]
     async fn handle_tx_v07_ok() {
         let db = get_shared_db().await;
-        // TODO: use mocked connection, alloy::transports::ipc::MockIpcServer from alloy seems broken at v0.8.3
-        let client = connect_rpc().await;
+        let client = mock_rpc_with_responses("handle_tx_v07_ok");
 
         // just some random tx from mainnet
         let tx_hash = b256!("4a6702f8ef5b7754f5b54dfb00ccba181603e3a6fff77c93e7d0d40148f09ad0");
-        let entry_point = EntrypointsSettings::default().v07_entry_point;
+        let entry_points = EntrypointsSettings::default().v07_entry_point;
 
         let (tx, _) = mpsc::channel(100);
         let indexer = Indexer::new(
             client,
             db.clone(),
             Default::default(),
-            v07::IndexerV07 { entry_point },
+            v07::IndexerV07 {
+                v07_entry_points: entry_points.clone(),
+                v08_entry_points: vec![],
+            },
             tx,
         );
         indexer
@@ -657,7 +673,7 @@ mod tests {
             signature: bytes!("f59f5f4d934312578dbd0c7a8a464cd8c73c1cbbb267b1dcae103d0e2d8f3971314b169eac449874652d7f6cb83de63422c762c4dfbca02629f94fc3a478141d1c"),
             aggregator: None,
             aggregator_signature: None,
-            entry_point,
+            entry_point: entry_points[0],
             entry_point_version: EntryPointVersion::V07,
             transaction_hash: tx_hash,
             block_number: 21476573,
@@ -676,6 +692,75 @@ mod tests {
             user_logs_start_index: 458,
             user_logs_count: 11,
             fee: U256::from(1584224373782662u64),
+            consensus: None,
+            timestamp: None,
+        })
+    }
+
+    #[tokio::test]
+    async fn handle_tx_v08_ok() {
+        let db = get_shared_db().await;
+        let client = mock_rpc_with_responses("handle_tx_v08_ok");
+
+        // just some random tx from mainnet
+        let tx_hash = b256!("2774bc3394da9e6950702cdd21f4d1ff35b140d461e468cf855582a0a5ce5d89");
+        let entry_points = EntrypointsSettings::default().v08_entry_point;
+
+        let (tx, _) = mpsc::channel(100);
+        let indexer = Indexer::new(
+            client,
+            db.clone(),
+            Default::default(),
+            v07::IndexerV07 {
+                v07_entry_points: vec![],
+                v08_entry_points: entry_points.clone(),
+            },
+            tx,
+        );
+        indexer
+            .handle_tx(tx_hash, TraceClient::Trace)
+            .await
+            .unwrap();
+
+        let op_hash = b256!("04b8ae1d6ddf21cbcda873a20322d9c55f53e9d3273f36d461b654aeb53d6625");
+        let user_op = repository::user_op::find_user_op_by_op_hash(&db, op_hash)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(user_op, UserOp {
+            hash: op_hash,
+            sender: address!("3014F9C4f55035a62da4b664396206C60dCe20D5"),
+            nonce: B256::ZERO,
+            init_code: Some(bytes!("a19b05ecf2027d3afab83aeae479a018cea5450d5fbfb9cf00000000000000000000000009fd4f6088f2025427ab1e89257a44747081ed590000000000000000000000000000000000000000000000000000000000000000")),
+            call_data: bytes!("b61d27f6000000000000000000000000d52432be369a9ae28dfab1a32124c66a249a3799000000000000000000000000000000000000000000000000000000e8d4a5100000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000"),
+            call_gas_limit: U256::from(56500),
+            verification_gas_limit: U256::from(276637),
+            pre_verification_gas: U256::from(51860),
+            max_fee_per_gas: U256::from(1500000000),
+            max_priority_fee_per_gas: U256::from(1550845482),
+            paymaster_and_data: None,
+            signature: bytes!("dba6faedf44fa7da354590175963f2643e1b54f93f9965d94984dedd72f66644309c85b3d30a1586414e1d7093d891d3a897e51952e6c84f8026c4aa10bc36631c"),
+            aggregator: None,
+            aggregator_signature: None,
+            entry_point: entry_points[0],
+            entry_point_version: EntryPointVersion::V08,
+            transaction_hash: tx_hash,
+            block_number: 7942840,
+            block_hash: b256!("daa2f01f6f8f7fd7d24a28849cfebe102a36dcd32a9fe3083266c12d94f514d2"),
+            bundler: address!("0047e22c52deee45ed3ab87d4e27dad61db81e78"),
+            bundle_index: 0,
+            index: 0,
+            factory: Some(address!("a19b05ecf2027d3afab83aeae479a018cea5450d")),
+            paymaster: None,
+            status: true,
+            revert_reason: None,
+            gas: U256::from(384997),
+            gas_price: U256::from(1527027715),
+            gas_used: U256::from(300439),
+            sponsor_type: SponsorType::WalletDeposit,
+            user_logs_start_index: 26,
+            user_logs_count: 0,
+            fee: U256::from(458778679666885u64),
             consensus: None,
             timestamp: None,
         })

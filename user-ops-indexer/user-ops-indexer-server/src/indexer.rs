@@ -20,7 +20,7 @@ pub async fn run(
 
     let mut status = IndexerStatus::default();
     status.v06.enabled = settings.indexer.entrypoints.v06;
-    status.v07.enabled = settings.indexer.entrypoints.v07;
+    status.v07_v08.enabled = settings.indexer.entrypoints.v07 || settings.indexer.entrypoints.v08;
     let status = Arc::new(RwLock::new(status));
     let status_res = status.clone();
 
@@ -37,7 +37,7 @@ pub async fn run(
             db_connection.clone(),
             settings.indexer.clone(),
             v06::IndexerV06 {
-                entry_point: settings.indexer.entrypoints.v06_entry_point,
+                entry_points: settings.indexer.entrypoints.v06_entry_point.clone(),
             },
             tx.clone(),
         )
@@ -46,18 +46,27 @@ pub async fn run(
         tracing::warn!("indexer for v0.6 is disabled in settings");
     }
 
-    if settings.indexer.entrypoints.v07 {
+    if settings.indexer.entrypoints.v07 || settings.indexer.entrypoints.v08 {
         start_indexer_with_retries(
             db_connection.clone(),
             settings.indexer.clone(),
             v07::IndexerV07 {
-                entry_point: settings.indexer.entrypoints.v07_entry_point,
+                v07_entry_points: if settings.indexer.entrypoints.v07 {
+                    settings.indexer.entrypoints.v07_entry_point.clone()
+                } else {
+                    vec![]
+                },
+                v08_entry_points: if settings.indexer.entrypoints.v08 {
+                    settings.indexer.entrypoints.v08_entry_point.clone()
+                } else {
+                    vec![]
+                },
             },
             tx.clone(),
         )
         .await?;
     } else {
-        tracing::warn!("indexer for v0.7 is disabled in settings");
+        tracing::warn!("indexer for v0.7 and v0.8 is disabled in settings");
     }
 
     Ok(status_res)
@@ -71,12 +80,12 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
 ) -> anyhow::Result<()> {
     tracing::info!(
         version = L::VERSION,
-        entry_point = logic.entry_point().to_string(),
+        entry_points = ?logic.entry_points(),
         "connecting to rpc"
     );
     // If the first connect fails, the function will return an error immediately.
     // All subsequent reconnects are done inside tokio task and will not propagate to above.
-    let mut client = ProviderBuilder::new().on_builtin(&settings.rpc_url).await?;
+    let mut client = ProviderBuilder::new().connect(&settings.rpc_url).await?;
 
     tokio::spawn(async move {
         let delay = settings.restart_delay;
@@ -120,7 +129,7 @@ async fn start_indexer_with_retries<L: IndexerLogic + Sync + Clone + Send + 'sta
 
                 tracing::info!(version = L::VERSION, "re-connecting to rpc");
 
-                client = match ProviderBuilder::new().on_builtin(&settings.rpc_url).await {
+                client = match ProviderBuilder::new().connect(&settings.rpc_url).await {
                     Ok(client) => client,
                     Err(err) => {
                         tracing::error!(

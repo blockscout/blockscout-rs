@@ -9,6 +9,7 @@ pub use entity::sea_orm_active_enums::{EntryPointVersion, SponsorType};
 use entity::user_operations::Model;
 use num_traits::cast::ToPrimitive;
 use sea_orm::ActiveEnum;
+use serde_json::json;
 use std::ops::Mul;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -152,52 +153,48 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
     fn from(v: UserOp) -> Self {
         let raw = match v.entry_point_version {
             EntryPointVersion::V06 => {
-                user_ops_indexer_proto::blockscout::user_ops_indexer::v1::user_op::Raw::RawV06(
-                    user_ops_indexer_proto::blockscout::user_ops_indexer::v1::RawUserOpV06 {
-                        sender: v.sender.to_string(),
-                        nonce: U256::from_be_slice(v.nonce.as_slice()).to_string(),
-                        init_code: v.init_code.map_or("0x".to_string(), |b| b.to_string()),
-                        call_data: v.call_data.to_string(),
-                        call_gas_limit: v.call_gas_limit.to_string(),
-                        verification_gas_limit: v.verification_gas_limit.to_string(),
-                        pre_verification_gas: v.pre_verification_gas.to_string(),
-                        max_fee_per_gas: v.max_fee_per_gas.to_string(),
-                        max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
-                        paymaster_and_data: v
-                            .paymaster_and_data
-                            .map_or("0x".to_string(), |b| b.to_string()),
-                        signature: v.signature.to_string(),
-                    },
-                )
+                json!({
+                    "sender": v.sender.to_string(),
+                    "nonce": U256::from_be_slice(v.nonce.as_slice()).to_string(),
+                    "init_code": v.init_code.map_or("0x".to_string(), |b| b.to_string()),
+                    "call_data": v.call_data.to_string(),
+                    "call_gas_limit": v.call_gas_limit.to_string(),
+                    "verification_gas_limit": v.verification_gas_limit.to_string(),
+                    "pre_verification_gas": v.pre_verification_gas.to_string(),
+                    "max_fee_per_gas": v.max_fee_per_gas.to_string(),
+                    "max_priority_fee_per_gas": v.max_priority_fee_per_gas.to_string(),
+                    "paymaster_and_data": v
+                        .paymaster_and_data
+                        .map_or("0x".to_string(), |b| b.to_string()),
+                    "signature": v.signature.to_string(),
+                })
             }
-            EntryPointVersion::V07 => {
-                user_ops_indexer_proto::blockscout::user_ops_indexer::v1::user_op::Raw::RawV07(
-                    user_ops_indexer_proto::blockscout::user_ops_indexer::v1::RawUserOpV07 {
-                        sender: v.sender.to_string(),
-                        nonce: U256::from_be_slice(v.nonce.as_slice()).to_string(),
-                        init_code: v.init_code.map_or("0x".to_string(), |b| b.to_string()),
-                        call_data: v.call_data.to_string(),
-                        account_gas_limits: B128::from(
-                            v.verification_gas_limit.uint_try_to().unwrap_or(U128::ZERO),
-                        )
+            EntryPointVersion::V07 | EntryPointVersion::V08 => {
+                json!({
+                    "sender": v.sender.to_string(),
+                    "nonce": U256::from_be_slice(v.nonce.as_slice()).to_string(),
+                    "init_code": v.init_code.map_or("0x".to_string(), |b| b.to_string()),
+                    "call_data": v.call_data.to_string(),
+                    "account_gas_limits": B128::from(
+                        v.verification_gas_limit.uint_try_to().unwrap_or(U128::ZERO),
+                    )
+                    .concat_const::<16, 32>(B128::from(
+                        v.call_gas_limit.uint_try_to().unwrap_or(U128::ZERO),
+                    ))
+                    .to_string(),
+                    "pre_verification_gas": v.pre_verification_gas.to_string(),
+                    "gas_fees": B128::from(v.max_fee_per_gas.uint_try_to().unwrap_or(U128::ZERO))
                         .concat_const::<16, 32>(B128::from(
-                            v.call_gas_limit.uint_try_to().unwrap_or(U128::ZERO),
+                            v.max_priority_fee_per_gas
+                                .uint_try_to()
+                                .unwrap_or(U128::ZERO),
                         ))
                         .to_string(),
-                        pre_verification_gas: v.pre_verification_gas.to_string(),
-                        gas_fees: B128::from(v.max_fee_per_gas.uint_try_to().unwrap_or(U128::ZERO))
-                            .concat_const::<16, 32>(B128::from(
-                                v.max_priority_fee_per_gas
-                                    .uint_try_to()
-                                    .unwrap_or(U128::ZERO),
-                            ))
-                            .to_string(),
-                        paymaster_and_data: v
-                            .paymaster_and_data
-                            .map_or("0x".to_string(), |b| b.to_string()),
-                        signature: v.signature.to_string(),
-                    },
-                )
+                    "paymaster_and_data": v
+                        .paymaster_and_data
+                        .map_or("0x".to_string(), |b| b.to_string()),
+                    "signature": v.signature.to_string(),
+                })
             }
         };
 
@@ -214,7 +211,7 @@ impl From<UserOp> for user_ops_indexer_proto::blockscout::user_ops_indexer::v1::
             max_fee_per_gas: v.max_fee_per_gas.to_string(),
             max_priority_fee_per_gas: v.max_priority_fee_per_gas.to_string(),
             signature: v.signature.to_string(),
-            raw: Some(raw),
+            raw: serde_json::from_value(raw).expect("deserialize raw failed"),
             aggregator: v.aggregator.map(|a| a.to_string()),
             aggregator_signature: v.aggregator_signature.map(|b| b.to_string()),
             entry_point: v.entry_point.to_string(),
