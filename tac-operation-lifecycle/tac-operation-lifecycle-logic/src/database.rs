@@ -109,6 +109,41 @@ impl TacDatabase {
         Ok(())
     }
 
+    // Create interval with the specified boundary [from..to]
+    // Update watermark in the database
+    pub async fn generate_pending_interval(&self, from: u64, to: u64) -> anyhow::Result<()> {
+        let interval = interval::ActiveModel {
+            id: ActiveValue::NotSet,
+            start: ActiveValue::Set(from as i64),
+            end: ActiveValue::Set(to as i64),
+            timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
+            status:sea_orm::ActiveValue::Set(EntityStatus::Pending.to_id()),
+            next_retry: ActiveValue::Set(None),
+            retry_count: ActiveValue::Set(0 as i16),
+        };
+
+        let tx = self.db.begin().await?;
+
+        match interval::Entity::insert(interval)
+            .exec(&tx)
+            .await {
+                Ok(_) => {
+                    let _ = self.set_watermark_internal(&tx, to).await?;
+                    
+                    tx.commit().await?; 
+                    tracing::info!( "Pending interval was added and watermark updated to {}", to);
+                },
+
+                Err(e) => {
+                    tx.rollback().await?;
+                    tracing::error!("Failed to add pending interval [{}..{}]: {}", from, to, e);
+                    return Err(e.into());
+                }
+            };
+
+        Ok(())
+    }
+
     // Create intervals with the specified period within the [from..to] boundary
     // Returns the number of created intervals
     // NOTE: the routine doesn't check if intervals will overlapped with existing ones
@@ -122,7 +157,7 @@ impl TacDatabase {
                 //we don't want to save intervals that are out of specifiedboundaries
                 end: ActiveValue::Set(min(timestamp + period_secs, to) as i64),
                 timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
-                status:sea_orm::ActiveValue::Set(0 as i16),
+                status:sea_orm::ActiveValue::Set(EntityStatus::Pending.to_id()),
                 next_retry: ActiveValue::Set(None),
                 retry_count: ActiveValue::Set(0 as i16),
             })
@@ -286,7 +321,34 @@ impl TacDatabase {
     }
 
     // Extract up to `num` intervals in the pending state and switch them status to `processing`
-    pub async fn pull_pending_intervals(&self, num: usize, order: OrderDirection) -> anyhow::Result<Vec<interval::Model>> {
+    pub async fn pull_pending_intervals(
+        &self,
+        num: usize,
+        order: OrderDirection,
+        from: Option<u64>,
+        to: Option<u64>
+    ) -> anyhow::Result<Vec<interval::Model>> {
+
+        // prepare statement before starting transaction
+        let mut conditions = vec![format!("status = {}", EntityStatus::Pending.to_id())];
+        if let Some(start) = from {
+            conditions.push(format!("start >= {}", start));
+        }
+        if let Some(end) = to {
+            conditions.push(format!(r#""end" < {}"#, end));
+        }
+        let sql = format!(r#" SELECT id, start, "end", timestamp, status, next_retry, retry_count 
+                                      FROM interval 
+                                      WHERE {} 
+                                      ORDER BY start {} 
+                                      LIMIT {} 
+                                      FOR UPDATE SKIP LOCKED "#, 
+            conditions.join(" AND "),
+            order.sql_order_string(),
+            num
+        );
+
+
         // Start transaction
         let txn = match self.db.begin().await {
             Ok(txn) => txn,
@@ -298,11 +360,7 @@ impl TacDatabase {
 
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            &format!(r#" SELECT id, start, "end", timestamp, status, next_retry, retry_count FROM interval WHERE status = {} ORDER BY start {} LIMIT {} FOR UPDATE SKIP LOCKED "#, 
-                EntityStatus::Pending.to_id(),
-                order.sql_order_string(),
-                num
-            ),
+            sql,
             vec![]
         );
 

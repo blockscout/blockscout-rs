@@ -16,7 +16,7 @@ async fn main() -> Result<(), anyhow::Error> {
     )
     .await?;
     
-    let indexer = Indexer::new(settings.clone().indexer.unwrap(), Arc::new(db_connection)).await?;
+    let mut indexer = Indexer::new(settings.clone().indexer.unwrap(), Arc::new(db_connection)).await?;
 
     tokio::spawn(async move {
         indexer.start().await.unwrap();
