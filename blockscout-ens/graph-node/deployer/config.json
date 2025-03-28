@@ -89,6 +89,11 @@
         "subgraph_path": "../subgraphs/story-subgraph",
         "subgraph_name": "story-subgraph",
         "network": "story-mainnet"
+    },
+    "gravity": {
+      "subgraph_path": "../subgraphs/gravity-subgraph",
+      "subgraph_name": "gravity-subgraph",
+      "network": "gravity-mainnet"
     }
   }
 }
