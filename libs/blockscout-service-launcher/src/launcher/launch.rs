@@ -146,7 +146,10 @@ where
                 .wrap(metrics.clone())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
-                .configure(configure_router(&http, base_path.clone()))
+                .configure(configure_router(
+                    &http,
+                    base_path.as_ref().map(|p| p.0.clone()),
+                ))
         })
         .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)
@@ -159,7 +162,10 @@ where
                 .wrap(TracingLogger::<CompactRootSpanBuilder>::new())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
-                .configure(configure_router(&http, base_path.clone()))
+                .configure(configure_router(
+                    &http,
+                    base_path.as_ref().map(|p| p.0.clone()),
+                ))
         })
         .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)
