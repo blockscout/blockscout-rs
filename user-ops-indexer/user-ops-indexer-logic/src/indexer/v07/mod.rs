@@ -10,7 +10,7 @@ use crate::{
     types::user_op::UserOp,
 };
 use alloy::{
-    primitives::{Address, BlockHash, Bytes, B256, U256},
+    primitives::{address, Address, BlockHash, Bytes, B256, U256},
     rpc::types::{Log, TransactionReceipt},
     sol,
     sol_types::{SolCall, SolEvent, SolInterface},
@@ -210,12 +210,9 @@ impl IndexerV07 {
         let (max_fee_per_gas, max_priority_fee_per_gas) =
             unpack_uints(&user_op.user_op.gasFees[..]);
 
-        let factory = if self.v08_entry_points.contains(&user_op.entry_point)
-            && user_op.user_op.initCode.starts_with(&[0x77, 0x02])
-        {
-            None
-        } else {
-            extract_address(&user_op.user_op.initCode)
+        let factory = match extract_address(&user_op.user_op.initCode) {
+            Some(f) if f == address!("7702000000000000000000000000000000000000") => None,
+            res => res,
         };
         let paymaster = extract_address(&user_op.user_op.paymasterAndData);
         let sender = user_op.user_op.sender;
