@@ -321,6 +321,7 @@ impl TacDatabase {
     }
 
     // Extract up to `num` intervals in the pending state and switch them status to `processing`
+    // Available time boundaries may be specifies via `from` and `to` parameters
     pub async fn pull_pending_intervals(
         &self,
         num: usize,
@@ -328,8 +329,6 @@ impl TacDatabase {
         from: Option<u64>,
         to: Option<u64>
     ) -> anyhow::Result<Vec<interval::Model>> {
-
-        // prepare statement before starting transaction
         let mut conditions = vec![format!("status = {}", EntityStatus::Pending.to_id())];
         if let Some(start) = from {
             conditions.push(format!("start >= {}", start));
@@ -337,7 +336,7 @@ impl TacDatabase {
         if let Some(end) = to {
             conditions.push(format!(r#""end" < {}"#, end));
         }
-        let sql = format!(r#" SELECT id, start, "end", timestamp, status, next_retry, retry_count 
+        let sql = format!(r#" SELECT *
                                       FROM interval 
                                       WHERE {} 
                                       ORDER BY start {} 
@@ -348,7 +347,25 @@ impl TacDatabase {
             num
         );
 
+        self.pull_intervals_with_sql(&sql).await
+    }
 
+    pub async fn pull_failed_intervals(&self, num: usize) -> anyhow::Result<Vec<interval::Model>> {
+        let sql = format!(r#" SELECT *
+                                      FROM interval 
+                                      WHERE status = {} AND next_retry IS NOT NULL AND next_retry < {} 
+                                      ORDER BY next_retry ASC 
+                                      LIMIT {} 
+                                      FOR UPDATE SKIP LOCKED "#,
+            EntityStatus::Pending.to_id(),
+            chrono::Utc::now().timestamp(),
+            num
+        );
+
+        self.pull_intervals_with_sql(&sql).await
+    }
+
+    async fn pull_intervals_with_sql(&self, sql: &String) -> anyhow::Result<Vec<interval::Model>> {
         // Start transaction
         let txn = match self.db.begin().await {
             Ok(txn) => txn,
@@ -414,6 +431,44 @@ impl TacDatabase {
 
     // Extract up to `num` operations in the pending state and switch them status to `processing`
     pub async fn pull_pending_operations(&self, num: usize, order: OrderDirection) -> anyhow::Result<Vec<operation::Model>> {
+        let sql = format!(r#" SELECT *
+                                      FROM operation
+                                      WHERE status = {}
+                                      ORDER BY timestamp {}
+                                      LIMIT {}
+                                      FOR UPDATE SKIP LOCKED"#,
+            EntityStatus::Pending.to_id(),
+            order.sql_order_string(),
+            num
+        );
+
+        self.pull_pending_operations_with_sql(&sql).await
+    }
+
+    pub async fn pull_failed_operations(&self, num: usize, order: OrderDirection) -> anyhow::Result<Vec<operation::Model>> {
+        let sql = format!(r#" SELECT * 
+                                      FROM operation 
+                                      WHERE status = {} AND next_retry IS NOT NULL AND next_retry < {}
+                                      ORDER BY timestamp {} 
+                                      LIMIT {} 
+                                      FOR UPDATE SKIP LOCKED"#,
+            EntityStatus::Pending.to_id(),
+            chrono::Utc::now().timestamp(),
+            order.sql_order_string(),
+            num
+        );
+
+        self.pull_pending_operations_with_sql(&sql).await
+    }
+
+    async fn pull_pending_operations_with_sql(&self, sql: &String) -> anyhow::Result<Vec<operation::Model>> {
+        // Find and lock pending operations
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            sql,
+            vec![]
+        );
+
         // Start transaction
         let txn = match self.db.begin().await {
             Ok(txn) => txn,
@@ -423,16 +478,6 @@ impl TacDatabase {
             }
         };
 
-        // Find and lock pending operations
-        let stmt = Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            format!(r#"SELECT id, operation_type,timestamp, next_retry,status, retry_count FROM operation WHERE status = {} ORDER BY timestamp {} LIMIT {} FOR UPDATE SKIP LOCKED"#,
-                EntityStatus::Pending.to_id(),
-                order.sql_order_string(),
-                num
-            ),
-            vec![]
-        );
         let pending_operations = match operation::Entity::find()
             .from_raw_sql(stmt)
             .all(&txn)
