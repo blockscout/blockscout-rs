@@ -4,7 +4,7 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::Deserialize;
-use tac_operation_lifecycle_logic::settings::IndexerSettings;
+use tac_operation_lifecycle_logic::{client::settings::RpcSettings, settings::IndexerSettings};
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
@@ -20,6 +20,7 @@ pub struct Settings {
     pub database: DatabaseSettings,
 
     pub indexer: Option<IndexerSettings>,
+    pub rpc: RpcSettings
     }
 
 impl ConfigSettings for Settings {
@@ -44,6 +45,7 @@ impl Settings {
                 connect_options: Default::default(),
             },
             indexer: None,
+            rpc: RpcSettings::default(),
         }
     }
 }

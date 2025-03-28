@@ -38,13 +38,17 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time;
     use futures::stream::select_all;
     use rand::Rng;
 
-    use tac_operation_lifecycle_logic::{settings::IndexerSettings, Indexer, IndexerJob, OrderDirection};
+    use tac_operation_lifecycle_logic::client::Client;
+    use tac_operation_lifecycle_logic::{settings::IndexerSettings, Indexer, IndexerJob};
+    use tac_operation_lifecycle_logic::database::OrderDirection;
     use tac_operation_lifecycle_entity::interval;
     use migration::sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
+    use tokio::sync::Mutex;
     use super::*;
     
     #[tokio::test]
@@ -114,8 +118,8 @@ mod tests {
         indexer.generate_historical_intervals(current_epoch).await.unwrap();
 
         // Create prioritized streams like in the actual implementation
-        let high_priority = indexer.interval_stream(OrderDirection::Descending);
-        let low_priority = indexer.interval_stream(OrderDirection::Ascending);
+        let high_priority = indexer.interval_stream(OrderDirection::LatestFirst, None, None);
+        let low_priority = indexer.interval_stream(OrderDirection::EarliestFirst, None, None);
         let mut combined_stream = select_with_strategy(high_priority, low_priority, prio_left);
         
         // Collect jobs from the prioritized stream
@@ -172,7 +176,7 @@ mod tests {
                                 all_jobs_received = true;
                             }
                         },
-                        IndexerJob::Operation(_) => {
+                        IndexerJob::Operation(_) | IndexerJob::Realtime => {
                             // Skip operation jobs in this test as we're only testing intervals
                             continue;
                         }
@@ -206,7 +210,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_operation_lifecycle_indexing() {
-        use std::time::{SystemTime, UNIX_EPOCH};
         use wiremock::{Mock, ResponseTemplate, MockServer};
         use wiremock::matchers::{method, path};
         use serde_json::json;
@@ -284,16 +287,12 @@ mod tests {
         let jobs_number = 3;
         let current_epoch = start_timestamp + catchup_interval.as_secs() * jobs_number as u64;
 
+        let client = Arc::new(Mutex::new(Client::new(RpcSettings::default())));
         let indexer_settings = IndexerSettings {
             concurrency: 1,
             catchup_interval,
             start_timestamp,
-            client: RpcSettings {
-                url: mock_server.uri(),
-                auth_token: None,
-                max_request_size: 100 * 1024 * 1024,
-                max_response_size: 100 * 1024 * 1024,
-            },
+            
             ..Default::default()
         };
 
@@ -304,7 +303,7 @@ mod tests {
         assert_eq!(intervals_number, jobs_number as usize);
 
         // Get the stream of jobs
-        let  interval_stream = indexer.interval_stream(OrderDirection::Ascending);
+        let  interval_stream = indexer.interval_stream(OrderDirection::EarliestFirst, None, None);
 
         let  operations_stream = indexer.operations_stream();
 
@@ -325,7 +324,7 @@ mod tests {
                         IndexerJob::Interval(interval_job) => {
                             // Process the interval job
                             tracing::warn!("Processing interval job: {:?}", interval_job);
-                            if let Err(e) = indexer.fetch_operations(&interval_job).await {
+                            if let Err(e) = indexer.fetch_operations(&interval_job, client.clone()).await {
                                 panic!("Failed to fetch operations: {}", e);
                             }
                             
@@ -346,7 +345,7 @@ mod tests {
                         },
                         IndexerJob::Operation(operation_job) => {
                             // Process the operation job
-                            indexer.process_operation_with_retries([&operation_job].to_vec()).await;
+                            indexer.process_operation_with_retries(vec![&operation_job], client.clone()).await;
                             
                             // Verify operation ID matches our mock
                             assert_eq!(
@@ -356,6 +355,10 @@ mod tests {
                             );
                             operation_id_fetched = true;
                             stage_history_fetched = true;
+                        }
+                        IndexerJob::Realtime => {
+                            // Skip realtime jobs in this test as we're only testing operations
+                            continue;
                         }
                     }
 
