@@ -322,7 +322,7 @@ impl TacDatabase {
 
     // Extract up to `num` intervals in the pending state and switch them status to `processing`
     // Available time boundaries may be specifies via `from` and `to` parameters
-    pub async fn pull_pending_intervals(
+    pub async fn query_pending_intervals(
         &self,
         num: usize,
         order: OrderDirection,
@@ -347,10 +347,10 @@ impl TacDatabase {
             num
         );
 
-        self.pull_intervals_with_sql(&sql).await
+        self.query_intervals(&sql).await
     }
 
-    pub async fn pull_failed_intervals(&self, num: usize) -> anyhow::Result<Vec<interval::Model>> {
+    pub async fn select_failed_intervals(&self, num: usize) -> anyhow::Result<Vec<interval::Model>> {
         let sql = format!(r#" SELECT *
                                       FROM interval 
                                       WHERE status = {} AND next_retry IS NOT NULL AND next_retry < {} 
@@ -362,10 +362,10 @@ impl TacDatabase {
             num
         );
 
-        self.pull_intervals_with_sql(&sql).await
+        self.query_intervals(&sql).await
     }
 
-    async fn pull_intervals_with_sql(&self, sql: &String) -> anyhow::Result<Vec<interval::Model>> {
+    async fn query_intervals(&self, sql: &String) -> anyhow::Result<Vec<interval::Model>> {
         // Start transaction
         let txn = match self.db.begin().await {
             Ok(txn) => txn,
@@ -412,7 +412,7 @@ impl TacDatabase {
                     // Commit the transaction before proceeding
                     //let start = Instant::now();
                     if let Err(e) = txn.commit().await {
-                        tracing::error!("Failed to pull intervals: {}", e);
+                        tracing::error!("Failed to select intervals: {}", e);
                         
                         return Err(e.into());
                     }
@@ -421,7 +421,7 @@ impl TacDatabase {
                     Ok(updated_list)
                 }
                 Err(e) => {
-                    tracing::error!("Failed to pull intervals: {}", e);
+                    tracing::error!("Failed to select intervals: {}", e);
                     let _ = txn.rollback().await;
                     
                     Err(e.into())
@@ -430,7 +430,7 @@ impl TacDatabase {
     }
 
     // Extract up to `num` operations in the pending state and switch them status to `processing`
-    pub async fn pull_pending_operations(&self, num: usize, order: OrderDirection) -> anyhow::Result<Vec<operation::Model>> {
+    pub async fn query_pending_operations(&self, num: usize, order: OrderDirection) -> anyhow::Result<Vec<operation::Model>> {
         let sql = format!(r#" SELECT *
                                       FROM operation
                                       WHERE status = {}
@@ -442,10 +442,10 @@ impl TacDatabase {
             num
         );
 
-        self.pull_pending_operations_with_sql(&sql).await
+        self.query_operations(&sql).await
     }
 
-    pub async fn pull_failed_operations(&self, num: usize, order: OrderDirection) -> anyhow::Result<Vec<operation::Model>> {
+    pub async fn query_failed_operations(&self, num: usize, order: OrderDirection) -> anyhow::Result<Vec<operation::Model>> {
         let sql = format!(r#" SELECT * 
                                       FROM operation 
                                       WHERE status = {} AND next_retry IS NOT NULL AND next_retry < {}
@@ -458,10 +458,10 @@ impl TacDatabase {
             num
         );
 
-        self.pull_pending_operations_with_sql(&sql).await
+        self.query_operations(&sql).await
     }
 
-    async fn pull_pending_operations_with_sql(&self, sql: &String) -> anyhow::Result<Vec<operation::Model>> {
+    async fn query_operations(&self, sql: &String) -> anyhow::Result<Vec<operation::Model>> {
         // Find and lock pending operations
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
@@ -509,7 +509,7 @@ impl TacDatabase {
                     // Commit the transaction before proceeding
                     //let start = Instant::now();
                     if let Err(e) = txn.commit().await {
-                        tracing::error!("Failed to pull operations: {}", e);
+                        tracing::error!("Failed to select operations: {}", e);
                         
                         return Err(e.into());
                     }
@@ -518,7 +518,7 @@ impl TacDatabase {
                     Ok(updated_list)
                 }
                 Err(e) => {
-                    tracing::error!("Failed to pull operations: {}", e);
+                    tracing::error!("Failed to select operations: {}", e);
                     let _ = txn.rollback().await;
                     
                     Err(e.into())

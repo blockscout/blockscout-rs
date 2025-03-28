@@ -68,6 +68,18 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_operation_status_next_retry_timestamp")
+                    .table(Operation::Table)
+                    .col(Operation::Status)
+                    .col(Operation::NextRetry)
+                    .col(Operation::Timestamp)
+                    .to_owned(),
+            )
+            .await?;
+
             manager
             .create_table(
                 Table::create()
@@ -107,6 +119,17 @@ impl MigrationTrait for Migration {
                     .name("idx_interval_id")
                     .table(Interval::Table)
                     .col(Interval::Id)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_interval_id_status")
+                    .table(Interval::Table)
+                    .col(Interval::Id)
+                    .col(Interval::Status)
                     .to_owned(),
             )
             .await?;

@@ -18,6 +18,7 @@ use futures::{
 };
 use settings::IndexerSettings;
 use chrono;
+use tokio::sync::Mutex;
 use tracing::instrument;
 
 #[derive(Debug, Clone)]
@@ -86,7 +87,6 @@ impl BlockchainType {
 }
 
 pub struct Indexer {
-    client: Client,
     settings: IndexerSettings,
     watermark: AtomicU64,
     start_timestamp: u64,
@@ -106,7 +106,6 @@ impl Indexer {
                 max(row.timestamp as u64, settings.start_timestamp as u64)
             });
         Ok(Self {
-            client: Client::new(settings.client.clone()),
             settings,
             watermark: AtomicU64::new(watermark),
             start_timestamp: 0,
@@ -164,14 +163,14 @@ impl Indexer {
     }
 
     pub fn interval_stream(&self, direction: OrderDirection, from: Option<u64>, to: Option<u64>) -> BoxStream<'_, IndexerJob> {
-        const INTERVALS_PULL_SIZE: usize = 1;
+        const INTERVALS_QUERY_RESULT_SIZE: usize = 1;
         const INTERVALS_LOOP_DELAY_INTERVAL_MS: u64 = 100;
 
         Box::pin(async_stream::stream! {
             loop {
-                match self.database.pull_pending_intervals(INTERVALS_PULL_SIZE, direction, from, to).await {
-                    Ok(pulled) => {
-                        for interval in pulled {
+                match self.database.query_pending_intervals(INTERVALS_QUERY_RESULT_SIZE, direction, from, to).await {
+                    Ok(selected) => {
+                        for interval in selected {
                             // Yield the job
                             yield IndexerJob::Interval(Job {
                                 interval: interval.clone(),
@@ -179,7 +178,7 @@ impl Indexer {
                         }
                     },
                     Err(e) => {
-                        tracing::error!("[Thread {:?}] Unable to pull intervals from the database: {}", thread::current().id(), e);
+                        tracing::error!("[Thread {:?}] Unable to select intervals from the database: {}", thread::current().id(), e);
                     },
                 }
 
@@ -190,13 +189,13 @@ impl Indexer {
     }
 
     pub fn operations_stream(&self) -> BoxStream<'_, IndexerJob> {
-        const OPERATIONS_PULL_SIZE: usize = 1;
+        const OPERATIONS_QUERY_RESULT_SIZE: usize = 1;
         const OPERATIONS_LOOP_DELAY_INTERVAL_MS: u64 = 200;
         Box::pin(async_stream::stream! {
             loop {
-                match self.database.pull_pending_operations(OPERATIONS_PULL_SIZE, OrderDirection::EarliestFirst).await {
-                    Ok(pulled) => {
-                        for operation in pulled {
+                match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst).await {
+                    Ok(selected) => {
+                        for operation in selected {
                             // Yield the job
                             yield IndexerJob::Operation(OperationJob {
                                 operation: operation,
@@ -207,7 +206,7 @@ impl Indexer {
                         tokio::time::sleep(Duration::from_millis(100)).await;
                     },
                     Err(e) => {
-                        tracing::error!("Unable to pull operations from the database: {}", e);
+                        tracing::error!("Unable to select operations from the database: {}", e);
                     },
                 }
 
@@ -218,15 +217,15 @@ impl Indexer {
     }
 
     pub fn retry_intervals_stream(&self) -> BoxStream<'_, IndexerJob> {
-        const INTERVALS_PULL_SIZE: usize = 1;
+        const INTERVALS_QUERY_RESULT_SIZE: usize = 1;
         const INTERVALS_LOOP_DELAY_INTERVAL_MS: u64 = 2000;
 
         Box::pin(async_stream::stream! {
             loop {
-                match self.database.pull_failed_intervals(INTERVALS_PULL_SIZE).await {
-                    Ok(pulled) => {
-                        tracing::error!("Failed intervals found: {}", pulled.len());
-                        for interval in pulled {
+                match self.database.select_failed_intervals(INTERVALS_QUERY_RESULT_SIZE).await {
+                    Ok(selected) => {
+                        tracing::debug!("Failed intervals found: {}", selected.len());
+                        for interval in selected {
                             // Yield the job
                             yield IndexerJob::Interval(Job {
                                 interval: interval.clone(),
@@ -234,7 +233,7 @@ impl Indexer {
                         }
                     },
                     Err(e) => {
-                        tracing::error!("[Thread {:?}] Unable to pull failed intervals from the database: {}", thread::current().id(), e);
+                        tracing::error!("[Thread {:?}] Unable to select failed intervals from the database: {}", thread::current().id(), e);
                     },
                 }
 
@@ -245,14 +244,14 @@ impl Indexer {
     }
 
     pub fn retry_operations_stream(&self) -> BoxStream<'_, IndexerJob> {
-        const OPERATIONS_PULL_SIZE: usize = 1;
+        const OPERATIONS_QUERY_RESULT_SIZE: usize = 1;
         const OPERATIONS_LOOP_DELAY_INTERVAL_MS: u64 = 2000;
         Box::pin(async_stream::stream! {
             loop {
-                match self.database.pull_failed_operations(OPERATIONS_PULL_SIZE, OrderDirection::EarliestFirst).await {
-                    Ok(pulled) => {
-                        tracing::error!("Failed operations found: {}", pulled.len());
-                        for operation in pulled {
+                match self.database.query_failed_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst).await {
+                    Ok(selected) => {
+                        tracing::debug!("Failed operations found: {}", selected.len());
+                        for operation in selected {
                             // Yield the job
                             yield IndexerJob::Operation(OperationJob {
                                 operation: operation,
@@ -263,7 +262,7 @@ impl Indexer {
                         tokio::time::sleep(Duration::from_millis(100)).await;
                     },
                     Err(e) => {
-                        tracing::error!("Unable to pull failed operations from the database: {}", e);
+                        tracing::error!("Unable to select failed operations from the database: {}", e);
                     },
                 }
 
@@ -273,8 +272,8 @@ impl Indexer {
         })
     }
 
-    pub async fn process_interval_with_retries(&self, job: &Job) -> () {
-        match self.fetch_operations(&job).await {
+    pub async fn process_interval_with_retries(&self, job: &Job, client: Arc<Mutex<Client>>) -> () {
+        match self.fetch_operations(&job, client.clone()).await {
             Ok(num) => {
                 if num > 0 {
                     tracing::info!("Successfully fetched {} operations for interval {}", num, job.interval.id);
@@ -294,11 +293,12 @@ impl Indexer {
         }
     }
 
-    pub async fn fetch_operations(&self, job: &Job) -> Result<usize, Error> {
+    pub async fn fetch_operations(&self, job: &Job, client: Arc<Mutex<Client>>) -> Result<usize, Error> {
+        let mut client = client.lock().await;
         let thread_id = thread::current().id();
         tracing::debug!("[Thread {:?}] Processing interval job: {:?}", thread_id, job);
 
-        let operations = self.client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
+        let operations = client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
         let ops_num = operations.len();
         
         if ops_num > 0 {
@@ -322,10 +322,12 @@ impl Indexer {
         Ok(ops_num)
     }
 
-    pub async fn process_operation_with_retries(&self, jobs: Vec<&OperationJob>) -> () {
+    pub async fn process_operation_with_retries(&self, jobs: Vec<&OperationJob>, client: Arc<Mutex<Client>>) -> () {
+        let mut client = client.lock().await;
         let op_ids: Vec<&str> = jobs.iter().map(|j| j.operation.id.as_str()).collect();
 
-        match self.client.get_operations_stages(op_ids.clone()).await {
+        
+        match client.get_operations_stages(op_ids.clone()).await {
             Ok(operations_map) => {
                 let mut timestamp_acc = 0;
                 let mut processed_operations = 0;
@@ -347,8 +349,6 @@ impl Indexer {
                             tracing::error!("Stage profiling response contains unknown operation (id = {}). Skipping...", op_id);
                         }
                     }
-                    
-                    
                 }
 
                 let avg_timestamp = timestamp_acc / processed_operations;
@@ -382,7 +382,7 @@ impl Indexer {
     fn prio_left(_: &mut ()) -> PollNext { PollNext::Left }
 
     #[instrument(name = "indexer", skip_all, level = "info")]
-    pub async fn start(&mut self) -> anyhow::Result<()> {
+    pub async fn start(&mut self, client: Arc<Mutex<Client>>) -> anyhow::Result<()> {
         tracing::warn!("Initializing TAC indexer");
 
         self.ensure_stages_types_exist().await?;
@@ -434,11 +434,11 @@ impl Indexer {
                 },
 
                 IndexerJob::Interval(job) => {
-                    self.process_interval_with_retries(&job).await;
+                    self.process_interval_with_retries(&job, client.clone()).await;
                 },
 
                 IndexerJob::Operation(job) => {
-                    self.process_operation_with_retries([&job].to_vec()).await;
+                    self.process_operation_with_retries([&job].to_vec(), client.clone()).await;
                 }
             }
         }

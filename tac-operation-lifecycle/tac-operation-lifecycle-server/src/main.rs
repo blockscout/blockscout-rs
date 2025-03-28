@@ -5,6 +5,9 @@ use migration::Migrator;
 use tac_operation_lifecycle_server::{Settings, run};
 use tac_operation_lifecycle_logic::Indexer;
 use blockscout_service_launcher::database;
+use tac_operation_lifecycle_logic::client::Client;
+use tokio::sync::Mutex;
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
 
@@ -15,11 +18,14 @@ async fn main() -> Result<(), anyhow::Error> {
         &settings.database,
     )
     .await?;
+
+
+    let client = Arc::new(Mutex::new(Client::new(settings.rpc.clone())));
     
     let mut indexer = Indexer::new(settings.clone().indexer.unwrap(), Arc::new(db_connection)).await?;
 
     tokio::spawn(async move {
-        indexer.start().await.unwrap();
+        indexer.start(client).await.unwrap();
     });
     run(settings).await
 }

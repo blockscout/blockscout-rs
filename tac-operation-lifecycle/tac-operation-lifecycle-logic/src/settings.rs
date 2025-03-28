@@ -1,21 +1,7 @@
 use std::time;
 
-// use crate::{
-//     celestia::settings::IndexerSettings as CelestiaSettings,
-//     eigenda::settings::IndexerSettings as EigendaSettings,
-// };
 use serde::Deserialize;
 use serde_with::serde_as;
-
-use crate::client::settings::RpcSettings;
-
-// #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
-// #[serde(tag = "type")]
-// pub enum DASettings {
-//     Celestia(CelestiaSettings),
-//     EigenDA(EigendaSettings),
-// }
-
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -35,7 +21,6 @@ pub struct IndexerSettings {
     pub catchup_interval: time::Duration,
     #[serde(default = "default_start_timestamp")]
     pub start_timestamp: u64,
-    pub client: RpcSettings,
 }
 
 fn default_start_timestamp() -> u64 {
@@ -61,8 +46,6 @@ fn default_catchup_interval() -> time::Duration {
 impl Default for IndexerSettings {
     fn default() -> Self {
         Self {
-            client: RpcSettings::default(),
-            // da: DASettings::Celestia(CelestiaSettings::default()),
             concurrency: 2,
             restart_delay: default_restart_delay(),
             polling_interval: default_polling_interval(),

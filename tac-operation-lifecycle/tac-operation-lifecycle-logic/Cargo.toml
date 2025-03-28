@@ -39,6 +39,7 @@ tokio = "1.22"
 chrono = "0.4.39"
 #tonic = { version = "0.8", features = ["tls-roots"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"]}
+tower = { version = "0.5.2", features = ["limit"] }
 
 [dev-dependencies]
 blockscout-service-launcher = { version = "0.17.0", features = [ 
