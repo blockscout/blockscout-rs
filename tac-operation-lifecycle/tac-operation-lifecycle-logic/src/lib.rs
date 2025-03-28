@@ -13,7 +13,7 @@ pub mod settings;
 pub mod database;
 
 use futures::{
-    stream::{select_with_strategy, BoxStream, PollNext},
+    stream::{select, select_with_strategy, BoxStream, PollNext},
     StreamExt,
 };
 use settings::IndexerSettings;
@@ -116,21 +116,6 @@ impl Indexer {
 }
 
 impl Indexer {
-    // pub async fn find_inconsistent_intervals(&self) -> anyhow::Result<()> {
-    //     let intervals = interval::Entity::find()
-    //         .filter(
-    //             interval::Column::Start
-    //                 .gt(self.watermark.load(std::sync::atomic::Ordering::Acquire) as i64),
-    //         )
-    //         .all(self.db.as_ref())
-    //         .await?;
-
-    //     for interval in intervals {
-    //         tracing::error!("Interval {} is inconsistent", interval.id);
-    //     }
-    //     Ok(())
-    // }
-
     // Generate intervals between current epoch and watermark and save them to the db
     // Returns number of the generated intervals
     #[instrument(name = "generate_historical_intervals", skip_all, level = "info")]
@@ -140,20 +125,6 @@ impl Indexer {
         let global_start = self.settings.start_timestamp;
         
         self.database.generate_pending_intervals(max(watermark, global_start), now, catchup_period).await
-    }
-
-    pub async fn generate_realtime_intervals(&self) {
-        let mut interval = tokio::time::interval(self.settings.polling_interval);
-        
-        loop {
-            interval.tick().await;
-
-            let wm = self.database.get_watermark().await.unwrap();
-            let now = chrono::Utc::now().timestamp() as u64;
-            if let Err(e) = self.database.generate_pending_interval(wm, now).await {
-                tracing::error!("Failed to generate real-time interval: {}", e);
-            }
-        }
     }
 
     pub async fn ensure_stages_types_exist(&self) -> Result<(), sea_orm::DbErr> {
@@ -237,6 +208,62 @@ impl Indexer {
                     },
                     Err(e) => {
                         tracing::error!("Unable to pull operations from the database: {}", e);
+                    },
+                }
+
+                // Sleep a bit before next iteration to prevent tight loop
+                tokio::time::sleep(Duration::from_millis(OPERATIONS_LOOP_DELAY_INTERVAL_MS)).await;
+            }
+        })
+    }
+
+    pub fn retry_intervals_stream(&self) -> BoxStream<'_, IndexerJob> {
+        const INTERVALS_PULL_SIZE: usize = 1;
+        const INTERVALS_LOOP_DELAY_INTERVAL_MS: u64 = 2000;
+
+        Box::pin(async_stream::stream! {
+            loop {
+                match self.database.pull_failed_intervals(INTERVALS_PULL_SIZE).await {
+                    Ok(pulled) => {
+                        tracing::error!("Failed intervals found: {}", pulled.len());
+                        for interval in pulled {
+                            // Yield the job
+                            yield IndexerJob::Interval(Job {
+                                interval: interval.clone(),
+                            });
+                        }
+                    },
+                    Err(e) => {
+                        tracing::error!("[Thread {:?}] Unable to pull failed intervals from the database: {}", thread::current().id(), e);
+                    },
+                }
+
+                // Sleep a bit before next iteration to prevent tight loop
+                tokio::time::sleep(Duration::from_millis(INTERVALS_LOOP_DELAY_INTERVAL_MS)).await;
+            }
+        })
+    }
+
+    pub fn retry_operations_stream(&self) -> BoxStream<'_, IndexerJob> {
+        const OPERATIONS_PULL_SIZE: usize = 1;
+        const OPERATIONS_LOOP_DELAY_INTERVAL_MS: u64 = 2000;
+        Box::pin(async_stream::stream! {
+            loop {
+                match self.database.pull_failed_operations(OPERATIONS_PULL_SIZE, OrderDirection::EarliestFirst).await {
+                    Ok(pulled) => {
+                        tracing::error!("Failed operations found: {}", pulled.len());
+                        for operation in pulled {
+                            // Yield the job
+                            yield IndexerJob::Operation(OperationJob {
+                                operation: operation,
+                            });
+                        }
+
+                        // Sleep a bit before next iteration to prevent tight loop
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    },
+                    Err(e) => {
+                        tracing::error!("Unable to pull failed operations from the database: {}", e);
                     },
                 }
 
@@ -366,19 +393,30 @@ impl Indexer {
         // This timestamp will used for distinguish between historical and realtime intervals
         self.start_timestamp = self.database.get_watermark().await?;
         
-        // Create prioritized streams
+        // Create streams
         let realtime = self.realtime_stream();
         let realtime_intervals = self.interval_stream(OrderDirection::EarliestFirst, Some(self.start_timestamp), None);
         let historical_intervals_high_priority = self.interval_stream(OrderDirection::LatestFirst, None, Some(self.start_timestamp));
         let historical_intervals_low_priority = self.interval_stream(OrderDirection::EarliestFirst, None, Some(self.start_timestamp));
         let operations = self.operations_stream();
+        let failed_intervals = self.retry_intervals_stream();
+        let failed_operations = self.retry_operations_stream();
 
         // Combine streams with prioritization (high priority first)
+        let retry_stream = select(failed_intervals, failed_operations);
         let historical_intervals_stream = select_with_strategy(historical_intervals_high_priority, historical_intervals_low_priority, Self::prio_left);
         let intervals_stream = select_with_strategy(realtime_intervals, historical_intervals_stream, Self::prio_left);
         let mut combined_stream = select_with_strategy(
             realtime, 
-            select_with_strategy(operations, intervals_stream, Self::prio_left),
+            select_with_strategy(
+                operations,
+                select_with_strategy(
+                    intervals_stream,
+                    retry_stream,
+                    Self::prio_left
+                ),
+                Self::prio_left
+            ),
             Self::prio_left
         );
 
