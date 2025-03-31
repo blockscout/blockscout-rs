@@ -35,6 +35,7 @@ polling_interval = 12
 
 [indexer.da]
 type = "Celestia"
+save_batch_size = 20
 
 [indexer.da.rpc]
 url = "http://host.docker.internal:26658"
