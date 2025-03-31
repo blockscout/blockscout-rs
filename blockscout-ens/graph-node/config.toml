@@ -68,3 +68,8 @@ provider = [
 ]
 shard = "primary"
 
+[chains.zeta-mainnet]
+provider = [
+    { label = "zeta-mainnet", url = "https://zeta-chain.drpc.org", features = [] }
+]
+shard = "primary"
