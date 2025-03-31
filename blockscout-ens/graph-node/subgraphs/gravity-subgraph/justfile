@@ -1,0 +1,15 @@
+graph_node_url := "http://127.0.0.1:8020"
+ipfs_url := "http://127.0.0.1:5001"
+network := "gravity-mainnet"
+name := "gravity-name-service-subgraph"
+
+create:
+    yarn graph create --node {{graph_node_url}} {{name}}
+
+deploy VERSION:
+    yarn graph deploy --node {{graph_node_url}} --ipfs {{ipfs_url}} {{name}} --network {{network}} --version-label {{VERSION}}
+
+deploy-remote VERSION:
+    just graph_node_url={{graph_node_url}} ipfs_url=http://ipfs.node.blockscout.com network={{network}} name={{name}} \
+        deploy {{VERSION}}
+

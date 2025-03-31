@@ -78,7 +78,7 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
 
       - name: Setup repo
-        uses: blockscout/blockscout-ci-cd/.github/actions/setup-multiarch-buildx@master
+        uses: blockscout/actions/.github/actions/setup-multiarch-buildx@main
         id: setup
         with:
           docker-image: ${{ env.IMAGE_NAME }}

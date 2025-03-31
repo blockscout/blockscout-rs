@@ -164,6 +164,7 @@ impl UpdateService {
             init_update_tracker
                 .mark_started_initial_update(&group_entry.enabled_members)
                 .await;
+            init_update_tracker.report().await;
             if let Some(force_full) = force_update_on_start {
                 self.clone()
                     .update(group_entry.clone(), force_full, None)
@@ -472,6 +473,10 @@ impl UpdateService {
                 .await
                 .into(),
         }
+    }
+
+    pub fn initial_update_tracker(&self) -> &InitialUpdateTracker {
+        &self.init_update_tracker
     }
 
     /// (accepted_chart_keys, accepted_chart_names, rejected_chart_names)

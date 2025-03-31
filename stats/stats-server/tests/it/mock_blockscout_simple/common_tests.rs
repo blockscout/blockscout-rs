@@ -2,6 +2,8 @@
 //! the initialization requirements, the actual testing code
 //! is reused between these cases
 
+use std::collections::HashMap;
+
 use blockscout_service_launcher::test_server::send_get_request;
 use pretty_assertions::assert_eq;
 use stats::{lines::NEW_TXNS_WINDOW_RANGE, ResolutionKind};
@@ -125,28 +127,8 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
             send_get_request(&base, &format!("/api/v1/lines/{line_name}")).await;
     }
 
-    // check that remaining are empty
-    for (line_chart_id, resolutions) in enabled_resolutions {
-        for resolution in resolutions {
-            let chart: serde_json::Value = send_get_request(
-                &base,
-                &format!("/api/v1/lines/{line_chart_id}?resolution={resolution}"),
-            )
-            .await;
-            let chart_data = chart
-                .as_object()
-                .expect("response has to be json object")
-                .get("chart")
-                .expect("response doesn't have 'chart' field")
-                .as_array()
-                .expect("'chart' field has to be json array");
-
-            assert!(
-                chart_data.is_empty(),
-                "chart '{line_chart_id}' '{resolution}' is not empty (it should not be enabled)"
-            );
-        }
-    }
+    // should not return charts that are disabled or waiting for indexing
+    assert_eq!(enabled_resolutions, HashMap::new());
 }
 
 pub async fn test_counters_ok(base: Url, blockscout_indexed: bool, user_ops_indexed: bool) {

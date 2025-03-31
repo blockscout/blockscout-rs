@@ -73,3 +73,9 @@ provider = [
     { label = "zeta-mainnet", url = "https://zeta-chain.drpc.org", features = [] }
 ]
 shard = "primary"
+
+[chains.gravity-mainnet]
+provider = [
+    { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }
+]
+shard = "primary"
