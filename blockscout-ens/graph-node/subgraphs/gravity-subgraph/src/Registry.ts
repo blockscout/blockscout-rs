@@ -5,7 +5,7 @@ import {
   Transfer as TransferEvent,
   NewResolver as NewResolverEvent,
   NewTTL as NewTTLEvent
-} from "../generated/{{ cookiecutter.registry_name }}/{{ cookiecutter.registry_name }}"
+} from "../generated/Registry/Registry"
 import { NewOwner, Transfer, NewResolver, NewTTL, Domain, Account, Resolver } from "../generated/schema"
 import { EMPTY_ADDRESS, EMPTY_ADDRESS_BYTEARRAY, ROOT_NODE, concat, createEventID } from "./utils";
 
@@ -15,7 +15,6 @@ const BIG_INT_ZERO = BigInt.fromI32(0);
 
 function createDomain(node: string, timestamp: BigInt): Domain {
   let domain = new Domain(node);
-  domain = new Domain(node);
   domain.owner = EMPTY_ADDRESS;
   domain.isMigrated = true;
   domain.createdAt = timestamp;
