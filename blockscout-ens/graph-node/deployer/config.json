@@ -89,6 +89,11 @@
         "subgraph_path": "../subgraphs/story-subgraph",
         "subgraph_name": "story-subgraph",
         "network": "story-mainnet"
+    },
+    "morph": {
+      "subgraph_path": "../subgraphs/morph-subgraph",
+      "subgraph_name": "morph-subgraph",
+      "network": "morph-mainnet"
     }
   }
 }
