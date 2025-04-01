@@ -7,6 +7,6 @@ members = [
 ]
 
 [workspace.dependencies]
-blockscout-client = { git = "https://github.com/blockscout/blockscout-rs/", rev = "5d091b6e" }
-blockscout-service-launcher = "0.10.0"
-eth-bytecode-db-proto = { git = "https://github.com/blockscout/blockscout-rs/", rev = "93dc74f3" }
+api-client-framework = { version = "0.1.0" }
+blockscout-service-launcher = "0.18.0"
+eth-bytecode-db-proto = { git = "https://github.com/blockscout/blockscout-rs/", rev = "be8422c" }

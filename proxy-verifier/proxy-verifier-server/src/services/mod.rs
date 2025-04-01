@@ -48,7 +48,7 @@ pub(crate) const VYPER_EVM_VERSIONS: [&str; 8] = [
 ];
 
 pub(crate) async fn verify<'a, Request, Verify, VerifyOutput>(
-    blockscout_clients: &'a BTreeMap<String, blockscout_client::Client>,
+    blockscout_clients: &'a BTreeMap<String, proxy_verifier_logic::blockscout::Client>,
     eth_bytecode_db_client: &'a eth_bytecode_db_proto::http_client::Client,
     contracts: Vec<proxy_verifier_proto_v1::Contract>,
     verification_request: Request,
@@ -57,7 +57,10 @@ pub(crate) async fn verify<'a, Request, Verify, VerifyOutput>(
 where
     Verify: Fn(
         &'a eth_bytecode_db_proto::http_client::Client,
-        Vec<(&'a blockscout_client::Client, ethers_core::types::Address)>,
+        Vec<(
+            &'a proxy_verifier_logic::blockscout::Client,
+            proxy_verifier_logic::Contract,
+        )>,
         Request,
     ) -> VerifyOutput,
     VerifyOutput: std::future::Future<Output = proxy_verifier_logic::VerificationResponse>,
@@ -110,9 +113,15 @@ where
 }
 
 pub fn contracts_proto_to_inner<'a>(
-    blockscout_clients: &'a std::collections::BTreeMap<String, blockscout_client::Client>,
+    blockscout_clients: &'a BTreeMap<String, proxy_verifier_logic::blockscout::Client>,
     proto_contracts: &[proxy_verifier_proto_v1::Contract],
-) -> Result<Vec<(&'a blockscout_client::Client, ethers_core::types::Address)>, tonic::Status> {
+) -> Result<
+    Vec<(
+        &'a proxy_verifier_logic::blockscout::Client,
+        proxy_verifier_logic::Contract,
+    )>,
+    tonic::Status,
+> {
     use std::str::FromStr;
 
     let mut inner_contracts = vec![];
@@ -130,7 +139,13 @@ pub fn contracts_proto_to_inner<'a>(
                     contract.chain_id, contract.address
                 ))
             })?;
-        inner_contracts.push((blockscout_client, contract_address))
+        inner_contracts.push((
+            blockscout_client,
+            proxy_verifier_logic::Contract {
+                chain_id: contract.chain_id.clone(),
+                address: contract_address,
+            },
+        ))
     }
 
     Ok(inner_contracts)
