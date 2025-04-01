@@ -1,17 +1,16 @@
 use crate::{
     metrics,
     proto::{
-        vyper_verifier_server::VyperVerifier, BytecodeType, ListCompilerVersionsRequest,
+        vyper_verifier_server::VyperVerifier, ListCompilerVersionsRequest,
         ListCompilerVersionsResponse, VerifyResponse, VerifyVyperMultiPartRequest,
         VerifyVyperStandardJsonRequest,
     },
     services::common,
     settings::VyperSettings,
     types,
-    types::VerifyResponseWrapper,
 };
 use anyhow::Context;
-use smart_contract_verifier::{vyper, Compilers, VerificationError, VyperClient, VyperCompiler};
+use smart_contract_verifier::{vyper, Compilers, VyperClient, VyperCompiler};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
@@ -84,26 +83,6 @@ impl VyperVerifier for VyperVerifierService {
             "multi-part",
         );
         Ok(Response::new(verify_response))
-
-        // let response = if let Ok(verification_success) = result {
-        //     tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
-        //     VerifyResponseWrapper::ok(verification_success)
-        // } else {
-        //     let err = result.unwrap_err();
-        //     tracing::info!(err=%err, "Request processing failed");
-        //     match err {
-        //         VerificationError::Compilation(_)
-        //         | VerificationError::NoMatchingContracts
-        //         | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
-        //         VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-        //             return Err(Status::invalid_argument(err.to_string()));
-        //         }
-        //         VerificationError::Internal(err) => {
-        //             tracing::error!("internal error: {err:#?}");
-        //             return Err(Status::internal(err.to_string()));
-        //         }
-        //     }
-        // };
     }
 
     async fn verify_standard_json(
