@@ -36,6 +36,14 @@ pub struct LookupDomainInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct MultichainLookupDomainNameInput {
+    pub network_ids: Vec<i64>,
+    pub name: String,
+    pub only_active: bool,
+    pub maybe_filter_protocols: Option<NonEmpty<String>>,
+}
+
+#[derive(Debug, Clone)]
 pub struct LookupAddressInput {
     pub network_id: i64,
     pub address: Address,

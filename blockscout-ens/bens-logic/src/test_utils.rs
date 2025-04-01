@@ -96,14 +96,24 @@ pub async fn mocked_blockscout_client() -> BlockscoutClient {
 pub async fn mocked_networks_and_protocols(
 ) -> (HashMap<i64, Network>, HashMap<String, ProtocolInfo>) {
     let client = mocked_blockscout_client().await;
-    let networks = HashMap::from_iter([(
-        1,
-        Network {
-            blockscout_client: Arc::new(client),
-            use_protocols: vec!["ens".to_string()],
-            rpc_url: None,
-        },
-    )]);
+    let networks = HashMap::from_iter([
+        (
+            1,
+            Network {
+                blockscout_client: Arc::new(client.clone()),
+                use_protocols: vec!["ens".to_string()],
+                rpc_url: None,
+            },
+        ),
+        (
+            10,
+            Network {
+                blockscout_client: Arc::new(client),
+                use_protocols: vec!["ens".to_string()],
+                rpc_url: None,
+            },
+        ),
+    ]);
 
     let protocols = HashMap::from_iter([(
         "ens".to_string(),

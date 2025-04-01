@@ -54,6 +54,9 @@ fn compile(
             ".blockscout.bens.v1.LookupAddressRequest.only_active",
             "#[serde(default)]"
         )
+        // Comma separator for MultichainLookupDomainNameRequest.chain_id
+        .type_attribute(".blockscout.bens.v1.MultichainLookupDomainNameRequest", "#[serde_with::serde_as]")
+        .field_attribute(".blockscout.bens.v1.MultichainLookupDomainNameRequest.chain_id", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, i64>\")]")
         ;
     config.compile_protos(protos, includes)?;
     Ok(())

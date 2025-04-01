@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use alloy::primitives::Address;
+use itertools::Itertools;
 use nonempty::NonEmpty;
 use sea_query::{Alias, Condition, Expr, PostgresQueryBuilder, SelectStatement};
 use sql_gen::QueryBuilderExt;
@@ -235,8 +236,13 @@ pub async fn find_domains(
 
     let mut query = sqlx::query_as(&sql);
     tracing::debug!(sql = sql, "build SQL query for 'find_domains'");
-    if let FindDomainsInput::Names(names) = &input {
-        query = query.bind(names.iter().map(|n| n.inner.id.clone()).collect::<Vec<_>>());
+    if let FindDomainsInput::Names(names) = input {
+        let ids = names
+            .into_iter()
+            .map(|n| n.inner.id)
+            .unique_by(|id| id.clone())
+            .collect::<Vec<_>>();
+        query = query.bind(ids);
     }
     let domains = query.fetch_all(pool).await?;
     Ok(domains)

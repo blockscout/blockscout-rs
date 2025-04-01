@@ -7,7 +7,9 @@ use bens_logic::{
     protocols::ProtocolError,
     subgraph::{LookupOutput, SubgraphReadError, SubgraphReader},
 };
-use bens_proto::blockscout::bens::v1::{domains_extractor_server::DomainsExtractor, *};
+use bens_proto::blockscout::bens::v1::{
+    domains_extractor_server::DomainsExtractor, multichain_lookup_domain_name_response::Domains, *,
+};
 use std::sync::Arc;
 
 pub struct DomainsExtractorService {
@@ -81,6 +83,30 @@ impl DomainsExtractor for DomainsExtractorService {
         let response = LookupDomainNameResponse {
             items: domains,
             next_page_params: pagination_from_logic(result.next_page_token, page_size),
+        };
+        Ok(tonic::Response::new(response))
+    }
+
+    async fn multichain_lookup_domain_name(
+        &self,
+        request: tonic::Request<MultichainLookupDomainNameRequest>,
+    ) -> Result<tonic::Response<MultichainLookupDomainNameResponse>, tonic::Status> {
+        let request = request.into_inner();
+        let input = conversion::multichain_lookup_domain_name_from_inner(request);
+
+        let result = self
+            .subgraph_reader
+            .multichain_lookup_domain_name(input)
+            .await
+            .map_err(map_subgraph_error)?;
+
+        let response = MultichainLookupDomainNameResponse {
+            items: result
+                .into_iter()
+                .map(|(k, v)| {
+                    from_resolved_domains_result(v, k).map(|items| (k, Domains { items }))
+                })
+                .collect::<Result<_, tonic::Status>>()?,
         };
         Ok(tonic::Response::new(response))
     }

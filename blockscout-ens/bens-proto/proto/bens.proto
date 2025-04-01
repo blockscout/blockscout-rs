@@ -31,6 +31,7 @@ service DomainsExtractor {
   rpc ListDomainEvents(ListDomainEventsRequest) returns (ListDomainEventsResponse) {}
   // Get basic info about domain for ens-lookup and blockscout quick-search. Sorted by `registration_date`
   rpc LookupDomainName(LookupDomainNameRequest) returns (LookupDomainNameResponse) {}
+  rpc MultichainLookupDomainName(MultichainLookupDomainNameRequest) returns (MultichainLookupDomainNameResponse) {}
   // Get basic info about address for ens-lookup and blockscout quick-search. Sorted by `registration_date`
   rpc LookupAddress(LookupAddressRequest) returns (LookupAddressResponse) {}
   // Get detailed information about main domain of requested address
@@ -169,6 +170,25 @@ message ListDomainEventsRequest {
 message ListDomainEventsResponse {
   repeated DomainEvent items = 1;
 }
+
+message MultichainLookupDomainNameRequest {
+  // Name of domain, for example vitalik.eth
+  string name = 1;
+  // List of comma separated chains (networks) where domain search should be done
+  repeated int64 chain_id = 2;
+  // Filtering field to remove expired domains
+  bool only_active = 3;
+  // comma separated list of protocol ids to filter by
+  optional string protocols = 4;
+}
+
+message MultichainLookupDomainNameResponse {
+  message Domains {
+    repeated Domain items = 1;
+  }
+  map<int64, Domains> items = 1;
+}
+
 
 message LookupDomainNameRequest {
   // Optional. Name of domain, for example vitalik.eth. None means lookup for any name

@@ -15,6 +15,45 @@ consumes:
 produces:
   - application/json
 paths:
+  /api/v1/domains:multichain-lookup:
+    get:
+      operationId: DomainsExtractor_MultichainLookupDomainName
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1MultichainLookupDomainNameResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          description: Name of domain, for example vitalik.eth
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: List of comma separated chains (networks) where domain search should be done
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+            format: int64
+          collectionFormat: multi
+        - name: only_active
+          description: Filtering field to remove expired domains
+          in: query
+          required: false
+          type: boolean
+        - name: protocols
+          description: comma separated list of protocol ids to filter by
+          in: query
+          required: false
+          type: string
+      tags:
+        - DomainsExtractor
   /api/v1/{chain_id}/addresses/{address}:
     get:
       summary: Get detailed information about main domain of requested address
@@ -353,6 +392,14 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  MultichainLookupDomainNameResponseDomains:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
   protobufAny:
     type: object
     properties:
@@ -530,6 +577,13 @@ definitions:
           Sorted by relevance, so first address could be displayed as main resolved address
       next_page_params:
         $ref: '#/definitions/v1Pagination'
+  v1MultichainLookupDomainNameResponse:
+    type: object
+    properties:
+      items:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/MultichainLookupDomainNameResponseDomains'
   v1Order:
     type: string
     enum:
