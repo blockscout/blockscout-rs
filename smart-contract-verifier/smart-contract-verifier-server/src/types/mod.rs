@@ -15,4 +15,3 @@ pub use errors::StandardJsonParseError;
 pub use lookup_methods::{LookupMethodsRequestWrapper, LookupMethodsResponseWrapper};
 pub use sourcify_from_etherscan::VerifyFromEtherscanSourcifyRequestWrapper;
 pub use verify_response::VerifyResponseWrapper;
-pub use vyper_multi_part::VerifyVyperMultiPartRequestWrapper;

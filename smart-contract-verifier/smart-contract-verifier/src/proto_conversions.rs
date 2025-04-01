@@ -8,7 +8,7 @@ use foundry_compilers_new::artifacts::EvmVersion;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     BatchVerifySolidityMultiPartRequest, BatchVerifySolidityStandardJsonRequest, BytecodeType,
     Contract, VerificationMetadata, VerifySolidityMultiPartRequest,
-    VerifySolidityStandardJsonRequest, VerifyVyperStandardJsonRequest,
+    VerifySolidityStandardJsonRequest, VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
 };
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
@@ -81,6 +81,33 @@ impl TryFrom<VerifySolidityStandardJsonRequest> for solidity::standard_json::Ver
     }
 }
 
+impl TryFrom<BatchVerifySolidityMultiPartRequest>
+    for solidity::multi_part::BatchVerificationRequest
+{
+    type Error = RequestParseError;
+
+    fn try_from(request: BatchVerifySolidityMultiPartRequest) -> Result<Self, Self::Error> {
+        let contracts = request
+            .contracts
+            .into_iter()
+            .map(OnChainContract::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
+        let content = build_solidity_multi_part_content(
+            request.sources,
+            request.evm_version,
+            request.optimization_runs,
+            request.libraries,
+        )?;
+
+        Ok(Self {
+            contracts,
+            compiler_version,
+            content,
+        })
+    }
+}
+
 impl TryFrom<BatchVerifySolidityStandardJsonRequest>
     for solidity::standard_json::BatchVerificationRequest
 {
@@ -104,27 +131,21 @@ impl TryFrom<BatchVerifySolidityStandardJsonRequest>
     }
 }
 
-impl TryFrom<BatchVerifySolidityMultiPartRequest>
-    for solidity::multi_part::BatchVerificationRequest
-{
+impl TryFrom<VerifyVyperMultiPartRequest> for vyper::multi_part::VerificationRequest {
     type Error = RequestParseError;
 
-    fn try_from(request: BatchVerifySolidityMultiPartRequest) -> Result<Self, Self::Error> {
-        let contracts = request
-            .contracts
-            .into_iter()
-            .map(OnChainContract::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
+    fn try_from(request: VerifyVyperMultiPartRequest) -> Result<Self, Self::Error> {
+        let contract =
+            build_on_chain_contract(&request.bytecode, request.bytecode_type(), request.metadata)?;
         let compiler_version = helpers::decode_compiler_version(&request.compiler_version)?;
-        let content = build_solidity_multi_part_content(
-            request.sources,
+        let content = build_vyper_multi_part_content(
+            request.source_files,
+            request.interfaces,
             request.evm_version,
-            request.optimization_runs,
-            request.libraries,
         )?;
 
         Ok(Self {
-            contracts,
+            contract,
             compiler_version,
             content,
         })
@@ -180,6 +201,36 @@ fn build_solidity_standard_json_content(
 ) -> Result<SolcInput, RequestParseError> {
     let deserializer = &mut serde_json::Deserializer::from_str(&solc_input);
     Ok(serde_path_to_error::deserialize(deserializer)?)
+}
+
+fn build_vyper_multi_part_content(
+    sources: BTreeMap<String, String>,
+    interfaces: BTreeMap<String, String>,
+    evm_version: Option<String>,
+) -> Result<vyper::multi_part::Content, RequestParseError> {
+    let sources: BTreeMap<PathBuf, String> = sources
+        .into_iter()
+        .map(|(name, content)| (PathBuf::from(name), content))
+        .collect();
+
+    let interfaces: BTreeMap<PathBuf, String> = interfaces
+        .into_iter()
+        .map(|(name, content)| (PathBuf::from(name), content))
+        .collect();
+
+    let evm_version = match evm_version {
+        Some(version) if version != "default" => Some(
+            EvmVersion::from_str(&version)
+                .map_err(|err| anyhow::anyhow!("invalid evm_version: {err}"))?,
+        ),
+        _ => None,
+    };
+
+    Ok(vyper::multi_part::Content {
+        sources,
+        interfaces,
+        evm_version,
+    })
 }
 
 fn build_vyper_standard_json_content(input: String) -> Result<VyperInput, RequestParseError> {

@@ -6,7 +6,8 @@ mod solc_compiler;
 mod verification;
 mod verifier;
 mod vyper_compiler;
-mod vyper_compiler_input;
+
+pub mod vyper_compiler_input;
 
 pub use evm_compilers::EvmCompilersPool;
 pub use solc_compiler::{SolcCompiler, SolcInput};

@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 pub type Content = verify_new::VyperInput;
 
+#[derive(Clone, Debug)]
 pub struct VerificationRequest {
     pub contract: OnChainContract,
     pub compiler_version: DetailedVersion,

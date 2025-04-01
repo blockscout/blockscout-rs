@@ -1,4 +1,3 @@
-pub use super::vyper_compiler_input::VyperInput;
 use crate::{
     verify_new::{evm_compilers, Error},
     DetailedVersion, Language, Version,
@@ -8,6 +7,8 @@ use async_trait::async_trait;
 use foundry_compilers_new::artifacts;
 use serde_json::Value;
 use std::{collections::BTreeMap, path::Path, sync::Arc};
+
+pub use super::vyper_compiler_input::VyperInput;
 
 impl evm_compilers::CompilerInput for VyperInput {
     // Starting from pre-release versions of 0.4.0 interfaces are missing from input standard-json.
