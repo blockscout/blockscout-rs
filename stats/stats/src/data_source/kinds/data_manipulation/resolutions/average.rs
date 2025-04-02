@@ -4,12 +4,12 @@ use std::{fmt::Debug, marker::PhantomData};
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 use itertools::{EitherOrBoth, Itertools};
-use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
     data_processing::zip_same_timespan,
     data_source::{
-        kinds::data_manipulation::resolutions::reduce_each_timespan, DataSource, UpdateContext,
+        kinds::{data_manipulation::resolutions::reduce_each_timespan, AdapterDataSource},
+        DataSource, UpdateContext,
     },
     range::UniversalRange,
     types::{ConsistsOf, Timespan, TimespanValue},
@@ -31,7 +31,7 @@ pub struct AverageLowerResolution<Average, Weight, LowerRes>(
     PhantomData<(Average, Weight, LowerRes)>,
 );
 
-impl<Average, Weight, LowerRes, HigherRes> DataSource
+impl<Average, Weight, LowerRes, HigherRes> AdapterDataSource
     for AverageLowerResolution<Average, Weight, LowerRes>
 where
     Average: DataSource<Output = Vec<TimespanValue<HigherRes, f64>>>,
@@ -42,32 +42,6 @@ where
     type MainDependencies = Average;
     type ResolutionDependencies = Weight;
     type Output = Vec<TimespanValue<LowerRes, f64>>;
-
-    fn mutex_id() -> Option<String> {
-        // just an adapter
-        None
-    }
-
-    async fn init_itself(
-        _db: &DatabaseConnection,
-        _init_time: &DateTime<Utc>,
-    ) -> Result<(), DbErr> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn set_next_update_from_itself(
-        _db: &DatabaseConnection,
-        _update_from: chrono::NaiveDate,
-    ) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
 
     async fn query_data(
         cx: &UpdateContext<'_>,
@@ -211,7 +185,7 @@ mod tests {
 
         // db is not used in mock
         let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
-        let output: Vec<WeekValue<f64>> = TestedAverageSource::query_data(
+        let output: Vec<WeekValue<f64>> = <TestedAverageSource as DataSource>::query_data(
             &UpdateContext::from_params_now_or_override(UpdateParameters {
                 db: &db,
                 blockscout: &db,
@@ -269,7 +243,7 @@ mod tests {
         });
         let week_1_average = (5.0 * 100.0 + 34.2 * 2.0 + 10.3 * 12.0) / (100.0 + 2.0 + 12.0);
         assert_eq!(
-            TestedAverageSource::query_data(
+            <TestedAverageSource as DataSource>::query_data(
                 &context,
                 UniversalRange::full(),
                 &mut AggregateTimer::new()
@@ -318,7 +292,7 @@ mod tests {
             force_full: false,
         });
         assert_eq!(
-            TestedAverageSource::query_data(
+            <TestedAverageSource as DataSource>::query_data(
                 &context,
                 UniversalRange::full(),
                 &mut AggregateTimer::new()
@@ -364,7 +338,7 @@ mod tests {
             force_full: false,
         });
         assert_eq!(
-            TestedAverageSource::query_data(
+            <TestedAverageSource as DataSource>::query_data(
                 &context,
                 UniversalRange::full(),
                 &mut AggregateTimer::new()

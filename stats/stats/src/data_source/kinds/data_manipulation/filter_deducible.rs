@@ -6,10 +6,9 @@ use std::marker::PhantomData;
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
-use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
-    data_source::{DataSource, UpdateContext},
+    data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
     ChartError, ChartProperties, MissingDatePolicy,
@@ -22,7 +21,7 @@ where
     D: DataSource,
     Properties: ChartProperties;
 
-impl<DS, Resolution, Value: Zero, Properties> DataSource for FilterDeducible<DS, Properties>
+impl<DS, Resolution, Value: Zero, Properties> AdapterDataSource for FilterDeducible<DS, Properties>
 where
     DS: DataSource<Output = Vec<TimespanValue<Resolution, Value>>>,
     Resolution: Clone + Send,
@@ -32,31 +31,6 @@ where
     type MainDependencies = DS;
     type ResolutionDependencies = ();
     type Output = DS::Output;
-
-    fn mutex_id() -> Option<String> {
-        None
-    }
-
-    async fn init_itself(
-        _db: &DatabaseConnection,
-        _init_time: &DateTime<Utc>,
-    ) -> Result<(), DbErr> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn set_next_update_from_itself(
-        _db: &DatabaseConnection,
-        _update_from: chrono::NaiveDate,
-    ) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
 
     async fn query_data(
         cx: &UpdateContext<'_>,

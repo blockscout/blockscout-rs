@@ -83,7 +83,7 @@ pub trait UpdateGroup: core::fmt::Debug {
     fn list_dependency_mutex_ids(&self) -> HashSet<String>;
     /// List mutex ids of particular group member dependencies (including the member itself).
     ///
-    /// `None` if `chart_name` is not a member.
+    /// `None` if `chart_id is not a member.
     fn dependency_mutex_ids_of(&self, chart_id: &ChartKey) -> Option<HashSet<String>>;
     /// Create/init enabled charts with their dependencies (in DB) recursively.
     /// Idempotent, does nothing if the charts were previously initialized.
@@ -630,6 +630,14 @@ impl SyncUpdateGroup {
         self.inner
             .set_next_update_from(db, from, locked_enabled_members.charts())
             .await
+    }
+
+    ///
+    pub async fn enabled_members_with_deps(
+        &self,
+        enabled_charts: &HashSet<ChartKey>,
+    ) -> HashSet<String> {
+        todo!()
     }
 }
 

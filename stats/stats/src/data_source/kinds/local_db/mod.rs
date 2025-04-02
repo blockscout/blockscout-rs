@@ -39,7 +39,7 @@ use crate::{
     metrics,
     range::UniversalRange,
     utils::day_start,
-    ChartError, IndexingStatus,
+    ChartError, ChartKey, IndexingStatus,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -225,8 +225,8 @@ where
     type ResolutionDependencies = ResolutionDep;
     type Output = Query::Output;
 
-    fn mutex_id() -> Option<String> {
-        Some(ChartProps::key().into())
+    fn chart_key() -> Option<ChartKey> {
+        Some(ChartProps::key())
     }
 
     fn indexing_status_self_requirement() -> IndexingStatus {
