@@ -92,14 +92,10 @@ mod tests {
 
     use crate::{
         data_source::{kinds::remote_db::StatementFromRange, types::BlockscoutMigrations},
-        tests::point_construction::dt,
+        tests::{normalize_sql, point_construction::dt},
     };
 
     use super::TxnsStatsStatement;
-
-    fn normalize_sql(statement: &str) -> String {
-        statement.split_whitespace().collect_vec().join(" ")
-    }
 
     #[test]
     fn statement_is_correct() {

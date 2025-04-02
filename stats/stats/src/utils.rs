@@ -49,7 +49,7 @@ pub(crate) fn produce_filter_and_values(
 /// `filter_by` is a column/property(?) in SQL used to generate string for `filter`
 ///
 /// all subsequent arguments (after `range` will be passed to `format!` macro to the
-/// resulting statement)
+/// resulting statement). of course do not pass user-supplied data there.
 macro_rules! sql_with_range_filter_opt {
     (
         $db_backend: expr,
