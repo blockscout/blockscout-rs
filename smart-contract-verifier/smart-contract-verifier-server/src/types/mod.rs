@@ -3,7 +3,6 @@ mod source;
 mod sourcify;
 mod sourcify_from_etherscan;
 mod verify_response;
-mod vyper_multi_part;
 pub mod zksolc_standard_json;
 
 pub mod batch_verification;
