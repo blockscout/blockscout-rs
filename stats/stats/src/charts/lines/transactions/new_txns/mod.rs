@@ -3,6 +3,7 @@ use std::{collections::HashSet, ops::Range};
 use blockscout_db::entity::{blocks, transactions};
 use chrono::{DateTime, Utc};
 use migration::{Alias, ExprTrait, IntoIden};
+use op_stack_operational::OpStackNewOperationalTxns;
 use sea_orm::{
     sea_query, ColumnTrait, DatabaseBackend, EntityName, EntityTrait, IntoIdentity, IntoSimpleExpr,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement,
@@ -11,10 +12,12 @@ use sea_query::{Expr, Func};
 
 use crate::{
     charts::db_interaction::utils::datetime_range_filter,
+    counters::OpStackYesterdayOperationalTxns,
     data_source::{
         kinds::remote_db::{PullAllWithAndSortCached, RemoteDatabaseSource, StatementFromRange},
         types::BlockscoutMigrations,
     },
+    lines::OpStackNewOperationalTxnsWindow,
     types::new_txns::NewTxnsCombinedPoint,
     ChartKey, ChartProperties, QueryAllBlockTimestampRange,
 };
@@ -33,8 +36,15 @@ impl StatementFromRange for NewTxnsCombinedStatement {
         completed_migrations: &BlockscoutMigrations,
         enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
-        let count_op_stack_transactions: bool = enabled_update_charts_recursive
-            .contains(&op_stack_operational::OpStackNewOperationalTxns::key());
+        // not the cleanest solution but it works
+        // and missing charts from the list should be caught by unit tests
+        let count_op_stack_transactions: bool = [
+            OpStackNewOperationalTxns::key(),
+            OpStackNewOperationalTxnsWindow::key(),
+            OpStackYesterdayOperationalTxns::key(),
+        ]
+        .iter()
+        .any(|k| enabled_update_charts_recursive.contains(k));
         let denormalized = completed_migrations.denormalization;
 
         // see `statements_are_correct` test for more readable resulting SQL statements

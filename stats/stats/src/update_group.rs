@@ -221,6 +221,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # use stats::{
 /// #     QueryAllBlockTimestampRange, construct_update_group,
 /// #     types::timespans::DateValue, ChartProperties, Named, ChartError,
+/// #     ChartKey,
 /// # };
 /// # use stats::data_source::{
 /// #     kinds::{
@@ -231,13 +232,13 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # };
 /// # use chrono::{NaiveDate, DateTime, Utc};
 /// # use entity::sea_orm_active_enums::ChartType;
-/// # use std::ops::Range;
+/// # use std::{ops::Range, collections::HashSet};
 /// # use sea_orm::Statement;
 ///
 /// struct DummyRemoteStatement;
 ///
 /// impl StatementFromRange for DummyRemoteStatement {
-///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
+///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations, _: &HashSet<ChartKey>) -> Statement {
 ///         todo!()
 ///     }
 /// }

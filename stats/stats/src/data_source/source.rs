@@ -286,6 +286,11 @@ impl DataSource for () {
         HashSet::new()
     }
 
+    fn all_dependencies_chart_keys() -> HashSet<ChartKey> {
+        // stop recursion
+        HashSet::new()
+    }
+
     fn indexing_status_requirement_recursive() -> IndexingStatus {
         // stop recursion
         Self::indexing_status_self_requirement()
