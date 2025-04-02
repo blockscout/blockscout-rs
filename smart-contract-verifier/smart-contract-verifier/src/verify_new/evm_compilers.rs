@@ -133,10 +133,7 @@ struct CompilerOutputErrors<E> {
     pub errors: Vec<E>,
 }
 
-fn validate_no_errors<E>(raw_output: &Value) -> Result<(), Error>
-where
-    E: CompilationError + for<'de> Deserialize<'de>,
-{
+fn validate_no_errors<E: CompilationError>(raw_output: &Value) -> Result<(), Error> {
     let output_errors: CompilerOutputErrors<E> = serde_path_to_error::deserialize(raw_output)
         .context("deserializing compiler output errors")?;
 

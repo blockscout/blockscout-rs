@@ -58,13 +58,6 @@ pub struct VerificationRequest {
     pub content: Content,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MultiFileContent {
-    pub sources: BTreeMap<PathBuf, String>,
-    pub interfaces: BTreeMap<PathBuf, String>,
-    pub evm_version: Option<EvmVersion>,
-}
-
 pub async fn verify(
     client: Arc<Client>,
     request: VerificationRequest,
