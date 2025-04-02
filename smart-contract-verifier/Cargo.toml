@@ -11,6 +11,7 @@ members = [
 smart-contract-verifier = { path = "smart-contract-verifier" }
 smart-contract-verifier-proto = { path = "smart-contract-verifier-proto" }
 smart-contract-verifier-server = { path = "smart-contract-verifier-server" }
+verification-common = { path = "verification-common" }
 vyper-cbor-auxdata = { path = "vyper-cbor-auxdata" }
 
 actix-prost = { version = "0.1.0" }
@@ -51,6 +52,7 @@ prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 quick-xml = { version = "0.24" }
 rand = { version = "0.8" }
+readonly = { version = "0.2" }
 reqwest = { version = "0.11" }
 reqwest-middleware = { version = "0.1" }
 reqwest-retry = { version = "0.1" }
@@ -74,5 +76,4 @@ tonic-build = { version = "0.12" }
 tracing = { version = "0.1" }
 url = { version = "2.4" }
 uuid = { version = "1.6.1" }
-verification-common = { git = "https://github.com/blockscout/blockscout-rs/", rev = "510d8b5" }
 wiremock = { version = "0.5" }
