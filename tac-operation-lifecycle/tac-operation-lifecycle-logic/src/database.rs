@@ -1,18 +1,7 @@
 use std::{cmp::min, collections::HashMap, sync::Arc, thread};
 use anyhow::anyhow;
 use sea_orm::{
-    sea_query::{ArrayType, OnConflict},
-    ActiveModelTrait,
-    ActiveValue::{self, NotSet},
-    ColumnTrait,
-    DatabaseConnection,
-    DatabaseTransaction,
-    EntityTrait,
-    QueryFilter,
-    Set,
-    Statement,
-    TransactionTrait,
-    Value,
+    sea_query::{ArrayType, Expr, Func, OnConflict}, ActiveModelTrait, ActiveValue::{self, NotSet}, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect, Set, Statement, TransactionTrait, Value
 };
 use tac_operation_lifecycle_entity::{interval, operation, operation_stage, stage_type, transaction, watermark};
 use crate::client::models::operations::Operations as ApiOperations;
@@ -55,6 +44,21 @@ impl EntityStatus {
         format!("{:?}", self)
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct IndexerStatistic {
+    watermark: u64,
+    first_timestamp: u64,
+    last_timestamp: u64,
+    total_intervals: usize,
+    failed_intervals: usize,
+    total_pending_intervals: usize,
+    historical_pending_intervals: usize,
+    realtime_pending_intervals: usize,
+    historical_processed_period: u64,
+    realtime_processed_period: u64,
+}
+
 
 pub struct TacDatabase {
     db: Arc<DatabaseConnection>,
@@ -648,5 +652,61 @@ impl TacDatabase {
                 Err(e.into())
             }
         }
+    }
+
+    pub async fn get_statistic(&self, historical_boundary: u64) -> anyhow::Result<IndexerStatistic> {
+        let first_timestamp = interval::Entity::find()
+            .select_only()
+            .column_as(interval::Column::Start.min(), "min_start")
+            .into_tuple::<Option<i64>>()
+            .one(self.db.as_ref());
+        let last_timestamp = interval::Entity::find()
+            .select_only()
+            .column_as(interval::Column::End.max(), "max_end")
+            .into_tuple::<Option<i64>>()
+            .one(self.db.as_ref());
+        let total_intervals = interval::Entity::find()
+            .count(self.db.as_ref());
+        let failed_intervals = interval::Entity::find()
+            .filter(interval::Column::Status.ne(EntityStatus::Finalized.to_id()))
+            .filter(interval::Column::RetryCount.gt(0))
+            .count(self.db.as_ref());
+        let total_pending_intervals = interval::Entity::find()
+            .filter(interval::Column::Status.eq(EntityStatus::Pending.to_id()))
+            .count(self.db.as_ref());
+        let historical_pending_intervals = interval::Entity::find()
+            .filter(interval::Column::Status.eq(EntityStatus::Pending.to_id()))
+            .filter(interval::Column::End.lt(historical_boundary))
+            .count(self.db.as_ref());
+        let realtime_pending_intervals = interval::Entity::find()
+            .filter(interval::Column::Status.eq(EntityStatus::Pending.to_id()))
+            .filter(interval::Column::Start.gte(historical_boundary))
+            .count(self.db.as_ref());
+
+        let sql1 = Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                format!(r#"SELECT SUM("end" - start) as sum FROM interval WHERE status = {} AND \"end\" < {}"#, EntityStatus::Pending.to_id(), historical_boundary),
+            );
+        let historical_processed_period = self.db.query_one(sql1);
+
+        let sql2 = Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                format!(r#"SELECT SUM("end" - start) as sum FROM interval WHERE status = {} AND start >= {}"#, EntityStatus::Pending.to_id(), historical_boundary),
+            );
+        let realtime_processed_period = self.db.query_one(sql2);
+
+
+        Ok(IndexerStatistic {
+            watermark: self.get_watermark().await?,
+            first_timestamp: first_timestamp.await?.unwrap().unwrap_or(0) as u64,
+            last_timestamp: last_timestamp.await?.unwrap().unwrap_or(0) as u64,
+            total_intervals: total_intervals.await? as usize,
+            failed_intervals: failed_intervals.await? as usize,
+            total_pending_intervals: total_pending_intervals.await? as usize,
+            historical_pending_intervals: historical_pending_intervals.await? as usize,
+            realtime_pending_intervals: realtime_pending_intervals.await? as usize,
+            historical_processed_period: historical_processed_period.await?.and_then(|row| row.try_get("", "sum").ok()).unwrap_or(0),
+            realtime_processed_period: realtime_processed_period.await?.and_then(|row| row.try_get("", "sum").ok()).unwrap_or(0),
+        })
     }
 }

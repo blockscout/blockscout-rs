@@ -446,3 +446,8 @@ impl Indexer {
         Ok(())
     }
 }
+
+// Statistic endpoints
+impl Indexer {
+    
+}
