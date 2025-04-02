@@ -1,6 +1,6 @@
 //! Active account abstraction wallets on each day.
 
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -14,7 +14,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use blockscout_db::entity::user_operations;
@@ -31,6 +31,7 @@ impl StatementFromRange for ActiveAccountAbstractionWalletsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         _completed_migrations: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
     ) -> Statement {
         count_distinct_in_user_ops(user_operations::Column::Sender.into_column_ref(), range)
     }

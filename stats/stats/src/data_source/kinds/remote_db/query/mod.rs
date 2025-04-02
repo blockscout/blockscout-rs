@@ -76,5 +76,6 @@ fn yesterday_statement<DailyDataStatement: StatementFromRange>(
     Ok(DailyDataStatement::get_statement(
         Some(yesterday_range),
         &cx.blockscout_applied_migrations,
+        &cx.enabled_update_charts_recursive,
     ))
 }

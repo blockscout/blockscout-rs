@@ -17,7 +17,7 @@ use crate::{
     },
     types::new_txns::NewTxnsCombinedPoint,
     utils::sql_with_range_filter_opt,
-    Named, QueryAllBlockTimestampRange,
+    ChartKey, Named, QueryAllBlockTimestampRange,
 };
 
 pub mod all_new_txns;
@@ -105,6 +105,7 @@ impl StatementFromRange for NewTxnsCombinedStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
     ) -> Statement {
         // do not filter by `!= to_timestamp(0)` because
         // 1. it allows to use index `transactions_block_consensus_index`

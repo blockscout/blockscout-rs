@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     marker::{PhantomData, Send},
     ops::Range,
 };
@@ -14,14 +15,16 @@ use crate::{
     },
     range::{data_source_query_range_to_db_statement_range, UniversalRange},
     types::{TimespanTrait, TimespanValue},
-    ChartError,
+    ChartError, ChartKey,
 };
 
 pub trait StatementFromRange {
-    /// `completed_migrations` can be used for selecting more optimal query
+    /// `completed_migrations` and `enabled_update_charts_recursive`
+    /// can be used for selecting more optimal query
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement;
 }
 
@@ -59,7 +62,11 @@ where
         // to not overcomplicate the queries
         let query_range =
             data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
-        let query = S::get_statement(query_range, &cx.blockscout_applied_migrations);
+        let query = S::get_statement(
+            query_range,
+            &cx.blockscout_applied_migrations,
+            &cx.enabled_update_charts_recursive,
+        );
         let mut data = TimespanValue::<Resolution, Value>::find_by_statement(query)
             .all(cx.blockscout)
             .await
@@ -102,7 +109,11 @@ where
         // to not overcomplicate the queries
         let query_range =
             data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
-        let query = S::get_statement(query_range, &cx.blockscout_applied_migrations);
+        let query = S::get_statement(
+            query_range,
+            &cx.blockscout_applied_migrations,
+            &cx.enabled_update_charts_recursive,
+        );
         let data = find_all_cached(cx, query).await?;
         Ok(data)
     }

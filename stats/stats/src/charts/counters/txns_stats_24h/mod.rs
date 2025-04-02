@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::utils::datetime_range_filter,
@@ -7,6 +7,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     lines::op_stack_operational_transactions_filter,
+    ChartKey,
 };
 use blockscout_db::entity::{blocks, transactions};
 use chrono::{DateTime, Utc};
@@ -26,6 +27,7 @@ impl StatementFromRange for TxnsStatsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         use sea_orm::prelude::*;
 
@@ -87,6 +89,8 @@ pub type Txns24hStats = RemoteDatabaseSource<PullOne24hCached<TxnsStatsStatement
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use pretty_assertions::assert_eq;
 
     use crate::{
@@ -102,6 +106,7 @@ mod tests {
         let actual = TxnsStatsStatement::get_statement(
             Some(dt("2025-01-01T00:00:00").and_utc()..dt("2025-01-02T00:00:00").and_utc()),
             &BlockscoutMigrations::latest(),
+            &HashSet::new(),
         );
 
         let expected = r#"

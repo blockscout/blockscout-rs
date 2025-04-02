@@ -4,6 +4,8 @@
 //! Basically an extension of [super::NewTxnsWindow]
 //! but for operational txns
 
+use std::collections::HashSet;
+
 use crate::{
     data_source::{
         kinds::{
@@ -24,7 +26,7 @@ use crate::{
     range::UniversalRange,
     types::{Timespan, TimespanDuration, TimespanValue},
     utils::day_start,
-    ChartError, ChartProperties, IndexingStatus, Named,
+    ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -36,6 +38,7 @@ use super::arbitrum_new_operational_txns::ArbitrumCalculateOperationalTxnsVec;
 fn new_blocks_window_statement(
     update_day: NaiveDate,
     completed_migrations: &BlockscoutMigrations,
+    enabled_update_charts_recursive: &HashSet<ChartKey>,
 ) -> Statement {
     // `update_day` is not included because the data would
     // be incomplete.
@@ -44,7 +47,11 @@ fn new_blocks_window_statement(
             NEW_TXNS_WINDOW_RANGE,
         )),
     )..day_start(&update_day);
-    NewBlocksStatement::get_statement(Some(window), completed_migrations)
+    NewBlocksStatement::get_statement(
+        Some(window),
+        completed_migrations,
+        enabled_update_charts_recursive,
+    )
 }
 
 pub struct NewBlocksWindowQuery;
@@ -57,7 +64,11 @@ impl RemoteQueryBehaviour for NewBlocksWindowQuery {
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<TimespanValue<NaiveDate, String>>, ChartError> {
         let update_day = cx.time.date_naive();
-        let query = new_blocks_window_statement(update_day, &cx.blockscout_applied_migrations);
+        let query = new_blocks_window_statement(
+            update_day,
+            &cx.blockscout_applied_migrations,
+            &cx.enabled_update_charts_recursive,
+        );
         let mut data = TimespanValue::<NaiveDate, String>::find_by_statement(query)
             .all(cx.blockscout)
             .await

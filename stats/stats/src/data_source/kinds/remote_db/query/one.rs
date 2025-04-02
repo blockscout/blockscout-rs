@@ -115,6 +115,7 @@ where
         let query = S::get_statement(
             Some(inclusive_range_to_exclusive(range_24h)),
             &cx.blockscout_applied_migrations,
+            &cx.enabled_update_charts_recursive,
         );
 
         let value = find_one_value_cached(cx, query)
@@ -130,7 +131,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, ops::Range};
+    use std::{
+        collections::{BTreeMap, HashSet},
+        ops::Range,
+    };
 
     use chrono::{DateTime, Utc};
     use pretty_assertions::assert_eq;
@@ -145,6 +149,7 @@ mod test {
         range::UniversalRange,
         tests::point_construction::dt,
         types::TimespanValue,
+        ChartKey,
     };
 
     use super::PullOne24hCached;
@@ -154,6 +159,7 @@ mod test {
         fn get_statement(
             _range: Option<Range<DateTime<Utc>>>,
             _completed_migrations: &BlockscoutMigrations,
+            _enabled_update_charts_recursive: &HashSet<ChartKey>,
         ) -> Statement {
             Statement::from_string(DbBackend::Postgres, "SELECT id as value FROM t;")
         }

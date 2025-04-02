@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -22,7 +22,7 @@ use crate::{
     lines::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -34,7 +34,11 @@ const ETH: i64 = 1_000_000_000_000_000_000;
 pub struct AverageBlockRewardsQuery;
 
 impl StatementFromRange for AverageBlockRewardsQuery {
-    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(
+        range: Option<Range<DateTime<Utc>>>,
+        _: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
+    ) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"

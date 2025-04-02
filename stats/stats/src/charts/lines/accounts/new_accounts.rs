@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::{db_interaction::read::QueryAllBlockTimestampRange, types::timespans::DateValue},
@@ -24,7 +24,7 @@ use crate::{
     range::{data_source_query_range_to_db_statement_range, UniversalRange},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartError, ChartProperties, Named,
+    ChartError, ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -37,6 +37,7 @@ impl StatementFromRange for NewAccountsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough
         let min_timestamp = DateTime::<Utc>::UNIX_EPOCH;
@@ -108,6 +109,7 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
         let query = NewAccountsStatement::get_statement(
             statement_range.clone(),
             &cx.blockscout_applied_migrations,
+            &cx.enabled_update_charts_recursive,
         );
         let mut data = DateValue::<String>::find_by_statement(query)
             .all(cx.blockscout)
