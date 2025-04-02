@@ -171,6 +171,7 @@ mod tests {
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
+            enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             force_full: false,
         });
         NewBlocks::update_recursively(&cx).await.unwrap();
@@ -246,6 +247,7 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
         });
@@ -341,6 +343,7 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
         });

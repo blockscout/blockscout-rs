@@ -87,7 +87,6 @@ pub type Txns24hStats = RemoteDatabaseSource<PullOne24hCached<TxnsStatsStatement
 
 #[cfg(test)]
 mod tests {
-    use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
     use crate::{

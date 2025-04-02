@@ -92,13 +92,13 @@ mod tests {
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
-        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &empty_db,
-            blockscout: &empty_db,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            update_time_override: Some(dt("2024-07-30T09:00:00").and_utc()),
-            force_full: false,
-        });
+        let context =
+            UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+                &empty_db,
+                &empty_db,
+                BlockscoutMigrations::latest(),
+                Some(dt("2024-07-30T09:00:00").and_utc()),
+            ));
         assert_eq!(
             MockSource::query_data(&context, UniversalRange::full(), &mut AggregateTimer::new())
                 .await

@@ -83,8 +83,12 @@ pub trait UpdateGroup: core::fmt::Debug {
     fn list_dependency_mutex_ids(&self) -> HashSet<String>;
     /// List mutex ids of particular group member dependencies (including the member itself).
     ///
-    /// `None` if `chart_id is not a member.
+    /// `None` if `chart_id`` is not a member.
     fn dependency_mutex_ids_of(&self, chart_id: &ChartKey) -> Option<HashSet<String>>;
+    /// List chart keys of a particular group member dependencies (including the member itself).
+    ///
+    /// `None` if `chart_id`` is not a member.
+    fn dependency_keys_of(&self, chart_id: &ChartKey) -> Option<HashSet<ChartKey>>;
     /// Create/init enabled charts with their dependencies (in DB) recursively.
     /// Idempotent, does nothing if the charts were previously initialized.
     ///
@@ -311,7 +315,7 @@ macro_rules! construct_update_group {
 
             }
 
-            fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<String> {
+            fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<::std::string::String> {
                 let mut ids = ::std::collections::HashSet::new();
                 $(
                     ids.extend(
@@ -325,11 +329,25 @@ macro_rules! construct_update_group {
             fn dependency_mutex_ids_of(
                 &self,
                 chart_id: &$crate::ChartKey
-            ) -> Option<::std::collections::HashSet<String>> {
+            ) -> Option<::std::collections::HashSet<::std::string::String>> {
                 $(
                     if chart_id == &<$member as $crate::ChartProperties>::key() {
                         return Some(
                             <$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids()
+                        );
+                    }
+                )*
+                return None;
+            }
+
+            fn dependency_keys_of(
+                &self,
+                chart_id: &$crate::ChartKey)
+            -> Option<::std::collections::HashSet<$crate::ChartKey>> {
+                $(
+                    if chart_id == &<$member as $crate::ChartProperties>::key() {
+                        return Some(
+                            <$member as $crate::data_source::DataSource>::all_dependencies_chart_keys()
                         );
                     }
                 )*
@@ -491,7 +509,7 @@ impl SyncUpdateGroup {
 
 impl SyncUpdateGroup {
     /// Ignores missing elements
-    fn joint_dependencies_of(&self, charts: &HashSet<ChartKey>) -> HashSet<String> {
+    fn joint_dependencies_mutex_ids_of(&self, charts: &HashSet<ChartKey>) -> HashSet<String> {
         let mut result = HashSet::new();
         for id in charts {
             let Some(dependencies_ids) = self.inner.dependency_mutex_ids_of(id) else {
@@ -552,8 +570,9 @@ impl SyncUpdateGroup {
             .into_iter()
             .filter(|m| enabled_charts.contains(m))
             .collect();
-        let enabled_members_with_deps = self.joint_dependencies_of(&enabled_members);
-        (enabled_members, enabled_members_with_deps)
+        let enabled_members_with_deps_mutex_ids =
+            self.joint_dependencies_mutex_ids_of(&enabled_members);
+        (enabled_members, enabled_members_with_deps_mutex_ids)
     }
 
     /// Lock only enabled charts (that are also group members) and their dependencies
@@ -632,12 +651,23 @@ impl SyncUpdateGroup {
             .await
     }
 
-    ///
-    pub async fn enabled_members_with_deps(
+    /// Ignores non-member charts
+    pub fn enabled_members_with_deps(
         &self,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> HashSet<String> {
-        todo!()
+    ) -> HashSet<ChartKey> {
+        let mut result = HashSet::new();
+        for id in enabled_charts {
+            let Some(dependencies_ids) = self.inner.dependency_keys_of(id) else {
+                tracing::warn!(
+                    update_group=self.name(),
+                    "`dependency_mutex_ids_of` of member chart '{id}' returned `None`. Expected `Some(..)`"
+                );
+                continue;
+            };
+            result.extend(dependencies_ids.into_iter().map(|s| s.to_owned()))
+        }
+        result
     }
 }
 

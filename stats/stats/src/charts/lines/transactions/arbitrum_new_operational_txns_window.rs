@@ -144,6 +144,8 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive:
+                ArbitrumNewOperationalTxnsWindow::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
         };

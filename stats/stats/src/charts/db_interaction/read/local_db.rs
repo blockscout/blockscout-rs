@@ -583,7 +583,7 @@ mod tests {
         charts::ResolutionKind,
         counters::TotalBlocks,
         data_source::{
-            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations,
+            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations, DataSource,
             UpdateContext, UpdateParameters,
         },
         lines::{AccountsGrowth, ActiveAccounts, NewTxns, TxnsGrowth, TxnsGrowthMonthly},
@@ -839,6 +839,7 @@ mod tests {
             // shouldn't use this because mock data contains total blocks value
             blockscout: &db,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
         });

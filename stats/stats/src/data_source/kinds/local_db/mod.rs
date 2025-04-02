@@ -359,6 +359,7 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: TotalTxns::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
         };
@@ -540,6 +541,7 @@ mod tests {
                 db: &db,
                 blockscout: &blockscout,
                 blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(next_time),
                 force_full: true,
             };
@@ -560,6 +562,7 @@ mod tests {
                 db: &db,
                 blockscout: &blockscout,
                 blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
             };
@@ -576,6 +579,7 @@ mod tests {
                 db: &db,
                 blockscout: &blockscout,
                 blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
             };
@@ -590,6 +594,7 @@ mod tests {
                 db: &db,
                 blockscout: &blockscout,
                 blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
             };

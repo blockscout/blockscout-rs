@@ -178,13 +178,12 @@ mod test {
             ])
             .into_connection();
         let time = dt("2023-01-01T00:00:00").and_utc();
-        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &db,
-            blockscout: &db,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            update_time_override: Some(time),
-            force_full: false,
-        });
+        let cx = UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+            &db,
+            &db,
+            BlockscoutMigrations::latest(),
+            Some(time),
+        ));
         assert_eq!(
             TimespanValue {
                 timespan: time.date_naive(),

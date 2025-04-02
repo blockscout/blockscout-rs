@@ -298,6 +298,7 @@ async fn update_examples() {
         db: &db,
         blockscout: &blockscout,
         blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
         update_time_override: None,
         force_full: true,
     };

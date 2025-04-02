@@ -391,14 +391,17 @@ impl UpdateService {
         else {
             return;
         };
+        let enabled_charts = enabled_charts_overwrite.unwrap_or(&group_entry.enabled_members);
         let update_parameters = UpdateParameters {
             db: &self.db,
             blockscout: &self.blockscout_db,
             blockscout_applied_migrations: active_migrations,
+            enabled_update_charts_recursive: group_entry
+                .group
+                .enabled_members_with_deps(enabled_charts),
             update_time_override: None,
             force_full,
         };
-        let enabled_charts = enabled_charts_overwrite.unwrap_or(&group_entry.enabled_members);
         let result = group_entry
             .group
             .update_charts_sync(update_parameters, enabled_charts)

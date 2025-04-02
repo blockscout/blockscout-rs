@@ -238,13 +238,13 @@ impl ReadService {
         let migrations = BlockscoutMigrations::query_from_db(&self.blockscout)
             .await
             .map_err(ChartError::BlockscoutDB)?;
-        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &self.db,
-            blockscout: &self.blockscout,
-            blockscout_applied_migrations: migrations,
-            update_time_override: Some(query_time),
-            force_full: false,
-        });
+        let context =
+            UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+                &self.db,
+                &self.blockscout,
+                migrations,
+                Some(query_time),
+            ));
         query_handle
             .query_data(&context, range, points_limit, true)
             .await
