@@ -28,6 +28,7 @@ pub const ATTRIBUTES_DEPOSITED_FROM_HASH: &str = "deaddeaddeaddeaddeaddeaddeadde
 pub const ATTRIBUTES_DEPOSITED_TO_HASH: &str = "4200000000000000000000000000000000000015";
 
 pub fn transactions_filter(transactions_table_name: &str) -> String {
+    // https://specs.optimism.io/protocol/deposits.html#l1-attributes-deposited-transaction
     format!(
         "NOT (
             {transactions_table_name}.from_address_hash = decode('{ATTRIBUTES_DEPOSITED_FROM_HASH}', 'hex') AND
