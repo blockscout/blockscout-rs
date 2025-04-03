@@ -41,9 +41,10 @@ impl SubgraphPatcher {
     }
 
     pub fn patched_domain_name_only(&self, from_user: &DomainNameOnProtocol<'_>) -> Domain {
-        let mut domain = Domain::default();
-        domain.name = Some(from_user.inner.name.clone());
-        domain
+        Domain {
+            name: Some(from_user.inner.name.clone()),
+            ..Default::default()
+        }
     }
 
     pub fn patched_domain(

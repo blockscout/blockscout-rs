@@ -146,7 +146,6 @@ pub enum AddressResolveTechnique {
     #[serde(rename = "addr2name")]
     Addr2Name,
 }
-const MAX_NAMES_LIMIT: usize = 5;
 
 impl Tld {
     pub fn new(tld: &str) -> Tld {
@@ -335,10 +334,6 @@ impl Protocoler {
                 Ok(direct.into_iter().take(1).collect())
             }
         } else {
-            dbg!(&self.networks);
-            let network_opt = self.networks.get(&network_id);
-            let network = network_opt.ok_or_else(|| ProtocolError::NetworkNotFound(network_id))?;
-
             let tlds = self
                 .networks
                 .get(&network_id)

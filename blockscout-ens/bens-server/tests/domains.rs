@@ -323,7 +323,7 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
             ("page_size".into(), "2".into()),
         ]),
         expected_domains[0..2].to_vec(),
-        None,
+        Some((2, None)),
     )
     .await;
     assert_eq!(actual, expected);
