@@ -347,6 +347,18 @@ definitions:
       '@type':
         type: string
     additionalProperties: {}
+  protobufNullValue:
+    type: string
+    enum:
+      - NULL_VALUE
+    default: NULL_VALUE
+    description: |-
+      `NullValue` is a singleton enumeration to represent the null value for the
+      `Value` type union.
+
+      The JSON representation for `NullValue` is JSON `null`.
+
+       - NULL_VALUE: Null value.
   rpcStatus:
     type: object
     properties:
@@ -436,7 +448,7 @@ definitions:
         type: boolean
       v06:
         $ref: '#/definitions/v1EntryPointIndexerStatus'
-      v07:
+      v07_v08:
         $ref: '#/definitions/v1EntryPointIndexerStatus'
   v1ListAccountsResponse:
     type: object
@@ -536,55 +548,6 @@ definitions:
       total_ops:
         type: integer
         format: int64
-  v1RawUserOpV06:
-    type: object
-    properties:
-      sender:
-        type: string
-      nonce:
-        type: string
-      init_code:
-        type: string
-      call_data:
-        type: string
-      call_gas_limit:
-        type: string
-      verification_gas_limit:
-        type: string
-      pre_verification_gas:
-        type: string
-      max_fee_per_gas:
-        type: string
-      max_priority_fee_per_gas:
-        type: string
-      paymaster_and_data:
-        type: string
-      signature:
-        type: string
-  v1RawUserOpV07:
-    type: object
-    properties:
-      sender:
-        type: string
-      nonce:
-        type: string
-      init_code:
-        type: string
-      call_data:
-        type: string
-      account_gas_limits:
-        type: string
-        title: call_gas_limit + verification_gas_limit
-      pre_verification_gas:
-        type: string
-      gas_fees:
-        type: string
-        title: max_fee_per_gas + max_priority_fee_per_gas
-      paymaster_and_data:
-        type: string
-        title: paymaster + paymaster_verification_gas_limit + post_op_gas_limit + paymaster_data
-      signature:
-        type: string
   v1UserOp:
     type: object
     properties:
@@ -608,10 +571,8 @@ definitions:
         type: string
       signature:
         type: string
-      rawV06:
-        $ref: '#/definitions/v1RawUserOpV06'
-      rawV07:
-        $ref: '#/definitions/v1RawUserOpV07'
+      raw:
+        type: object
       aggregator:
         type: string
       aggregator_signature:

@@ -204,7 +204,7 @@ pub async fn stream_unprocessed_logs_tx_hashes(
     let missed_tx_stream = TxHash::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r#"
-SELECT DISTINCT logs.transaction_hash as transaction_hash
+SELECT logs.transaction_hash
 FROM logs
          JOIN blocks ON logs.block_hash = blocks.hash AND blocks.consensus
          LEFT JOIN user_operations ON logs.second_topic = user_operations.hash
@@ -212,7 +212,9 @@ WHERE logs.address_hash    = $1
   AND logs.first_topic     = $2
   AND logs.block_number    >= $3
   AND logs.block_number    <= $4
-  AND user_operations.hash IS NULL"#,
+  AND user_operations.hash IS NULL
+GROUP BY logs.block_number, logs.block_hash, logs.transaction_hash;
+"#,
         [
             addr.as_slice().into(),
             topic.as_slice().into(),

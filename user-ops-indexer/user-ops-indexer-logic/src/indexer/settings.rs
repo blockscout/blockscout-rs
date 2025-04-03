@@ -1,7 +1,7 @@
 use crate::indexer::rpc_utils::TraceClient;
 use alloy::primitives::{address, Address};
 use serde::Deserialize;
-use serde_with::serde_as;
+use serde_with::{formats::CommaSeparator, serde_as};
 use std::time;
 
 #[serde_as]
@@ -31,13 +31,19 @@ pub struct IndexerSettings {
     pub trace_client: Option<TraceClient>,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct EntrypointsSettings {
     pub v06: bool,
-    pub v06_entry_point: Address,
+    #[serde_as(as = "serde_with::StringWithSeparator<CommaSeparator, Address>")]
+    pub v06_entry_point: Vec<Address>,
     pub v07: bool,
-    pub v07_entry_point: Address,
+    #[serde_as(as = "serde_with::StringWithSeparator<CommaSeparator, Address>")]
+    pub v07_entry_point: Vec<Address>,
+    pub v08: bool,
+    #[serde_as(as = "serde_with::StringWithSeparator<CommaSeparator, Address>")]
+    pub v08_entry_point: Vec<Address>,
 }
 
 #[serde_as]
@@ -94,9 +100,11 @@ impl Default for EntrypointsSettings {
     fn default() -> Self {
         Self {
             v06: true,
-            v06_entry_point: address!("5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"),
+            v06_entry_point: vec![address!("5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")],
             v07: true,
-            v07_entry_point: address!("0000000071727De22E5E9d8BAf0edAc6f37da032"),
+            v07_entry_point: vec![address!("0000000071727De22E5E9d8BAf0edAc6f37da032")],
+            v08: true,
+            v08_entry_point: vec![address!("4337084D9E255Ff0702461CF8895CE9E3b5Ff108")],
         }
     }
 }
