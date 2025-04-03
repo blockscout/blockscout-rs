@@ -6,8 +6,7 @@ use super::{
     SubgraphPatcher,
 };
 use crate::{
-    blockscout,
-    blockscout::BlockscoutClient,
+    blockscout::{self, BlockscoutClient},
     entity::subgraph::{
         domain::{DetailedDomain, Domain},
         domain_event::{DomainEvent, DomainEventTransaction},
@@ -19,6 +18,7 @@ use crate::{
     subgraph::{
         resolve_addresses::resolve_addresses,
         sql::{AdditionalTable, CachedView, DbErr},
+        DomainPaginationInput,
     },
 };
 use alloy::primitives::{Address, TxHash};
@@ -321,6 +321,61 @@ impl SubgraphReader {
         Ok(paginated)
     }
 
+    pub async fn multichain_lookup_domain_name(
+        &self,
+        input: MultichainLookupDomainNameInput,
+    ) -> Result<BTreeMap<i64, Vec<LookupOutput>>, SubgraphReadError> {
+        // Get all possible name options across networks
+        let name_options = input
+            .network_ids
+            .iter()
+            .filter_map(|id| {
+                self.protocoler
+                    .names_options_in_network(
+                        &input.name,
+                        *id,
+                        input.maybe_filter_protocols.clone(),
+                    )
+                    .ok()
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+
+        if name_options.is_empty() {
+            return Ok(Default::default());
+        }
+
+        let page_size = name_options.len() as u32;
+        let domains = sql::find_domains(
+            self.pool.as_ref(),
+            sql::FindDomainsInput::Names(name_options.clone()),
+            input.only_active,
+            Some(&DomainPaginationInput {
+                page_size,
+                ..Default::default()
+            }),
+        )
+        .await?
+        .into_iter()
+        .map(|domain| {
+            // if domain is found by name, patch it with user input
+            if let Some(from_user) = name_options.iter().find(|name| {
+                name.inner.id == domain.id
+                    && name.deployed_protocol.protocol.info.slug == domain.protocol_slug
+            }) {
+                return self
+                    .patcher
+                    .patched_domain(self.pool.clone(), domain, from_user);
+            };
+            domain
+        });
+
+        let result =
+            multichain_lookup_output_from_domains(domains, &self.protocoler, input.network_ids);
+
+        Ok(result)
+    }
+
     pub async fn lookup_address(
         &self,
         input: LookupAddressInput,
@@ -523,6 +578,36 @@ fn lookup_output_from_domains(
         .collect()
 }
 
+fn multichain_lookup_output_from_domains(
+    domains: impl IntoIterator<Item = Domain>,
+    protocoler: &Protocoler,
+    network_ids: impl IntoIterator<Item = i64>,
+) -> BTreeMap<i64, Vec<LookupOutput>> {
+    let domains = domains.into_iter().collect::<Vec<_>>();
+    network_ids
+        .into_iter()
+        .filter_map(|network_id| {
+            let network_domains = protocoler
+                .protocols_of_network(network_id, None)
+                .ok()?
+                .into_iter()
+                .filter_map(|p| {
+                    let domain = domains
+                        .iter()
+                        .find(|d| d.protocol_slug == p.protocol.info.slug)?;
+                    Some(LookupOutput {
+                        domain: domain.clone(),
+                        protocol: p.protocol.clone(),
+                        deployment_network: p.deployment_network.clone(),
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            (!network_domains.is_empty()).then_some((network_id, network_domains))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -622,6 +707,33 @@ mod tests {
                 .map(|output| output.domain.name.as_deref())
                 .collect::<Vec<_>>(),
         );
+    }
+
+    #[sqlx::test(migrations = "tests/migrations")]
+    async fn multichain_lookup_domain_name_works(pool: PgPool) {
+        let reader = mocked_reader(pool).await;
+
+        let network_ids = vec![DEFAULT_CHAIN_ID, 10];
+
+        let result = reader
+            .multichain_lookup_domain_name(MultichainLookupDomainNameInput {
+                network_ids: network_ids.clone(),
+                name: "vitalik.eth".to_string(),
+                only_active: false,
+                maybe_filter_protocols: None,
+            })
+            .await
+            .expect("failed to get vitalik domains");
+
+        for network_id in network_ids {
+            assert_eq!(
+                vec![Some("vitalik.eth")],
+                result[&network_id]
+                    .iter()
+                    .map(|output| output.domain.name.as_deref())
+                    .collect::<Vec<_>>()
+            );
+        }
     }
 
     #[sqlx::test(migrations = "tests/migrations")]

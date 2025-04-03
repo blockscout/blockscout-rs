@@ -27,6 +27,8 @@ pub fn union_domain_queries(
         })
         .collect::<Result<Vec<SelectStatement>, anyhow::Error>>()?
         .into_iter()
+        // TODO: sea-query puts ORDER BY and LIMIT clauses related to the first query
+        // in the end of the statement, which may cause missing domain names
         .reduce(|mut acc, new| acc.union(UnionType::All, new).to_owned())
         .expect("reduce from non empty iterator");
 

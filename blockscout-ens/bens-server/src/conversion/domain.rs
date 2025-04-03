@@ -7,7 +7,7 @@ use alloy::primitives::Address;
 use bens_logic::subgraph::{
     BatchResolveAddressNamesInput, DomainPaginationInput, DomainSortField, DomainToken,
     DomainTokenType, GetAddressInput, GetDomainInput, GetDomainOutput, LookupAddressInput,
-    LookupDomainInput, LookupOutput,
+    LookupDomainInput, LookupOutput, MultichainLookupDomainNameInput,
 };
 use bens_proto::blockscout::bens::v1 as proto;
 use std::{collections::BTreeMap, str::FromStr};
@@ -46,6 +46,19 @@ pub fn lookup_domain_name_from_inner(
         },
         maybe_filter_protocols,
     })
+}
+
+pub fn multichain_lookup_domain_name_from_inner(
+    inner: proto::MultichainLookupDomainNameRequest,
+) -> MultichainLookupDomainNameInput {
+    let maybe_filter_protocols = maybe_protocol_filter_from_inner(inner.protocols);
+
+    MultichainLookupDomainNameInput {
+        network_ids: inner.chain_id,
+        name: inner.name,
+        only_active: inner.only_active,
+        maybe_filter_protocols,
+    }
 }
 
 pub fn lookup_address_from_inner(
