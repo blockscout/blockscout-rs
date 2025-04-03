@@ -4,7 +4,7 @@ import { Account, Domain } from "../generated/schema";
 // @ts-ignore
 const NETWORK = "{{network}}"
 
-export let BASE_NODE_HASH = "8cd6dbd33b537c3bbd338c88dc2308df525654de6a3384b9b62c231b2e44e3b0" // mainnet base node hash
+export let BASE_NODE_HASH = "5865123cb0ae04a590aea6cd6d53d004c14efd7894f8f8903c68c972df5bbc52" // mainnet base node hash
 
 // @ts-ignore
 if (NETWORK == "zeta-testnet") {
