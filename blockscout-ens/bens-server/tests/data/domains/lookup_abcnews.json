@@ -6,25 +6,23 @@
     "owner": {
       "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
     },
+    "wrapped_owner": null,
     "registration_date": "2023-12-19T00:28:15.000Z",
     "resolved_address": {
       "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
     },
-    "wrapped_owner": null,
     "protocol": {{ genome_protocol | json_encode() | safe }}
   },
   {
-    "expiry_date": "2025-03-18T01:27:42.000Z",
-    "id": "0x98ae83dd985941d29a5c5947cd4f69d5f192b8416d216dbbe79cb18827401b4d",
-    "name": "cele0x.gno",
+    "expiry_date": null,
+    "id": "0x7a68d23f9d7e32e79f09e024d21e2e12b66f74cbbc4aff0e5a36043a6a42778d",
+    "name": "abcnews.eth",
     "owner": {
-      "hash": "0xc9Be4fEA6C3f0D9E39d65678D7c631C0C41e95A6"
-    },
-    "registration_date": "2023-12-18T19:38:30.000Z",
-    "resolved_address": {
-      "hash": "0xc9Be4fEA6C3f0D9E39d65678D7c631C0C41e95A6"
+      "hash": "0xe95Ca676DE726AEe5eD7F6cd4537CDE478cC5020"
     },
     "wrapped_owner": null,
-    "protocol": {{ genome_protocol | json_encode() | safe }}
+    "registration_date": "2017-06-14T01:21:44.000Z",
+    "resolved_address": null,
+    "protocol": {{ ens_protocol | json_encode() | safe }}
   }
 ]
