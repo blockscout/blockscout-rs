@@ -35,7 +35,8 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
+/// Chart enabled by config
+#[derive(Debug, Clone)]
 pub struct EnabledChartEntry {
     pub settings: EnabledChartSettings,
     /// Static information presented as dynamic object
@@ -60,9 +61,17 @@ impl EnabledChartEntry {
                 .collect_vec(),
         }
     }
+
+    /// Returns a vector of `ChartKey`'s for all resolutions of the chart.
+    pub fn get_keys(&self) -> Vec<ChartKey> {
+        self.resolutions
+            .iter()
+            .map(|(res, entry)| ChartKey::new(entry.name.clone(), *res))
+            .collect()
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnabledResolutionEntry {
     pub name: String,
     pub missing_date_policy: stats::MissingDatePolicy,
@@ -303,6 +312,7 @@ impl RuntimeSetup {
             Arc::new(ActiveAccountsGroup),
             Arc::new(ActiveBundlersGroup),
             Arc::new(ActivePaymastersGroup),
+            Arc::new(ActiveAccountAbstractionWalletsGroup),
             Arc::new(AverageBlockTimeGroup),
             Arc::new(CompletedTxnsGroup),
             Arc::new(PendingTxns30mGroup),
@@ -310,7 +320,6 @@ impl RuntimeSetup {
             Arc::new(TotalBlocksGroup),
             Arc::new(TotalTokensGroup),
             Arc::new(TotalTxnsGroup),
-            Arc::new(TotalOperationalTxnsGroup),
             Arc::new(YesterdayTxnsGroup),
             Arc::new(ActiveRecurringAccountsDailyRecurrence60DaysGroup),
             Arc::new(ActiveRecurringAccountsMonthlyRecurrence60DaysGroup),
@@ -338,6 +347,7 @@ impl RuntimeSetup {
             Arc::new(TxnsSuccessRateGroup),
             // complex groups
             Arc::new(NewAccountsGroup),
+            Arc::new(NewAccountAbstractionWalletsGroup),
             Arc::new(NewContractsGroup),
             Arc::new(NewTxnsGroup),
             Arc::new(NewUserOpsGroup),
@@ -415,6 +425,8 @@ impl RuntimeSetup {
             // compute, therefore this solution is ok (to not introduce
             // more update groups if not necessary)
             ("NewBlocksGroup", vec!["newTxns_DAY"]),
+            // Same logic as above
+            ("TotalBlocksGroup", vec!["totalTxns_DAY"]),
         ]
         .map(|(group_name, allowed_missing)| {
             (
@@ -544,6 +556,13 @@ impl RuntimeSetup {
         members
     }
 
+    pub fn enabled_chart_keys(&self) -> Vec<ChartKey> {
+        self.charts_info
+            .values()
+            .flat_map(|entry| entry.get_keys())
+            .collect()
+    }
+
     /// Recursive indexing status requirements for all group members.
     ///
     /// 'Recursive' means that their dependencies' requirements are also
@@ -563,6 +582,18 @@ impl RuntimeSetup {
                     })
                     .collect_vec()
             })
+            .collect()
+    }
+
+    /// Recursive indexing status requirements for all enabled group members.
+    /// See [`Self::all_members_indexing_status_requirements`] for details.
+    pub fn all_enabled_members_indexing_status_requirements(
+        &self,
+    ) -> BTreeMap<ChartKey, IndexingStatus> {
+        let enabled_charts: HashSet<_> = self.enabled_chart_keys().into_iter().collect();
+        Self::all_members_indexing_status_requirements()
+            .into_iter()
+            .filter(|(chart, _req)| enabled_charts.contains(chart))
             .collect()
     }
 }

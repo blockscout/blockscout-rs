@@ -8,13 +8,10 @@
 use crate::{
     data_source::{
         kinds::{
+            data_manipulation::map::{MapParseTo, StripExt},
             local_db::{
                 parameters::{
-                    update::batching::{
-                        parameters::{BatchMaxDays, ClearAllAndPassStep},
-                        BatchUpdate,
-                    },
-                    DefaultCreate, DefaultQueryVec,
+                    update::clear_and_query_all::ClearAllAndPassVec, DefaultCreate, DefaultQueryVec,
                 },
                 LocalDbChartSource,
             },
@@ -23,6 +20,7 @@ use crate::{
         types::BlockscoutMigrations,
         UpdateContext,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     lines::NewTxnsStatement,
     range::UniversalRange,
     types::{Timespan, TimespanDuration, TimespanValue},
@@ -86,7 +84,10 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 
@@ -94,17 +95,11 @@ pub type NewTxnsWindow = LocalDbChartSource<
     NewTxnsWindowRemote,
     (),
     DefaultCreate<Properties>,
-    BatchUpdate<
-        NewTxnsWindowRemote,
-        (),
-        ClearAllAndPassStep,
-        BatchMaxDays,
-        DefaultQueryVec<Properties>,
-        Properties,
-    >,
+    ClearAllAndPassVec<NewTxnsWindowRemote, DefaultQueryVec<Properties>, Properties>,
     DefaultQueryVec<Properties>,
     Properties,
 >;
+pub type NewTxnsWindowInt = MapParseTo<StripExt<NewTxnsWindow>, i64>;
 
 #[cfg(test)]
 mod tests {

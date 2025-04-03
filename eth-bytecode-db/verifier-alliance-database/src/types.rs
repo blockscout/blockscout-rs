@@ -1,14 +1,14 @@
-use sea_orm::prelude::Uuid;
+use sea_orm::prelude::{DateTimeWithTimeZone, Uuid};
 use std::collections::BTreeMap;
-use verification_common_v1::verifier_alliance::{
+use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts,
 };
-use verifier_alliance_entity_v1::contract_deployments;
+use verifier_alliance_entity::contract_deployments;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ContractDeployment {
     pub id: Uuid,
-    pub chain_id: u128,
+    pub chain_id: i64,
     pub address: Vec<u8>,
     pub runtime_code: Vec<u8>,
     pub creation_code: Option<Vec<u8>>,
@@ -29,12 +29,12 @@ pub enum ContractCode {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum InsertContractDeployment {
     Genesis {
-        chain_id: u128,
+        chain_id: i64,
         address: Vec<u8>,
         runtime_code: Vec<u8>,
     },
     Regular {
-        chain_id: u128,
+        chain_id: i64,
         address: Vec<u8>,
         transaction_hash: Vec<u8>,
         block_number: u128,
@@ -46,7 +46,7 @@ pub enum InsertContractDeployment {
 }
 
 impl InsertContractDeployment {
-    pub fn chain_id(&self) -> u128 {
+    pub fn chain_id(&self) -> i64 {
         match self {
             InsertContractDeployment::Genesis { chain_id, .. } => *chain_id,
             InsertContractDeployment::Regular { chain_id, .. } => *chain_id,
@@ -77,14 +77,14 @@ impl InsertContractDeployment {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RetrieveContractDeployment {
-    pub(crate) chain_id: u128,
+    pub(crate) chain_id: i64,
     pub(crate) address: Vec<u8>,
     pub(crate) transaction_hash: Option<Vec<u8>>,
     pub(crate) runtime_code: Option<Vec<u8>>,
 }
 
 impl RetrieveContractDeployment {
-    pub fn regular(chain_id: u128, address: Vec<u8>, transaction_hash: Vec<u8>) -> Self {
+    pub fn regular(chain_id: i64, address: Vec<u8>, transaction_hash: Vec<u8>) -> Self {
         Self {
             chain_id,
             address,
@@ -93,7 +93,7 @@ impl RetrieveContractDeployment {
         }
     }
 
-    pub fn genesis(chain_id: u128, address: Vec<u8>, runtime_code: Vec<u8>) -> Self {
+    pub fn genesis(chain_id: i64, address: Vec<u8>, runtime_code: Vec<u8>) -> Self {
         Self {
             chain_id,
             address,
@@ -102,7 +102,7 @@ impl RetrieveContractDeployment {
         }
     }
 
-    pub fn chain_id(&self) -> u128 {
+    pub fn chain_id(&self) -> i64 {
         self.chain_id
     }
 
@@ -161,4 +161,13 @@ pub struct VerifiedContract {
     pub contract_deployment_id: Uuid,
     pub compiled_contract: CompiledContract,
     pub matches: VerifiedContractMatches,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RetrievedVerifiedContract {
+    pub verified_contract: VerifiedContract,
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
+    pub created_by: String,
+    pub updated_by: String,
 }

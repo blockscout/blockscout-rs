@@ -17,41 +17,70 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum HealthError {
-    DefaultResponse(models::RpcStatus),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`health_v1`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum HealthV1Error {
     UnknownValue(serde_json::Value),
 }
 
 pub async fn health(
     configuration: &configuration::Configuration,
-) -> Result<models::V1HealthCheckResponse, Error<HealthError>> {
-    let local_var_configuration = configuration;
+) -> Result<models::HealthCheckResponse, Error<HealthError>> {
+    let uri_str = format!("{}/api/health", configuration.base_path);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/api/v1/health", local_var_configuration.base_path);
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<HealthError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<HealthError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+pub async fn health_v1(
+    configuration: &configuration::Configuration,
+) -> Result<models::V1HealthCheckResponse, Error<HealthV1Error>> {
+    let uri_str = format!("{}/api/v1/health", configuration.base_path);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<HealthV1Error> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }

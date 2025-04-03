@@ -90,15 +90,17 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
 
     let db_connection = {
-        let mut connect_options = ConnectOptions::new(settings.database.url);
-        connect_options.sqlx_logging_level(::tracing::log::LevelFilter::Debug);
+        let database_settings = database::DatabaseSettings {
+            connect: database::DatabaseConnectSettings::Url(settings.database.url),
+            connect_options: database::DatabaseConnectOptionsSettings {
+                sqlx_logging_level: ::tracing::log::LevelFilter::Debug,
+                ..Default::default()
+            },
+            create_database: settings.database.create_database,
+            run_migrations: settings.database.run_migrations,
+        };
 
-        database::initialize_postgres::<Migrator>(
-            connect_options,
-            settings.database.create_database,
-            settings.database.run_migrations,
-        )
-        .await?
+        database::initialize_postgres::<Migrator>(&database_settings).await?
     };
 
     let mut client = Client::new(

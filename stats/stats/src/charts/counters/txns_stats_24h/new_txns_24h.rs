@@ -1,8 +1,9 @@
 use crate::{
     data_source::kinds::{
-        data_manipulation::map::{Map, MapFunction},
+        data_manipulation::map::{Map, MapFunction, MapParseTo},
         local_db::DirectPointLocalDbChartSource,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::TimespanValue,
     ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
@@ -45,11 +46,16 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 
 pub type NewTxns24h = DirectPointLocalDbChartSource<NewTxns24hExtracted, Properties>;
+
+pub type NewTxns24hInt = MapParseTo<NewTxns24h, i64>;
 
 #[cfg(test)]
 mod tests {
@@ -67,7 +73,8 @@ mod tests {
     async fn update_new_txns_24h_2() {
         simple_test_counter::<NewTxns24h>(
             "update_new_txns_24h_2",
-            // block at `2022-11-11T00:00:00` is not counted because sql is not that precise :/
+            // block at `2022-11-11T00:00:00` is not counted because
+            // the relation is 'less than' in query
             "14",
             Some(dt("2022-11-11T00:00:00")),
         )

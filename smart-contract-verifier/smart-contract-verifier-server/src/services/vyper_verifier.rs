@@ -6,7 +6,7 @@ use crate::{
         VerifyVyperStandardJsonRequest,
     },
     services::common,
-    settings::{Extensions, VyperSettings},
+    settings::VyperSettings,
     types::{
         StandardJsonParseError, VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper,
         VerifyVyperStandardJsonRequestWrapper,
@@ -26,8 +26,6 @@ impl VyperVerifierService {
     pub async fn new(
         settings: VyperSettings,
         compilers_threads_semaphore: Arc<Semaphore>,
-        /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_variables)] extensions: Extensions,
     ) -> anyhow::Result<Self> {
         let fetcher = common::initialize_fetcher(
             settings.fetcher,
@@ -40,16 +38,7 @@ impl VyperVerifierService {
         let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
         compilers.load_from_dir(&settings.compilers_dir).await;
 
-        /* Otherwise, results in compilation warning if all extensions are disabled */
-        #[allow(unused_mut)]
-        let mut client = VyperClient::new(compilers);
-
-        #[cfg(feature = "sig-provider-extension")]
-        if let Some(sig_provider) = extensions.sig_provider {
-            // TODO(#221): create only one instance of middleware/connection
-            client = client
-                .with_middleware(sig_provider_extension::SigProvider::new(sig_provider).await?);
-        }
+        let client = VyperClient::new(compilers);
 
         Ok(Self {
             client: Arc::new(client),
@@ -82,7 +71,7 @@ impl VyperVerifier for VyperVerifierService {
 
         tracing::debug!(
             bytecode = request.bytecode,
-            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+            bytecode_type = BytecodeType::try_from(request.bytecode_type)
                 .unwrap()
                 .as_str_name(),
             compiler_version = request.compiler_version,
@@ -153,7 +142,7 @@ impl VyperVerifier for VyperVerifierService {
 
         tracing::debug!(
             bytecode = request.bytecode,
-            bytecode_type = BytecodeType::from_i32(request.bytecode_type)
+            bytecode_type = BytecodeType::try_from(request.bytecode_type)
                 .unwrap()
                 .as_str_name(),
             compiler_version = request.compiler_version,

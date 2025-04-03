@@ -163,12 +163,22 @@ fn verify_compiler_output(
                 contract,
             )? {
                 Ok(success) => {
+                    let creation_match_type = success.creation_match.as_ref().map(|v| {
+                        if v.metadata_match {
+                            "full"
+                        } else {
+                            "partial"
+                        }
+                    });
+                    let runtime_match_type = if success.runtime_match.metadata_match {
+                        "full"
+                    } else {
+                        "partial"
+                    };
                     tracing::trace!(
                         file = success.file_path,
                         contract = success.contract_name,
-                        "contract matches; creation_match={:?}, runtime_match={}",
-                        success.creation_match.as_ref().map(|v| &v.r#type),
-                        success.runtime_match.r#type
+                        "contract matches; creation_match={creation_match_type:?}, runtime_match={runtime_match_type}",
                     );
                     successes.push(success);
                 }

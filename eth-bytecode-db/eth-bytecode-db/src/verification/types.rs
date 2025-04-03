@@ -5,6 +5,7 @@ use entity::sea_orm_active_enums;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, str::FromStr};
+use verifier_alliance_database::{CompiledContractCompiler, CompiledContractLanguage};
 
 /********** Bytecode Part **********/
 
@@ -130,6 +131,16 @@ impl From<SourceType> for smart_contract_verifier::SourceType {
             SourceType::Solidity => smart_contract_verifier::SourceType::Solidity,
             SourceType::Vyper => smart_contract_verifier::SourceType::Vyper,
             SourceType::Yul => smart_contract_verifier::SourceType::Yul,
+        }
+    }
+}
+
+impl From<CompiledContractLanguage> for SourceType {
+    fn from(value: CompiledContractLanguage) -> Self {
+        match value {
+            CompiledContractLanguage::Solidity => SourceType::Solidity,
+            CompiledContractLanguage::Yul => SourceType::Yul,
+            CompiledContractLanguage::Vyper => SourceType::Vyper,
         }
     }
 }
@@ -311,6 +322,64 @@ impl TryFrom<Source> for DatabaseReadySource {
             deployed_bytecode_parts: value.deployed_bytecode_parts,
         })
     }
+}
+
+impl TryFrom<DatabaseReadySource> for verifier_alliance_database::CompiledContract {
+    type Error = anyhow::Error;
+
+    fn try_from(source: DatabaseReadySource) -> Result<Self, Self::Error> {
+        let (compiler, language) = match source.source_type {
+            SourceType::Solidity => (
+                CompiledContractCompiler::Solc,
+                CompiledContractLanguage::Solidity,
+            ),
+            SourceType::Vyper => (
+                CompiledContractCompiler::Vyper,
+                CompiledContractLanguage::Vyper,
+            ),
+            SourceType::Yul => (
+                CompiledContractCompiler::Solc,
+                CompiledContractLanguage::Yul,
+            ),
+        };
+        validate_name_part(&source.file_name, "file_name")?;
+        validate_name_part(&source.contract_name, "contract_name")?;
+        let fully_qualified_name = format!("{}:{}", source.file_name, source.contract_name);
+        let compilation_artifacts = source
+            .compilation_artifacts
+            .ok_or_else(|| anyhow::anyhow!("missing compilation_artifacts"))?;
+        let creation_code_artifacts = source
+            .creation_code_artifacts
+            .ok_or_else(|| anyhow::anyhow!("missing creation_code_artifacts"))?;
+        let runtime_code_artifacts = source
+            .runtime_code_artifacts
+            .ok_or_else(|| anyhow::anyhow!("missing runtime_code_artifacts"))?;
+
+        Ok(Self {
+            compiler,
+            version: source.compiler_version,
+            language,
+            name: source.contract_name,
+            fully_qualified_name,
+            sources: source.source_files,
+            compiler_settings: source.compiler_settings,
+            compilation_artifacts: serde_json::from_value(compilation_artifacts)
+                .context("deserializing compilation_artifacts")?,
+            creation_code: source.raw_creation_code,
+            creation_code_artifacts: serde_json::from_value(creation_code_artifacts)
+                .context("deserializing creation_code_artifacts")?,
+            runtime_code: source.raw_runtime_code,
+            runtime_code_artifacts: serde_json::from_value(runtime_code_artifacts)
+                .context("deserializing runtime_code_artifacts")?,
+        })
+    }
+}
+
+fn validate_name_part(name: &str, part: &str) -> Result<(), anyhow::Error> {
+    if name.contains(':') {
+        return Err(anyhow::anyhow!("{} cannot contain ':': '{}'", part, name));
+    }
+    Ok(())
 }
 
 impl TryFrom<AllianceContractImportSuccess> for DatabaseReadySource {

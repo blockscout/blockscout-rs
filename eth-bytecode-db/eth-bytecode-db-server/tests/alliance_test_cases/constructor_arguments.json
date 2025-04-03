@@ -62,7 +62,7 @@
     "creation_transformations": [
         {
             "type": "insert",
-            "reason": "constructor",
+            "reason": "constructorArguments",
             "offset": 489
         }
     ],

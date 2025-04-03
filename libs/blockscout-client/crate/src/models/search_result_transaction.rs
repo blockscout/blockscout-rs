@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 pub struct SearchResultTransaction {
     #[serde(rename = "timestamp")]
     pub timestamp: String,
-    #[serde(rename = "tx_hash")]
-    pub tx_hash: String,
+    #[serde(rename = "transaction_hash")]
+    pub transaction_hash: String,
     #[serde(rename = "type")]
     pub r#type: String,
     #[serde(rename = "url")]
@@ -26,13 +26,13 @@ pub struct SearchResultTransaction {
 impl SearchResultTransaction {
     pub fn new(
         timestamp: String,
-        tx_hash: String,
+        transaction_hash: String,
         r#type: String,
         url: String,
     ) -> SearchResultTransaction {
         SearchResultTransaction {
             timestamp,
-            tx_hash,
+            transaction_hash,
             r#type,
             url,
         }

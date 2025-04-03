@@ -11,54 +11,26 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(derive_new::new, Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TokenTransfer {
     #[serde(rename = "block_hash")]
     pub block_hash: String,
     #[serde(rename = "from")]
     pub from: models::AddressParam,
     #[serde(rename = "log_index")]
-    pub log_index: String,
+    pub log_index: i32, // changed
     #[serde(rename = "method")]
-    pub method: String,
+    pub method: Option<String>, // changed
     #[serde(rename = "timestamp")]
-    pub timestamp: String,
+    pub timestamp: Option<String>, // changed
     #[serde(rename = "to")]
     pub to: models::AddressParam,
     #[serde(rename = "token")]
     pub token: models::TokenInfo,
     #[serde(rename = "total")]
     pub total: models::TokenTransferTotal,
-    #[serde(rename = "tx_hash")]
-    pub tx_hash: String,
+    #[serde(rename = "transaction_hash")]
+    pub transaction_hash: String,
     #[serde(rename = "type")]
     pub r#type: String,
-}
-
-impl TokenTransfer {
-    pub fn new(
-        block_hash: String,
-        from: models::AddressParam,
-        log_index: String,
-        method: String,
-        timestamp: String,
-        to: models::AddressParam,
-        token: models::TokenInfo,
-        total: models::TokenTransferTotal,
-        tx_hash: String,
-        r#type: String,
-    ) -> TokenTransfer {
-        TokenTransfer {
-            block_hash,
-            from,
-            log_index,
-            method,
-            timestamp,
-            to,
-            token,
-            total,
-            tx_hash,
-            r#type,
-        }
-    }
 }

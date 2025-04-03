@@ -29,12 +29,16 @@ use sea_orm::{DatabaseConnection, DbErr};
 use crate::{
     charts::{
         chart_properties_portrait,
-        db_interaction::read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
+        db_interaction::{
+            read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
+            write::set_last_updated_at,
+        },
         ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
     metrics,
     range::UniversalRange,
+    utils::day_start,
     ChartError, IndexingStatus,
 };
 
@@ -260,6 +264,32 @@ where
         Ok(())
     }
 
+    async fn set_next_update_from_itself(
+        db: &DatabaseConnection,
+        update_from: chrono::NaiveDate,
+    ) -> Result<(), ChartError> {
+        // make a proper separate table/column and use it
+        // if this approach brings some problems
+        let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
+        let update_from = day_start(&update_from);
+        match metadata.last_updated_at {
+            Some(current_last_updated_at) if update_from <= current_last_updated_at => {
+                set_last_updated_at(metadata.id, db, update_from)
+                    .await
+                    .map_err(ChartError::StatsDB)?;
+            }
+            Some(current_last_updated_at) => {
+                tracing::warn!("not setting `last_updated_at` because current value ({}) is less than requested ({})", current_last_updated_at, update_from)
+            }
+            None => {
+                tracing::warn!(
+                    "not setting `last_updated_at` because the chart have never updated before"
+                )
+            }
+        }
+        Ok(())
+    }
+
     async fn query_data(
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
@@ -304,6 +334,54 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        counters::TotalTxns,
+        data_source::{types::BlockscoutMigrations, UpdateParameters},
+        tests::{
+            mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
+            point_construction::d,
+            simple_test::{get_counter, prepare_chart_test},
+        },
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_total_txns_with_reindex() {
+        let test_name = "update_total_txns_with_reindex";
+        let (current_time, db, blockscout) = prepare_chart_test::<TotalTxns>(test_name, None).await;
+        let current_date = current_time.date_naive();
+        fill_mock_blockscout_data(&blockscout, current_date).await;
+
+        // Initial update and verify
+        let parameters = UpdateParameters {
+            db: &db,
+            blockscout: &blockscout,
+            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            update_time_override: Some(current_time),
+            force_full: false,
+        };
+
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        TotalTxns::update_recursively(&cx).await.unwrap();
+        assert_eq!("57", get_counter::<TotalTxns>(&cx).await.value);
+
+        // Reindex blockscout data
+        imitate_reindex(&blockscout, current_date).await;
+
+        // Eight transactions were added as a result of reindex
+        // `TotalTxns` calculates all data at once, so the date to update from
+        // does not make a difference here.
+
+        TotalTxns::set_next_update_from_recursively(&db, d("2023-01-02"))
+            .await
+            .unwrap();
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        TotalTxns::update_recursively(&cx).await.unwrap();
+        assert_eq!("65", get_counter::<TotalTxns>(&cx).await.value);
+    }
+
     mod update_itself_is_triggered_once_per_group {
         use std::{
             collections::HashSet,
@@ -453,7 +531,7 @@ mod tests {
                 .collect();
             let group = SyncUpdateGroup::new(&mutexes, Arc::new(TestUpdateGroup)).unwrap();
             group
-                .create_charts_with_mutexes(&db, Some(current_time), &enabled)
+                .create_charts_sync(&db, Some(current_time), &enabled)
                 .await
                 .unwrap();
 
@@ -466,7 +544,7 @@ mod tests {
                 force_full: true,
             };
             group
-                .update_charts_with_mutexes(parameters, &enabled)
+                .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
 
@@ -486,7 +564,7 @@ mod tests {
                 force_full: true,
             };
             group
-                .update_charts_with_mutexes(parameters, &enabled)
+                .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
 
@@ -502,7 +580,7 @@ mod tests {
                 force_full: true,
             };
             group
-                .update_charts_with_mutexes(parameters, &enabled)
+                .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
 
@@ -516,7 +594,7 @@ mod tests {
                 force_full: true,
             };
             group
-                .update_charts_with_mutexes(parameters, &enabled)
+                .update_charts_sync(parameters, &enabled)
                 .await
                 .unwrap();
         }

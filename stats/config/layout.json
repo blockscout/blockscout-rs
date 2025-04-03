@@ -14,8 +14,10 @@
         "total_txns",
         "total_operational_txns",
         "total_user_ops",
+        "total_account_abstraction_wallets",
         "total_verified_contracts",
         "new_txns_24h",
+        "new_operational_txns_24h",
         "pending_txns_30m",
         "txns_fee_24h",
         "average_txn_fee_24h"
@@ -43,8 +45,7 @@
                 "txns_growth",
                 "new_operational_txns",
                 "operational_txns_growth",
-                "txns_success_rate",
-                "new_txns_window"
+                "txns_success_rate"
             ]
         },
         {
@@ -91,6 +92,9 @@
             "charts_order": [
                 "user_ops_growth",
                 "new_user_ops",
+                "new_account_abstraction_wallets",
+                "account_abstraction_wallets_growth",
+                "active_account_abstraction_wallets",
                 "active_bundlers",
                 "active_paymasters"
             ]

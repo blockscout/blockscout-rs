@@ -8,6 +8,7 @@ use crate::{
         },
         UpdateContext,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     range::UniversalRange,
     types::timespans::DateValue,
     ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
@@ -75,7 +76,10 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 
@@ -98,13 +102,8 @@ impl ValueEstimation for TotalTxnsEstimation {
     }
 }
 
-// We will need it to update on not fully indexed data soon, therefore this counter is
-// separated from `NewTxns`.
-//
-// Separate query not reliant on previous computation helps this counter to work in such
-// environments.
-//
-// todo: make it dependant again if #845 is resolved
+// Independent from `NewTxns` because this needs to work on not-fully-indexed
+// just as well.
 pub type TotalTxns =
     DirectPointLocalDbChartSourceWithEstimate<TotalTxnsRemote, TotalTxnsEstimation, Properties>;
 pub type TotalTxnsInt = MapParseTo<TotalTxns, i64>;

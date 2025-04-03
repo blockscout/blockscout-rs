@@ -93,7 +93,7 @@ where
     }
 }
 
-/// Will reuse result for the same produced query within one update
+/// Will reuse result for the same produced query **within one update**
 /// (based on update context)
 pub struct PullOne24hCached<S, Value>(PhantomData<(S, Value)>)
 where

@@ -1,3 +1,8 @@
+//! It makes sense to focus on the slowest querying charts
+//! when making update groups, as we want to synchronize
+//! update of other lighter charts to perform simultaneously
+//! and reuse the heavy query data.
+
 use crate::{construct_update_group, counters::*, lines::*};
 
 macro_rules! singleton_groups {
@@ -18,21 +23,16 @@ singleton_groups!(
     // Active accounts is left without resolutions because the chart is non-trivial
     // to calculate somewhat-optimally
     ActiveAccounts,
-    // Same^ for bundlers & paymasters
+    // Same ^ for bundlers, paymasters, and aa wallets
     ActiveBundlers,
     ActivePaymasters,
+    ActiveAccountAbstractionWallets,
     AverageBlockTime,
     CompletedTxns,
     PendingTxns30m,
     TotalAddresses,
-    TotalBlocks,
     TotalTxns,
-    // Even though it depends on `TotalTxns` and `TotalBlocks`,
-    // it's ok not to update it as frequently.
-    // Granular control over these 2 still seems useful.
-    TotalOperationalTxns,
     TotalTokens,
-    YesterdayTxns,
     // Each of the `ActiveRecurringAccounts*` charts includes quite heavy SQL query,
     // thus it's better to have granular control on update times.
     ActiveRecurringAccountsDailyRecurrence60Days,
@@ -47,9 +47,23 @@ singleton_groups!(
     ActiveRecurringAccountsMonthlyRecurrence120Days,
     ActiveRecurringAccountsWeeklyRecurrence120Days,
     ActiveRecurringAccountsYearlyRecurrence120Days,
-    // Standalone chart
-    NewTxnsWindow,
 );
+
+// According to collected metrics, `TotalTxns` has
+// very cheap query (a dependency of `TotalOperationalTxns`),
+// but `TotalBlocks` doesn't. Also, all these charts
+// are placed on the main page, thus they benefit
+// from frequent updates.
+//
+// Therefore, we put the dependant (`TotalOperationalTxns`) in the same
+// group as its heaviest dependency (`TotalBlocks`).
+construct_update_group!(TotalBlocksGroup {
+    charts: [TotalBlocks, TotalOperationalTxns]
+});
+
+construct_update_group!(YesterdayTxnsGroup {
+    charts: [YesterdayTxns, YesterdayOperationalTxns]
+});
 
 construct_update_group!(AverageBlockRewardsGroup {
     charts: [
@@ -146,7 +160,12 @@ construct_update_group!(TxnsSuccessRateGroup {
 });
 
 construct_update_group!(TxnsStats24hGroup {
-    charts: [AverageTxnFee24h, NewTxns24h, TxnsFee24h,]
+    charts: [
+        AverageTxnFee24h,
+        NewTxns24h,
+        TxnsFee24h,
+        NewOperationalTxns24h,
+    ]
 });
 
 construct_update_group!(NewAccountsGroup {
@@ -160,6 +179,20 @@ construct_update_group!(NewAccountsGroup {
         AccountsGrowthMonthly,
         AccountsGrowthYearly,
         TotalAccounts,
+    ]
+});
+
+construct_update_group!(NewAccountAbstractionWalletsGroup {
+    charts: [
+        NewAccountAbstractionWallets,
+        NewAccountAbstractionWalletsWeekly,
+        NewAccountAbstractionWalletsMonthly,
+        NewAccountAbstractionWalletsYearly,
+        AccountAbstractionWalletsGrowth,
+        AccountAbstractionWalletsGrowthWeekly,
+        AccountAbstractionWalletsGrowthMonthly,
+        AccountAbstractionWalletsGrowthYearly,
+        TotalAccountAbstractionWallets,
     ]
 });
 
@@ -188,6 +221,10 @@ construct_update_group!(NewTxnsGroup {
         TxnsGrowthMonthly,
         TxnsGrowthYearly,
     ],
+});
+
+construct_update_group!(NewTxnsWindowGroup {
+    charts: [NewTxnsWindow, NewOperationalTxnsWindow],
 });
 
 construct_update_group!(NewUserOpsGroup {

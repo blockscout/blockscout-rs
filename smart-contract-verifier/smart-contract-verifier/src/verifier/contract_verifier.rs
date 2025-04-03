@@ -85,6 +85,7 @@ pub struct ContractVerifier<'a, C> {
 
 impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
     pub fn new(
+        is_vyper: bool,
         compilers: &'a Compilers<C>,
         compiler_version: &'a compiler::DetailedVersion,
         creation_tx_input: Option<Bytes>,
@@ -108,11 +109,13 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                     is_blueprint = true;
                     Box::new(all_metadata_extracting_verifier::Verifier::<
                         CreationTxInputWithoutConstructorArgs,
-                    >::new(blueprint_contract.initcode)?)
+                    >::new(
+                        is_vyper, blueprint_contract.initcode
+                    )?)
                 } else {
                     Box::new(all_metadata_extracting_verifier::Verifier::<
                         DeployedBytecode,
-                    >::new(deployed_bytecode)?)
+                    >::new(is_vyper, deployed_bytecode)?)
                 }
             }
             Some(creation_tx_input) => {
@@ -122,10 +125,13 @@ impl<'a, C: EvmCompiler> ContractVerifier<'a, C> {
                     is_blueprint = true;
                     Box::new(all_metadata_extracting_verifier::Verifier::<
                         CreationTxInputWithoutConstructorArgs,
-                    >::new(blueprint_contract.initcode)?)
+                    >::new(
+                        is_vyper, blueprint_contract.initcode
+                    )?)
                 } else {
                     Box::new(
                         all_metadata_extracting_verifier::Verifier::<CreationTxInput>::new(
+                            is_vyper,
                             creation_tx_input,
                         )?,
                     )

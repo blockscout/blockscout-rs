@@ -16,6 +16,30 @@ async fn health(blockscout: Stubr) {
         .await
         .expect("Failed to get health");
     assert_eq!(health.healthy, Some(true));
+    assert_eq!(
+        health
+            .metadata
+            .expect("metadata is None")
+            .latest_block
+            .expect("latest_block is None")
+            .db
+            .expect("db is None")
+            .number
+            .expect("number is None"),
+        "21979873"
+    );
+    let health_v1 = health_api::health_v1(&config)
+        .await
+        .expect("Failed to get health");
+    assert_eq!(health_v1.healthy, Some(true));
+    assert_eq!(
+        health_v1
+            .data
+            .expect("data is None")
+            .latest_block_number
+            .expect("latest_block_number is None"),
+        "21879216"
+    );
 }
 
 #[rstest]
@@ -42,9 +66,10 @@ async fn transactions(blockscout: Stubr) {
 #[tokio::test]
 async fn internal_transactions(blockscout: Stubr) {
     let config = get_config_from_stubr(&blockscout);
-    let internal_transactions = transactions_api::get_internal_txs(&config, DEFAULT_TX_HASH)
-        .await
-        .expect("Failed to get transactions");
+    let internal_transactions =
+        transactions_api::get_transaction_internal_txs(&config, DEFAULT_TX_HASH)
+            .await
+            .expect("Failed to get transactions");
     assert!(!internal_transactions.items.is_empty());
 }
 
@@ -82,6 +107,18 @@ async fn tokens(blockscout: Stubr) {
         tokens_api::get_nft_instance(&config, DEFAULT_TOKEN_HASH, DEFAULT_TOKEN_INSTANCE_NUMBER)
             .await
             .expect("Failed to get transactions");
+}
+
+#[rstest]
+#[tokio::test]
+async fn the_transaction(blockscout: Stubr) {
+    let config = get_config_from_stubr(&blockscout);
+    transactions_api::get_tx(
+        &config,
+        "0xf7d09142363203b4c572bac2be3599de91260eb6131b57663832490e7eeaf213",
+    )
+    .await
+    .expect("Failed to get transaction");
 }
 
 #[fixture]

@@ -37,6 +37,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --name postgres
         ports:
           - 5432:5432
     steps:
@@ -48,26 +49,30 @@ jobs:
         with:
           working-directory: stats
 
-      - name: Unit tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
-        if: success() || failure()
-
-      - name: Doc tests
-        run: cargo test --locked --workspace --all-features --doc
-        if: success() || failure()
+      - name: Build
+        id: build
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
 
       - name: ENVs in documentation
         run: cargo run --bin env-docs-generation
         env:
           VALIDATE_ONLY: true
 
+      - name: Unit tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+        if: steps.build.outcome == 'success'
+
+      - name: Doc tests
+        run: cargo test --locked --workspace --all-features --doc
+        if: steps.build.outcome == 'success'
+
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
 
       - name: DB tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace -- --nocapture --ignored
-        if: success() || failure()
+        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored
+        if: steps.build.outcome == 'success'
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
 

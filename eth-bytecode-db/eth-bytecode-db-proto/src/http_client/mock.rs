@@ -2,12 +2,15 @@ use crate::blockscout::eth_bytecode_db::v2::{
     database_actix::route_database, database_server::Database,
     solidity_verifier_actix::route_solidity_verifier, solidity_verifier_server::SolidityVerifier,
     sourcify_verifier_actix::route_sourcify_verifier, sourcify_verifier_server::SourcifyVerifier,
+    verifier_alliance_actix::route_verifier_alliance, verifier_alliance_server::VerifierAlliance,
     vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifier,
     AllianceStats, BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
     GetAllianceStatsRequest, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
     SearchAllSourcesRequest, SearchAllSourcesResponse, SearchAllianceSourcesRequest,
     SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesRequest,
-    SearchSourcesResponse, SearchSourcifySourcesRequest, VerifyFromEtherscanSourcifyRequest,
+    SearchSourcesResponse, SearchSourcifySourcesRequest, VerifierAllianceBatchImportResponse,
+    VerifierAllianceBatchImportSolidityMultiPartRequest,
+    VerifierAllianceBatchImportSolidityStandardJsonRequest, VerifyFromEtherscanSourcifyRequest,
     VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     VerifySourcifyRequest, VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
 };
@@ -74,12 +77,25 @@ mock! {
     }
 }
 
+mock! {
+    #[derive(Clone)]
+    pub VerifierAllianceService {}
+
+    #[async_trait::async_trait]
+    impl VerifierAlliance for VerifierAllianceService {
+        async fn batch_import_solidity_multi_part(&self, request: tonic::Request<VerifierAllianceBatchImportSolidityMultiPartRequest>) -> Result<tonic::Response<VerifierAllianceBatchImportResponse>, tonic::Status>;
+
+        async fn batch_import_solidity_standard_json(&self, request: tonic::Request<VerifierAllianceBatchImportSolidityStandardJsonRequest>) -> Result<tonic::Response<VerifierAllianceBatchImportResponse>, tonic::Status>;
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct EthBytecodeDbServer {
     database_service: Option<Arc<MockDatabaseService>>,
     solidity_verifier_service: Option<Arc<MockSolidityVerifierService>>,
     vyper_verifier_service: Option<Arc<MockVyperVerifierService>>,
     sourcify_verifier_service: Option<Arc<MockSourcifyVerifierService>>,
+    verifier_alliance_service: Option<Arc<MockVerifierAllianceService>>,
 }
 
 impl EthBytecodeDbServer {
@@ -89,6 +105,7 @@ impl EthBytecodeDbServer {
             solidity_verifier_service: None,
             vyper_verifier_service: None,
             sourcify_verifier_service: None,
+            verifier_alliance_service: None,
         }
     }
 
@@ -118,6 +135,14 @@ impl EthBytecodeDbServer {
         self
     }
 
+    pub fn verifier_alliance_service(
+        mut self,
+        verifier_alliance_service: MockVerifierAllianceService,
+    ) -> Self {
+        self.verifier_alliance_service = Some(Arc::new(verifier_alliance_service));
+        self
+    }
+
     pub async fn start(&self) -> SocketAddr {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
@@ -126,6 +151,7 @@ impl EthBytecodeDbServer {
         let solidity_verifier_service = self.solidity_verifier_service.clone();
         let vyper_verifier_service = self.vyper_verifier_service.clone();
         let sourcify_verifier_service = self.sourcify_verifier_service.clone();
+        let verifier_alliance_service = self.verifier_alliance_service.clone();
 
         let configure_router = move |service_config: &mut actix_web::web::ServiceConfig| {
             if let Some(database) = database_service.clone() {
@@ -139,6 +165,10 @@ impl EthBytecodeDbServer {
             }
             if let Some(sourcify) = sourcify_verifier_service.clone() {
                 service_config.configure(|config| route_sourcify_verifier(config, sourcify));
+            }
+            if let Some(verifier_alliance) = verifier_alliance_service.clone() {
+                service_config
+                    .configure(|config| route_verifier_alliance(config, verifier_alliance));
             }
         };
 

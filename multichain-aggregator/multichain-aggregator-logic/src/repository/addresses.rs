@@ -1,13 +1,19 @@
-use crate::{
-    error::{ParseError, ServiceError},
-    types::{addresses::Address, ChainId},
-};
+use crate::types::{addresses::Address, ChainId};
 use alloy_primitives::Address as AddressAlloy;
-use entity::addresses::{ActiveModel, Column, Entity, Model};
+use entity::{
+    addresses::{ActiveModel, Column, Entity, Model},
+    sea_orm_active_enums as db_enum,
+};
 use regex::Regex;
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, IntoSimpleExpr, Iterable, QueryFilter, QueryOrder, QuerySelect,
+    prelude::Expr,
+    sea_query::{
+        Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
+        WithClause,
+    },
+    ActiveValue::NotSet,
+    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoSimpleExpr,
+    Iterable, Order, QuerySelect,
 };
 use std::sync::OnceLock;
 
@@ -16,19 +22,10 @@ fn words_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"[a-zA-Z0-9]+").unwrap())
 }
 
-fn hex_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^(0x)?[0-9a-fA-F]{3,40}$").unwrap())
-}
-
 pub async fn upsert_many<C>(db: &C, mut addresses: Vec<Address>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {
-    if addresses.is_empty() {
-        return Ok(());
-    }
-
     addresses.sort_by(|a, b| (a.hash, a.chain_id).cmp(&(b.hash, b.chain_id)));
     let addresses = addresses.into_iter().map(|address| {
         let model: Model = address.into();
@@ -45,77 +42,192 @@ where
                 .value(Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
         )
-        .exec(db)
+        .do_nothing()
+        .exec_without_returning(db)
         .await?;
 
     Ok(())
 }
 
-pub async fn search_by_query<C>(db: &C, q: &str) -> Result<Vec<Address>, ServiceError>
-where
-    C: ConnectionTrait,
-{
-    search_by_query_paginated(db, q, None, None, 100)
-        .await
-        .map(|(addresses, _)| addresses)
+fn prepare_address_search_cte(
+    contract_name_query: Option<String>,
+    cte_name: impl IntoIden,
+) -> CommonTableExpression {
+    // Materialize addresses CTE when searching by contract_name.
+    // Otherwise, query planner chooses a suboptimal plan.
+    // If query is not provided, this CTE will be folded by the optimizer.
+    let is_cte_materialized = contract_name_query.is_some();
+
+    CommonTableExpression::new()
+        .query(
+            Query::select()
+                .column(ColumnRef::Asterisk)
+                .from(Entity.table_ref())
+                .apply_if(contract_name_query, |q, query| {
+                    let ts_query = prepare_ts_query(&query);
+                    q.and_where(Expr::cust_with_expr(
+                        "to_tsvector('english', contract_name) @@ to_tsquery($1)",
+                        ts_query,
+                    ));
+                })
+                // Apply a hard limit in case we materialize the CTE
+                .apply_if(is_cte_materialized.then_some(10_000), |q, limit| {
+                    q.limit(limit);
+                })
+                .to_owned(),
+        )
+        .materialized(is_cte_materialized)
+        .table_name(cte_name)
+        .to_owned()
 }
 
-pub async fn search_by_query_paginated<C>(
+pub async fn uniform_chain_search<C>(
     db: &C,
-    q: &str,
-    chain_id: Option<ChainId>,
-    page_token: Option<(AddressAlloy, ChainId)>,
-    limit: u64,
-) -> Result<(Vec<Address>, Option<(AddressAlloy, ChainId)>), ServiceError>
+    contract_name_query: String,
+    token_types: Option<Vec<db_enum::TokenType>>,
+    chain_ids: Vec<ChainId>,
+) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait,
 {
-    let page_token = page_token.unwrap_or((AddressAlloy::ZERO, ChainId::MIN));
-    let mut query = Entity::find()
-        .filter(
-            Expr::tuple([
-                Column::Hash.into_simple_expr(),
-                Column::ChainId.into_simple_expr(),
-            ])
-            .gte(Expr::tuple([
-                page_token.0.as_slice().into(),
-                page_token.1.into(),
-            ])),
+    if chain_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let ts_rank_ordering = Expr::cust_with_expr(
+        "ts_rank(to_tsvector('english', contract_name), to_tsquery($1))",
+        prepare_ts_query(&contract_name_query),
+    );
+
+    let addresses_cte_iden = Alias::new("addresses").into_iden();
+    let addresses_cte =
+        prepare_address_search_cte(Some(contract_name_query), addresses_cte_iden.clone());
+
+    let row_number = Expr::custom_keyword(Alias::new("ROW_NUMBER()"));
+    let ranked_addresses_iden = Alias::new("ranked_addresses").into_iden();
+    let ranked_addresses_cte = CommonTableExpression::new()
+        .query(
+            Query::select()
+                .column(ColumnRef::TableAsterisk(addresses_cte_iden.clone()))
+                .expr_window_as(
+                    row_number,
+                    WindowStatement::partition_by(Column::ChainId)
+                        .order_by_expr(ts_rank_ordering, Order::Desc)
+                        .order_by(Column::Hash, Order::Asc)
+                        .to_owned(),
+                    Alias::new("rn"),
+                )
+                .from(addresses_cte_iden.clone())
+                .and_where(Column::ChainId.is_in(chain_ids.clone()))
+                .apply_if(token_types, |q, token_types| {
+                    if !token_types.is_empty() {
+                        q.and_where(Column::TokenType.is_in(token_types));
+                    } else {
+                        q.and_where(Column::TokenType.is_null());
+                    }
+                })
+                .to_owned(),
         )
-        .order_by_asc(Column::Hash)
-        .order_by_asc(Column::ChainId)
-        .limit(limit + 1);
+        .table_name(ranked_addresses_iden.clone())
+        .to_owned();
 
-    if let Some(chain_id) = chain_id {
-        query = query.filter(Column::ChainId.eq(chain_id));
-    }
+    let limit = chain_ids.len() as u64;
+    let base_select = Query::select()
+        .column(ColumnRef::Asterisk)
+        .from(ranked_addresses_iden)
+        .and_where(Expr::col(Alias::new("rn")).eq(1))
+        .order_by_expr(
+            Expr::cust_with_exprs(
+                "array_position($1, $2)",
+                [chain_ids.into(), Expr::col(Column::ChainId).into()],
+            ),
+            Order::Asc,
+        )
+        .limit(limit)
+        .to_owned();
 
-    if hex_regex().is_match(q) {
-        query = query.filter(Expr::cust_with_expr(
-            "encode(hash, 'hex') LIKE $1",
-            format!("{}%", q.to_lowercase().strip_prefix("0x").unwrap_or(q)),
-        ));
-    } else {
-        let ts_query = prepare_ts_query(q);
-        query = query.filter(Expr::cust_with_expr(
-            "to_tsvector('english', contract_name) @@ to_tsquery($1) OR \
-                to_tsvector('english', ens_name) @@ to_tsquery($1) OR \
-                to_tsvector('english', token_name) @@ to_tsquery($1)",
-            ts_query,
-        ));
-    }
+    let query = WithClause::new()
+        .cte(addresses_cte)
+        .cte(ranked_addresses_cte)
+        .to_owned()
+        .query(base_select);
 
-    let addresses = query
+    let addresses = Model::find_by_statement(db.get_database_backend().build(&query))
         .all(db)
-        .await?
-        .into_iter()
-        .map(Address::try_from)
-        .collect::<Result<Vec<_>, _>>()?;
+        .await?;
 
-    match addresses.get(limit as usize) {
+    Ok(addresses)
+}
+
+pub async fn list<C>(
+    db: &C,
+    address: Option<AddressAlloy>,
+    contract_name_query: Option<String>,
+    chain_ids: Option<Vec<ChainId>>,
+    token_types: Option<Vec<db_enum::TokenType>>,
+    page_size: u64,
+    page_token: Option<(AddressAlloy, ChainId)>,
+) -> Result<(Vec<Model>, Option<(AddressAlloy, ChainId)>), DbErr>
+where
+    C: ConnectionTrait,
+{
+    let addresses_cte_iden = Alias::new("addresses").into_iden();
+    let addresses_cte = prepare_address_search_cte(contract_name_query, addresses_cte_iden.clone());
+
+    let base_select = QuerySelect::query(&mut Entity::find())
+        .from_clear()
+        .from(addresses_cte_iden)
+        .apply_if(chain_ids, |q, chain_ids| {
+            if !chain_ids.is_empty() {
+                q.and_where(Column::ChainId.is_in(chain_ids));
+            }
+        })
+        .apply_if(token_types, |q, token_types| {
+            if !token_types.is_empty() {
+                q.and_where(Column::TokenType.is_in(token_types));
+            } else {
+                q.and_where(Column::TokenType.is_null());
+            }
+        })
+        .apply_if(address, |q, address| {
+            q.and_where(Column::Hash.eq(address.as_slice()));
+        })
+        .apply_if(page_token, |q, page_token| {
+            q.and_where(
+                Expr::tuple([
+                    Column::Hash.into_simple_expr(),
+                    Column::ChainId.into_simple_expr(),
+                ])
+                .gte(Expr::tuple([
+                    page_token.0.as_slice().into(),
+                    page_token.1.into(),
+                ])),
+            );
+        })
+        .order_by_columns(vec![
+            (Column::Hash, Order::Asc),
+            (Column::ChainId, Order::Asc),
+        ])
+        .limit(page_size + 1)
+        .to_owned();
+
+    let query = WithClause::new()
+        .cte(addresses_cte)
+        .to_owned()
+        .query(base_select);
+
+    let addresses = Model::find_by_statement(db.get_database_backend().build(&query))
+        .all(db)
+        .await?;
+
+    match addresses.get(page_size as usize) {
         Some(a) => Ok((
-            addresses[0..limit as usize].to_vec(),
-            Some((a.hash, a.chain_id)),
+            addresses[..page_size as usize].to_vec(),
+            Some((
+                // unwrap is safe here because addresses are validated prior to being inserted
+                AddressAlloy::try_from(a.hash.as_slice()).unwrap(),
+                a.chain_id,
+            )),
         )),
         None => Ok((addresses, None)),
     }
@@ -128,10 +240,6 @@ fn non_primary_columns() -> impl Iterator<Item = Column> {
             Column::Hash | Column::ChainId | Column::CreatedAt | Column::UpdatedAt
         )
     })
-}
-
-pub fn try_parse_address(query: &str) -> Result<alloy_primitives::Address, ParseError> {
-    query.parse().map_err(ParseError::from)
 }
 
 fn prepare_ts_query(query: &str) -> String {

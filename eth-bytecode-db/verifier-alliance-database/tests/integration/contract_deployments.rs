@@ -2,7 +2,7 @@ use blockscout_display_bytes::decode_hex;
 use blockscout_service_launcher::test_database::database;
 use pretty_assertions::assert_eq;
 use verifier_alliance_database::{InsertContractDeployment, RetrieveContractDeployment};
-use verifier_alliance_migration_v1::Migrator;
+use verifier_alliance_migration::Migrator;
 
 #[tokio::test]
 async fn insert_regular_deployment_works_and_can_be_retrieved() {

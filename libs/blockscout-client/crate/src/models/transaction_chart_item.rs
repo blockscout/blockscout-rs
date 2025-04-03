@@ -15,12 +15,15 @@ use serde::{Deserialize, Serialize};
 pub struct TransactionChartItem {
     #[serde(rename = "date")]
     pub date: String,
-    #[serde(rename = "tx_count")]
-    pub tx_count: i32,
+    #[serde(rename = "transaction_count")]
+    pub transaction_count: i32,
 }
 
 impl TransactionChartItem {
-    pub fn new(date: String, tx_count: i32) -> TransactionChartItem {
-        TransactionChartItem { date, tx_count }
+    pub fn new(date: String, transaction_count: i32) -> TransactionChartItem {
+        TransactionChartItem {
+            date,
+            transaction_count,
+        }
     }
 }

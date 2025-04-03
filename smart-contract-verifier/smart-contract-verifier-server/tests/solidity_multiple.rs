@@ -34,13 +34,9 @@ async fn global_service() -> &'static Arc<SolidityVerifierService> {
         .get_or_init(|| async {
             let settings = Settings::default();
             let compilers_lock = Semaphore::new(settings.compilers.max_threads.get());
-            let service = SolidityVerifierService::new(
-                settings.solidity,
-                Arc::new(compilers_lock),
-                settings.extensions.solidity,
-            )
-            .await
-            .expect("couldn't initialize the service");
+            let service = SolidityVerifierService::new(settings.solidity, Arc::new(compilers_lock))
+                .await
+                .expect("couldn't initialize the service");
             Arc::new(service)
         })
         .await
@@ -409,20 +405,21 @@ mod success_tests {
         test_success(contract_dir, test_input).await;
     }
 
-    #[tokio::test]
-    async fn solidity_0_4_10() {
-        let contract_dir = "solidity_0.4.10";
-
-        // For some reason v0.4.10 in default solc list for linux
-        // has different commit hash from macos and js versions
-        #[cfg(target_os = "linux")]
-        let compiler_version = "v0.4.10+commit.9e8cc01b";
-        #[cfg(not(target_os = "linux"))]
-        let compiler_version = "v0.4.10+commit.f0d539ae";
-
-        let test_input = TestInput::new("Main", compiler_version).has_constructor_args();
-        test_success(contract_dir, test_input).await;
-    }
+    // TODO: uncomment when solc <v0.4.11 support is returned back
+    // #[tokio::test]
+    // async fn solidity_0_4_10() {
+    //     let contract_dir = "solidity_0.4.10";
+    //
+    //     // For some reason v0.4.10 in default solc list for linux
+    //     // has different commit hash from macos and js versions
+    //     #[cfg(target_os = "linux")]
+    //     let compiler_version = "v0.4.10+commit.9e8cc01b";
+    //     #[cfg(not(target_os = "linux"))]
+    //     let compiler_version = "v0.4.10+commit.f0d539ae";
+    //
+    //     let test_input = TestInput::new("Main", compiler_version).has_constructor_args();
+    //     test_success(contract_dir, test_input).await;
+    // }
 }
 
 mod failure_tests {
@@ -449,32 +446,32 @@ mod failure_tests {
         test_failure(contract_dir, test_input, "ParserError").await;
     }
 
-    #[tokio::test]
-    async fn returns_compiler_version_mismatch() {
-        let contract_dir = "solidity_0.5.14";
+    // #[tokio::test]
+    // async fn returns_compiler_version_mismatch() { TODO: uncomment when support for compiler version mismatch is returned
+    // let contract_dir = "solidity_0.5.14";
+    //
+    // // Another version
+    // let test_input = TestInput::new("A", "v0.5.15+commit.6a57276f");
+    // test_failure(
+    //     contract_dir,
+    //     test_input,
+    //     "Invalid compiler version: Expected 0.5.14, found 0.5.15",
+    // )
+    // .await;
 
-        // Another version
-        let test_input = TestInput::new("A", "v0.5.15+commit.6a57276f");
-        test_failure(
-            contract_dir,
-            test_input,
-            "Invalid compiler version: Expected 0.5.14, found 0.5.15",
-        )
-        .await;
+    // Currently due to the nature of bytecodes comparing (see `base_verifier::compare_creation_tx_inputs`)
+    // if on chain creation transaction input length is less than the local creation transaction input,
+    // the verifier returns `NoMatchingContracts` error. Thus, the test case below would not work.
+    //
+    // TODO: see how difficult it would be to fix that
 
-        // Currently due to the nature of bytecodes comparing (see `base_verifier::compare_creation_tx_inputs`)
-        // if on chain creation transaction input length is less than the local creation transaction input,
-        // the verifier returns `NoMatchingContracts` error. Thus, the test case below would not work.
-        //
-        // TODO: see how difficult it would be to fix that
-
-        // // Another nightly version
-        // let settings_json = "{ \"solidity\": { \"fetcher\": { \"list\": { \"list_url\": \"https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json\" } } } }";
-        // let settings = serde_json::from_str(settings_json).expect("Settings is valid json");
-        // let local_app_router = local_app_router(settings).await;
-        // let test_input = TestInput::new("A", "v0.5.14-nightly.2019.12.10+commit.45aa7a88").with_app_router(local_app_router);
-        // test_failure(contract_dir, test_input, "Invalid compiler version").await;
-    }
+    // // Another nightly version
+    // let settings_json = "{ \"solidity\": { \"fetcher\": { \"list\": { \"list_url\": \"https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json\" } } } }";
+    // let settings = serde_json::from_str(settings_json).expect("Settings is valid json");
+    // let local_app_router = local_app_router(settings).await;
+    // let test_input = TestInput::new("A", "v0.5.14-nightly.2019.12.10+commit.45aa7a88").with_app_router(local_app_router);
+    // test_failure(contract_dir, test_input, "Invalid compiler version").await;
+    // }
 }
 
 mod bad_request_error_tests {

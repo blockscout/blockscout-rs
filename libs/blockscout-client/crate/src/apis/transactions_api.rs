@@ -13,42 +13,50 @@ use crate::{apis::ResponseContent, models};
 use reqwest;
 use serde::{Deserialize, Serialize};
 
-/// struct for typed errors of method [`get_internal_txs`]
+/// struct for typed errors of method [`get_transaction_internal_txs`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum GetInternalTxsError {
+pub enum GetTransactionInternalTxsError {
     Status400(),
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`get_logs`]
+/// struct for typed errors of method [`get_transaction_logs`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum GetLogsError {
+pub enum GetTransactionLogsError {
     Status400(),
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`get_raw_trace`]
+/// struct for typed errors of method [`get_transaction_raw_trace`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum GetRawTraceError {
+pub enum GetTransactionRawTraceError {
     Status400(),
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`get_state_changes`]
+/// struct for typed errors of method [`get_transaction_state_changes`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum GetStateChangesError {
+pub enum GetTransactionStateChangesError {
     Status400(),
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`get_token_transfers`]
+/// struct for typed errors of method [`get_transaction_summary`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum GetTokenTransfersError {
+pub enum GetTransactionSummaryError {
+    Status400(),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`get_transaction_token_transfers`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GetTransactionTokenTransfersError {
     Status400(),
     UnknownValue(serde_json::Value),
 }
@@ -69,212 +77,231 @@ pub enum GetTxsError {
     UnknownValue(serde_json::Value),
 }
 
-pub async fn get_internal_txs(
+pub async fn get_transaction_internal_txs(
     configuration: &configuration::Configuration,
     transaction_hash: &str,
-) -> Result<models::GetInternalTxs200Response, Error<GetInternalTxsError>> {
-    let local_var_configuration = configuration;
+) -> Result<models::GetTransactionInternalTxs200Response, Error<GetTransactionInternalTxsError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_transaction_hash = transaction_hash;
 
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!(
+    let uri_str = format!(
         "{}/api/v2/transactions/{transaction_hash}/internal-transactions",
-        local_var_configuration.base_path,
-        transaction_hash = crate::apis::urlencode(transaction_hash)
+        configuration.base_path,
+        transaction_hash = crate::apis::urlencode(p_transaction_hash)
     );
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetInternalTxsError> =
-            serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetTransactionInternalTxsError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }
 
-pub async fn get_logs(
+pub async fn get_transaction_logs(
     configuration: &configuration::Configuration,
     transaction_hash: &str,
-) -> Result<models::GetLogs200Response, Error<GetLogsError>> {
-    let local_var_configuration = configuration;
+) -> Result<models::GetTransactionLogs200Response, Error<GetTransactionLogsError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_transaction_hash = transaction_hash;
 
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!(
+    let uri_str = format!(
         "{}/api/v2/transactions/{transaction_hash}/logs",
-        local_var_configuration.base_path,
-        transaction_hash = crate::apis::urlencode(transaction_hash)
+        configuration.base_path,
+        transaction_hash = crate::apis::urlencode(p_transaction_hash)
     );
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetLogsError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetTransactionLogsError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }
 
-pub async fn get_raw_trace(
+pub async fn get_transaction_raw_trace(
     configuration: &configuration::Configuration,
     transaction_hash: &str,
-) -> Result<Vec<models::RawTrace>, Error<GetRawTraceError>> {
-    let local_var_configuration = configuration;
+) -> Result<Vec<models::RawTrace>, Error<GetTransactionRawTraceError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_transaction_hash = transaction_hash;
 
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!(
+    let uri_str = format!(
         "{}/api/v2/transactions/{transaction_hash}/raw-trace",
-        local_var_configuration.base_path,
-        transaction_hash = crate::apis::urlencode(transaction_hash)
+        configuration.base_path,
+        transaction_hash = crate::apis::urlencode(p_transaction_hash)
     );
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetRawTraceError> =
-            serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetTransactionRawTraceError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }
 
-pub async fn get_state_changes(
+pub async fn get_transaction_state_changes(
     configuration: &configuration::Configuration,
     transaction_hash: &str,
-) -> Result<models::GetStateChanges200Response, Error<GetStateChangesError>> {
-    let local_var_configuration = configuration;
+) -> Result<models::GetTransactionStateChanges200Response, Error<GetTransactionStateChangesError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_transaction_hash = transaction_hash;
 
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!(
+    let uri_str = format!(
         "{}/api/v2/transactions/{transaction_hash}/state-changes",
-        local_var_configuration.base_path,
-        transaction_hash = crate::apis::urlencode(transaction_hash)
+        configuration.base_path,
+        transaction_hash = crate::apis::urlencode(p_transaction_hash)
     );
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetStateChangesError> =
-            serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetTransactionStateChangesError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }
 
-pub async fn get_token_transfers(
+pub async fn get_transaction_summary(
+    configuration: &configuration::Configuration,
+    transaction_hash: &str,
+) -> Result<models::TransactionSummary, Error<GetTransactionSummaryError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_transaction_hash = transaction_hash;
+
+    let uri_str = format!(
+        "{}/api/v2/transactions/{transaction_hash}/summary",
+        configuration.base_path,
+        transaction_hash = crate::apis::urlencode(p_transaction_hash)
+    );
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<GetTransactionSummaryError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+pub async fn get_transaction_token_transfers(
     configuration: &configuration::Configuration,
     transaction_hash: &str,
     r#type: Option<&str>,
-) -> Result<models::GetTokenTransfers200Response, Error<GetTokenTransfersError>> {
-    let local_var_configuration = configuration;
+) -> Result<models::GetTransactionTokenTransfers200Response, Error<GetTransactionTokenTransfersError>>
+{
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_transaction_hash = transaction_hash;
+    let p_type = r#type;
 
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!(
+    let uri_str = format!(
         "{}/api/v2/transactions/{transaction_hash}/token-transfers",
-        local_var_configuration.base_path,
-        transaction_hash = crate::apis::urlencode(transaction_hash)
+        configuration.base_path,
+        transaction_hash = crate::apis::urlencode(p_transaction_hash)
     );
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    if let Some(ref local_var_str) = r#type {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("type", &local_var_str.to_string())]);
+    if let Some(ref param_value) = p_type {
+        req_builder = req_builder.query(&[("type", &param_value.to_string())]);
     }
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetTokenTransfersError> =
-            serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetTransactionTokenTransfersError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }
 
@@ -282,39 +309,36 @@ pub async fn get_tx(
     configuration: &configuration::Configuration,
     transaction_hash: &str,
 ) -> Result<models::Transaction, Error<GetTxError>> {
-    let local_var_configuration = configuration;
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_transaction_hash = transaction_hash;
 
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!(
+    let uri_str = format!(
         "{}/api/v2/transactions/{transaction_hash}",
-        local_var_configuration.base_path,
-        transaction_hash = crate::apis::urlencode(transaction_hash)
+        configuration.base_path,
+        transaction_hash = crate::apis::urlencode(p_transaction_hash)
     );
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetTxError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetTxError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }
 
@@ -324,46 +348,42 @@ pub async fn get_txs(
     r#type: Option<&str>,
     method: Option<&str>,
 ) -> Result<models::GetTxs200Response, Error<GetTxsError>> {
-    let local_var_configuration = configuration;
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_filter = filter;
+    let p_type = r#type;
+    let p_method = method;
 
-    let local_var_client = &local_var_configuration.client;
+    let uri_str = format!("{}/api/v2/transactions", configuration.base_path);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    let local_var_uri_str = format!("{}/api/v2/transactions", local_var_configuration.base_path);
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_str) = filter {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("filter", &local_var_str.to_string())]);
+    if let Some(ref param_value) = p_filter {
+        req_builder = req_builder.query(&[("filter", &param_value.to_string())]);
     }
-    if let Some(ref local_var_str) = r#type {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("type", &local_var_str.to_string())]);
+    if let Some(ref param_value) = p_type {
+        req_builder = req_builder.query(&[("type", &param_value.to_string())]);
     }
-    if let Some(ref local_var_str) = method {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("method", &local_var_str.to_string())]);
+    if let Some(ref param_value) = p_method {
+        req_builder = req_builder.query(&[("method", &param_value.to_string())]);
     }
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetTxsError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetTxsError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }

@@ -2,7 +2,7 @@ use super::get_metadata;
 use crate::{
     entity::subgraph::domain::Domain,
     metrics,
-    protocols::{D3ConnectProtocol, DomainName, DomainNameOnProtocol},
+    protocols::{AddressResolveTechnique, D3ConnectProtocol, DomainName, DomainNameOnProtocol},
     subgraph::{
         self,
         offchain::{
@@ -20,9 +20,10 @@ pub async fn maybe_offchain_resolution(
     db: &PgPool,
     name: &DomainNameOnProtocol<'_>,
     d3: &D3ConnectProtocol,
+    address_resolve_technique: &AddressResolveTechnique,
 ) -> Option<ResolveResult> {
     metrics::D3_OFFCHAIN_RESOLVE_ATTEMPTS.inc();
-    match resolve_d3_name(db, name, d3).await {
+    match resolve_d3_name(db, name, d3, address_resolve_technique).await {
         Ok(result) => {
             metrics::D3_OFFCHAIN_RESOLVE_SUCCESS.inc();
             Some(result)
@@ -42,6 +43,7 @@ async fn resolve_d3_name(
     db: &PgPool,
     name: &DomainNameOnProtocol<'_>,
     d3: &D3ConnectProtocol,
+    address_resolve_technique: &AddressResolveTechnique,
 ) -> Result<ResolveResult, anyhow::Error> {
     let reader = reader_from_protocol(&name.deployed_protocol);
 
@@ -62,7 +64,14 @@ async fn resolve_d3_name(
             None => (default_resolver, None),
         };
 
-    let offchain_resolution = get_offchain_resolution(&reader, resolver_address, name, d3).await?;
+    let offchain_resolution = get_offchain_resolution(
+        &reader,
+        resolver_address,
+        name,
+        d3,
+        address_resolve_technique,
+    )
+    .await?;
     tracing::debug!(data =? offchain_resolution, "fetched offchain resolution");
     let creation_domain =
         offchain_resolution_to_resolve_result(name, offchain_resolution, maybe_existing_domain);
@@ -74,23 +83,30 @@ async fn get_offchain_resolution(
     resolver_address: Address,
     name: &DomainNameOnProtocol<'_>,
     d3: &D3ConnectProtocol,
+    address_resolve_technique: &AddressResolveTechnique,
 ) -> Result<DomainInfoFromOffchainResolution, anyhow::Error> {
     let resolve_result =
         alloy_ccip_read::d3::resolve_d3_name(reader, resolver_address, &name.inner.name, "")
             .await?;
     let addr = resolve_result.addr.into_value();
-    let reverse_resolve_result =
-        alloy_ccip_read::d3::reverse_resolve_d3_name(reader, addr, resolver_address, "").await?;
-    let addr2name = DomainName::new(
-        &reverse_resolve_result.name.value,
-        name.deployed_protocol
-            .protocol
-            .info
-            .protocol_specific
-            .empty_label_hash(),
-    )
-    .map(|name| name.name)
-    .ok();
+    let addr2name = match address_resolve_technique {
+        AddressResolveTechnique::Addr2Name => {
+            let reverse_resolve_result =
+                alloy_ccip_read::d3::reverse_resolve_d3_name(reader, addr, resolver_address, "")
+                    .await?;
+            DomainName::new(
+                &reverse_resolve_result.name.value,
+                name.deployed_protocol
+                    .protocol
+                    .info
+                    .protocol_specific
+                    .empty_label_hash(),
+            )
+            .map(|name| name.name)
+            .ok()
+        }
+        AddressResolveTechnique::ReverseRegistry | AddressResolveTechnique::AllDomains => None,
+    };
     let metadata = get_metadata(reader, name, d3).await?;
     let expiry_date = metadata.get_expiration_date();
 

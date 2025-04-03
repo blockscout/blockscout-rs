@@ -35,17 +35,21 @@ jobs:
         with:
           working-directory: smart-contract-verifier
 
+      - name: Build
+        id: build
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
+
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
 
       - name: Doc tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --doc -- --skip proto
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
 
       - name: Integration tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
 
   lint:
     name: Linting

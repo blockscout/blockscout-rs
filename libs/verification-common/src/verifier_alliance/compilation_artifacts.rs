@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
 
 pub trait ToCompilationArtifacts {
     fn abi(&self) -> Option<Value> {
@@ -45,7 +44,7 @@ pub struct CompilationArtifacts {
     pub devdoc: Option<Value>,
     pub userdoc: Option<Value>,
     pub storage_layout: Option<Value>,
-    pub sources: Option<BTreeMap<String, SourceId>>,
+    pub sources: Option<Value>,
 }
 
 impl<T: ToCompilationArtifacts> From<T> for CompilationArtifacts {

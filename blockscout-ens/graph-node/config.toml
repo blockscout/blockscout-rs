@@ -43,3 +43,32 @@ provider = [
     { label = "shibarium", url = "https://www.shibrpc.com", features = [] }
 ]
 shard = "primary"
+
+[chains.shibarium-testnet]
+provider = [
+    { label = "shibarium-testnet", url = "https://puppynet.shibrpc.com", features = [] }
+]
+shard = "primary"
+
+[chains.ape-mainnet]
+provider = [
+    { label = "ape-mainnet", url = "https://rpc.apechain.com", features = [] }
+]
+shard = "primary"
+
+[chains.ape-testnet]
+provider = [
+    { label = "ape-testnet", url = "https://curtis.rpc.caldera.xyz/http", features = [] }
+]
+shard = "primary"
+
+[chains.story-mainnet]
+provider = [
+    { label = "story-mainnet", url = "https://frequent-hidden-telescope.story-mainnet.quiknode.pro/9934ef7bc4e5bcc89ef9768b5ca2f39fcb937c46", features = [] }
+]
+shard = "primary"
+[chains.gravity-mainnet]
+provider = [
+    { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }
+]
+shard = "primary"

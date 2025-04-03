@@ -32,3 +32,25 @@ dataSources:
           handler: handleSLDRenewed
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer
+  - kind: ethereum/contract
+    name: Resolver
+    network: shibarium
+    source:
+      abi: Resolver
+      address: "0x8b9d58e6915A71Dd782F5111c886377Df1d5cBe5"
+      startBlock: 8954971
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/Resolver.ts
+      entities:
+        - Domain
+        - Account
+        - NameChanged
+      abis:
+        - name: Resolver
+          file: ./abis/Resolver.json
+      eventHandlers:
+        - event: SetReverseMapping(address,string,string)
+          handler: handleSetReverseMapping

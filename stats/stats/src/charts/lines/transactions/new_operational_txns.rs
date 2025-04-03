@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::{
     data_processing::zip_same_timespan,
     data_source::kinds::{
@@ -45,7 +47,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub struct Calculate;
+pub struct CalculateOperationalTxnsVec;
 
 type Input<Resolution> = (
     // newBlocks
@@ -54,9 +56,9 @@ type Input<Resolution> = (
     Vec<TimespanValue<Resolution, i64>>,
 );
 
-impl<Resolution> MapFunction<Input<Resolution>> for Calculate
+impl<Resolution> MapFunction<Input<Resolution>> for CalculateOperationalTxnsVec
 where
-    Resolution: Timespan + Send + Ord,
+    Resolution: Timespan + Send + Ord + Debug,
 {
     type Output = Vec<TimespanValue<Resolution, String>>;
 
@@ -88,7 +90,7 @@ define_and_impl_resolution_properties!(
 );
 
 pub type NewOperationalTxns = DirectVecLocalDbChartSource<
-    Map<(NewBlocksInt, NewTxnsInt), Calculate>,
+    Map<(NewBlocksInt, NewTxnsInt), CalculateOperationalTxnsVec>,
     BatchMaxDays,
     Properties,
 >;

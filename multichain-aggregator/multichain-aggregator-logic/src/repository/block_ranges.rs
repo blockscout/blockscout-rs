@@ -1,21 +1,15 @@
-use crate::{
-    error::ServiceError,
-    types::block_ranges::{BlockRange, ChainBlockNumber},
-};
+use super::paginate_cursor;
+use crate::types::{block_ranges::BlockRange, ChainId};
 use entity::block_ranges::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, QueryFilter,
+    EntityTrait, QueryFilter, QueryTrait,
 };
 
 pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {
-    if block_ranges.is_empty() {
-        return Ok(());
-    }
-
     let block_ranges = block_ranges.into_iter().map(|block_range| {
         let model: Model = block_range.into();
         let mut active: ActiveModel = model.into();
@@ -52,45 +46,38 @@ where
                 ])
                 .to_owned(),
         )
-        .exec(db)
+        .do_nothing()
+        .exec_without_returning(db)
         .await?;
 
     Ok(())
 }
 
-pub async fn find_matching_block_ranges<C>(
+pub async fn list_matching_block_ranges_paginated<C>(
     db: &C,
     block_number: u64,
-) -> Result<Vec<BlockRange>, DbErr>
+    chain_ids: Option<Vec<ChainId>>,
+    page_size: u64,
+    page_token: Option<ChainId>,
+) -> Result<(Vec<Model>, Option<ChainId>), DbErr>
 where
     C: ConnectionTrait,
 {
-    let res = Entity::find()
+    let mut c = Entity::find()
+        .apply_if(chain_ids, |q, chain_ids| {
+            if !chain_ids.is_empty() {
+                q.filter(Column::ChainId.is_in(chain_ids))
+            } else {
+                q
+            }
+        })
         .filter(Column::MinBlockNumber.lte(block_number))
         .filter(Column::MaxBlockNumber.gte(block_number))
-        .all(db)
-        .await?
-        .into_iter()
-        .map(|r| r.into())
-        .collect();
-    Ok(res)
-}
+        .cursor_by(Column::ChainId);
 
-pub async fn search_by_query<C>(db: &C, query: &str) -> Result<Vec<ChainBlockNumber>, ServiceError>
-where
-    C: ConnectionTrait,
-{
-    let block_number = match query.parse() {
-        Ok(block_number) => block_number,
-        Err(_) => return Ok(vec![]),
-    };
+    if let Some(page_token) = page_token {
+        c.after(page_token);
+    }
 
-    Ok(find_matching_block_ranges(db, block_number)
-        .await?
-        .into_iter()
-        .map(|r| ChainBlockNumber {
-            chain_id: r.chain_id,
-            block_number,
-        })
-        .collect())
+    paginate_cursor(db, c, page_size, |u| u.chain_id).await
 }

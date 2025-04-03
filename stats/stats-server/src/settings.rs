@@ -8,11 +8,17 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::{
-    counters::TotalOperationalTxns,
-    lines::{NewOperationalTxns, OperationalTxnsGrowth},
-    ChartProperties, IndexingStatus,
+    counters::{NewOperationalTxns24h, TotalOperationalTxns, YesterdayOperationalTxns},
+    indexing_status::BlockscoutIndexingStatus,
+    lines::{NewOperationalTxns, NewOperationalTxnsWindow, OperationalTxnsGrowth},
+    ChartProperties,
 };
-use std::{collections::BTreeSet, net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{
+    collections::{BTreeSet, HashMap},
+    net::SocketAddr,
+    path::PathBuf,
+    str::FromStr,
+};
 use tracing::warn;
 
 use crate::{
@@ -53,6 +59,7 @@ pub struct Settings {
     pub update_groups_config: PathBuf,
     /// Location of swagger file to serve
     pub swagger_file: PathBuf,
+    pub api_keys: HashMap<String, String>,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
@@ -75,6 +82,7 @@ impl Default for Settings {
                     addr: SocketAddr::from_str("0.0.0.0:8051").unwrap(),
                 },
             },
+            api_keys: Default::default(),
             db_url: Default::default(),
             default_schedule: Schedule::from_str("0 0 1 * * * *").unwrap(),
             force_update_on_start: Some(false),
@@ -99,6 +107,10 @@ impl Default for Settings {
     }
 }
 
+impl ConfigSettings for Settings {
+    const SERVICE_NAME: &'static str = "STATS";
+}
+
 pub fn handle_disable_internal_transactions(
     disable_internal_transactions: bool,
     conditional_start: &mut StartConditionSettings,
@@ -109,7 +121,9 @@ pub fn handle_disable_internal_transactions(
         let charts_dependant_on_internal_transactions =
             RuntimeSetup::all_members_indexing_status_requirements()
                 .into_iter()
-                .filter(|(_k, req)| req == &IndexingStatus::InternalTransactionsIndexed)
+                .filter(|(_k, req)| {
+                    req.blockscout == BlockscoutIndexingStatus::InternalTransactionsIndexed
+                })
                 .map(|(k, _req)| k.into_name());
         let to_disable: BTreeSet<_> = charts_dependant_on_internal_transactions.collect();
 
@@ -141,8 +155,11 @@ pub fn handle_enable_all_arbitrum(
     if enable_all_arbitrum {
         for enable_key in [
             NewOperationalTxns::key().name(),
-            OperationalTxnsGrowth::key().name(),
+            NewOperationalTxnsWindow::key().name(),
             TotalOperationalTxns::key().name(),
+            NewOperationalTxns24h::key().name(),
+            OperationalTxnsGrowth::key().name(),
+            YesterdayOperationalTxns::key().name(),
         ] {
             let settings = match (
                 charts.lines.get_mut(enable_key),
@@ -190,6 +207,7 @@ impl Default for LimitsSettings {
 pub struct StartConditionSettings {
     pub blocks_ratio: ToggleableThreshold,
     pub internal_transactions_ratio: ToggleableThreshold,
+    pub user_ops_past_indexing_finished: ToggleableCheck,
     pub check_period_secs: u32,
 }
 
@@ -199,8 +217,18 @@ impl Default for StartConditionSettings {
             // in some networks it's always almost 1
             blocks_ratio: ToggleableThreshold::default(),
             internal_transactions_ratio: ToggleableThreshold::default(),
+            user_ops_past_indexing_finished: ToggleableCheck::default(),
             check_period_secs: 5,
         }
+    }
+}
+
+impl StartConditionSettings {
+    pub fn blockscout_checks_enabled(&self) -> bool {
+        self.blocks_ratio.enabled || self.internal_transactions_ratio.enabled
+    }
+    pub fn user_ops_checks_enabled(&self) -> bool {
+        self.user_ops_past_indexing_finished.enabled
     }
 }
 
@@ -243,8 +271,16 @@ impl Default for ToggleableThreshold {
     }
 }
 
-impl ConfigSettings for Settings {
-    const SERVICE_NAME: &'static str = "STATS";
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ToggleableCheck {
+    pub enabled: bool,
+}
+
+impl Default for ToggleableCheck {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 
 #[cfg(test)]

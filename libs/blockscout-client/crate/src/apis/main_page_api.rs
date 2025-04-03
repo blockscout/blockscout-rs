@@ -37,116 +37,89 @@ pub enum GetMainPageTxsError {
 pub async fn get_indexing_status(
     configuration: &configuration::Configuration,
 ) -> Result<models::IndexingStatus, Error<GetIndexingStatusError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!(
+    let uri_str = format!(
         "{}/api/v2/main-page/indexing-status",
-        local_var_configuration.base_path
+        configuration.base_path
     );
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetIndexingStatusError> =
-            serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetIndexingStatusError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }
 
 pub async fn get_main_page_tokens(
     configuration: &configuration::Configuration,
 ) -> Result<Vec<models::Block>, Error<GetMainPageTokensError>> {
-    let local_var_configuration = configuration;
+    let uri_str = format!("{}/api/v2/main-page/blocks", configuration.base_path);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!(
-        "{}/api/v2/main-page/blocks",
-        local_var_configuration.base_path
-    );
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetMainPageTokensError> =
-            serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetMainPageTokensError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }
 
 pub async fn get_main_page_txs(
     configuration: &configuration::Configuration,
 ) -> Result<Vec<models::Transaction>, Error<GetMainPageTxsError>> {
-    let local_var_configuration = configuration;
+    let uri_str = format!("{}/api/v2/main-page/transactions", configuration.base_path);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!(
-        "{}/api/v2/main-page/transactions",
-        local_var_configuration.base_path
-    );
-    let mut local_var_req_builder =
-        local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    let status = resp.status();
 
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        serde_json::from_str(&content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<GetMainPageTxsError> =
-            serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
+        let content = resp.text().await?;
+        let entity: Option<GetMainPageTxsError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
     }
 }

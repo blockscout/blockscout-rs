@@ -265,6 +265,30 @@ pub mod sourcify_verifier_client {
     }
 }
 
+pub mod verifier_alliance_client {
+    use super::{proto, Client, Result};
+
+    pub async fn batch_import_solidity_multi_part(
+        client: &Client,
+        request: proto::VerifierAllianceBatchImportSolidityMultiPartRequest,
+    ) -> Result<proto::VerifierAllianceBatchImportResponse> {
+        let path = "/api/v2/alliance/solidity/multi-part:batch-import";
+        client
+            .post_request_with_headers(client.build_url(path), &request, client.key_headers())
+            .await
+    }
+
+    pub async fn batch_import_solidity_standard_json(
+        client: &Client,
+        request: proto::VerifierAllianceBatchImportSolidityStandardJsonRequest,
+    ) -> Result<proto::VerifierAllianceBatchImportResponse> {
+        let path = "/api/v2/alliance/solidity/standard-json:batch-import";
+        client
+            .post_request_with_headers(client.build_url(path), &request, client.key_headers())
+            .await
+    }
+}
+
 pub mod health_client {
     use super::{proto, Client, Result};
 

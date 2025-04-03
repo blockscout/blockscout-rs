@@ -2,13 +2,17 @@ pub use sea_orm_migration::prelude::*;
 use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
 
 mod m20220101_000001_initial_tables;
+mod m20250130_084023_add_chains_name;
 
 pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(m20220101_000001_initial_tables::Migration)]
+        vec![
+            Box::new(m20220101_000001_initial_tables::Migration),
+            Box::new(m20250130_084023_add_chains_name::Migration),
+        ]
     }
 }
 

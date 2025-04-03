@@ -11,6 +11,8 @@ pub struct Model {
     pub icon_url: Option<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub name: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

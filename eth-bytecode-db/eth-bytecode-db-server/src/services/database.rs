@@ -360,7 +360,10 @@ impl DatabaseService {
             contract_address.to_vec(),
         )
         .await
-        .map_err(|err| tonic::Status::internal(err.to_string()))?
+        .map_err(|err| {
+            tracing::error!("error while retrieving alliance sources: {err:#?}");
+            tonic::Status::internal(err.to_string())
+        })?
         .into_iter()
         .map(|source| SourceWrapper::from(source).into_inner())
         .collect();

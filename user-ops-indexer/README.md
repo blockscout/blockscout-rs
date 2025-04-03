@@ -31,7 +31,7 @@ instance ([configuration](https://github.com/blockscout/docs/blob/master/for-dev
 * `MICROSERVICE_ACCOUNT_ABSTRACTION_URL={service_url}`
 
 And the following ENVs on the Blockscout
-frontend ([configuration](https://github.com/blockscout/frontend/blob/main/docs/ENVS.md#user-operations-feature-erc-4337)):
+frontend ([configuration](https://github.com/blockscout/frontend/blob/main/docs/ENVS.md#user-operations-erc-4337)):
 
 * `NEXT_PUBLIC_HAS_USER_OPS=true`
 

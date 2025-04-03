@@ -1,4 +1,5 @@
-use crate::{error::ServiceError, types::hashes::Hash};
+use super::paginate_cursor;
+use crate::types::{hashes::Hash, ChainId};
 use alloy_primitives::BlockHash;
 use entity::{
     hashes::{ActiveModel, Column, Entity, Model},
@@ -6,17 +7,13 @@ use entity::{
 };
 use sea_orm::{
     sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr, EntityTrait,
-    QueryFilter,
+    QueryFilter, QueryTrait,
 };
 
 pub async fn upsert_many<C>(db: &C, hashes: Vec<Hash>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {
-    if hashes.is_empty() {
-        return Ok(());
-    }
-
     let hashes = hashes.into_iter().map(|hash| {
         let model: Model = hash.into();
         let mut active: ActiveModel = model.into();
@@ -24,47 +21,49 @@ where
         active
     });
 
-    let res = Entity::insert_many(hashes)
+    Entity::insert_many(hashes)
         .on_conflict(
             OnConflict::columns([Column::Hash, Column::ChainId])
                 .do_nothing()
                 .to_owned(),
         )
-        .exec(db)
-        .await;
+        .do_nothing()
+        .exec_without_returning(db)
+        .await?;
 
-    match res {
-        Ok(_) | Err(DbErr::RecordNotInserted) => Ok(()),
-        Err(err) => Err(err),
-    }
+    Ok(())
 }
 
-pub async fn find_by_hash<C>(db: &C, hash: BlockHash) -> Result<Vec<Hash>, ServiceError>
+// Because (`hash`, `chain_id`) is a primary key
+// we can paginate by `chain_id` only, as `hash` is always provided
+pub async fn list<C>(
+    db: &C,
+    hash: BlockHash,
+    hash_type: Option<db_enum::HashType>,
+    chain_ids: Option<Vec<ChainId>>,
+    page_size: u64,
+    page_token: Option<ChainId>,
+) -> Result<(Vec<Model>, Option<ChainId>), DbErr>
 where
     C: ConnectionTrait,
 {
-    let res = Entity::find()
+    let mut c = Entity::find()
         .filter(Column::Hash.eq(hash.as_slice()))
-        .all(db)
-        .await?
-        .into_iter()
-        .map(Hash::try_from)
-        .collect::<Result<Vec<_>, _>>()?;
+        .apply_if(hash_type, |q, hash_type| {
+            q.filter(Column::HashType.eq(hash_type))
+        })
+        .apply_if(chain_ids, |q, chain_ids| {
+            if !chain_ids.is_empty() {
+                q.filter(Column::ChainId.is_in(chain_ids))
+            } else {
+                q
+            }
+        })
+        .cursor_by(Column::ChainId);
 
-    Ok(res)
-}
+    if let Some(page_token) = page_token {
+        c.after(page_token);
+    }
 
-pub async fn search_by_query<C>(db: &C, query: &str) -> Result<(Vec<Hash>, Vec<Hash>), ServiceError>
-where
-    C: ConnectionTrait,
-{
-    let hash = match query.parse() {
-        Ok(hash) => hash,
-        Err(_) => return Ok((vec![], vec![])),
-    };
-
-    Ok(find_by_hash(db, hash)
-        .await?
-        .into_iter()
-        .partition(|h| h.hash_type == db_enum::HashType::Block))
+    paginate_cursor(db, c, page_size, |u| u.chain_id).await
 }

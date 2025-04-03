@@ -171,14 +171,31 @@ macro_rules! impl_cacheable {
     };
 }
 
+impl_cacheable!(TxnsStatsValue, ValueTxnsStats);
+// for testing
 impl_cacheable!(String, ValueString);
 impl_cacheable!(Option<f64>, ValueOptionF64);
-impl_cacheable!(TxnsStatsValue, ValueTxnsStats);
 
+// To allow using the scalar(?) types in context requiring
+// `FromQueryResult`
 #[derive(Debug, Clone, FromQueryResult, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WrappedValue<V: TryGetable> {
     pub value: V,
 }
+
+impl<V: TryGetable> From<V> for WrappedValue<V> {
+    fn from(value: V) -> Self {
+        WrappedValue { value }
+    }
+}
+
+impl<V: TryGetable> WrappedValue<V> {
+    pub fn into_inner(self) -> V {
+        self.value
+    }
+}
+
+impl<V: TryGetable + Copy> Copy for WrappedValue<V> {}
 
 macro_rules! impl_cacheable_wrapped {
     ($type: ty, $cache_value_variant:ident) => {
@@ -284,11 +301,16 @@ mod tests {
         let stmt_a = Statement::from_string(DbBackend::Sqlite, "abcde");
         let stmt_b = Statement::from_string(DbBackend::Sqlite, "edcba");
 
-        let val_1 = Some(1.2);
+        let val_1 = Some(1.2).into();
         let val_2 = "kekekek".to_string();
 
-        cache.insert::<Option<f64>>(&stmt_a, val_1).await;
-        assert_eq!(cache.get::<Option<f64>>(&stmt_a).await, Some(val_1));
+        cache
+            .insert::<WrappedValue<Option<f64>>>(&stmt_a, val_1)
+            .await;
+        assert_eq!(
+            cache.get::<WrappedValue<Option<f64>>>(&stmt_a).await,
+            Some(val_1)
+        );
         assert_eq!(cache.get::<String>(&stmt_a).await, None);
 
         cache.insert::<Option<f64>>(&stmt_a, None).await;
@@ -299,8 +321,13 @@ mod tests {
         assert_eq!(cache.get::<Option<f64>>(&stmt_a).await, None);
         assert_eq!(cache.get::<String>(&stmt_a).await, Some(val_2.clone()));
 
-        cache.insert::<Option<f64>>(&stmt_b, val_1).await;
-        assert_eq!(cache.get::<Option<f64>>(&stmt_b).await, Some(val_1));
+        cache
+            .insert::<WrappedValue<Option<f64>>>(&stmt_b, val_1)
+            .await;
+        assert_eq!(
+            cache.get::<WrappedValue<Option<f64>>>(&stmt_b).await,
+            Some(val_1)
+        );
         assert_eq!(cache.get::<String>(&stmt_b).await, None);
         assert_eq!(cache.get::<Option<f64>>(&stmt_a).await, None);
         assert_eq!(cache.get::<String>(&stmt_a).await, Some(val_2));
