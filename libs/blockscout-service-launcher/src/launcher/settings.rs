@@ -121,7 +121,7 @@ impl CorsSettings {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String")]
-pub struct BasePath(pub String);
+pub struct BasePath(String);
 
 impl TryFrom<String> for BasePath {
     type Error = String;
@@ -140,6 +140,12 @@ impl TryFrom<String> for BasePath {
             ));
         };
         Ok(Self(value))
+    }
+}
+
+impl From<BasePath> for String {
+    fn from(value: BasePath) -> Self {
+        value.0
     }
 }
 

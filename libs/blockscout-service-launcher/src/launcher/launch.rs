@@ -129,7 +129,13 @@ fn http_serve<R>(
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
 {
-    tracing::info!("starting http server on addr {}", settings.addr);
+    let base_path = settings.base_path.clone();
+    let addr_debug = if let Some(base_path) = base_path.clone() {
+        format!("{}{}", settings.addr, String::from(base_path))
+    } else {
+        settings.addr.to_string()
+    };
+    tracing::info!("starting http server on addr {}", addr_debug);
 
     // Initialize the tracing logger not to print http request and response messages on health endpoint
     CompactRootSpanBuilder::init_skip_http_trace_paths(["/health"]);
@@ -137,7 +143,6 @@ where
     let json_cfg = actix_web::web::JsonConfig::default().limit(settings.max_body_size);
     let cors_settings = settings.cors.clone();
     let cors_enabled = cors_settings.enabled;
-    let base_path = settings.base_path.clone();
     let server = if let Some(metrics) = metrics {
         HttpServer::new(move || {
             let cors = cors_settings.clone().build();
@@ -146,10 +151,7 @@ where
                 .wrap(metrics.clone())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
-                .configure(configure_router(
-                    &http,
-                    base_path.as_ref().map(|p| p.0.clone()),
-                ))
+                .configure(configure_router(&http, base_path.clone().map(|p| p.into())))
         })
         .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)
@@ -162,10 +164,7 @@ where
                 .wrap(TracingLogger::<CompactRootSpanBuilder>::new())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
-                .configure(configure_router(
-                    &http,
-                    base_path.as_ref().map(|p| p.0.clone()),
-                ))
+                .configure(configure_router(&http, base_path.clone().map(|p| p.into())))
         })
         .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)
