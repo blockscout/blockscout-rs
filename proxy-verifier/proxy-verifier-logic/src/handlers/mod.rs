@@ -7,15 +7,16 @@ pub mod vyper_verifier_standard_json;
 /************************************************/
 
 use crate::{
-    address_details, address_details::AddressDetails, to_hex::ToHex, Error, VerificationResponse,
-    VerificationSuccess,
+    address_details, address_details::AddressDetails, blockscout, Contract, Error,
+    VerificationResponse, VerificationSuccess,
 };
+use blockscout_display_bytes::ToHex;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use std::future::Future;
 
 async fn process_verification_request<'a, Request, RequestBuilder, Verify, VerifyOutput>(
     eth_bytecode_db_client: &'a eth_bytecode_db_proto::http_client::Client,
-    contracts: Vec<(&blockscout_client::Client, ethers_core::types::Address)>,
+    contracts: Vec<(&blockscout::Client, Contract)>,
     request_builder: RequestBuilder,
     verify: Verify,
 ) -> VerificationResponse
@@ -37,7 +38,7 @@ where
     }
 
     let mut results = vec![];
-    for (contract_details, (blockscout_client, contract_address)) in
+    for (contract_details, (blockscout_client, contract)) in
         contract_details.into_iter().zip(contracts)
     {
         let result = verify_contract(
@@ -49,7 +50,7 @@ where
         .await;
         match result {
             Ok(match_type) => {
-                let search_result = search_contract(blockscout_client, contract_address).await;
+                let search_result = search_contract(blockscout_client, contract).await;
                 let result = search_result.map(|url| VerificationSuccess { url, match_type });
                 results.push(result)
             }
@@ -181,25 +182,29 @@ fn process_verify_response(
 }
 
 async fn search_contract(
-    blockscout_client: &blockscout_client::Client,
-    contract_address: ethers_core::types::Address,
+    blockscout_client: &blockscout::Client,
+    contract: Contract,
 ) -> Result<String, Error> {
-    let search_result =
-        blockscout_client::import::smart_contracts::get(blockscout_client, contract_address).await;
+    let request = blockscout::ImportSmartContract {
+        address: contract.address,
+        api_key: blockscout_client.api_key().clone(),
+    };
+    let search_result = blockscout_client.request(&request).await;
 
     match search_result {
         Ok(response)
             if response.message.contains("Success")
                 || response.message.contains("Already verified") =>
         {
-            let url =
-                blockscout_client.build_url(&format!("/address/{}", contract_address.to_hex()));
+            let mut url = blockscout_client.base_url().clone();
+            url.set_path(&format!("/address/{}", contract.address.to_hex()));
+
             Ok(url.to_string())
         }
         Ok(response) => {
             tracing::error!(
-                chain_id = blockscout_client.chain_id(),
-                contract_address = contract_address.to_hex(),
+                chain_id = contract.chain_id,
+                contract_address = contract.address.to_hex(),
                 "internal error while retrieving address details: {}",
                 response.message
             );
@@ -209,8 +214,8 @@ async fn search_contract(
         }
         Err(err) => {
             tracing::error!(
-                chain_id = blockscout_client.chain_id(),
-                contract_address = contract_address.to_hex(),
+                chain_id = contract.chain_id,
+                contract_address = contract.address.to_hex(),
                 "internal error while importing contract into blockscout: {err}"
             );
             Err(Error::internal("Importing contract into blockscout failed"))

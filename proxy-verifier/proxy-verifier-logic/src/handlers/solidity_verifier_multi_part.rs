@@ -1,4 +1,5 @@
-use crate::{handlers::process_verification_request, ToHex, VerificationResponse};
+use crate::{blockscout, handlers::process_verification_request, Contract, VerificationResponse};
+use blockscout_display_bytes::ToHex;
 use eth_bytecode_db_proto::{
     blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2, http_client::solidity_verifier_client,
 };
@@ -15,7 +16,7 @@ pub struct VerificationRequest {
 
 pub async fn verify(
     eth_bytecode_db_client: &eth_bytecode_db_proto::http_client::Client,
-    contracts: Vec<(&blockscout_client::Client, ethers_core::types::Address)>,
+    contracts: Vec<(&blockscout::Client, Contract)>,
     request: VerificationRequest,
 ) -> VerificationResponse {
     let request_builder = |bytecode: ethers_core::types::Bytes,
