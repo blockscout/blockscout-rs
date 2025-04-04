@@ -47,6 +47,22 @@ fn verify_runtime_code(
     .expect("(runtime_code) error while verifying")
 }
 
+fn verify_blueprint_initcode(
+    on_chain_initcode: &str,
+    re_compiled_creation_code: &str,
+    creation_code_artifacts: serde_json::Value,
+) -> Option<Match> {
+    let on_chain_initcode = parse_code(on_chain_initcode);
+    let re_compiled_creation_code = parse_code(re_compiled_creation_code);
+    let creation_code_artifacts = parse_artifacts::<CreationCodeArtifacts>(creation_code_artifacts);
+    verifier_alliance::verify_blueprint_initcode(
+        &on_chain_initcode,
+        re_compiled_creation_code,
+        &creation_code_artifacts,
+    )
+    .expect("(blueprint_initcode) error while verifying")
+}
+
 #[test]
 fn full_match() {
     let on_chain_creation_code = "0x608060405234801561001057600080fd5b50610133806100206000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80636057361d1460375780638381f58a14604f575b600080fd5b604d60048036038101906049919060af565b6069565b005b60556073565b6040516060919060e4565b60405180910390f35b8060008190555050565b60005481565b600080fd5b6000819050919050565b608f81607e565b8114609957600080fd5b50565b60008135905060a9816088565b92915050565b60006020828403121560c25760c16079565b5b600060ce84828501609c565b91505092915050565b60de81607e565b82525050565b600060208201905060f7600083018460d7565b9291505056fea26469706673582212204ac0ce5f82b26331fa3e9ae959291a55624ffaf90fcd509deafcc21a5f1da21e64736f6c63430008120033";
@@ -577,4 +593,55 @@ fn non_existent_constructor_argument() {
         compilation_artifacts,
     );
     assert_eq!(creation_match, None, "(creation_code) no match expected")
+}
+
+#[test]
+fn blueprint_contract_with_constructor_arguments() {
+    let on_chain_initcode = "0x60a0515034610028573360805260206100e25f395f5160a05261008061002c6000396100c06000f35b5f80fd5f3560e01c60026003820660011b61007a01601e395f51565b635f284cb3811861007257346100765760206100a060403960206040f35b63117803e38118610072573461007657602061008060403960206040f35b633bc72e5e811861007257346100765760206100a060403960206040f35b5f5ffd5b5f80fd0018003600548558209910565d6525be14bcfb57762f44321d8ec7dd69acff8d6ebe267dc1ac19e594188081061840a1657679706572830004010036";
+    let re_compiled_creation_code = "0x60a0515034610028573360805260206100e25f395f5160a05261008061002c6000396100c06000f35b5f80fd5f3560e01c60026003820660011b61007a01601e395f51565b635f284cb3811861007257346100765760206100a060403960206040f35b63117803e38118610072573461007657602061008060403960206040f35b633bc72e5e811861007257346100765760206100a060403960206040f35b5f5ffd5b5f80fd0018003600548558209910565d6525be14bcfb57762f44321d8ec7dd69acff8d6ebe267dc1ac19e594188081061840a1657679706572830004010036";
+    let creation_code_artifacts = json!({"linkReferences":{},"cborAuxdata":{"1":{"offset":172,"value":"0x8558209910565d6525be14bcfb57762f44321d8ec7dd69acff8d6ebe267dc1ac19e594188081061840a1657679706572830004010036"}}});
+
+    let match_ = verify_blueprint_initcode(
+        on_chain_initcode,
+        re_compiled_creation_code,
+        creation_code_artifacts,
+    )
+    .expect("(blueprint_initcode) match expected");
+
+    assert!(match_.metadata_match, "invalid metadata match");
+    assert_eq!(
+        match_.transformations.len(),
+        0,
+        "no transformations expected"
+    );
+    assert_eq!(
+        match_.values.constructor_arguments, None,
+        "no constructor arguments expected"
+    );
+}
+
+#[test]
+fn blueprint_contract_partial_match() {
+    let on_chain_initcode = "0x60a051503461002257336080526104d260a0526100806100266000396100c06000f35b5f80fd5f3560e01c60026003820660011b61007a01601e395f51565b635f284cb3811861007257346100765760206100a060403960206040f35b63117803e38118610072573461007657602061008060403960206040f35b633bc72e5e811861007257346100765760206100a060403960206040f35b5f5ffd5b5f80fd001800360054855820a848d527ec28f7e565eca30ec32ca251a7cf9f0d9298dce908bb44921ab84b82188081061840a1657679706572830004010036";
+    let re_compiled_creation_code = "0x60a051503461002257336080526104d260a0526100806100266000396100c06000f35b5f80fd5f3560e01c60026003820660011b61007a01601e395f51565b635f284cb3811861007257346100765760206100a060403960206040f35b63117803e38118610072573461007657602061008060403960206040f35b633bc72e5e811861007257346100765760206100a060403960206040f35b5f5ffd5b5f80fd00180036005485582055d7c15cd1f3183b1caa86c0f8d7cfb7c1ed86e9fad20e52d65e8db27248049a188081061840a1657679706572830004010036";
+    let creation_code_artifacts = json!({"linkReferences":{},"cborAuxdata":{"1":{"offset":166,"value":"0x85582055d7c15cd1f3183b1caa86c0f8d7cfb7c1ed86e9fad20e52d65e8db27248049a188081061840a1657679706572830004010036"}}});
+
+    let match_ = verify_blueprint_initcode(
+        on_chain_initcode,
+        re_compiled_creation_code,
+        creation_code_artifacts,
+    )
+    .expect("(blueprint_initcode) match expected");
+
+    assert!(!match_.metadata_match, "invalid metadata match");
+    assert_eq!(
+        match_.transformations.len(),
+        1,
+        "cbor_auxdata transformation expected"
+    );
+    assert_eq!(
+        match_.values.cbor_auxdata.len(),
+        1,
+        "cbor_auxdata value expected"
+    );
 }

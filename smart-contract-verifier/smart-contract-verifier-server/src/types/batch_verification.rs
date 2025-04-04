@@ -31,6 +31,9 @@ pub fn process_error(error: Error) -> Result<BatchVerifyResponse, Status> {
             tracing::error!(err = formatted_error, "internal error");
             Err(Status::internal(formatted_error))
         }
+        err @ Error::NotConsistentBlueprintOnChainCode { .. } => {
+            Err(Status::invalid_argument(err.to_string()))
+        }
         err @ Error::Compilation(_) => Ok(compilation_error(err.to_string())),
     }
 }

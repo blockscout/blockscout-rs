@@ -28,9 +28,9 @@ pub enum VerificationResult {
 pub fn verify_contract(
     on_chain_code: OnChainCode,
     recompiled_code: RecompiledCode,
-    compilation_artifacts: CompilationArtifacts,
-    creation_code_artifacts: CreationCodeArtifacts,
-    runtime_code_artifacts: RuntimeCodeArtifacts,
+    compilation_artifacts: &CompilationArtifacts,
+    creation_code_artifacts: &CreationCodeArtifacts,
+    runtime_code_artifacts: &RuntimeCodeArtifacts,
 ) -> VerificationResult {
     if on_chain_code.runtime.is_none() && on_chain_code.creation.is_none() {
         unreachable!("OnChainCode constructors require at least one of the code values")
@@ -41,7 +41,7 @@ pub fn verify_contract(
         let verify_code_result = verifier_alliance::verify_runtime_code(
             on_chain_runtime_code,
             recompiled_code.runtime,
-            &runtime_code_artifacts,
+            runtime_code_artifacts,
         );
         runtime_match = process_verify_code_result("runtime", verify_code_result);
     }
@@ -51,13 +51,27 @@ pub fn verify_contract(
         let verify_code_result = verifier_alliance::verify_creation_code(
             on_chain_creation_code,
             recompiled_code.creation,
-            &creation_code_artifacts,
-            &compilation_artifacts,
+            creation_code_artifacts,
+            compilation_artifacts,
         );
         creation_match = process_verify_code_result("creation", verify_code_result);
     }
 
     matches_to_verification_result(runtime_match, creation_match)
+}
+
+pub fn verify_blueprint_contract(
+    on_chain_initcode: Vec<u8>,
+    recompiled_code: RecompiledCode,
+    creation_code_artifacts: &CreationCodeArtifacts,
+) -> VerificationResult {
+    let verify_code_result = verifier_alliance::verify_blueprint_initcode(
+        &on_chain_initcode,
+        recompiled_code.creation,
+        creation_code_artifacts,
+    );
+    let match_ = process_verify_code_result("blueprint_initcode", verify_code_result);
+    matches_to_verification_result(match_.clone(), match_)
 }
 
 fn process_verify_code_result(
