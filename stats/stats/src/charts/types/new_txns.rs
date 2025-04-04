@@ -40,13 +40,7 @@ impl MapFunction<Vec<NewTxnsCombinedPoint>> for ExtractAllTxns {
     type Output = Vec<TimespanValue<NaiveDate, String>>;
 
     fn function(inner_data: Vec<NewTxnsCombinedPoint>) -> Result<Self::Output, ChartError> {
-        Ok(inner_data
-            .into_iter()
-            .map(|p| TimespanValue {
-                timespan: p.date,
-                value: p.all_transactions,
-            })
-            .collect())
+        Ok(inner_data.into_iter().map(extract_all_txns_inner).collect())
     }
 }
 
@@ -54,10 +48,14 @@ impl MapFunction<NewTxnsCombinedPoint> for ExtractAllTxns {
     type Output = TimespanValue<NaiveDate, String>;
 
     fn function(inner_data: NewTxnsCombinedPoint) -> Result<Self::Output, ChartError> {
-        Ok(TimespanValue {
-            timespan: inner_data.date,
-            value: inner_data.all_transactions,
-        })
+        Ok(extract_all_txns_inner(inner_data))
+    }
+}
+
+fn extract_all_txns_inner(combined: NewTxnsCombinedPoint) -> TimespanValue<NaiveDate, String> {
+    TimespanValue {
+        timespan: combined.date,
+        value: combined.all_transactions,
     }
 }
 
@@ -69,10 +67,7 @@ impl MapFunction<Vec<NewTxnsCombinedPoint>> for ExtractOpStackTxns {
     fn function(inner_data: Vec<NewTxnsCombinedPoint>) -> Result<Self::Output, ChartError> {
         Ok(inner_data
             .into_iter()
-            .map(|p| TimespanValue {
-                timespan: p.date,
-                value: p.op_stack_operational_transactions,
-            })
+            .map(extract_op_stack_operational_inner)
             .collect())
     }
 }
@@ -80,9 +75,15 @@ impl MapFunction<NewTxnsCombinedPoint> for ExtractOpStackTxns {
     type Output = TimespanValue<NaiveDate, String>;
 
     fn function(inner_data: NewTxnsCombinedPoint) -> Result<Self::Output, ChartError> {
-        Ok(TimespanValue {
-            timespan: inner_data.date,
-            value: inner_data.op_stack_operational_transactions,
-        })
+        Ok(extract_op_stack_operational_inner(inner_data))
+    }
+}
+
+fn extract_op_stack_operational_inner(
+    combined: NewTxnsCombinedPoint,
+) -> TimespanValue<NaiveDate, String> {
+    TimespanValue {
+        timespan: combined.date,
+        value: combined.op_stack_operational_transactions,
     }
 }
