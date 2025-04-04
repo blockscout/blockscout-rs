@@ -8,7 +8,7 @@ database:
 indexer:
   concurrency: 5
   start_timestamp: 1741554000
-  polling_interval: 1
+  polling_interval: 2
   catchup_interval: 300
 rpc:
   url: "https://data.turin.tac.build/"

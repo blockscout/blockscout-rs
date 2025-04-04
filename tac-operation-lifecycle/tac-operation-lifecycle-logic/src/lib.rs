@@ -4,7 +4,7 @@ use std::{
 
 use anyhow::Error;
 use client::{models::profiling::{BlockchainType, OperationType, StageType}, Client};
-use database::{EntityStatus, OrderDirection, TacDatabase};
+use database::{DatabaseStatistic, EntityStatus, OrderDirection, TacDatabase};
 use sea_orm::{DatabaseConnection, EntityTrait};
 use tac_operation_lifecycle_entity::{interval, operation, watermark};
 
@@ -89,6 +89,7 @@ impl BlockchainType {
 pub struct Indexer {
     settings: IndexerSettings,
     watermark: AtomicU64,
+    // This timestamp will used for distinguish between historical and realtime intervals
     start_timestamp: u64,
     database: Arc<TacDatabase>,
 }
@@ -96,20 +97,16 @@ pub struct Indexer {
 impl Indexer {
     pub async fn new(
         settings: IndexerSettings,
-        db: Arc<DatabaseConnection>,
+        db: Arc<TacDatabase>,
     ) -> anyhow::Result<Self> {
         
-        let watermark = watermark::Entity::find()
-            .one(db.as_ref())
-            .await?
-            .map_or(settings.start_timestamp as u64, |row| {
-                max(row.timestamp as u64, settings.start_timestamp as u64)
-            });
+        let watermark = max(db.get_watermark().await?, settings.start_timestamp as u64);
+        
         Ok(Self {
             settings,
             watermark: AtomicU64::new(watermark),
-            start_timestamp: 0,
-            database: Arc::new(TacDatabase::new(db)),
+            start_timestamp: chrono::Utc::now().timestamp() as u64,
+            database: db,
         })
     }
 }
@@ -148,6 +145,10 @@ impl Indexer {
 
     pub fn watermark(&self) -> u64 {
         self.watermark.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    pub fn realtime_boundary(&self) -> u64 {
+        self.start_timestamp
     }
 
     pub fn realtime_stream(&self) -> BoxStream<'_, IndexerJob> {
@@ -201,9 +202,6 @@ impl Indexer {
                                 operation: operation,
                             });
                         }
-
-                        // Sleep a bit before next iteration to prevent tight loop
-                        tokio::time::sleep(Duration::from_millis(100)).await;
                     },
                     Err(e) => {
                         tracing::error!("Unable to select operations from the database: {}", e);
@@ -257,9 +255,6 @@ impl Indexer {
                                 operation: operation,
                             });
                         }
-
-                        // Sleep a bit before next iteration to prevent tight loop
-                        tokio::time::sleep(Duration::from_millis(100)).await;
                     },
                     Err(e) => {
                         tracing::error!("Unable to select failed operations from the database: {}", e);
@@ -388,10 +383,7 @@ impl Indexer {
         self.ensure_stages_types_exist().await?;
 
         // Generate historical intervals
-        self.generate_historical_intervals(chrono::Utc::now().timestamp() as u64).await?;
-
-        // This timestamp will used for distinguish between historical and realtime intervals
-        self.start_timestamp = self.database.get_watermark().await?;
+        self.generate_historical_intervals(self.start_timestamp).await?;
         
         // Create streams
         let realtime = self.realtime_stream();
@@ -449,5 +441,8 @@ impl Indexer {
 
 // Statistic endpoints
 impl Indexer {
+    pub async fn get_database_stat(&self) -> anyhow::Result<DatabaseStatistic> {
+        self.database.get_statistic(self.start_timestamp).await
+    }
     
 }
