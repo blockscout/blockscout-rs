@@ -197,7 +197,7 @@ fn relevant_data_until<R: Timespan>(
 /// ```
 ///
 /// - Value `A` is moved to correctly represent value at date `2`. Value for `1`
-///     is outside the range, thus we move the value.
+///   is outside the range, thus we move the value.
 /// - Date 4 is still omitted, because it can be calculated from `3`
 ///
 /// with `fill_missing_dates=true`:

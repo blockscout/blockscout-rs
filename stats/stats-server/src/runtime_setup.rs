@@ -3,15 +3,13 @@
 //! ## Adding new charts
 //!
 //! 1. Create charts & update group(-s) (if necessary) according to
-//!     documentation in [`stats::update_group`] (steps 1-2).
+//!    documentation in [`stats::update_group`] (steps 1-2).
 //! 2. If new groups were added:
-//!
-//!     2.1. Add new update groups to [`RuntimeSetup::all_update_groups`] (if any)
-//!
-//!     2.2. Configure the group update schedule in `update_groups.json` config
+//!    2.1. Add new update groups to [`RuntimeSetup::all_update_groups`] (if any)
+//!    2.2. Configure the group update schedule in `update_groups.json` config
 //! 3. Add the new charts to `charts.json` and `layout.json` (if needed)
 //! 4. If some were added in the previous step, also consider adding the
-//!     new charts to integration tests (`tests` folder).
+//!    new charts to integration tests (`tests` folder).
 //!
 
 use crate::{

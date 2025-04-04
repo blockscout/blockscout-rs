@@ -411,7 +411,7 @@ fn mock_addresses() -> Vec<addresses::ActiveModel> {
 
 fn mock_address(seed: i64, is_contract: bool, is_verified: bool) -> addresses::ActiveModel {
     let mut hash = seed.to_le_bytes().to_vec();
-    hash.extend(std::iter::repeat(0).take(32 - hash.len()));
+    hash.extend(std::iter::repeat_n(0, 32 - hash.len()));
     let contract_code = is_contract.then(|| vec![60u8, 80u8]);
     let verified = is_contract.then_some(is_verified);
     addresses::ActiveModel {
