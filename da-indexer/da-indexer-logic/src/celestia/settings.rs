@@ -40,7 +40,7 @@ impl Default for IndexerSettings {
                 max_request_size: default_max_request_size(),
                 max_response_size: default_max_response_size(),
             },
-            save_batch_size: 20,
+            save_batch_size: 1000,
         }
     }
 }
