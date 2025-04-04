@@ -13,6 +13,6 @@ pub use compilation_artifacts::{CompilationArtifacts, SourceId, ToCompilationArt
 pub use creation_code_artifacts::{CreationCodeArtifacts, ToCreationCodeArtifacts};
 pub use runtime_code_artifacts::{RuntimeCodeArtifacts, ToRuntimeCodeArtifacts};
 pub use verification_match::{
-    verify_creation_code, verify_runtime_code, Match, MatchBuilder, MatchTransformation,
-    MatchValues,
+    verify_blueprint_initcode, verify_creation_code, verify_runtime_code, Match, MatchBuilder,
+    MatchTransformation, MatchValues,
 };

@@ -49,6 +49,20 @@ pub fn verify_runtime_code(
     Ok(None)
 }
 
+pub fn verify_blueprint_initcode(
+    initcode: &[u8],
+    compiled_code: Vec<u8>,
+    creation_code_artifacts: &CreationCodeArtifacts,
+) -> Result<Option<Match>, anyhow::Error> {
+    let builder = MatchBuilder::new(initcode, compiled_code);
+    if let Some(builder) = builder {
+        return Ok(builder
+            .apply_blueprint_initcode_transformations(creation_code_artifacts)?
+            .verify_and_build());
+    }
+    Ok(None)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatchBuilder<'a> {
     deployed_code: &'a [u8],
@@ -99,6 +113,13 @@ impl<'a> MatchBuilder<'a> {
         self.apply_cbor_auxdata_transformations(creation_code_artifacts.cbor_auxdata.as_ref())?
             .apply_library_transformations(creation_code_artifacts.link_references.as_ref())?
             .apply_constructor_transformation(compilation_artifacts.abi.as_ref())
+    }
+
+    pub fn apply_blueprint_initcode_transformations(
+        self,
+        creation_code_artifacts: &CreationCodeArtifacts,
+    ) -> Result<Self, anyhow::Error> {
+        self.apply_cbor_auxdata_transformations(creation_code_artifacts.cbor_auxdata.as_ref())
     }
 
     pub fn verify_and_build(self) -> Option<Match> {
