@@ -362,9 +362,15 @@ definitions:
         $ref: '#/definitions/v1Counter'
       yesterday_operational_transactions:
         $ref: '#/definitions/v1Counter'
+      op_stack_total_operational_transactions:
+        $ref: '#/definitions/v1Counter'
+      op_stack_yesterday_operational_transactions:
+        $ref: '#/definitions/v1Counter'
       daily_new_transactions:
         $ref: '#/definitions/v1LineChart'
       daily_new_operational_transactions:
+        $ref: '#/definitions/v1LineChart'
+      op_stack_daily_new_operational_transactions:
         $ref: '#/definitions/v1LineChart'
   v1Point:
     type: object
@@ -399,6 +405,8 @@ definitions:
       transactions_24h:
         $ref: '#/definitions/v1Counter'
       operational_transactions_24h:
+        $ref: '#/definitions/v1Counter'
+      op_stack_operational_transactions_24h:
         $ref: '#/definitions/v1Counter'
   v1UpdateStatus:
     type: object

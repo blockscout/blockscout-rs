@@ -3,7 +3,7 @@ use crate::{
         kinds::{
             data_manipulation::map::{Map, MapParseTo},
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
+            remote_db::{query::query_yesterday_data, RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         UpdateContext,
     },
@@ -17,10 +17,7 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 
-use super::{
-    yesterday_txns::{query_yesterday_data, YesterdayTxnsInt},
-    CalculateOperationalTxns,
-};
+use super::{yesterday_txns::YesterdayTxnsInt, CalculateOperationalTxns};
 
 pub struct YesterdayBlocksQuery;
 
@@ -69,7 +66,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type YesterdayOperationalTxns = DirectPointLocalDbChartSource<
+pub type ArbitrumYesterdayOperationalTxns = DirectPointLocalDbChartSource<
     Map<(YesterdayBlocksRemoteInt, YesterdayTxnsInt), CalculateOperationalTxns<Properties>>,
     Properties,
 >;
@@ -81,10 +78,10 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_yesterday_operational_txns() {
+    async fn update_arbitrum_yesterday_operational_txns() {
         // 14 - 3 (txns - blocks)
-        simple_test_counter::<YesterdayOperationalTxns>(
-            "update_yesterday_operational_txns",
+        simple_test_counter::<ArbitrumYesterdayOperationalTxns>(
+            "update_arbitrum_yesterday_operational_txns",
             "11",
             Some(dt("2022-11-11T00:00:00")),
         )

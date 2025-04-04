@@ -6,6 +6,7 @@ use crate::{
         },
         types::BlockscoutMigrations,
     },
+    types::TimespanValue,
     ChartProperties, MissingDatePolicy, Named,
 };
 
@@ -71,7 +72,7 @@ impl StatementForOne for CompletedTxnsStatement {
 }
 
 pub type CompletedTxnsRemote =
-    RemoteDatabaseSource<PullOne<CompletedTxnsStatement, NaiveDate, String>>;
+    RemoteDatabaseSource<PullOne<CompletedTxnsStatement, TimespanValue<NaiveDate, String>>>;
 
 pub struct Properties;
 
@@ -104,7 +105,7 @@ mod tests {
     async fn update_completed_txns() {
         simple_test_counter_with_migration_variants::<CompletedTxns>(
             "update_completed_txns",
-            "54",
+            "55",
             None,
         )
         .await;

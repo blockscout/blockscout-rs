@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::{read::QueryAllBlockTimestampRange, utils::datetime_range_filter},
@@ -21,7 +21,7 @@ use crate::{
     define_and_impl_resolution_properties,
     indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
     types::timespans::{Month, Week, Year},
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use blockscout_db::entity::{blocks, user_operations};
@@ -39,6 +39,7 @@ impl StatementFromRange for NewUserOpsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         _completed_migrations: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
     ) -> Statement {
         let date_intermediate_col = "date".into_identity();
         let mut query = user_operations::Entity::find()

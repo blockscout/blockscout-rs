@@ -1,7 +1,10 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
-    charts::{db_interaction::read::QueryAllBlockTimestampRange, types::timespans::DateValue},
+    charts::{
+        db_interaction::read::{find_all_points, QueryAllBlockTimestampRange},
+        types::timespans::DateValue,
+    },
     data_source::{
         kinds::{
             data_manipulation::{
@@ -24,12 +27,12 @@ use crate::{
     range::{data_source_query_range_to_db_statement_range, UniversalRange},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartError, ChartProperties, Named,
+    ChartError, ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, FromQueryResult, Statement};
+use sea_orm::{DbBackend, Statement};
 
 pub struct NewAccountsStatement;
 
@@ -37,6 +40,7 @@ impl StatementFromRange for NewAccountsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough
         let min_timestamp = DateTime::<Utc>::UNIX_EPOCH;
@@ -105,16 +109,12 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
         let statement_range =
             data_source_query_range_to_db_statement_range::<QueryAllBlockTimestampRange>(cx, range)
                 .await?;
-        let query = NewAccountsStatement::get_statement(
+        let statement = NewAccountsStatement::get_statement(
             statement_range.clone(),
             &cx.blockscout_applied_migrations,
+            &cx.enabled_update_charts_recursive,
         );
-        let mut data = DateValue::<String>::find_by_statement(query)
-            .all(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?;
-        // make sure that it's sorted
-        data.sort_by_key(|d| d.timespan);
+        let mut data = find_all_points::<DateValue<String>>(cx, statement).await?;
         if let Some(range) = statement_range {
             let range = range.start.date_naive()..=range.end.date_naive();
             trim_out_of_range_sorted(&mut data, range);
@@ -190,7 +190,7 @@ mod tests {
                 ("2022-11-09", "1"),
                 ("2022-11-10", "3"),
                 ("2022-11-11", "4"),
-                ("2023-03-01", "1"),
+                ("2023-03-01", "2"),
             ],
         )
         .await;
@@ -201,7 +201,7 @@ mod tests {
     async fn update_new_accounts_weekly() {
         simple_test_chart_with_migration_variants::<NewAccountsWeekly>(
             "update_new_accounts_weekly",
-            vec![("2022-11-07", "8"), ("2023-02-27", "1")],
+            vec![("2022-11-07", "8"), ("2023-02-27", "2")],
         )
         .await;
     }
@@ -211,7 +211,7 @@ mod tests {
     async fn update_new_accounts_monthly() {
         simple_test_chart_with_migration_variants::<NewAccountsMonthly>(
             "update_new_accounts_monthly",
-            vec![("2022-11-01", "8"), ("2023-03-01", "1")],
+            vec![("2022-11-01", "8"), ("2023-03-01", "2")],
         )
         .await;
     }
@@ -221,7 +221,7 @@ mod tests {
     async fn update_new_accounts_yearly() {
         simple_test_chart_with_migration_variants::<NewAccountsYearly>(
             "update_new_accounts_yearly",
-            vec![("2022-01-01", "8"), ("2023-01-01", "1")],
+            vec![("2022-01-01", "8"), ("2023-01-01", "2")],
         )
         .await;
     }

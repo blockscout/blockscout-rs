@@ -38,7 +38,7 @@ use crate::{
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
 };
 
 pub struct NewContractsQuery;
@@ -47,6 +47,7 @@ impl StatementFromRange for NewContractsQuery {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         // choose the statement based on migration progress
         if completed_migrations.denormalization {
@@ -298,6 +299,7 @@ async fn update_examples() {
         db: &db,
         blockscout: &blockscout,
         blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
         update_time_override: None,
         force_full: true,
     };
