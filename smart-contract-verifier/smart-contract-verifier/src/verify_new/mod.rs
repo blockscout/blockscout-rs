@@ -16,6 +16,11 @@ pub use vyper_compiler::{VyperCompiler, VyperInput};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("One of creation or runtime code is blueprint while another is not; chain_id={chain_id:?}, address={address:?}")]
+    NotConsistentBlueprintOnChainCode {
+        chain_id: Option<String>,
+        address: Option<String>,
+    },
     #[error("Compiler version not found: {0}")]
     CompilerNotFound(String),
     #[error("Compilation error: {0:#?}")]

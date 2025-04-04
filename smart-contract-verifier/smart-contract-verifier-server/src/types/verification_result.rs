@@ -19,6 +19,9 @@ pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
             tracing::error!(err = formatted_error, "internal error");
             Err(Status::internal(formatted_error))
         }
+        err @ Error::NotConsistentBlueprintOnChainCode { .. } => {
+            Err(Status::invalid_argument(err.to_string()))
+        }
         err @ Error::Compilation(_) => {
             let response = v2::VerifyResponse {
                 message: err.to_string(),
@@ -137,7 +140,7 @@ fn try_into_source(verifying_contract: VerifyingContract) -> Result<v2::Source, 
         compilation_artifacts: Some(Value::from(compilation_artifacts).to_string()),
         creation_input_artifacts: Some(Value::from(creation_code_artifacts).to_string()),
         deployed_bytecode_artifacts: Some(Value::from(runtime_code_artifacts).to_string()),
-        is_blueprint: false,
+        is_blueprint: verifying_contract.is_blueprint,
     };
     Ok(source)
 }
