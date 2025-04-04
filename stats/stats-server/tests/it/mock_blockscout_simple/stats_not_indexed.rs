@@ -1,7 +1,7 @@
 //! Tests for the case
 //! - blockscout is not indexed
 //! - stats server is fully enabled & updated as much as possible
-//!     with not indexed blockscout
+//!   with not indexed blockscout
 
 use blockscout_service_launcher::{launcher::GracefulShutdownHandler, test_server::init_server};
 use futures::FutureExt;
