@@ -4,6 +4,7 @@ info:
   version: version not set
 tags:
   - name: TacService
+  - name: TacStatistic
   - name: Health
 consumes:
   - application/json
@@ -30,6 +31,20 @@ paths:
             $ref: '#/definitions/v1GetOperationStatusRequest'
       tags:
         - TacService
+  /api/v1/stat:
+    post:
+      operationId: TacStatistic_GetIndexerStatistics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetIndexerStatisticResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - TacStatistic
   /health:
     get:
       summary: |-
@@ -81,6 +96,51 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1GetIndexerStatisticResponse:
+    type: object
+    properties:
+      timestamp:
+        type: string
+        format: uint64
+      watermark:
+        type: string
+        format: uint64
+      realtime_from:
+        type: string
+        format: uint64
+      first_timestamp:
+        type: string
+        format: uint64
+      last_timestamp:
+        type: string
+        format: uint64
+      total_intervals:
+        type: string
+        format: uint64
+      failed_intervals:
+        type: string
+        format: uint64
+      total_pending_intervals:
+        type: string
+        format: uint64
+      historical_pending_intervals:
+        type: string
+        format: uint64
+      realtime_pending_intervals:
+        type: string
+        format: uint64
+      historical_processed_period:
+        type: string
+        format: uint64
+      realtime_processed_period:
+        type: string
+        format: uint64
+      historical_sync_completeness:
+        type: number
+        format: double
+      realtime_sync_completeness:
+        type: number
+        format: double
   v1GetOperationStatusRequest:
     type: object
     properties:

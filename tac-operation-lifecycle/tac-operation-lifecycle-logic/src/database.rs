@@ -46,17 +46,17 @@ impl EntityStatus {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct IndexerStatistic {
-    watermark: u64,
-    first_timestamp: u64,
-    last_timestamp: u64,
-    total_intervals: usize,
-    failed_intervals: usize,
-    total_pending_intervals: usize,
-    historical_pending_intervals: usize,
-    realtime_pending_intervals: usize,
-    historical_processed_period: u64,
-    realtime_processed_period: u64,
+pub struct DatabaseStatistic {
+    pub watermark: u64,
+    pub first_timestamp: u64,
+    pub last_timestamp: u64,
+    pub total_intervals: usize,
+    pub failed_intervals: usize,
+    pub total_pending_intervals: usize,
+    pub historical_pending_intervals: usize,
+    pub realtime_pending_intervals: usize,
+    pub historical_processed_period: u64,
+    pub realtime_processed_period: u64,
 }
 
 
@@ -654,7 +654,7 @@ impl TacDatabase {
         }
     }
 
-    pub async fn get_statistic(&self, historical_boundary: u64) -> anyhow::Result<IndexerStatistic> {
+    pub async fn get_statistic(&self, historical_boundary: u64) -> anyhow::Result<DatabaseStatistic> {
         let first_timestamp = interval::Entity::find()
             .select_only()
             .column_as(interval::Column::Start.min(), "min_start")
@@ -685,18 +685,18 @@ impl TacDatabase {
 
         let sql1 = Statement::from_string(
                 sea_orm::DatabaseBackend::Postgres,
-                format!(r#"SELECT SUM("end" - start) as sum FROM interval WHERE status = {} AND \"end\" < {}"#, EntityStatus::Pending.to_id(), historical_boundary),
+                format!(r#"SELECT SUM("end" - start)::BIGINT as sum FROM interval WHERE status = {} AND "end" < {}"#, EntityStatus::Finalized.to_id(), historical_boundary),
             );
         let historical_processed_period = self.db.query_one(sql1);
 
         let sql2 = Statement::from_string(
                 sea_orm::DatabaseBackend::Postgres,
-                format!(r#"SELECT SUM("end" - start) as sum FROM interval WHERE status = {} AND start >= {}"#, EntityStatus::Pending.to_id(), historical_boundary),
+                format!(r#"SELECT SUM("end" - start)::BIGINT as sum FROM interval WHERE status = {} AND start >= {}"#, EntityStatus::Finalized.to_id(), historical_boundary),
             );
         let realtime_processed_period = self.db.query_one(sql2);
 
 
-        Ok(IndexerStatistic {
+        Ok(DatabaseStatistic {
             watermark: self.get_watermark().await?,
             first_timestamp: first_timestamp.await?.unwrap().unwrap_or(0) as u64,
             last_timestamp: last_timestamp.await?.unwrap().unwrap_or(0) as u64,
@@ -705,8 +705,18 @@ impl TacDatabase {
             total_pending_intervals: total_pending_intervals.await? as usize,
             historical_pending_intervals: historical_pending_intervals.await? as usize,
             realtime_pending_intervals: realtime_pending_intervals.await? as usize,
-            historical_processed_period: historical_processed_period.await?.and_then(|row| row.try_get("", "sum").ok()).unwrap_or(0),
-            realtime_processed_period: realtime_processed_period.await?.and_then(|row| row.try_get("", "sum").ok()).unwrap_or(0),
+            historical_processed_period: historical_processed_period.await?.and_then(|row| row.try_get::<i64>("", "sum").ok()).unwrap_or(0) as u64,
+            realtime_processed_period: realtime_processed_period.await?.and_then(|row| row.try_get::<i64>("", "sum").ok()).unwrap_or(0) as u64,
         })
+    }
+
+    pub async fn get_operations_with_stages(&self, id: &String) -> anyhow::Result<Option<(operation::Model, Vec<operation_stage::Model>)>> {
+        let operation = operation::Entity::find()
+            .filter(operation::Column::Id.eq(id))
+            .find_with_related(operation_stage::Entity)
+            .all(self.db.as_ref())
+            .await?;
+
+        Ok(operation.into_iter().next())
     }
 }

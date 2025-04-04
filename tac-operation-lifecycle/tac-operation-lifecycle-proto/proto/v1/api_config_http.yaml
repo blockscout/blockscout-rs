@@ -7,6 +7,9 @@ http:
     - selector: blockscout.tacOperationLifecycle.v1.TacService.GetOperationStatus
       post: /api/v1/TacService:getOperationStatus
       body: "*"
+
+    - selector: blockscout.tacOperationLifecycle.v1.TacStatistic.GetIndexerStatistics
+      post: /api/v1/stat
     
     #################### Health ####################
 
