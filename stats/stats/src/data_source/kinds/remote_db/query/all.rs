@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::{FromQueryResult, Statement};
 
 use crate::{
-    charts::db_interaction::read::cached::find_all_cached,
+    charts::db_interaction::read::{cached::find_all_cached, find_all_points},
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, Cacheable, UpdateContext},
@@ -59,22 +59,8 @@ where
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<TimespanValue<Resolution, Value>>, ChartError> {
-        // to not overcomplicate the queries
-        let query_range =
-            data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
-        let query = S::get_statement(
-            query_range,
-            &cx.blockscout_applied_migrations,
-            &cx.enabled_update_charts_recursive,
-        );
-        let mut data = TimespanValue::<Resolution, Value>::find_by_statement(query)
-            .all(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?;
-        // linear time for sorted sequences
-        data.sort_unstable_by(|a, b| a.timespan.cmp(&b.timespan));
-        // can't use sort_*_by_key: https://github.com/rust-lang/rust/issues/34162
-        Ok(data)
+        let statement = prepare_range_query_statement::<S, AllRangeSource>(cx, range).await?;
+        find_all_points(cx, statement).await
     }
 }
 /// Pull data from remote (blockscout) db according to statement
@@ -106,15 +92,25 @@ where
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<Point>, ChartError> {
-        // to not overcomplicate the queries
-        let query_range =
-            data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
-        let query = S::get_statement(
-            query_range,
-            &cx.blockscout_applied_migrations,
-            &cx.enabled_update_charts_recursive,
-        );
-        let data = find_all_cached(cx, query).await?;
-        Ok(data)
+        let statement = prepare_range_query_statement::<S, AllRangeSource>(cx, range).await?;
+        find_all_cached(cx, statement).await
     }
+}
+
+pub async fn prepare_range_query_statement<S, AllRangeSource>(
+    cx: &UpdateContext<'_>,
+    range: UniversalRange<DateTime<Utc>>,
+) -> Result<Statement, ChartError>
+where
+    S: StatementFromRange,
+    AllRangeSource: RemoteQueryBehaviour<Output = Range<DateTime<Utc>>>,
+{
+    // to not overcomplicate the queries
+    let query_range =
+        data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
+    Ok(S::get_statement(
+        query_range,
+        &cx.blockscout_applied_migrations,
+        &cx.enabled_update_charts_recursive,
+    ))
 }

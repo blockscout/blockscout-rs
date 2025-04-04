@@ -2,7 +2,9 @@ mod all;
 mod each;
 mod one;
 
-pub use all::{PullAllWithAndSort, PullAllWithAndSortCached, StatementFromRange};
+pub use all::{
+    prepare_range_query_statement, PullAllWithAndSort, PullAllWithAndSortCached, StatementFromRange,
+};
 use chrono::{Days, NaiveDate};
 pub use each::{PullEachWith, StatementFromTimespan};
 pub use one::{
@@ -11,9 +13,9 @@ pub use one::{
 use sea_orm::{FromQueryResult, Statement};
 
 use crate::{
-    charts::db_interaction::read::cached::find_one_value_cached,
+    charts::db_interaction::read::{cached::find_one_value_cached, find_one_value},
     data_source::{types::Cacheable, UpdateContext},
-    types::{Timespan, TimespanDuration, TimespanTrait, TimespanValue},
+    types::{timespans::DateValue, Timespan, TimespanDuration, TimespanTrait, TimespanValue},
     utils::day_start,
     ChartError,
 };
@@ -25,10 +27,8 @@ pub(crate) async fn query_yesterday_data<DailyDataStatement: StatementFromRange>
 ) -> Result<TimespanValue<NaiveDate, String>, ChartError> {
     let yesterday = calculate_yesterday(today)?;
     let query_statement = yesterday_statement::<DailyDataStatement>(cx, yesterday)?;
-    let mut data = TimespanValue::<NaiveDate, String>::find_by_statement(query_statement)
-        .one(cx.blockscout)
-        .await
-        .map_err(ChartError::BlockscoutDB)?
+    let mut data = find_one_value::<DateValue<String>>(cx, query_statement)
+        .await?
         // no data for yesterday
         .unwrap_or(TimespanValue::with_zero_value(yesterday));
     // today's value is the number from the day before.

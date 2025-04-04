@@ -1,7 +1,10 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
-    charts::{db_interaction::read::QueryAllBlockTimestampRange, types::timespans::DateValue},
+    charts::{
+        db_interaction::read::{find_all_points, QueryAllBlockTimestampRange},
+        types::timespans::DateValue,
+    },
     data_source::{
         kinds::{
             data_manipulation::{
@@ -106,17 +109,12 @@ impl RemoteQueryBehaviour for NewAccountsQueryBehaviour {
         let statement_range =
             data_source_query_range_to_db_statement_range::<QueryAllBlockTimestampRange>(cx, range)
                 .await?;
-        let query = NewAccountsStatement::get_statement(
+        let statement = NewAccountsStatement::get_statement(
             statement_range.clone(),
             &cx.blockscout_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        let mut data = DateValue::<String>::find_by_statement(query)
-            .all(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?;
-        // make sure that it's sorted
-        data.sort_by_key(|d| d.timespan);
+        let mut data = find_all_points::<DateValue<String>>(cx, statement).await?;
         if let Some(range) = statement_range {
             let range = range.start.date_naive()..=range.end.date_naive();
             trim_out_of_range_sorted(&mut data, range);

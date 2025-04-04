@@ -7,6 +7,7 @@
 use std::collections::HashSet;
 
 use crate::{
+    charts::db_interaction::read::find_all_points,
     data_source::{
         kinds::{
             data_manipulation::map::{Map, MapParseTo},
@@ -24,14 +25,14 @@ use crate::{
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     lines::{NewBlocksStatement, NewTxnsWindowInt, NEW_TXNS_WINDOW_RANGE},
     range::UniversalRange,
-    types::{Timespan, TimespanDuration, TimespanValue},
+    types::{timespans::DateValue, Timespan, TimespanDuration, TimespanValue},
     utils::day_start,
     ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{FromQueryResult, Statement};
+use sea_orm::Statement;
 
 use super::arbitrum_new_operational_txns::ArbitrumCalculateOperationalTxnsVec;
 
@@ -64,18 +65,12 @@ impl RemoteQueryBehaviour for NewBlocksWindowQuery {
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<TimespanValue<NaiveDate, String>>, ChartError> {
         let update_day = cx.time.date_naive();
-        let query = new_blocks_window_statement(
+        let statement = new_blocks_window_statement(
             update_day,
             &cx.blockscout_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        let mut data = TimespanValue::<NaiveDate, String>::find_by_statement(query)
-            .all(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?;
-        // linear time for sorted sequences
-        data.sort_unstable_by(|a, b| a.timespan.cmp(&b.timespan));
-        Ok(data)
+        find_all_points::<DateValue<String>>(cx, statement).await
     }
 }
 

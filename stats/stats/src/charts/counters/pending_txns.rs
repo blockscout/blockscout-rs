@@ -1,4 +1,5 @@
 use crate::{
+    charts::db_interaction::read::find_one_value,
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
@@ -48,15 +49,13 @@ impl RemoteQueryBehaviour for PendingTxns30mQuery {
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, ChartError> {
         let update_time = cx.time;
-        let query = PendingTxnsStatement::get_statement(
+        let statement = PendingTxnsStatement::get_statement(
             update_time
                 .checked_sub_signed(TimeDelta::minutes(30))
                 .unwrap_or(DateTime::<Utc>::MIN_UTC),
         );
-        let data = Value::find_by_statement(query)
-            .one(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?
+        let data = find_one_value::<Value>(cx, statement)
+            .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
         Ok(TimespanValue {
             timespan: update_time.date_naive(),

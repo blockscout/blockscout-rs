@@ -4,7 +4,7 @@ use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use sea_orm::{FromQueryResult, Statement, TryGetable};
 
 use crate::{
-    charts::db_interaction::read::cached::find_one_value_cached,
+    charts::db_interaction::read::{cached::find_one_value_cached, find_one_value},
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, Cacheable, UpdateContext, WrappedValue},
@@ -42,11 +42,9 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Value, ChartError> {
-        let query = S::get_statement(&cx.blockscout_applied_migrations);
-        let data = Value::find_by_statement(query)
-            .one(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?
+        let statement = S::get_statement(&cx.blockscout_applied_migrations);
+        let data = find_one_value::<Value>(cx, statement)
+            .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
         Ok(data)
     }
@@ -78,12 +76,10 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
-        let query = S::get_statement(cx.time, &cx.blockscout_applied_migrations);
+        let statement = S::get_statement(cx.time, &cx.blockscout_applied_migrations);
         let timespan = Resolution::from_date(cx.time.date_naive());
-        let value = WrappedValue::<Value>::find_by_statement(query)
-            .one(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?
+        let value = find_one_value::<WrappedValue<Value>>(cx, statement)
+            .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?
             .value;
         Ok(TimespanValue { timespan, value })

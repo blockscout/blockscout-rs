@@ -8,6 +8,39 @@ use sea_orm::{
 };
 use std::fmt::Debug;
 
+use crate::{data_source::UpdateContext, types::TimespanTrait, ChartError};
+
+pub async fn find_one_value<Value>(
+    cx: &UpdateContext<'_>,
+    query: Statement,
+) -> Result<Option<Value>, ChartError>
+where
+    Value: FromQueryResult,
+{
+    Value::find_by_statement(query)
+        .one(cx.blockscout)
+        .await
+        .map_err(ChartError::BlockscoutDB)
+}
+
+pub async fn find_all_points<Point>(
+    cx: &UpdateContext<'_>,
+    statement: Statement,
+) -> Result<Vec<Point>, ChartError>
+where
+    Point: FromQueryResult + TimespanTrait,
+    Point::Timespan: Ord,
+{
+    let find_by_statement = Point::find_by_statement(statement);
+    let mut data = find_by_statement
+        .all(cx.blockscout)
+        .await
+        .map_err(ChartError::BlockscoutDB)?;
+    // can't use sort_*_by_key: https://github.com/rust-lang/rust/issues/34162
+    data.sort_unstable_by(|a, b| a.timespan().cmp(b.timespan()));
+    Ok(data)
+}
+
 #[derive(FromQueryResult)]
 struct MinBlock {
     min_block: i64,
