@@ -32,7 +32,7 @@ use crate::{
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, FromQueryResult, Statement};
+use sea_orm::{DbBackend, Statement};
 
 pub struct NewAccountsStatement;
 

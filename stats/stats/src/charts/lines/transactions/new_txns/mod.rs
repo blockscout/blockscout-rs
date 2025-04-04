@@ -208,8 +208,7 @@ mod tests {
             &BlockscoutMigrations::latest(),
             &HashSet::new(),
         );
-        let expected = format!(
-            r#"
+        let expected = r#"
                 SELECT
                     CAST("transactions"."block_timestamp" AS date) AS "date",
                     CAST(COUNT(*) AS text) AS "all_transactions",
@@ -221,8 +220,7 @@ mod tests {
                     "transactions"."block_timestamp" >= '2025-01-01 00:00:00 +00:00'
                 GROUP BY "date"
                 ORDER BY "date" ASC
-            "#,
-        );
+            "#.to_string();
         assert_eq!(
             normalize_sql(&expected),
             normalize_sql(&denormalized_without_op_stack.to_string())
