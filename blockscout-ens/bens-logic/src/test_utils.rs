@@ -95,26 +95,50 @@ pub async fn mocked_blockscout_client() -> BlockscoutClient {
 
 pub async fn mocked_networks_and_protocols(
 ) -> (HashMap<i64, Network>, HashMap<String, ProtocolInfo>) {
-    let client = mocked_blockscout_client().await;
-    let networks = HashMap::from_iter([(
-        1,
-        Network {
-            blockscout_client: Arc::new(client),
-            use_protocols: vec!["ens".to_string()],
-            rpc_url: None,
-        },
-    )]);
+    // let client = mocked_blockscout_client().await;
+    let client = Arc::new(mocked_blockscout_client().await);
 
-    let protocols = HashMap::from_iter([(
-        "ens".to_string(),
-        ProtocolInfo {
-            slug: "ens".to_string(),
-            network_id: 1,
-            tld_list: nonempty![Tld::new("eth")],
-            subgraph_name: "ens-subgraph".to_string(),
-            ..Default::default()
-        },
-    )]);
+    let networks = HashMap::from_iter([
+        (
+            1,
+            Network {
+                blockscout_client: client.clone(),
+                use_protocols: vec!["ens".to_string()],
+                rpc_url: None,
+            },
+        ),
+        (
+            1337,
+            Network {
+                blockscout_client: client.clone(),
+                use_protocols: vec!["ens".to_string(), "genome".to_string()],
+                rpc_url: None,
+            },
+        ),
+    ]);
+
+    let protocols = HashMap::from_iter([
+        (
+            "ens".to_string(),
+            ProtocolInfo {
+                slug: "ens".to_string(),
+                network_id: 1,
+                tld_list: nonempty![Tld::new("eth")],
+                subgraph_name: "ens-subgraph".to_string(),
+                ..Default::default()
+            },
+        ),
+        (
+            "genome".to_string(),
+            ProtocolInfo {
+                slug: "genome".to_string(),
+                network_id: 1337,
+                tld_list: nonempty![Tld::new("gno")],
+                subgraph_name: "genome-subgraph".to_string(),
+                ..Default::default()
+            },
+        ),
+    ]);
 
     (networks, protocols)
 }

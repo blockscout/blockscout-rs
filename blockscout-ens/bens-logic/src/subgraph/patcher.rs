@@ -40,6 +40,13 @@ impl SubgraphPatcher {
         Ok(())
     }
 
+    pub fn patched_domain_name_only(&self, from_user: &DomainNameOnProtocol<'_>) -> Domain {
+        Domain {
+            name: Some(from_user.inner.name.clone()),
+            ..Default::default()
+        }
+    }
+
     pub fn patched_domain(
         &self,
         pool: Arc<PgPool>,
