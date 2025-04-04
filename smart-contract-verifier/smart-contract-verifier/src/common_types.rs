@@ -1,5 +1,13 @@
 use std::fmt::{Display, Formatter};
 
+#[derive(thiserror::Error, Debug)]
+pub enum RequestParseError {
+    #[error("content is not a valid standard json: {0}")]
+    InvalidContent(#[from] serde_path_to_error::Error<serde_json::Error>),
+    #[error("{0:#}")]
+    BadRequest(#[from] anyhow::Error),
+}
+
 /// The enum representing how provided bytecode corresponds
 /// to the local result of source codes compilation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

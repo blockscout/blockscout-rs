@@ -9,5 +9,5 @@ pub mod standard_json;
 
 pub use client::Client;
 pub use compiler::SolidityCompiler;
-pub use types::{RequestParseError, Success};
+pub use types::Success;
 pub use validator::SolcValidator;

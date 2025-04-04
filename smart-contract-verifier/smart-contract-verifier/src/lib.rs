@@ -25,6 +25,7 @@ pub use consts::{
 pub use crate::sourcify::Error as SourcifyError;
 pub use common_types::{
     Contract, FullyQualifiedName, Language, MatchType, OnChainCode, OnChainContract,
+    RequestParseError,
 };
 pub use compiler::{
     CompactVersion, Compilers, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher,

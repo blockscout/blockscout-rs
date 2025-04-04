@@ -1,6 +1,4 @@
-use super::evm_compilers;
 use foundry_compilers_new::artifacts;
-use nonempty::NonEmpty;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{ImmutableReferences, LinkReferences};
@@ -8,24 +6,9 @@ use verification_common::verifier_alliance::{ImmutableReferences, LinkReferences
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct SharedCompilerOutput {
     #[serde(default)]
-    pub errors: Vec<artifacts::Error>,
-    #[serde(default)]
     pub contracts: BTreeMap<String, BTreeMap<String, Contract>>,
     #[serde(default)]
     pub sources: SourceFiles,
-}
-
-impl evm_compilers::CompilerOutput for SharedCompilerOutput {
-    fn check_errors(&self) -> Option<NonEmpty<String>> {
-        // Compilations errors, warnings and info messages are returned in `CompilerOutput.errors`
-        let mut errors = Vec::new();
-        for err in &self.errors {
-            if err.severity == artifacts::Severity::Error {
-                errors.push(err.formatted_message.clone().unwrap_or(err.message.clone()))
-            }
-        }
-        NonEmpty::from_vec(errors)
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
