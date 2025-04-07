@@ -428,17 +428,21 @@ impl TacDatabase {
             conditions.push(format!(r#""end" < {}"#, end));
         }
         let sql = format!(
-            r#" SELECT *
-                                      FROM interval 
-                                      WHERE {} 
-                                      ORDER BY start {} 
-                                      LIMIT {} 
-                                      FOR UPDATE SKIP LOCKED "#,
+            r#" WITH pending_intervals AS (
+                    SELECT * FROM interval 
+                    WHERE  {} 
+                    ORDER BY start {}
+                    LIMIT {}
+                    )
+                    UPDATE interval 
+                    SET status = {}
+                    WHERE id IN (SELECT id FROM pending_intervals)
+                    "#,
             conditions.join(" AND "),
             order.sql_order_string(),
-            num
+            num,
+            EntityStatus::Processing.to_id(), 
         );
-
         self.query_intervals(&sql)
         .instrument(tracing::info_span!(
             "query pending intervals"
@@ -451,12 +455,17 @@ impl TacDatabase {
         num: usize,
     ) -> anyhow::Result<Vec<interval::Model>> {
         let sql = format!(
-            r#" SELECT *
-                                      FROM interval 
-                                      WHERE status = {} AND next_retry IS NOT NULL AND next_retry < {} 
-                                      ORDER BY next_retry ASC 
-                                      LIMIT {} 
-                                      FOR UPDATE SKIP LOCKED "#,
+            r#" WITH failed_intervals AS (
+                    SELECT * FROM interval 
+                    WHERE status = {} AND next_retry IS NOT NULL AND next_retry < {} 
+                    ORDER BY next_retry ASC 
+                    LIMIT {}
+                    )
+                    UPDATE interval 
+                    SET status = {}
+                    WHERE id IN (SELECT id FROM failed_intervals)
+                    "#,
+            EntityStatus::Pending.to_id(),
             EntityStatus::Pending.to_id(),
             chrono::Utc::now().timestamp(),
             num
@@ -475,29 +484,12 @@ impl TacDatabase {
         let tx_id = Uuid::new_v4();
         let tx_start = Instant::now();
 
-        // Extract the WHERE clause from the original SQL
-        // The original SQL format is: SELECT * FROM interval WHERE [conditions] ORDER BY start [ASC/DESC] LIMIT [num] FOR UPDATE SKIP LOCKED
-        let where_clause = sql
-            .split("WHERE")
-            .nth(1)
-            .and_then(|s| s.split("ORDER BY").next())
-            .map(|s| s.trim())
-            .unwrap_or("");
-
-        // Create an UPDATE statement with the same WHERE clause and RETURNING clause
-        let update_sql = format!(
-            r#"UPDATE interval SET status = {} WHERE {} RETURNING id, start, "end", timestamp, status, next_retry, retry_count"#,
-            EntityStatus::Processing.to_id(),
-            where_clause
-        );
-
-
         // Start a transaction
         let txn = match self.db.begin()
         .instrument(tracing::info_span!(
             "begin transaction for update intervals",
             tx_id = tx_id.to_string(),
-            sql = update_sql.clone()
+            sql = sql.clone()
         ))
         .await {
             Ok(txn) => {
@@ -519,7 +511,7 @@ impl TacDatabase {
         };
 
         let query_start = Instant::now();
-        let update_stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, &update_sql, vec![]);
+        let update_stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
 
         // Execute the UPDATE with RETURNING clause
         let updated_intervals = match interval::Entity::find()
