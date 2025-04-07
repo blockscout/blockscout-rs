@@ -20,6 +20,8 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 | lightlink-subgraph  | Lightlink | .ll   | SpaceID contracts |
 | zns-subgraph        | Polygon   | .poly |      |
 | d3-connect-subgraph | Shibarium | .shib |      |
+| story-subgraph      | Story     | .ip   | SpaceID contracts |
+| gravity-subgraph    | Gravity   | .g    | SpaceID contracts |
 | zeta-subgraph       | Zeta      | .zeta | SpaceID contracts |
 
 
