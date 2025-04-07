@@ -433,6 +433,7 @@ impl TacDatabase {
                     WHERE  {} 
                     ORDER BY start {}
                     LIMIT {}
+                    FOR UPDATE SKIP LOCKED
                     )
                     UPDATE interval 
                     SET status = {}
@@ -460,6 +461,7 @@ impl TacDatabase {
                     WHERE status = {} AND next_retry IS NOT NULL AND next_retry < {} 
                     ORDER BY next_retry ASC 
                     LIMIT {}
+                    FOR UPDATE SKIP LOCKED
                     )
                     UPDATE interval 
                     SET status = {}
