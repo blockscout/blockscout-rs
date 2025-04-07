@@ -140,7 +140,7 @@ impl TacDatabase {
                 let _ = self.set_watermark_internal(&tx, to).await?;
 
                 tx.commit().await?;
-                tracing::info!("Pending interval was added and watermark updated to {}", to);
+                tracing::debug!("Pending interval was added and watermark updated to {}", to);
             }
 
             Err(e) => {
@@ -177,7 +177,7 @@ impl TacDatabase {
             })
             .collect();
 
-        tracing::info!(
+        tracing::debug!(
             "Total {}s intervals were generated: {} ({}..{})",
             period_secs,
             intervals.len(),
@@ -206,7 +206,7 @@ impl TacDatabase {
                     }
 
                     tx.commit().await?;
-                    tracing::info!(
+                    tracing::debug!(
                         "Successfully saved batch of {} intervals and updated watermark to {}",
                         chunk.len(),
                         if let Some(wm) = updated_watermark {
@@ -331,7 +331,6 @@ impl TacDatabase {
                 anyhow!(e)
             })?;
 
-        //tracing::info!("Successfully updated interval {} status to {}", interval_id, status.to_string());
         Ok(())
     }
 
@@ -380,7 +379,7 @@ impl TacDatabase {
                 anyhow!(e)
             })?;
 
-        tracing::info!(
+        tracing::debug!(
             "Successfully updated operation {} status to {}",
             operation_model.id,
             status.to_string()
@@ -444,6 +443,39 @@ impl TacDatabase {
         )
     }
 
+    // Helper function to build operation query with common structure
+    fn build_operation_query(
+        &self,
+        conditions: Vec<String>,
+        order_by: Option<(&str, OrderDirection)>,
+        limit: usize,
+        update_status: EntityStatus,
+    ) -> String {
+        let order_clause = if let Some((field, direction)) = order_by {
+            format!("ORDER BY {} {}", field, direction.sql_order_string())
+        } else {
+            "".to_string()
+        };
+
+        format!(
+            r#" WITH selected_operations AS (
+                    SELECT * FROM operation 
+                    WHERE {} 
+                    {} 
+                    LIMIT {}
+                    FOR UPDATE SKIP LOCKED
+                    )
+                    UPDATE operation 
+                    SET status = {}
+                    WHERE id IN (SELECT id FROM selected_operations)
+                    "#,
+            conditions.join(" AND "),
+            order_clause,
+            limit,
+            update_status.to_id(),
+        )
+    }
+
     pub async fn query_pending_intervals(
         &self,
         num: usize,
@@ -467,13 +499,13 @@ impl TacDatabase {
         );
         
         self.query_intervals(&sql)
-        .instrument(tracing::info_span!(
+        .instrument(tracing::debug_span!(
             "query pending intervals"
         ))
         .await
     }
 
-    pub async fn select_failed_intervals(
+    pub async fn query_failed_intervals(
         &self,
         num: usize,
     ) -> anyhow::Result<Vec<interval::Model>> {
@@ -491,35 +523,28 @@ impl TacDatabase {
         );
         
         let span_id = Uuid::new_v4();
-        self.query_intervals(&sql).instrument(tracing::info_span!(
+        self.query_intervals(&sql).instrument(tracing::debug_span!(
             "query failed intervals",
             span_id = span_id.to_string()
         ))
         .await
     }
 
+    
+
     async fn query_intervals(&self, sql: &String) -> anyhow::Result<Vec<interval::Model>> {
         // Generate a unique transaction ID for tracking
-        let start_time = Instant::now();
         let tx_id = Uuid::new_v4();
-        let tx_start = Instant::now();
 
         // Start a transaction
         let txn = match self.db.begin()
-        .instrument(tracing::info_span!(
+        .instrument(tracing::debug_span!(
             "begin transaction for update intervals",
             tx_id = tx_id.to_string(),
-            sql = sql.clone()
+            // sql = format_sql_for_logging(sql.as_str())
         ))
         .await {
-            Ok(txn) => {
-                tracing::warn!(
-                    "[TX-{:?}] INTERVALS transaction started after {:?}ms",
-                    tx_id,
-                    tx_start.elapsed().as_millis()
-                );
-                txn
-            }
+            Ok(txn) => txn,
             Err(e) => {
                 tracing::error!(
                     "[TX-{:?}] Failed to begin INTERVALS transaction: {}",
@@ -530,28 +555,20 @@ impl TacDatabase {
             }
         };
 
-        let query_start = Instant::now();
         let update_stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
 
         // Execute the UPDATE with RETURNING clause
         let updated_intervals = match interval::Entity::find()
             .from_raw_sql(update_stmt)
             .all(&txn)
-            .instrument(tracing::info_span!(
+            .instrument(tracing::debug_span!(
                 "executing update query for intervals",
-                tx_id = tx_id.to_string()
+                tx_id = tx_id.to_string(),
+                // sql = format_sql_for_logging(sql.as_str())
             ))
             .await
         {
-            Ok(intervals) => {
-                tracing::debug!(
-                    "[TX-{:?}] UPDATE query completed in {:?}ms, updated {} intervals",
-                    tx_id,
-                    query_start.elapsed().as_millis(),
-                    intervals.len()
-                );
-                intervals
-            }
+            Ok(intervals) => intervals,
             Err(e) => {
                 tracing::error!(
                     "[TX-{:?}] Failed to update intervals: {}",
@@ -564,10 +581,10 @@ impl TacDatabase {
         };
 
         // Commit the transaction
-        let commit_start = Instant::now();
+        
         if let Err(e) = txn
             .commit()
-            .instrument(tracing::info_span!(
+            .instrument(tracing::debug_span!(
                 "commit update intervals",
                 tx_id = tx_id.to_string()
             ))
@@ -581,17 +598,6 @@ impl TacDatabase {
             return Err(e.into());
         }
 
-        tracing::info!(
-            "[TX-{:?}] Transaction committed in {:?}ms",
-            tx_id,
-            commit_start.elapsed().as_millis()
-        );
-        tracing::info!(
-            "[TX-{:?}] Complete query_intervals operation took {:?}ms",
-            tx_id,
-            start_time.elapsed().as_millis()
-        );
-
         Ok(updated_intervals)
     }
 
@@ -601,19 +607,20 @@ impl TacDatabase {
         num: usize,
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
-        let sql = format!(
-            r#" SELECT *
-                                      FROM operation
-                                      WHERE status = {}
-                                      ORDER BY timestamp {}
-                                      LIMIT {}
-                                      FOR UPDATE SKIP LOCKED"#,
-            EntityStatus::Pending.to_id(),
-            order.sql_order_string(),
-            num
+        let conditions = vec![format!("status = {}", EntityStatus::Pending.to_id())];
+        
+        let sql = self.build_operation_query(
+            conditions,
+            Some(("timestamp", order)),
+            num,
+            EntityStatus::Processing,
         );
-
-        self.query_operations(&sql).await
+        
+        self.query_operations(&sql)
+        .instrument(tracing::debug_span!(
+            "query pending operations"
+        ))
+        .await
     }
 
     pub async fn query_failed_operations(
@@ -621,110 +628,68 @@ impl TacDatabase {
         num: usize,
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
-        let sql = format!(
-            r#" SELECT * 
-                                      FROM operation 
-                                      WHERE status = {} AND next_retry IS NOT NULL AND next_retry < {}
-                                      ORDER BY timestamp {} 
-                                      LIMIT {} 
-                                      FOR UPDATE SKIP LOCKED"#,
-            EntityStatus::Pending.to_id(),
-            chrono::Utc::now().timestamp(),
-            order.sql_order_string(),
-            num
+        let conditions = vec![
+            format!("status = {}", EntityStatus::Pending.to_id()),
+            format!("next_retry IS NOT NULL"),
+            format!("next_retry < {}", chrono::Utc::now().timestamp()),
+        ];
+        
+        let sql = self.build_operation_query(
+            conditions,
+            Some(("next_retry", order)),
+            num,
+            EntityStatus::Processing,
         );
-
-        self.query_operations(&sql).await
+        
+        let span_id = Uuid::new_v4();
+        self.query_operations(&sql)
+        .instrument(tracing::debug_span!(
+            "query failed operations",
+            span_id = span_id.to_string()
+        ))
+        .await
     }
 
     async fn query_operations(&self, sql: &String) -> anyhow::Result<Vec<operation::Model>> {
         // Generate a unique transaction ID for tracking
         let tx_id = Uuid::new_v4();
-        let start_time = Instant::now();
-        tracing::warn!("[TX-{:?}] Beginning query_operations operation", tx_id);
 
-        // Use two separate transactions for better performance
-        // First transaction: SELECT the operations with FOR UPDATE SKIP LOCKED
-        let select_tx_id = Uuid::new_v4();
-        let select_start = Instant::now();
-        tracing::debug!("[TX-{:?}] Beginning SELECT transaction", select_tx_id);
-
-        // Find and lock pending operations
-        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
-
-        // Start transaction
+        // Start a transaction
         let txn = match self.db.begin()
-        .instrument(tracing::info_span!(
-            "begin transaction for select operations",
-            tx_id = select_tx_id.to_string()
+        .instrument(tracing::debug_span!(
+            "begin transaction for update operations",
+            tx_id = tx_id.to_string(),
+            sql = sql.clone()
         ))
         .await {
-            Ok(txn) => {
-                tracing::debug!(
-                    "[TX-{:?}] SELECT transaction started after {:?}ms",
-                    select_tx_id,
-                    select_start.elapsed().as_millis()
-                );
-                txn
-            }
+            Ok(txn) => txn,
             Err(e) => {
                 tracing::error!(
-                    "[TX-{:?}] Failed to begin SELECT transaction: {}",
-                    select_tx_id,
+                    "[TX-{:?}] Failed to begin OPERATIONS transaction: {}",
+                    tx_id,
                     e
                 );
                 return Err(anyhow!(e));
             }
         };
 
-        tracing::debug!("[TX-{:?}] Executing SQL query: {}", select_tx_id, sql);
-        let query_start = Instant::now();
+        let update_stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
 
-        let pending_operations = match operation::Entity::find()
-        .from_raw_sql(stmt)
-        .all(&txn)
-        .instrument(tracing::info_span!(
-            "query_operations",
-            tx_id = tx_id.to_string()
-        ))
-        .await
+        // Execute the UPDATE with RETURNING clause
+        let updated_operations = match operation::Entity::find()
+            .from_raw_sql(update_stmt)
+            .all(&txn)
+            .instrument(tracing::debug_span!(
+                "executing update query for operations",
+                tx_id = tx_id.to_string()
+            ))
+            .await
         {
-            Ok(operations) => {
-                tracing::debug!(
-                    "[TX-{:?}] SQL query completed in {:?}ms, found {} operations",
-                    select_tx_id,
-                    query_start.elapsed().as_millis(),
-                    operations.len()
-                );
-
-                // Commit the first transaction immediately
-                let commit_start = Instant::now();
-                if let Err(e) = txn
-                .commit()
-                .instrument(tracing::info_span!(
-                    "commit_operations",
-                    tx_id = tx_id.to_string()
-                ))
-                .await {
-                    tracing::error!(
-                        "[TX-{:?}] Failed to commit SELECT transaction: {}",
-                        select_tx_id,
-                        e
-                    );
-                    return Err(e.into());
-                }
-                tracing::debug!(
-                    "[TX-{:?}] SELECT transaction committed in {:?}ms",
-                    select_tx_id,
-                    commit_start.elapsed().as_millis()
-                );
-
-                operations
-            }
+            Ok(operations) => operations,
             Err(e) => {
                 tracing::error!(
-                    "[TX-{:?}] Failed to fetch pending operations: {}",
-                    select_tx_id,
+                    "[TX-{:?}] Failed to update operations: {}",
+                    tx_id,
                     e
                 );
                 let _ = txn.rollback().await;
@@ -732,116 +697,24 @@ impl TacDatabase {
             }
         };
 
-        // If no operations found, return early
-        if pending_operations.is_empty() {
-            tracing::debug!(
-                "[TX-{:?}] No operations found, query_operations completed in {:?}ms",
-                tx_id,
-                start_time.elapsed().as_millis()
-            );
-            return Ok(vec![]);
-        }
-
-        // Second transaction: UPDATE the operations to processing status
-        let update_tx_id = Uuid::new_v4();
-        let update_start = Instant::now();
-        tracing::debug!(
-            "[TX-{:?}] Beginning UPDATE transaction for {} operations",
-            update_tx_id,
-            pending_operations.len()
-        );
-
-        let update_txn = match self.db.begin()
-        .instrument(tracing::info_span!(
-            "begin transaction for update operations",
-            tx_id = update_tx_id.to_string()
-        ))
-        .await {
-            Ok(txn) => {
-                tracing::debug!(
-                    "[TX-{:?}] UPDATE transaction started after {:?}ms",
-                    update_tx_id,
-                    update_start.elapsed().as_millis()
-                );
-                txn
-            }
-            Err(e) => {
-                tracing::error!(
-                    "[TX-{:?}] Failed to begin UPDATE transaction: {}",
-                    update_tx_id,
-                    e
-                );
-                return Err(anyhow!(e));
-            }
-        };
-
-        let update_sql_start = Instant::now();
-        let update_stmt = Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            r#"UPDATE operation SET status = $1 WHERE id = ANY($2) RETURNING id, operation_type, timestamp, status, next_retry, retry_count"#,
-            vec![
-                Value::SmallInt(Some(EntityStatus::Processing.to_id())),
-                Value::Array(
-                    ArrayType::String,
-                    Some(Box::new(
-                        pending_operations
-                            .iter()
-                            .map(|o| o.id.clone().into())
-                            .collect(),
-                    )),
-                ),
-            ],
-        );
-
-        match operation::Entity::find()
-            .from_raw_sql(update_stmt)
-            .all(&update_txn)
-            .instrument(tracing::info_span!(
-                "update_operations",
-                tx_id = update_tx_id.to_string()
+        // Commit the transaction
+        let commit_start = Instant::now();
+        if let Err(e) = txn
+            .commit()
+            .instrument(tracing::debug_span!(
+                "commit update operations",
+                tx_id = tx_id.to_string()
             ))
             .await
         {
-            Ok(updated_list) => {
-                tracing::debug!(
-                    "[TX-{:?}] UPDATE operation completed in {:?}ms, updated {} operations",
-                    update_tx_id,
-                    update_sql_start.elapsed().as_millis(),
-                    updated_list.len()
-                );
-
-                // Commit the transaction
-                let commit_start = Instant::now();
-                tracing::debug!("[TX-{:?}] Committing UPDATE operation transaction", update_tx_id);
-
-                if let Err(e) = update_txn.commit().await {
-                    tracing::error!(
-                        "[TX-{:?}] Failed to commit UPDATE operation transaction: {}",
-                        update_tx_id,
-                        e
-                    );
-                    return Err(e.into());
-                }
-
-                tracing::info!(
-                    "[TX-{:?}] UPDATE operation transaction committed in {:?}ms",
-                    update_tx_id,
-                    commit_start.elapsed().as_millis()
-                );
-                tracing::info!(
-                    "[TX-{:?}] Complete query_operations operation took {:?}ms",
-                    tx_id,
-                    start_time.elapsed().as_millis()
-                );
-
-                Ok(updated_list)
-            }
-            Err(e) => {
-                tracing::error!("[TX-{:?}] Failed to update operations: {}", update_tx_id, e);
-                let _ = update_txn.rollback().await;
-                Err(e.into())
-            }
+            tracing::error!(
+                "[TX-{:?}] Failed to commit transaction: {}",
+                tx_id,
+                e
+            );
+            return Err(e.into());
         }
+        Ok(updated_operations)
     }
 
     pub async fn set_operation_data(
@@ -857,14 +730,7 @@ impl TacDatabase {
         );
 
         let txn = match self.db.begin().await {
-            Ok(txn) => {
-                tracing::debug!(
-                    "[TX-{:?}] Transaction started after {:?}ms",
-                    tx_id,
-                    start_time.elapsed().as_millis()
-                );
-                txn
-            }
+            Ok(txn) => txn,
             Err(e) => {
                 tracing::error!(
                     "[TX-{:?}] Failed to begin transaction after {:?}ms: {}",
@@ -901,7 +767,7 @@ impl TacDatabase {
 
         if let Err(e) = operation_model
         .update(&txn)
-        .instrument(tracing::info_span!("updating operation", tx_id = tx_id.to_string()))
+        .instrument(tracing::debug_span!("updating operation", tx_id = tx_id.to_string()))
         .await {
             tracing::error!("Failed to update operation status: {}", e);
             let _ = txn.rollback().await;
@@ -973,16 +839,10 @@ impl TacDatabase {
 
         match txn
             .commit()
-            .instrument(tracing::info_span!("commiting insert transaction", tx_id = tx_id.to_string()))
+            .instrument(tracing::debug_span!("commiting insert transaction", tx_id = tx_id.to_string()))
             .await
         {
             Ok(_) => {
-                tracing::info!(
-                    "[TX-{:?}] Transaction committed in {:?}ms, total duration: {:?}ms",
-                    tx_id,
-                    commit_start.elapsed().as_millis(),
-                    start_time.elapsed().as_millis()
-                );
                 Ok(())
             }
             Err(e) => {

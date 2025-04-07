@@ -172,7 +172,7 @@ impl Indexer {
             loop {
                 let span_id = Uuid::new_v4();
                 match self.database.query_pending_intervals(INTERVALS_QUERY_RESULT_SIZE, direction, from, to)
-                    .instrument(tracing::info_span!(
+                    .instrument(tracing::debug_span!(
                         "REALTIME INTERVALS",
                         span_id = span_id.to_string()
                     ))
@@ -203,7 +203,7 @@ impl Indexer {
             loop {
                 let span_id = Uuid::new_v4();
                 match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
-                    .instrument(tracing::info_span!(
+                    .instrument(tracing::debug_span!(
                         "PENDING OPERATIONS",
                         span_id = span_id.to_string()
                     ))
@@ -234,8 +234,8 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.select_failed_intervals(INTERVALS_QUERY_RESULT_SIZE)
-                    .instrument(tracing::info_span!(
+                match self.database.query_failed_intervals(INTERVALS_QUERY_RESULT_SIZE)
+                    .instrument(tracing::debug_span!(
                         "FAILED INTERVALS",
                         span_id = span_id.to_string()
                     ))
@@ -267,7 +267,7 @@ impl Indexer {
             loop {
                 let span_id = Uuid::new_v4();
                 match self.database.query_failed_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
-                    .instrument(tracing::info_span!(
+                    .instrument(tracing::debug_span!(
                         "FAILED OPERATIONS",
                         span_id = span_id.to_string()
                     ))
@@ -294,13 +294,13 @@ impl Indexer {
 
     pub async fn process_interval_with_retries(&self, job: &Job, client: Arc<Mutex<Client>>) -> () {
         match self.fetch_operations(&job, client.clone())
-            .instrument(tracing::info_span!(
+            .instrument(tracing::debug_span!(
                 "fetching operations for interval",
             ))
             .await {
             Ok(num) => {
                 if num > 0 {
-                    tracing::info!("Successfully fetched {} operations for interval {}", num, job.interval.id);
+                    tracing::debug!("Successfully fetched {} operations for interval {}", num, job.interval.id);
                 }
             }
             
@@ -326,7 +326,7 @@ impl Indexer {
         let ops_num = operations.len();
         
         if ops_num > 0 {
-            tracing::info!("[Thread {:?}] Fetched {} operation_ids: [\n\t{}\n]", thread_id, ops_num, operations.iter().map(|o| o.id.clone()).collect::<Vec<_>>().join(",\n\t"));
+            tracing::debug!("[Thread {:?}] Fetched {} operation_ids: [\n\t{}\n]", thread_id, ops_num, operations.iter().map(|o| o.id.clone()).collect::<Vec<_>>().join(",\n\t"));
             self.database.insert_pending_operations(&operations).await?
         }
 
@@ -337,7 +337,7 @@ impl Indexer {
         } else {
             "HISTORICAL"
         };
-        tracing::info!("[Thread {:?}] Successfully processed {} job (id={})", 
+        tracing::debug!("[Thread {:?}] Successfully processed {} job (id={})", 
             thread_id,
             job_type,
             job.interval.id,
@@ -377,14 +377,14 @@ impl Indexer {
 
                 let avg_timestamp = timestamp_acc / processed_operations;
                 if avg_timestamp > self.start_timestamp as i64 {
-                    tracing::info!(
+                    tracing::debug!(
                         "Successfully processed {} REALTIME operations. Average delay = {}s: [{}]",
                         processed_operations,
                         chrono::Utc::now().timestamp() - avg_timestamp,
                         op_ids.join(",")
                     );
                 } else {
-                    tracing::info!(
+                    tracing::debug!(
                         "Successfully processed {} HISTORICAL operations: [{}]",
                         processed_operations,
                         op_ids.join(",")
@@ -441,7 +441,7 @@ impl Indexer {
             Self::prio_left
         );
 
-        tracing::info!("Starting TAC indexer. Realtime intervals lays after timestamp: {}", self.start_timestamp);
+        tracing::debug!("Starting TAC indexer. Realtime intervals lays after timestamp: {}", self.start_timestamp);
 
         // Process the prioritized stream
         while let Some(job) = combined_stream.next().await {
@@ -457,7 +457,7 @@ impl Indexer {
 
                 IndexerJob::Interval(job) => {
                     self.process_interval_with_retries(&job, client.clone())
-                        .instrument(tracing::info_span!(
+                        .instrument(tracing::debug_span!(
                             "processing interval",
                             span_id = span_id.to_string()
                         ))
@@ -466,7 +466,7 @@ impl Indexer {
 
                 IndexerJob::Operation(job) => {
                     self.process_operation_with_retries([&job].to_vec(), client.clone())
-                        .instrument(tracing::info_span!(
+                        .instrument(tracing::debug_span!(
                             "processing operation",
                             span_id = span_id.to_string()
                         ))
