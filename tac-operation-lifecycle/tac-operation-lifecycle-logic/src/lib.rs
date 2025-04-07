@@ -20,7 +20,8 @@ use settings::IndexerSettings;
 use chrono;
 use tokio::sync::Mutex;
 use tracing::instrument;
-
+use uuid::Uuid;
+use tracing::Instrument;
 #[derive(Debug, Clone)]
 pub struct Job {
     pub interval: interval::Model,
@@ -169,7 +170,13 @@ impl Indexer {
 
         Box::pin(async_stream::stream! {
             loop {
-                match self.database.query_pending_intervals(INTERVALS_QUERY_RESULT_SIZE, direction, from, to).await {
+                let span_id = Uuid::new_v4();
+                match self.database.query_pending_intervals(INTERVALS_QUERY_RESULT_SIZE, direction, from, to)
+                    .instrument(tracing::info_span!(
+                        "REALTIME INTERVALS",
+                        span_id = span_id.to_string()
+                    ))
+                    .await {
                     Ok(selected) => {
                         for interval in selected {
                             // Yield the job
@@ -194,7 +201,13 @@ impl Indexer {
         const OPERATIONS_LOOP_DELAY_INTERVAL_MS: u64 = 200;
         Box::pin(async_stream::stream! {
             loop {
-                match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst).await {
+                let span_id = Uuid::new_v4();
+                match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
+                    .instrument(tracing::info_span!(
+                        "PENDING OPERATIONS",
+                        span_id = span_id.to_string()
+                    ))
+                    .await {
                     Ok(selected) => {
                         for operation in selected {
                             // Yield the job
@@ -220,7 +233,13 @@ impl Indexer {
 
         Box::pin(async_stream::stream! {
             loop {
-                match self.database.select_failed_intervals(INTERVALS_QUERY_RESULT_SIZE).await {
+                let span_id = Uuid::new_v4();
+                match self.database.select_failed_intervals(INTERVALS_QUERY_RESULT_SIZE)
+                    .instrument(tracing::info_span!(
+                        "FAILED INTERVALS",
+                        span_id = span_id.to_string()
+                    ))
+                    .await {
                     Ok(selected) => {
                         tracing::debug!("Failed intervals found: {}", selected.len());
                         for interval in selected {
@@ -246,7 +265,13 @@ impl Indexer {
         const OPERATIONS_LOOP_DELAY_INTERVAL_MS: u64 = 2000;
         Box::pin(async_stream::stream! {
             loop {
-                match self.database.query_failed_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst).await {
+                let span_id = Uuid::new_v4();
+                match self.database.query_failed_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
+                    .instrument(tracing::info_span!(
+                        "FAILED OPERATIONS",
+                        span_id = span_id.to_string()
+                    ))
+                    .await {
                     Ok(selected) => {
                         tracing::debug!("Failed operations found: {}", selected.len());
                         for operation in selected {
@@ -268,7 +293,11 @@ impl Indexer {
     }
 
     pub async fn process_interval_with_retries(&self, job: &Job, client: Arc<Mutex<Client>>) -> () {
-        match self.fetch_operations(&job, client.clone()).await {
+        match self.fetch_operations(&job, client.clone())
+            .instrument(tracing::info_span!(
+                "fetching operations for interval",
+            ))
+            .await {
             Ok(num) => {
                 if num > 0 {
                     tracing::info!("Successfully fetched {} operations for interval {}", num, job.interval.id);
@@ -416,6 +445,7 @@ impl Indexer {
 
         // Process the prioritized stream
         while let Some(job) = combined_stream.next().await {
+            let span_id = Uuid::new_v4();
             match job {
                 IndexerJob::Realtime => {
                     let wm = self.database.get_watermark().await.unwrap();
@@ -426,11 +456,21 @@ impl Indexer {
                 },
 
                 IndexerJob::Interval(job) => {
-                    self.process_interval_with_retries(&job, client.clone()).await;
+                    self.process_interval_with_retries(&job, client.clone())
+                        .instrument(tracing::info_span!(
+                            "processing interval",
+                            span_id = span_id.to_string()
+                        ))
+                        .await;
                 },
 
                 IndexerJob::Operation(job) => {
-                    self.process_operation_with_retries([&job].to_vec(), client.clone()).await;
+                    self.process_operation_with_retries([&job].to_vec(), client.clone())
+                        .instrument(tracing::info_span!(
+                            "processing operation",
+                            span_id = span_id.to_string()
+                        ))
+                        .await;
                 }
             }
         }

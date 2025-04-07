@@ -134,6 +134,28 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_interval_status_end")
+                    .table(Interval::Table)
+                    .col(Interval::Status)
+                    .col(Interval::End)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_interval_status_next_retry")
+                    .table(Interval::Table)
+                    .col(Interval::Status)
+                    .col(Interval::NextRetry)
+                    .to_owned(),
+            )
+            .await?;
+
         // Create StageType enum table
         manager
             .create_table(
