@@ -50,6 +50,7 @@ pub struct HttpServerSettings {
     pub addr: SocketAddr,
     pub max_body_size: usize,
     pub cors: CorsSettings,
+    pub base_path: Option<BasePath>,
 }
 
 impl Default for HttpServerSettings {
@@ -59,6 +60,7 @@ impl Default for HttpServerSettings {
             addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
             max_body_size: 2 * 1024 * 1024, // 2 Mb - default Actix value
             cors: Default::default(),
+            base_path: None,
         }
     }
 }
@@ -114,6 +116,36 @@ impl CorsSettings {
             }
         };
         cors
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+pub struct BasePath(String);
+
+impl TryFrom<String> for BasePath {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if !value.starts_with("/") {
+            return Err(format!(
+                "Invalid base path '{}': must start with '/'",
+                value
+            ));
+        };
+        if value.ends_with("/") {
+            return Err(format!(
+                "Invalid base path '{}': must not end with '/'",
+                value
+            ));
+        };
+        Ok(Self(value))
+    }
+}
+
+impl From<BasePath> for String {
+    fn from(value: BasePath) -> Self {
+        value.0
     }
 }
 
