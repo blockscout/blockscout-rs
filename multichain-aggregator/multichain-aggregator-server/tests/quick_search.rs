@@ -16,7 +16,7 @@ use wiremock::{
 async fn test_quick_search() {
     let db = database!(test_db::TestMigrator);
 
-    let quick_search_chains = vec![5, 3, 2];
+    let quick_search_chains = vec![5, 3, 2, 1];
 
     let token_info_server = mock_token_info_server().await;
     let dapp_server = mock_dapp_server().await;
@@ -40,6 +40,7 @@ async fn test_quick_search() {
         quick_search_chains
     );
     assert_eq!(response.tokens.len(), 1);
+    assert_eq!(response.tokens[0].is_verified_contract, true);
     assert_eq!(response.dapps.len(), 1);
 }
 
@@ -56,7 +57,7 @@ async fn mock_token_info_server() -> MockServer {
             },
             {
                 "tokenAddress": Address::from_slice(&[1; 20]).to_string(),
-                "chainId": "2",
+                "chainId": "10",
                 "iconUrl": "https://test2",
                 "tokenName": "Test Token 2",
                 "tokenSymbol": "TKN2"
@@ -81,7 +82,7 @@ async fn mock_dapp_server() -> MockServer {
                 "logo": "https://test1",
                 "shortDescription": "Short description 1"
             },
-            "chainId": "1"
+            "chainId": "10"
         },
         {
             "dapp": {

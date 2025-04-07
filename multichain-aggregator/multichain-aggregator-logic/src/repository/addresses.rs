@@ -6,14 +6,14 @@ use entity::{
 };
 use regex::Regex;
 use sea_orm::{
-    prelude::Expr,
+    prelude::{DateTime, Expr},
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
         WithClause,
     },
     ActiveValue::NotSet,
-    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoSimpleExpr,
-    Iterable, Order, QuerySelect,
+    ColumnTrait, ConnectionTrait, DbErr, DeriveIden, EntityName, EntityTrait, FromQueryResult,
+    IntoSimpleExpr, Iterable, Order, QuerySelect,
 };
 use std::sync::OnceLock;
 
@@ -155,6 +155,122 @@ where
     let addresses = Model::find_by_statement(db.get_database_backend().build(&query))
         .all(db)
         .await?;
+
+    Ok(addresses)
+}
+
+pub async fn get_batch_in_order<C>(
+    db: &C,
+    pks: Vec<(&AddressAlloy, ChainId)>,
+) -> Result<Vec<Option<Model>>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    // NOTE: This is a temporary workaround to get the correct implementation of `FromQueryResult` trait
+    // for nested models. Default implementation of the trait (resulting from `DeriveEntityModel`)
+    // is using `try_get` instead of `try_get_nullable` for model's fields which results in a deserialization error.
+    #[derive(FromQueryResult, Debug)]
+    struct InternalModel {
+        hash: Vec<u8>,
+        chain_id: i64,
+        ens_name: Option<String>,
+        contract_name: Option<String>,
+        token_name: Option<String>,
+        token_type: Option<db_enum::TokenType>,
+        is_contract: bool,
+        is_verified_contract: bool,
+        is_token: bool,
+        created_at: DateTime,
+        updated_at: DateTime,
+    }
+
+    impl From<InternalModel> for Model {
+        fn from(value: InternalModel) -> Self {
+            Model {
+                hash: value.hash,
+                chain_id: value.chain_id,
+                ens_name: value.ens_name,
+                contract_name: value.contract_name,
+                token_name: value.token_name,
+                token_type: value.token_type,
+                is_contract: value.is_contract,
+                is_verified_contract: value.is_verified_contract,
+                is_token: value.is_token,
+                created_at: value.created_at,
+                updated_at: value.updated_at,
+            }
+        }
+    }
+
+    #[derive(DeriveIden, Clone, Copy)]
+    struct Position;
+
+    #[derive(DeriveIden, Clone, Copy)]
+    struct Hash;
+
+    #[derive(DeriveIden, Clone, Copy)]
+    struct ChainId;
+
+    #[derive(DeriveIden, Clone, Copy)]
+    struct InputKeys;
+
+    if pks.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let (positions, (hashes, chain_ids)): (Vec<_>, (Vec<_>, Vec<_>)) = pks
+        .into_iter()
+        .enumerate()
+        .map(|(pos, (address, chain_id))| (pos as u64, (address.as_slice().to_owned(), chain_id)))
+        .unzip();
+
+    let input_cte = CommonTableExpression::new()
+        .query(
+            Query::select()
+                .expr_as(
+                    Expr::cust_with_values("unnest($1::int[])", vec![positions]),
+                    Position,
+                )
+                .expr_as(
+                    Expr::cust_with_values("unnest($1::bytea[])", vec![hashes]),
+                    Hash,
+                )
+                .expr_as(
+                    Expr::cust_with_values("unnest($1::bigint[])", vec![chain_ids]),
+                    ChainId,
+                )
+                .to_owned(),
+        )
+        .table_name(InputKeys)
+        .to_owned();
+
+    let query = WithClause::new().cte(input_cte).to_owned().query(
+        QuerySelect::query(&mut Entity::find())
+            .expr(Expr::col((InputKeys, Position)))
+            .from_clear()
+            .from(InputKeys)
+            .left_join(
+                Entity,
+                Expr::tuple([
+                    Column::Hash.into_simple_expr(),
+                    Column::ChainId.into_simple_expr(),
+                ])
+                .eq(Expr::tuple([
+                    Expr::col((InputKeys, Hash)).into(),
+                    Expr::col((InputKeys, ChainId)).into(),
+                ])),
+            )
+            .order_by((InputKeys, Position), Order::Asc)
+            .to_owned(),
+    );
+
+    let addresses =
+        <Option<InternalModel>>::find_by_statement(db.get_database_backend().build(&query))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|m| m.map(|m| m.into()))
+            .collect::<Vec<_>>();
 
     Ok(addresses)
 }

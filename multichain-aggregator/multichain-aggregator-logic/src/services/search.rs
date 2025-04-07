@@ -87,6 +87,7 @@ pub async fn search_hashes(
 }
 
 pub async fn search_tokens(
+    db: &DatabaseConnection,
     token_info_client: &HttpApiClient,
     query: String,
     chain_id: Vec<ChainId>,
@@ -111,7 +112,7 @@ pub async fn search_tokens(
         .await
         .map_err(|err| anyhow::anyhow!("failed to search tokens: {:?}", err))?;
 
-    let tokens = res
+    let mut tokens = res
         .token_infos
         .into_iter()
         .map(|token_info| {
@@ -120,6 +121,15 @@ pub async fn search_tokens(
             Ok(token)
         })
         .collect::<Result<Vec<_>, ParseError>>()?;
+
+    let pks = tokens.iter().map(|t| (&t.address, t.chain_id)).collect();
+    let addresses = addresses::get_batch_in_order(db, pks).await?;
+
+    for (token, address) in tokens.iter_mut().zip(addresses.iter()) {
+        if let Some(address) = address {
+            token.is_verified_contract = address.is_verified_contract;
+        }
+    }
 
     Ok((tokens, res.next_page_params.map(|p| p.page_token)))
 }
@@ -345,6 +355,7 @@ impl SearchTerm {
             }
             SearchTerm::TokenInfo(query) => {
                 let (tokens, _) = search_tokens(
+                    search_context.db,
                     search_context.token_info_client,
                     query,
                     search_context.chain_ids.to_vec(),
