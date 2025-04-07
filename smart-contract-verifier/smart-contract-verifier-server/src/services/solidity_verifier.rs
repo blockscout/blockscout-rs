@@ -9,12 +9,11 @@ use crate::{
     services::common,
     settings::SoliditySettings,
     types,
-    types::{LookupMethodsRequestWrapper, LookupMethodsResponseWrapper, VerifyResponseWrapper},
+    types::{LookupMethodsRequestWrapper, LookupMethodsResponseWrapper},
 };
 use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity, solidity::RequestParseError, Compilers, SolcValidator, SolidityClient,
-    SolidityCompiler,
+    find_methods, solidity, Compilers, SolcValidator, SolidityClient, SolidityCompiler,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     LookupMethodsRequest, LookupMethodsResponse,
@@ -80,18 +79,8 @@ impl SolidityVerifier for SolidityVerifierService {
 
         let maybe_verification_request =
             solidity::multi_part::VerificationRequest::try_from(request);
-        let verification_request = match maybe_verification_request {
-            Ok(request) => request,
-            Err(err @ RequestParseError::InvalidContent(_)) => {
-                let response = VerifyResponseWrapper::err(err).into_inner();
-                tracing::info!(response=?response, "request processed");
-                return Ok(Response::new(response));
-            }
-            Err(err @ RequestParseError::BadRequest(_)) => {
-                tracing::info!(err=%err, "bad request");
-                return Err(Status::invalid_argument(err.to_string()));
-            }
-        };
+        let verification_request =
+            common::process_solo_verification_request_conversion!(maybe_verification_request);
 
         let result = solidity::multi_part::verify(self.client.clone(), verification_request).await;
 
@@ -131,18 +120,8 @@ impl SolidityVerifier for SolidityVerifierService {
 
         let maybe_verification_request =
             solidity::standard_json::VerificationRequest::try_from(request);
-        let verification_request = match maybe_verification_request {
-            Ok(request) => request,
-            Err(err @ RequestParseError::InvalidContent(_)) => {
-                let response = VerifyResponseWrapper::err(err).into_inner();
-                tracing::info!(response=?response, "request processed");
-                return Ok(Response::new(response));
-            }
-            Err(err @ RequestParseError::BadRequest(_)) => {
-                tracing::info!(err=%err, "bad request");
-                return Err(Status::invalid_argument(err.to_string()));
-            }
-        };
+        let verification_request =
+            common::process_solo_verification_request_conversion!(maybe_verification_request);
 
         let result =
             solidity::standard_json::verify(self.client.clone(), verification_request).await;
@@ -169,18 +148,8 @@ impl SolidityVerifier for SolidityVerifierService {
 
         let maybe_verification_request =
             solidity::multi_part::BatchVerificationRequest::try_from(request);
-        let verification_request = match maybe_verification_request {
-            Ok(request) => request,
-            Err(err @ RequestParseError::InvalidContent(_)) => {
-                let response = types::batch_verification::compilation_error(err.to_string());
-                tracing::info!(response=?response, "request processed");
-                return Ok(Response::new(response));
-            }
-            Err(err @ RequestParseError::BadRequest(_)) => {
-                tracing::info!(err=%err, "bad request");
-                return Err(Status::invalid_argument(err.to_string()));
-            }
-        };
+        let verification_request =
+            common::process_batch_verification_request_conversion!(maybe_verification_request);
 
         let result =
             solidity::multi_part::batch_verify(self.client.clone(), verification_request).await;
@@ -201,18 +170,8 @@ impl SolidityVerifier for SolidityVerifierService {
 
         let maybe_verification_request =
             solidity::standard_json::BatchVerificationRequest::try_from(request);
-        let verification_request = match maybe_verification_request {
-            Ok(request) => request,
-            Err(err @ RequestParseError::InvalidContent(_)) => {
-                let response = types::batch_verification::compilation_error(err.to_string());
-                tracing::info!(response=?response, "request processed");
-                return Ok(Response::new(response));
-            }
-            Err(err @ RequestParseError::BadRequest(_)) => {
-                tracing::info!(err=%err, "bad request");
-                return Err(Status::invalid_argument(err.to_string()));
-            }
-        };
+        let verification_request =
+            common::process_batch_verification_request_conversion!(maybe_verification_request);
 
         let result =
             solidity::standard_json::batch_verify(self.client.clone(), verification_request).await;

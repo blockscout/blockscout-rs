@@ -1,9 +1,10 @@
 use super::compiler::VyperCompiler;
-use crate::compiler::Compilers;
+use crate::{compiler::Compilers, verify_new};
 use std::sync::Arc;
 
 pub struct Client {
     compilers: Arc<Compilers<VyperCompiler>>,
+    new_compilers: Arc<verify_new::EvmCompilersPool<verify_new::VyperCompiler>>,
 }
 
 impl Client {
@@ -20,10 +21,21 @@ impl Client {
     ///
     /// [`new`]: Self::new
     pub fn new_arc(compilers: Arc<Compilers<VyperCompiler>>) -> Self {
-        Self { compilers }
+        let new_compilers = verify_new::EvmCompilersPool::new(
+            compilers.fetcher.clone(),
+            compilers.threads_semaphore.clone(),
+        );
+        Self {
+            compilers,
+            new_compilers: Arc::new(new_compilers),
+        }
     }
 
     pub fn compilers(&self) -> &Compilers<VyperCompiler> {
         self.compilers.as_ref()
+    }
+
+    pub fn new_compilers(&self) -> &verify_new::EvmCompilersPool<verify_new::VyperCompiler> {
+        self.new_compilers.as_ref()
     }
 }
