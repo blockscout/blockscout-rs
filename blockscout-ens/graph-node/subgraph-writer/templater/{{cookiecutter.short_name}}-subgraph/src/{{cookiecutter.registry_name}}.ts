@@ -15,15 +15,13 @@ const BIG_INT_ZERO = BigInt.fromI32(0);
 
 function createDomain(node: string, timestamp: BigInt): Domain {
   let domain = new Domain(node);
-  if (node == ROOT_NODE) {
-    domain = new Domain(node);
-    domain.owner = EMPTY_ADDRESS;
-    domain.isMigrated = true;
-    domain.createdAt = timestamp;
-    domain.subdomainCount = 0;
-    domain.storedOffchain = false;
-    domain.resolvedWithWildcard = false;
-  }
+  domain = new Domain(node);
+  domain.owner = EMPTY_ADDRESS;
+  domain.isMigrated = true;
+  domain.createdAt = timestamp;
+  domain.subdomainCount = 0;
+  domain.storedOffchain = false;
+  domain.resolvedWithWildcard = false;
   return domain;
 }
 
@@ -78,6 +76,9 @@ function _handleNewOwner(event: NewOwnerEvent, isMigrated: boolean): void {
   let subnode = makeSubnode(event);
   let domain = getDomain(subnode, event.block.timestamp);
   let parent = getDomain(event.params.node.toHexString());
+  if (parent === null) {
+    parent = createDomain(event.params.node.toHexString(), event.block.timestamp);
+  }
 
   if (domain === null) {
     domain = new Domain(subnode);

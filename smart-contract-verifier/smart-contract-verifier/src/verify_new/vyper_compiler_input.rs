@@ -121,10 +121,7 @@ impl Interface {
 
     pub fn content(self) -> String {
         match self {
-            Interface::Vyper(source) => {
-                // Similar to `unwrap_or_clone` which is still nightly-only feature.
-                Arc::try_unwrap(source.content).unwrap_or_else(|content| (*content).clone())
-            }
+            Interface::Vyper(source) => Arc::unwrap_or_clone(source.content),
             Interface::Abi(source) => serde_json::to_string(&source.abi).unwrap(),
             Interface::ContractTypes(source) => {
                 format!(

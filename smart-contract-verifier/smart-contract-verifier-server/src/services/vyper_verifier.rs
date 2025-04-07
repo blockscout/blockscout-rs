@@ -62,7 +62,7 @@ impl VyperVerifier for VyperVerifierService {
         tracing::info!(
             chain_id =? chain_id,
             contract_address =? contract_address,
-            "vyper standard-json verification request received"
+            "vyper multi-part verification request received"
         );
 
         let maybe_verification_request = vyper::multi_part::VerificationRequest::try_from(request);

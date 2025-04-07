@@ -29,6 +29,7 @@ pub struct MultichainAggregator {
     dapp_client: HttpApiClient,
     token_info_client: HttpApiClient,
     api_settings: ApiSettings,
+    quick_search_chains: Vec<types::ChainId>,
 }
 
 impl MultichainAggregator {
@@ -37,6 +38,7 @@ impl MultichainAggregator {
         dapp_client: HttpApiClient,
         token_info_client: HttpApiClient,
         api_settings: ApiSettings,
+        quick_search_chains: Vec<types::ChainId>,
     ) -> Self {
         Self {
             api_key_manager: ApiKeyManager::new(repo.write_db().clone()),
@@ -44,6 +46,7 @@ impl MultichainAggregator {
             dapp_client,
             token_info_client,
             api_settings,
+            quick_search_chains,
         }
     }
 
@@ -87,14 +90,28 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let only_active = inner.only_active.unwrap_or(false);
-        let chains = chains::list_chains_cached(self.repo.read_db(), only_active).await?;
+        let chains = if only_active {
+            let token_info_client = &self.token_info_client;
+            let dapp_client = &self.dapp_client;
+            chains::list_active_chains(
+                self.repo.read_db(),
+                &[
+                    chains::ChainSource::Repository,
+                    chains::ChainSource::TokenInfo { token_info_client },
+                    chains::ChainSource::Dapp { dapp_client },
+                ],
+            )
+            .await?
+        } else {
+            chains::list_repo_chains_cached(self.repo.read_db(), false).await?
+        };
 
-        Ok(Response::new(ListChainsResponse {
-            items: chains
-                .into_iter()
-                .filter_map(|c| c.try_into().ok())
-                .collect(),
-        }))
+        let items = chains
+            .into_iter()
+            .filter_map(|c| c.try_into().ok())
+            .collect();
+
+        Ok(Response::new(ListChainsResponse { items }))
     }
 
     async fn list_addresses(
@@ -111,7 +128,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             self.repo.read_db(),
             inner.q,
             chain_id,
-            None,
+            Some(vec![]),
             page_size as u64,
             page_token,
         )
@@ -180,7 +197,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             self.repo.read_db(),
             inner.q,
             Some(types::hashes::HashType::Transaction),
-            chain_id,
+            chain_id.map(|v| vec![v]),
             page_size as u64,
             page_token,
         )
@@ -210,6 +227,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             &self.dapp_client,
             &self.token_info_client,
             inner.q,
+            &self.quick_search_chains,
         )
         .await
         .inspect_err(|err| {
@@ -225,13 +243,17 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<ListTokensResponse>, Status> {
         let inner = request.into_inner();
 
-        let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let chain_ids = inner
+            .chain_id
+            .into_iter()
+            .map(parse_query)
+            .collect::<Result<Vec<_>, _>>()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (tokens, next_page_token) = search::search_tokens(
             &self.token_info_client,
             inner.q.to_string(),
-            chain_id,
+            chain_ids,
             page_size as u64,
             inner.page_token,
         )
@@ -252,13 +274,14 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<ListDappsResponse>, Status> {
         let inner = request.into_inner();
 
-        let dapps = search::search_dapps(
-            &self.dapp_client,
-            inner.q,
-            inner.categories,
-            inner.chain_ids,
-        )
-        .await?;
+        let chain_ids = inner
+            .chain_ids
+            .into_iter()
+            .map(parse_query)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let dapps =
+            search::search_dapps(&self.dapp_client, inner.q, inner.categories, chain_ids).await?;
 
         Ok(Response::new(ListDappsResponse {
             items: dapps.into_iter().map(|d| d.into()).collect(),
@@ -269,22 +292,16 @@ impl MultichainAggregatorService for MultichainAggregator {
         &self,
         _request: Request<ListDappChainsRequest>,
     ) -> Result<Response<ListDappChainsResponse>, Status> {
-        let chain_ids = self
-            .dapp_client
-            .request(&dapp::list_chains::ListChains {})
-            .await
-            .map_err(|err| {
-                tracing::error!(error = ?err, "failed to list marketplace chains");
-                Status::internal("failed to list marketplace chains")
-            })?;
-
-        let chains = chains::list_chains_cached(self.repo.read_db(), false).await?;
-
-        let items = chains
-            .into_iter()
-            .filter(|c| chain_ids.contains(&c.id.to_string()))
-            .filter_map(|c| c.try_into().ok())
-            .collect::<Vec<_>>();
+        let items = chains::list_active_chains(
+            self.repo.read_db(),
+            &[chains::ChainSource::Dapp {
+                dapp_client: &self.dapp_client,
+            }],
+        )
+        .await?
+        .into_iter()
+        .filter_map(|c| c.try_into().ok())
+        .collect();
 
         Ok(Response::new(ListDappChainsResponse { items }))
     }

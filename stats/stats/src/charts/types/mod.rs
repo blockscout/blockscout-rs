@@ -1,6 +1,7 @@
 pub mod db;
 mod duration;
 mod extended;
+pub mod new_txns;
 pub mod timespans;
 mod traits;
 
@@ -9,7 +10,7 @@ use sea_orm::Set;
 
 pub use duration::TimespanDuration;
 pub use extended::ExtendedTimespanValue;
-pub use traits::{ConsistsOf, Timespan, TimespanValueTrait, ZeroTimespanValue};
+pub use traits::{ConsistsOf, Timespan, TimespanTrait, TimespanValueTrait, ZeroTimespanValue};
 
 /// Some value for some time interval
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

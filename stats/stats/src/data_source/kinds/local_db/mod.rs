@@ -39,7 +39,7 @@ use crate::{
     metrics,
     range::UniversalRange,
     utils::day_start,
-    ChartError, IndexingStatus,
+    ChartError, ChartKey, IndexingStatus,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -225,8 +225,8 @@ where
     type ResolutionDependencies = ResolutionDep;
     type Output = Query::Output;
 
-    fn mutex_id() -> Option<String> {
-        Some(ChartProps::key().into())
+    fn chart_key() -> Option<ChartKey> {
+        Some(ChartProps::key())
     }
 
     fn indexing_status_self_requirement() -> IndexingStatus {
@@ -359,13 +359,14 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: TotalTxns::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
         };
 
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalTxns::update_recursively(&cx).await.unwrap();
-        assert_eq!("57", get_counter::<TotalTxns>(&cx).await.value);
+        assert_eq!("58", get_counter::<TotalTxns>(&cx).await.value);
 
         // Reindex blockscout data
         imitate_reindex(&blockscout, current_date).await;
@@ -379,7 +380,7 @@ mod tests {
             .unwrap();
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalTxns::update_recursively(&cx).await.unwrap();
-        assert_eq!("65", get_counter::<TotalTxns>(&cx).await.value);
+        assert_eq!("66", get_counter::<TotalTxns>(&cx).await.value);
     }
 
     mod update_itself_is_triggered_once_per_group {
@@ -540,6 +541,7 @@ mod tests {
                 db: &db,
                 blockscout: &blockscout,
                 blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(next_time),
                 force_full: true,
             };
@@ -560,6 +562,7 @@ mod tests {
                 db: &db,
                 blockscout: &blockscout,
                 blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
             };
@@ -576,6 +579,7 @@ mod tests {
                 db: &db,
                 blockscout: &blockscout,
                 blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
             };
@@ -590,6 +594,7 @@ mod tests {
                 db: &db,
                 blockscout: &blockscout,
                 blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
             };

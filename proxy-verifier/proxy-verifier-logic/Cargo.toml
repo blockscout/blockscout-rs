@@ -7,32 +7,17 @@ edition = "2021"
 [dependencies]
 proxy-verifier-proto = { path = "../proxy-verifier-proto" }
 
-blockscout-client = { workspace = true }
-blockscout-display-bytes = "1.0"
+api-client-framework = { workspace = true, features = ["blockscout"] }
+blockscout-display-bytes = "1.1"
 eth-bytecode-db-proto = { workspace = true, features = [ "http-client" ] }
 ethers-core = "2.0.13"
 hex = "0.4.3"
+http = "1.2"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_with = { version = "3.12.0" }
 thiserror = "1.0"
 tracing = "0.1"
-
-
-## Uncomment this if needed
-#ethabi = "18.0"
-#ethers-core = "2.0.0"
-#futures = "0.3"
-#hex = "0.4"
-#keccak-hash = "0.10.0"
-#lazy_static = "1"
-#mismatch = "1.0"
-#prometheus = "0.13"
-#reqwest = "0.11.18"
-#semver = "1.0"
-#serde = "1.0"
-#serde_json = "1.0"
-#thiserror = "1.0"
-#tokio = "1.22"
-#tonic = { version = "0.8", features = ["tls-roots"] }
-#tracing-subscriber = { version = "0.3", features = ["env-filter"]}
+url = "2.5.2"
 
 [dev-dependencies]
 pretty_assertions = "1.3"

@@ -1,6 +1,6 @@
 //! Active accounts on each day.
 
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -14,7 +14,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     utils::sql_with_range_filter_opt,
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -27,6 +27,7 @@ impl StatementFromRange for ActiveAccountsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         if completed_migrations.denormalization {
             sql_with_range_filter_opt!(
@@ -109,7 +110,7 @@ mod tests {
                 ("2022-12-01", "1"),
                 ("2023-01-01", "1"),
                 ("2023-02-01", "1"),
-                ("2023-03-01", "1"),
+                ("2023-03-01", "2"),
             ],
         )
         .await;

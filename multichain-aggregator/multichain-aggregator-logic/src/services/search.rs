@@ -1,9 +1,6 @@
 use crate::{
-    clients::{
-        dapp::search_dapps,
-        token_info::{SearchTokenInfos, SearchTokenInfosParams},
-    },
-    error::ServiceError,
+    clients::{dapp::search_dapps, token_info::search_token_infos},
+    error::{ParseError, ServiceError},
     repository::{addresses, block_ranges, hashes},
     types::{
         addresses::{Address, TokenType},
@@ -18,7 +15,10 @@ use crate::{
 use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
 use sea_orm::DatabaseConnection;
-use std::str::FromStr;
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
@@ -45,7 +45,7 @@ pub async fn search_addresses(
         db,
         address,
         query,
-        chain_id,
+        chain_id.map(|v| vec![v]),
         token_types,
         page_size,
         page_token,
@@ -65,7 +65,7 @@ pub async fn search_hashes(
     db: &DatabaseConnection,
     query: String,
     hash_type: Option<HashType>,
-    chain_id: Option<ChainId>,
+    chain_ids: Option<Vec<ChainId>>,
     page_size: u64,
     page_token: Option<ChainId>,
 ) -> Result<(Vec<Hash>, Option<ChainId>), ServiceError> {
@@ -75,7 +75,7 @@ pub async fn search_hashes(
     };
 
     let (hashes, page_token) =
-        hashes::list(db, hash, hash_type, chain_id, page_size, page_token).await?;
+        hashes::list(db, hash, hash_type, chain_ids, page_size, page_token).await?;
 
     Ok((
         hashes
@@ -89,7 +89,7 @@ pub async fn search_hashes(
 pub async fn search_tokens(
     token_info_client: &HttpApiClient,
     query: String,
-    chain_id: Option<ChainId>,
+    chain_id: Vec<ChainId>,
     page_size: u64,
     page_token: Option<String>,
 ) -> Result<(Vec<Token>, Option<String>), ServiceError> {
@@ -97,8 +97,8 @@ pub async fn search_tokens(
         return Ok((vec![], None));
     }
 
-    let token_info_search_endpoint = SearchTokenInfos {
-        params: SearchTokenInfosParams {
+    let token_info_search_endpoint = search_token_infos::SearchTokenInfos {
+        params: search_token_infos::SearchTokenInfosParams {
             query,
             chain_id,
             page_size: Some(page_size as u32),
@@ -114,8 +114,12 @@ pub async fn search_tokens(
     let tokens = res
         .token_infos
         .into_iter()
-        .map(Token::try_from)
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|token_info| {
+            let mut token = Token::try_from(token_info)?;
+            token.icon_url = replace_coingecko_logo_uri_to_large(token.icon_url.as_str());
+            Ok(token)
+        })
+        .collect::<Result<Vec<_>, ParseError>>()?;
 
     Ok((tokens, res.next_page_params.map(|p| p.page_token)))
 }
@@ -124,7 +128,7 @@ pub async fn search_dapps(
     dapp_client: &HttpApiClient,
     query: Option<String>,
     categories: Option<String>,
-    chain_ids: Option<String>,
+    chain_ids: Vec<ChainId>,
 ) -> Result<Vec<MarketplaceDapp>, ServiceError> {
     let res = dapp_client
         .request(&search_dapps::SearchDapps {
@@ -151,6 +155,7 @@ pub async fn quick_search(
     dapp_client: &HttpApiClient,
     token_info_client: &HttpApiClient,
     query: String,
+    chain_ids: &[ChainId],
 ) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
 
@@ -159,6 +164,7 @@ pub async fn quick_search(
         db,
         dapp_client,
         token_info_client,
+        chain_ids,
     };
 
     // Each search term produces its own `SearchResults` struct.
@@ -195,6 +201,38 @@ struct SearchContext<'a> {
     db: &'a DatabaseConnection,
     dapp_client: &'a HttpApiClient,
     token_info_client: &'a HttpApiClient,
+    chain_ids: &'a [ChainId],
+}
+
+fn filter_and_sort_by_priority<T>(
+    items: Vec<T>,
+    get_chain_id: impl Fn(&T) -> ChainId,
+    search_context: &SearchContext<'_>,
+) -> Vec<T> {
+    // Filter to keep only one item per chain_id,
+    // assuming they are already presented in a relevant order.
+    let mut seen_chain_ids = HashSet::new();
+    let mut filtered_items = items
+        .into_iter()
+        .filter(|item| {
+            let chain_id = get_chain_id(item);
+            search_context.chain_ids.contains(&chain_id) && seen_chain_ids.insert(chain_id)
+        })
+        .collect::<Vec<_>>();
+
+    let chain_id_priority = search_context
+        .chain_ids
+        .iter()
+        .enumerate()
+        .map(|(idx, &chain_id)| (chain_id, idx))
+        .collect::<HashMap<_, _>>();
+    filtered_items.sort_by_key(|item| {
+        chain_id_priority
+            .get(&get_chain_id(item))
+            .unwrap_or(&usize::MAX)
+    });
+
+    filtered_items
 }
 
 impl SearchTerm {
@@ -209,12 +247,23 @@ impl SearchTerm {
 
         match self {
             SearchTerm::Hash(hash) => {
-                let (hashes, _) =
-                    hashes::list(db, hash, None, None, QUICK_SEARCH_NUM_ITEMS, None).await?;
-                let (blocks, transactions): (Vec<_>, Vec<_>) = hashes
+                let (hashes, _) = hashes::list(
+                    db,
+                    hash,
+                    None,
+                    Some(search_context.chain_ids.to_vec()),
+                    QUICK_SEARCH_NUM_ITEMS,
+                    None,
+                )
+                .await?;
+                let hashes = hashes
                     .into_iter()
                     .map(Hash::try_from)
-                    .collect::<Result<Vec<_>, _>>()?
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let hashes = filter_and_sort_by_priority(hashes, |h| h.chain_id, search_context);
+
+                let (blocks, transactions): (Vec<_>, Vec<_>) = hashes
                     .into_iter()
                     .partition(|h| h.hash_type == HashType::Block);
 
@@ -226,7 +275,7 @@ impl SearchTerm {
                     db,
                     Some(address),
                     None,
-                    None,
+                    Some(search_context.chain_ids.to_vec()),
                     None,
                     QUICK_SEARCH_NUM_ITEMS,
                     None,
@@ -236,6 +285,10 @@ impl SearchTerm {
                     .into_iter()
                     .map(Address::try_from)
                     .collect::<Result<Vec<_>, _>>()?;
+
+                let addresses =
+                    filter_and_sort_by_priority(addresses, |a| a.chain_id, search_context);
+
                 let nfts = addresses
                     .iter()
                     .filter(|a| {
@@ -246,14 +299,20 @@ impl SearchTerm {
                     })
                     .cloned()
                     .collect::<Vec<_>>();
+                let non_token_addresses = addresses
+                    .iter()
+                    .filter(|a| a.token_type.is_none())
+                    .cloned()
+                    .collect::<Vec<_>>();
 
-                results.addresses.extend(addresses);
+                results.addresses.extend(non_token_addresses);
                 results.nfts.extend(nfts);
             }
             SearchTerm::BlockNumber(block_number) => {
                 let (block_ranges, _) = block_ranges::list_matching_block_ranges_paginated(
                     db,
                     block_number,
+                    Some(search_context.chain_ids.to_vec()),
                     QUICK_SEARCH_NUM_ITEMS,
                     None,
                 )
@@ -266,11 +325,21 @@ impl SearchTerm {
                     })
                     .collect::<Vec<_>>();
 
+                let block_numbers =
+                    filter_and_sort_by_priority(block_numbers, |b| b.chain_id, search_context);
+
                 results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
-                let dapps =
-                    search_dapps(search_context.dapp_client, Some(query), None, None).await?;
+                let dapps = search_dapps(
+                    search_context.dapp_client,
+                    Some(query),
+                    None,
+                    search_context.chain_ids.to_vec(),
+                )
+                .await?;
+
+                let dapps = filter_and_sort_by_priority(dapps, |d| d.chain_id, search_context);
 
                 results.dapps.extend(dapps);
             }
@@ -278,29 +347,30 @@ impl SearchTerm {
                 let (tokens, _) = search_tokens(
                     search_context.token_info_client,
                     query,
-                    None,
-                    QUICK_SEARCH_NUM_ITEMS,
+                    search_context.chain_ids.to_vec(),
+                    // TODO: temporary increase number of tokens to improve search quality
+                    // until we have a dedicated endpoint for quick search which returns
+                    // only one token per chain_id.
+                    QUICK_SEARCH_NUM_ITEMS * 2,
                     None,
                 )
                 .await?;
 
+                let tokens = filter_and_sort_by_priority(tokens, |t| t.chain_id, search_context);
+
                 results.tokens.extend(tokens);
             }
             SearchTerm::ContractName(query) => {
-                let (addresses, _) = addresses::list(
+                let addresses = addresses::uniform_chain_search(
                     db,
-                    None,
-                    Some(query),
-                    None,
-                    None,
-                    QUICK_SEARCH_NUM_ITEMS,
-                    None,
+                    query,
+                    Some(vec![]),
+                    search_context.chain_ids.to_vec(),
                 )
-                .await?;
-                let addresses: Vec<_> = addresses
-                    .into_iter()
-                    .map(Address::try_from)
-                    .collect::<Result<Vec<_>, _>>()?;
+                .await?
+                .into_iter()
+                .map(Address::try_from)
+                .collect::<Result<Vec<_>, _>>()?;
 
                 results.addresses.extend(addresses);
             }
@@ -337,12 +407,20 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     terms
 }
 
+fn replace_coingecko_logo_uri_to_large(logo_uri: &str) -> String {
+    if logo_uri.starts_with("https://assets.coingecko.com/") {
+        logo_uri.replacen("/small/", "/large/", 1)
+    } else {
+        logo_uri.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn parse_search_terms_works() {
+    fn test_parse_search_terms() {
         assert_eq!(
             parse_search_terms("0x0000000000000000000000000000000000000000"),
             vec![SearchTerm::AddressHash(alloy_primitives::Address::ZERO)]
@@ -371,6 +449,21 @@ mod tests {
                 SearchTerm::ContractName("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
             ]
+        );
+    }
+
+    #[test]
+    fn test_replace_coingecko_logo_uri_to_large() {
+        let coingecko_logo = "https://assets.coingecko.com/coins/images/1/small/test_token.png";
+        assert_eq!(
+            replace_coingecko_logo_uri_to_large(coingecko_logo),
+            "https://assets.coingecko.com/coins/images/1/large/test_token.png"
+        );
+
+        let other_source_logo = "https://some.other.source.com/coins/images/1/small/test_token.png";
+        assert_eq!(
+            replace_coingecko_logo_uri_to_large(other_source_logo),
+            other_source_logo
         );
     }
 }

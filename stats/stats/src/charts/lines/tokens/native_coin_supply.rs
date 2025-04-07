@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -20,7 +20,7 @@ use crate::{
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -32,7 +32,11 @@ const ETH: i64 = 1_000_000_000_000_000_000;
 pub struct NativeCoinSupplyStatement;
 
 impl StatementFromRange for NativeCoinSupplyStatement {
-    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(
+        range: Option<Range<DateTime<Utc>>>,
+        _: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
+    ) -> Statement {
         let day_range: Option<Range<NaiveDate>> = range.map(|r| {
             let Range { start, end } = r;
             // chart is off anyway, so shouldn't be a big deal

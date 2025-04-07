@@ -4,7 +4,10 @@
 //! Basically an extension of [super::NewTxnsWindow]
 //! but for operational txns
 
+use std::collections::HashSet;
+
 use crate::{
+    charts::db_interaction::read::find_all_points,
     data_source::{
         kinds::{
             data_manipulation::map::{Map, MapParseTo},
@@ -22,20 +25,21 @@ use crate::{
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     lines::{NewBlocksStatement, NewTxnsWindowInt, NEW_TXNS_WINDOW_RANGE},
     range::UniversalRange,
-    types::{Timespan, TimespanDuration, TimespanValue},
+    types::{timespans::DateValue, Timespan, TimespanDuration, TimespanValue},
     utils::day_start,
-    ChartError, ChartProperties, IndexingStatus, Named,
+    ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{FromQueryResult, Statement};
+use sea_orm::Statement;
 
-use super::new_operational_txns::CalculateOperationalTxnsVec;
+use super::arbitrum_new_operational_txns::ArbitrumCalculateOperationalTxnsVec;
 
 fn new_blocks_window_statement(
     update_day: NaiveDate,
     completed_migrations: &BlockscoutMigrations,
+    enabled_update_charts_recursive: &HashSet<ChartKey>,
 ) -> Statement {
     // `update_day` is not included because the data would
     // be incomplete.
@@ -44,7 +48,11 @@ fn new_blocks_window_statement(
             NEW_TXNS_WINDOW_RANGE,
         )),
     )..day_start(&update_day);
-    NewBlocksStatement::get_statement(Some(window), completed_migrations)
+    NewBlocksStatement::get_statement(
+        Some(window),
+        completed_migrations,
+        enabled_update_charts_recursive,
+    )
 }
 
 pub struct NewBlocksWindowQuery;
@@ -57,14 +65,12 @@ impl RemoteQueryBehaviour for NewBlocksWindowQuery {
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<TimespanValue<NaiveDate, String>>, ChartError> {
         let update_day = cx.time.date_naive();
-        let query = new_blocks_window_statement(update_day, &cx.blockscout_applied_migrations);
-        let mut data = TimespanValue::<NaiveDate, String>::find_by_statement(query)
-            .all(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?;
-        // linear time for sorted sequences
-        data.sort_unstable_by(|a, b| a.timespan.cmp(&b.timespan));
-        Ok(data)
+        let statement = new_blocks_window_statement(
+            update_day,
+            &cx.blockscout_applied_migrations,
+            &cx.enabled_update_charts_recursive,
+        );
+        find_all_points::<DateValue<String>>(cx, statement).await
     }
 }
 
@@ -96,14 +102,14 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type NewOperationalTxnsWindowCalculation =
-    Map<(NewBlocksWindowRemoteInt, NewTxnsWindowInt), CalculateOperationalTxnsVec>;
-pub type NewOperationalTxnsWindow = LocalDbChartSource<
-    NewOperationalTxnsWindowCalculation,
+pub type ArbitrumNewOperationalTxnsWindowCalculation =
+    Map<(NewBlocksWindowRemoteInt, NewTxnsWindowInt), ArbitrumCalculateOperationalTxnsVec>;
+pub type ArbitrumNewOperationalTxnsWindow = LocalDbChartSource<
+    ArbitrumNewOperationalTxnsWindowCalculation,
     (),
     DefaultCreate<Properties>,
     ClearAllAndPassVec<
-        NewOperationalTxnsWindowCalculation,
+        ArbitrumNewOperationalTxnsWindowCalculation,
         DefaultQueryVec<Properties>,
         Properties,
     >,
@@ -128,9 +134,9 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_operational_txns_window_clears_and_overwrites() {
-        let (init_time, db, blockscout) = prepare_chart_test::<NewOperationalTxnsWindow>(
-            "update_operational_txns_window_clears_and_overwrites",
+    async fn update_arbitrum_operational_txns_window_clears_and_overwrites() {
+        let (init_time, db, blockscout) = prepare_chart_test::<ArbitrumNewOperationalTxnsWindow>(
+            "update_arbitrum_operational_txns_window_clears_and_overwrites",
             None,
         )
         .await;
@@ -144,16 +150,18 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive:
+                ArbitrumNewOperationalTxnsWindow::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
         };
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-        NewOperationalTxnsWindow::update_recursively(&cx)
+        ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
             .await
             .unwrap();
         assert_eq!(
             &chart_output_to_expected(
-                NewOperationalTxnsWindow::query_data_static(
+                ArbitrumNewOperationalTxnsWindow::query_data_static(
                     &cx,
                     UniversalRange::full(),
                     None,
@@ -174,12 +182,12 @@ mod tests {
         let current_time = dt("2022-12-10T00:00:00").and_utc();
         parameters.update_time_override = Some(current_time);
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-        NewOperationalTxnsWindow::update_recursively(&cx)
+        ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
             .await
             .unwrap();
         assert_eq!(
             &chart_output_to_expected(
-                NewOperationalTxnsWindow::query_data_static(
+                ArbitrumNewOperationalTxnsWindow::query_data_static(
                     &cx,
                     UniversalRange::full(),
                     None,
@@ -202,12 +210,12 @@ mod tests {
         let current_time = dt("2022-12-11T00:00:00").and_utc();
         parameters.update_time_override = Some(current_time);
         let cx = UpdateContext::from_params_now_or_override(parameters);
-        NewOperationalTxnsWindow::update_recursively(&cx)
+        ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
             .await
             .unwrap();
         assert_eq!(
             &chart_output_to_expected(
-                NewOperationalTxnsWindow::query_data_static(
+                ArbitrumNewOperationalTxnsWindow::query_data_static(
                     &cx,
                     UniversalRange::full(),
                     None,

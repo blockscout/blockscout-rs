@@ -23,6 +23,16 @@ impl InitialUpdateTracker {
         }
     }
 
+    pub async fn get_all_charts_with_exact_status(
+        &self,
+        status: &proto_v1::ChartSubsetUpdateStatus,
+    ) -> HashSet<ChartKey> {
+        self.inner
+            .lock()
+            .await
+            .get_all_charts_with_exact_status(status)
+    }
+
     /// will skip tracking in a subset if not a part of the subset
     async fn mark_all_trackers(&self, charts: &HashSet<ChartKey>, status: UpdateStatusChange) {
         let mut inner = self.inner.lock().await;
@@ -91,7 +101,7 @@ struct InitialUpdateTrackerInner {
 
 impl InitialUpdateTrackerInner {
     /// Need charts with their status requirements
-    pub fn new(charts: &BTreeMap<ChartKey, IndexingStatus>) -> Self {
+    fn new(charts: &BTreeMap<ChartKey, IndexingStatus>) -> Self {
         let charts_satisfying_status =
             |charts: &BTreeMap<ChartKey, IndexingStatus>, status: &IndexingStatus| -> HashSet<_> {
                 charts
@@ -143,6 +153,22 @@ impl InitialUpdateTrackerInner {
             ),
             user_ops_dependent: UpdateChartSubsetTracker::new(user_ops_dependent),
         }
+    }
+
+    fn get_all_charts_with_exact_status(
+        &self,
+        status: &proto_v1::ChartSubsetUpdateStatus,
+    ) -> HashSet<ChartKey> {
+        let all_trackers = [
+            &self.independent,
+            &self.blocks_dependent,
+            &self.internal_transactions_dependent,
+            &self.user_ops_dependent,
+        ];
+        all_trackers
+            .into_iter()
+            .flat_map(|tracker| tracker.get_charts_with_exact_status(status).clone())
+            .collect()
     }
 
     fn verify_tracking_all_charts(
@@ -329,5 +355,21 @@ impl UpdateChartSubsetTracker {
             self.running_initial_update.len(),
             self.completed_initial_update.len(),
         ]
+    }
+
+    pub fn get_charts_with_exact_status(
+        &self,
+        status: &proto_v1::ChartSubsetUpdateStatus,
+    ) -> &HashSet<ChartKey> {
+        match status {
+            proto_v1::ChartSubsetUpdateStatus::Pending => &self.pending,
+            proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition => {
+                &self.waiting_for_starting_condition
+            }
+            proto_v1::ChartSubsetUpdateStatus::RunningInitialUpdate => &self.running_initial_update,
+            proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate => {
+                &self.completed_initial_update
+            }
+        }
     }
 }

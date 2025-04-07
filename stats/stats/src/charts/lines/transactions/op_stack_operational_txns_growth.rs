@@ -17,13 +17,13 @@ use crate::{
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;
 
-use super::new_operational_txns::NewOperationalTxns;
+use super::new_txns::op_stack_operational::OpStackNewOperationalTxnsInt;
 
 pub struct Properties;
 
 impl Named for Properties {
     fn name() -> String {
-        "operationalTxnsGrowth".into()
+        "opStackOperationalTxnsGrowth".into()
     }
 }
 
@@ -48,22 +48,23 @@ define_and_impl_resolution_properties!(
     base_impl: Properties
 );
 
-pub type OperationalTxnsGrowth =
-    DailyCumulativeLocalDbChartSource<MapParseTo<StripExt<NewOperationalTxns>, i64>, Properties>;
-pub type OperationalTxnsGrowthInt = MapParseTo<StripExt<OperationalTxnsGrowth>, i64>;
-pub type OperationalTxnsGrowthWeekly = DirectVecLocalDbChartSource<
-    MapToString<LastValueLowerResolution<OperationalTxnsGrowthInt, Week>>,
+pub type OpStackOperationalTxnsGrowth =
+    DailyCumulativeLocalDbChartSource<OpStackNewOperationalTxnsInt, Properties>;
+pub type OpStackOperationalTxnsGrowthInt = MapParseTo<StripExt<OpStackOperationalTxnsGrowth>, i64>;
+pub type OpStackOperationalTxnsGrowthWeekly = DirectVecLocalDbChartSource<
+    MapToString<LastValueLowerResolution<OpStackOperationalTxnsGrowthInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
-pub type OperationalTxnsGrowthMonthly = DirectVecLocalDbChartSource<
-    MapToString<LastValueLowerResolution<OperationalTxnsGrowthInt, Month>>,
+pub type OpStackOperationalTxnsGrowthMonthly = DirectVecLocalDbChartSource<
+    MapToString<LastValueLowerResolution<OpStackOperationalTxnsGrowthInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
-pub type OperationalTxnsGrowthMonthlyInt = MapParseTo<StripExt<OperationalTxnsGrowthMonthly>, i64>;
-pub type OperationalTxnsGrowthYearly = DirectVecLocalDbChartSource<
-    MapToString<LastValueLowerResolution<OperationalTxnsGrowthMonthlyInt, Year>>,
+pub type OpStackOperationalTxnsGrowthMonthlyInt =
+    MapParseTo<StripExt<OpStackOperationalTxnsGrowthMonthly>, i64>;
+pub type OpStackOperationalTxnsGrowthYearly = DirectVecLocalDbChartSource<
+    MapToString<LastValueLowerResolution<OpStackOperationalTxnsGrowthMonthlyInt, Year>>,
     Batch30Years,
     YearlyProperties,
 >;
@@ -75,18 +76,18 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_operational_txns_growth() {
-        simple_test_chart::<OperationalTxnsGrowth>(
-            "update_operational_txns_growth",
+    async fn update_op_stack_operational_txns_growth() {
+        simple_test_chart::<OpStackOperationalTxnsGrowth>(
+            "update_op_stack_operational_txns_growth",
             vec![
-                ("2022-11-09", "5"),
-                ("2022-11-10", "16"),
-                ("2022-11-11", "28"),
-                ("2022-11-12", "33"),
-                ("2022-12-01", "38"),
-                ("2023-01-01", "38"),
-                ("2023-02-01", "42"),
-                ("2023-03-01", "42"),
+                ("2022-11-09", "6"),
+                ("2022-11-10", "20"),
+                ("2022-11-11", "36"),
+                ("2022-11-12", "42"),
+                ("2022-12-01", "48"),
+                ("2023-01-01", "49"),
+                ("2023-02-01", "54"),
+                ("2023-03-01", "55"),
             ],
         )
         .await;

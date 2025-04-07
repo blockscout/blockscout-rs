@@ -10,7 +10,7 @@ pub type DefaultRateLimiterMiddleware<
 impl DefaultRateLimiterMiddleware {
     /// Default rate limiter splits the given period evenly between quotas
     /// and allows only 1 request per the cell.
-    const BURST_SIZE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(1) };
+    const BURST_SIZE: NonZeroU32 = NonZeroU32::new(1).unwrap();
 
     pub fn per_second(max_burst: NonZeroU32) -> Self {
         let quota = governor::Quota::per_second(max_burst).allow_burst(Self::BURST_SIZE);
