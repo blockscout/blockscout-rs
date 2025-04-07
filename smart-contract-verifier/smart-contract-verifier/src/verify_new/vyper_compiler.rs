@@ -88,7 +88,7 @@ impl evm_compilers::EvmCompiler for VyperCompiler {
         compiler_version: &DetailedVersion,
         input: &Self::CompilerInput,
     ) -> Result<Value, Error> {
-        // we use `solc::Solc` because `vyper::Vyper` does not support async compilation
+        // we use `solc::Solc` because `solc::Solc` does the same thing under the hood.
         let solc = foundry_compilers_new::solc::Solc::new_with_version(
             compiler_path,
             compiler_version.to_semver().to_owned(),

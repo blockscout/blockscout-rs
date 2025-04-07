@@ -5,7 +5,7 @@ use super::{
 use bytes::Bytes;
 use ethers_core::abi::Abi;
 use ethers_solc::sourcemap::SourceMap;
-use std::{collections::BTreeMap, iter::repeat};
+use std::{collections::BTreeMap, iter::repeat_n};
 
 pub struct LookupMethodsRequest {
     pub bytecode: Bytes,
@@ -118,7 +118,7 @@ fn prepend_selector(partial_selector: &[u8]) -> anyhow::Result<Vec<u8>> {
 
     // prepend selector with 0s if it's shorter than 4 bytes
     let mut selector = partial_selector.to_owned();
-    selector.splice(..0, repeat(0).take(4 - partial_selector.len()));
+    selector.splice(..0, repeat_n(0, 4 - partial_selector.len()));
     Ok(selector)
 }
 
