@@ -30,6 +30,7 @@ pub struct Model {
     pub icon_url: Option<String>,
     pub is_verified_via_admin_panel: Option<bool>,
     pub volume_24h: Option<Decimal>,
+    pub metadata_updated_at: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
