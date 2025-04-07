@@ -52,26 +52,26 @@ fn verify_on_chain_contract(
     contract: OnChainContract,
     compilation_result: &CompilationResult,
 ) -> Result<VerificationResult, Error> {
+    let blueprint_initcode = try_extract_blueprint_initcode(&contract)?;
+    let is_blueprint = blueprint_initcode.is_some();
+
     let mut successes = vec![];
     for (fully_qualified_name, contract_artifacts) in &compilation_result.artifacts {
-        let mut is_blueprint = false;
-        let verify_contract_result =
-            if let Some(initcode) = try_extract_blueprint_initcode(&contract)? {
-                is_blueprint = true;
-                verification::verify_blueprint_contract(
-                    initcode,
-                    contract_artifacts.code.clone(),
-                    &contract_artifacts.creation_code_artifacts,
-                )
-            } else {
-                verification::verify_contract(
-                    contract.code.clone(),
-                    contract_artifacts.code.clone(),
-                    &contract_artifacts.compilation_artifacts,
-                    &contract_artifacts.creation_code_artifacts,
-                    &contract_artifacts.runtime_code_artifacts,
-                )
-            };
+        let verify_contract_result = match blueprint_initcode.clone() {
+            Some(initcode) => verification::verify_blueprint_contract(
+                initcode,
+                contract_artifacts.code.clone(),
+                &contract_artifacts.creation_code_artifacts,
+            ),
+            None => verification::verify_contract(
+                contract.code.clone(),
+                contract_artifacts.code.clone(),
+                &contract_artifacts.compilation_artifacts,
+                &contract_artifacts.creation_code_artifacts,
+                &contract_artifacts.runtime_code_artifacts,
+            ),
+        };
+
         let maybe_verifying_contract = process_verify_contract_result(
             compilation_result,
             fully_qualified_name,
