@@ -411,8 +411,39 @@ impl TacDatabase {
         }
     }
 
-    // Extract up to `num` intervals in the pending state and switch them status to `processing`
-    // Available time boundaries may be specifies via `from` and `to` parameters
+    // Helper function to build interval query with common structure
+    fn build_interval_query(
+        &self,
+        conditions: Vec<String>,
+        order_by: Option<(&str, OrderDirection)>,
+        limit: usize,
+        update_status: EntityStatus,
+    ) -> String {
+        let order_clause = if let Some((field, direction)) = order_by {
+            format!("ORDER BY {} {}", field, direction.sql_order_string())
+        } else {
+            "".to_string()
+        };
+
+        format!(
+            r#" WITH selected_intervals AS (
+                    SELECT * FROM interval 
+                    WHERE {} 
+                    {} 
+                    LIMIT {}
+                    FOR UPDATE SKIP LOCKED
+                    )
+                    UPDATE interval 
+                    SET status = {}
+                    WHERE id IN (SELECT id FROM selected_intervals)
+                    "#,
+            conditions.join(" AND "),
+            order_clause,
+            limit,
+            update_status.to_id(),
+        )
+    }
+
     pub async fn query_pending_intervals(
         &self,
         num: usize,
@@ -427,23 +458,14 @@ impl TacDatabase {
         if let Some(end) = to {
             conditions.push(format!(r#""end" < {}"#, end));
         }
-        let sql = format!(
-            r#" WITH pending_intervals AS (
-                    SELECT * FROM interval 
-                    WHERE  {} 
-                    ORDER BY start {}
-                    LIMIT {}
-                    FOR UPDATE SKIP LOCKED
-                    )
-                    UPDATE interval 
-                    SET status = {}
-                    WHERE id IN (SELECT id FROM pending_intervals)
-                    "#,
-            conditions.join(" AND "),
-            order.sql_order_string(),
+        
+        let sql = self.build_interval_query(
+            conditions,
+            Some(("start", order)),
             num,
-            EntityStatus::Processing.to_id(), 
+            EntityStatus::Processing,
         );
+        
         self.query_intervals(&sql)
         .instrument(tracing::info_span!(
             "query pending intervals"
@@ -455,23 +477,19 @@ impl TacDatabase {
         &self,
         num: usize,
     ) -> anyhow::Result<Vec<interval::Model>> {
-        let sql = format!(
-            r#" WITH failed_intervals AS (
-                    SELECT * FROM interval 
-                    WHERE status = {} AND next_retry IS NOT NULL AND next_retry < {} 
-                    ORDER BY next_retry ASC 
-                    LIMIT {}
-                    FOR UPDATE SKIP LOCKED
-                    )
-                    UPDATE interval 
-                    SET status = {}
-                    WHERE id IN (SELECT id FROM failed_intervals)
-                    "#,
-            EntityStatus::Pending.to_id(),
-            EntityStatus::Pending.to_id(),
-            chrono::Utc::now().timestamp(),
-            num
+        let conditions = vec![
+            format!("status = {}", EntityStatus::Pending.to_id()),
+            format!("next_retry IS NOT NULL"),
+            format!("next_retry < {}", chrono::Utc::now().timestamp()),
+        ];
+        
+        let sql = self.build_interval_query(
+            conditions,
+            Some(("next_retry", OrderDirection::EarliestFirst)),
+            num,
+            EntityStatus::Processing,
         );
+        
         let span_id = Uuid::new_v4();
         self.query_intervals(&sql).instrument(tracing::info_span!(
             "query failed intervals",
