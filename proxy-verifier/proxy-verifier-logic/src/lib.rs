@@ -1,8 +1,6 @@
 mod address_details;
+pub mod blockscout;
 mod handlers;
-mod to_hex;
-
-use to_hex::ToHex;
 
 pub use handlers::*;
 
@@ -66,4 +64,10 @@ pub enum VerificationResponse {
     CompilationFailed(Error),
     InvalidContracts(Vec<Option<Error>>),
     Results(Vec<Result<VerificationSuccess, Error>>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Contract {
+    pub chain_id: String,
+    pub address: ethers_core::types::Address,
 }

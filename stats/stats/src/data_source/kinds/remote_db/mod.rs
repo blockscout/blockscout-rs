@@ -16,7 +16,7 @@
 //! [types in `local_db`](`crate::data_source::kinds::local_db`) is largely
 //! helpful.
 
-mod query;
+pub mod query;
 
 use std::{
     future::Future,
@@ -30,12 +30,13 @@ use sea_orm::{DatabaseConnection, DbErr};
 use crate::{
     data_source::{source::DataSource, types::UpdateContext},
     range::UniversalRange,
-    ChartError,
+    ChartError, ChartKey,
 };
 
 pub use query::{
-    PullAllWithAndSort, PullEachWith, PullOne, PullOne24hCached, PullOneValue, StatementForOne,
-    StatementFromRange, StatementFromTimespan, StatementFromUpdateTime,
+    PullAllWithAndSort, PullAllWithAndSortCached, PullEachWith, PullOne, PullOne24hCached,
+    PullOneNowValue, StatementForOne, StatementFromRange, StatementFromTimespan,
+    StatementFromUpdateTime,
 };
 
 /// See [module-level documentation](self)
@@ -55,6 +56,11 @@ impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
     type MainDependencies = ();
     type ResolutionDependencies = ();
     type Output = Q::Output;
+
+    fn chart_key() -> Option<ChartKey> {
+        None
+    }
+
     // No local state => no race conditions expected
     fn mutex_id() -> Option<String> {
         None
@@ -67,15 +73,6 @@ impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
         Ok(())
     }
 
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        range: UniversalRange<DateTime<Utc>>,
-        remote_fetch_timer: &mut AggregateTimer,
-    ) -> Result<<Self as DataSource>::Output, ChartError> {
-        let _interval = remote_fetch_timer.start_interval();
-        Q::query_data(cx, range).await
-    }
-
     async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
         Ok(())
     }
@@ -85,5 +82,14 @@ impl<Q: RemoteQueryBehaviour> DataSource for RemoteDatabaseSource<Q> {
         _update_from: chrono::NaiveDate,
     ) -> Result<(), ChartError> {
         Ok(())
+    }
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        range: UniversalRange<DateTime<Utc>>,
+        remote_fetch_timer: &mut AggregateTimer,
+    ) -> Result<<Self as DataSource>::Output, ChartError> {
+        let _interval = remote_fetch_timer.start_interval();
+        Q::query_data(cx, range).await
     }
 }

@@ -75,13 +75,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let blockscout_clients = {
         let mut clients = BTreeMap::new();
         for (id, settings) in chains.into_inner() {
-            let config = blockscout_client::Config::new(id.clone(), settings.api_url.to_string())
-                .with_api_sensitive_endpoints_key(
-                    settings
-                        .sensitive_api_key
-                        .expect("sensitive_api_key value must not be null"),
-                );
-            let client = blockscout_client::Client::new(config);
+            let client = proxy_verifier_logic::blockscout::Client::new(
+                settings.api_url,
+                settings
+                    .sensitive_api_key
+                    .expect("sensitive_api_key value must not be null"),
+            )
+            .await;
 
             clients.insert(id, client);
         }
@@ -111,7 +111,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: Default::default(),
     };
 
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(launch_settings, http_router, grpc_router).await
 }

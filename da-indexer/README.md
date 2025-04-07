@@ -28,21 +28,22 @@ This service supports three primary use cases:
 ### Celestia
 | Variable                                                | Description                                            | Default value                    |
 |---------------------------------------------------------|--------------------------------------------------------|----------------------------------|
-| DA_INDEXER__INDEXER__DA__RPC__URL                       | Celestia light node RPC url                            |                                  |
-| DA_INDEXER__INDEXER__DA__RPC__AUTH_TOKEN                | Celestia light node authorization token                | ''                               |
-| DA_INDEXER__INDEXER__DA__START_HEIGHT                   | The height of the block to start with                  | The local head of the light node |
+| DA_INDEXER__INDEXER__DA__CELESTIA__RPC__URL             | Celestia light node RPC url                            |                                  |
+| DA_INDEXER__INDEXER__DA__CELESTIA__RPC__AUTH_TOKEN      | Celestia light node authorization token                | ''                               |
+| DA_INDEXER__INDEXER__DA__CELESTIA__START_HEIGHT         | The height of the block to start with                  | The local head of the light node |
+| DA_INDEXER__INDEXER__DA__CELESTIA__SAVE_BATCH_SIZE      | The number of blobs to save per db insert              |                                  |
 
 ### EigenDA
-| Variable                                                | Description                                            | Default value                    |
-|---------------------------------------------------------|--------------------------------------------------------|----------------------------------|
-| DA_INDEXER__INDEXER__DA__DISPERSER_URL                  | EigenDA disperser url                                  |                                  |
-| DA_INDEXER__INDEXER__DA__EIGENDA_ADDRESS                | Address of the `EigenDAServiceManager`                 |                                  |
-| DA_INDEXER__INDEXER__DA__EIGENDA_CREATION_BLOCK         | The `EigenDAServiceManager` creation block             |                                  |
-| DA_INDEXER__INDEXER__DA__RPC__URL                       | Mainnet or Testnet `RPC_URL`                           |                                  |
-| DA_INDEXER__INDEXER__DA__RPC__BATCH_SIZE                | Batch size to use in the `eth_getLogs` requests        |                                  |
-| DA_INDEXER__INDEXER__DA__START_BLOCK                    | The number of the block to start with                  | The latest block number          |
-| DA_INDEXER__INDEXER__DA__SAVE_BATCH_SIZE                | The number of blobs to save per db transaction         |                                  |
-| DA_INDEXER__INDEXER__DA__PRUNING_BLOCK_THRESHOLD        | The threshold above which blobs might be unavailable   |                                  |
+| Variable                                                  | Description                                            | Default value                    |
+|-----------------------------------------------------------|--------------------------------------------------------|----------------------------------|
+| DA_INDEXER__INDEXER__DA__EIGENDA__DISPERSER_URL           | EigenDA disperser url                                  |                                  |
+| DA_INDEXER__INDEXER__DA__EIGENDA__ADDRESS                 | Address of the `EigenDAServiceManager`                 |                                  |
+| DA_INDEXER__INDEXER__DA__EIGENDA__CREATION_BLOCK          | The `EigenDAServiceManager` creation block             |                                  |
+| DA_INDEXER__INDEXER__DA__EIGENDA__RPC__URL                | Mainnet or Testnet `RPC_URL`                           |                                  |
+| DA_INDEXER__INDEXER__DA__EIGENDA__RPC__BATCH_SIZE         | Batch size to use in the `eth_getLogs` requests        |                                  |
+| DA_INDEXER__INDEXER__DA__EIGENDA__START_BLOCK             | The number of the block to start with                  | The latest block number          |
+| DA_INDEXER__INDEXER__DA__EIGENDA__SAVE_BATCH_SIZE         | The number of blobs to save per db transaction         |                                  |
+| DA_INDEXER__INDEXER__DA__EIGENDA__PRUNING_BLOCK_THRESHOLD | The threshold above which blobs might be unavailable   |                                  |
 
 ## Celestia Blob Indexer
 The Celestia indexer runs on top of the [Celestia light node](https://docs.celestia.org/how-to-guides/light-node). It is worth noting that the indexer collects only blobs and some block metadata, it does not collect full blocks, transactions, etc.
@@ -53,8 +54,7 @@ DA_INDEXER__DATABASE__CONNECT__URL=postgres://postgres:postgres@database:5432/bl
 DA_INDEXER__DATABASE__CREATE_DATABASE="true"
 DA_INDEXER__DATABASE__RUN_MIGRATIONS="true"
 
-DA_INDEXER__INDEXER__DA__TYPE="Celestia"
-DA_INDEXER__INDEXER__DA__RPC__URL="http://celestia-light-node:26658"
+DA_INDEXER__INDEXER__DA__CELESTIA__RPC__URL="http://celestia-light-node:26658"
 DA_INDEXER__INDEXER__CONCURRENCY=15
 ```
 
@@ -91,15 +91,14 @@ DA_INDEXER__DATABASE__RUN_MIGRATIONS="true"
 
 DA_INDEXER__INDEXER__CONCURRENCY=5
 
-DA_INDEXER__INDEXER__DA__TYPE="EigenDA"
-DA_INDEXER__INDEXER__DA__DISPERSER_URL="https://disperser-holesky.eigenda.xyz:443"
-DA_INDEXER__INDEXER__DA__EIGENDA_ADDRESS="0xD4A7E1Bd8015057293f0D0A557088c286942e84b"
-DA_INDEXER__INDEXER__DA__EIGENDA_CREATION_BLOCK=1168412
-DA_INDEXER__INDEXER__DA__SAVE_BATCH_SIZE=20
-DA_INDEXER__INDEXER__DA__PRUNING_BLOCK_THRESHOLD=1000
+DA_INDEXER__INDEXER__DA__EIGENDA__DISPERSER_URL="https://disperser-holesky.eigenda.xyz:443"
+DA_INDEXER__INDEXER__DA__EIGENDA__ADDRESS="0xD4A7E1Bd8015057293f0D0A557088c286942e84b"
+DA_INDEXER__INDEXER__DA__EIGENDA__CREATION_BLOCK=1168412
+DA_INDEXER__INDEXER__DA__EIGENDA__SAVE_BATCH_SIZE=20
+DA_INDEXER__INDEXER__DA__EIGENDA__PRUNING_BLOCK_THRESHOLD=1000
 
-DA_INDEXER__INDEXER__DA__RPC__URL="https://ethereum-holesky-rpc.publicnode.com"
-DA_INDEXER__INDEXER__DA__RPC__BATCH_SIZE=1000
+DA_INDEXER__INDEXER__DA__EIGENDA__RPC__URL="https://ethereum-holesky-rpc.publicnode.com"
+DA_INDEXER__INDEXER__DA__EIGENDA__RPC__BATCH_SIZE=1000
 ```
 
 ### API

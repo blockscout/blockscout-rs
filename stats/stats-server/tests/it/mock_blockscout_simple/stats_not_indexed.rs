@@ -1,7 +1,7 @@
 //! Tests for the case
 //! - blockscout is not indexed
 //! - stats server is fully enabled & updated as much as possible
-//!     with not indexed blockscout
+//!   with not indexed blockscout
 
 use blockscout_service_launcher::{launcher::GracefulShutdownHandler, test_server::init_server};
 use futures::FutureExt;
@@ -45,6 +45,7 @@ pub async fn run_tests_with_nothing_indexed() {
         None,
     )
     .await;
+    let (blockscout_indexed, user_ops_indexed) = (false, false);
     let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();
@@ -54,11 +55,11 @@ pub async fn run_tests_with_nothing_indexed() {
 
     // these pages must be available right away to display users
     let tests: JoinSet<_> = [
-        test_main_page_ok(base.clone(), true).boxed(),
+        test_main_page_ok(base.clone(), true, blockscout_indexed).boxed(),
         test_transactions_page_ok(base.clone(), true).boxed(),
         test_contracts_page_ok(base.clone()).boxed(),
-        test_lines_ok(base.clone(), false, false).boxed(),
-        test_counters_ok(base.clone(), false, false).boxed(),
+        test_lines_ok(base.clone(), blockscout_indexed, user_ops_indexed).boxed(),
+        test_counters_ok(base.clone(), blockscout_indexed, user_ops_indexed).boxed(),
         test_swagger_ok(base.clone()).boxed(),
     ]
     .into_iter()
@@ -85,6 +86,7 @@ pub async fn run_tests_with_user_ops_not_indexed() {
         Some(ResponseTemplate::new(200).set_body_json(user_ops_status_response_json(false))),
     )
     .await;
+    let (blockscout_indexed, user_ops_indexed) = (true, false);
     let (settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();
@@ -93,8 +95,8 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
 
     let tests: JoinSet<_> = [
-        test_lines_ok(base.clone(), true, false).boxed(),
-        test_counters_ok(base.clone(), true, false).boxed(),
+        test_lines_ok(base.clone(), blockscout_indexed, user_ops_indexed).boxed(),
+        test_counters_ok(base.clone(), blockscout_indexed, user_ops_indexed).boxed(),
     ]
     .into_iter()
     .collect();

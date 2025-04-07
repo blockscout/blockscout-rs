@@ -10,7 +10,7 @@ use tynm::type_name;
 use crate::{
     indexing_status::{IndexingStatus, IndexingStatusTrait},
     range::UniversalRange,
-    ChartError,
+    ChartError, ChartKey,
 };
 
 use super::types::UpdateContext;
@@ -38,11 +38,20 @@ pub trait DataSource {
     /// Data that this source provides
     type Output: Send;
 
+    // if there are more types of data sources, consider adding function
+    // `source_type` that returns enum containing type-specific info
+    /// Chart key of the data source, if it is a chart.
+    fn chart_key() -> Option<ChartKey>;
+
     /// Unique identifier of this data source that is used for synchronizing updates.
     ///
     /// Must be set to `Some` if the source stores some (local) data (i.e. `update_itself`
     /// does something) (e.g. [`local_db`](super::kinds::local_db))
-    fn mutex_id() -> Option<String>;
+    fn mutex_id() -> Option<String> {
+        // currently only ['charts'](super::kinds::local_db) are locally stored,
+        // so we can use chart key as a default synchronization key
+        Self::chart_key().map(|k| k.into())
+    }
 
     /// Initialize the data source and its dependencies.
     ///
@@ -108,6 +117,19 @@ pub trait DataSource {
                 is_not_duplicate,
                 "Data sources `MUTEX_ID`s must be unique. ID '{self_id}' is duplicate",
             );
+        }
+        ids
+    }
+
+    // if there are more types of data sources, consider adding function
+    // `all_dependencies_source_types` that returns set of enums containing type-specific info
+    /// List ChartKey's of itself (if any) and all of it's dependencies
+    /// combined
+    fn all_dependencies_chart_keys() -> HashSet<ChartKey> {
+        let mut ids = Self::MainDependencies::all_dependencies_chart_keys();
+        ids.extend(Self::ResolutionDependencies::all_dependencies_chart_keys());
+        if let Some(self_key) = Self::chart_key() {
+            ids.insert(self_key.clone());
         }
         ids
     }
@@ -237,6 +259,10 @@ impl DataSource for () {
     type ResolutionDependencies = ();
     type Output = ();
 
+    fn chart_key() -> Option<ChartKey> {
+        None
+    }
+
     fn mutex_id() -> Option<String> {
         None
     }
@@ -257,6 +283,11 @@ impl DataSource for () {
     }
 
     fn all_dependencies_mutex_ids() -> HashSet<String> {
+        HashSet::new()
+    }
+
+    fn all_dependencies_chart_keys() -> HashSet<ChartKey> {
+        // stop recursion
         HashSet::new()
     }
 
@@ -311,6 +342,10 @@ macro_rules! impl_data_source_for_tuple {
             type Output = ($(
                 $element_generic_name::Output
             ),+);
+
+            fn chart_key() -> Option<ChartKey> {
+                None
+            }
 
             // only dependencies' ids matter
             fn mutex_id() -> Option<String> {

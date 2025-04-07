@@ -1,6 +1,6 @@
 //! Average fee per transaction
 
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -23,7 +23,7 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -40,6 +40,7 @@ impl StatementFromRange for AverageTxnFeeStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
     ) -> Statement {
         if completed_migrations.denormalization {
             // TODO: consider supporting such case in macro ?
@@ -180,7 +181,7 @@ mod tests {
                 ("2022-12-01", "0.000149419752937"),
                 ("2023-01-01", "0.000023592592569"),
                 ("2023-02-01", "0.000212333333121"),
-                ("2023-03-01", "0.000023592592569"),
+                ("2023-03-01", "0.0000117962962845"),
             ],
         )
         .await;
@@ -196,7 +197,7 @@ mod tests {
                 ("2022-11-28", "0.000149419752937"),
                 ("2022-12-26", "0.000023592592569"),
                 ("2023-01-30", "0.000212333333121"),
-                ("2023-02-27", "0.000023592592569"),
+                ("2023-02-27", "0.0000117962962845"),
             ],
         )
         .await;
@@ -212,7 +213,7 @@ mod tests {
                 ("2022-12-01", "0.000149419752937"),
                 ("2023-01-01", "0.000023592592569"),
                 ("2023-02-01", "0.000212333333121"),
-                ("2023-03-01", "0.000023592592569"),
+                ("2023-03-01", "0.0000117962962845"),
             ],
         )
         .await;
@@ -225,7 +226,7 @@ mod tests {
             "update_average_txn_fee_yearly",
             vec![
                 ("2022-01-01", "0.0000747098764685"),
-                ("2023-01-01", "0.00015840740724900002"),
+                ("2023-01-01", "0.000138606481342875"),
             ],
         )
         .await;

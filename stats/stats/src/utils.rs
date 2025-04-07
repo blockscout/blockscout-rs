@@ -47,13 +47,16 @@ pub(crate) fn produce_filter_and_values(
 ///
 /// `statement_with_filter_placeholder` must have `filter` named parameter
 /// `filter_by` is a column/property(?) in SQL used to generate string for `filter`
+///
+/// all subsequent arguments (after `range` will be passed to `format!` macro to the
+/// resulting statement). of course do not pass user-supplied data there.
 macro_rules! sql_with_range_filter_opt {
     (
         $db_backend: expr,
         $statement_with_filter_placeholder: literal,
         [$($value: expr),* $(,)?],
         $filter_by:expr,
-        $range:expr $(,)?
+        $range:expr, $($args:tt)*
     ) => {
         {
             let mut values = ::std::vec![ $($value),* ];
@@ -65,8 +68,25 @@ macro_rules! sql_with_range_filter_opt {
             let sql = ::std::format!(
                 $statement_with_filter_placeholder,
                 filter=filter_str,
+                $($args)*
             );
             ::sea_orm::Statement::from_sql_and_values($db_backend, &sql, values)
+        }
+    };
+    (
+        $db_backend: expr,
+        $statement_with_filter_placeholder: literal,
+        [$($value: expr),* $(,)?],
+        $filter_by:expr,
+        $range:expr
+    ) => {
+        {
+            sql_with_range_filter_opt!($db_backend,
+                $statement_with_filter_placeholder,
+                [$($value),*],
+                $filter_by,
+                $range,
+            )
         }
     };
 }

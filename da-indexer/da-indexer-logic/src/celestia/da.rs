@@ -18,6 +18,8 @@ use super::{
 };
 
 pub struct CelestiaDA {
+    settings: IndexerSettings,
+
     client: Client,
     db: Arc<DatabaseConnection>,
 
@@ -47,6 +49,7 @@ impl CelestiaDA {
         tracing::info!(start_from, "indexer initialized");
 
         Ok(Self {
+            settings,
             client,
             db,
             last_known_height: AtomicU64::new(start_from.saturating_sub(1)),
@@ -90,7 +93,11 @@ impl DA for CelestiaDA {
         .await?;
 
         if !blobs.is_empty() {
-            blobs::upsert_many(&txn, job.height, blobs).await?;
+            // blobs might be quite big, so we save them periodically
+            // to save ram and to avoid huge db insertions
+            for chunk in blobs.chunks(self.settings.save_batch_size as usize) {
+                blobs::upsert_many(&txn, job.height, chunk.to_vec()).await?;
+            }
             tracing::debug!(height = job.height, blobs_count, "saved blobs to db");
         }
 
