@@ -472,92 +472,78 @@ impl TacDatabase {
     async fn query_intervals(&self, sql: &String) -> anyhow::Result<Vec<interval::Model>> {
         // Generate a unique transaction ID for tracking
         let start_time = Instant::now();
+        let tx_id = Uuid::new_v4();
+        let tx_start = Instant::now();
 
-        // Use two separate transactions for better performance
-        // First transaction: SELECT the intervals with FOR UPDATE SKIP LOCKED
-        let select_tx_id = Uuid::new_v4();
-        let select_start = Instant::now();
-        
+        // Extract the WHERE clause from the original SQL
+        // The original SQL format is: SELECT * FROM interval WHERE [conditions] ORDER BY start [ASC/DESC] LIMIT [num] FOR UPDATE SKIP LOCKED
+        let where_clause = sql
+            .split("WHERE")
+            .nth(1)
+            .and_then(|s| s.split("ORDER BY").next())
+            .map(|s| s.trim())
+            .unwrap_or("");
 
+        // Create an UPDATE statement with the same WHERE clause and RETURNING clause
+        let update_sql = format!(
+            r#"UPDATE interval SET status = {} WHERE {} RETURNING id, start, "end", timestamp, status, next_retry, retry_count"#,
+            EntityStatus::Processing.to_id(),
+            where_clause
+        );
+
+
+        // Start a transaction
         let txn = match self.db.begin()
         .instrument(tracing::info_span!(
-            "begin transaction for select intervals",
-            tx_id = select_tx_id.to_string()
+            "begin transaction for update intervals",
+            tx_id = tx_id.to_string(),
+            sql = update_sql.clone()
         ))
         .await {
             Ok(txn) => {
                 tracing::warn!(
-                    "[TX-{:?}] SELECT INTERVALS transaction started after {:?}ms",
-                    select_tx_id,
-                    select_start.elapsed().as_millis()
+                    "[TX-{:?}] INTERVALS transaction started after {:?}ms",
+                    tx_id,
+                    tx_start.elapsed().as_millis()
                 );
                 txn
             }
             Err(e) => {
                 tracing::error!(
-                    "[TX-{:?}] Failed to begin SELECT INTERVALS transaction: {}",
-                    select_tx_id,
+                    "[TX-{:?}] Failed to begin INTERVALS transaction: {}",
+                    tx_id,
                     e
                 );
                 return Err(anyhow!(e));
             }
         };
 
-        tracing::debug!(
-            "[TX-{:?}] Executing SQL for INTERVALS query: {}",
-            select_tx_id,
-            sql
-        );
         let query_start = Instant::now();
+        let update_stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, &update_sql, vec![]);
 
-        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
-
-        let pending_intervals = match interval::Entity::find()
-            .from_raw_sql(stmt)
+        // Execute the UPDATE with RETURNING clause
+        let updated_intervals = match interval::Entity::find()
+            .from_raw_sql(update_stmt)
             .all(&txn)
             .instrument(tracing::info_span!(
-                "executing sql query for intervals",
-                tx_id = select_tx_id.to_string()
+                "executing update query for intervals",
+                tx_id = tx_id.to_string()
             ))
             .await
         {
             Ok(intervals) => {
                 tracing::debug!(
-                    "[TX-{:?}] SQL query completed in {:?}ms, found {} intervals",
-                    select_tx_id,
+                    "[TX-{:?}] UPDATE query completed in {:?}ms, updated {} intervals",
+                    tx_id,
                     query_start.elapsed().as_millis(),
                     intervals.len()
                 );
-
-                // Commit the first transaction immediately
-                let commit_start = Instant::now();
-                if let Err(e) = txn
-                    .commit()
-                    .instrument(tracing::info_span!(
-                        "commit query pending intervals",
-                        tx_id = select_tx_id.to_string()
-                    ))
-                    .await
-                {
-                    tracing::error!(
-                        "[TX-{:?}] Failed to commit SELECT transaction: {}",
-                        select_tx_id,
-                        e
-                    );
-                    return Err(e.into());
-                }
-                tracing::debug!(
-                    "[TX-{:?}] SELECT transaction committed in {:?}ms",
-                    select_tx_id,
-                    commit_start.elapsed().as_millis()
-                );
-
                 intervals
             }
             Err(e) => {
                 tracing::error!(
-                    "[TX-{:?}] Failed to fetch pending intervals: {}",
-                    select_tx_id,
+                    "[TX-{:?}] Failed to update intervals: {}",
+                    tx_id,
                     e
                 );
                 let _ = txn.rollback().await;
@@ -565,116 +551,36 @@ impl TacDatabase {
             }
         };
 
-        // If no intervals found, return early
-        if pending_intervals.is_empty() {
-            tracing::debug!(
-                "[TX-{:?}] No intervals found, query_intervals completed in {:?}ms",
-                select_tx_id,
-                start_time.elapsed().as_millis()
-            );
-            return Ok(vec![]);
-        }
-
-        // Second transaction: UPDATE the intervals to processing status
-        let update_tx_id = Uuid::new_v4();
-        let update_start = Instant::now();
-        tracing::debug!(
-            "[TX-{:?}] Beginning UPDATE INTERVALS transaction for {} intervals",
-            update_tx_id,
-            pending_intervals.len()
-        );
-
-        let update_txn = match self.db.begin()
-        .instrument(tracing::info_span!(
-            "begin transaction for update intervals",
-            tx_id = update_tx_id.to_string()
-        ))
-        .await {
-            Ok(txn) => {
-                tracing::debug!(
-                    "[TX-{:?}] UPDATE INTERVALS transaction started after {:?}ms",
-                    update_tx_id,
-                    update_start.elapsed().as_millis()
-                );
-                txn
-            }
-            Err(e) => {
-                tracing::error!(
-                    "[TX-{:?}] Failed to begin UPDATE INTERVALS transaction: {}",
-                    update_tx_id,
-                    e
-                );
-                return Err(anyhow!(e));
-            }
-        };
-
-        let update_sql_start = Instant::now();
-        let update_stmt = Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            r#"UPDATE interval SET status = $1 WHERE id = ANY($2) RETURNING id, start, "end", timestamp, status, next_retry, retry_count"#,
-            vec![
-                Value::SmallInt(Some(EntityStatus::Processing.to_id())),
-                Value::Array(
-                    ArrayType::Int,
-                    Some(Box::new(
-                        pending_intervals.iter().map(|i| i.id.into()).collect(),
-                    )),
-                ),
-            ],
-        );
-
-        match interval::Entity::find()
-            .from_raw_sql(update_stmt)
-            .all(&update_txn)
+        // Commit the transaction
+        let commit_start = Instant::now();
+        if let Err(e) = txn
+            .commit()
             .instrument(tracing::info_span!(
-                "update_intervals",
-                tx_id = update_tx_id.to_string()
+                "commit update intervals",
+                tx_id = tx_id.to_string()
             ))
             .await
         {
-            Ok(updated_list) => {
-                tracing::debug!(
-                    "[TX-{:?}] UPDATE INTERVALS completed in {:?}ms, updated {} intervals",
-                    update_tx_id,
-                    update_sql_start.elapsed().as_millis(),
-                    updated_list.len()
-                );
-
-                // Commit the transaction
-                let commit_start = Instant::now();
-                tracing::debug!(
-                    "[TX-{:?}] Committing UPDATE INTERVALS transaction",
-                    update_tx_id
-                );
-
-                if let Err(e) = update_txn.commit().await {
-                    tracing::error!(
-                        "[TX-{:?}] Failed to commit UPDATE transaction: {}",
-                        update_tx_id,
-                        e
-                    );
-                    return Err(e.into());
-                }
-
-                tracing::info!(
-                    "[TX-{:?}] UPDATE transaction INTERVALS committed in {:?}ms",
-                    update_tx_id,
-                    commit_start.elapsed().as_millis()
-                );
-                tracing::info!(
-                    "[TX-{:?}] Complete query_intervals operation took {:?}ms",
-                    update_tx_id,
-                    start_time.elapsed().as_millis()
-                );
-
-                Ok(updated_list)
-            }
-            Err(e) => {
-                tracing::error!("[TX-{:?}] Failed to update intervals: {}", update_tx_id, e);
-                let _ = update_txn.rollback().await;
-                Err(e.into())
-            }
+            tracing::error!(
+                "[TX-{:?}] Failed to commit transaction: {}",
+                tx_id,
+                e
+            );
+            return Err(e.into());
         }
+
+        tracing::info!(
+            "[TX-{:?}] Transaction committed in {:?}ms",
+            tx_id,
+            commit_start.elapsed().as_millis()
+        );
+        tracing::info!(
+            "[TX-{:?}] Complete query_intervals operation took {:?}ms",
+            tx_id,
+            start_time.elapsed().as_millis()
+        );
+
+        Ok(updated_intervals)
     }
 
     // Extract up to `num` operations in the pending state and switch them status to `processing`
