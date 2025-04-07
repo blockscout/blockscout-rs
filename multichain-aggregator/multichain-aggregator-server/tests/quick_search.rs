@@ -40,7 +40,7 @@ async fn test_quick_search() {
         quick_search_chains
     );
     assert_eq!(response.tokens.len(), 1);
-    assert_eq!(response.tokens[0].is_verified_contract, true);
+    assert!(response.tokens[0].is_verified_contract);
     assert_eq!(response.dapps.len(), 1);
 }
 
