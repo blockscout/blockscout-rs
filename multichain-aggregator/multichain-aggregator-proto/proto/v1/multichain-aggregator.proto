@@ -75,6 +75,7 @@ message Token {
   string name = 3;
   string symbol = 4;
   string chain_id = 5;
+  bool is_verified_contract = 6;
 }
 
 message BatchImportRequest {

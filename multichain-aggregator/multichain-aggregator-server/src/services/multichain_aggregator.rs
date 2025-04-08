@@ -251,6 +251,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let page_size = self.normalize_page_size(inner.page_size);
 
         let (tokens, next_page_token) = search::search_tokens(
+            self.repo.read_db(),
             &self.token_info_client,
             inner.q.to_string(),
             chain_ids,
