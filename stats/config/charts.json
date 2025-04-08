@@ -242,12 +242,12 @@
         },
         "new_eip_7702_auths": {
             "enabled": false,
-            "title": "New signed authorizations",
+            "title": "New EIP-7702 authorizations",
             "description": "Number of new EIP-7702 authorizations"
         },
         "eip_7702_auths_growth": {
             "enabled": false,
-            "title": "Number of signed authorizations",
+            "title": "Number of EIP-7702 authorizations",
             "description": "Cumulative EIP-7702 authorization growth over time"
         },
         "new_block_rewards": {
