@@ -31,7 +31,7 @@ fn default_max_response_size() -> u32 {
 }
 
 fn default_request_per_second() -> u32 {
-    1
+    100
 }
 
 impl Default for IndexerSettings {

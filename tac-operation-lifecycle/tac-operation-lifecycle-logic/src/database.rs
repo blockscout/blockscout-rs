@@ -71,6 +71,10 @@ pub struct TacDatabase {
     db: Arc<DatabaseConnection>,
 }
 
+fn format_sql_for_logging(sql: &str) -> String {
+    sql.replace("\n", " ").replace("\t", " ").replace("  ", " ").replace("           ", " ")
+}
+
 impl TacDatabase {
     pub fn new(db: Arc<DatabaseConnection>) -> Self {
         Self { db }
@@ -435,6 +439,7 @@ impl TacDatabase {
                     UPDATE interval 
                     SET status = {}
                     WHERE id IN (SELECT id FROM selected_intervals)
+                    RETURNING id, start, "end", timestamp, status, next_retry, retry_count
                     "#,
             conditions.join(" AND "),
             order_clause,
@@ -468,6 +473,7 @@ impl TacDatabase {
                     UPDATE operation 
                     SET status = {}
                     WHERE id IN (SELECT id FROM selected_operations)
+                    RETURNING id, timestamp, status, next_retry, retry_count
                     "#,
             conditions.join(" AND "),
             order_clause,
@@ -499,8 +505,9 @@ impl TacDatabase {
         );
         
         self.query_intervals(&sql)
-        .instrument(tracing::debug_span!(
-            "query pending intervals"
+        .instrument(tracing::info_span!(
+            "query pending intervals",
+            sql = format_sql_for_logging(sql.as_str())
         ))
         .await
     }
@@ -523,7 +530,7 @@ impl TacDatabase {
         );
         
         let span_id = Uuid::new_v4();
-        self.query_intervals(&sql).instrument(tracing::debug_span!(
+        self.query_intervals(&sql).instrument(tracing::info_span!(
             "query failed intervals",
             span_id = span_id.to_string()
         ))
@@ -564,11 +571,14 @@ impl TacDatabase {
             .instrument(tracing::debug_span!(
                 "executing update query for intervals",
                 tx_id = tx_id.to_string(),
-                // sql = format_sql_for_logging(sql.as_str())
+                sql = format_sql_for_logging(sql.as_str())
             ))
             .await
         {
-            Ok(intervals) => intervals,
+            Ok(intervals) => {
+                tracing::info!("Updated intervals: {}", intervals.len());
+                intervals
+            },
             Err(e) => {
                 tracing::error!(
                     "[TX-{:?}] Failed to update intervals: {}",
