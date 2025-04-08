@@ -17,7 +17,7 @@ use futures::{
     StreamExt,
 };
 use settings::IndexerSettings;
-use chrono;
+use chrono::{self, Days};
 use tokio::sync::Mutex;
 use tracing::instrument;
 use uuid::Uuid;
@@ -106,7 +106,7 @@ impl Indexer {
         Ok(Self {
             settings,
             watermark: AtomicU64::new(watermark),
-            start_timestamp: chrono::Utc::now().timestamp() as u64,
+            start_timestamp: chrono::Utc::now().checked_sub_days(Days::new(7)).unwrap().timestamp() as u64,
             database: db,
         })
     }
@@ -172,9 +172,10 @@ impl Indexer {
             loop {
                 let span_id = Uuid::new_v4();
                 match self.database.query_pending_intervals(INTERVALS_QUERY_RESULT_SIZE, direction, from, to)
-                    .instrument(tracing::debug_span!(
-                        "REALTIME INTERVALS",
-                        span_id = span_id.to_string()
+                    .instrument(tracing::info_span!(
+                        "INTERVALS",
+                        span_id = span_id.to_string(),
+                        direction = direction.sql_order_string()
                     ))
                     .await {
                     Ok(selected) => {
@@ -203,7 +204,7 @@ impl Indexer {
             loop {
                 let span_id = Uuid::new_v4();
                 match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
-                    .instrument(tracing::debug_span!(
+                    .instrument(tracing::info_span!(
                         "PENDING OPERATIONS",
                         span_id = span_id.to_string()
                     ))
@@ -320,7 +321,7 @@ impl Indexer {
     pub async fn fetch_operations(&self, job: &Job, client: Arc<Mutex<Client>>) -> Result<usize, Error> {
         let mut client = client.lock().await;
         let thread_id = thread::current().id();
-        tracing::debug!("[Thread {:?}] Processing interval job: {:?}", thread_id, job);
+        tracing::info!("[Thread {:?}] Processing interval job: {:?}", thread_id, job);
 
         let operations = client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
         let ops_num = operations.len();
@@ -446,6 +447,7 @@ impl Indexer {
         // Process the prioritized stream
         while let Some(job) = combined_stream.next().await {
             let span_id = Uuid::new_v4();
+            tracing::info!("Processing job: {:?}", job);
             match job {
                 IndexerJob::Realtime => {
                     let wm = self.database.get_watermark().await.unwrap();
@@ -457,7 +459,7 @@ impl Indexer {
 
                 IndexerJob::Interval(job) => {
                     self.process_interval_with_retries(&job, client.clone())
-                        .instrument(tracing::debug_span!(
+                        .instrument(tracing::info_span!(
                             "processing interval",
                             span_id = span_id.to_string()
                         ))
