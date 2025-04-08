@@ -6,7 +6,7 @@ schema:
 dataSources:
   - kind: ethereum/contract
     name: Registry
-    network: zeta
+    network: zeta-mainnet
     source:
       abi: Registry
       address: "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17"
@@ -32,11 +32,9 @@ dataSources:
           handler: handleNewResolver
         - event: NewTTL(indexed bytes32,uint64)
           handler: handleNewTTL
-
-
   - kind: ethereum/contract
     name: Resolver
-    network: zeta
+    network: zeta-mainnet
     source:
       abi: Resolver
       startBlock: 2358728
@@ -76,7 +74,7 @@ dataSources:
           handler: handleTextChanged
   - kind: ethereum/contract
     name: Base
-    network: zeta
+    network: zeta-mainnet
     source:
       abi: Base
       address: "0xfcd0df2d5b1023c3ce210bed17c3bcf40d4ed5cd"
@@ -101,10 +99,9 @@ dataSources:
           handler: handleNameRenewed
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleNameTransferred
-
   - kind: ethereum/contract
     name: RegistrarController
-    network: zeta
+    network: zeta-mainnet
     source:
       abi: RegistrarController
       address: "0xD7b837A0E388B4c25200983bdAa3EF3A83ca86b7"
