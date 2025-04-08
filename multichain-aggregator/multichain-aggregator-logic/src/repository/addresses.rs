@@ -186,13 +186,9 @@ where
     let pk_to_model = models
         .into_iter()
         .map(|m| {
-            (
-                (
-                    AddressAlloy::try_from(m.hash.as_slice()).unwrap(),
-                    m.chain_id,
-                ),
-                m,
-            )
+            let address = parse_db_address(m.hash.as_slice());
+            let pk = (address, m.chain_id);
+            (pk, m)
         })
         .collect();
 
@@ -263,14 +259,14 @@ where
     match addresses.get(page_size as usize) {
         Some(a) => Ok((
             addresses[..page_size as usize].to_vec(),
-            Some((
-                // unwrap is safe here because addresses are validated prior to being inserted
-                AddressAlloy::try_from(a.hash.as_slice()).unwrap(),
-                a.chain_id,
-            )),
+            Some((parse_db_address(a.hash.as_slice()), a.chain_id)),
         )),
         None => Ok((addresses, None)),
     }
+}
+
+fn parse_db_address(hash: &[u8]) -> AddressAlloy {
+    AddressAlloy::try_from(hash).expect("db address should be valid")
 }
 
 fn non_primary_columns() -> impl Iterator<Item = Column> {
