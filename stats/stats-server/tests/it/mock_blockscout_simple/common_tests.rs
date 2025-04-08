@@ -67,6 +67,8 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
             "opStackOperationalTxnsGrowth",
             "newOperationalTxns",
             "operationalTxnsGrowth",
+            "newEip7702Auths",
+            "eip7702AuthsGrowth",
             "txnsSuccessRate",
             "newVerifiedContracts",
             "newContracts",
