@@ -123,10 +123,11 @@ pub async fn search_tokens(
         .collect::<Result<Vec<_>, ParseError>>()?;
 
     let pks = tokens.iter().map(|t| (&t.address, t.chain_id)).collect();
-    let addresses = addresses::get_batch_in_order(db, pks).await?;
+    let pk_to_address = addresses::get_batch(db, pks).await?;
 
-    for (token, address) in tokens.iter_mut().zip(addresses.iter()) {
-        if let Some(address) = address {
+    for token in tokens.iter_mut() {
+        let pk = (token.address, token.chain_id);
+        if let Some(address) = pk_to_address.get(&pk) {
             token.is_verified_contract = address.is_verified_contract;
         }
     }
