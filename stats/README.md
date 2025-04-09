@@ -118,6 +118,7 @@ The service will periodically check the enabled start conditions and start updat
 | `STATS__SERVER__HTTP__CORS__SEND_WILDCARD` | | Send wildcard for allowed origins in CORS | `false` |
 | `STATS__SERVER__HTTP__ENABLED` | | Enable the HTTP server | `true` |
 | `STATS__SERVER__HTTP__MAX_BODY_SIZE` | | Maximum allowed size for HTTP request bodies (in bytes) | `2097152` |
+| `STATS__SERVER__HTTP__BASE_PATH` | | Path prefix to use before all services' endpoints. E.g. "/abcd" will make the service endpoints start with `/abcd/api/v1/...` instead of `/api/v1/...` | `null` |
 
 [anchor]: <> (anchors.envs.end.server)
 
