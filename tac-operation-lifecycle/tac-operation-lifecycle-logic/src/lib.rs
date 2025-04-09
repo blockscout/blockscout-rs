@@ -16,7 +16,6 @@ use futures::{
     StreamExt,
 };
 use settings::IndexerSettings;
-use chrono::{self, Days};
 use tokio::sync::Mutex;
 use tracing::instrument;
 use uuid::Uuid;
@@ -39,6 +38,11 @@ pub enum IndexerJob {
 }
 
 impl OperationType {
+    pub fn from_str(s: &str) -> Self {
+        serde_json::from_str(&format!("\"{}\"", s))
+            .unwrap_or(OperationType::ErrorType)
+    }
+
     pub fn to_id(&self) -> i32 {
         match self {
             OperationType::Pending => 1,
@@ -59,7 +63,7 @@ impl OperationType {
     }
 
     pub fn is_finalized(&self) -> bool {
-        self == &OperationType::Pending
+        self != &OperationType::Pending && self != &OperationType::Unknown
     }
 }
 
@@ -101,7 +105,7 @@ impl Indexer {
         
         Ok(Self {
             settings,
-            start_timestamp: chrono::Utc::now().checked_sub_days(Days::new(7)).unwrap().timestamp() as u64,
+            start_timestamp: chrono::Utc::now().timestamp() as u64,
             database: db,
         })
     }

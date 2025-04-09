@@ -6,25 +6,82 @@ option go_package = "github.com/blockscout/blockscout-rs/tac-operation-lifecycle
 
 
 service TacService {
-  rpc GetOperationStatus(GetOperationStatusRequest) returns (GetOperationStatusResponse) {}
-  
+  rpc GetOperations(GetOperationsRequest) returns (OperationsResponse) {}
+  rpc GetOperationDetails(GetOperationDetailsRequest) returns (OperationDetails) {}
+  rpc GetOperationByTransaction(GetOperationByTxHashRequest) returns (OperationDetails) {}
 }
 
-message GetOperationStatusResponse {
+message Pagination {
+  uint64 page_timestamp = 1;
+  uint32 page_size = 2;
+}
+
+message GetOperationsRequest {
+  optional uint64 page_timestamp = 1;
+  optional uint64 page_size = 2;
+}
+
+message GetOperationDetailsRequest {
   string operation_id = 1;
-  repeated OperationStatus status_history = 2;
 }
 
-message GetOperationStatusRequest {
+message GetOperationByTxHashRequest {
+  string tx_hash = 1;
+}
+
+enum OperationType {
+  Error = 0;
+  Pending = 1;
+  TonTacTon = 2;
+  TacTon = 3;
+  TonTac = 4;
+  Rollback = 5;
+  Unknown = 6;
+}
+
+message OperationsResponse {
+  repeated OperationBriefDetails operations = 1;
+  Pagination next_page_params = 2;
+}
+
+message OperationBriefDetails {
   string operation_id = 1;
+  OperationType type = 2;
+  optional uint64 timestamp = 3;
+  optional string sender = 4;
 }
 
-message OperationStatus {
-  string status = 1;
-  uint64 timestamp = 2;
-  
+message OperationDetails {
+  string operation_id = 1;
+  OperationType type = 2;
+  optional uint64 timestamp = 3;
+  optional string sender = 4;
+  repeated OperationStage status_history = 5;
 }
 
+message OperationRelatedTransaction {
+  string hash = 1;
+  enum BlockchainType {
+    TAC = 0;
+    TON = 1;
+    Unknown = 2;
+  }
+  BlockchainType type = 2;
+}
 
-
-
+message OperationStage {
+  enum StageType {
+    CollectedInTAC = 0;
+    IncludedInTACConsensus = 1;
+    ExecutedInTAC = 2;
+    CollectedInTON = 3;
+    IncludedInTONConsensus = 4;
+    ExecutedInTON = 5;
+  }
+  StageType type = 1;
+  bool is_exist = 2;
+  optional bool is_success = 3;
+  optional uint64 timestamp = 4;
+  repeated OperationRelatedTransaction transactions = 5;
+  optional string note = 6;
+}

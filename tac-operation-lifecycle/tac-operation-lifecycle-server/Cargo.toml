@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 tac-operation-lifecycle-proto = { path = "../tac-operation-lifecycle-proto" }
 tac-operation-lifecycle-logic = { path = "../tac-operation-lifecycle-logic" }
+tac-operation-lifecycle-entity = { path = "../tac-operation-lifecycle-entity" }
 tac-operation-lifecycle-migration = { path = "../tac-operation-lifecycle-migration" }
 actix-web = "4.2"
 anyhow = "1.0"
