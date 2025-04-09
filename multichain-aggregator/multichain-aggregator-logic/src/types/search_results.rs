@@ -1,3 +1,4 @@
+use super::ChainId;
 use crate::{
     proto,
     types::{
@@ -5,6 +6,7 @@ use crate::{
         hashes::Hash, token_info::Token,
     },
 };
+use std::collections::{HashMap, HashSet};
 
 #[derive(Default, Debug)]
 pub struct QuickSearchResult {
@@ -28,6 +30,61 @@ impl QuickSearchResult {
         self.tokens.extend(other.tokens);
         self.nfts.extend(other.nfts);
         self.domains.extend(other.domains);
+    }
+
+    pub fn filter_and_sort_entities_by_priority(mut self, chain_ids: &[ChainId]) -> Self {
+        macro_rules! filter_and_sort_by_priority {
+            ($search_result: ident, [$($field: ident),*]) => {
+                $(
+                    $search_result.$field = Self::filter_and_sort_array_by_priority($search_result.$field, |e| e.chain_id, chain_ids);
+                )*
+            };
+        }
+
+        filter_and_sort_by_priority!(
+            self,
+            [
+                addresses,
+                blocks,
+                transactions,
+                block_numbers,
+                dapps,
+                tokens,
+                nfts
+            ]
+        );
+
+        self
+    }
+
+    fn filter_and_sort_array_by_priority<T>(
+        items: impl IntoIterator<Item = T>,
+        get_chain_id: impl Fn(&T) -> ChainId,
+        chain_ids: &[ChainId],
+    ) -> Vec<T> {
+        // Filter to keep only one item per chain_id,
+        // assuming they are already presented in a relevant order.
+        let mut seen_chain_ids = HashSet::new();
+        let mut filtered_items = items
+            .into_iter()
+            .filter(|item| {
+                let chain_id = get_chain_id(item);
+                chain_ids.contains(&chain_id) && seen_chain_ids.insert(chain_id)
+            })
+            .collect::<Vec<_>>();
+
+        let chain_id_priority = chain_ids
+            .iter()
+            .enumerate()
+            .map(|(idx, &chain_id)| (chain_id, idx))
+            .collect::<HashMap<_, _>>();
+        filtered_items.sort_by_key(|item| {
+            chain_id_priority
+                .get(&get_chain_id(item))
+                .unwrap_or(&usize::MAX)
+        });
+
+        filtered_items
     }
 
     pub fn balance_entities(&mut self, n: usize) {

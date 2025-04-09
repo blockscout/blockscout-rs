@@ -122,9 +122,14 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
+            &self.bens_client,
+            search::AddressSearchConfig::NonTokenSearch {
+                bens_protocols: self.bens_protocols.as_deref(),
+                // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
+                bens_domain_lookup_limit: 1,
+            },
             inner.q,
-            chain_id,
-            Some(vec![]),
+            chain_id.map(|v| vec![v]).unwrap_or_default(),
             page_size as u64,
             page_token,
         )
@@ -155,12 +160,10 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
+            &self.bens_client,
+            search::AddressSearchConfig::NFTSearch,
             inner.q,
-            chain_id,
-            Some(vec![
-                types::addresses::TokenType::Erc721,
-                types::addresses::TokenType::Erc1155,
-            ]),
+            chain_id.map(|v| vec![v]).unwrap_or_default(),
             page_size as u64,
             page_token,
         )

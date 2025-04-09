@@ -12,7 +12,7 @@ service MultichainAggregatorService {
   rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
   rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
   rpc ListTransactions(ListTransactionsRequest)
-  returns (ListTransactionsResponse) {}
+      returns (ListTransactionsResponse) {}
   rpc ListNfts(ListNftsRequest) returns (ListNftsResponse) {}
   rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
   rpc ListDapps(ListDappsRequest) returns (ListDappsResponse) {}
@@ -40,9 +40,16 @@ message Pagination {
   uint32 page_size = 2;
 }
 
+message DomainInfo {
+  string address = 1;
+  string name = 2;
+  optional string expiry_date = 3;
+  uint32 names_count = 4;
+}
+
 message Address {
   string hash = 1;
-  optional string ens_name = 2;
+  DomainInfo domain_info = 2;
   optional string contract_name = 3;
   optional string token_name = 4;
   TokenType token_type = 5;

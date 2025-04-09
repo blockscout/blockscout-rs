@@ -397,8 +397,8 @@ definitions:
     properties:
       hash:
         type: string
-      ens_name:
-        type: string
+      domain_info:
+        $ref: '#/definitions/v1DomainInfo'
       contract_name:
         type: string
       token_name:
@@ -462,6 +462,18 @@ definitions:
         type: string
       protocol:
         type: object
+  v1DomainInfo:
+    type: object
+    properties:
+      address:
+        type: string
+      name:
+        type: string
+      expiry_date:
+        type: string
+      names_count:
+        type: integer
+        format: int64
   v1Hash:
     type: object
     properties:

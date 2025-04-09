@@ -8,13 +8,12 @@ pub fn new_client(url: Url) -> Result<Client, Error> {
 }
 
 pub mod lookup_domain_name {
+    use super::*;
     use api_client_framework::serialize_query;
     use bens_proto::blockscout::bens::v1::{
         LookupDomainNameRequest, LookupDomainNameResponse, Order,
     };
     use serde::Serialize;
-
-    use super::*;
 
     pub struct LookupDomainName {
         pub request: LookupDomainNameRequest,
@@ -57,6 +56,44 @@ pub mod lookup_domain_name {
                 page_size: self.request.page_size,
                 page_token: self.request.page_token.as_ref(),
                 protocols: self.request.protocols.as_ref(),
+            };
+            serialize_query(&params)
+        }
+    }
+}
+
+pub mod get_address {
+    use super::*;
+    use api_client_framework::serialize_query;
+    use bens_proto::blockscout::bens::v1::{GetAddressRequest, GetAddressResponse};
+    use serde::Serialize;
+
+    pub struct GetAddress {
+        pub request: GetAddressRequest,
+    }
+
+    impl Endpoint for GetAddress {
+        type Response = GetAddressResponse;
+
+        fn method(&self) -> Method {
+            Method::GET
+        }
+
+        fn path(&self) -> String {
+            format!(
+                "/api/v1/{}/addresses/{}",
+                self.request.chain_id, self.request.address
+            )
+        }
+
+        fn query(&self) -> Option<String> {
+            #[derive(Serialize)]
+            pub struct Params<'a> {
+                pub protocol_id: Option<&'a String>,
+            }
+
+            let params = Params {
+                protocol_id: self.request.protocol_id.as_ref(),
             };
             serialize_query(&params)
         }
