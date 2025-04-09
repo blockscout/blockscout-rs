@@ -1,26 +1,31 @@
+use std::sync::Arc;
+
 use blockscout_service_launcher::{
     test_database::TestDbGuard,
     test_server
 };
 use futures::StreamExt;
 use reqwest::Url;
+use sea_orm::DatabaseConnection;
 use tac_operation_lifecycle_server::Settings;
-use tac_operation_lifecycle_logic::client::settings::RpcSettings;
+use tac_operation_lifecycle_logic::{client::settings::RpcSettings, database::TacDatabase};
 
-pub async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
-    let db_name = format!("{db_prefix}_{test_name}");
+pub async fn init_db(test_name: &str) -> TestDbGuard {
+    let db_name = format!("testdb_{test_name}");
     TestDbGuard::new::<migration::Migrator>(db_name.as_str()).await
 }
 pub async fn init_tac_operation_lifecycle_server<F>(
     db_url: String,
-    settings_setup: F
+    test_name: &str,
+    settings_setup: F,
+    realtime_boundary: u64
 ) -> Url
 where
     F: Fn(Settings) -> Settings,
 {
     let (settings, base) = {
         let mut settings = Settings::default(
-            db_url
+            db_url.clone()
             );
         let (server_settings, base) = test_server::get_test_server_settings();
         settings.server = server_settings;
@@ -31,7 +36,10 @@ where
         (settings_setup(settings), base)
     };
 
-    test_server::init_server(|| tac_operation_lifecycle_server::run(settings), &base).await;
+    let test_db = init_db(test_name).await;
+    let db = Arc::new(TacDatabase::new(test_db.client()));
+
+    test_server::init_server(move || tac_operation_lifecycle_server::run(settings, db.clone(), realtime_boundary.clone()), &base).await;
     base
 }
 
@@ -43,6 +51,7 @@ mod tests {
     use futures::stream::select_all;
     use rand::Rng;
 
+    use sea_orm::Database;
     use tac_operation_lifecycle_logic::client::Client;
     use tac_operation_lifecycle_logic::{settings::IndexerSettings, Indexer, IndexerJob};
     use tac_operation_lifecycle_logic::database::OrderDirection;
@@ -53,7 +62,9 @@ mod tests {
     
     #[tokio::test]
     async fn test_save_intervals() {
-        let db = init_db("test_save_intervals", "test").await;
+        let db = init_db("save_intervals").await;
+        let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
+        
         let catchup_interval = time::Duration::from_secs(rand::thread_rng().gen_range(1..100));
         let tasks_number = rand::thread_rng().gen_range(1..100);
         let lag = tasks_number * catchup_interval.as_secs();
@@ -73,7 +84,7 @@ mod tests {
         };
         // let settings = Settings::default("postgres://postgres:postgres@database:5432/blockscout".to_string());
         // let server = init_tac_operation_lifecycle_server(db.db_url(), |settings| settings).await;
-        let indexer = Indexer::new(indexer_settings, db.client()).await.unwrap();
+        let indexer = Indexer::new(indexer_settings, Arc::new(TacDatabase::new(Arc::new(conn_with_db)))).await.unwrap();
         let intervals_number = indexer.generate_historical_intervals(current_epoch).await.unwrap();
         let intervals = interval::Entity::find()
             .all(db.client().as_ref())
@@ -99,7 +110,8 @@ mod tests {
         fn prio_left(_: &mut ()) -> PollNext { PollNext::Left }
 
         // Initialize test database and create indexer with test settings
-        let db = init_db("test_job_stream", "test").await;
+        let db = init_db("test_job_stream").await;
+        let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
         let catchup_interval = time::Duration::from_secs(10); // Use fixed interval for predictable testing
         let tasks_number = 5; // Use fixed number of tasks for predictable testing
         let current_epoch = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs();
@@ -112,7 +124,7 @@ mod tests {
             ..Default::default()
         };
 
-        let indexer = Indexer::new(indexer_settings, db.client()).await.unwrap();
+        let indexer = Indexer::new(indexer_settings, Arc::new(TacDatabase::new(Arc::new(conn_with_db)))).await.unwrap();
         
         // Save intervals first
         indexer.generate_historical_intervals(current_epoch).await.unwrap();
@@ -215,13 +227,14 @@ mod tests {
         use serde_json::json;
 
         // Initialize test database and mock server
-        let db = init_db("test_operation_lifecycle", "indexing").await;
+        let db = init_db("indexing").await;
+        let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
         let mock_server = MockServer::start().await;
 
-        let _server = init_tac_operation_lifecycle_server(db.db_url(), |mut settings| {
+        let _server = init_tac_operation_lifecycle_server(db.db_url(), "indexing",|mut settings| {
             settings.tracing.enabled = true;
             settings
-        }).await;
+        }, 0).await;
         // Set up the mock for /operationIds endpoint
         Mock::given(method("GET"))
             .and(path("/operationIds"))
@@ -296,7 +309,7 @@ mod tests {
             ..Default::default()
         };
 
-        let indexer = Indexer::new(indexer_settings, db.client()).await.unwrap();
+        let indexer = Indexer::new(indexer_settings, Arc::new(TacDatabase::new(Arc::new(conn_with_db)))).await.unwrap();
         
         // Save intervals and start indexing
         let intervals_number = indexer.generate_historical_intervals(current_epoch).await.unwrap();
