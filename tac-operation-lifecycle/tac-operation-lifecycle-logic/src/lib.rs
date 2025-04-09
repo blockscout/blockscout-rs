@@ -1,5 +1,5 @@
 use std::{
-    cmp::max, collections::HashMap, sync::{atomic::AtomicU64, Arc}, time::Duration, thread,
+    cmp::max, collections::HashMap, sync::Arc, time::Duration, thread,
 };
 
 use anyhow::Error;
@@ -88,7 +88,6 @@ impl BlockchainType {
 
 pub struct Indexer {
     settings: IndexerSettings,
-    watermark: AtomicU64,
     // This timestamp will used for distinguish between historical and realtime intervals
     start_timestamp: u64,
     database: Arc<TacDatabase>,
@@ -100,11 +99,8 @@ impl Indexer {
         db: Arc<TacDatabase>,
     ) -> anyhow::Result<Self> {
         
-        let watermark = max(db.get_watermark().await?, settings.start_timestamp as u64);
-        
         Ok(Self {
             settings,
-            watermark: AtomicU64::new(watermark),
             start_timestamp: chrono::Utc::now().checked_sub_days(Days::new(7)).unwrap().timestamp() as u64,
             database: db,
         })
