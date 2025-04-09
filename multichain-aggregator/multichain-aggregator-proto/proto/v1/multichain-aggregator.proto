@@ -4,6 +4,8 @@ package blockscout.multichainAggregator.v1;
 
 option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
 
+import "google/protobuf/struct.proto";
+
 service MultichainAggregatorService {
   rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
   rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
@@ -17,6 +19,7 @@ service MultichainAggregatorService {
   rpc ListDappChains(ListDappChainsRequest) returns (ListDappChainsResponse) {}
   rpc ListDappCategories(ListDappCategoriesRequest)
       returns (ListDappCategoriesResponse) {}
+  rpc ListDomains(ListDomainsRequest) returns (ListDomainsResponse) {}
 }
 
 enum TokenType {
@@ -78,6 +81,13 @@ message Token {
   bool is_verified_contract = 6;
 }
 
+message Domain {
+  string address = 1;
+  string name = 2;
+  optional string expiry_date = 3;
+  google.protobuf.Struct protocol = 4;
+}
+
 message BatchImportRequest {
   message AddressImport {
     string hash = 1;
@@ -124,6 +134,7 @@ message QuickSearchResponse {
   repeated MarketplaceDapp dapps = 5;
   repeated Token tokens = 6;
   repeated Address nfts = 7;
+  repeated Domain domains = 8;
 }
 
 message ListAddressesRequest {
@@ -209,4 +220,15 @@ message ListDappCategoriesRequest {}
 
 message ListDappCategoriesResponse {
   repeated string items = 1;
+}
+
+message ListDomainsRequest {
+  string q = 1;
+  optional uint32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message ListDomainsResponse {
+  repeated Domain items = 1;
+  Pagination next_page_params = 2;
 }

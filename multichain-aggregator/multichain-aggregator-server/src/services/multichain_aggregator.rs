@@ -1,10 +1,6 @@
 use super::repo::ReadWriteRepo;
 use crate::{
-    proto::{
-        multichain_aggregator_service_server::MultichainAggregatorService, BatchImportRequest,
-        BatchImportResponse, ListAddressesRequest, ListAddressesResponse, Pagination,
-        QuickSearchRequest, QuickSearchResponse,
-    },
+    proto::{multichain_aggregator_service_server::MultichainAggregatorService, *},
     settings::ApiSettings,
 };
 use api_client_framework::HttpApiClient;
@@ -14,12 +10,6 @@ use multichain_aggregator_logic::{
     services::{api_key_manager::ApiKeyManager, chains, import, search},
     types,
 };
-use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::{
-    ListChainsRequest, ListChainsResponse, ListDappCategoriesRequest, ListDappCategoriesResponse,
-    ListDappChainsRequest, ListDappChainsResponse, ListDappsRequest, ListDappsResponse,
-    ListNftsRequest, ListNftsResponse, ListTokensRequest, ListTokensResponse,
-    ListTransactionsRequest, ListTransactionsResponse,
-};
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
 
@@ -28,8 +18,10 @@ pub struct MultichainAggregator {
     api_key_manager: ApiKeyManager,
     dapp_client: HttpApiClient,
     token_info_client: HttpApiClient,
+    bens_client: HttpApiClient,
     api_settings: ApiSettings,
     quick_search_chains: Vec<types::ChainId>,
+    bens_protocols: Option<Vec<String>>,
 }
 
 impl MultichainAggregator {
@@ -37,16 +29,20 @@ impl MultichainAggregator {
         repo: ReadWriteRepo,
         dapp_client: HttpApiClient,
         token_info_client: HttpApiClient,
+        bens_client: HttpApiClient,
         api_settings: ApiSettings,
         quick_search_chains: Vec<types::ChainId>,
+        bens_protocols: Option<Vec<String>>,
     ) -> Self {
         Self {
             api_key_manager: ApiKeyManager::new(repo.write_db().clone()),
             repo,
             dapp_client,
             token_info_client,
+            bens_client,
             api_settings,
             quick_search_chains,
+            bens_protocols,
         }
     }
 
@@ -226,8 +222,10 @@ impl MultichainAggregatorService for MultichainAggregator {
             self.repo.read_db(),
             &self.dapp_client,
             &self.token_info_client,
+            &self.bens_client,
             inner.q,
             &self.quick_search_chains,
+            self.bens_protocols.as_deref(),
         )
         .await
         .inspect_err(|err| {
@@ -320,6 +318,32 @@ impl MultichainAggregatorService for MultichainAggregator {
                 Status::internal("failed to list marketplace categories")
             })?;
         Ok(Response::new(ListDappCategoriesResponse { items }))
+    }
+
+    async fn list_domains(
+        &self,
+        request: Request<ListDomainsRequest>,
+    ) -> Result<Response<ListDomainsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let page_size = self.normalize_page_size(inner.page_size);
+
+        let (domains, next_page_token) = search::search_domains(
+            &self.bens_client,
+            inner.q,
+            self.bens_protocols.as_deref(),
+            page_size,
+            inner.page_token,
+        )
+        .await?;
+
+        Ok(Response::new(ListDomainsResponse {
+            items: domains.into_iter().map(|d| d.into()).collect(),
+            next_page_params: next_page_token.map(|page_token| Pagination {
+                page_token,
+                page_size,
+            }),
+        }))
     }
 }
 

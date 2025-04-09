@@ -11,9 +11,9 @@ members = [
 bens-proto = { path = "./bens-proto" }
 bens-logic = { path = "./bens-logic" }
 
-actix-prost = { git = "https://github.com/blockscout/actix-prost" }
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
-actix-prost-macros = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.3" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.3" }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", tag = "v1.0.3" }
 actix-web = { version = "4" }
 alloy = { version = "0.5.4", default-features = false }
 alloy-ccip-read = { version = "0.3.0" }

@@ -1,8 +1,8 @@
 use crate::{
     proto,
     types::{
-        addresses::Address, block_ranges::ChainBlockNumber, dapp::MarketplaceDapp, hashes::Hash,
-        token_info::Token,
+        addresses::Address, block_ranges::ChainBlockNumber, dapp::MarketplaceDapp, domains::Domain,
+        hashes::Hash, token_info::Token,
     },
 };
 
@@ -15,6 +15,7 @@ pub struct QuickSearchResult {
     pub dapps: Vec<MarketplaceDapp>,
     pub tokens: Vec<Token>,
     pub nfts: Vec<Address>,
+    pub domains: Vec<Domain>,
 }
 
 impl QuickSearchResult {
@@ -26,6 +27,7 @@ impl QuickSearchResult {
         self.dapps.extend(other.dapps);
         self.tokens.extend(other.tokens);
         self.nfts.extend(other.nfts);
+        self.domains.extend(other.domains);
     }
 
     pub fn balance_entities(&mut self, n: usize) {
@@ -64,6 +66,7 @@ impl From<QuickSearchResult> for proto::QuickSearchResponse {
             dapps: v.dapps.into_iter().map(|d| d.into()).collect(),
             tokens: v.tokens.into_iter().map(|t| t.into()).collect(),
             nfts: v.nfts.into_iter().map(|n| n.into()).collect(),
+            domains: v.domains.into_iter().map(|d| d.into()).collect(),
         }
     }
 }

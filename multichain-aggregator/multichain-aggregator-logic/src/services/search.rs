@@ -1,11 +1,12 @@
 use crate::{
-    clients::{dapp::search_dapps, token_info::search_token_infos},
+    clients::{bens::lookup_domain_name, dapp::search_dapps, token_info::search_token_infos},
     error::{ParseError, ServiceError},
     repository::{addresses, block_ranges, hashes},
     types::{
         addresses::{Address, TokenType},
         block_ranges::ChainBlockNumber,
         dapp::MarketplaceDapp,
+        domains::Domain,
         hashes::{Hash, HashType},
         search_results::QuickSearchResult,
         token_info::Token,
@@ -14,15 +15,22 @@ use crate::{
 };
 use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
+use regex::Regex;
 use sea_orm::DatabaseConnection;
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
+    sync::OnceLock,
 };
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
 const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
+
+fn domain_name_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\w+\.\w+").unwrap())
+}
 
 pub async fn search_addresses(
     db: &DatabaseConnection,
@@ -160,13 +168,55 @@ pub async fn search_dapps(
     Ok(dapps)
 }
 
+pub async fn search_domains(
+    domain_client: &HttpApiClient,
+    query: String,
+    protocols: Option<&[String]>,
+    page_size: u32,
+    page_token: Option<String>,
+) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
+    // TODO: for now, we just need any chain that has a primary ENS protocol.
+    // Later, we will need to add a BENS handle that is chain-agnostic
+    // and works directly with protocols.
+    let chain_id = 1;
+    let sort = "registration_date".to_string();
+    let order = bens_proto::blockscout::bens::v1::Order::Desc.into();
+    let request = bens_proto::blockscout::bens::v1::LookupDomainNameRequest {
+        name: Some(query),
+        chain_id,
+        only_active: true,
+        sort,
+        order,
+        protocols: protocols.map(|p| p.join(",")),
+        page_size: Some(page_size),
+        page_token,
+    };
+
+    let res = domain_client
+        .request(&lookup_domain_name::LookupDomainName { request })
+        .await
+        .map_err(|err| anyhow::anyhow!("failed to search domains: {:?}", err))?;
+
+    let domains = res
+        .items
+        .into_iter()
+        .map(|d| d.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let next_page_token = res.next_page_params.map(|p| p.page_token);
+
+    Ok((domains, next_page_token))
+}
+
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
     db: &DatabaseConnection,
     dapp_client: &HttpApiClient,
     token_info_client: &HttpApiClient,
+    bens_client: &HttpApiClient,
     query: String,
     chain_ids: &[ChainId],
+    bens_protocols: Option<&[String]>,
 ) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
 
@@ -175,7 +225,9 @@ pub async fn quick_search(
         db,
         dapp_client,
         token_info_client,
+        bens_client,
         chain_ids,
+        bens_protocols,
     };
 
     // Each search term produces its own `SearchResults` struct.
@@ -206,13 +258,16 @@ pub enum SearchTerm {
     Dapp(String),
     TokenInfo(String),
     ContractName(String),
+    Domain(String),
 }
 
 struct SearchContext<'a> {
     db: &'a DatabaseConnection,
     dapp_client: &'a HttpApiClient,
     token_info_client: &'a HttpApiClient,
+    bens_client: &'a HttpApiClient,
     chain_ids: &'a [ChainId],
+    bens_protocols: Option<&'a [String]>,
 }
 
 fn filter_and_sort_by_priority<T>(
@@ -386,6 +441,18 @@ impl SearchTerm {
 
                 results.addresses.extend(addresses);
             }
+            SearchTerm::Domain(query) => {
+                let (domains, _) = search_domains(
+                    search_context.bens_client,
+                    query,
+                    search_context.bens_protocols,
+                    QUICK_SEARCH_NUM_ITEMS as u32,
+                    None,
+                )
+                .await?;
+
+                results.domains.extend(domains);
+            }
         }
 
         Ok(results)
@@ -412,6 +479,10 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     if query.len() >= MIN_QUERY_LENGTH {
         terms.push(SearchTerm::TokenInfo(query.to_string()));
         terms.push(SearchTerm::ContractName(query.to_string()));
+
+        if domain_name_regex().is_match(query) {
+            terms.push(SearchTerm::Domain(query.to_string()));
+        }
     }
 
     terms.push(SearchTerm::Dapp(query.to_string()));
@@ -460,6 +531,16 @@ mod tests {
                 SearchTerm::TokenInfo("1234".to_string()),
                 SearchTerm::ContractName("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
+            ]
+        );
+
+        assert_eq!(
+            parse_search_terms("test.domain"),
+            vec![
+                SearchTerm::TokenInfo("test.domain".to_string()),
+                SearchTerm::ContractName("test.domain".to_string()),
+                SearchTerm::Domain("test.domain".to_string()),
+                SearchTerm::Dapp("test.domain".to_string()),
             ]
         );
     }

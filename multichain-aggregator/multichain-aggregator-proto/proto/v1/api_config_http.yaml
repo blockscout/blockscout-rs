@@ -34,6 +34,9 @@ http:
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDappCategories
       get: /api/v1/dapps/categories
 
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDomains
+      get: /api/v1/domains
+
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check
