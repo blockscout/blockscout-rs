@@ -5,8 +5,7 @@ use std::{
 use anyhow::Error;
 use client::{models::profiling::{BlockchainType, OperationType, StageType}, Client};
 use database::{DatabaseStatistic, EntityStatus, OrderDirection, TacDatabase};
-use sea_orm::{DatabaseConnection, EntityTrait};
-use tac_operation_lifecycle_entity::{interval, operation, watermark};
+use tac_operation_lifecycle_entity::{interval, operation};
 
 pub mod client;
 pub mod settings;
@@ -144,8 +143,8 @@ impl Indexer {
         Ok(())
     }
 
-    pub fn watermark(&self) -> u64 {
-        self.watermark.load(std::sync::atomic::Ordering::Acquire)
+    pub async fn watermark(&self) -> anyhow::Result<u64> {
+        self.database.get_watermark().await
     }
 
     pub fn realtime_boundary(&self) -> u64 {
@@ -323,7 +322,13 @@ impl Indexer {
         let thread_id = thread::current().id();
         tracing::info!("[Thread {:?}] Processing interval job: {:?}", thread_id, job);
 
-        let operations = client.get_operations(job.interval.start as u64, job.interval.end as u64).await?;
+        let operations = client.get_operations(job.interval.start as u64, job.interval.end as u64)
+        .instrument(tracing::info_span!(
+            "get_operations",
+            interval_id = job.interval.id,
+            start = job.interval.start,
+            end = job.interval.end,
+        )).await?;
         let ops_num = operations.len();
         
         if ops_num > 0 {

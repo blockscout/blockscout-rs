@@ -1,9 +1,7 @@
 use crate::{
     proto::{
         health_actix::route_health, health_server::HealthServer,
-        tac_service_server::TacServiceServer,
         tac_service_actix::route_tac_service,
-        tac_statistic_server::TacStatisticServer,
         tac_statistic_actix::route_tac_statistic,
     },
     services::{
@@ -12,12 +10,10 @@ use crate::{
     settings::Settings,
 };
 use blockscout_service_launcher::{
-    database,
     launcher, launcher::LaunchSettings, tracing};
 
-use migration::Migrator;
+
 use tac_operation_lifecycle_logic::database::TacDatabase;
-use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::tac_service_server::TacService;
 
 use std::sync::Arc;
 

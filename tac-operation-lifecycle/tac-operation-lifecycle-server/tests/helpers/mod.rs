@@ -6,7 +6,6 @@ use blockscout_service_launcher::{
 };
 use futures::StreamExt;
 use reqwest::Url;
-use sea_orm::DatabaseConnection;
 use tac_operation_lifecycle_server::Settings;
 use tac_operation_lifecycle_logic::{client::settings::RpcSettings, database::TacDatabase};
 
@@ -58,6 +57,7 @@ mod tests {
     use tac_operation_lifecycle_entity::interval;
     use migration::sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
     use tokio::sync::Mutex;
+    use tracing::Instrument;
     use super::*;
     
     #[tokio::test]
@@ -97,7 +97,7 @@ mod tests {
             assert_eq!(intervals[i].end as u64, start_timestamp + (index + 1) * catchup_interval.as_secs());
         }
 
-        assert_eq!(indexer.watermark(), current_epoch);
+        assert_eq!(indexer.watermark().await.unwrap(), current_epoch);
     }
 
     #[tokio::test]
@@ -237,13 +237,18 @@ mod tests {
         }, 0).await;
         // Set up the mock for /operationIds endpoint
         Mock::given(method("GET"))
-            .and(path("/operationIds"))
+            .and(path("/operation-ids"))
             .respond_with(ResponseTemplate::new(200)
                 .set_body_json(json!({
-                    "response": [{
-                        "operation_id": "0x33e2ee58e3e8d48f064915a062adb02dcc062c0533fb429c7f703ba3e1fe33fb",
-                        "timestamp": 1741794238
-                    }]
+                    "response": {
+                        "operations": [
+                            {
+                                "operationId": "0x33e2ee58e3e8d48f064915a062adb02dcc062c0533fb429c7f703ba3e1fe33fb",
+                                "timestamp": 1741794238
+                            }
+                        ],
+                        "total": 1
+                    }
                 })))
             .mount(&mock_server)
             .await;
@@ -300,7 +305,12 @@ mod tests {
         let jobs_number = 3;
         let current_epoch = start_timestamp + catchup_interval.as_secs() * jobs_number as u64;
 
-        let client = Arc::new(Mutex::new(Client::new(RpcSettings::default())));
+        let mock_rpc_settings = RpcSettings {
+            url: mock_server.uri(),
+            ..Default::default()
+        };
+
+        let client = Arc::new(Mutex::new(Client::new(mock_rpc_settings)));
         let indexer_settings = IndexerSettings {
             concurrency: 1,
             catchup_interval,
@@ -337,8 +347,13 @@ mod tests {
                         IndexerJob::Interval(interval_job) => {
                             // Process the interval job
                             tracing::warn!("Processing interval job: {:?}", interval_job);
-                            if let Err(e) = indexer.fetch_operations(&interval_job, client.clone()).await {
-                                panic!("Failed to fetch operations: {}", e);
+                            if let Err(e) = indexer.fetch_operations(&interval_job, client.clone()).instrument(tracing::info_span!(
+                                "fetching operations",
+                                interval_id = interval_job.interval.id,
+                                start = interval_job.interval.start,
+                                end = interval_job.interval.end,
+                            )).await {
+                                panic!("Failed to fetch operations: {} ", e);
                             }
                             
                             // Verify interval contains our target timestamp

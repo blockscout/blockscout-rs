@@ -28,7 +28,7 @@ impl TacService for OperationsService {
 
         // TODO: request operation status/stages
         match self.db.get_operations_with_stages(&inner.operation_id).await {
-            Ok(Some(res)) => {
+            Ok(Some(_res)) => {
                 Ok(tonic::Response::new(GetOperationStatusResponse {
                     operation_id: inner.operation_id,
                     status_history: [].to_vec()

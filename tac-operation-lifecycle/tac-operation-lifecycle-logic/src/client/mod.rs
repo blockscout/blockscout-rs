@@ -39,25 +39,28 @@ impl Client {
 
     pub async fn get_operations(&mut self, start: u64, end: u64) -> Result<Operations, Error> {
         let url = format!("{}/operation-ids?from={}&till={}", self.url(), start, end);
-        debug!("Fetching operations from URL: {}", url);
-        
+            
         let request = Request::new(Method::GET, url.parse()?);
         let response = self.make_request(request).await?;
-        let status = response.status();
-        debug!("Response status: {}", status);
-        
+        if !response.status().is_success() {
+            let status = response.status();
+            tracing::error!("Bad response status: {} from {url}", status);
+            tracing::error!("Response body: {}", response.text().await?);
+            
+            return Err(anyhow::anyhow!("HTTP error {}: {}", status.as_u16(), status.as_str()));
+        }
+
         let text = response.text().await?;
-        debug!("Raw response body: {}", text);
         
         if text.is_empty() {
-            tracing::error!("Received empty response from server");
+            tracing::error!("Received empty response from {url}");
             return Ok(Vec::new());
         }
         
         match serde_json::from_str::<OperationIdsApiResponse>(&text) {
             Ok(response) => Ok(response.response.operations),
             Err(e) => {
-                error!("Failed to parse response: {}", e);
+                tracing::error!("Failed to parse response: {}", e);
                 Err(e.into())
             }
         }
@@ -85,8 +88,8 @@ impl Client {
             debug!("Raw response body: {}", text);
             
             if text.is_empty() {
-                tracing::error!("Received empty response from server");
-                return Err(anyhow::anyhow!("Received empty response from server"));
+                tracing::error!("Received empty response from {url}");
+                return Err(anyhow::anyhow!("Received empty response from {url}"));
             }
             
             match serde_json::from_str::<StageProfilingApiResponse>(&text) {
