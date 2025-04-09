@@ -108,7 +108,8 @@ impl QuickSearchResult {
             self.block_numbers => 3,
             self.dapps => 4,
             self.tokens => 5,
-            self.nfts => 6
+            self.nfts => 6,
+            self.domains => 7
         );
     }
 }
