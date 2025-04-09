@@ -86,6 +86,7 @@ impl Default for Settings {
                     addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
                     max_body_size: 2 * 1024 * 1024, // 2 Mb - default Actix value
                     cors: Default::default(),
+                    base_path: None,
                 },
                 grpc: GrpcServerSettings {
                     enabled: false,
