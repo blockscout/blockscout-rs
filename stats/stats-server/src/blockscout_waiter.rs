@@ -134,6 +134,12 @@ impl IndexingStatusAggregator {
                     tracing::info!("Indexing status is unchanged");
                 }
             }
+            // Completely normal behaviour
+            Err(blockscout_client::Error::ResponseError(response))
+                if response.status == reqwest::StatusCode::NOT_IMPLEMENTED =>
+            {
+                tracing::info!(response_content =? response.content, "User ops are disabled");
+            }
             Err(e) => {
                 match &e {
                     blockscout_client::Error::ResponseError(bad_request)
