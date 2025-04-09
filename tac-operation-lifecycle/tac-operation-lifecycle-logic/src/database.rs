@@ -507,7 +507,7 @@ impl TacDatabase {
         self.query_intervals(&sql)
         .instrument(tracing::info_span!(
             "query pending intervals",
-            sql = format_sql_for_logging(sql.as_str())
+            // sql = format_sql_for_logging(sql.as_str())
         ))
         .await
     }
@@ -537,78 +537,36 @@ impl TacDatabase {
         .await
     }
 
-    
-
     async fn query_intervals(&self, sql: &String) -> anyhow::Result<Vec<interval::Model>> {
         // Generate a unique transaction ID for tracking
         let tx_id = Uuid::new_v4();
-
-        // Start a transaction
-        let txn = match self.db.begin()
-        .instrument(tracing::debug_span!(
-            "begin transaction for update intervals",
-            tx_id = tx_id.to_string(),
-            // sql = format_sql_for_logging(sql.as_str())
-        ))
-        .await {
-            Ok(txn) => txn,
-            Err(e) => {
-                tracing::error!(
-                    "[TX-{:?}] Failed to begin INTERVALS transaction: {}",
-                    tx_id,
-                    e
-                );
-                return Err(anyhow!(e));
-            }
-        };
-
+        
+        // Create the statement
         let update_stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
 
-        // Execute the UPDATE with RETURNING clause
-        let updated_intervals = match interval::Entity::find()
+        // Execute the UPDATE with RETURNING clause directly on the database connection
+        match interval::Entity::find()
             .from_raw_sql(update_stmt)
-            .all(&txn)
+            .all(self.db.as_ref())
             .instrument(tracing::debug_span!(
                 "executing update query for intervals",
                 tx_id = tx_id.to_string(),
-                sql = format_sql_for_logging(sql.as_str())
+                // sql = format_sql_for_logging(sql.as_str())
             ))
             .await
         {
             Ok(intervals) => {
                 tracing::info!("Updated intervals: {}", intervals.len());
-                intervals
+                Ok(intervals)
             },
             Err(e) => {
                 tracing::error!(
-                    "[TX-{:?}] Failed to update intervals: {}",
-                    tx_id,
+                    "Failed to update intervals: {}",
                     e
                 );
-                let _ = txn.rollback().await;
-                return Err(e.into());
+                Err(e.into())
             }
-        };
-
-        // Commit the transaction
-        
-        if let Err(e) = txn
-            .commit()
-            .instrument(tracing::debug_span!(
-                "commit update intervals",
-                tx_id = tx_id.to_string()
-            ))
-            .await
-        {
-            tracing::error!(
-                "[TX-{:?}] Failed to commit transaction: {}",
-                tx_id,
-                e
-            );
-            return Err(e.into());
         }
-
-        Ok(updated_intervals)
     }
 
     // Extract up to `num` operations in the pending state and switch them status to `processing`
@@ -663,68 +621,33 @@ impl TacDatabase {
     async fn query_operations(&self, sql: &String) -> anyhow::Result<Vec<operation::Model>> {
         // Generate a unique transaction ID for tracking
         let tx_id = Uuid::new_v4();
-
-        // Start a transaction
-        let txn = match self.db.begin()
-        .instrument(tracing::debug_span!(
-            "begin transaction for update operations",
-            tx_id = tx_id.to_string(),
-            sql = sql.clone()
-        ))
-        .await {
-            Ok(txn) => txn,
-            Err(e) => {
-                tracing::error!(
-                    "[TX-{:?}] Failed to begin OPERATIONS transaction: {}",
-                    tx_id,
-                    e
-                );
-                return Err(anyhow!(e));
-            }
-        };
-
+        
+        // Create the statement
         let update_stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
 
-        // Execute the UPDATE with RETURNING clause
-        let updated_operations = match operation::Entity::find()
+        // Execute the UPDATE with RETURNING clause directly on the database connection
+        match operation::Entity::find()
             .from_raw_sql(update_stmt)
-            .all(&txn)
+            .all(self.db.as_ref())
             .instrument(tracing::debug_span!(
                 "executing update query for operations",
-                tx_id = tx_id.to_string()
+                tx_id = tx_id.to_string(),
+                // sql = format_sql_for_logging(sql.as_str())
             ))
             .await
         {
-            Ok(operations) => operations,
+            Ok(operations) => {
+                tracing::info!("Updated operations: {}", operations.len());
+                Ok(operations)
+            },
             Err(e) => {
                 tracing::error!(
-                    "[TX-{:?}] Failed to update operations: {}",
-                    tx_id,
+                    "Failed to update operations: {}",
                     e
                 );
-                let _ = txn.rollback().await;
-                return Err(e.into());
+                Err(e.into())
             }
-        };
-
-        // Commit the transaction
-        let commit_start = Instant::now();
-        if let Err(e) = txn
-            .commit()
-            .instrument(tracing::debug_span!(
-                "commit update operations",
-                tx_id = tx_id.to_string()
-            ))
-            .await
-        {
-            tracing::error!(
-                "[TX-{:?}] Failed to commit transaction: {}",
-                tx_id,
-                e
-            );
-            return Err(e.into());
         }
-        Ok(updated_operations)
     }
 
     pub async fn set_operation_data(
