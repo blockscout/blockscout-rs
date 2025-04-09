@@ -2,11 +2,11 @@ use crate::client::models::operations::Operations as ApiOperations;
 use crate::client::models::profiling::OperationData as ApiOperationData;
 use anyhow::anyhow;
 use sea_orm::{
-    sea_query::{ArrayType, Expr, Func, OnConflict},
+    sea_query::OnConflict,
     ActiveModelTrait,
     ActiveValue::{self, NotSet},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
-    PaginatorTrait, QueryFilter, QuerySelect, Set, Statement, TransactionTrait, Value,
+    PaginatorTrait, QueryFilter, QuerySelect, Set, Statement, TransactionTrait,
 };
 use std::{cmp::min, collections::HashMap, sync::Arc, thread, time::Instant};
 use tac_operation_lifecycle_entity::{
@@ -69,10 +69,6 @@ pub struct DatabaseStatistic {
 
 pub struct TacDatabase {
     db: Arc<DatabaseConnection>,
-}
-
-fn format_sql_for_logging(sql: &str) -> String {
-    sql.replace("\n", " ").replace("\t", " ").replace("  ", " ").replace("           ", " ")
 }
 
 impl TacDatabase {
