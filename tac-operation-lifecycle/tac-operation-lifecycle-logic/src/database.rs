@@ -2,7 +2,7 @@ use crate::client::models::operations::Operations as ApiOperations;
 use crate::client::models::profiling::OperationData as ApiOperationData;
 use anyhow::anyhow;
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ActiveValue::{self, NotSet}, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait
+    sea_query::OnConflict, ActiveModelTrait, ActiveValue::{self, NotSet}, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait, prelude::Expr
 };
 use std::{cmp::min, collections::HashMap, sync::Arc, thread, time::Instant};
 use tac_operation_lifecycle_entity::{
@@ -1056,5 +1056,25 @@ impl TacDatabase {
             .await?;
 
         Ok(operations)
+    }
+
+    pub async fn reset_processing_intervals(&self) -> anyhow::Result<usize> {
+        let result = interval::Entity::update_many()
+        .col_expr(interval::Column::Status, Expr::value(EntityStatus::Pending.to_id()))
+        .filter(interval::Column::Status.eq(EntityStatus::Processing.to_id()))
+        .exec(self.db.as_ref())
+        .await?;
+
+        Ok(result.rows_affected as usize)
+    }
+
+    pub async fn reset_processing_operations(&self) -> anyhow::Result<usize> {
+        let result = operation::Entity::update_many()
+        .col_expr(operation::Column::Status, Expr::value(EntityStatus::Pending.to_id()))
+        .filter(operation::Column::Status.eq(EntityStatus::Processing.to_id()))
+        .exec(self.db.as_ref())
+        .await?;
+
+        Ok(result.rows_affected as usize)
     }
 }

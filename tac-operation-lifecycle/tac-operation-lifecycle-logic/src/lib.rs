@@ -112,6 +112,15 @@ impl Indexer {
 }
 
 impl Indexer {
+    // Revert all intevals and operations in the 'processing' phase into the 'pending' one
+    // This should be done on startup to avoid entities oblivion
+    pub async fn reset_processing_operations(&self) -> anyhow::Result<(usize, usize)> {
+        let intervals_affected = self.database.reset_processing_intervals().await?;
+        let operations_affected = self.database.reset_processing_operations().await?;
+
+        Ok((intervals_affected, operations_affected))
+    }
+
     // Generate intervals between current epoch and watermark and save them to the db
     // Returns number of the generated intervals
     #[instrument(name = "generate_historical_intervals", skip_all, level = "info")]
@@ -418,7 +427,19 @@ impl Indexer {
         self.ensure_stages_types_exist().await?;
 
         // Generate historical intervals
-        self.generate_historical_intervals(self.start_timestamp).await?;
+        let new_intervals = self.generate_historical_intervals(self.start_timestamp).await?;
+        if new_intervals > 0 {
+            tracing::info!("Generated {} historical intervals", new_intervals);
+        }
+
+        // Resetting intervals and operations status
+        let (updated_intervals, updated_operations) = self.reset_processing_operations().await?;
+        if updated_intervals > 0 {
+            tracing::info!("Found and reseted {} intervals in 'processing' state", updated_intervals);
+        }
+        if updated_operations > 0 {
+            tracing::info!("Found and reseted {} intervals in 'processing' state", updated_operations);
+        }
         
         // Create streams
         let realtime = self.realtime_stream();
