@@ -119,6 +119,34 @@ paths:
             $ref: '#/definitions/rpcStatus'
       tags:
         - MultichainAggregatorService
+  /api/v1/domains:
+    get:
+      operationId: MultichainAggregatorService_ListDomains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDomainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /api/v1/import:batch:
     post:
       operationId: MultichainAggregatorService_BatchImport
@@ -339,6 +367,18 @@ definitions:
       '@type':
         type: string
     additionalProperties: {}
+  protobufNullValue:
+    type: string
+    enum:
+      - NULL_VALUE
+    default: NULL_VALUE
+    description: |-
+      `NullValue` is a singleton enumeration to represent the null value for the
+      `Value` type union.
+
+      The JSON representation for `NullValue` is JSON `null`.
+
+       - NULL_VALUE: Null value.
   rpcStatus:
     type: object
     properties:
@@ -357,8 +397,8 @@ definitions:
     properties:
       hash:
         type: string
-      ens_name:
-        type: string
+      domain_info:
+        $ref: '#/definitions/v1DomainInfo'
       contract_name:
         type: string
       token_name:
@@ -411,6 +451,29 @@ definitions:
         type: string
       icon_url:
         type: string
+  v1Domain:
+    type: object
+    properties:
+      address:
+        type: string
+      name:
+        type: string
+      expiry_date:
+        type: string
+      protocol:
+        type: object
+  v1DomainInfo:
+    type: object
+    properties:
+      address:
+        type: string
+      name:
+        type: string
+      expiry_date:
+        type: string
+      names_count:
+        type: integer
+        format: int64
   v1Hash:
     type: object
     properties:
@@ -472,6 +535,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1MarketplaceDapp'
+  v1ListDomainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListNftsResponse:
     type: object
     properties:
@@ -561,6 +634,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Address'
+      domains:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
   v1Token:
     type: object
     properties:

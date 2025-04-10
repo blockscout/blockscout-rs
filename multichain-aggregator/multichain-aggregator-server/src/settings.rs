@@ -29,8 +29,9 @@ pub struct Settings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceSettings {
-    pub dapp_client: DappClientSettings,
-    pub token_info_client: TokenInfoClientSettings,
+    pub dapp_client: HttpApiClientSettings,
+    pub token_info_client: HttpApiClientSettings,
+    pub bens_client: HttpApiClientSettings,
     #[serde(default)]
     pub api: ApiSettings,
     // Chains that will be used for quick search (ordered by priority).
@@ -39,6 +40,8 @@ pub struct ServiceSettings {
     pub quick_search_chains: Vec<i64>,
     #[serde(default)]
     pub fetch_chains: bool,
+    #[serde(default = "default_bens_protocols")]
+    pub bens_protocols: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,13 +64,7 @@ impl Default for ApiSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct DappClientSettings {
-    pub url: Url,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct TokenInfoClientSettings {
+pub struct HttpApiClientSettings {
     pub url: Url,
 }
 
@@ -90,11 +87,14 @@ impl Settings {
             },
             replica_database: Default::default(),
             service: ServiceSettings {
-                dapp_client: DappClientSettings {
+                dapp_client: HttpApiClientSettings {
                     url: Url::parse("http://localhost:8050").unwrap(),
                 },
-                token_info_client: TokenInfoClientSettings {
+                token_info_client: HttpApiClientSettings {
                     url: Url::parse("http://localhost:8051").unwrap(),
+                },
+                bens_client: HttpApiClientSettings {
+                    url: Url::parse("http://localhost:8052").unwrap(),
                 },
                 api: ApiSettings {
                     default_page_size: default_default_page_size(),
@@ -102,6 +102,7 @@ impl Settings {
                 },
                 quick_search_chains: default_quick_search_chains(),
                 fetch_chains: false,
+                bens_protocols: default_bens_protocols(),
             },
         }
     }
@@ -119,4 +120,8 @@ fn default_quick_search_chains() -> Vec<i64> {
     vec![
         1, 8453, 57073, 698, 109, 7777777, 100, 10, 42161, 690, 534352,
     ]
+}
+
+fn default_bens_protocols() -> Option<Vec<String>> {
+    Some(vec!["ens".to_string()])
 }

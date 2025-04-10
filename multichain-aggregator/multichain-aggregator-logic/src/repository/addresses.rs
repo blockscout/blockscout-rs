@@ -197,9 +197,9 @@ where
 
 pub async fn list<C>(
     db: &C,
-    address: Option<AddressAlloy>,
+    addresses: Vec<AddressAlloy>,
     contract_name_query: Option<String>,
-    chain_ids: Option<Vec<ChainId>>,
+    chain_ids: Vec<ChainId>,
     token_types: Option<Vec<db_enum::TokenType>>,
     page_size: u64,
     page_token: Option<(AddressAlloy, ChainId)>,
@@ -213,11 +213,12 @@ where
     let base_select = QuerySelect::query(&mut Entity::find())
         .from_clear()
         .from(addresses_cte_iden)
-        .apply_if(chain_ids, |q, chain_ids| {
-            if !chain_ids.is_empty() {
+        .apply_if(
+            (!chain_ids.is_empty()).then_some(chain_ids),
+            |q, chain_ids| {
                 q.and_where(Column::ChainId.is_in(chain_ids));
-            }
-        })
+            },
+        )
         .apply_if(token_types, |q, token_types| {
             if !token_types.is_empty() {
                 q.and_where(Column::TokenType.is_in(token_types));
@@ -225,9 +226,19 @@ where
                 q.and_where(Column::TokenType.is_null());
             }
         })
-        .apply_if(address, |q, address| {
-            q.and_where(Column::Hash.eq(address.as_slice()));
-        })
+        .apply_if(
+            (!addresses.is_empty()).then_some(addresses),
+            |q, addresses| {
+                q.and_where(
+                    Column::Hash.is_in(
+                        addresses
+                            .into_iter()
+                            .map(|a| a.to_vec())
+                            .collect::<Vec<_>>(),
+                    ),
+                );
+            },
+        )
         .apply_if(page_token, |q, page_token| {
             q.and_where(
                 Expr::tuple([
