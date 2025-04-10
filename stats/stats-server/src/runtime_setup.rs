@@ -3,15 +3,13 @@
 //! ## Adding new charts
 //!
 //! 1. Create charts & update group(-s) (if necessary) according to
-//!     documentation in [`stats::update_group`] (steps 1-2).
+//!    documentation in [`stats::update_group`] (steps 1-2).
 //! 2. If new groups were added:
-//!
-//!     2.1. Add new update groups to [`RuntimeSetup::all_update_groups`] (if any)
-//!
-//!     2.2. Configure the group update schedule in `update_groups.json` config
+//!    2.1. Add new update groups to [`RuntimeSetup::all_update_groups`] (if any)
+//!    2.2. Configure the group update schedule in `update_groups.json` config
 //! 3. Add the new charts to `charts.json` and `layout.json` (if needed)
 //! 4. If some were added in the previous step, also consider adding the
-//!     new charts to integration tests (`tests` folder).
+//!    new charts to integration tests (`tests` folder).
 //!
 
 use crate::{
@@ -35,7 +33,8 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
+/// Chart enabled by config
+#[derive(Debug, Clone)]
 pub struct EnabledChartEntry {
     pub settings: EnabledChartSettings,
     /// Static information presented as dynamic object
@@ -70,7 +69,7 @@ impl EnabledChartEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnabledResolutionEntry {
     pub name: String,
     pub missing_date_policy: stats::MissingDatePolicy,
@@ -555,6 +554,13 @@ impl RuntimeSetup {
         members
     }
 
+    pub fn enabled_chart_keys(&self) -> Vec<ChartKey> {
+        self.charts_info
+            .values()
+            .flat_map(|entry| entry.get_keys())
+            .collect()
+    }
+
     /// Recursive indexing status requirements for all group members.
     ///
     /// 'Recursive' means that their dependencies' requirements are also
@@ -574,6 +580,18 @@ impl RuntimeSetup {
                     })
                     .collect_vec()
             })
+            .collect()
+    }
+
+    /// Recursive indexing status requirements for all enabled group members.
+    /// See [`Self::all_members_indexing_status_requirements`] for details.
+    pub fn all_enabled_members_indexing_status_requirements(
+        &self,
+    ) -> BTreeMap<ChartKey, IndexingStatus> {
+        let enabled_charts: HashSet<_> = self.enabled_chart_keys().into_iter().collect();
+        Self::all_members_indexing_status_requirements()
+            .into_iter()
+            .filter(|(chart, _req)| enabled_charts.contains(chart))
             .collect()
     }
 }

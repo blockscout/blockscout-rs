@@ -139,7 +139,7 @@ message ListAddressesResponse {
 
 message ListTokensRequest {
   string q = 1;
-  optional string chain_id = 2;
+  repeated string chain_id = 2;
   optional uint32 page_size = 3;
   optional string page_token = 4;
 }
@@ -180,7 +180,9 @@ message Chain {
   string icon_url = 4;
 }
 
-message ListChainsRequest {}
+message ListChainsRequest {
+  optional bool only_active = 1;
+}
 
 message ListChainsResponse {
   repeated Chain items = 1;
@@ -189,7 +191,7 @@ message ListChainsResponse {
 message ListDappsRequest {
   optional string q = 1;
   optional string categories = 2;
-  optional string chain_ids = 3;
+  repeated string chain_ids = 3;
 }
 
 message ListDappsResponse {

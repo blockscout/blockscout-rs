@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sig-provider-extension = { workspace = true, optional = true }
 smart-contract-verifier = { workspace = true }
 smart-contract-verifier-proto = { workspace = true }
 
@@ -45,5 +44,6 @@ ethers-solc = { workspace = true, features = ["svm-solc"] }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
 rstest = { workspace = true }
+serde_path_to_error = { workspace = true }
 stdext = { workspace = true }
 tempfile = { workspace = true }

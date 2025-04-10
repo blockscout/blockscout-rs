@@ -1,10 +1,10 @@
 use super::compiler::VyperCompiler;
-use crate::{compiler::Compilers, middleware::Middleware, vyper::Success};
+use crate::{compiler::Compilers, verify_new};
 use std::sync::Arc;
 
 pub struct Client {
     compilers: Arc<Compilers<VyperCompiler>>,
-    middleware: Option<Arc<dyn Middleware<Success>>>,
+    new_compilers: Arc<verify_new::EvmCompilersPool<verify_new::VyperCompiler>>,
 }
 
 impl Client {
@@ -21,35 +21,21 @@ impl Client {
     ///
     /// [`new`]: Self::new
     pub fn new_arc(compilers: Arc<Compilers<VyperCompiler>>) -> Self {
+        let new_compilers = verify_new::EvmCompilersPool::new(
+            compilers.fetcher.clone(),
+            compilers.threads_semaphore.clone(),
+        );
         Self {
             compilers,
-            middleware: None,
+            new_compilers: Arc::new(new_compilers),
         }
-    }
-
-    /// Convenience method to attach middleware.
-    ///
-    /// If you need to keep a reference to the middleware after attaching, use [`with_middleware_arc`].
-    ///
-    /// [`with_middleware_arc`]: Self::with_middleware_arc
-    pub fn with_middleware(self, middleware: impl Middleware<Success>) -> Self {
-        self.with_middleware_arc(Arc::new(middleware))
-    }
-
-    /// Add middleware to the client. [`with_middleware`] is more ergonomic if you don't need the `Arc`.
-    ///
-    /// [`with_middleware`]: Self::with_middleware
-    pub fn with_middleware_arc(mut self, middleware: Arc<impl Middleware<Success>>) -> Self {
-        self.middleware = Some(middleware);
-        self
     }
 
     pub fn compilers(&self) -> &Compilers<VyperCompiler> {
         self.compilers.as_ref()
     }
 
-    /// Provides a reference to the middleware, if there is any.
-    pub fn middleware(&self) -> Option<&dyn Middleware<Success>> {
-        self.middleware.as_ref().map(|m| m.as_ref())
+    pub fn new_compilers(&self) -> &verify_new::EvmCompilersPool<verify_new::VyperCompiler> {
+        self.new_compilers.as_ref()
     }
 }

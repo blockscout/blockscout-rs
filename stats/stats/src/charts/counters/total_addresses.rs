@@ -7,7 +7,8 @@ use crate::{
         },
         types::BlockscoutMigrations,
     },
-    types::timespans::DateValue,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    types::{timespans::DateValue, TimespanValue},
     ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use blockscout_db::entity::addresses;
@@ -39,7 +40,7 @@ impl StatementForOne for TotalAddressesStatement {
 }
 
 pub type TotalAddressesRemote =
-    RemoteDatabaseSource<PullOne<TotalAddressesStatement, NaiveDate, String>>;
+    RemoteDatabaseSource<PullOne<TotalAddressesStatement, TimespanValue<NaiveDate, String>>>;
 
 pub struct Properties;
 
@@ -59,7 +60,10 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 
@@ -96,7 +100,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_addresses() {
-        simple_test_counter::<TotalAddresses>("update_total_addresses", "33", None).await;
+        simple_test_counter::<TotalAddresses>("update_total_addresses", "35", None).await;
     }
 
     #[tokio::test]

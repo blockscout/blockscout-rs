@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use blockscout_db::entity::migrations_status;
 use chrono::Utc;
@@ -8,7 +11,7 @@ use sea_orm::{
 use tokio::sync::Mutex;
 use tracing::warn;
 
-use crate::counters::TxnsStatsValue;
+use crate::{counters::TxnsStatsValue, types::new_txns::NewTxnsCombinedPoint, ChartKey};
 
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
@@ -16,11 +19,38 @@ pub struct UpdateParameters<'a> {
     /// Blockscout database
     pub blockscout: &'a DatabaseConnection,
     pub blockscout_applied_migrations: BlockscoutMigrations,
+    /// Charts engaged in the current (group) update.
+    /// Includes recursively affected charts.
+    pub enabled_update_charts_recursive: HashSet<ChartKey>,
     /// If `None`, it will be measured at the start of update
     /// (i.e. after taking mutexes)
     pub update_time_override: Option<chrono::DateTime<Utc>>,
     /// Force full re-update
     pub force_full: bool,
+}
+
+impl<'a> UpdateParameters<'a> {
+    /// Parameter builder for just querying data (if no updates are expected)
+    pub fn query_parameters(
+        db: &'a DatabaseConnection,
+        blockscout: &'a DatabaseConnection,
+        blockscout_applied_migrations: BlockscoutMigrations,
+        query_time_override: Option<chrono::DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            db,
+            blockscout,
+            blockscout_applied_migrations,
+            update_time_override: query_time_override,
+            // not an update, therefore empty.
+            // also it's used for reusing queries, but
+            // non-update queries must not be expensive;
+            // therefore it's not needed in this case
+            enabled_update_charts_recursive: HashSet::new(),
+            // doesn't make sense during query
+            force_full: false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -29,6 +59,9 @@ pub struct UpdateContext<'a> {
     pub blockscout: &'a DatabaseConnection,
     pub blockscout_applied_migrations: BlockscoutMigrations,
     pub cache: UpdateCache,
+    /// Charts engaged in the current (group) update.
+    /// Includes recursively affected charts.
+    pub enabled_update_charts_recursive: HashSet<ChartKey>,
     /// Update time
     pub time: chrono::DateTime<Utc>,
     pub force_full: bool,
@@ -41,6 +74,7 @@ impl<'a> UpdateContext<'a> {
             blockscout: value.blockscout,
             blockscout_applied_migrations: value.blockscout_applied_migrations,
             cache: UpdateCache::new(),
+            enabled_update_charts_recursive: value.enabled_update_charts_recursive,
             time: value.update_time_override.unwrap_or_else(Utc::now),
             force_full: value.force_full,
         }
@@ -142,6 +176,8 @@ pub enum CacheValue {
     ValueString(String),
     ValueOptionF64(Option<f64>),
     ValueTxnsStats(TxnsStatsValue),
+    ValueNewTxnsCombined(NewTxnsCombinedPoint),
+    VecTxnWindow(Vec<NewTxnsCombinedPoint>),
 }
 
 pub trait Cacheable {
@@ -172,6 +208,8 @@ macro_rules! impl_cacheable {
 }
 
 impl_cacheable!(TxnsStatsValue, ValueTxnsStats);
+impl_cacheable!(NewTxnsCombinedPoint, ValueNewTxnsCombined);
+impl_cacheable!(Vec<NewTxnsCombinedPoint>, VecTxnWindow);
 // for testing
 impl_cacheable!(String, ValueString);
 impl_cacheable!(Option<f64>, ValueOptionF64);

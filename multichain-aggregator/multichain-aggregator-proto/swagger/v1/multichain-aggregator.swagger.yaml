@@ -54,6 +54,11 @@ paths:
           description: An unexpected error response.
           schema:
             $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: only_active
+          in: query
+          required: false
+          type: boolean
       tags:
         - MultichainAggregatorService
   /api/v1/dapps:
@@ -80,7 +85,10 @@ paths:
         - name: chain_ids
           in: query
           required: false
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
       tags:
         - MultichainAggregatorService
   /api/v1/dapps/categories:
@@ -202,7 +210,10 @@ paths:
         - name: chain_id
           in: query
           required: false
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false

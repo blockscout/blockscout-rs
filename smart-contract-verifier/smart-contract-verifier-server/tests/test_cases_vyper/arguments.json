@@ -7,10 +7,20 @@
     "expected_constructor_argument": "000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000053130303030000000000000000000000000000000000000000000000000000000",
     "expected_compiler_artifacts": {
         "abi": [{"inputs":[{"name":"name","type":"string"}],"outputs":[],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"getUserName","outputs":[{"name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"userName","outputs":[{"name":"","type":"string"}],"stateMutability":"view","type":"function"}],
-        "sources": {"VyperContract.vy":  {"id":  0}}
+        "sources": {"VyperContract.vy":  {"id":  0}},
+        "devdoc": null,
+        "storageLayout": null,
+        "userdoc": null
     },
-    "expected_creation_input_artifacts": {},
+    "expected_creation_input_artifacts": {
+        "cborAuxdata": {},
+        "linkReferences": null,
+        "sourceMap": null
+    },
     "expected_deployed_bytecode_artifacts": {
-        "sourceMap": "-1:-1:0:-;;;;:::-;;:::-;:::-;;;;;;;:::-;;;;;:::-;;;;;:::-;;;;;;;;182:13;-1:-1;;;;;;;;;;;;;;;;;:::-;;;;:::-;;:::-;;;;;;;;;;;;;;;;;:::-;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::-;;;;;:::-;;;;;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;:::-;;;;:::-;;:::-;;;;;;;;;;;;;;;;;:::-;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::-;;:::-;;;;:::-;;;"
+        "sourceMap": "-1:-1:0:-;;;;:::-;;:::-;:::-;;;;;;;:::-;;;;;:::-;;;;;:::-;;;;;;;;182:13;-1:-1;;;;;;;;;;;;;;;;;:::-;;;;:::-;;:::-;;;;;;;;;;;;;;;;;:::-;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::-;;;;;:::-;;;;;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;:::-;;;;:::-;;:::-;;;;;;;;;;;;;;;;;:::-;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::-;;:::-;;;;:::-;;;",
+        "cborAuxdata": {},
+        "linkReferences": null,
+        "immutableReferences": null
     }
 }

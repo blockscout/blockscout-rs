@@ -11,28 +11,8 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/TacService:getOperationStatus:
-    post:
-      operationId: TacService_GetOperationStatus
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1GetOperationStatusResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v1GetOperationStatusRequest'
-      tags:
-        - TacService
   /api/v1/stat:
-    post:
+    get:
       operationId: TacStatistic_GetIndexerStatistics
       responses:
         "200":
@@ -45,6 +25,69 @@ paths:
             $ref: '#/definitions/rpcStatus'
       tags:
         - TacStatistic
+  /api/v1/tac/operation/tx/{tx_hash}:
+    get:
+      operationId: TacService_GetOperationByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationDetails'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+      tags:
+        - TacService
+  /api/v1/tac/operation/{operation_id}:
+    get:
+      operationId: TacService_GetOperationDetails
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationDetails'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - TacService
+  /api/v1/tac/operations/list:
+    get:
+      operationId: TacService_GetOperations
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: page_timestamp
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: page_items
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - TacService
   /health:
     get:
       summary: |-
@@ -77,6 +120,23 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  OperationRelatedTransactionBlockchainType:
+    type: string
+    enum:
+      - TAC
+      - TON
+      - Unknown
+    default: TAC
+  OperationStageStageType:
+    type: string
+    enum:
+      - CollectedInTAC
+      - IncludedInTACConsensus
+      - ExecutedInTAC
+      - CollectedInTON
+      - IncludedInTONConsensus
+      - ExecutedInTON
+    default: CollectedInTAC
   protobufAny:
     type: object
     properties:
@@ -141,31 +201,93 @@ definitions:
       realtime_sync_completeness:
         type: number
         format: double
-  v1GetOperationStatusRequest:
-    type: object
-    properties:
-      operation_id:
-        type: string
-  v1GetOperationStatusResponse:
-    type: object
-    properties:
-      operation_id:
-        type: string
-      status_history:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1OperationStatus'
   v1HealthCheckResponse:
     type: object
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
-  v1OperationStatus:
+  v1OperationBriefDetails:
     type: object
     properties:
-      status:
+      operation_id:
         type: string
+      type:
+        $ref: '#/definitions/v1OperationType'
       timestamp:
         type: string
         format: uint64
+      sender:
+        type: string
+  v1OperationDetails:
+    type: object
+    properties:
+      operation_id:
+        type: string
+      type:
+        $ref: '#/definitions/v1OperationType'
+      timestamp:
+        type: string
+        format: uint64
+      sender:
+        type: string
+      status_history:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1OperationStage'
+  v1OperationRelatedTransaction:
+    type: object
+    properties:
+      hash:
+        type: string
+      type:
+        $ref: '#/definitions/OperationRelatedTransactionBlockchainType'
+  v1OperationStage:
+    type: object
+    properties:
+      type:
+        $ref: '#/definitions/OperationStageStageType'
+      is_exist:
+        type: boolean
+      is_success:
+        type: boolean
+      timestamp:
+        type: string
+        format: uint64
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1OperationRelatedTransaction'
+      note:
+        type: string
+  v1OperationType:
+    type: string
+    enum:
+      - Error
+      - Pending
+      - TonTacTon
+      - TacTon
+      - TonTac
+      - Rollback
+      - Unknown
+    default: Error
+  v1OperationsResponse:
+    type: object
+    properties:
+      operations:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1OperationBriefDetails'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1Pagination:
+    type: object
+    properties:
+      page_timestamp:
+        type: string
+        format: uint64
+      page_items:
+        type: integer
+        format: int64

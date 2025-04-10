@@ -8,9 +8,18 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use stats::{
-    counters::{NewOperationalTxns24h, TotalOperationalTxns, YesterdayOperationalTxns},
-    lines::{NewOperationalTxns, NewOperationalTxnsWindow, OperationalTxnsGrowth},
-    ChartProperties, IndexingStatus,
+    counters::{
+        ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
+        ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
+        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
+    },
+    indexing_status::BlockscoutIndexingStatus,
+    lines::{
+        ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
+        ArbitrumOperationalTxnsGrowth, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow,
+        OpStackOperationalTxnsGrowth,
+    },
+    ChartProperties,
 };
 use std::{
     collections::{BTreeSet, HashMap},
@@ -21,7 +30,6 @@ use std::{
 use tracing::warn;
 
 use crate::{
-    auth::ApiKey,
     config::{self, types::AllChartSettings},
     RuntimeSetup,
 };
@@ -48,6 +56,8 @@ pub struct Settings {
     pub disable_internal_transactions: bool,
     /// Enable arbitrum-specific charts
     pub enable_all_arbitrum: bool,
+    /// Enable op-stack-specific charts
+    pub enable_all_op_stack: bool,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -59,7 +69,7 @@ pub struct Settings {
     pub update_groups_config: PathBuf,
     /// Location of swagger file to serve
     pub swagger_file: PathBuf,
-    pub api_keys: HashMap<String, ApiKey>,
+    pub api_keys: HashMap<String, String>,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
@@ -98,6 +108,7 @@ impl Default for Settings {
             ignore_blockscout_api_absence: false,
             disable_internal_transactions: false,
             enable_all_arbitrum: false,
+            enable_all_op_stack: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
@@ -121,7 +132,9 @@ pub fn handle_disable_internal_transactions(
         let charts_dependant_on_internal_transactions =
             RuntimeSetup::all_members_indexing_status_requirements()
                 .into_iter()
-                .filter(|(_k, req)| req == &IndexingStatus::InternalTransactionsIndexed)
+                .filter(|(_k, req)| {
+                    req.blockscout == BlockscoutIndexingStatus::InternalTransactionsIndexed
+                })
                 .map(|(k, _req)| k.into_name());
         let to_disable: BTreeSet<_> = charts_dependant_on_internal_transactions.collect();
 
@@ -146,36 +159,68 @@ pub fn handle_disable_internal_transactions(
     }
 }
 
+fn enable_charts(
+    to_enable: &[&str],
+    charts: &mut config::charts::Config<AllChartSettings>,
+    charts_name_for_logs: &str,
+) {
+    for enable_key in to_enable {
+        let settings = match (
+            charts.lines.get_mut(*enable_key),
+            charts.counters.get_mut(*enable_key),
+        ) {
+            (Some(settings), _) => settings,
+            (_, Some(settings)) => settings,
+            _ => {
+                warn!(
+                    "Could not enable '{charts_name_for_logs}'-specific chart {enable_key}: \
+                    chart not found in settings. \
+                    This should not be a problem for running the service.",
+                );
+                continue;
+            }
+        };
+        settings.enabled = true;
+    }
+}
+
 pub fn handle_enable_all_arbitrum(
     enable_all_arbitrum: bool,
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
     if enable_all_arbitrum {
-        for enable_key in [
-            NewOperationalTxns::key().name(),
-            NewOperationalTxnsWindow::key().name(),
-            TotalOperationalTxns::key().name(),
-            NewOperationalTxns24h::key().name(),
-            OperationalTxnsGrowth::key().name(),
-            YesterdayOperationalTxns::key().name(),
-        ] {
-            let settings = match (
-                charts.lines.get_mut(enable_key),
-                charts.counters.get_mut(enable_key),
-            ) {
-                (Some(settings), _) => settings,
-                (_, Some(settings)) => settings,
-                _ => {
-                    warn!(
-                        "Could not enable arbitrum-specific chart {}: chart not found in settings. \
-                        This should not be a problem for running the service.",
-                        enable_key
-                    );
-                    continue;
-                }
-            };
-            settings.enabled = true;
-        }
+        enable_charts(
+            &[
+                ArbitrumNewOperationalTxns::key().name(),
+                ArbitrumNewOperationalTxnsWindow::key().name(),
+                ArbitrumTotalOperationalTxns::key().name(),
+                ArbitrumNewOperationalTxns24h::key().name(),
+                ArbitrumOperationalTxnsGrowth::key().name(),
+                ArbitrumYesterdayOperationalTxns::key().name(),
+            ],
+            charts,
+            "arbitrum",
+        )
+    }
+}
+
+pub fn handle_enable_all_op_stack(
+    enable_all_op_stack: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all_op_stack {
+        enable_charts(
+            &[
+                OpStackNewOperationalTxns::key().name(),
+                OpStackNewOperationalTxnsWindow::key().name(),
+                OpStackTotalOperationalTxns::key().name(),
+                OpStackNewOperationalTxns24h::key().name(),
+                OpStackOperationalTxnsGrowth::key().name(),
+                OpStackYesterdayOperationalTxns::key().name(),
+            ],
+            charts,
+            "op-stack",
+        )
     }
 }
 
@@ -205,6 +250,7 @@ impl Default for LimitsSettings {
 pub struct StartConditionSettings {
     pub blocks_ratio: ToggleableThreshold,
     pub internal_transactions_ratio: ToggleableThreshold,
+    pub user_ops_past_indexing_finished: ToggleableCheck,
     pub check_period_secs: u32,
 }
 
@@ -214,8 +260,18 @@ impl Default for StartConditionSettings {
             // in some networks it's always almost 1
             blocks_ratio: ToggleableThreshold::default(),
             internal_transactions_ratio: ToggleableThreshold::default(),
+            user_ops_past_indexing_finished: ToggleableCheck::default(),
             check_period_secs: 5,
         }
+    }
+}
+
+impl StartConditionSettings {
+    pub fn blockscout_checks_enabled(&self) -> bool {
+        self.blocks_ratio.enabled || self.internal_transactions_ratio.enabled
+    }
+    pub fn user_ops_checks_enabled(&self) -> bool {
+        self.user_ops_past_indexing_finished.enabled
     }
 }
 
@@ -255,6 +311,18 @@ impl ToggleableThreshold {
 impl Default for ToggleableThreshold {
     fn default() -> Self {
         Self::enabled(0.98)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ToggleableCheck {
+    pub enabled: bool,
+}
+
+impl Default for ToggleableCheck {
+    fn default() -> Self {
+        Self { enabled: true }
     }
 }
 

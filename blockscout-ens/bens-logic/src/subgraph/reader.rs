@@ -102,7 +102,7 @@ impl SubgraphReader {
                     .into_iter()
                     .partition(|protocol_name| protocols.contains_key(protocol_name));
                 if !unknown_protocols.is_empty() {
-                    tracing::warn!("found unknown protocols for network with id={chain_id}: {unknown_protocols:?}")
+                    tracing::warn!("found unknown or disabled protocols for network with id={chain_id}: {unknown_protocols:?}")
                 }
                 (chain_id, Network {
                     blockscout_client: network.blockscout_client,
@@ -493,7 +493,7 @@ async fn events_from_transactions(
                 .remove(&TxHash::from_slice(txn.transaction_id.as_slice()))
                 .map(|t| DomainEvent {
                     transaction_hash: t.hash,
-                    block_number: t.block,
+                    block_number: t.block_number,
                     timestamp: t.timestamp,
                     from_address: t.from.hash,
                     method: t.method,

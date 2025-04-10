@@ -16,9 +16,9 @@ COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release --bin bens-server
 
-FROM ubuntu:20.04 as run
+FROM ubuntu:24.04 as run
 WORKDIR /app
-RUN apt-get update && apt-get install -y libssl1.1 libssl-dev ca-certificates
+RUN apt-get update && apt-get install -y libssl3 libssl-dev ca-certificates
 ENV APP_USER=app
 RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER

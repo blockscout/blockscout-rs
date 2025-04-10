@@ -6,10 +6,9 @@ use std::marker::PhantomData;
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
-    data_source::{source::DataSource, UpdateContext},
+    data_source::{kinds::AdapterDataSource, source::DataSource, UpdateContext},
     range::UniversalRange,
     types::{Timespan, TimespanValue, ZeroTimespanValue},
     utils::day_start,
@@ -20,7 +19,7 @@ pub struct LastPoint<DS>(PhantomData<DS>)
 where
     DS: DataSource;
 
-impl<DS, Resolution, Value> DataSource for LastPoint<DS>
+impl<DS, Resolution, Value> AdapterDataSource for LastPoint<DS>
 where
     Resolution: Timespan + Ord + Send,
     Value: Send,
@@ -30,30 +29,6 @@ where
     type MainDependencies = DS;
     type ResolutionDependencies = ();
     type Output = TimespanValue<Resolution, Value>;
-    fn mutex_id() -> Option<String> {
-        None
-    }
-
-    async fn init_itself(
-        _db: &DatabaseConnection,
-        _init_time: &DateTime<Utc>,
-    ) -> Result<(), DbErr> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn set_next_update_from_itself(
-        _db: &DatabaseConnection,
-        _update_from: chrono::NaiveDate,
-    ) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
 
     async fn query_data(
         cx: &UpdateContext<'_>,

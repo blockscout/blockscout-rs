@@ -8,9 +8,10 @@ use serde::Deserialize;
 use serde_with::serde_as;
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(tag = "type")]
 pub enum DASettings {
+    #[serde(rename = "celestia")]
     Celestia(CelestiaSettings),
+    #[serde(rename = "eigenda")]
     EigenDA(EigendaSettings),
 }
 

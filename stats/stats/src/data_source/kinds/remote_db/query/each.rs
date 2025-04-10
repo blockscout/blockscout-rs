@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::{FromQueryResult, Statement, TryGetable};
 
 use crate::{
+    charts::db_interaction::read::find_one_value,
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, UpdateContext},
@@ -61,11 +62,9 @@ where
         let points = split_time_range_into_resolution_points::<Resolution>(query_range);
         let mut collected_data = Vec::with_capacity(points.len());
         for point_range in points {
-            let query = S::get_statement(point_range.clone(), &cx.blockscout_applied_migrations);
-            let point_value = ValueWrapper::<Value>::find_by_statement(query)
-                .one(cx.blockscout)
-                .await
-                .map_err(ChartError::BlockscoutDB)?;
+            let statement =
+                S::get_statement(point_range.clone(), &cx.blockscout_applied_migrations);
+            let point_value = find_one_value::<ValueWrapper<Value>>(cx, statement).await?;
             if let Some(ValueWrapper { value }) = point_value {
                 let timespan = resolution_from_range(point_range);
                 collected_data.push(TimespanValue { timespan, value });

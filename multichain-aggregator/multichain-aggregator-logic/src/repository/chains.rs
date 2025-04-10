@@ -1,7 +1,11 @@
 use crate::types::chains::Chain;
-use entity::chains::{ActiveModel, Column, Entity, Model};
+use entity::{
+    api_keys,
+    chains::{ActiveModel, Column, Entity, Model},
+};
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
+    QueryOrder, QuerySelect,
 };
 
 pub async fn upsert_many<C>(db: &C, chains: Vec<Chain>) -> Result<(), DbErr>
@@ -27,14 +31,21 @@ where
                 .value(Column::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
         )
-        .exec(db)
+        .do_nothing()
+        .exec_without_returning(db)
         .await?;
+
     Ok(())
 }
 
-pub async fn list_chains<C>(db: &C) -> Result<Vec<Model>, DbErr>
+pub async fn list_chains<C>(db: &C, with_active_api_keys: bool) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait,
 {
-    Entity::find().all(db).await
+    let mut query = Entity::find().order_by_asc(Column::Id);
+    if with_active_api_keys {
+        // Filter out chains without active api keys
+        query = query.distinct_on([Column::Id]).inner_join(api_keys::Entity);
+    }
+    query.all(db).await
 }

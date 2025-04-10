@@ -12,7 +12,7 @@ const ROUTE: &str = "/api/v2/verifier/sourcify/sources:verify-from-etherscan";
 async fn init_service() -> Arc<SourcifyVerifierService> {
     let mut settings = Settings::default();
     settings.sourcify.verification_attempts = std::num::NonZeroU32::new(5).unwrap();
-    let service = SourcifyVerifierService::new(settings.sourcify, settings.extensions.sourcify)
+    let service = SourcifyVerifierService::new(settings.sourcify)
         .await
         .expect("couldn't initialize the service");
     Arc::new(service)

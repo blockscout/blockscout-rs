@@ -1,29 +1,39 @@
 use std::{str::FromStr, time::Duration};
 
-use blockscout_service_launcher::test_server::{init_server, send_get_request};
-use chrono::NaiveDate;
+use blockscout_service_launcher::{
+    launcher::GracefulShutdownHandler,
+    test_server::{init_server, send_get_request},
+};
+use chrono::{Days, NaiveDate, Utc};
+use pretty_assertions::assert_eq;
 use stats::tests::{
     init_db::init_db_all,
     mock_blockscout::{default_mock_blockscout_api, fill_mock_blockscout_data, imitate_reindex},
     simple_test::{chart_output_to_expected, map_str_tuple_to_owned},
 };
 use stats_proto::blockscout::stats::v1::{self as proto_v1, BatchUpdateChartsResult};
-use stats_server::{auth::ApiKey, stats};
+use stats_server::{
+    auth::{ApiKey, API_KEY_NAME},
+    stats,
+};
 use tokio::time::sleep;
 use url::Url;
 
-use crate::common::{get_test_stats_settings, request_reupdate_from, setup_single_key};
+use crate::common::{
+    get_test_stats_settings, request_reupdate_from, setup_single_key, wait_for_subset_to_update,
+    ChartSubset,
+};
 
 /// Uses reindexing, so needs to be independent
 #[tokio::test]
 #[ignore = "needs database"]
-async fn tests_reupdate_works() {
-    let test_name = "tests_reupdate_works";
+async fn test_reupdate_works() {
+    let test_name = "test_reupdate_works";
+    let _ = tracing_subscriber::fmt::try_init();
     let (stats_db, blockscout_db) = init_db_all(test_name).await;
     let max_date = NaiveDate::from_str("2023-03-01").unwrap();
     fill_mock_blockscout_data(&blockscout_db, max_date).await;
     let blockscout_api = default_mock_blockscout_api().await;
-    std::env::set_var("STATS__CONFIG", "./tests/config/test.toml");
     let (mut settings, base) = get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api);
     // obviously don't use this anywhere except tests
     let api_key = ApiKey::from_str_infallible("123");
@@ -31,10 +41,15 @@ async fn tests_reupdate_works() {
     // settings.tracing.enabled = true;
     let wait_multiplier = if settings.tracing.enabled { 3 } else { 1 };
 
-    init_server(|| stats(settings), &base).await;
+    let shutdown = GracefulShutdownHandler::new();
+    let shutdown_cloned = shutdown.clone();
+    init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
 
     // Sleep until server will start and calculate all values
-    sleep(Duration::from_secs(8 * wait_multiplier)).await;
+    wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
+    sleep(Duration::from_secs(2 * wait_multiplier)).await;
+
+    test_incorrect_reupdate_requests(&base, api_key.clone()).await;
 
     let data = get_new_txns(&base).await;
     assert_eq!(
@@ -47,7 +62,7 @@ async fn tests_reupdate_works() {
             ("2022-12-01", "6"),
             ("2023-01-01", "1"),
             ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
+            ("2023-03-01", "2"),
         ])
     );
     imitate_reindex(&blockscout_db, max_date).await;
@@ -66,7 +81,7 @@ async fn tests_reupdate_works() {
     );
     #[allow(clippy::identity_op)]
     // wait to reupdate
-    sleep(Duration::from_secs(1 * wait_multiplier)).await;
+    sleep(Duration::from_secs(2 * wait_multiplier)).await;
 
     let data = get_new_txns(&base).await;
     assert_eq!(
@@ -79,7 +94,7 @@ async fn tests_reupdate_works() {
             ("2022-12-01", "6"),
             ("2023-01-01", "3"),
             ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
+            ("2023-03-01", "2"),
         ])
     );
 
@@ -96,7 +111,7 @@ async fn tests_reupdate_works() {
     );
     #[allow(clippy::identity_op)]
     // wait to reupdate
-    sleep(Duration::from_secs(1 * wait_multiplier)).await;
+    sleep(Duration::from_secs(2 * wait_multiplier)).await;
 
     let data = get_new_txns(&base).await;
     assert_eq!(
@@ -109,7 +124,7 @@ async fn tests_reupdate_works() {
             ("2022-12-01", "6"),
             ("2023-01-01", "3"),
             ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
+            ("2023-03-01", "2"),
         ])
     );
 
@@ -125,7 +140,7 @@ async fn tests_reupdate_works() {
         }
     );
     // need to wait longer as reupdating from year 2000
-    sleep(Duration::from_secs(2 * wait_multiplier)).await;
+    sleep(Duration::from_secs(5 * wait_multiplier)).await;
 
     let data = get_new_txns(&base).await;
     assert_eq!(
@@ -138,9 +153,60 @@ async fn tests_reupdate_works() {
             ("2022-12-01", "6"),
             ("2023-01-01", "3"),
             ("2023-02-01", "5"),
-            ("2023-03-01", "1"),
+            ("2023-03-01", "2"),
         ])
     );
+    blockscout_db.close_all_unwrap().await;
+    stats_db.close_all_unwrap().await;
+    shutdown.cancel_wait_timeout(None).await.unwrap();
+}
+
+pub async fn test_incorrect_reupdate_requests(base: &Url, key: ApiKey) {
+    let mut request = reqwest::Client::new().request(
+        reqwest::Method::POST,
+        base.join("/api/v1/charts/batch-update").unwrap(),
+    );
+    request = request.json(&proto_v1::BatchUpdateChartsRequest {
+        chart_names: vec!["txnsGrowth".to_string()],
+        from: Some("2023-01-01".to_string()),
+        update_later: None,
+    });
+    let request_without_key = request.try_clone().unwrap();
+    let response = request_without_key
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("Failed to send request"));
+    assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    let incorrect_key = "321".to_string();
+    assert_ne!(key.key, incorrect_key);
+    let request_with_incorrect_key = request
+        .try_clone()
+        .unwrap()
+        .header(API_KEY_NAME, &incorrect_key);
+    let response = request_with_incorrect_key
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("Failed to send request"));
+    assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    let request_correct = request.header(API_KEY_NAME, &key.key);
+
+    let tomorrow = Utc::now().checked_add_days(Days::new(1)).unwrap();
+    let request_with_future_from =
+        request_correct
+            .try_clone()
+            .unwrap()
+            .json(&proto_v1::BatchUpdateChartsRequest {
+                chart_names: vec!["txnsGrowth".to_string()],
+                from: Some(tomorrow.format("%Y-%m-%d").to_string()),
+                update_later: None,
+            });
+    let response = request_with_future_from
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("Failed to send request"));
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
 async fn get_new_txns(base: &Url) -> Vec<proto_v1::Point> {

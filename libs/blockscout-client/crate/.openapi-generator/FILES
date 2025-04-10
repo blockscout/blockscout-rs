@@ -18,9 +18,11 @@ src/models/address_counters.rs
 src/models/address_nft_collection.rs
 src/models/address_nft_instance.rs
 src/models/address_nft_instance_collection.rs
+src/models/address_param.rs
 src/models/address_tag.rs
 src/models/address_with_tx_count.rs
 src/models/argument.rs
+src/models/block.rs
 src/models/code_and_message.rs
 src/models/coin_balance_history_by_days_entry.rs
 src/models/coin_balance_history_entry.rs
@@ -28,6 +30,7 @@ src/models/contract_source.rs
 src/models/decoded_input.rs
 src/models/decoded_input_log.rs
 src/models/decoded_input_log_parameter.rs
+src/models/decoded_input_parameter.rs
 src/models/error.rs
 src/models/extended_revert_reason_as_map.rs
 src/models/external_library.rs
@@ -65,15 +68,20 @@ src/models/get_transaction_token_transfers_200_response.rs
 src/models/get_txs_200_response.rs
 src/models/get_txs_chart_200_response.rs
 src/models/get_write_methods_200_response_inner.rs
+src/models/health_check_response.rs
+src/models/health_check_response_metadata.rs
 src/models/holder.rs
 src/models/indexing_status.rs
+src/models/internal_transaction.rs
+src/models/latest_block.rs
+src/models/latest_block_cache.rs
+src/models/latest_block_db.rs
 src/models/log.rs
 src/models/market_chart_item.rs
 src/models/mod.rs
 src/models/nft_change.rs
 src/models/nft_instance.rs
 src/models/output_and_names.rs
-src/models/protobuf_any.rs
 src/models/query_read_method_200_response_inner.rs
 src/models/raw_trace.rs
 src/models/raw_trace_action.rs
@@ -89,7 +97,7 @@ src/models/read_method_response_result.rs
 src/models/recaptcha_body.rs
 src/models/refetch_token_instance_metadata_200_response.rs
 src/models/refetch_token_instance_metadata_403_response.rs
-src/models/rpc_status.rs
+src/models/reward.rs
 src/models/search_200_response.rs
 src/models/search_200_response_items_inner.rs
 src/models/search_result_address_or_contract.rs
@@ -97,6 +105,8 @@ src/models/search_result_block.rs
 src/models/search_result_redirect.rs
 src/models/search_result_token.rs
 src/models/search_result_transaction.rs
+src/models/smart_contract.rs
+src/models/smart_contract_for_list.rs
 src/models/state_change.rs
 src/models/state_change_change.rs
 src/models/stats_response.rs
@@ -116,6 +126,7 @@ src/models/token_transfer_total.rs
 src/models/total_erc1155.rs
 src/models/total_erc20.rs
 src/models/total_erc721.rs
+src/models/transaction.rs
 src/models/transaction_action.rs
 src/models/transaction_action_aave_v3_bswrf.rs
 src/models/transaction_action_aave_v3_enable_disable_collateral.rs

@@ -1,6 +1,6 @@
 //! Active bundlers on each day.
 
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -13,7 +13,8 @@ use crate::{
         },
         types::BlockscoutMigrations,
     },
-    ChartProperties, Named,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
+    ChartKey, ChartProperties, Named,
 };
 
 use blockscout_db::entity::user_operations;
@@ -30,6 +31,7 @@ impl StatementFromRange for ActiveBundlersStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         _completed_migrations: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
     ) -> Statement {
         count_distinct_in_user_ops(user_operations::Column::Bundler.into_column_ref(), range)
     }
@@ -52,6 +54,12 @@ impl ChartProperties for Properties {
 
     fn chart_type() -> ChartType {
         ChartType::Line
+    }
+    fn indexing_status_requirement() -> IndexingStatus {
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
+            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+        }
     }
 }
 

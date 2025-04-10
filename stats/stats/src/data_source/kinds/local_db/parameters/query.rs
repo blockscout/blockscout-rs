@@ -81,10 +81,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
             C::missing_date_policy(),
         )
         .await?
-        .ok_or(ChartError::Internal(format!(
-            "no data for counter '{}' was found",
-            C::name()
-        )))?;
+        .ok_or(ChartError::NoCounterData(C::key()))?;
         Ok(value)
     }
 }
@@ -152,13 +149,12 @@ mod tests {
         let (db, blockscout) = init_db_all("fallback_query_works").await;
         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
 
-        let parameters = UpdateParameters {
-            db: &db,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            update_time_override: Some(current_time),
-            force_full: true,
-        };
+        let parameters = UpdateParameters::query_parameters(
+            &db,
+            &blockscout,
+            BlockscoutMigrations::latest(),
+            Some(current_time),
+        );
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
 
         struct TestFallback;

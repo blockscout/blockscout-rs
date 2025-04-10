@@ -22,7 +22,7 @@
 //! The initialization & update is expected to
 //! 1. Trigger the same operation on source's dependencies recursively
 //! 2. Perform the action on itself.
-//!     This ensures that the data requested by current source from dependencies is relevant.
+//!    This ensures that the data requested by current source from dependencies is relevant.
 //!
 //! ## Implementation
 //!

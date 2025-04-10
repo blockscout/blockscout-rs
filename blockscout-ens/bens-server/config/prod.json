@@ -73,6 +73,22 @@
           "ens"
         ]
       },
+      "1514": {
+        "blockscout": {
+          "url": "https://www.storyscan.io/"
+        },
+        "use_protocols": [
+          "story"
+        ]
+      },
+      "1625": {
+        "blockscout": {
+          "url": "https://explorer.gravity.xyz/"
+        },
+        "use_protocols": [
+          "gravity"
+        ]
+      },
       "10200": {
         "blockscout": {
           "url": "https://gnosis-chiado.blockscout.com"
@@ -96,6 +112,15 @@
         "use_protocols": [
           "base-name-service", "ens"
         ]
+      },
+      "33111": {
+        "blockscout": {
+          "url": "https://curtis.explorer.caldera.xyz/"
+        },
+        "use_protocols": [
+          "d3-connect-ape-testnet"
+        ],
+        "rpc_url": "https://curtis.rpc.caldera.xyz/http"
       },
       "33139": {
         "blockscout": {
@@ -168,6 +193,30 @@
         },
         "use_protocols": [
           "ens", "zns-ink"
+        ]
+      },
+      "80094": {
+        "blockscout": {
+          "url": "https://bera.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "130": {
+        "blockscout": {
+          "url": "https://unichain.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "1301": {
+        "blockscout": {
+          "url": "https://unichain-sepolia.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
         ]
       }
     },
@@ -374,8 +423,8 @@
         "meta": {
           "short_name": "ZNS",
           "title": "ZNS Connect Domains",
-          "description": "ZNS Connect is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
           "docs_url": "https://docs.znsconnect.io/"
         }
       },
@@ -392,8 +441,8 @@
         "meta": {
           "short_name": "ZNS",
           "title": "ZNS Connect Domains",
-          "description": "ZNS Connect is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
           "docs_url": "https://docs.znsconnect.io/"
         }
       },
@@ -408,8 +457,8 @@
         "meta": {
           "short_name": "ZNS",
           "title": "ZNS Connect Domains",
-          "description": "ZNS Connect is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/c7QnsBF.png",
+          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
+          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
           "docs_url": "https://docs.znsconnect.io/"
         }
       },
@@ -449,6 +498,24 @@
           "docs_url": "https://docs.d3.app/"
         }
       },
+      "d3-connect-ape-testnet": {
+        "tld_list": ["ape"],
+        "network_id": 33111,
+        "subgraph_name": "d3-connect-ape-testnet-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "d3_connect",
+          "native_token_contract": "0xA6A33ddE98BAb3ee5262e7e1a14ee5B1F06D0D40",
+          "resolver_contract": "0x2ad234136165B59f98cf03f696cB84eaf48E30cF"
+        },
+        "meta": {
+          "short_name": "D3 Connect",
+          "title": "D3 Connect",
+          "description": "D3 Connect is official identity service for top web3 communities.",
+          "icon_url": "https://i.imgur.com/cD6VIXk.png",
+          "docs_url": "https://docs.d3.app/"
+        }
+      },
       "d3-connect-shib-testnet": {
         "tld_list": ["shib"],
         "network_id": 157,
@@ -462,9 +529,45 @@
         "meta": {
           "short_name": "D3 Connect",
           "title": "D3 Connect",
-          "description": "D3 Connect is a platform for connecting to the Shibarium network.",
+          "description": "D3 Connect is official identity service for top web3 communities.",
           "icon_url": "https://i.imgur.com/cD6VIXk.png",
           "docs_url": "https://docs.d3.app/"
+        }
+      },
+      "story": {
+        "tld_list": ["ip"],
+        "network_id": 1514,
+        "subgraph_name": "story-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xff829d3ea4d8f25bf8be2d8774c080a8046cb7e1",
+          "empty_label_hash": "0x699d90c22b22a5d5d34ff98b3e55748d93f2f4564862200c93b7d5d90b511710"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "gravity": {
+        "tld_list": ["g"],
+        "network_id": 1625,
+        "subgraph_name": "gravity-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xf8d9d86a4594ffc975ca9c760c5887bd9a3b6232",
+          "empty_label_hash": "0x438c16e05212074ed5b2d4beba06988729060b93431f68bf346c93c64a1ce640"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
         }
       }
     }

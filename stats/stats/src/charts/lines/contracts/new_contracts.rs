@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -19,9 +19,10 @@ use crate::{
         types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::timespans::{Month, Week, Year},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartProperties, IndexingStatus, Named,
+    ChartKey, ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -34,6 +35,7 @@ impl StatementFromRange for NewContractsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
     ) -> Statement {
         if completed_migrations.denormalization {
             // TODO: consider supporting such case in macro ?
@@ -136,7 +138,10 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::InternalTransactionsIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 

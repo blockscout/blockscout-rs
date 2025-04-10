@@ -83,6 +83,7 @@ where
         db: &db,
         blockscout: &blockscout,
         blockscout_applied_migrations: migrations,
+        enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -133,6 +134,7 @@ pub async fn dirty_force_update_and_check<C>(
         db,
         blockscout,
         blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -232,6 +234,7 @@ async fn ranged_test_chart_inner<C>(
         db: &db,
         blockscout: &blockscout,
         blockscout_applied_migrations: migrations,
+        enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -313,6 +316,7 @@ async fn simple_test_counter_inner<C>(
         db: &db,
         blockscout: &blockscout,
         blockscout_applied_migrations: migrations,
+        enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
     };
@@ -352,6 +356,7 @@ where
         db: &db,
         blockscout: &blockscout,
         blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: false,
     };

@@ -518,7 +518,7 @@ mod tests {
                     ("2022-11-11", "8"),
                 ]),
                 repeat_value_for_dates("2022-11-12", "2023-02-28", "8"),
-                map_str_tuple_to_owned(vec![("2023-03-01", "9")]),
+                map_str_tuple_to_owned(vec![("2023-03-01", "10")]),
             ]
             .concat();
             let expected_data: Vec<(&str, &str)> = expected_data_owned

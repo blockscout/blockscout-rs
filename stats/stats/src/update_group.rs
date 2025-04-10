@@ -16,15 +16,16 @@
 //!
 //!
 //! 1. Create multiple connected charts
-//!     (e.g.
-//!     [`DirectVecLocalDbChartSource`](crate::data_source::kinds::local_db::DirectVecLocalDbChartSource)
-//!     or
-//!     [`DailyCumulativeLocalDbChartSource`](crate::data_source::kinds::local_db::DailyCumulativeLocalDbChartSource)
-//!     ).
+//!    (e.g.
+//!    [`DirectVecLocalDbChartSource`](crate::data_source::kinds::local_db::DirectVecLocalDbChartSource)
+//!    or
+//!    [`DailyCumulativeLocalDbChartSource`](crate::data_source::kinds::local_db::DailyCumulativeLocalDbChartSource)
+//!    ).
 //! 2. Construct simple (non-sync) update groups via `construct_update_group` macro (usually done in `../update_groups.rs`)
-//! 3. Create mutexes (1-1 for each chart) (in general automatically done in `stats-server`, see instructions there)
+//! 3. Create mutexes (1-1 for each chart) (in general automatically done in `stats-server`, see instructions there
+//!    in `runtime_setup.rs`)
 //! 4. Create synchronous versions of groups with [`SyncUpdateGroup::new`]
-//!     (in general automatically done in `stats-server`, see instructions there)
+//!    (in general automatically done in `stats-server`, see instructions there)
 //!
 
 use std::{
@@ -44,7 +45,8 @@ use tokio::sync::{Mutex, MutexGuard};
 use crate::{
     charts::{chart_properties_portrait::imports::ChartKey, ChartObject},
     data_source::UpdateParameters,
-    ChartError, IndexingStatus,
+    indexing_status::IndexingStatus,
+    ChartError,
 };
 
 #[derive(Error, Debug, PartialEq)]
@@ -81,8 +83,12 @@ pub trait UpdateGroup: core::fmt::Debug {
     fn list_dependency_mutex_ids(&self) -> HashSet<String>;
     /// List mutex ids of particular group member dependencies (including the member itself).
     ///
-    /// `None` if `chart_name` is not a member.
+    /// `None` if `chart_id`` is not a member.
     fn dependency_mutex_ids_of(&self, chart_id: &ChartKey) -> Option<HashSet<String>>;
+    /// List chart keys of a particular group member dependencies (including the member itself).
+    ///
+    /// `None` if `chart_id`` is not a member.
+    fn dependency_keys_of(&self, chart_id: &ChartKey) -> Option<HashSet<ChartKey>>;
     /// Create/init enabled charts with their dependencies (in DB) recursively.
     /// Idempotent, does nothing if the charts were previously initialized.
     ///
@@ -215,6 +221,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # use stats::{
 /// #     QueryAllBlockTimestampRange, construct_update_group,
 /// #     types::timespans::DateValue, ChartProperties, Named, ChartError,
+/// #     ChartKey,
 /// # };
 /// # use stats::data_source::{
 /// #     kinds::{
@@ -225,13 +232,13 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # };
 /// # use chrono::{NaiveDate, DateTime, Utc};
 /// # use entity::sea_orm_active_enums::ChartType;
-/// # use std::ops::Range;
+/// # use std::{ops::Range, collections::HashSet};
 /// # use sea_orm::Statement;
 ///
 /// struct DummyRemoteStatement;
 ///
 /// impl StatementFromRange for DummyRemoteStatement {
-///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
+///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations, _: &HashSet<ChartKey>) -> Statement {
 ///         todo!()
 ///     }
 /// }
@@ -290,8 +297,10 @@ macro_rules! construct_update_group {
             fn dependency_indexing_status_requirement(
                 &self,
                 enabled_charts: &::std::collections::HashSet<$crate::ChartKey>,
-            ) -> $crate::IndexingStatus {
-                $crate::IndexingStatus::most_restrictive_from(
+            ) -> $crate::indexing_status::IndexingStatus {
+                use $crate::indexing_status::IndexingStatusTrait;
+
+                $crate::indexing_status::IndexingStatus::most_restrictive_from(
                     [
                         $(
                             (
@@ -307,7 +316,7 @@ macro_rules! construct_update_group {
 
             }
 
-            fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<String> {
+            fn list_dependency_mutex_ids(&self) -> ::std::collections::HashSet<::std::string::String> {
                 let mut ids = ::std::collections::HashSet::new();
                 $(
                     ids.extend(
@@ -321,11 +330,25 @@ macro_rules! construct_update_group {
             fn dependency_mutex_ids_of(
                 &self,
                 chart_id: &$crate::ChartKey
-            ) -> Option<::std::collections::HashSet<String>> {
+            ) -> Option<::std::collections::HashSet<::std::string::String>> {
                 $(
                     if chart_id == &<$member as $crate::ChartProperties>::key() {
                         return Some(
                             <$member as $crate::data_source::DataSource>::all_dependencies_mutex_ids()
+                        );
+                    }
+                )*
+                return None;
+            }
+
+            fn dependency_keys_of(
+                &self,
+                chart_id: &$crate::ChartKey)
+            -> Option<::std::collections::HashSet<$crate::ChartKey>> {
+                $(
+                    if chart_id == &<$member as $crate::ChartProperties>::key() {
+                        return Some(
+                            <$member as $crate::data_source::DataSource>::all_dependencies_chart_keys()
                         );
                     }
                 )*
@@ -487,7 +510,7 @@ impl SyncUpdateGroup {
 
 impl SyncUpdateGroup {
     /// Ignores missing elements
-    fn joint_dependencies_of(&self, charts: &HashSet<ChartKey>) -> HashSet<String> {
+    fn joint_dependencies_mutex_ids_of(&self, charts: &HashSet<ChartKey>) -> HashSet<String> {
         let mut result = HashSet::new();
         for id in charts {
             let Some(dependencies_ids) = self.inner.dependency_mutex_ids_of(id) else {
@@ -548,8 +571,9 @@ impl SyncUpdateGroup {
             .into_iter()
             .filter(|m| enabled_charts.contains(m))
             .collect();
-        let enabled_members_with_deps = self.joint_dependencies_of(&enabled_members);
-        (enabled_members, enabled_members_with_deps)
+        let enabled_members_with_deps_mutex_ids =
+            self.joint_dependencies_mutex_ids_of(&enabled_members);
+        (enabled_members, enabled_members_with_deps_mutex_ids)
     }
 
     /// Lock only enabled charts (that are also group members) and their dependencies
@@ -626,6 +650,25 @@ impl SyncUpdateGroup {
         self.inner
             .set_next_update_from(db, from, locked_enabled_members.charts())
             .await
+    }
+
+    /// Ignores non-member charts
+    pub fn enabled_members_with_deps(
+        &self,
+        enabled_charts: &HashSet<ChartKey>,
+    ) -> HashSet<ChartKey> {
+        let mut result = HashSet::new();
+        for id in enabled_charts {
+            let Some(dependencies_ids) = self.inner.dependency_keys_of(id) else {
+                tracing::warn!(
+                    update_group=self.name(),
+                    "`dependency_mutex_ids_of` of member chart '{id}' returned `None`. Expected `Some(..)`"
+                );
+                continue;
+            };
+            result.extend(dependencies_ids.into_iter().map(|s| s.to_owned()))
+        }
+        result
     }
 }
 

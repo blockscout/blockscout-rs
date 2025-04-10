@@ -4,10 +4,11 @@ use crate::{
         kinds::{
             data_manipulation::map::MapToString,
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOneValue, RemoteDatabaseSource, StatementFromUpdateTime},
+            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
         },
         types::BlockscoutMigrations,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
@@ -36,7 +37,7 @@ impl StatementFromUpdateTime for NewVerifiedContracts24hStatement {
 }
 
 pub type NewVerifiedContracts24hRemote =
-    RemoteDatabaseSource<PullOneValue<NewVerifiedContracts24hStatement, NaiveDate, i64>>;
+    RemoteDatabaseSource<PullOneNowValue<NewVerifiedContracts24hStatement, NaiveDate, i64>>;
 
 pub struct Properties;
 
@@ -56,7 +57,10 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 

@@ -5,10 +5,9 @@ use std::marker::PhantomData;
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
-    data_source::{DataSource, UpdateContext},
+    data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
     range::UniversalRange,
     ChartError,
 };
@@ -36,7 +35,7 @@ pub trait MapFunction<Input> {
     fn function(inner_data: Input) -> Result<Self::Output, ChartError>;
 }
 
-impl<D, F> DataSource for Map<D, F>
+impl<D, F> AdapterDataSource for Map<D, F>
 where
     D: DataSource,
     F: MapFunction<D::Output>,
@@ -44,30 +43,6 @@ where
     type MainDependencies = D;
     type ResolutionDependencies = ();
     type Output = F::Output;
-    fn mutex_id() -> Option<String> {
-        None
-    }
-
-    async fn init_itself(
-        _db: &DatabaseConnection,
-        _init_time: &chrono::DateTime<Utc>,
-    ) -> Result<(), DbErr> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn set_next_update_from_itself(
-        _db: &DatabaseConnection,
-        _update_from: chrono::NaiveDate,
-    ) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
 
     async fn query_data(
         cx: &UpdateContext<'_>,

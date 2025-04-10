@@ -10,7 +10,7 @@ use sea_orm::{
 };
 use std::{cmp::min, collections::HashMap, sync::Arc, thread, time::Instant};
 use tac_operation_lifecycle_entity::{
-    interval, operation, operation_stage, stage_type, transaction, watermark,
+    interval, operation::{self, Column}, operation_stage, stage_type, transaction, watermark,
 };
 use tracing::Instrument;
 use uuid::Uuid;
@@ -65,6 +65,28 @@ pub struct DatabaseStatistic {
     pub realtime_pending_intervals: usize,
     pub historical_processed_period: u64,
     pub realtime_processed_period: u64,
+}
+
+#[derive(Debug, FromQueryResult)]
+struct JoinedRow {
+    // operation
+    op_id: String,
+    operation_type: Option<String>,
+    timestamp: i64,
+    status: i32,
+
+    //operation_stage
+    stage_id: Option<i32>,
+    stage_type_id: Option<i32>,
+    stage_success: bool,
+    stage_timestamp: Option<i64>,
+    stage_note: Option<String>,
+
+    // transaction
+    tx_id: Option<i32>,
+    tx_stage_id: Option<i32>,
+    tx_hash: Option<String>,
+    tx_blockchain_type: Option<String>,
 }
 
 pub struct TacDatabase {
@@ -903,16 +925,160 @@ impl TacDatabase {
         })
     }
 
-    pub async fn get_operations_with_stages(
+    pub async fn get_operation_by_id(
         &self,
         id: &String,
-    ) -> anyhow::Result<Option<(operation::Model, Vec<operation_stage::Model>)>> {
-        let operation = operation::Entity::find()
-            .filter(operation::Column::Id.eq(id))
-            .find_with_related(operation_stage::Entity)
+    ) -> anyhow::Result<Option<(operation::Model, Vec<(operation_stage::Model, Vec<transaction::Model>)>)>> {
+        let sql = format!(r#"
+            SELECT 
+                o.id as op_id, o.operation_type, o.timestamp, o.status,
+                s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
+                t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
+            FROM operation o
+            LEFT JOIN operation_stage s ON o.id = s.operation_id
+            LEFT JOIN transaction t ON s.id = t.stage_id
+            WHERE o.id = '{}'
+            "#,
+            id
+        );
+
+        self.get_full_operation_with_sql(&sql).await
+    }
+
+    pub async fn get_operation_by_tx_hash(
+        &self,
+        tx_hash: &String,
+    ) -> anyhow::Result<Option<(operation::Model, Vec<(operation_stage::Model, Vec<transaction::Model>)>)>> {
+        let sql = format!(r#"
+            SELECT 
+                o.id as op_id, o.operation_type, o.timestamp, o.status,
+                s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
+                t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
+            FROM operation o
+            LEFT JOIN operation_stage s ON o.id = s.operation_id
+            LEFT JOIN transaction t ON s.id = t.stage_id
+            WHERE o.id = (
+                SELECT o2.id
+                FROM operation o2
+                JOIN operation_stage s2 ON o2.id = s2.operation_id
+                JOIN transaction t2 ON s2.id = t2.stage_id
+                WHERE t2.hash = '{}'
+                LIMIT 1
+            )
+            "#,
+            tx_hash
+        );
+
+        self.get_full_operation_with_sql(&sql).await
+    }
+
+    async fn get_full_operation_with_sql(
+        &self,
+        sql: &String,
+    ) -> anyhow::Result<Option<(operation::Model, Vec<(operation_stage::Model, Vec<transaction::Model>)>)>> {
+        let joined: Vec<JoinedRow> = JoinedRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            sql,
+            vec![],
+        ))
+        .all(self.db.as_ref())
+        .await?;
+
+        if joined.is_empty() {
+            return Ok(None);
+        }
+
+        let op_row = &joined[0];
+        let op_model = operation::Model {
+            id: op_row.op_id.clone(),
+            operation_type: op_row.operation_type.clone(),
+            timestamp: op_row.timestamp,
+            next_retry: None,
+            status: op_row.status,
+            retry_count: 0,
+        };
+
+        use std::collections::HashMap;
+
+        let mut stages_map: HashMap<i32, (operation_stage::Model, Vec<transaction::Model>)> = HashMap::new();
+
+        for row in joined {
+            if let Some(stage_id) = row.stage_id {
+                let entry = stages_map.entry(stage_id).or_insert_with(|| {
+                    (
+                        operation_stage::Model {
+                            id: stage_id,
+                            operation_id: op_model.id.clone(),
+                            stage_type_id: row.stage_type_id.unwrap_or_default(),
+                            success: row.stage_success,
+                            timestamp: row.stage_timestamp.unwrap_or_default(),
+                            note: row.stage_note.clone(),
+                        },
+                        vec![],
+                    )
+                });
+
+                if let Some(tx_id) = row.tx_id {
+                    let tx = transaction::Model {
+                        id: tx_id,
+                        stage_id: row.tx_stage_id.unwrap_or_default(),
+                        hash: row.tx_hash.clone().unwrap_or_default(),
+                        blockchain_type: row.tx_blockchain_type.clone().unwrap_or_default(),
+                    };
+                    entry.1.push(tx);
+                }
+            }
+        }
+
+        let mut stages: Vec<_> = stages_map.into_iter().map(|(_, v)| v).collect();
+
+        stages.sort_by_key(|(stage, _)| stage.timestamp);
+
+        Ok(Some((op_model, stages)))
+    }
+
+    pub async fn get_operations(
+        &self,
+        count: usize,
+        earlier_timestamp: Option<u64>,
+        sort: OrderDirection,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let mut query = operation::Entity::find();
+
+        if let Some(ts) = earlier_timestamp {
+            query = query.filter(Column::Timestamp.lt(ts as i64));
+        }
+
+        query = match sort {
+            OrderDirection::EarliestFirst => query.order_by_asc(Column::Timestamp),
+            OrderDirection::LatestFirst => query.order_by_desc(Column::Timestamp),
+        };
+
+        let operations = query
+            .limit(count as u64)
             .all(self.db.as_ref())
             .await?;
 
-        Ok(operation.into_iter().next())
+        Ok(operations)
+    }
+
+    pub async fn reset_processing_intervals(&self) -> anyhow::Result<usize> {
+        let result = interval::Entity::update_many()
+        .col_expr(interval::Column::Status, Expr::value(EntityStatus::Pending.to_id()))
+        .filter(interval::Column::Status.eq(EntityStatus::Processing.to_id()))
+        .exec(self.db.as_ref())
+        .await?;
+
+        Ok(result.rows_affected as usize)
+    }
+
+    pub async fn reset_processing_operations(&self) -> anyhow::Result<usize> {
+        let result = operation::Entity::update_many()
+        .col_expr(operation::Column::Status, Expr::value(EntityStatus::Pending.to_id()))
+        .filter(operation::Column::Status.eq(EntityStatus::Processing.to_id()))
+        .exec(self.db.as_ref())
+        .await?;
+
+        Ok(result.rows_affected as usize)
     }
 }

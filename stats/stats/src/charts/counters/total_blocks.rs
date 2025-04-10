@@ -8,6 +8,7 @@ use crate::{
         },
         types::UpdateContext,
     },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     range::UniversalRange,
     types::timespans::DateValue,
     ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
@@ -72,7 +73,10 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::NoneIndexed
+        IndexingStatus {
+            blockscout: BlockscoutIndexingStatus::NoneIndexed,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        }
     }
 }
 
@@ -147,6 +151,7 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
         };
@@ -174,6 +179,7 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
         };
@@ -211,6 +217,7 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
         };

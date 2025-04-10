@@ -70,6 +70,11 @@
       "subgraph_name": "d3-connect-ape-subgraph",
       "network": "ape-mainnet"
     },
+    "d3-connect-ape-testnet": {
+      "subgraph_path": "../subgraphs/d3-connect-subgraph",
+      "subgraph_name": "d3-connect-ape-testnet-subgraph",
+      "network": "ape-testnet"
+    },
     "d3-connect-shib-testnet": {
         "subgraph_path": "../subgraphs/d3-connect-subgraph",
         "subgraph_name": "d3-connect-shib-testnet-subgraph",
@@ -79,6 +84,16 @@
         "subgraph_path": "../subgraphs/zns-subgraph",
         "subgraph_name": "zns-ink-subgraph",
         "network": "ink-mainnet"
+    },
+    "story": {
+        "subgraph_path": "../subgraphs/story-subgraph",
+        "subgraph_name": "story-subgraph",
+        "network": "story-mainnet"
+    },
+    "gravity": {
+      "subgraph_path": "../subgraphs/gravity-subgraph",
+      "subgraph_name": "gravity-subgraph",
+      "network": "gravity-mainnet"
     }
   }
 }
