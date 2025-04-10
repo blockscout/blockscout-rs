@@ -3,19 +3,13 @@ use std::sync::Arc;
 use tac_operation_lifecycle_entity::{operation, operation_stage, transaction};
 use tac_operation_lifecycle_logic::{client::models::profiling::OperationType, database::{OrderDirection, TacDatabase}};
 use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::{
-  GetOperationByTxHashRequest, 
-  GetOperationDetailsRequest,
-  GetOperationsRequest,
-  OperationBriefDetails,
-  OperationDetails,
-  OperationRelatedTransaction,
-  OperationStage,
-  OperationsResponse,
+  GetOperationByTxHashRequest, GetOperationDetailsRequest,
+  GetOperationsRequest, OperationBriefDetails, OperationDetails,
+  OperationRelatedTransaction, OperationStage, OperationsResponse,
   Pagination
 };
 
 use crate::proto::tac_service_server::TacService;
-use tac_operation_lifecycle_logic::database::TacDatabase;
 
 pub struct OperationsService {
     db: Arc<TacDatabase>,
