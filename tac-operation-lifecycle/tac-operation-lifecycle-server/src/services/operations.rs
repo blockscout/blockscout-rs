@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use tac_operation_lifecycle_entity::{operation, operation_stage, transaction};
-use tac_operation_lifecycle_logic::{client::models::profiling::OperationType, database::TacDatabase};
-use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::{GetOperationByTxHashRequest, GetOperationDetailsRequest, GetOperationsRequest, OperationDetails, OperationRelatedTransaction, OperationStage, OperationsResponse};
+use tac_operation_lifecycle_logic::{client::models::profiling::OperationType, database::{OrderDirection, TacDatabase}};
+use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::{GetOperationByTxHashRequest, GetOperationDetailsRequest, GetOperationsRequest, OperationBriefDetails, OperationDetails, OperationRelatedTransaction, OperationStage, OperationsResponse, Pagination};
 
 use crate::proto::tac_service_server::TacService;
 
@@ -77,7 +77,43 @@ impl TacService for OperationsService {
         &self,
         request: tonic::Request<GetOperationsRequest>,
     ) -> std::result::Result<tonic::Response<OperationsResponse>, tonic::Status> {
-        Err(tonic::Status::not_found("unimplemented yet"))
+        let inner = request.into_inner();
+
+        const PAGE_SIZE: usize = 50;
+
+        match self.db.get_operations(PAGE_SIZE, inner.page_timestamp, OrderDirection::LatestFirst).await {
+            Ok(operations) => {
+                let last_timestamp = operations.last().map(|op| op.timestamp as u64);
+
+                Ok(tonic::Response::new(OperationsResponse {
+                    operations: operations
+                        .into_iter()
+                        .map(|op| {
+                            let op_type = match op.operation_type {
+                                Some(t) => OperationType::from_str(&t.clone()),
+                                _ => OperationType::Unknown,
+                            };
+                            OperationBriefDetails {
+                                operation_id: op.id,
+                                r#type: op_type.to_id(),
+                                timestamp: Some(op.timestamp as u64),
+                                sender: None,
+                            }
+                        })
+                        .collect(),
+                    next_page_params: match last_timestamp {
+                        Some(ts) => Some(Pagination {
+                            page_timestamp: ts,
+                            page_items: inner.page_items.unwrap_or(0) as u32 + PAGE_SIZE as u32,
+                        }),
+                        _ => None,
+                    },    
+                }))
+            },
+            Err(e) => {
+                Err(tonic::Status::internal(e.to_string()))
+            }
+        }
     }
 
     async fn get_operation_details(

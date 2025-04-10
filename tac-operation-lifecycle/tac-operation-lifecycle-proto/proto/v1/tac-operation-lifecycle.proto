@@ -13,12 +13,12 @@ service TacService {
 
 message Pagination {
   uint64 page_timestamp = 1;
-  uint32 page_size = 2;
+  uint32 page_items = 2;
 }
 
 message GetOperationsRequest {
   optional uint64 page_timestamp = 1;
-  optional uint64 page_size = 2;
+  optional uint64 page_items = 2;
 }
 
 message GetOperationDetailsRequest {
@@ -41,7 +41,7 @@ enum OperationType {
 
 message OperationsResponse {
   repeated OperationBriefDetails operations = 1;
-  Pagination next_page_params = 2;
+  optional Pagination next_page_params = 2;
 }
 
 message OperationBriefDetails {

@@ -4,20 +4,21 @@ config_version: 3
 http:
   rules:
     
+    #################### Operations ####################
+
     - selector: blockscout.tacOperationLifecycle.v1.TacService.GetOperations
-      post: /api/v1/TacService:getOperations
-      body: "*"
+      get: /api/v1/tac/operations/list
 
     - selector: blockscout.tacOperationLifecycle.v1.TacService.GetOperationDetails
-      post: /api/v1/TacService:getOperationDetails
-      body: "*"
+      get: /api/v1/tac/operation/{operation_id}
 
     - selector: blockscout.tacOperationLifecycle.v1.TacService.GetOperationByTransaction
-      post: /api/v1/TacService:getOperationByTransaction
-      body: "*"
+      get: /api/v1/tac/operation/tx/{tx_hash}
+
+    #################### Statistics ####################
 
     - selector: blockscout.tacOperationLifecycle.v1.TacStatistic.GetIndexerStatistics
-      post: /api/v1/stat
+      get: /api/v1/stat
     
     #################### Health ####################
 

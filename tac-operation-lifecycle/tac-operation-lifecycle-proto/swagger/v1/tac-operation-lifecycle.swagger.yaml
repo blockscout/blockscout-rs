@@ -11,68 +11,8 @@ consumes:
 produces:
   - application/json
 paths:
-  /api/v1/TacService:getOperationByTransaction:
-    post:
-      operationId: TacService_GetOperationByTransaction
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1OperationDetails'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v1GetOperationByTxHashRequest'
-      tags:
-        - TacService
-  /api/v1/TacService:getOperationDetails:
-    post:
-      operationId: TacService_GetOperationDetails
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1OperationDetails'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v1GetOperationDetailsRequest'
-      tags:
-        - TacService
-  /api/v1/TacService:getOperations:
-    post:
-      operationId: TacService_GetOperations
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1OperationsResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: body
-          in: body
-          required: true
-          schema:
-            $ref: '#/definitions/v1GetOperationsRequest'
-      tags:
-        - TacService
   /api/v1/stat:
-    post:
+    get:
       operationId: TacStatistic_GetIndexerStatistics
       responses:
         "200":
@@ -85,6 +25,69 @@ paths:
             $ref: '#/definitions/rpcStatus'
       tags:
         - TacStatistic
+  /api/v1/tac/operation/tx/{tx_hash}:
+    get:
+      operationId: TacService_GetOperationByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationDetails'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+      tags:
+        - TacService
+  /api/v1/tac/operation/{operation_id}:
+    get:
+      operationId: TacService_GetOperationDetails
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationDetails'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - TacService
+  /api/v1/tac/operations/list:
+    get:
+      operationId: TacService_GetOperations
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: page_timestamp
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: page_items
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - TacService
   /health:
     get:
       summary: |-
@@ -198,25 +201,6 @@ definitions:
       realtime_sync_completeness:
         type: number
         format: double
-  v1GetOperationByTxHashRequest:
-    type: object
-    properties:
-      tx_hash:
-        type: string
-  v1GetOperationDetailsRequest:
-    type: object
-    properties:
-      operation_id:
-        type: string
-  v1GetOperationsRequest:
-    type: object
-    properties:
-      page_timestamp:
-        type: string
-        format: uint64
-      page_size:
-        type: string
-        format: uint64
   v1HealthCheckResponse:
     type: object
     properties:
@@ -304,6 +288,6 @@ definitions:
       page_timestamp:
         type: string
         format: uint64
-      page_size:
+      page_items:
         type: integer
         format: int64

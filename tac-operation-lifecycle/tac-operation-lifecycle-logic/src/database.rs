@@ -2,11 +2,11 @@ use crate::client::models::operations::Operations as ApiOperations;
 use crate::client::models::profiling::OperationData as ApiOperationData;
 use anyhow::anyhow;
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ActiveValue::{self, NotSet}, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QuerySelect, Set, Statement, TransactionTrait
+    sea_query::OnConflict, ActiveModelTrait, ActiveValue::{self, NotSet}, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait
 };
 use std::{cmp::min, collections::HashMap, sync::Arc, thread, time::Instant};
 use tac_operation_lifecycle_entity::{
-    interval, operation, operation_stage, stage_type, transaction, watermark,
+    interval, operation::{self, Column}, operation_stage, stage_type, transaction, watermark,
 };
 use tracing::Instrument;
 use uuid::Uuid;
@@ -1031,5 +1031,30 @@ impl TacDatabase {
         stages.sort_by_key(|(stage, _)| stage.timestamp);
 
         Ok(Some((op_model, stages)))
+    }
+
+    pub async fn get_operations(
+        &self,
+        count: usize,
+        earlier_timestamp: Option<u64>,
+        sort: OrderDirection,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let mut query = operation::Entity::find();
+
+        if let Some(ts) = earlier_timestamp {
+            query = query.filter(Column::Timestamp.lt(ts as i64));
+        }
+
+        query = match sort {
+            OrderDirection::EarliestFirst => query.order_by_asc(Column::Timestamp),
+            OrderDirection::LatestFirst => query.order_by_desc(Column::Timestamp),
+        };
+
+        let operations = query
+            .limit(count as u64)
+            .all(self.db.as_ref())
+            .await?;
+
+        Ok(operations)
     }
 }
