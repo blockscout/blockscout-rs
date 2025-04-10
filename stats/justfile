@@ -13,8 +13,11 @@ export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "0")
 docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
 
-docker-build *args:
-    docker build --build-context proto=../proto . {{args}}
+docker-build-dev *args:
+    docker compose -f docker-compose.dev.yml build
+
+docker-run-dev *args:
+    docker compose -f docker-compose.dev.yml up
 
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping

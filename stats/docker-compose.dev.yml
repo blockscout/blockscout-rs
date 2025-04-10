@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   db-init:
-    image: postgres:16
+    image: postgres:17
     volumes:
       - ./data/blockscout-db:/var/lib/postgresql/data
     entrypoint:
@@ -15,7 +15,7 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
-    image: postgres:16
+    image: postgres:17
     user: 2000:2000
     shm_size: 256m
     restart: always
@@ -43,8 +43,6 @@ services:
     image: blockscout/blockscout:6.8.0
     links:
       - db:database
-    # extra_hosts:
-    #   - 'host.docker.internal:host-gateway'
     environment:
       DATABASE_URL: postgresql://blockscout:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout
       ETHEREUM_JSONRPC_VARIANT: erigon
@@ -61,7 +59,7 @@ services:
     command: [ "/bin/sh", "-c", "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start" ]
 
   stats-db-init:
-    image: postgres:16
+    image: postgres:17
     volumes:
       - ./data/stats-db:/var/lib/postgresql/data
     entrypoint:
@@ -74,7 +72,7 @@ services:
     depends_on:
       stats-db-init:
         condition: service_completed_successfully
-    image: postgres:16
+    image: postgres:17
     user: 2000:2000
     shm_size: 256m
     restart: always
@@ -100,13 +98,16 @@ services:
     depends_on:
       - stats-db
       - backend
-    build: .
+    build:
+      context: .
+      additional_contexts:
+        - proto=../proto
+      tags:
+        - stats:local-build
     pull_policy: always
     platform: linux/amd64
     restart: always
     container_name: 'stats'
-    # extra_hosts:
-    #   - 'host.docker.internal:host-gateway'
     environment:
       - STATS__DB_URL=postgres://stats:n0uejXPl61ci6ldCuE2gQU5Y@stats-db:5432/stats
       - STATS__BLOCKSCOUT_DB_URL=${STATS__BLOCKSCOUT_DB_URL:-postgresql://blockscout:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout}
@@ -115,8 +116,8 @@ services:
       - STATS__SERVER__HTTP__ENABLED=true
       - STATS__SERVER__HTTP__ADDR=0.0.0.0:8050
       - STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152
+      - STATS__SERVER__HTTP__BASE_PATH=/kek
       - STATS__BLOCKSCOUT_API_URL=http://backend:4000
-      # - STATS__FORCE_UPDATE_ON_START=true
       - RUST_BACKTRACE=1
     ports:
       - 8080:8050

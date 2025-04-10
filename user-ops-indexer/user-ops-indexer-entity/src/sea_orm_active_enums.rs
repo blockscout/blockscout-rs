@@ -13,6 +13,8 @@ pub enum EntryPointVersion {
     V06,
     #[sea_orm(string_value = "v0.7")]
     V07,
+    #[sea_orm(string_value = "v0.8")]
+    V08,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "sponsor_type")]

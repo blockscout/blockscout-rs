@@ -8,7 +8,9 @@ fn main() {
         "bens-server/config/example.json",
         PrefixFilter::blacklist(&[
             "BENS__SERVER__HTTP__CORS",
+            "BENS__SERVER__HTTP__BASE_PATH",
             "BENS__SERVER__GRPC",
+            "BENS__DATABASE__CONNECT_OPTIONS",
             "BENS__METRICS",
             "BENS__JAEGER",
         ]),
