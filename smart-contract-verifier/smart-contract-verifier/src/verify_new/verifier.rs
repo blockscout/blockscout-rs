@@ -5,9 +5,12 @@ use super::{
     verification, Error,
 };
 use crate::{DetailedVersion, FullyQualifiedName, Language, OnChainContract};
+use blockscout_display_bytes::ToHex;
+use bytes::Bytes;
 use std::collections::BTreeMap;
-use verification_common::verifier_alliance::{
-    CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts,
+use verification_common::{
+    blueprint_contracts,
+    verifier_alliance::{CompilationArtifacts, CreationCodeArtifacts, Match, RuntimeCodeArtifacts},
 };
 
 pub struct VerifyingContract {
@@ -23,6 +26,7 @@ pub struct VerifyingContract {
     pub runtime_code_artifacts: RuntimeCodeArtifacts,
     pub runtime_match: Option<Match>,
     pub creation_match: Option<Match>,
+    pub is_blueprint: bool,
 }
 
 pub type VerificationResult = Vec<VerifyingContract>;
@@ -48,19 +52,31 @@ fn verify_on_chain_contract(
     contract: OnChainContract,
     compilation_result: &CompilationResult,
 ) -> Result<VerificationResult, Error> {
+    let blueprint_initcode = try_extract_blueprint_initcode(&contract)?;
+    let is_blueprint = blueprint_initcode.is_some();
+
     let mut successes = vec![];
     for (fully_qualified_name, contract_artifacts) in &compilation_result.artifacts {
-        let verify_contract_result = verification::verify_contract(
-            contract.code.clone(),
-            contract_artifacts.code.clone(),
-            contract_artifacts.compilation_artifacts.clone(),
-            contract_artifacts.creation_code_artifacts.clone(),
-            contract_artifacts.runtime_code_artifacts.clone(),
-        );
+        let verify_contract_result = match blueprint_initcode.clone() {
+            Some(initcode) => verification::verify_blueprint_contract(
+                initcode,
+                contract_artifacts.code.clone(),
+                &contract_artifacts.creation_code_artifacts,
+            ),
+            None => verification::verify_contract(
+                contract.code.clone(),
+                contract_artifacts.code.clone(),
+                &contract_artifacts.compilation_artifacts,
+                &contract_artifacts.creation_code_artifacts,
+                &contract_artifacts.runtime_code_artifacts,
+            ),
+        };
+
         let maybe_verifying_contract = process_verify_contract_result(
             compilation_result,
             fully_qualified_name,
             &verify_contract_result,
+            is_blueprint,
         )?;
 
         if let Some(verifying_contract) = maybe_verifying_contract {
@@ -75,6 +91,7 @@ fn process_verify_contract_result(
     compilation_result: &CompilationResult,
     contract_fully_qualified_name: &FullyQualifiedName,
     verify_contract_result: &verification::VerificationResult,
+    is_blueprint: bool,
 ) -> Result<Option<VerifyingContract>, Error> {
     let (runtime_match, creation_match) = match verify_contract_result.clone() {
         verification::VerificationResult::Failure => return Ok(None),
@@ -112,7 +129,42 @@ fn process_verify_contract_result(
             .clone(),
         runtime_match,
         creation_match,
+        is_blueprint,
     };
 
     Ok(Some(verifying_contract))
+}
+
+/// In case only one of creation or runtime code correspond to blueprint,
+/// or they correspond to different initcodes, returns `Error::NotConsistentBlueprintOnChainCode`.
+fn try_extract_blueprint_initcode(contract: &OnChainContract) -> Result<Option<Vec<u8>>, Error> {
+    let creation_code = contract.code.creation.as_ref();
+    let runtime_code = contract.code.runtime.as_ref();
+
+    match (creation_code, runtime_code) {
+        (Some(creation_code), Some(runtime_code)) => {
+            let creation_blueprint =
+                blueprint_contracts::from_creation_code(Bytes::copy_from_slice(creation_code));
+            let runtime_blueprint =
+                blueprint_contracts::from_runtime_code(Bytes::copy_from_slice(runtime_code));
+            if creation_blueprint != runtime_blueprint {
+                return Err(Error::NotConsistentBlueprintOnChainCode {
+                    chain_id: contract.chain_id.clone(),
+                    address: contract.address.map(|address| address.to_hex()),
+                });
+            }
+            Ok(creation_blueprint.map(|value| value.initcode.to_vec()))
+        }
+        (Some(creation_code), None) => {
+            let blueprint =
+                blueprint_contracts::from_creation_code(Bytes::copy_from_slice(creation_code));
+            Ok(blueprint.map(|value| value.initcode.to_vec()))
+        }
+        (None, Some(runtime_code)) => {
+            let blueprint =
+                blueprint_contracts::from_runtime_code(Bytes::copy_from_slice(runtime_code));
+            Ok(blueprint.map(|value| value.initcode.to_vec()))
+        }
+        (None, None) => Ok(None),
+    }
 }
