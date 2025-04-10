@@ -45,6 +45,12 @@ impl TacStatistic for StatisticService {
                     / (self.realtime_boundary - stat.first_timestamp) as f64,
                 realtime_sync_completeness: stat.realtime_processed_period as f64
                     / (now - self.realtime_boundary) as f64,
+                total_operations: stat.total_operations as u64,
+                failed_operations: stat.failed_operations as u64,
+                total_pending_operations: stat.total_pending_operations as u64,
+                operations_sync_completeness: (stat.total_operations - stat.failed_operations - stat.total_pending_operations) as f64
+                    / stat.total_operations as f64,
+                
             })),
 
             Err(e) => Err(tonic::Status::internal(e.to_string())),

@@ -5,7 +5,7 @@ use reqwest::{Client as HttpClient, Method, Request, Response};
 use settings::RpcSettings;
 use tokio;
 use tower::{limit::RateLimit, Service, ServiceBuilder, ServiceExt};
-use tracing::{debug, error};
+use tracing::debug;
 
 pub mod settings;
 

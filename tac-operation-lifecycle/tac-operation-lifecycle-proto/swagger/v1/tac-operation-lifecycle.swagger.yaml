@@ -201,6 +201,18 @@ definitions:
       realtime_sync_completeness:
         type: number
         format: double
+      total_operations:
+        type: string
+        format: uint64
+      failed_operations:
+        type: string
+        format: uint64
+      total_pending_operations:
+        type: string
+        format: uint64
+      operations_sync_completeness:
+        type: number
+        format: double
   v1HealthCheckResponse:
     type: object
     properties:

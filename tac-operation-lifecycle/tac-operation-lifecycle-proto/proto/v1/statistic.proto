@@ -28,4 +28,8 @@ message GetIndexerStatisticResponse {
     uint64 realtime_processed_period = 12;
     double historical_sync_completeness = 13;
     double realtime_sync_completeness = 14;
+    uint64 total_operations = 15;
+    uint64 failed_operations = 16;
+    uint64 total_pending_operations = 17;
+    double operations_sync_completeness = 18;
 }

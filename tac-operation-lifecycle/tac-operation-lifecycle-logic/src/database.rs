@@ -70,6 +70,9 @@ pub struct DatabaseStatistic {
     pub realtime_pending_intervals: usize,
     pub historical_processed_period: u64,
     pub realtime_processed_period: u64,
+    pub total_operations: usize,
+    pub failed_operations: usize,
+    pub total_pending_operations: usize,
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -884,6 +887,15 @@ impl TacDatabase {
             .filter(interval::Column::Status.eq(EntityStatus::Pending.to_id()))
             .filter(interval::Column::Start.gte(historical_boundary))
             .count(self.db.as_ref());
+        let total_operations = operation::Entity::find().count(self.db.as_ref());
+        let total_pending_operations = operation::Entity::find()
+            .filter(operation::Column::Status.eq(EntityStatus::Pending.to_id()))
+            .count(self.db.as_ref());
+        let failed_operations = operation::Entity::find()
+            .filter(operation::Column::Status.ne(EntityStatus::Finalized.to_id()))
+            .filter(operation::Column::RetryCount.gt(0))
+            .count(self.db.as_ref());
+
 
         let sql1 = Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
@@ -922,6 +934,9 @@ impl TacDatabase {
                 .await?
                 .and_then(|row| row.try_get::<i64>("", "sum").ok())
                 .unwrap_or(0) as u64,
+            total_operations: total_operations.await? as usize,
+            failed_operations: failed_operations.await? as usize,
+            total_pending_operations: total_pending_operations.await? as usize,
         })
     }
 
