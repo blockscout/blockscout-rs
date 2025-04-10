@@ -13,7 +13,10 @@ pub struct StatisticService {
 
 impl StatisticService {
     pub fn new(db: Arc<TacDatabase>, realtime_boundary: u64) -> Self {
-        Self { db , realtime_boundary}
+        Self {
+            db,
+            realtime_boundary,
+        }
     }
 }
 
@@ -21,7 +24,7 @@ impl StatisticService {
 impl TacStatistic for StatisticService {
     async fn get_indexer_statistics(
         &self,
-        _: tonic::Request<GetIndexerStatisticRequest>
+        _: tonic::Request<GetIndexerStatisticRequest>,
     ) -> Result<tonic::Response<GetIndexerStatisticResponse>, tonic::Status> {
         let now = chrono::Utc::now().timestamp() as u64;
         match self.db.get_statistic(self.realtime_boundary).await {
@@ -37,13 +40,14 @@ impl TacStatistic for StatisticService {
                 historical_pending_intervals: stat.historical_pending_intervals as u64,
                 realtime_pending_intervals: stat.realtime_pending_intervals as u64,
                 historical_processed_period: stat.historical_processed_period,
-                realtime_processed_period: stat.realtime_processed_period, 
-                historical_sync_completeness: stat.historical_processed_period as f64 / (self.realtime_boundary - stat.first_timestamp) as f64,
-                realtime_sync_completeness: stat.realtime_processed_period as f64 / (now - self.realtime_boundary) as f64,
+                realtime_processed_period: stat.realtime_processed_period,
+                historical_sync_completeness: stat.historical_processed_period as f64
+                    / (self.realtime_boundary - stat.first_timestamp) as f64,
+                realtime_sync_completeness: stat.realtime_processed_period as f64
+                    / (now - self.realtime_boundary) as f64,
             })),
 
-            Err(e) => 
-                Err(tonic::Status::internal(e.to_string()))
+            Err(e) => Err(tonic::Status::internal(e.to_string())),
         }
     }
 }

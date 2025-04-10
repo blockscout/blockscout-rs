@@ -20,19 +20,15 @@ pub struct Settings {
     pub database: DatabaseSettings,
 
     pub indexer: Option<IndexerSettings>,
-    pub rpc: RpcSettings
-    }
+    pub rpc: RpcSettings,
+}
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "TAC_OPERATION_LIFECYCLE";
 }
 
 impl Settings {
-    pub fn default(
-        
-        database_url: String,
-        
-    ) -> Self {
+    pub fn default(database_url: String) -> Self {
         Self {
             server: Default::default(),
             metrics: Default::default(),

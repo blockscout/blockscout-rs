@@ -27,7 +27,7 @@ pub enum OperationType {
     Rollback,
     Unknown,
     #[serde(other)]
-    ErrorType
+    ErrorType,
 }
 
 #[derive(Debug, Deserialize, Eq, PartialEq, Hash)]

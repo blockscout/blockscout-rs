@@ -39,7 +39,11 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(Operation::OperationType).string().null())
-                    .col(ColumnDef::new(Operation::Timestamp).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(Operation::Timestamp)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Operation::NextRetry).big_integer().null())
                     .col(ColumnDef::new(Operation::Status).integer().not_null())
                     .col(ColumnDef::new(Operation::RetryCount).integer().not_null())
@@ -80,7 +84,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-            manager
+        manager
             .create_table(
                 Table::create()
                     .table(Interval::Table)
@@ -89,7 +93,7 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(Interval::Id)
                             .integer()
                             .not_null()
-                        .auto_increment()
+                            .auto_increment()
                             .primary_key(),
                     )
                     .col(ColumnDef::new(Interval::Start).big_integer().not_null())
@@ -97,7 +101,11 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Interval::Timestamp).big_integer().not_null())
                     .col(ColumnDef::new(Interval::Status).small_unsigned().not_null())
                     .col(ColumnDef::new(Interval::NextRetry).big_integer().null())
-                    .col(ColumnDef::new(Interval::RetryCount).small_unsigned().not_null())
+                    .col(
+                        ColumnDef::new(Interval::RetryCount)
+                            .small_unsigned()
+                            .not_null(),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -315,7 +323,7 @@ enum WaterMark {
     Timestamp,
 }
 #[derive(Iden)]
-enum Interval    {
+enum Interval {
     Table,
     Id,
     Start,

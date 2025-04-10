@@ -36,9 +36,7 @@ fn default_request_per_second() -> u32 {
 
 impl Default for IndexerSettings {
     fn default() -> Self {
-        Self {
-            start_height: None,
-        }
+        Self { start_height: None }
     }
 }
 impl Default for RpcSettings {

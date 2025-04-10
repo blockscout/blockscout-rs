@@ -1,15 +1,21 @@
-use crate::client::models::operations::Operations as ApiOperations;
-use crate::client::models::profiling::OperationData as ApiOperationData;
+use crate::client::models::{
+    operations::Operations as ApiOperations, profiling::OperationData as ApiOperationData,
+};
 use anyhow::anyhow;
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveModelTrait,
-    ActiveValue::{self, NotSet}, ColumnTrait, ConnectionTrait, DatabaseConnection,
-    DatabaseTransaction, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set, Statement, TransactionTrait
+    prelude::Expr,
+    sea_query::OnConflict,
+    ActiveModelTrait,
+    ActiveValue::{self, NotSet},
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
+    FromQueryResult, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, Statement,
+    TransactionTrait,
 };
 use std::{cmp::min, collections::HashMap, sync::Arc, thread, time::Instant};
 use tac_operation_lifecycle_entity::{
-    interval, operation::{self, Column}, operation_stage, stage_type, transaction, watermark,
+    interval,
+    operation::{self, Column},
+    operation_stage, stage_type, transaction, watermark,
 };
 use tracing::Instrument;
 use uuid::Uuid;
@@ -513,53 +519,52 @@ impl TacDatabase {
         if let Some(end) = to {
             conditions.push(format!(r#""end" < {}"#, end));
         }
-        
+
         let sql = self.build_interval_query(
             conditions,
             Some(("start", order)),
             num,
             EntityStatus::Processing,
         );
-        
+
         self.query_intervals(&sql)
-        .instrument(tracing::info_span!(
-            "query pending intervals",
-            // sql = format_sql_for_logging(sql.as_str())
-        ))
-        .await
+            .instrument(tracing::info_span!(
+                "query pending intervals",
+                // sql = format_sql_for_logging(sql.as_str())
+            ))
+            .await
     }
 
-    pub async fn query_failed_intervals(
-        &self,
-        num: usize,
-    ) -> anyhow::Result<Vec<interval::Model>> {
+    pub async fn query_failed_intervals(&self, num: usize) -> anyhow::Result<Vec<interval::Model>> {
         let conditions = vec![
             format!("status = {}", EntityStatus::Pending.to_id()),
             format!("next_retry IS NOT NULL"),
             format!("next_retry < {}", chrono::Utc::now().timestamp()),
         ];
-        
+
         let sql = self.build_interval_query(
             conditions,
             Some(("next_retry", OrderDirection::EarliestFirst)),
             num,
             EntityStatus::Processing,
         );
-        
+
         let span_id = Uuid::new_v4();
-        self.query_intervals(&sql).instrument(tracing::info_span!(
-            "query failed intervals",
-            span_id = span_id.to_string()
-        ))
-        .await
+        self.query_intervals(&sql)
+            .instrument(tracing::info_span!(
+                "query failed intervals",
+                span_id = span_id.to_string()
+            ))
+            .await
     }
 
     async fn query_intervals(&self, sql: &String) -> anyhow::Result<Vec<interval::Model>> {
         // Generate a unique transaction ID for tracking
         let tx_id = Uuid::new_v4();
-        
+
         // Create the statement
-        let update_stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
+        let update_stmt =
+            Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
 
         // Execute the UPDATE with RETURNING clause directly on the database connection
         match interval::Entity::find()
@@ -575,12 +580,9 @@ impl TacDatabase {
             Ok(intervals) => {
                 tracing::info!("Updated intervals: {}", intervals.len());
                 Ok(intervals)
-            },
+            }
             Err(e) => {
-                tracing::error!(
-                    "Failed to update intervals: {}",
-                    e
-                );
+                tracing::error!("Failed to update intervals: {}", e);
                 Err(e.into())
             }
         }
@@ -593,19 +595,17 @@ impl TacDatabase {
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
         let conditions = vec![format!("status = {}", EntityStatus::Pending.to_id())];
-        
+
         let sql = self.build_operation_query(
             conditions,
             Some(("timestamp", order)),
             num,
             EntityStatus::Processing,
         );
-        
+
         self.query_operations(&sql)
-        .instrument(tracing::debug_span!(
-            "query pending operations"
-        ))
-        .await
+            .instrument(tracing::debug_span!("query pending operations"))
+            .await
     }
 
     pub async fn query_failed_operations(
@@ -618,29 +618,30 @@ impl TacDatabase {
             format!("next_retry IS NOT NULL"),
             format!("next_retry < {}", chrono::Utc::now().timestamp()),
         ];
-        
+
         let sql = self.build_operation_query(
             conditions,
             Some(("next_retry", order)),
             num,
             EntityStatus::Processing,
         );
-        
+
         let span_id = Uuid::new_v4();
         self.query_operations(&sql)
-        .instrument(tracing::debug_span!(
-            "query failed operations",
-            span_id = span_id.to_string()
-        ))
-        .await
+            .instrument(tracing::debug_span!(
+                "query failed operations",
+                span_id = span_id.to_string()
+            ))
+            .await
     }
 
     async fn query_operations(&self, sql: &String) -> anyhow::Result<Vec<operation::Model>> {
         // Generate a unique transaction ID for tracking
         let tx_id = Uuid::new_v4();
-        
+
         // Create the statement
-        let update_stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
+        let update_stmt =
+            Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
 
         // Execute the UPDATE with RETURNING clause directly on the database connection
         match operation::Entity::find()
@@ -656,12 +657,9 @@ impl TacDatabase {
             Ok(operations) => {
                 tracing::info!("Updated operations: {}", operations.len());
                 Ok(operations)
-            },
+            }
             Err(e) => {
-                tracing::error!(
-                    "Failed to update operations: {}",
-                    e
-                );
+                tracing::error!("Failed to update operations: {}", e);
                 Err(e.into())
             }
         }
@@ -716,9 +714,13 @@ impl TacDatabase {
         operation_model.operation_type = Set(Some(operation_data.operation_type.to_string()));
 
         if let Err(e) = operation_model
-        .update(&txn)
-        .instrument(tracing::debug_span!("updating operation", tx_id = tx_id.to_string()))
-        .await {
+            .update(&txn)
+            .instrument(tracing::debug_span!(
+                "updating operation",
+                tx_id = tx_id.to_string()
+            ))
+            .await
+        {
             tracing::error!("Failed to update operation status: {}", e);
             let _ = txn.rollback().await;
 
@@ -785,16 +787,16 @@ impl TacDatabase {
 
         // Commit transaction
         let commit_start = Instant::now();
-        
 
         match txn
             .commit()
-            .instrument(tracing::debug_span!("commiting insert transaction", tx_id = tx_id.to_string()))
+            .instrument(tracing::debug_span!(
+                "commiting insert transaction",
+                tx_id = tx_id.to_string()
+            ))
             .await
         {
-            Ok(_) => {
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(e) => {
                 tracing::error!(
                     "[TX-{:?}] Failed to commit transaction after {:?}ms: {}",
@@ -927,8 +929,14 @@ impl TacDatabase {
     pub async fn get_operation_by_id(
         &self,
         id: &String,
-    ) -> anyhow::Result<Option<(operation::Model, Vec<(operation_stage::Model, Vec<transaction::Model>)>)>> {
-        let sql = format!(r#"
+    ) -> anyhow::Result<
+        Option<(
+            operation::Model,
+            Vec<(operation_stage::Model, Vec<transaction::Model>)>,
+        )>,
+    > {
+        let sql = format!(
+            r#"
             SELECT 
                 o.id as op_id, o.operation_type, o.timestamp, o.status,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
@@ -947,8 +955,14 @@ impl TacDatabase {
     pub async fn get_operation_by_tx_hash(
         &self,
         tx_hash: &String,
-    ) -> anyhow::Result<Option<(operation::Model, Vec<(operation_stage::Model, Vec<transaction::Model>)>)>> {
-        let sql = format!(r#"
+    ) -> anyhow::Result<
+        Option<(
+            operation::Model,
+            Vec<(operation_stage::Model, Vec<transaction::Model>)>,
+        )>,
+    > {
+        let sql = format!(
+            r#"
             SELECT 
                 o.id as op_id, o.operation_type, o.timestamp, o.status,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
@@ -974,14 +988,20 @@ impl TacDatabase {
     async fn get_full_operation_with_sql(
         &self,
         sql: &String,
-    ) -> anyhow::Result<Option<(operation::Model, Vec<(operation_stage::Model, Vec<transaction::Model>)>)>> {
-        let joined: Vec<JoinedRow> = JoinedRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            sql,
-            vec![],
-        ))
-        .all(self.db.as_ref())
-        .await?;
+    ) -> anyhow::Result<
+        Option<(
+            operation::Model,
+            Vec<(operation_stage::Model, Vec<transaction::Model>)>,
+        )>,
+    > {
+        let joined: Vec<JoinedRow> =
+            JoinedRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                sql,
+                vec![],
+            ))
+            .all(self.db.as_ref())
+            .await?;
 
         if joined.is_empty() {
             return Ok(None);
@@ -999,7 +1019,8 @@ impl TacDatabase {
 
         use std::collections::HashMap;
 
-        let mut stages_map: HashMap<i32, (operation_stage::Model, Vec<transaction::Model>)> = HashMap::new();
+        let mut stages_map: HashMap<i32, (operation_stage::Model, Vec<transaction::Model>)> =
+            HashMap::new();
 
         for row in joined {
             if let Some(stage_id) = row.stage_id {
@@ -1053,30 +1074,33 @@ impl TacDatabase {
             OrderDirection::LatestFirst => query.order_by_desc(Column::Timestamp),
         };
 
-        let operations = query
-            .limit(count as u64)
-            .all(self.db.as_ref())
-            .await?;
+        let operations = query.limit(count as u64).all(self.db.as_ref()).await?;
 
         Ok(operations)
     }
 
     pub async fn reset_processing_intervals(&self) -> anyhow::Result<usize> {
         let result = interval::Entity::update_many()
-        .col_expr(interval::Column::Status, Expr::value(EntityStatus::Pending.to_id()))
-        .filter(interval::Column::Status.eq(EntityStatus::Processing.to_id()))
-        .exec(self.db.as_ref())
-        .await?;
+            .col_expr(
+                interval::Column::Status,
+                Expr::value(EntityStatus::Pending.to_id()),
+            )
+            .filter(interval::Column::Status.eq(EntityStatus::Processing.to_id()))
+            .exec(self.db.as_ref())
+            .await?;
 
         Ok(result.rows_affected as usize)
     }
 
     pub async fn reset_processing_operations(&self) -> anyhow::Result<usize> {
         let result = operation::Entity::update_many()
-        .col_expr(operation::Column::Status, Expr::value(EntityStatus::Pending.to_id()))
-        .filter(operation::Column::Status.eq(EntityStatus::Processing.to_id()))
-        .exec(self.db.as_ref())
-        .await?;
+            .col_expr(
+                operation::Column::Status,
+                Expr::value(EntityStatus::Pending.to_id()),
+            )
+            .filter(operation::Column::Status.eq(EntityStatus::Processing.to_id()))
+            .exec(self.db.as_ref())
+            .await?;
 
         Ok(result.rows_affected as usize)
     }

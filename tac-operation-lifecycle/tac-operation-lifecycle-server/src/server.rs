@@ -1,17 +1,12 @@
 use crate::{
     proto::{
         health_actix::route_health, health_server::HealthServer,
-        tac_service_actix::route_tac_service,
-        tac_statistic_actix::route_tac_statistic,
+        tac_service_actix::route_tac_service, tac_statistic_actix::route_tac_statistic,
     },
-    services::{
-        HealthService, OperationsService, StatisticService
-    },
+    services::{HealthService, OperationsService, StatisticService},
     settings::Settings,
 };
-use blockscout_service_launcher::{
-    launcher, launcher::LaunchSettings, tracing};
-
+use blockscout_service_launcher::{launcher, launcher::LaunchSettings, tracing};
 
 use tac_operation_lifecycle_logic::database::TacDatabase;
 
@@ -29,9 +24,8 @@ struct Router {
 
 impl Router {
     pub fn grpc_router(&self) -> tonic::transport::server::Router {
-        tonic::transport::Server::builder()
-            .add_service(HealthServer::from_arc(self.health.clone()))
-            //.add_service(StatisticService::from_arc(self.stat.clone()))
+        tonic::transport::Server::builder().add_service(HealthServer::from_arc(self.health.clone()))
+        //.add_service(StatisticService::from_arc(self.stat.clone()))
     }
 }
 
@@ -43,14 +37,17 @@ impl launcher::HttpRouter for Router {
     }
 }
 
-pub async fn run(settings: Settings, db: Arc<TacDatabase>, realtime_boundary: u64) -> Result<(), anyhow::Error> {
+pub async fn run(
+    settings: Settings,
+    db: Arc<TacDatabase>,
+    realtime_boundary: u64,
+) -> Result<(), anyhow::Error> {
     println!("running server");
     tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
     let stat = Arc::new(StatisticService::new(db.clone(), realtime_boundary));
     let operations = Arc::new(OperationsService::new(db.clone()));
-    
 
     // TODO: init services here
 
