@@ -528,9 +528,8 @@ impl TacDatabase {
         );
 
         self.query_intervals(&sql)
-            .instrument(tracing::info_span!(
+            .instrument(tracing::debug_span!(
                 "query pending intervals",
-                // sql = format_sql_for_logging(sql.as_str())
             ))
             .await
     }
@@ -551,7 +550,7 @@ impl TacDatabase {
 
         let span_id = Uuid::new_v4();
         self.query_intervals(&sql)
-            .instrument(tracing::info_span!(
+            .instrument(tracing::debug_span!(
                 "query failed intervals",
                 span_id = span_id.to_string()
             ))
@@ -578,7 +577,7 @@ impl TacDatabase {
             .await
         {
             Ok(intervals) => {
-                tracing::info!("Updated intervals: {}", intervals.len());
+                tracing::debug!("Updated intervals: {}", intervals.len());
                 Ok(intervals)
             }
             Err(e) => {
@@ -655,7 +654,7 @@ impl TacDatabase {
             .await
         {
             Ok(operations) => {
-                tracing::info!("Updated operations: {}", operations.len());
+                tracing::debug!("Updated operations: {}", operations.len());
                 Ok(operations)
             }
             Err(e) => {

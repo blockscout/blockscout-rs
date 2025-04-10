@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
@@ -53,6 +54,7 @@ pub struct StageData {
     pub success: bool,
     pub timestamp: u64,
     pub transactions: Vec<Transaction>,
+    #[serde(default, deserialize_with = "deserialize_note_to_string")]
     pub note: Option<String>,
 }
 
@@ -70,4 +72,16 @@ pub enum BlockchainType {
 pub struct Transaction {
     pub hash: String,
     pub blockchain_type: BlockchainType,
+}
+
+
+fn deserialize_note_to_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let val: Option<Value> = Option::deserialize(deserializer)?;
+    Ok(val.map(|v| match v {
+        Value::String(s) => s,
+        other => other.to_string(),
+    }))
 }

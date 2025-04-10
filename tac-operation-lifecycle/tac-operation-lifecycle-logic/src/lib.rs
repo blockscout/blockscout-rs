@@ -183,7 +183,7 @@ impl Indexer {
             loop {
                 let span_id = Uuid::new_v4();
                 match self.database.query_pending_intervals(INTERVALS_QUERY_RESULT_SIZE, direction, from, to)
-                    .instrument(tracing::info_span!(
+                    .instrument(tracing::debug_span!(
                         "INTERVALS",
                         span_id = span_id.to_string(),
                         direction = direction.sql_order_string()
@@ -215,7 +215,7 @@ impl Indexer {
             loop {
                 let span_id = Uuid::new_v4();
                 match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
-                    .instrument(tracing::info_span!(
+                    .instrument(tracing::debug_span!(
                         "PENDING OPERATIONS",
                         span_id = span_id.to_string()
                     ))
@@ -343,7 +343,7 @@ impl Indexer {
     ) -> Result<usize, Error> {
         let mut client = client.lock().await;
         let thread_id = thread::current().id();
-        tracing::info!(
+        tracing::debug!(
             "[Thread {:?}] Processing interval job: {:?}",
             thread_id,
             job
@@ -351,7 +351,7 @@ impl Indexer {
 
         let operations = client
             .get_operations(job.interval.start as u64, job.interval.end as u64)
-            .instrument(tracing::info_span!(
+            .instrument(tracing::debug_span!(
                 "get_operations",
                 interval_id = job.interval.id,
                 start = job.interval.start,
@@ -484,13 +484,13 @@ impl Indexer {
         let (updated_intervals, updated_operations) = self.reset_processing_operations().await?;
         if updated_intervals > 0 {
             tracing::info!(
-                "Found and reseted {} intervals in 'processing' state",
+                "Found and reset {} intervals in 'processing' state",
                 updated_intervals
             );
         }
         if updated_operations > 0 {
             tracing::info!(
-                "Found and reseted {} intervals in 'processing' state",
+                "Found and reset {} operations in 'processing' state",
                 updated_operations
             );
         }
@@ -546,7 +546,7 @@ impl Indexer {
         // Process the prioritized stream
         while let Some(job) = combined_stream.next().await {
             let span_id = Uuid::new_v4();
-            tracing::info!("Processing job: {:?}", job);
+            tracing::debug!("Processing job: {:?}", job);
             match job {
                 IndexerJob::Realtime => {
                     let wm = self.database.get_watermark().await.unwrap();
@@ -558,7 +558,7 @@ impl Indexer {
 
                 IndexerJob::Interval(job) => {
                     self.process_interval_with_retries(&job, client.clone())
-                        .instrument(tracing::info_span!(
+                        .instrument(tracing::debug_span!(
                             "processing interval",
                             span_id = span_id.to_string()
                         ))

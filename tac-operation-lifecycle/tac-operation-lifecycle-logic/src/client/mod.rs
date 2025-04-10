@@ -63,7 +63,7 @@ impl Client {
         match serde_json::from_str::<OperationIdsApiResponse>(&text) {
             Ok(response) => Ok(response.response.operations),
             Err(e) => {
-                tracing::error!("Failed to parse response: {}", e);
+                tracing::error!("Failed to parse operations list ({}) response: {}", url, e);
                 Err(e.into())
             }
         }
@@ -97,17 +97,16 @@ impl Client {
 
         if response.status().is_success() {
             let text = response.text().await?;
-            debug!("Raw response body: {}", text);
 
             if text.is_empty() {
-                tracing::error!("Received empty response from {url}");
+                tracing::error!("Received empty response from {url} (staging for {:?})", id);
                 return Err(anyhow::anyhow!("Received empty response from {url}"));
             }
 
             match serde_json::from_str::<StageProfilingApiResponse>(&text) {
                 Ok(response) => Ok(response.response),
                 Err(e) => {
-                    error!("Failed to parse response: {}", e);
+                    tracing::error!("Failed to parse response (staging for {:?}): {}", id, e);
                     Err(e.into())
                 }
             }

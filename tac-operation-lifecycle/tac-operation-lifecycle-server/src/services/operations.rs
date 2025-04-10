@@ -66,7 +66,7 @@ impl OperationsService {
                                         }
                                     })
                                     .collect(),
-                                note: None, // TODO
+                                note: s.note.clone(),
                             }
                         })
                         .collect(),
