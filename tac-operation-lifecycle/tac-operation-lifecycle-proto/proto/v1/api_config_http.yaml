@@ -24,4 +24,3 @@ http:
 
     - selector: blockscout.tacOperationLifecycle.v1.Health.Check
       get: /health
-

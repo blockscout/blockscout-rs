@@ -2,7 +2,11 @@ use crate::client::models::operations::Operations as ApiOperations;
 use crate::client::models::profiling::OperationData as ApiOperationData;
 use anyhow::anyhow;
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ActiveValue::{self, NotSet}, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait, prelude::Expr
+    sea_query::OnConflict,
+    ActiveModelTrait,
+    ActiveValue::{self, NotSet},
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
+    PaginatorTrait, QueryFilter, QuerySelect, Set, Statement, TransactionTrait,
 };
 use std::{cmp::min, collections::HashMap, sync::Arc, thread, time::Instant};
 use tac_operation_lifecycle_entity::{
