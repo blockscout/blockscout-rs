@@ -4,13 +4,6 @@ use serde_with::serde_as;
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct IndexerSettings {
-    pub start_height: Option<u64>,
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 pub struct RpcSettings {
     pub url: String,
     pub auth_token: Option<String>,
@@ -34,11 +27,6 @@ fn default_request_per_second() -> u32 {
     100
 }
 
-impl Default for IndexerSettings {
-    fn default() -> Self {
-        Self { start_height: None }
-    }
-}
 impl Default for RpcSettings {
     fn default() -> Self {
         Self {
