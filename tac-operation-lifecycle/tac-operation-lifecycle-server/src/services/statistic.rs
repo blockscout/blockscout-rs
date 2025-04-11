@@ -48,9 +48,11 @@ impl TacStatistic for StatisticService {
                 total_operations: stat.total_operations as u64,
                 failed_operations: stat.failed_operations as u64,
                 total_pending_operations: stat.total_pending_operations as u64,
-                operations_sync_completeness: (stat.total_operations - stat.failed_operations - stat.total_pending_operations) as f64
+                operations_sync_completeness: (stat.total_operations
+                    - stat.failed_operations
+                    - stat.total_pending_operations)
+                    as f64
                     / stat.total_operations as f64,
-                
             })),
 
             Err(e) => Err(tonic::Status::internal(e.to_string())),

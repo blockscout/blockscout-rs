@@ -1,11 +1,20 @@
-use std::{cmp::max, collections::HashMap, sync::Arc, thread, time::Duration};
+use std::{
+    cmp::max,
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    thread,
+    time::Duration,
+};
 
 use anyhow::Error;
 use client::{
     models::profiling::{BlockchainType, OperationType, StageType},
     Client,
 };
-use database::{DatabaseStatistic, EntityStatus, OrderDirection, TacDatabase};
+use database::{EntityStatus, OrderDirection, TacDatabase};
 use tac_operation_lifecycle_entity::{interval, operation};
 
 pub mod client;
@@ -17,8 +26,7 @@ use futures::{
     StreamExt,
 };
 use settings::IndexerSettings;
-use tokio::sync::Mutex;
-use tokio::task::unconstrained;
+use tokio::{sync::Mutex, task::unconstrained};
 use tracing::{instrument, Instrument};
 use uuid::Uuid;
 #[derive(Debug, Clone)]
@@ -93,16 +101,31 @@ impl BlockchainType {
 
 pub struct Indexer {
     settings: IndexerSettings,
-    // This timestamp will used for distinguish between historical and realtime intervals
-    start_timestamp: u64,
+    // This boundary timestamp will used for distinguish between historical and realtime intervals
+    // The main difference lays within interval processing
+    //  - the historical intervals are fetched by selected boundaries
+    //  - the realtime intervals are always fetched FROM the realtime boundary
+    //    (to avoid remote service sync issues)
+    // The boundary can be updated on inserting new operations
+    realtime_boundary: AtomicU64,
     database: Arc<TacDatabase>,
 }
 
 impl Indexer {
     pub async fn new(settings: IndexerSettings, db: Arc<TacDatabase>) -> anyhow::Result<Self> {
+        const REALTIME_LAG_MINUTES: i64 = 30;
+        // realtime boundary evaluation: few minutes before (to avoid remote service sync issues)
+        let realtime_boundary_hard = (chrono::Utc::now()
+            - chrono::Duration::minutes(REALTIME_LAG_MINUTES))
+        .timestamp() as u64;
+        // realtime boundary evaluation: last operation timestamp from the database
+        let relatime_boundary_db = match db.get_latest_operation_timestamp().await {
+            Ok(Some(ts)) => ts,
+            _ => 0,
+        };
         Ok(Self {
             settings,
-            start_timestamp: chrono::Utc::now().timestamp() as u64,
+            realtime_boundary: AtomicU64::new(max(realtime_boundary_hard, relatime_boundary_db)),
             database: db,
         })
     }
@@ -155,8 +178,22 @@ impl Indexer {
         self.database.get_watermark().await
     }
 
-    pub fn realtime_boundary(&self) -> u64 {
-        self.start_timestamp
+    pub fn get_realtime_boundary(&self) -> u64 {
+        self.realtime_boundary.load(Ordering::Acquire)
+    }
+
+    fn set_realtime_boundary(&self, new_boundary_candidate: u64) {
+        // !the boundary cannot be set less than current
+        let _ =
+            self.realtime_boundary
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                    if new_boundary_candidate > current {
+                        tracing::info!("Realtime boundary is moved to {}", new_boundary_candidate);
+                        Some(new_boundary_candidate)
+                    } else {
+                        None
+                    }
+                });
     }
 
     pub fn realtime_stream(&self) -> BoxStream<'_, IndexerJob> {
@@ -329,10 +366,11 @@ impl Indexer {
                 let base_delay = 5; // 5 seconds base delay
                 let next_retry_after = (base_delay * 2i64.pow(retries as u32)) as i64;
 
-                let _ = unconstrained(self
-                    .database
-                    .set_interval_retry(&job.interval, next_retry_after))
-                    .await;
+                let _ = unconstrained(
+                    self.database
+                        .set_interval_retry(&job.interval, next_retry_after),
+                )
+                .await;
             }
         }
     }
@@ -350,40 +388,48 @@ impl Indexer {
             job
         );
 
+        let realtime_boundary = self.get_realtime_boundary();
+        let (job_type, request_start) = if job.interval.start as u64 >= realtime_boundary {
+            ("REALTIME", realtime_boundary)
+        } else {
+            ("HISTORICAL", job.interval.start as u64)
+        };
+
         let operations = client
-            .get_operations(job.interval.start as u64, job.interval.end as u64)
+            .get_operations(request_start, job.interval.end as u64)
             .instrument(tracing::debug_span!(
                 "get_operations",
                 interval_id = job.interval.id,
-                start = job.interval.start,
+                start = request_start,
                 end = job.interval.end,
             ))
             .await?;
         let ops_num = operations.len();
 
         if ops_num > 0 {
-            tracing::debug!(
-                "[Thread {:?}] Fetched {} operation_ids: [\n\t{}\n]",
+            tracing::info!(
+                "[Thread {:?}] Fetched {} {} operation_ids: [\n\t{}\n]",
                 thread_id,
                 ops_num,
+                job_type,
                 operations
                     .iter()
                     .map(|o| o.id.clone())
                     .collect::<Vec<_>>()
                     .join(",\n\t")
             );
-            unconstrained(self.database.insert_pending_operations(&operations)).await?
+            unconstrained(self.database.insert_pending_operations(&operations)).await?;
+
+            let max_timestamp = operations.iter().map(|o| o.timestamp).max().unwrap();
+            self.set_realtime_boundary(max_timestamp);
         }
 
-        unconstrained(self.database
-            .set_interval_status(&job.interval, EntityStatus::Finalized)
-        ).await?;
+        unconstrained(
+            self.database
+                .set_interval_status(&job.interval, EntityStatus::Finalized),
+        )
+        .await?;
 
-        let job_type = if job.interval.start as u64 >= self.start_timestamp {
-            "REALTIME"
-        } else {
-            "HISTORICAL"
-        };
         tracing::debug!(
             "[Thread {:?}] Successfully processed {} job (id={})",
             thread_id,
@@ -404,26 +450,25 @@ impl Indexer {
 
         match client.get_operations_stages(op_ids.clone()).await {
             Ok(operations_map) => {
-                let mut timestamp_acc = 0;
                 let mut processed_operations = 0;
                 for (op_id, operation_data) in operations_map.iter() {
                     // Find an associated operation in the input operations vector
                     match jobs.iter().find(|j| &j.operation.id == op_id) {
                         Some(job) => {
-                            let _ = unconstrained(self
-                                .database
-                                .set_operation_data(&job.operation, operation_data))
-                                .await;
+                            let _ = unconstrained(
+                                self.database
+                                    .set_operation_data(&job.operation, operation_data),
+                            )
+                            .await;
 
                             if operation_data.operation_type != OperationType::Pending {
                                 let _ = (self
                                     .database
                                     .set_operation_status(&job.operation, EntityStatus::Finalized))
-                                    .await;
+                                .await;
                             } else {
                                 // TODO: Add operation to the fast-retry queue
                             }
-                            timestamp_acc += job.operation.timestamp;
                             processed_operations = processed_operations + 1;
                         }
                         None => {
@@ -432,21 +477,11 @@ impl Indexer {
                     }
                 }
 
-                let avg_timestamp = timestamp_acc / processed_operations;
-                if avg_timestamp > self.start_timestamp as i64 {
-                    tracing::debug!(
-                        "Successfully processed {} REALTIME operations. Average delay = {}s: [{}]",
-                        processed_operations,
-                        chrono::Utc::now().timestamp() - avg_timestamp,
-                        op_ids.join(",")
-                    );
-                } else {
-                    tracing::debug!(
-                        "Successfully processed {} HISTORICAL operations: [{}]",
-                        processed_operations,
-                        op_ids.join(",")
-                    );
-                };
+                tracing::debug!(
+                    "Successfully processed {} operations: [{}]",
+                    processed_operations,
+                    op_ids.join(",\n\t")
+                );
             }
             _ => {
                 let _ = jobs.iter().map(|job| async {
@@ -454,10 +489,11 @@ impl Indexer {
                     let base_delay = 5; // 5 seconds base delay
                     let next_retry_after = (base_delay * 2i64.pow(retries as u32)) as i64;
 
-                    let _ = unconstrained(self
-                        .database
-                        .set_operation_retry(&job.operation, next_retry_after))
-                        .await;
+                    let _ = unconstrained(
+                        self.database
+                            .set_operation_retry(&job.operation, next_retry_after),
+                    )
+                    .await;
                 });
             }
         }
@@ -474,8 +510,9 @@ impl Indexer {
         self.ensure_stages_types_exist().await?;
 
         // Generate historical intervals
+        let current_realtime_timestamp = self.get_realtime_boundary();
         let new_intervals = self
-            .generate_historical_intervals(self.start_timestamp)
+            .generate_historical_intervals(current_realtime_timestamp)
             .await?;
         if new_intervals > 0 {
             tracing::info!("Generated {} historical intervals", new_intervals);
@@ -500,18 +537,18 @@ impl Indexer {
         let realtime = self.realtime_stream();
         let realtime_intervals = self.interval_stream(
             OrderDirection::EarliestFirst,
-            Some(self.start_timestamp),
+            Some(current_realtime_timestamp),
             None,
         );
         let historical_intervals_high_priority = self.interval_stream(
             OrderDirection::LatestFirst,
             None,
-            Some(self.start_timestamp),
+            Some(current_realtime_timestamp),
         );
         let historical_intervals_low_priority = self.interval_stream(
             OrderDirection::EarliestFirst,
             None,
-            Some(self.start_timestamp),
+            Some(current_realtime_timestamp),
         );
         let operations = self.operations_stream();
         let failed_intervals = self.retry_intervals_stream();
@@ -540,8 +577,8 @@ impl Indexer {
         );
 
         tracing::debug!(
-            "Starting TAC indexer. Realtime intervals lays after timestamp: {}",
-            self.start_timestamp
+            "Starting TAC indexer. Realtime boundary is: {}",
+            current_realtime_timestamp
         );
 
         // Process the prioritized stream
@@ -578,12 +615,5 @@ impl Indexer {
         }
 
         Ok(())
-    }
-}
-
-// Statistic endpoints
-impl Indexer {
-    pub async fn get_database_stat(&self) -> anyhow::Result<DatabaseStatistic> {
-        self.database.get_statistic(self.start_timestamp).await
     }
 }
