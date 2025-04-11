@@ -86,7 +86,7 @@ impl ProtocolSpecific {
     pub fn empty_label_hash(&self) -> Option<B256> {
         match self {
             ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
-            ProtocolSpecific::D3Connect(d3_connect) => d3_connect.empty_label_hash,
+            ProtocolSpecific::D3Connect(_) => None,
         }
     }
 
@@ -122,7 +122,6 @@ pub struct D3ConnectProtocol {
     pub native_token_contract: Address,
     #[serde(default)]
     pub disable_offchain_resolve: bool,
-    pub empty_label_hash: Option<B256>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
