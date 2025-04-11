@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package blockscout.tacOperationLifecycle.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/tac-operation-lifecycle";
+
+service TacStatistic {
+    rpc GetIntervalStatistics(GetIntervalStatisticsRequest) returns (GetIntervalStatisticsResponse) {}
+    rpc GetOperationStatistics(GetOperationStatisticsRequest) returns (GetOperationStatisticsResponse) {}
+    rpc GetFullStatistics(GetFullStatisticRequest) returns (GetFullStatisticResponse) {}
+}
+
+message GetIntervalStatisticsRequest {}
+message GetOperationStatisticsRequest {}
+message GetFullStatisticRequest {}
+
+message GetIntervalStatisticsResponse {
+    uint64 timestamp = 1;
+    IntervalStatistic intervals = 2;
+}
+
+message GetOperationStatisticsResponse {
+    uint64 timestamp = 1;
+    OperationStatistic operations = 2;
+}
+
+message GetFullStatisticResponse {
+    uint64 timestamp = 1;
+    uint64 watermark = 2;
+    IntervalStatistic intervals = 3;
+    OperationStatistic operations = 4;
+}
+
+message IntervalStatistic {
+    uint64 first_timestamp = 1;
+    uint64 last_timestamp = 2;
+    uint64 total_intervals = 3;
+    uint64 pending_intervals = 4;
+    uint64 processing_intervals = 5;
+    uint64 finalized_intervals = 6;
+    uint64 failed_intervals = 7;
+    uint64 finalized_period = 8;
+    double sync_completeness = 9;
+}
+
+message OperationStatistic {
+    uint64 last_timestamp = 1;
+    uint64 total_operations = 2;
+    uint64 pending_operations = 3;
+    uint64 processing_operations = 4;
+    uint64 finalized_operations = 5;
+    uint64 failed_operations = 6;
+    double sync_completeness = 7;
+}

@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = [
+    "tac-operation-lifecycle-logic",
+    "tac-operation-lifecycle-entity",
+    "tac-operation-lifecycle-migration",
+    "tac-operation-lifecycle-proto",
+    "tac-operation-lifecycle-server",
+]
+
+[workspace.dependencies]
+blockscout-service-launcher = "0.17.0"
