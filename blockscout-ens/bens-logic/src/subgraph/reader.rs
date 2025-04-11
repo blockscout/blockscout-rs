@@ -214,7 +214,6 @@ impl SubgraphReader {
             input.network_id,
             input.protocol_id.clone().map(|p| nonempty![p]),
         )?;
-        println!("get_domain: {name:?}");
         // if domain is not found, it means that it is not in the database
         self.patcher
             .handle_user_domain_names(self.pool.as_ref(), &name)
