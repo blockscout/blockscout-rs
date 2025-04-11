@@ -1,0 +1,38 @@
+{
+  "zeta-mainnet": {
+    "Registry": {
+      "address": "0x5dC881dDA4e4a8d312be3544AD13118D1a04Cb17",
+      "startBlock": 2358728
+    },
+    "Resolver": {
+      "startBlock": 2358728
+    },
+    "RegistrarController": {
+      "address": "0xD7b837A0E388B4c25200983bdAa3EF3A83ca86b7",
+      "startBlock": 2358728
+    },
+    "Base": {
+      "address": "0xfcd0df2d5b1023c3ce210bed17c3bcf40d4ed5cd",
+      "startBlock": 2358728
+    },
+    "": ""
+  },
+  "zeta-sepolia": {
+    "Registry": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Resolver": {
+      "startBlock": 0
+    },
+    "RegistrarController": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Base": {
+      "address": "",
+      "startBlock": 0
+    },
+    "": ""
+  }
+}
