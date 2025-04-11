@@ -8,8 +8,7 @@ use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{self, NotSet},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
-    FromQueryResult, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, Statement,
-    TransactionTrait,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
 use std::{cmp::min, collections::HashMap, sync::Arc, thread, time::Instant};
 use tac_operation_lifecycle_entity::{
@@ -58,21 +57,26 @@ impl EntityStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct DatabaseStatistic {
-    pub watermark: u64,
+#[derive(Debug, Clone, Copy, Default)]
+pub struct IntervalDbStatistic {
     pub first_timestamp: u64,
     pub last_timestamp: u64,
     pub total_intervals: usize,
+    pub pending_intervals: usize,
+    pub processing_intervals: usize,
+    pub finalized_intervals: usize,
     pub failed_intervals: usize,
-    pub total_pending_intervals: usize,
-    pub historical_pending_intervals: usize,
-    pub realtime_pending_intervals: usize,
-    pub historical_processed_period: u64,
-    pub realtime_processed_period: u64,
+    pub finalized_period: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct OperationDbStatistic {
+    pub max_timestamp: u64,
     pub total_operations: usize,
+    pub pending_operations: usize,
+    pub processing_operations: usize,
+    pub finalized_operations: usize,
     pub failed_operations: usize,
-    pub total_pending_operations: usize,
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -869,86 +873,117 @@ impl TacDatabase {
         }
     }
 
-    pub async fn get_statistic(
+    pub async fn get_intervals_statistic(
         &self,
-        historical_boundary: u64,
-    ) -> anyhow::Result<DatabaseStatistic> {
-        let first_timestamp = interval::Entity::find()
-            .select_only()
-            .column_as(interval::Column::Start.min(), "min_start")
-            .into_tuple::<Option<i64>>()
-            .one(self.db.as_ref());
-        let last_timestamp = interval::Entity::find()
-            .select_only()
-            .column_as(interval::Column::End.max(), "max_end")
-            .into_tuple::<Option<i64>>()
-            .one(self.db.as_ref());
-        let total_intervals = interval::Entity::find().count(self.db.as_ref());
-        let failed_intervals = interval::Entity::find()
-            .filter(interval::Column::Status.ne(EntityStatus::Finalized.to_id()))
-            .filter(interval::Column::RetryCount.gt(0))
-            .count(self.db.as_ref());
-        let total_pending_intervals = interval::Entity::find()
-            .filter(interval::Column::Status.eq(EntityStatus::Pending.to_id()))
-            .count(self.db.as_ref());
-        let historical_pending_intervals = interval::Entity::find()
-            .filter(interval::Column::Status.eq(EntityStatus::Pending.to_id()))
-            .filter(interval::Column::End.lt(historical_boundary))
-            .count(self.db.as_ref());
-        let realtime_pending_intervals = interval::Entity::find()
-            .filter(interval::Column::Status.eq(EntityStatus::Pending.to_id()))
-            .filter(interval::Column::Start.gte(historical_boundary))
-            .count(self.db.as_ref());
-        let total_operations = operation::Entity::find().count(self.db.as_ref());
-        let total_pending_operations = operation::Entity::find()
-            .filter(operation::Column::Status.eq(EntityStatus::Pending.to_id()))
-            .count(self.db.as_ref());
-        let failed_operations = operation::Entity::find()
-            .filter(operation::Column::Status.ne(EntityStatus::Finalized.to_id()))
-            .filter(operation::Column::RetryCount.gt(0))
-            .count(self.db.as_ref());
-
-        let sql1 = Statement::from_string(
+    ) -> anyhow::Result<IntervalDbStatistic> {
+        let sql = Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
             format!(
-                r#"SELECT SUM("end" - start)::BIGINT as sum FROM interval WHERE status = {} AND "end" < {}"#,
+                r#"
+                WITH interval_stats AS (
+                    SELECT
+                        MIN(start) AS min_start,
+                        MAX("end") AS max_end,
+                        COUNT(*) AS total_intervals,
+                        COUNT(CASE WHEN "status" = {} THEN 1 END) AS pending_intervals,
+                        COUNT(CASE WHEN "status" = {} THEN 1 END) AS processing_intervals,
+                        COUNT(CASE WHEN "status" = {} THEN 1 END) AS finalized_intervals,
+                        COUNT(CASE WHEN "status" != {} AND retry_count > 0 THEN 1 END) AS failed_intervals,
+                        SUM(CASE WHEN "status" = {} THEN ("end" - start) ELSE 0 END)::BIGINT AS finalized_period
+                    FROM interval
+                )
+                SELECT * FROM interval_stats
+                "#,
+                EntityStatus::Pending.to_id(),
+                EntityStatus::Processing.to_id(),
                 EntityStatus::Finalized.to_id(),
-                historical_boundary
+                EntityStatus::Finalized.to_id(),
+                EntityStatus::Finalized.to_id(),
             ),
         );
-        let historical_processed_period = self.db.query_one(sql1);
+    
+        match self.db.query_one(sql).await? {
+            Some(interval_data) => {
+                let first_timestamp = interval_data
+                    .try_get::<Option<i64>>("", "min_start")?
+                    .unwrap_or(0) as u64;
+                let last_timestamp = interval_data
+                    .try_get::<Option<i64>>("", "max_end")?
+                    .unwrap_or(0) as u64;
+                let total_intervals = interval_data.try_get::<i64>("", "total_intervals")? as usize;
+                let pending_intervals = interval_data.try_get::<i64>("", "pending_intervals")? as usize;
+                let processing_intervals = interval_data.try_get::<i64>("", "processing_intervals")? as usize;
+                let finalized_intervals = interval_data.try_get::<i64>("", "finalized_intervals")? as usize;
+                let failed_intervals = interval_data.try_get::<i64>("", "failed_intervals")? as usize;
+                let finalized_period = interval_data.try_get::<i64>("", "finalized_period")? as u64;
+            
+                Ok(IntervalDbStatistic {
+                    first_timestamp,
+                    last_timestamp,
+                    total_intervals,
+                    failed_intervals,
+                    pending_intervals,
+                    processing_intervals,
+                    finalized_intervals,
+                    finalized_period,
+                })
+            },
 
-        let sql2 = Statement::from_string(
+            _ => Ok(IntervalDbStatistic::default()),
+        }
+
+    }
+
+    pub async fn get_operations_statistic(
+        &self,
+    ) -> anyhow::Result<OperationDbStatistic> {
+        let sql = Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
             format!(
-                r#"SELECT SUM("end" - start)::BIGINT as sum FROM interval WHERE status = {} AND start >= {}"#,
+                r#"
+                WITH operation_stats AS (
+                    SELECT
+                        MAX(timestamp) AS max_timestamp,
+                        COUNT(*) AS total_operations,
+                        COUNT(CASE WHEN status = {} THEN 1 END) AS pending_operations,
+                        COUNT(CASE WHEN status = {} THEN 1 END) AS processing_operations,
+                        COUNT(CASE WHEN status = {} THEN 1 END) AS finalized_operations,
+                        COUNT(CASE WHEN status != {} AND retry_count > 0 THEN 1 END) AS failed_operations
+                    FROM interval
+                )
+                SELECT * FROM operation_stats
+                "#,
+                EntityStatus::Pending.to_id(),
+                EntityStatus::Processing.to_id(),
                 EntityStatus::Finalized.to_id(),
-                historical_boundary
+                EntityStatus::Finalized.to_id(),
             ),
         );
-        let realtime_processed_period = self.db.query_one(sql2);
+    
+        match self.db.query_one(sql).await? {
+            Some(operation_data) => {
+                let max_timestamp = operation_data
+                    .try_get::<Option<i64>>("", "max_timestamp")?
+                    .unwrap_or(0) as u64;
+                let total_operations = operation_data.try_get::<i64>("", "total_operations")? as usize;
+                let pending_operations = operation_data.try_get::<i64>("", "pending_operations")? as usize;
+                let processing_operations = operation_data.try_get::<i64>("", "processing_operations")? as usize;
+                let finalized_operations = operation_data.try_get::<i64>("", "finalized_operations")? as usize;
+                let failed_operations = operation_data.try_get::<i64>("", "failed_operations")? as usize;
+            
+                Ok(OperationDbStatistic {
+                    max_timestamp,
+                    total_operations,
+                    pending_operations,
+                    processing_operations,
+                    finalized_operations,
+                    failed_operations,
+                })
+            },
 
-        Ok(DatabaseStatistic {
-            watermark: self.get_watermark().await?,
-            first_timestamp: first_timestamp.await?.unwrap().unwrap_or(0) as u64,
-            last_timestamp: last_timestamp.await?.unwrap().unwrap_or(0) as u64,
-            total_intervals: total_intervals.await? as usize,
-            failed_intervals: failed_intervals.await? as usize,
-            total_pending_intervals: total_pending_intervals.await? as usize,
-            historical_pending_intervals: historical_pending_intervals.await? as usize,
-            realtime_pending_intervals: realtime_pending_intervals.await? as usize,
-            historical_processed_period: historical_processed_period
-                .await?
-                .and_then(|row| row.try_get::<i64>("", "sum").ok())
-                .unwrap_or(0) as u64,
-            realtime_processed_period: realtime_processed_period
-                .await?
-                .and_then(|row| row.try_get::<i64>("", "sum").ok())
-                .unwrap_or(0) as u64,
-            total_operations: total_operations.await? as usize,
-            failed_operations: failed_operations.await? as usize,
-            total_pending_operations: total_pending_operations.await? as usize,
-        })
+            _ => Ok(OperationDbStatistic::default()),
+        }
+
     }
 
     pub async fn get_operation_by_id(

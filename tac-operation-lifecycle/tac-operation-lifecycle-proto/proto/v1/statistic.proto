@@ -5,31 +5,50 @@ package blockscout.tacOperationLifecycle.v1;
 option go_package = "github.com/blockscout/blockscout-rs/tac-operation-lifecycle";
 
 service TacStatistic {
-    rpc GetIndexerStatistics(GetIndexerStatisticRequest) returns (GetIndexerStatisticResponse) {}
-    
+    rpc GetIntervalStatistics(GetIntervalStatisticsRequest) returns (GetIntervalStatisticsResponse) {}
+    rpc GetOperationStatistics(GetOperationStatisticsRequest) returns (GetOperationStatisticsResponse) {}
+    rpc GetFullStatistics(GetFullStatisticRequest) returns (GetFullStatisticResponse) {}
 }
 
-message GetIndexerStatisticRequest {
+message GetIntervalStatisticsRequest {}
+message GetOperationStatisticsRequest {}
+message GetFullStatisticRequest {}
 
+message GetIntervalStatisticsResponse {
+    uint64 timestamp = 1;
+    IntervalStatistic intervals = 2;
 }
 
-message GetIndexerStatisticResponse {
+message GetOperationStatisticsResponse {
+    uint64 timestamp = 1;
+    OperationStatistic operations = 2;
+}
+
+message GetFullStatisticResponse {
     uint64 timestamp = 1;
     uint64 watermark = 2;
-    uint64 realtime_from = 3;
-    uint64 first_timestamp = 4;
-    uint64 last_timestamp = 5;
-    uint64 total_intervals = 6;
+    IntervalStatistic intervals = 3;
+    OperationStatistic operations = 4;
+}
+
+message IntervalStatistic {
+    uint64 first_timestamp = 1;
+    uint64 last_timestamp = 2;
+    uint64 total_intervals = 3;
+    uint64 pending_intervals = 4;
+    uint64 processing_intervals = 5;
+    uint64 finalized_intervals = 6;
     uint64 failed_intervals = 7;
-    uint64 total_pending_intervals = 8;
-    uint64 historical_pending_intervals = 9;
-    uint64 realtime_pending_intervals = 10;
-    uint64 historical_processed_period = 11;
-    uint64 realtime_processed_period = 12;
-    double historical_sync_completeness = 13;
-    double realtime_sync_completeness = 14;
-    uint64 total_operations = 15;
-    uint64 failed_operations = 16;
-    uint64 total_pending_operations = 17;
-    double operations_sync_completeness = 18;
+    uint64 finalized_period = 8;
+    double sync_completeness = 9;
+}
+
+message OperationStatistic {
+    uint64 last_timestamp = 1;
+    uint64 total_operations = 2;
+    uint64 pending_operations = 3;
+    uint64 processing_operations = 4;
+    uint64 finalized_operations = 5;
+    uint64 failed_operations = 6;
+    double sync_completeness = 7;
 }

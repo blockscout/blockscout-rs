@@ -17,8 +17,14 @@ http:
 
     #################### Statistics ####################
 
-    - selector: blockscout.tacOperationLifecycle.v1.TacStatistic.GetIndexerStatistics
-      get: /api/v1/stat
+    - selector: blockscout.tacOperationLifecycle.v1.TacStatistic.GetFullStatistics
+      get: /api/v1/stat/full
+
+    - selector: blockscout.tacOperationLifecycle.v1.TacStatistic.GetIntervalStatistics
+      get: /api/v1/stat/intervals
+
+    - selector: blockscout.tacOperationLifecycle.v1.TacStatistic.GetOperationStatistics
+      get: /api/v1/stat/operations
     
     #################### Health ####################
 
