@@ -46,28 +46,26 @@ impl OperationsService {
                     sender: None,
                     status_history: stages
                         .iter()
-                        .map(|(s, txs)| {
-                            OperationStage {
-                                r#type: s.stage_type_id - 1,
-                                is_exist: true,
-                                is_success: Some(s.success),
-                                timestamp: Some(s.timestamp as u64),
-                                transactions: txs
-                                    .iter()
-                                    .map(|tx| {
-                                        let blockchain_type = match tx.blockchain_type.as_str() {
-                                            "Tac" => 0,
-                                            "Ton" => 1,
-                                            _ => 2,
-                                        };
-                                        OperationRelatedTransaction {
-                                            hash: tx.hash.clone(),
-                                            r#type: blockchain_type,
-                                        }
-                                    })
-                                    .collect(),
-                                note: s.note.clone(),
-                            }
+                        .map(|(s, txs)| OperationStage {
+                            r#type: s.stage_type_id - 1,
+                            is_exist: true,
+                            is_success: Some(s.success),
+                            timestamp: Some(s.timestamp as u64),
+                            transactions: txs
+                                .iter()
+                                .map(|tx| {
+                                    let blockchain_type = match tx.blockchain_type.as_str() {
+                                        "Tac" => 0,
+                                        "Ton" => 1,
+                                        _ => 2,
+                                    };
+                                    OperationRelatedTransaction {
+                                        hash: tx.hash.clone(),
+                                        r#type: blockchain_type,
+                                    }
+                                })
+                                .collect(),
+                            note: s.note.clone(),
                         })
                         .collect(),
                 }))

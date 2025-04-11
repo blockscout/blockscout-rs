@@ -74,7 +74,6 @@ pub struct Transaction {
     pub blockchain_type: BlockchainType,
 }
 
-
 fn deserialize_note_to_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: Deserializer<'de>,

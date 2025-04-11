@@ -150,6 +150,20 @@ impl TacDatabase {
         Ok(())
     }
 
+    pub async fn get_latest_operation_timestamp(&self) -> anyhow::Result<Option<u64>> {
+        match operation::Entity::find()
+            .select_only()
+            .column_as(operation::Column::Timestamp.max(), "max_timestamp")
+            .into_tuple::<Option<u64>>()
+            .one(self.db.as_ref())
+            .await
+        {
+            Ok(Some(ts)) => Ok(ts),
+            Err(e) => Err(e.into()),
+            _ => Ok(None),
+        }
+    }
+
     // Create interval with the specified boundary [from..to]
     // Update watermark in the database
     pub async fn generate_pending_interval(&self, from: u64, to: u64) -> anyhow::Result<()> {
@@ -531,9 +545,7 @@ impl TacDatabase {
         );
 
         self.query_intervals(&sql)
-            .instrument(tracing::debug_span!(
-                "query pending intervals",
-            ))
+            .instrument(tracing::debug_span!("query pending intervals",))
             .await
     }
 
@@ -895,7 +907,6 @@ impl TacDatabase {
             .filter(operation::Column::Status.ne(EntityStatus::Finalized.to_id()))
             .filter(operation::Column::RetryCount.gt(0))
             .count(self.db.as_ref());
-
 
         let sql1 = Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
