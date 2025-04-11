@@ -1,6 +1,6 @@
 //! Total transaction fees for an interval
 
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -23,7 +23,7 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -38,6 +38,7 @@ impl StatementFromRange for TxnsFeeStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
     ) -> Statement {
         if completed_migrations.denormalization {
             // TODO: consider supporting such case in macro ?

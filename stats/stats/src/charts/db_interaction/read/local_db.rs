@@ -1,11 +1,9 @@
+/// Methods intended for interacting with local db
 use crate::{
     charts::{chart::ChartMetadata, ChartKey},
-    data_source::{
-        kinds::{local_db::parameter_traits::QueryBehaviour, remote_db::RemoteQueryBehaviour},
-        UpdateContext,
-    },
+    data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
-    range::{exclusive_range_to_inclusive, UniversalRange},
+    range::exclusive_range_to_inclusive,
     types::{
         timespans::{DateValue, Month, Week, Year},
         ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
@@ -13,31 +11,20 @@ use crate::{
     ChartError, ChartProperties, MissingDatePolicy,
 };
 
-use blockscout_db::entity::blocks;
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use entity::{
     chart_data, charts,
     sea_orm_active_enums::{ChartResolution, ChartType},
 };
 use itertools::Itertools;
 use sea_orm::{
-    sea_query::{self, Expr},
-    ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
+    sea_query::Expr, ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
-use std::{fmt::Debug, ops::Range};
-use thiserror::Error;
+use std::fmt::Debug;
 use tracing::instrument;
 
-#[derive(Error, Debug, PartialEq, Eq)]
-pub enum ReadError {
-    #[error("database error {0}")]
-    DB(#[from] DbErr),
-    #[error("chart {0} not found")]
-    ChartNotFound(ChartKey),
-    #[error("exceeded limit on requested data points (~{0}); choose smaller time interval.")]
-    IntervalTooLarge(u32),
-}
+use super::ReadError;
 
 #[derive(Debug, FromQueryResult)]
 struct ChartID {
@@ -210,7 +197,7 @@ fn relevant_data_until<R: Timespan>(
 /// ```
 ///
 /// - Value `A` is moved to correctly represent value at date `2`. Value for `1`
-///     is outside the range, thus we move the value.
+///   is outside the range, thus we move the value.
 /// - Date 4 is still omitted, because it can be calculated from `3`
 ///
 /// with `fill_missing_dates=true`:
@@ -381,92 +368,52 @@ where
     Ok(data)
 }
 
-#[derive(FromQueryResult)]
-struct MinBlock {
-    min_block: i64,
+pub trait ApproxUnsignedDiff {
+    /// Approx number of repeats of this timespan to get from `other` to `self`.
+    ///
+    /// `None` if < 0.
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64>;
 }
 
-pub async fn get_min_block_blockscout(blockscout: &DatabaseConnection) -> Result<i64, DbErr> {
-    let min_block = blocks::Entity::find()
-        .select_only()
-        .column_as(
-            sea_query::Expr::col(blocks::Column::Number).min(),
-            "min_block",
-        )
-        .filter(blocks::Column::Consensus.eq(true))
-        .into_model::<MinBlock>()
-        .one(blockscout)
-        .await?;
-
-    min_block
-        .map(|r| r.min_block)
-        .ok_or_else(|| DbErr::RecordNotFound("no blocks found in blockscout database".into()))
+impl ApproxUnsignedDiff for NaiveDate {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.signed_duration_since(*other)
+            .num_days()
+            .try_into()
+            .ok()
+    }
 }
 
-#[derive(FromQueryResult)]
-struct MinDate {
-    timestamp: NaiveDateTime,
+impl ApproxUnsignedDiff for Week {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.saturating_first_day()
+            .signed_duration_since(other.saturating_first_day())
+            .num_days()
+            .try_into()
+            .ok()
+            .map(|n: u64| n / 7)
+    }
 }
 
-pub async fn get_min_date_blockscout<C>(blockscout: &C) -> Result<NaiveDateTime, DbErr>
-where
-    C: ConnectionTrait,
-{
-    let min_date = blocks::Entity::find()
-        .select_only()
-        .column(blocks::Column::Timestamp)
-        .filter(blocks::Column::Consensus.eq(true))
-        // First block on ethereum mainnet has 0 timestamp,
-        // however first block on Goerli for example has valid timestamp.
-        // Therefore we filter on zero timestamp
-        .filter(blocks::Column::Timestamp.ne(NaiveDateTime::default()))
-        .order_by_asc(blocks::Column::Number)
-        .into_model::<MinDate>()
-        .one(blockscout)
-        .await?;
-
-    min_date
-        .map(|r| r.timestamp)
-        .ok_or_else(|| DbErr::RecordNotFound("no blocks found in blockscout database".into()))
+impl ApproxUnsignedDiff for Month {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.saturating_first_day()
+            .signed_duration_since(other.saturating_first_day())
+            .num_days()
+            .try_into()
+            .ok()
+            // 30.436875 = mean # of days in month (according to wiki)
+            .map(|n: u64| (n as f64 / 30.436875) as u64)
+    }
 }
 
-#[derive(Debug, FromQueryResult)]
-struct CountEstimate {
-    count: Option<i64>,
-}
-
-/// `None` means either that
-/// - db hasn't been initialized before
-/// - `table_name` wasn't found
-pub async fn query_estimated_table_rows(
-    blockscout: &DatabaseConnection,
-    table_name: &str,
-) -> Result<Option<i64>, DbErr> {
-    let statement: Statement = Statement::from_sql_and_values(
-        DbBackend::Postgres,
-        r#"
-            SELECT (
-                CASE WHEN c.reltuples < 0 THEN
-                    NULL
-                WHEN c.relpages = 0 THEN
-                    float8 '0'
-                ELSE c.reltuples / c.relpages
-                END *
-                (
-                    pg_catalog.pg_relation_size(c.oid) /
-                    pg_catalog.current_setting('block_size')::int
-                )
-            )::bigint as count
-            FROM pg_catalog.pg_class c
-            WHERE c.oid = $1::regclass
-        "#,
-        vec![table_name.into()],
-    );
-    let count = CountEstimate::find_by_statement(statement)
-        .one(blockscout)
-        .await?;
-    let count = count.and_then(|c| c.count);
-    Ok(count)
+impl ApproxUnsignedDiff for Year {
+    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
+        self.number_within_naive_date()
+            .saturating_sub(other.number_within_naive_date())
+            .try_into()
+            .ok()
+    }
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -629,71 +576,6 @@ impl RequestedPointsLimit {
     }
 }
 
-pub trait ApproxUnsignedDiff {
-    /// Approx number of repeats of this timespan to get from `other` to `self`.
-    ///
-    /// `None` if < 0.
-    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64>;
-}
-
-impl ApproxUnsignedDiff for NaiveDate {
-    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
-        self.signed_duration_since(*other)
-            .num_days()
-            .try_into()
-            .ok()
-    }
-}
-
-impl ApproxUnsignedDiff for Week {
-    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
-        self.saturating_first_day()
-            .signed_duration_since(other.saturating_first_day())
-            .num_days()
-            .try_into()
-            .ok()
-            .map(|n: u64| n / 7)
-    }
-}
-
-impl ApproxUnsignedDiff for Month {
-    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
-        self.saturating_first_day()
-            .signed_duration_since(other.saturating_first_day())
-            .num_days()
-            .try_into()
-            .ok()
-            // 30.436875 = mean # of days in month (according to wiki)
-            .map(|n: u64| (n as f64 / 30.436875) as u64)
-    }
-}
-
-impl ApproxUnsignedDiff for Year {
-    fn approx_unsigned_difference(&self, other: &Self) -> Option<u64> {
-        self.number_within_naive_date()
-            .saturating_sub(other.number_within_naive_date())
-            .try_into()
-            .ok()
-    }
-}
-
-pub struct QueryAllBlockTimestampRange;
-
-impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
-    type Output = Range<DateTime<Utc>>;
-
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, ChartError> {
-        let start_timestamp = get_min_date_blockscout(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?
-            .and_utc();
-        Ok(start_timestamp..cx.time)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -701,13 +583,12 @@ mod tests {
         charts::ResolutionKind,
         counters::TotalBlocks,
         data_source::{
-            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations,
-            UpdateParameters,
+            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations, DataSource,
+            UpdateContext, UpdateParameters,
         },
         lines::{AccountsGrowth, ActiveAccounts, NewTxns, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
-            init_db::{init_db, init_db_all},
-            mock_blockscout::fill_mock_blockscout_data,
+            init_db::init_db,
             point_construction::{d, dt, month_of},
             simple_test::get_counter,
         },
@@ -717,7 +598,7 @@ mod tests {
     use chrono::DateTime;
     use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
     use pretty_assertions::assert_eq;
-    use sea_orm::{EntityName, EntityTrait, Set};
+    use sea_orm::{EntityTrait, Set};
     use std::{collections::HashMap, str::FromStr};
 
     fn mock_chart_data(chart_id: i32, date: &str, value: i64) -> chart_data::ActiveModel {
@@ -958,6 +839,7 @@ mod tests {
             // shouldn't use this because mock data contains total blocks value
             blockscout: &db,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
         });
@@ -1420,62 +1302,6 @@ mod tests {
                 timespan: d("2022-06-29"),
                 value: "1676".to_string()
             })
-        );
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn get_estimated_table_rows_works() {
-        let (_db, blockscout) = init_db_all("get_estimated_table_rows_works").await;
-        fill_mock_blockscout_data(&blockscout, d("2023-03-01")).await;
-
-        // need to analyze or vacuum for `reltuples` to be updated.
-        // source: https://www.postgresql.org/docs/9.3/planner-stats.html
-        let _ = blockscout
-            .execute(Statement::from_string(DbBackend::Postgres, "ANALYZE;"))
-            .await
-            .unwrap();
-
-        let blocks_estimate = query_estimated_table_rows(&blockscout, blocks::Entity.table_name())
-            .await
-            .unwrap()
-            .unwrap();
-
-        // should be 16 rows in the table, but it's an estimate
-        assert!(blocks_estimate > 5);
-        assert!(blocks_estimate < 30);
-
-        assert!(
-            query_estimated_table_rows(
-                &blockscout,
-                blockscout_db::entity::addresses::Entity.table_name()
-            )
-            .await
-            .unwrap()
-            .unwrap()
-                > 0
-        );
-
-        assert!(
-            query_estimated_table_rows(
-                &blockscout,
-                blockscout_db::entity::transactions::Entity.table_name()
-            )
-            .await
-            .unwrap()
-            .unwrap()
-                > 0
-        );
-
-        assert!(
-            query_estimated_table_rows(
-                &blockscout,
-                blockscout_db::entity::smart_contracts::Entity.table_name()
-            )
-            .await
-            .unwrap()
-            .unwrap()
-                > 0
         );
     }
 }

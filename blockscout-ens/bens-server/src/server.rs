@@ -147,8 +147,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: Default::default(),
     };
 
     tracing::info!("launching web service");
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(launch_settings, http_router, grpc_router).await
 }

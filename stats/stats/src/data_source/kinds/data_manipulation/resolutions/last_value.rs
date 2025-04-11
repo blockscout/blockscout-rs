@@ -7,10 +7,9 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
-    data_source::{DataSource, UpdateContext},
+    data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
     range::UniversalRange,
     types::{ConsistsOf, Timespan, TimespanValue},
     ChartError,
@@ -21,7 +20,7 @@ use super::{extend_to_timespan_boundaries, reduce_each_timespan};
 /// Takes last value within each timespan range.
 pub struct LastValueLowerResolution<DS, LowerRes>(PhantomData<(DS, LowerRes)>);
 
-impl<DS, LowerRes, HigherRes, Value> DataSource for LastValueLowerResolution<DS, LowerRes>
+impl<DS, LowerRes, HigherRes, Value> AdapterDataSource for LastValueLowerResolution<DS, LowerRes>
 where
     LowerRes: Timespan + ConsistsOf<HigherRes> + Eq + Ord + Send,
     HigherRes: Clone,
@@ -31,32 +30,6 @@ where
     type MainDependencies = DS;
     type ResolutionDependencies = ();
     type Output = Vec<TimespanValue<LowerRes, Value>>;
-
-    fn mutex_id() -> Option<String> {
-        // just an adapter
-        None
-    }
-
-    async fn init_itself(
-        _db: &DatabaseConnection,
-        _init_time: &DateTime<Utc>,
-    ) -> Result<(), DbErr> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn set_next_update_from_itself(
-        _db: &DatabaseConnection,
-        _update_from: chrono::NaiveDate,
-    ) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
 
     async fn query_data(
         cx: &UpdateContext<'_>,
@@ -119,13 +92,13 @@ mod tests {
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
-        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &empty_db,
-            blockscout: &empty_db,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            update_time_override: Some(dt("2024-07-30T09:00:00").and_utc()),
-            force_full: false,
-        });
+        let context =
+            UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+                &empty_db,
+                &empty_db,
+                BlockscoutMigrations::latest(),
+                Some(dt("2024-07-30T09:00:00").and_utc()),
+            ));
         assert_eq!(
             MockSource::query_data(&context, UniversalRange::full(), &mut AggregateTimer::new())
                 .await

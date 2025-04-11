@@ -6,10 +6,9 @@ use std::marker::PhantomData;
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
-use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
-    data_source::{DataSource, UpdateContext},
+    data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
     ChartError, ChartProperties, MissingDatePolicy,
@@ -22,7 +21,7 @@ where
     D: DataSource,
     Properties: ChartProperties;
 
-impl<DS, Resolution, Value: Zero, Properties> DataSource for FilterDeducible<DS, Properties>
+impl<DS, Resolution, Value: Zero, Properties> AdapterDataSource for FilterDeducible<DS, Properties>
 where
     DS: DataSource<Output = Vec<TimespanValue<Resolution, Value>>>,
     Resolution: Clone + Send,
@@ -32,31 +31,6 @@ where
     type MainDependencies = DS;
     type ResolutionDependencies = ();
     type Output = DS::Output;
-
-    fn mutex_id() -> Option<String> {
-        None
-    }
-
-    async fn init_itself(
-        _db: &DatabaseConnection,
-        _init_time: &DateTime<Utc>,
-    ) -> Result<(), DbErr> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn update_itself(_cx: &UpdateContext<'_>) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
-
-    async fn set_next_update_from_itself(
-        _db: &DatabaseConnection,
-        _update_from: chrono::NaiveDate,
-    ) -> Result<(), ChartError> {
-        // just an adapter; inner is handled recursively
-        Ok(())
-    }
 
     async fn query_data(
         cx: &UpdateContext<'_>,
@@ -163,13 +137,13 @@ mod tests {
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
-        let context = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &empty_db,
-            blockscout: &empty_db,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            update_time_override: Some(dt("2024-07-30T09:00:00").and_utc()),
-            force_full: false,
-        });
+        let context =
+            UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+                &empty_db,
+                &empty_db,
+                BlockscoutMigrations::latest(),
+                Some(dt("2024-07-30T09:00:00").and_utc()),
+            ));
         assert_eq!(
             <TestedZero as DataSource>::query_data(
                 &context,

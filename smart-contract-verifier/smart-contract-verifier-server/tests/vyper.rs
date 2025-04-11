@@ -349,7 +349,12 @@ mod flattened {
 
         let mut test_case = vyper_types::from_file::<Flattened>("simple");
         test_case.creation_bytecode = "0xkeklol".to_string();
-        test_error(test_case, StatusCode::BAD_REQUEST, "Invalid bytecode: ").await;
+        test_error(
+            test_case,
+            StatusCode::BAD_REQUEST,
+            "bytecode is not valid hex",
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -372,14 +377,15 @@ mod flattened {
         test_success(test_case).await;
     }
 
-    #[tokio::test]
-    async fn blueprint_contract() {
-        let mut test_case = vyper_types::from_file::<Flattened>("blueprint");
-        test_success(test_case.clone()).await;
-
-        test_case.use_deployed_bytecode = true;
-        test_success(test_case).await;
-    }
+    // TODO: return when blueprint contracts support added back
+    // #[tokio::test]
+    // async fn blueprint_contract() {
+    //     let mut test_case = vyper_types::from_file::<Flattened>("blueprint");
+    //     test_success(test_case.clone()).await;
+    //
+    //     test_case.use_deployed_bytecode = true;
+    //     test_success(test_case).await;
+    // }
 
     #[tokio::test]
     async fn accepts_partially_matching_compiler_version_commit_hashes() {
@@ -477,7 +483,7 @@ mod standard_json {
         test_error(
             test_case,
             StatusCode::BAD_REQUEST,
-            "Invalid compiler version",
+            "invalid compiler version",
         )
         .await;
     }

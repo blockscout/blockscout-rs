@@ -17,6 +17,8 @@ use wiremock::{
     Mock, MockServer, ResponseTemplate,
 };
 
+use crate::lines::{ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH};
+
 pub async fn default_mock_blockscout_api() -> MockServer {
     mock_blockscout_api(
         ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -96,6 +98,12 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
 
     let accounts = mock_addresses();
     addresses::Entity::insert_many(accounts.clone())
+        .exec(blockscout)
+        .await
+        .unwrap();
+    let attributes_deposited_transaction_accounts =
+        mock_attributes_deposited_transaction_addresses();
+    addresses::Entity::insert_many(attributes_deposited_transaction_accounts)
         .exec(blockscout)
         .await
         .unwrap();
@@ -403,7 +411,7 @@ fn mock_addresses() -> Vec<addresses::ActiveModel> {
 
 fn mock_address(seed: i64, is_contract: bool, is_verified: bool) -> addresses::ActiveModel {
     let mut hash = seed.to_le_bytes().to_vec();
-    hash.extend(std::iter::repeat(0).take(32 - hash.len()));
+    hash.extend(std::iter::repeat_n(0, 32 - hash.len()));
     let contract_code = is_contract.then(|| vec![60u8, 80u8]);
     let verified = is_contract.then_some(is_verified);
     addresses::ActiveModel {
@@ -469,6 +477,12 @@ fn mock_transactions(
                 ),
             ]
         })
+        .chain([mock_attributes_deposit_transaction(
+            blocks.last().unwrap(),
+            43_887,
+            // just in case the block number is `% 3 != 1`
+            3,
+        )])
         .collect()
 }
 
@@ -568,6 +582,38 @@ fn mock_transaction(
         created_contract_code_indexed_at: Set(created_contract_code_indexed_at),
         ..Default::default()
     }
+}
+
+fn mock_attributes_deposited_transaction_addresses() -> Vec<addresses::ActiveModel> {
+    [ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH]
+        .into_iter()
+        .map(|hash| {
+            let hash = hex::decode(hash).unwrap();
+            let contract_code = vec![60u8, 80u8];
+            addresses::ActiveModel {
+                hash: Set(hash),
+                contract_code: Set(Some(contract_code)),
+                verified: Set(Some(false)),
+                inserted_at: Set(Default::default()),
+                updated_at: Set(Default::default()),
+                ..Default::default()
+            }
+        })
+        .collect_vec()
+}
+
+// https://specs.optimism.io/protocol/deposits.html#l1-attributes-deposited-transaction
+fn mock_attributes_deposit_transaction(
+    block: &blocks::ActiveModel,
+    gas: i64,
+    index: i32,
+) -> transactions::ActiveModel {
+    let mut address_list = mock_attributes_deposited_transaction_addresses();
+    // adjust choice of from/to in `mock_transaction`
+    if block.number.as_ref() % 2 == 1 {
+        address_list.reverse();
+    };
+    mock_transaction(block, gas, 0, &address_list, index, TxType::ContractCall)
 }
 
 fn mock_failed_transaction(

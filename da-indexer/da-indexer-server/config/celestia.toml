@@ -33,8 +33,8 @@ concurrency = 15
 retry_interval = 180
 polling_interval = 12
 
-[indexer.da]
-type = "Celestia"
+[indexer.da.celestia]
+save_batch_size = 1000
 
-[indexer.da.rpc]
+[indexer.da.celestia.rpc]
 url = "http://host.docker.internal:26658"

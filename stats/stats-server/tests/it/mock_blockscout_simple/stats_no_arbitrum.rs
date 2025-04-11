@@ -19,14 +19,16 @@ use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
 
 #[tokio::test]
 #[ignore = "needs database"]
-pub async fn run_chart_pages_tests_with_disabled_arbitrum() {
-    let test_name = "run_chart_pages_tests_with_disabled_arbitrum";
+pub async fn run_chart_pages_tests_with_disabled_chain_specific() {
+    let test_name = "run_chart_pages_tests_with_disabled_chain_specific";
     let _ = tracing_subscriber::fmt::try_init();
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = default_mock_blockscout_api().await;
+    let blockscout_indexed = true;
     let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
     settings.enable_all_arbitrum = false;
+    settings.enable_all_op_stack = false;
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();
     init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
@@ -34,7 +36,7 @@ pub async fn run_chart_pages_tests_with_disabled_arbitrum() {
     wait_for_subset_to_update(&base, ChartSubset::AllCharts).await;
 
     let tests: JoinSet<_> = [
-        test_main_page_ok(base.clone(), false).boxed(),
+        test_main_page_ok(base.clone(), false, blockscout_indexed).boxed(),
         test_transactions_page_ok(base, false).boxed(),
     ]
     .into_iter()

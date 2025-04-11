@@ -8,13 +8,16 @@ db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "stats")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
 export RUST_LOG := env_var_or_default('RUST_LOG', "error")
-export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "1")
+export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "0")
 
 docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
 
-docker-build *args:
-    docker build --build-context proto=../proto . {{args}}
+docker-build-dev *args:
+    docker compose -f docker-compose.dev.yml build
+
+docker-run-dev *args:
+    docker compose -f docker-compose.dev.yml up
 
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping

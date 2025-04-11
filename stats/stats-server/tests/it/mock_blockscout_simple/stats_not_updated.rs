@@ -1,7 +1,7 @@
 //! Tests for the case
 //! - blockscout is not indexed
 //! - stats server is fully enabled but not updated (yet)
-//!     (e.g. the update is slow and in progress)
+//!   (e.g. the update is slow and in progress)
 
 use std::time::Duration;
 

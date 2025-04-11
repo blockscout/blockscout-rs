@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -21,7 +21,7 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -33,7 +33,11 @@ use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 pub struct AverageBlockSizeStatement;
 
 impl StatementFromRange for AverageBlockSizeStatement {
-    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(
+        range: Option<Range<DateTime<Utc>>>,
+        _: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
+    ) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"

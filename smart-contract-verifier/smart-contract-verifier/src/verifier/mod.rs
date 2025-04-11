@@ -1,3 +1,5 @@
+#![allow(unused_imports, dead_code)]
+
 // base verifiers
 mod all_metadata_extracting_verifier;
 mod base;

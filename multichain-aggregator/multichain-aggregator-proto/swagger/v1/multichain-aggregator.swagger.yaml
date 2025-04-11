@@ -574,6 +574,8 @@ definitions:
         type: string
       chain_id:
         type: string
+      is_verified_contract:
+        type: boolean
   v1TokenType:
     type: string
     enum:

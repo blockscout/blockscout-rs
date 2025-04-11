@@ -7,14 +7,6 @@ use blockscout_display_bytes::Bytes as DisplayBytes;
 use ethers_solc::CompilerOutput;
 use foundry_compilers::CompilerInput;
 
-#[derive(thiserror::Error, Debug)]
-pub enum RequestParseError {
-    #[error("content is not a valid standard json: {0}")]
-    InvalidContent(#[from] serde_path_to_error::Error<serde_json::Error>),
-    #[error("{0:#}")]
-    BadRequest(#[from] anyhow::Error),
-}
-
 #[derive(Clone, Debug)]
 pub struct Success {
     pub compiler_input: CompilerInput,

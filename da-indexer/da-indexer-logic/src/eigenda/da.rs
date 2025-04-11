@@ -34,12 +34,8 @@ impl EigenDA {
         let start_from = settings
             .start_block
             .unwrap_or(provider.get_block_number().await?);
-        let gaps = batches::find_gaps(
-            &db,
-            settings.eigenda_creation_block as i64,
-            start_from as i64,
-        )
-        .await?;
+        let gaps =
+            batches::find_gaps(&db, settings.creation_block as i64, start_from as i64).await?;
         Ok(Self {
             settings,
             db,
@@ -59,7 +55,7 @@ impl EigenDA {
         let jobs = self
             .provider
             .get_logs(
-                &self.settings.eigenda_address,
+                &self.settings.address,
                 "BatchConfirmed(bytes32,uint32)",
                 from,
                 to,

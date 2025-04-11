@@ -145,8 +145,6 @@ pub type AverageBlockTime = DirectPointLocalDbChartSource<AverageBlockTimeRemote
 
 #[cfg(test)]
 mod tests {
-    use std::iter::repeat;
-
     use chrono::TimeDelta;
 
     use super::*;
@@ -168,10 +166,7 @@ mod tests {
             prepare_chart_test::<AverageBlockTime>("update_average_block_time", None).await;
 
         let times_generator = [100u64, 200, 300];
-        let block_times = repeat(1)
-            // genesis is not counted
-            // (2 because we consider block 1 as genesis just in case)
-            .take(2)
+        let block_times = std::iter::repeat_n(1, 2)
             .chain(
                 times_generator
                     .into_iter()
@@ -180,7 +175,7 @@ mod tests {
                     .take((LIMIT_BLOCKS - 1) as usize),
             )
             // will be skipped
-            .chain(repeat(1).take(OFFSET_BLOCKS as usize))
+            .chain(std::iter::repeat_n(1, OFFSET_BLOCKS as usize))
             .map(|x| TimeDelta::seconds(x as i64))
             .collect_vec();
         let expected_avg = {
@@ -207,6 +202,7 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: AverageBlockTime::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
         };

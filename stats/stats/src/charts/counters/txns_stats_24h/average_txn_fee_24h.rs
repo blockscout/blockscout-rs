@@ -72,7 +72,7 @@ mod tests {
     async fn update_average_txns_fee_1() {
         simple_test_counter::<AverageTxnFee24h>(
             "update_average_txns_fee_1",
-            "0.000023592592569",
+            "0.0000117962962845",
             None,
         )
         .await;

@@ -7,6 +7,8 @@ use serde_with::serde_as;
 pub struct IndexerSettings {
     pub rpc: RpcSettings,
     pub start_height: Option<u64>,
+    #[serde(default = "default_save_batch_size")]
+    pub save_batch_size: u64,
 }
 
 #[serde_as]
@@ -19,6 +21,10 @@ pub struct RpcSettings {
     pub max_request_size: u32,
     #[serde(default = "default_max_response_size")]
     pub max_response_size: u32,
+}
+
+fn default_save_batch_size() -> u64 {
+    1000
 }
 
 fn default_max_request_size() -> u32 {
@@ -39,6 +45,7 @@ impl Default for IndexerSettings {
                 max_request_size: default_max_request_size(),
                 max_response_size: default_max_response_size(),
             },
+            save_batch_size: 1000,
         }
     }
 }

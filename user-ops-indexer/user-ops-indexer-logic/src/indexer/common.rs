@@ -2,8 +2,7 @@ use alloy::{
     json_abi::JsonAbi,
     primitives::{Address, Bytes, Selector, U256},
     rpc::types::Log,
-    sol_types,
-    sol_types::SolValue,
+    sol_types::{self, SolValue},
 };
 use entity::sea_orm_active_enums::SponsorType;
 use lazy_static::lazy_static;

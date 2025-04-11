@@ -4,6 +4,7 @@ use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use sea_orm::{FromQueryResult, Statement, TryGetable};
 
 use crate::{
+    charts::db_interaction::read::{cached::find_one_value_cached, find_one_value},
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, Cacheable, UpdateContext, WrappedValue},
@@ -25,31 +26,25 @@ pub trait StatementForOne {
 /// `P` - Type of point to retrieve within query.
 /// `DateValue<String>` can be used to avoid parsing the values,
 /// but `DateValue<Decimal>` or other types can be useful sometimes.
-pub struct PullOne<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
+pub struct PullOne<S, Value>(PhantomData<(S, Value)>)
 where
     S: StatementForOne,
-    Resolution: Ord + Send,
-    Value: Send,
-    TimespanValue<Resolution, Value>: FromQueryResult;
+    Value: FromQueryResult + Send;
 
-impl<S, Resolution, Value> RemoteQueryBehaviour for PullOne<S, Resolution, Value>
+impl<S, Value> RemoteQueryBehaviour for PullOne<S, Value>
 where
     S: StatementForOne,
-    Resolution: Ord + Send,
-    Value: Send,
-    TimespanValue<Resolution, Value>: FromQueryResult,
+    Value: FromQueryResult + Send,
 {
-    type Output = TimespanValue<Resolution, Value>;
+    type Output = Value;
 
     async fn query_data(
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
-        let query = S::get_statement(&cx.blockscout_applied_migrations);
-        let data = TimespanValue::<Resolution, Value>::find_by_statement(query)
-            .one(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?
+    ) -> Result<Value, ChartError> {
+        let statement = S::get_statement(&cx.blockscout_applied_migrations);
+        let data = find_one_value::<Value>(cx, statement)
+            .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
         Ok(data)
     }
@@ -63,13 +58,13 @@ pub trait StatementFromUpdateTime {
 }
 
 /// Just like `PullOne` but timespan is taken from update time
-pub struct PullOneValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
+pub struct PullOneNowValue<S, Resolution, Value>(PhantomData<(S, Resolution, Value)>)
 where
     S: StatementFromUpdateTime,
     Resolution: Timespan + Ord + Send,
     Value: Send + TryGetable;
 
-impl<S, Resolution, Value> RemoteQueryBehaviour for PullOneValue<S, Resolution, Value>
+impl<S, Resolution, Value> RemoteQueryBehaviour for PullOneNowValue<S, Resolution, Value>
 where
     S: StatementFromUpdateTime,
     Resolution: Timespan + Ord + Send,
@@ -81,12 +76,10 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
-        let query = S::get_statement(cx.time, &cx.blockscout_applied_migrations);
+        let statement = S::get_statement(cx.time, &cx.blockscout_applied_migrations);
         let timespan = Resolution::from_date(cx.time.date_naive());
-        let value = WrappedValue::<Value>::find_by_statement(query)
-            .one(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?
+        let value = find_one_value::<WrappedValue<Value>>(cx, statement)
+            .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?
             .value;
         Ok(TimespanValue { timespan, value })
@@ -118,20 +111,12 @@ where
         let query = S::get_statement(
             Some(inclusive_range_to_exclusive(range_24h)),
             &cx.blockscout_applied_migrations,
+            &cx.enabled_update_charts_recursive,
         );
 
-        let value = if let Some(cached) = cx.cache.get::<Value>(&query).await {
-            cached
-        } else {
-            let find_by_statement = Value::find_by_statement(query.clone());
-            let value = find_by_statement
-                .one(cx.blockscout)
-                .await
-                .map_err(ChartError::BlockscoutDB)?
-                .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
-            cx.cache.insert(&query, value.clone()).await;
-            value
-        };
+        let value = find_one_value_cached(cx, query)
+            .await?
+            .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
 
         Ok(TimespanValue {
             timespan: update_time.date_naive(),
@@ -142,7 +127,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, ops::Range};
+    use std::{
+        collections::{BTreeMap, HashSet},
+        ops::Range,
+    };
 
     use chrono::{DateTime, Utc};
     use pretty_assertions::assert_eq;
@@ -157,6 +145,7 @@ mod test {
         range::UniversalRange,
         tests::point_construction::dt,
         types::TimespanValue,
+        ChartKey,
     };
 
     use super::PullOne24hCached;
@@ -166,6 +155,7 @@ mod test {
         fn get_statement(
             _range: Option<Range<DateTime<Utc>>>,
             _completed_migrations: &BlockscoutMigrations,
+            _enabled_update_charts_recursive: &HashSet<ChartKey>,
         ) -> Statement {
             Statement::from_string(DbBackend::Postgres, "SELECT id as value FROM t;")
         }
@@ -190,13 +180,12 @@ mod test {
             ])
             .into_connection();
         let time = dt("2023-01-01T00:00:00").and_utc();
-        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &db,
-            blockscout: &db,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
-            update_time_override: Some(time),
-            force_full: false,
-        });
+        let cx = UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+            &db,
+            &db,
+            BlockscoutMigrations::latest(),
+            Some(time),
+        ));
         assert_eq!(
             TimespanValue {
                 timespan: time.date_naive(),

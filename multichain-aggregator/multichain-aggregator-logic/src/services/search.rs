@@ -1,6 +1,6 @@
 use crate::{
     clients::{dapp::search_dapps, token_info::search_token_infos},
-    error::ServiceError,
+    error::{ParseError, ServiceError},
     repository::{addresses, block_ranges, hashes},
     types::{
         addresses::{Address, TokenType},
@@ -87,6 +87,7 @@ pub async fn search_hashes(
 }
 
 pub async fn search_tokens(
+    db: &DatabaseConnection,
     token_info_client: &HttpApiClient,
     query: String,
     chain_id: Vec<ChainId>,
@@ -111,11 +112,25 @@ pub async fn search_tokens(
         .await
         .map_err(|err| anyhow::anyhow!("failed to search tokens: {:?}", err))?;
 
-    let tokens = res
+    let mut tokens = res
         .token_infos
         .into_iter()
-        .map(Token::try_from)
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|token_info| {
+            let mut token = Token::try_from(token_info)?;
+            token.icon_url = replace_coingecko_logo_uri_to_large(token.icon_url.as_str());
+            Ok(token)
+        })
+        .collect::<Result<Vec<_>, ParseError>>()?;
+
+    let pks = tokens.iter().map(|t| (&t.address, t.chain_id)).collect();
+    let pk_to_address = addresses::get_batch(db, pks).await?;
+
+    for token in tokens.iter_mut() {
+        let pk = (token.address, token.chain_id);
+        if let Some(address) = pk_to_address.get(&pk) {
+            token.is_verified_contract = address.is_verified_contract;
+        }
+    }
 
     Ok((tokens, res.next_page_params.map(|p| p.page_token)))
 }
@@ -341,6 +356,7 @@ impl SearchTerm {
             }
             SearchTerm::TokenInfo(query) => {
                 let (tokens, _) = search_tokens(
+                    search_context.db,
                     search_context.token_info_client,
                     query,
                     search_context.chain_ids.to_vec(),
@@ -403,12 +419,20 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     terms
 }
 
+fn replace_coingecko_logo_uri_to_large(logo_uri: &str) -> String {
+    if logo_uri.starts_with("https://assets.coingecko.com/") {
+        logo_uri.replacen("/small/", "/large/", 1)
+    } else {
+        logo_uri.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn parse_search_terms_works() {
+    fn test_parse_search_terms() {
         assert_eq!(
             parse_search_terms("0x0000000000000000000000000000000000000000"),
             vec![SearchTerm::AddressHash(alloy_primitives::Address::ZERO)]
@@ -437,6 +461,21 @@ mod tests {
                 SearchTerm::ContractName("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
             ]
+        );
+    }
+
+    #[test]
+    fn test_replace_coingecko_logo_uri_to_large() {
+        let coingecko_logo = "https://assets.coingecko.com/coins/images/1/small/test_token.png";
+        assert_eq!(
+            replace_coingecko_logo_uri_to_large(coingecko_logo),
+            "https://assets.coingecko.com/coins/images/1/large/test_token.png"
+        );
+
+        let other_source_logo = "https://some.other.source.com/coins/images/1/small/test_token.png";
+        assert_eq!(
+            replace_coingecko_logo_uri_to_large(other_source_logo),
+            other_source_logo
         );
     }
 }
