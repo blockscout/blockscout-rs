@@ -214,6 +214,8 @@ impl SubgraphReader {
             input.network_id,
             input.protocol_id.clone().map(|p| nonempty![p]),
         )?;
+        println!("get_domain: {name:?}");
+        // if domain is not found, it means that it is not in the database
         self.patcher
             .handle_user_domain_names(self.pool.as_ref(), &name)
             .await?;
@@ -268,7 +270,7 @@ impl SubgraphReader {
         input: LookupDomainInput,
     ) -> Result<PaginatedList<LookupOutput>, SubgraphReadError> {
         let find_domains_input = if let Some(name) = input.name {
-            match self.protocoler.names_options_in_network(
+            match self.protocoler.lookup_names_options_in_network(
                 &name,
                 input.network_id,
                 input.maybe_filter_protocols,

@@ -10,6 +10,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use url::Url;
 
+const MAX_NETWORKS_LIMIT: usize = 5;
+
 #[derive(Debug, Clone)]
 pub struct Protocoler {
     networks: HashMap<i64, Network>,
@@ -204,6 +206,13 @@ impl Protocoler {
         })
     }
 
+    pub fn extract_tld(&self, domain: &str) -> Result<Tld, ProtocolError> {
+        Tld::from_domain_name(domain).ok_or_else(|| ProtocolError::InvalidName {
+            name: domain.to_string(),
+            reason: "Invalid TLD".to_string(),
+        })
+    }
+
     pub fn iter_protocols(&self) -> impl Iterator<Item = &Protocol> {
         self.protocols.values()
     }
@@ -290,11 +299,7 @@ impl Protocoler {
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        let tld =
-            Tld::from_domain_name(name_with_tld).ok_or_else(|| ProtocolError::InvalidName {
-                name: name_with_tld.to_string(),
-                reason: "Invalid TLD".to_string(),
-            })?;
+        let tld = self.extract_tld(name_with_tld)?;
 
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
 
@@ -307,16 +312,23 @@ impl Protocoler {
                 .empty_label_hash();
 
             let domain_name = DomainName::new(name_with_tld, empty_label_hash)?;
-            results.push(DomainNameOnProtocol {
-                inner: domain_name,
-                deployed_protocol,
-            });
+            results.push(DomainNameOnProtocol::from_str(&domain_name.name, deployed_protocol));
         }
 
+        let results = results
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect::<Vec<_>>();
+        if results.is_empty() {
+            return Err(ProtocolError::InvalidName {
+                name: name_with_tld.to_string(),
+                reason: "No matching protocols for given TLD".to_string(),
+            });
+        }
         Ok(results)
     }
 
-    pub fn names_options_in_network(
+    pub fn lookup_names_options_in_network(
         &self,
         name: &str,
         network_id: i64,
@@ -351,7 +363,7 @@ impl Protocoler {
                     self.fetch_domain_options(&name_with_tld, network_id, maybe_filter.clone())
                         .unwrap_or_default()
                 })
-                .take(5)
+                .take(MAX_NETWORKS_LIMIT)
                 .collect();
 
             if all_names_with_protocols.is_empty() {
@@ -363,6 +375,21 @@ impl Protocoler {
                 Ok(all_names_with_protocols)
             }
         }
+    }
+
+    pub fn names_options_in_network(
+        &self,
+        name: &str,
+        network_id: i64,
+        maybe_filter: Option<NonEmpty<String>>,
+    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+        let tld = self.extract_tld(name)?;
+        let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
+        let names_with_protocols = protocols
+            .into_iter()
+            .map(|p| DomainNameOnProtocol::from_str(name, p))
+            .collect::<Result<_, _>>()?;
+        Ok(names_with_protocols)
     }
 
     pub fn main_name_in_network(

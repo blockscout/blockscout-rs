@@ -95,7 +95,6 @@ pub async fn mocked_blockscout_client() -> BlockscoutClient {
 
 pub async fn mocked_networks_and_protocols(
 ) -> (HashMap<i64, Network>, HashMap<String, ProtocolInfo>) {
-    // let client = mocked_blockscout_client().await;
     let client = Arc::new(mocked_blockscout_client().await);
 
     let networks = HashMap::from_iter([
