@@ -69,6 +69,10 @@ mod tests {
                 "vitalik.eth",
                 "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
             ),
+            (
+                "abcnews.eth",
+                "0x7a68d23f9d7e32e79f09e024d21e2e12b66f74cbbc4aff0e5a36043a6a42778d",
+            ),
         ] {
             let hash = domain_id(name, None);
             assert_eq!(hash, expected_hash);
@@ -93,6 +97,10 @@ mod tests {
             (
                 "unknown.gno",
                 "0x7dd2724da2c399aa963a8ecf14e2a017b7f12026dcdf17277f96ac263d0ffbae",
+            ),
+            (
+                "abcnews.gno",
+                "0xefc07af2d64eead3daec2e3004575bfc86bfc43c34e316294bd01c957e70cba2",
             ),
         ] {
             let genome_testnet_empty_label = B256::from_hex(

@@ -65,6 +65,13 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
         data_file_as_json!("domains/wai_eth/detailed.json", &context)
     );
 
+    let request: Value = send_get_request(&base, "/api/v1/1/domains/abcnews.eth").await;
+
+    assert_eq!(
+        request,
+        data_file_as_json!("domains/abcnews_eth/detailed.json", &context)
+    );
+
     // get events
     let expected_events = data_file_as_json!("domains/vitalik_eth/events.json", &context);
     let expected_events = expected_events.as_array().unwrap().clone();
@@ -87,7 +94,6 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     .await;
     assert_eq!(actual, expected);
 
-    // all domains lookup + check pagination
     let expected_domains = data_file_as_json!("domains/lookup_ens.json", &context)
         .as_array()
         .unwrap()
@@ -271,7 +277,7 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
         data_file_as_json!("domains/levvv_gno/detailed.json", &context)
     );
 
-    let expected_domains = data_file_as_json!("domains/lookup_genome.json", &context)
+    let expected_domains = data_file_as_json!("domains/lookup_ens_genome.json", &context)
         .as_array()
         .unwrap()
         .clone();
@@ -279,10 +285,7 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
     let (actual, expected) = check_list_result(
         &base,
         "/api/v1/1337/domains:lookup",
-        HashMap::from_iter([
-            ("protocols".into(), "genome".into()),
-            ("page_size".into(), "2".into()),
-        ]),
+        HashMap::from_iter([("page_size".into(), "2".into())]),
         expected_domains,
         Some((2, Some(page_token.clone()))),
     )
@@ -303,6 +306,24 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
         ]),
         expected_domains[0..2].to_vec(),
         Some((2, Some(page_token.clone()))),
+    )
+    .await;
+    assert_eq!(actual, expected);
+
+    let expected_domains = data_file_as_json!("domains/lookup_abcnews.json", &context)
+        .as_array()
+        .unwrap()
+        .to_vec();
+
+    let (actual, expected) = check_list_result(
+        &base,
+        "/api/v1/1337/domains:lookup",
+        HashMap::from_iter([
+            ("name".into(), "abcnews".into()),
+            ("page_size".into(), "2".into()),
+        ]),
+        expected_domains[0..2].to_vec(),
+        Some((2, None)),
     )
     .await;
     assert_eq!(actual, expected);

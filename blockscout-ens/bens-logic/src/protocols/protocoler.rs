@@ -1,6 +1,6 @@
 use crate::{
     blockscout::BlockscoutClient,
-    protocols::{DomainNameOnProtocol, ProtocolError},
+    protocols::{DomainName, DomainNameOnProtocol, ProtocolError},
 };
 use alloy::primitives::{Address, B256};
 use anyhow::anyhow;
@@ -9,6 +9,8 @@ use sea_query::{Alias, IntoTableRef, TableRef};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use url::Url;
+
+const MAX_NETWORKS_LIMIT: usize = 5;
 
 #[derive(Debug, Clone)]
 pub struct Protocoler {
@@ -83,7 +85,7 @@ impl ProtocolSpecific {
 
     pub fn empty_label_hash(&self) -> Option<B256> {
         match self {
-            ProtocolSpecific::EnsLike(ens) => ens.empty_label_hash,
+            ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
             ProtocolSpecific::D3Connect(_) => None,
         }
     }
@@ -203,6 +205,13 @@ impl Protocoler {
         })
     }
 
+    pub fn extract_tld(&self, domain: &str) -> Result<Tld, ProtocolError> {
+        Tld::from_domain_name(domain).ok_or_else(|| ProtocolError::InvalidName {
+            name: domain.to_string(),
+            reason: "Invalid TLD".to_string(),
+        })
+    }
+
     pub fn iter_protocols(&self) -> impl Iterator<Item = &Protocol> {
         self.protocols.values()
     }
@@ -283,16 +292,100 @@ impl Protocoler {
         Ok(protocols)
     }
 
+    pub fn fetch_domain_options(
+        &self,
+        name_with_tld: &str,
+        network_id: i64,
+        maybe_filter: Option<NonEmpty<String>>,
+    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+        let tld = self.extract_tld(name_with_tld)?;
+
+        let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
+
+        let mut results = Vec::new();
+        for deployed_protocol in protocols {
+            let empty_label_hash = deployed_protocol
+                .protocol
+                .info
+                .protocol_specific
+                .empty_label_hash();
+
+            let domain_name = DomainName::new(name_with_tld, empty_label_hash)?;
+            results.push(DomainNameOnProtocol::from_str(
+                &domain_name.name,
+                deployed_protocol,
+            ));
+        }
+
+        let results = results
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .collect::<Vec<_>>();
+        if results.is_empty() {
+            return Err(ProtocolError::InvalidName {
+                name: name_with_tld.to_string(),
+                reason: "No matching protocols for given TLD".to_string(),
+            });
+        }
+        Ok(results)
+    }
+
+    pub fn lookup_names_options_in_network(
+        &self,
+        name: &str,
+        network_id: i64,
+        maybe_filter: Option<NonEmpty<String>>,
+    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+        if name.contains('.') {
+            let direct = self.fetch_domain_options(name, network_id, maybe_filter)?;
+
+            if direct.is_empty() {
+                Err(ProtocolError::InvalidName {
+                    name: name.to_string(),
+                    reason: "No matching protocols for given TLD".to_string(),
+                })
+            } else {
+                Ok(direct.into_iter().take(1).collect())
+            }
+        } else {
+            let tlds = self
+                .networks
+                .get(&network_id)
+                .ok_or_else(|| ProtocolError::NetworkNotFound(network_id))?
+                .use_protocols
+                .iter()
+                .filter_map(|protocol_name| self.protocols.get(protocol_name))
+                .flat_map(|protocol| protocol.info.tld_list.iter().cloned())
+                .collect::<Vec<Tld>>();
+
+            let all_names_with_protocols: Vec<_> = tlds
+                .into_iter()
+                .map(|tld| format!("{}.{}", name, tld.0))
+                .flat_map(|name_with_tld| {
+                    self.fetch_domain_options(&name_with_tld, network_id, maybe_filter.clone())
+                        .unwrap_or_default()
+                })
+                .take(MAX_NETWORKS_LIMIT)
+                .collect();
+
+            if all_names_with_protocols.is_empty() {
+                Err(ProtocolError::InvalidName {
+                    name: name.to_string(),
+                    reason: "No valid TLDs".to_string(),
+                })
+            } else {
+                Ok(all_names_with_protocols)
+            }
+        }
+    }
+
     pub fn names_options_in_network(
         &self,
         name: &str,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        let tld = Tld::from_domain_name(name).ok_or_else(|| ProtocolError::InvalidName {
-            name: name.to_string(),
-            reason: "no tld found".to_string(),
-        })?;
+        let tld = self.extract_tld(name)?;
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
         let names_with_protocols = protocols
             .into_iter()
@@ -308,8 +401,8 @@ impl Protocoler {
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<DomainNameOnProtocol, ProtocolError> {
         let maybe_name = self
-            .names_options_in_network(name, network_id, maybe_filter)
-            .map(|mut names| names.pop())?;
+            .names_options_in_network(name, network_id, maybe_filter)?
+            .pop();
         let name = maybe_name.ok_or_else(|| ProtocolError::InvalidName {
             name: name.to_string(),
             reason: "no protocol found".to_string(),
@@ -349,5 +442,42 @@ impl Protocol {
                 protocol: self,
                 deployment_network: network,
             })
+    }
+}
+
+#[cfg(test)]
+mod tld_tests {
+    use super::Tld;
+
+    #[test]
+    fn tld_new_trims_dot() {
+        let tld = Tld::new(".eth");
+        assert_eq!(tld.0, "eth");
+    }
+
+    #[test]
+    fn tld_new_no_dot() {
+        let tld = Tld::new("eth");
+        assert_eq!(tld.0, "eth");
+    }
+
+    #[test]
+    fn from_domain_name_works() {
+        let domain = "vitalik.eth";
+        let tld = Tld::from_domain_name(domain).unwrap();
+        assert_eq!(tld.0, "eth");
+    }
+
+    #[test]
+    fn from_domain_name_empty() {
+        let domain = ".";
+        let tld = Tld::from_domain_name(domain);
+        assert!(tld.is_none());
+    }
+
+    #[test]
+    fn reverse_works() {
+        let rev = Tld::reverse();
+        assert_eq!(rev.0, "reverse");
     }
 }

@@ -214,6 +214,7 @@ impl SubgraphReader {
             input.network_id,
             input.protocol_id.clone().map(|p| nonempty![p]),
         )?;
+        // if domain is not found, it means that it is not in the database
         self.patcher
             .handle_user_domain_names(self.pool.as_ref(), &name)
             .await?;
@@ -268,7 +269,7 @@ impl SubgraphReader {
         input: LookupDomainInput,
     ) -> Result<PaginatedList<LookupOutput>, SubgraphReadError> {
         let find_domains_input = if let Some(name) = input.name {
-            match self.protocoler.names_options_in_network(
+            match self.protocoler.lookup_names_options_in_network(
                 &name,
                 input.network_id,
                 input.maybe_filter_protocols,
@@ -617,6 +618,26 @@ mod tests {
         let result = result.items;
         assert_eq!(
             vec![Some("vitalik.eth")],
+            result
+                .iter()
+                .map(|output| output.domain.name.as_deref())
+                .collect::<Vec<_>>(),
+        );
+
+        let result = reader
+            .lookup_domain_name(LookupDomainInput {
+                network_id: 1337,
+                name: Some("abcnews".to_string()),
+                only_active: false,
+                pagination: Default::default(),
+                maybe_filter_protocols: None,
+            })
+            .await
+            .expect("failed to get abcnews domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
+        assert_eq!(
+            vec![Some("abcnews.eth")],
             result
                 .iter()
                 .map(|output| output.domain.name.as_deref())
