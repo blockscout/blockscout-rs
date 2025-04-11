@@ -259,6 +259,19 @@ construct_update_group!(NewUserOpsGroup {
     ],
 });
 
+construct_update_group!(NewEip7702AuthsGroup {
+    charts: [
+        NewEip7702Auths,
+        NewEip7702AuthsWeekly,
+        NewEip7702AuthsMonthly,
+        NewEip7702AuthsYearly,
+        Eip7702AuthsGrowth,
+        Eip7702AuthsGrowthWeekly,
+        Eip7702AuthsGrowthMonthly,
+        Eip7702AuthsGrowthYearly,
+    ],
+});
+
 construct_update_group!(NewVerifiedContractsGroup {
     charts: [
         NewVerifiedContracts,

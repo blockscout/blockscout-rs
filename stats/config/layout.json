@@ -49,7 +49,9 @@
                 "op_stack_operational_txns_growth",
                 "new_operational_txns",
                 "operational_txns_growth",
-                "txns_success_rate"
+                "txns_success_rate",
+                "new_eip_7702_auths",
+                "eip_7702_auths_growth"
             ]
         },
         {
