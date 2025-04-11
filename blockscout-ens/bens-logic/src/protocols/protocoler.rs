@@ -312,7 +312,10 @@ impl Protocoler {
                 .empty_label_hash();
 
             let domain_name = DomainName::new(name_with_tld, empty_label_hash)?;
-            results.push(DomainNameOnProtocol::from_str(&domain_name.name, deployed_protocol));
+            results.push(DomainNameOnProtocol::from_str(
+                &domain_name.name,
+                deployed_protocol,
+            ));
         }
 
         let results = results
