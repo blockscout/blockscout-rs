@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 multichain-aggregator-entity = { workspace = true }
 multichain-aggregator-proto = { workspace = true }
+bens-proto = { workspace = true }
 anyhow = { workspace = true }
 api-client-framework = { workspace = true }
 blockscout-chains = { workspace = true }
