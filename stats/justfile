@@ -29,19 +29,25 @@ start-postgres:
 stop-postgres:
     docker kill {{docker-name}}
 
+start-test-postgres:
+    just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
+
+stop-test-postgres:
+    just docker-name="{{docker-name}}-test" stop-postgres
+
 test *args:
     cargo test {{args}} -- --include-ignored --nocapture
 
 test-with-db *args:
     # remove db from previous run (if failed)
-    -just                            docker-name="{{docker-name}}-test" stop-postgres 2> /dev/null
-    just start-postgres-and-build-tests
-    just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
-    just                            docker-name="{{docker-name}}-test" stop-postgres
+    -just                                           stop-test-postgres              2> /dev/null
+    just                                            start-postgres-and-build-tests
+    just db-port="{{test-db-port}}" db-name=""      test                            {{args}}
+    just                                            stop-test-postgres
 
 start-postgres-and-build-tests:
     #!/bin/bash -eux
-    just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres &
+    just start-test-postgres &
     cargo build --tests &
     trap 'kill $(jobs -pr) || true' EXIT
     wait
