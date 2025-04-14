@@ -50,6 +50,17 @@ async fn test_quick_search() {
         test_server::send_get_request(&base, "/api/v1/search:quick?q=test.eth").await;
 
     assert_eq!(response.domains.len(), 1);
+
+    let response: proto::QuickSearchResponse = test_server::send_get_request(
+        &base,
+        "/api/v1/search:quick?q=0x0000000000000000000000000000000000000500",
+    )
+    .await;
+
+    assert_eq!(
+        response.addresses[0].domain_info.as_ref().unwrap().name,
+        "test-500.eth"
+    );
 }
 
 async fn mock_token_info_server() -> MockServer {
@@ -135,12 +146,33 @@ async fn mock_bens_server() -> MockServer {
             "docs_url": ""
         }
     });
-    let payload = json!({
-        "items": [domain_name]
-    });
     Mock::given(method("GET"))
         .and(path("/api/v1/1/domains:lookup"))
-        .respond_with(ResponseTemplate::new(StatusCode::OK).set_body_json(payload))
+        .respond_with(ResponseTemplate::new(StatusCode::OK).set_body_json(json!({
+            "items": [domain_name]
+        })))
+        .mount(&mock)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/v1/1/addresses/0x0000000000000000000000000000000000000500",
+        ))
+        .respond_with(ResponseTemplate::new(StatusCode::OK).set_body_json(json!({
+            "domain": {
+                "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "tokens": [],
+                "name": "test-500.eth",
+                "resolved_address": {
+                    "hash": "0x0000000000000000000000000000000000000500"
+                },
+                "registration_date": "",
+                "other_addresses": {},
+                "stored_offchain": false,
+                "resolved_with_wildcard": false,
+            },
+            "resolved_domains_count": 1
+        })))
         .mount(&mock)
         .await;
     mock

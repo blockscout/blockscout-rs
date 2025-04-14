@@ -19,7 +19,7 @@ use crate::{
 };
 use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
-use bens_proto::blockscout::bens::v1::{DetailedDomain, GetAddressResponse};
+use bens_proto::blockscout::bens::v1 as bens_proto;
 use regex::Regex;
 use sea_orm::DatabaseConnection;
 use std::{collections::HashSet, str::FromStr, sync::OnceLock};
@@ -135,7 +135,7 @@ pub async fn preload_domain_info(
             return address;
         }
 
-        let request = bens_proto::blockscout::bens::v1::GetAddressRequest {
+        let request = bens_proto::GetAddressRequest {
             address: address.hash.to_string(),
             chain_id: DOMAIN_PRIMARY_CHAIN_ID,
             protocol_id: None,
@@ -152,9 +152,9 @@ pub async fn preload_domain_info(
                 );
             });
 
-        if let Ok(GetAddressResponse {
+        if let Ok(bens_proto::GetAddressResponse {
             domain:
-                Some(DetailedDomain {
+                Some(bens_proto::DetailedDomain {
                     name,
                     resolved_address: Some(resolved_address),
                     expiry_date,
@@ -285,8 +285,8 @@ pub async fn search_domains(
     page_token: Option<String>,
 ) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
     let sort = "registration_date".to_string();
-    let order = bens_proto::blockscout::bens::v1::Order::Desc.into();
-    let request = bens_proto::blockscout::bens::v1::LookupDomainNameRequest {
+    let order = bens_proto::Order::Desc.into();
+    let request = bens_proto::LookupDomainNameRequest {
         name: Some(query),
         chain_id: DOMAIN_PRIMARY_CHAIN_ID,
         only_active: true,
@@ -424,6 +424,8 @@ impl SearchTerm {
                     .into_iter()
                     .map(Address::try_from)
                     .collect::<Result<Vec<_>, _>>()?;
+
+                let addresses = preload_domain_info(search_context.bens_client, addresses).await;
 
                 let nfts = addresses
                     .iter()
