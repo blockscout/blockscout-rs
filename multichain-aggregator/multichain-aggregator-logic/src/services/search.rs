@@ -1,11 +1,16 @@
 use crate::{
-    clients::{dapp::search_dapps, token_info::search_token_infos},
+    clients::{
+        bens::{get_address, lookup_domain_name},
+        dapp::search_dapps,
+        token_info::search_token_infos,
+    },
     error::{ParseError, ServiceError},
     repository::{addresses, block_ranges, hashes},
     types::{
-        addresses::{Address, TokenType},
+        addresses::{Address, DomainInfo, TokenType},
         block_ranges::ChainBlockNumber,
         dapp::MarketplaceDapp,
+        domains::Domain,
         hashes::{Hash, HashType},
         search_results::QuickSearchResult,
         token_info::Token,
@@ -14,21 +19,47 @@ use crate::{
 };
 use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
+use bens_proto::blockscout::bens::v1::{DetailedDomain, GetAddressResponse};
+use regex::Regex;
 use sea_orm::DatabaseConnection;
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-};
+use std::{collections::HashSet, str::FromStr, sync::OnceLock};
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
 const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
+// TODO: for now, we just need any chain that has a primary ENS protocol.
+// Later, we will need to add a BENS handle that is chain-agnostic
+// and works directly with protocols.
+const DOMAIN_PRIMARY_CHAIN_ID: ChainId = 1;
+
+fn domain_name_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\w+\.\w+").unwrap())
+}
+
+pub enum AddressSearchConfig<'a> {
+    NFTSearch,
+    NonTokenSearch {
+        bens_protocols: Option<&'a [String]>,
+        bens_domain_lookup_limit: u32,
+    },
+}
+
+impl AddressSearchConfig<'_> {
+    pub fn token_types(&self) -> Option<Vec<TokenType>> {
+        match self {
+            AddressSearchConfig::NFTSearch => Some(vec![TokenType::Erc721, TokenType::Erc1155]),
+            AddressSearchConfig::NonTokenSearch { .. } => Some(vec![]),
+        }
+    }
+}
 
 pub async fn search_addresses(
     db: &DatabaseConnection,
+    bens_client: &HttpApiClient,
+    config: AddressSearchConfig<'_>,
     query: String,
-    chain_id: Option<ChainId>,
-    token_types: Option<Vec<TokenType>>,
+    chain_ids: Vec<ChainId>,
     page_size: u64,
     page_token: Option<(AddressAlloy, ChainId)>,
 ) -> Result<(Vec<Address>, Option<(AddressAlloy, ChainId)>), ServiceError> {
@@ -36,29 +67,115 @@ pub async fn search_addresses(
         return Ok((vec![], None));
     }
 
-    let (address, query) = match alloy_primitives::Address::from_str(&query) {
-        Ok(address) => (Some(address), None),
-        Err(_) => (None, Some(query)),
+    let parse_address_query = |query: &str| match alloy_primitives::Address::from_str(query) {
+        Ok(address) => (vec![address], None),
+        Err(_) => (vec![], Some(query.to_string())),
+    };
+
+    let (addresses, contract_name_query) = match config {
+        AddressSearchConfig::NonTokenSearch {
+            bens_protocols,
+            bens_domain_lookup_limit,
+        } => {
+            if domain_name_regex().is_match(&query) {
+                let (domains, _) = search_domains(
+                    bens_client,
+                    query.clone(),
+                    bens_protocols,
+                    bens_domain_lookup_limit,
+                    None,
+                )
+                .await?;
+                let addresses = domains
+                    .iter()
+                    .map(|d| d.address)
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                // Ensure that domain resolves to at least one address
+                if addresses.is_empty() {
+                    return Ok((vec![], None));
+                }
+                (addresses, None)
+            } else {
+                parse_address_query(&query)
+            }
+        }
+        AddressSearchConfig::NFTSearch => parse_address_query(&query),
     };
 
     let (addresses, page_token) = addresses::list(
         db,
-        address,
-        query,
-        chain_id.map(|v| vec![v]),
-        token_types,
+        addresses,
+        contract_name_query,
+        chain_ids,
+        config.token_types(),
         page_size,
         page_token,
     )
     .await?;
 
-    Ok((
-        addresses
-            .into_iter()
-            .map(Address::try_from)
-            .collect::<Result<Vec<_>, _>>()?,
-        page_token,
-    ))
+    let addresses = addresses
+        .into_iter()
+        .map(Address::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let addresses = preload_domain_info(bens_client, addresses).await;
+
+    Ok((addresses, page_token))
+}
+
+pub async fn preload_domain_info(
+    bens_client: &HttpApiClient,
+    addresses: impl IntoIterator<Item = Address>,
+) -> Vec<Address> {
+    let jobs = addresses.into_iter().map(|mut address| async {
+        // Preload domain info only for EOA addresses and only for the primary chain instance
+        if address.is_contract || address.chain_id != DOMAIN_PRIMARY_CHAIN_ID {
+            return address;
+        }
+
+        let request = bens_proto::blockscout::bens::v1::GetAddressRequest {
+            address: address.hash.to_string(),
+            chain_id: DOMAIN_PRIMARY_CHAIN_ID,
+            protocol_id: None,
+        };
+
+        let res = bens_client
+            .request(&get_address::GetAddress { request })
+            .await
+            .inspect_err(|err| {
+                tracing::error!(
+                    error = ?err,
+                    address = ?address.hash,
+                    "failed to preload domain info"
+                );
+            });
+
+        if let Ok(GetAddressResponse {
+            domain:
+                Some(DetailedDomain {
+                    name,
+                    resolved_address: Some(resolved_address),
+                    expiry_date,
+                    ..
+                }),
+            resolved_domains_count,
+        }) = res
+        {
+            let domain_info = DomainInfo {
+                address: resolved_address.hash,
+                name,
+                expiry_date,
+                names_count: resolved_domains_count as u32,
+            };
+            address.domain_info = Some(domain_info);
+        }
+
+        address
+    });
+
+    futures::future::join_all(jobs).await
 }
 
 pub async fn search_hashes(
@@ -160,13 +277,51 @@ pub async fn search_dapps(
     Ok(dapps)
 }
 
+pub async fn search_domains(
+    bens_client: &HttpApiClient,
+    query: String,
+    protocols: Option<&[String]>,
+    page_size: u32,
+    page_token: Option<String>,
+) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
+    let sort = "registration_date".to_string();
+    let order = bens_proto::blockscout::bens::v1::Order::Desc.into();
+    let request = bens_proto::blockscout::bens::v1::LookupDomainNameRequest {
+        name: Some(query),
+        chain_id: DOMAIN_PRIMARY_CHAIN_ID,
+        only_active: true,
+        sort,
+        order,
+        protocols: protocols.map(|p| p.join(",")),
+        page_size: Some(page_size),
+        page_token,
+    };
+
+    let res = bens_client
+        .request(&lookup_domain_name::LookupDomainName { request })
+        .await
+        .map_err(|err| anyhow::anyhow!("failed to search domains: {:?}", err))?;
+
+    let domains = res
+        .items
+        .into_iter()
+        .map(|d| d.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let next_page_token = res.next_page_params.map(|p| p.page_token);
+
+    Ok((domains, next_page_token))
+}
+
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
     db: &DatabaseConnection,
     dapp_client: &HttpApiClient,
     token_info_client: &HttpApiClient,
+    bens_client: &HttpApiClient,
     query: String,
     chain_ids: &[ChainId],
+    bens_protocols: Option<&[String]>,
 ) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
 
@@ -175,7 +330,9 @@ pub async fn quick_search(
         db,
         dapp_client,
         token_info_client,
+        bens_client,
         chain_ids,
+        bens_protocols,
     };
 
     // Each search term produces its own `SearchResults` struct.
@@ -183,15 +340,16 @@ pub async fn quick_search(
     // We need to merge all of them into a single `SearchResults` struct.
     let jobs = terms.into_iter().map(|t| t.search(&context));
 
-    let mut results = futures::future::join_all(jobs).await.into_iter().fold(
-        QuickSearchResult::default(),
-        |mut acc, r| {
+    let mut results = futures::future::join_all(jobs)
+        .await
+        .into_iter()
+        .fold(QuickSearchResult::default(), |mut acc, r| {
             if let Ok(r) = r {
                 acc.merge(r);
             }
             acc
-        },
-    );
+        })
+        .filter_and_sort_entities_by_priority(chain_ids);
 
     results.balance_entities(QUICK_SEARCH_NUM_ITEMS as usize);
 
@@ -206,44 +364,16 @@ pub enum SearchTerm {
     Dapp(String),
     TokenInfo(String),
     ContractName(String),
+    Domain(String),
 }
 
 struct SearchContext<'a> {
     db: &'a DatabaseConnection,
     dapp_client: &'a HttpApiClient,
     token_info_client: &'a HttpApiClient,
+    bens_client: &'a HttpApiClient,
     chain_ids: &'a [ChainId],
-}
-
-fn filter_and_sort_by_priority<T>(
-    items: Vec<T>,
-    get_chain_id: impl Fn(&T) -> ChainId,
-    search_context: &SearchContext<'_>,
-) -> Vec<T> {
-    // Filter to keep only one item per chain_id,
-    // assuming they are already presented in a relevant order.
-    let mut seen_chain_ids = HashSet::new();
-    let mut filtered_items = items
-        .into_iter()
-        .filter(|item| {
-            let chain_id = get_chain_id(item);
-            search_context.chain_ids.contains(&chain_id) && seen_chain_ids.insert(chain_id)
-        })
-        .collect::<Vec<_>>();
-
-    let chain_id_priority = search_context
-        .chain_ids
-        .iter()
-        .enumerate()
-        .map(|(idx, &chain_id)| (chain_id, idx))
-        .collect::<HashMap<_, _>>();
-    filtered_items.sort_by_key(|item| {
-        chain_id_priority
-            .get(&get_chain_id(item))
-            .unwrap_or(&usize::MAX)
-    });
-
-    filtered_items
+    bens_protocols: Option<&'a [String]>,
 }
 
 impl SearchTerm {
@@ -272,8 +402,6 @@ impl SearchTerm {
                     .map(Hash::try_from)
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let hashes = filter_and_sort_by_priority(hashes, |h| h.chain_id, search_context);
-
                 let (blocks, transactions): (Vec<_>, Vec<_>) = hashes
                     .into_iter()
                     .partition(|h| h.hash_type == HashType::Block);
@@ -284,9 +412,9 @@ impl SearchTerm {
             SearchTerm::AddressHash(address) => {
                 let (addresses, _) = addresses::list(
                     db,
-                    Some(address),
+                    vec![address],
                     None,
-                    Some(search_context.chain_ids.to_vec()),
+                    search_context.chain_ids.to_vec(),
                     None,
                     QUICK_SEARCH_NUM_ITEMS,
                     None,
@@ -296,9 +424,6 @@ impl SearchTerm {
                     .into_iter()
                     .map(Address::try_from)
                     .collect::<Result<Vec<_>, _>>()?;
-
-                let addresses =
-                    filter_and_sort_by_priority(addresses, |a| a.chain_id, search_context);
 
                 let nfts = addresses
                     .iter()
@@ -336,9 +461,6 @@ impl SearchTerm {
                     })
                     .collect::<Vec<_>>();
 
-                let block_numbers =
-                    filter_and_sort_by_priority(block_numbers, |b| b.chain_id, search_context);
-
                 results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
@@ -349,8 +471,6 @@ impl SearchTerm {
                     search_context.chain_ids.to_vec(),
                 )
                 .await?;
-
-                let dapps = filter_and_sort_by_priority(dapps, |d| d.chain_id, search_context);
 
                 results.dapps.extend(dapps);
             }
@@ -368,8 +488,6 @@ impl SearchTerm {
                 )
                 .await?;
 
-                let tokens = filter_and_sort_by_priority(tokens, |t| t.chain_id, search_context);
-
                 results.tokens.extend(tokens);
             }
             SearchTerm::ContractName(query) => {
@@ -385,6 +503,42 @@ impl SearchTerm {
                 .collect::<Result<Vec<_>, _>>()?;
 
                 results.addresses.extend(addresses);
+            }
+            SearchTerm::Domain(query) => {
+                let (domains, _) = search_domains(
+                    search_context.bens_client,
+                    query,
+                    search_context.bens_protocols,
+                    QUICK_SEARCH_NUM_ITEMS as u32,
+                    None,
+                )
+                .await?;
+
+                let addresses = domains.iter().map(|d| d.address).collect::<Vec<_>>();
+                if !addresses.is_empty() {
+                    // Lookup only non-token addresses
+                    let (addresses, _) = addresses::list(
+                        db,
+                        addresses,
+                        None,
+                        search_context.chain_ids.to_vec(),
+                        Some(vec![]),
+                        QUICK_SEARCH_NUM_ITEMS,
+                        None,
+                    )
+                    .await?;
+                    let addresses: Vec<_> = addresses
+                        .into_iter()
+                        .map(Address::try_from)
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    let addresses =
+                        preload_domain_info(search_context.bens_client, addresses).await;
+
+                    results.addresses.extend(addresses);
+                }
+
+                results.domains.extend(domains);
             }
         }
 
@@ -412,6 +566,10 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     if query.len() >= MIN_QUERY_LENGTH {
         terms.push(SearchTerm::TokenInfo(query.to_string()));
         terms.push(SearchTerm::ContractName(query.to_string()));
+
+        if domain_name_regex().is_match(query) {
+            terms.push(SearchTerm::Domain(query.to_string()));
+        }
     }
 
     terms.push(SearchTerm::Dapp(query.to_string()));
@@ -460,6 +618,16 @@ mod tests {
                 SearchTerm::TokenInfo("1234".to_string()),
                 SearchTerm::ContractName("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
+            ]
+        );
+
+        assert_eq!(
+            parse_search_terms("test.domain"),
+            vec![
+                SearchTerm::TokenInfo("test.domain".to_string()),
+                SearchTerm::ContractName("test.domain".to_string()),
+                SearchTerm::Domain("test.domain".to_string()),
+                SearchTerm::Dapp("test.domain".to_string()),
             ]
         );
     }

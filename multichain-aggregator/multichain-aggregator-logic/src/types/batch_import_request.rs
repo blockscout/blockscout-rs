@@ -53,7 +53,7 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
                     Ok(Address {
                         chain_id,
                         hash,
-                        ens_name: a.ens_name,
+                        domain_info: None,
                         contract_name: a.contract_name,
                         token_name: a.token_name,
                         token_type,
