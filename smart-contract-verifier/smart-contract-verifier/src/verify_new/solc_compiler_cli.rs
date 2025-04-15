@@ -12,7 +12,7 @@ pub async fn compile_using_cli(
 ) -> Result<solc::CompilerOutput, SolcError> {
     let output = {
         let input = &input.0;
-        let input_args = types::InputArgs::try_from(input)?;
+        let input_args = types::InputArgs::from(input);
         let input_files = types::InputFiles::try_from_compiler_input(input).await?;
         Command::new(compiler_path)
             .args(input_args.build())
@@ -78,16 +78,14 @@ mod types {
         result
     }
 
-    impl TryFrom<&solc::SolcInput> for InputArgs {
-        type Error = SolcError;
-
-        fn try_from(input: &solc::SolcInput) -> Result<Self, Self::Error> {
+    impl From<&solc::SolcInput> for InputArgs {
+        fn from(input: &solc::SolcInput) -> Self {
             let libs = merge_libs(input.settings.libraries.clone());
-            Ok(InputArgs {
+            InputArgs {
                 optimize: input.settings.optimizer.enabled.unwrap_or(false),
                 optimize_runs: input.settings.optimizer.runs,
                 libs,
-            })
+            }
         }
     }
 
@@ -369,7 +367,7 @@ mod tests {
     fn correct_input_args() {
         let input: SolcInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
 
-        let input_args = types::InputArgs::try_from(&input.0).expect("failed to convert args");
+        let input_args = types::InputArgs::from(&input.0);
         let expected_args = types::InputArgs {
             optimize: false,
             optimize_runs: Some(200),
@@ -472,7 +470,7 @@ mod tests {
         fetcher
             .fetch(ver)
             .await
-            .expect("cannot fetch 0.4.8 version")
+            .unwrap_or_else(|err| panic!("cannot fetch {ver} version: {err}"))
     }
 
     fn source(file: &str, content: &str) -> (PathBuf, solc::Source) {
