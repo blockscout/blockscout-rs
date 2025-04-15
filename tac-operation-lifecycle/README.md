@@ -84,7 +84,7 @@ This PR follows similar practices  from `da_indexer` specifically the server lau
 +----------------------------------------------------------------------------------------+
 ```
 
-##Configuration Parameters
+## Configuration Parameters
 
 ### Indexer Settings
 
