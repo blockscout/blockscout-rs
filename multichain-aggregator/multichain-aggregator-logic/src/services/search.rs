@@ -555,6 +555,7 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
         return terms;
     }
     if let Ok(address) = query.parse::<alloy_primitives::Address>() {
+        terms.push(SearchTerm::TokenInfo(address.to_string()));
         terms.push(SearchTerm::AddressHash(address));
         return terms;
     }
