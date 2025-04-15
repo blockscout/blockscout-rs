@@ -349,6 +349,7 @@ impl RuntimeSetup {
             Arc::new(NewContractsGroup),
             Arc::new(NewTxnsGroup),
             Arc::new(NewUserOpsGroup),
+            Arc::new(NewEip7702AuthsGroup),
             Arc::new(NewVerifiedContractsGroup),
             Arc::new(NativeCoinHoldersGrowthGroup),
             Arc::new(NewNativeCoinTransfersGroup),

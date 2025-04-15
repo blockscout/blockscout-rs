@@ -9,7 +9,7 @@ use alloy::{
             CallFrame, GethDebugBuiltInTracerType, GethDebugTracerConfig, GethDebugTracerType,
             GethDebugTracingOptions, GethDefaultTracingOptions, GethTrace,
         },
-        parity::{Action, CallType},
+        parity::{Action, CallType, LocalizedTransactionTrace},
     },
     transports::{TransportErrorKind, TransportResult},
 };
@@ -83,6 +83,7 @@ pub struct CommonCallTrace {
     pub from: Address,
     pub to: Option<Address>,
     pub input: Bytes,
+    pub status: bool,
 }
 
 #[async_trait]
@@ -132,9 +133,8 @@ impl<T: Provider> CallTracer for T {
                 )),
             }
         } else {
-            let traces = self
-                .trace_transaction(tx_hash)
-                .await?
+            let traces = self.trace_transaction(tx_hash).await?;
+            let traces = mark_reverted_parents(traces)
                 .into_iter()
                 .filter_map(|t| match t.trace.action {
                     Action::Call(call) => Some(CommonCallTrace {
@@ -148,12 +148,14 @@ impl<T: Provider> CallTracer for T {
                         from: call.from,
                         to: Some(call.to),
                         input: call.input,
+                        status: t.trace.error.is_none(),
                     }),
                     Action::Create(create) => Some(CommonCallTrace {
                         typ: TraceType::Create,
                         from: create.from,
                         to: None,
                         input: create.init,
+                        status: t.trace.error.is_none(),
                     }),
                     _ => None,
                 })
@@ -165,33 +167,55 @@ impl<T: Provider> CallTracer for T {
 }
 
 fn flatten_geth_trace(root: CallFrame) -> Vec<CommonCallTrace> {
-    let mut path = Vec::from([(&root, 0)]);
+    let mut stack = vec![root];
     let mut res = Vec::new();
 
-    while let Some((frame, idx)) = path.pop() {
-        if idx == 0 {
-            res.push(CommonCallTrace {
-                typ: match frame.typ.as_str() {
-                    "CALL" => TraceType::Call,
-                    "CALLCODE" => TraceType::CallCode,
-                    "STATICCALL" => TraceType::StaticCall,
-                    "DELEGATECALL" => TraceType::DelegateCall,
-                    "CREATE" => TraceType::Create,
-                    "CREATE2" => TraceType::Create,
-                    _ => TraceType::Other,
-                },
-                from: frame.from,
-                to: frame.to,
-                input: frame.input.clone(),
-            });
+    while let Some(mut frame) = stack.pop() {
+        res.push(CommonCallTrace {
+            typ: match frame.typ.as_str() {
+                "CALL" => TraceType::Call,
+                "CALLCODE" => TraceType::CallCode,
+                "STATICCALL" => TraceType::StaticCall,
+                "DELEGATECALL" => TraceType::DelegateCall,
+                "CREATE" => TraceType::Create,
+                "CREATE2" => TraceType::Create,
+                _ => TraceType::Other,
+            },
+            from: frame.from,
+            to: frame.to,
+            input: frame.input.clone(),
+            status: frame.error.is_none(),
+        });
+        if frame.error.is_some() {
+            for child in &mut frame.calls {
+                if child.error.is_none() {
+                    child.error = Some("Parent reverted".to_string());
+                }
+            }
         }
-        if frame.calls.len() > idx {
-            path.push((frame, idx + 1));
-            path.push((&frame.calls[idx], 0));
+        stack.extend(frame.calls.into_iter().rev());
+    }
+    res
+}
+
+fn mark_reverted_parents(
+    mut traces: Vec<LocalizedTransactionTrace>,
+) -> Vec<LocalizedTransactionTrace> {
+    let mut earliest_revert: Option<Vec<usize>> = None;
+    for trace in &mut traces {
+        if let Some(earliest) = &earliest_revert {
+            if !trace.trace.trace_address.starts_with(earliest) {
+                earliest_revert = None;
+            }
+        }
+
+        match (&earliest_revert, &trace.trace.error) {
+            (Some(_), None) => trace.trace.error = Some("Parent reverted".to_string()),
+            (None, Some(_)) => earliest_revert = Some(trace.trace.trace_address.clone()),
+            _ => {}
         }
     }
-
-    res
+    traces
 }
 
 #[cfg(test)]

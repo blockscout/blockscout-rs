@@ -67,6 +67,13 @@ provider = [
     { label = "story-mainnet", url = "https://frequent-hidden-telescope.story-mainnet.quiknode.pro/9934ef7bc4e5bcc89ef9768b5ca2f39fcb937c46", features = [] }
 ]
 shard = "primary"
+
+[chains.zeta-mainnet]
+provider = [
+    { label = "zeta-mainnet", url = "https://zeta-chain.drpc.org", features = [] }
+]
+shard = "primary"
+
 [chains.gravity-mainnet]
 provider = [
     { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }

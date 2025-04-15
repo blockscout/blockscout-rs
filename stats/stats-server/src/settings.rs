@@ -16,8 +16,8 @@ use stats::{
     indexing_status::BlockscoutIndexingStatus,
     lines::{
         ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
-        ArbitrumOperationalTxnsGrowth, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow,
-        OpStackOperationalTxnsGrowth,
+        ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
+        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
     },
     ChartProperties,
 };
@@ -58,6 +58,8 @@ pub struct Settings {
     pub enable_all_arbitrum: bool,
     /// Enable op-stack-specific charts
     pub enable_all_op_stack: bool,
+    /// Enable EIP-7702 charts
+    pub enable_all_eip_7702: bool,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -86,6 +88,7 @@ impl Default for Settings {
                     addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
                     max_body_size: 2 * 1024 * 1024, // 2 Mb - default Actix value
                     cors: Default::default(),
+                    base_path: None,
                 },
                 grpc: GrpcServerSettings {
                     enabled: false,
@@ -109,6 +112,7 @@ impl Default for Settings {
             disable_internal_transactions: false,
             enable_all_arbitrum: false,
             enable_all_op_stack: false,
+            enable_all_eip_7702: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
@@ -185,10 +189,10 @@ fn enable_charts(
 }
 
 pub fn handle_enable_all_arbitrum(
-    enable_all_arbitrum: bool,
+    enable_all: bool,
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
-    if enable_all_arbitrum {
+    if enable_all {
         enable_charts(
             &[
                 ArbitrumNewOperationalTxns::key().name(),
@@ -205,10 +209,10 @@ pub fn handle_enable_all_arbitrum(
 }
 
 pub fn handle_enable_all_op_stack(
-    enable_all_op_stack: bool,
+    enable_all: bool,
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
-    if enable_all_op_stack {
+    if enable_all {
         enable_charts(
             &[
                 OpStackNewOperationalTxns::key().name(),
@@ -220,6 +224,22 @@ pub fn handle_enable_all_op_stack(
             ],
             charts,
             "op-stack",
+        )
+    }
+}
+
+pub fn handle_enable_all_eip_7702(
+    enable_all: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all {
+        enable_charts(
+            &[
+                NewEip7702Auths::key().name(),
+                Eip7702AuthsGrowth::key().name(),
+            ],
+            charts,
+            "eip-7702",
         )
     }
 }

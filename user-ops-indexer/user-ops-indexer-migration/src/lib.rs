@@ -4,6 +4,7 @@ mod m20220101_000001_initial_tables;
 mod m20231117_093738_add_indexes;
 mod m20240206_150422_add_entrypoint_version;
 mod m20240717_111524_add_transaction_hash_index;
+mod m20250326_080441_entrypoint_v08;
 
 pub struct Migrator;
 
@@ -15,6 +16,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20231117_093738_add_indexes::Migration),
             Box::new(m20240206_150422_add_entrypoint_version::Migration),
             Box::new(m20240717_111524_add_transaction_hash_index::Migration),
+            Box::new(m20250326_080441_entrypoint_v08::Migration),
         ]
     }
     fn migration_table_name() -> DynIden {

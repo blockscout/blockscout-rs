@@ -85,29 +85,18 @@ CREATE TYPE public.entry_point_version AS ENUM (
 ALTER TYPE public.entry_point_version OWNER TO postgres;
 
 --
--- Name: log_id; Type: TYPE; Schema: public; Owner: postgres
+-- Name: metadata_tag_record; Type: TYPE; Schema: public; Owner: postgres
 --
 
-CREATE TYPE public.log_id AS (
-	transaction_hash bytea,
-	block_hash bytea,
-	log_index integer
+CREATE TYPE public.metadata_tag_record AS (
+	id integer,
+	address_hash bytea,
+	metadata jsonb,
+	addresses_index integer
 );
 
 
-ALTER TYPE public.log_id OWNER TO postgres;
-
---
--- Name: nft_id; Type: TYPE; Schema: public; Owner: postgres
---
-
-CREATE TYPE public.nft_id AS (
-	block_number bigint,
-	log_index integer
-);
-
-
-ALTER TYPE public.nft_id OWNER TO postgres;
+ALTER TYPE public.metadata_tag_record OWNER TO postgres;
 
 --
 -- Name: proxy_type; Type: TYPE; Schema: public; Owner: postgres
@@ -1681,7 +1670,8 @@ CREATE TABLE public.tokens (
     total_supply_updated_at_block bigint,
     icon_url character varying(255),
     is_verified_via_admin_panel boolean DEFAULT false,
-    volume_24h numeric
+    volume_24h numeric,
+    metadata_updated_at timestamp without time zone
 );
 
 

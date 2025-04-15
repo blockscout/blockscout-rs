@@ -36,6 +36,7 @@
         "new_contracts_group": "0 20 */3 * * * *",
         "new_txns_group": "0 10 */3 * * * *",
         "new_user_ops_group": "0 5 7 * * * *",
+        "new_eip_7702_auths_group": "0 20 6 * * * *",
         "new_account_abstraction_wallets_group": "0 35 9 * * * *",
         "active_bundlers_group": "0 7 7 * * * *",
         "active_paymasters_group": "0 8 7 * * * *",

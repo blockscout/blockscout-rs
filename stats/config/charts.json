@@ -240,6 +240,16 @@
             "title": "Active paymasters",
             "description": "Active user ops paymasters number per period"
         },
+        "new_eip_7702_auths": {
+            "enabled": false,
+            "title": "New EIP-7702 authorizations",
+            "description": "Number of new EIP-7702 authorizations"
+        },
+        "eip_7702_auths_growth": {
+            "enabled": false,
+            "title": "Number of EIP-7702 authorizations",
+            "description": "Cumulative EIP-7702 authorization growth over time"
+        },
         "new_block_rewards": {
             "enabled": false,
             "title": "New block rewards",

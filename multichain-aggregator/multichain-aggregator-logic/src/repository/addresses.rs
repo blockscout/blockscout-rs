@@ -13,9 +13,9 @@ use sea_orm::{
     },
     ActiveValue::NotSet,
     ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoSimpleExpr,
-    Iterable, Order, QuerySelect,
+    Iterable, Order, QueryFilter, QuerySelect,
 };
-use std::sync::OnceLock;
+use std::{collections::HashMap, sync::OnceLock};
 
 fn words_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -159,11 +159,47 @@ where
     Ok(addresses)
 }
 
+pub async fn get_batch<C>(
+    db: &C,
+    pks: Vec<(&AddressAlloy, ChainId)>,
+) -> Result<HashMap<(AddressAlloy, ChainId), Model>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    let models = Entity::find()
+        .filter(
+            Expr::tuple([
+                Column::Hash.into_simple_expr(),
+                Column::ChainId.into_simple_expr(),
+            ])
+            .is_in(
+                pks.into_iter()
+                    .map(|(address, chain_id)| {
+                        Expr::tuple([address.as_slice().into(), chain_id.into()]).into_simple_expr()
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+        )
+        .all(db)
+        .await?;
+
+    let pk_to_model = models
+        .into_iter()
+        .map(|m| {
+            let address = parse_db_address(m.hash.as_slice());
+            let pk = (address, m.chain_id);
+            (pk, m)
+        })
+        .collect();
+
+    Ok(pk_to_model)
+}
+
 pub async fn list<C>(
     db: &C,
-    address: Option<AddressAlloy>,
+    addresses: Vec<AddressAlloy>,
     contract_name_query: Option<String>,
-    chain_ids: Option<Vec<ChainId>>,
+    chain_ids: Vec<ChainId>,
     token_types: Option<Vec<db_enum::TokenType>>,
     page_size: u64,
     page_token: Option<(AddressAlloy, ChainId)>,
@@ -177,11 +213,12 @@ where
     let base_select = QuerySelect::query(&mut Entity::find())
         .from_clear()
         .from(addresses_cte_iden)
-        .apply_if(chain_ids, |q, chain_ids| {
-            if !chain_ids.is_empty() {
+        .apply_if(
+            (!chain_ids.is_empty()).then_some(chain_ids),
+            |q, chain_ids| {
                 q.and_where(Column::ChainId.is_in(chain_ids));
-            }
-        })
+            },
+        )
         .apply_if(token_types, |q, token_types| {
             if !token_types.is_empty() {
                 q.and_where(Column::TokenType.is_in(token_types));
@@ -189,9 +226,19 @@ where
                 q.and_where(Column::TokenType.is_null());
             }
         })
-        .apply_if(address, |q, address| {
-            q.and_where(Column::Hash.eq(address.as_slice()));
-        })
+        .apply_if(
+            (!addresses.is_empty()).then_some(addresses),
+            |q, addresses| {
+                q.and_where(
+                    Column::Hash.is_in(
+                        addresses
+                            .into_iter()
+                            .map(|a| a.to_vec())
+                            .collect::<Vec<_>>(),
+                    ),
+                );
+            },
+        )
         .apply_if(page_token, |q, page_token| {
             q.and_where(
                 Expr::tuple([
@@ -223,14 +270,14 @@ where
     match addresses.get(page_size as usize) {
         Some(a) => Ok((
             addresses[..page_size as usize].to_vec(),
-            Some((
-                // unwrap is safe here because addresses are validated prior to being inserted
-                AddressAlloy::try_from(a.hash.as_slice()).unwrap(),
-                a.chain_id,
-            )),
+            Some((parse_db_address(a.hash.as_slice()), a.chain_id)),
         )),
         None => Ok((addresses, None)),
     }
+}
+
+fn parse_db_address(hash: &[u8]) -> AddressAlloy {
+    AddressAlloy::try_from(hash).expect("db address should be valid")
 }
 
 fn non_primary_columns() -> impl Iterator<Item = Column> {
