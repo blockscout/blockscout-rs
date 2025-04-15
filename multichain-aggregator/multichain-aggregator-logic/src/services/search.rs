@@ -594,7 +594,10 @@ mod tests {
     fn test_parse_search_terms() {
         assert_eq!(
             parse_search_terms("0x0000000000000000000000000000000000000000"),
-            vec![SearchTerm::AddressHash(alloy_primitives::Address::ZERO)]
+            vec![
+                SearchTerm::TokenInfo(alloy_primitives::Address::ZERO.to_string()),
+                SearchTerm::AddressHash(alloy_primitives::Address::ZERO),
+            ]
         );
         assert_eq!(
             parse_search_terms(
