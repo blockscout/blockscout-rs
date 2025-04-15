@@ -1,6 +1,6 @@
 use crate::{
     blockscout::BlockscoutClient,
-    protocols::{DomainName, DomainNameOnProtocol, ProtocolError},
+    protocols::{DomainNameOnProtocol, ProtocolError},
 };
 use alloy::primitives::{Address, B256};
 use anyhow::anyhow;
@@ -159,10 +159,6 @@ impl Tld {
             .filter(|c| !c.is_empty())
             .map(Self::new)
     }
-
-    pub fn reverse() -> Self {
-        Self("reverse".to_string())
-    }
 }
 
 impl<'de> Deserialize<'de> for Tld {
@@ -202,13 +198,6 @@ impl Protocoler {
         Ok(Self {
             networks,
             protocols,
-        })
-    }
-
-    pub fn extract_tld(&self, domain: &str) -> Result<Tld, ProtocolError> {
-        Tld::from_domain_name(domain).ok_or_else(|| ProtocolError::InvalidName {
-            name: domain.to_string(),
-            reason: "Invalid TLD".to_string(),
         })
     }
 
@@ -302,32 +291,19 @@ impl Protocoler {
 
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
 
-        let mut results = Vec::new();
-        for deployed_protocol in protocols {
-            let empty_label_hash = deployed_protocol
-                .protocol
-                .info
-                .protocol_specific
-                .empty_label_hash();
-
-            let domain_name = DomainName::new(name_with_tld, empty_label_hash)?;
-            results.push(DomainNameOnProtocol::from_str(
-                &domain_name.name,
-                deployed_protocol,
-            ));
-        }
-
-        let results = results
+        let domain_names: Vec<_> = protocols
             .into_iter()
-            .filter_map(|result| result.ok())
-            .collect::<Vec<_>>();
-        if results.is_empty() {
+            .filter_map(|p| DomainNameOnProtocol::from_str(name_with_tld, p).ok())
+            .collect();
+
+        if domain_names.is_empty() {
             return Err(ProtocolError::InvalidName {
                 name: name_with_tld.to_string(),
                 reason: "No matching protocols for given TLD".to_string(),
             });
         }
-        Ok(results)
+
+        Ok(domain_names)
     }
 
     pub fn lookup_names_options_in_network(
@@ -339,14 +315,7 @@ impl Protocoler {
         if name.contains('.') {
             let direct = self.fetch_domain_options(name, network_id, maybe_filter)?;
 
-            if direct.is_empty() {
-                Err(ProtocolError::InvalidName {
-                    name: name.to_string(),
-                    reason: "No matching protocols for given TLD".to_string(),
-                })
-            } else {
-                Ok(direct.into_iter().take(1).collect())
-            }
+            Ok(direct.into_iter().collect())
         } else {
             let tlds = self
                 .networks
@@ -367,7 +336,7 @@ impl Protocoler {
                 })
                 .take(MAX_NETWORKS_LIMIT)
                 .collect();
-
+            println!("all_names_with_protocols: {:?}", all_names_with_protocols);
             if all_names_with_protocols.is_empty() {
                 Err(ProtocolError::InvalidName {
                     name: name.to_string(),
@@ -424,6 +393,13 @@ impl Protocoler {
             .ok_or_else(|| ProtocolError::ProtocolNotFound(protocol_id.to_string()))?;
         Ok(name)
     }
+
+    fn extract_tld(&self, domain: &str) -> Result<Tld, ProtocolError> {
+        Tld::from_domain_name(domain).ok_or_else(|| ProtocolError::InvalidName {
+            name: domain.to_string(),
+            reason: "Invalid TLD".to_string(),
+        })
+    }
 }
 
 impl Protocol {
@@ -473,11 +449,5 @@ mod tld_tests {
         let domain = ".";
         let tld = Tld::from_domain_name(domain);
         assert!(tld.is_none());
-    }
-
-    #[test]
-    fn reverse_works() {
-        let rev = Tld::reverse();
-        assert_eq!(rev.0, "reverse");
     }
 }

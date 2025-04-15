@@ -214,7 +214,6 @@ impl SubgraphReader {
             input.network_id,
             input.protocol_id.clone().map(|p| nonempty![p]),
         )?;
-        // if domain is not found, it means that it is not in the database
         self.patcher
             .handle_user_domain_names(self.pool.as_ref(), &name)
             .await?;
@@ -636,8 +635,9 @@ mod tests {
             .expect("failed to get abcnews domains");
         assert_eq!(result.next_page_token, None);
         let result = result.items;
+        println!("result: {result:?}");
         assert_eq!(
-            vec![Some("abcnews.eth")],
+            vec![Some("abcnews.eth"), Some("abcnews.gno")],
             result
                 .iter()
                 .map(|output| output.domain.name.as_deref())
