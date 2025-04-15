@@ -1,4 +1,5 @@
 use std::time;
+use std::thread;
 
 use serde::Deserialize;
 use serde_with::serde_as;
@@ -46,7 +47,7 @@ fn default_catchup_interval() -> time::Duration {
 impl Default for IndexerSettings {
     fn default() -> Self {
         Self {
-            concurrency: 2,
+            concurrency: thread::available_parallelism().map(|p| p.get() as u32).unwrap_or(1),
             restart_delay: default_restart_delay(),
             polling_interval: default_polling_interval(),
             retry_interval: default_retry_interval(),
