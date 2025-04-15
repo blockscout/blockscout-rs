@@ -6,6 +6,7 @@ members = [
     "tac-operation-lifecycle-migration",
     "tac-operation-lifecycle-proto",
     "tac-operation-lifecycle-server",
+    "env-docs-generation",
 ]
 
 [workspace.dependencies]

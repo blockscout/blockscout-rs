@@ -5,7 +5,7 @@ use blockscout_service_launcher::{
 };
 use serde::Deserialize;
 use tac_operation_lifecycle_logic::{client::settings::RpcSettings, settings::IndexerSettings};
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
     #[serde(default)]

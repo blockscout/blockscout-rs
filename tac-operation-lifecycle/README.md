@@ -86,26 +86,36 @@ This PR follows similar practices  from `da_indexer` specifically the server lau
 
 ## Configuration Parameters
 
-### Indexer Settings
+Parameters can be configured either using a `yaml`file or environment variables. See example in `tac-operation-lifecycle-server/config.yaml`
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| concurrency | u32 | 2 | Number of concurrent operations the indexer can process |
-| restart_delay | Duration | 60 seconds | Delay before restarting the indexer after a failure |
-| polling_interval | Duration | 0 seconds | Interval between polling for new data (0 means no polling) |
-| retry_interval | Duration | 180 seconds | Base interval for retrying failed operations with exponential backoff |
-| catchup_interval | Duration | 5 seconds | Size of time intervals for historical data processing |
-| start_timestamp | u64 | 0 | Timestamp from which to start indexing historical data |
+[anchor]: <> (anchors.envs.start.service)
 
-### RPC Settings
+| Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| --- | --- | --- | --- |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT__URL` | true | e.g. `postgres://postgres:postgres@database:5432/blockscout` | |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__CONCURRENCY` | true |  Number of concurrent operations the indexer can process  | number of logical CPU's |
+| `TAC_OPERATION_LIFECYCLE__RPC__URL` | true | RPC endpoint e.g. `https://data.turin.tac.build/` | |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__ACQUIRE_TIMEOUT` | | e.g. `10` | `null` |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__CONNECT_TIMEOUT` | | e.g. `10` | `null` |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__IDLE_TIMEOUT` | | | `null` |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__MAX_CONNECTIONS` | | e.g. `20` | `null` |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__MAX_LIFETIME` | | | `null` |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__MIN_CONNECTIONS` | | e.g. `10` | `null` |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING` | | | `true` |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING_LEVEL` | | | `debug` |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__CREATE_DATABASE` | | e.g. `true` | `false` |
+| `TAC_OPERATION_LIFECYCLE__DATABASE__RUN_MIGRATIONS` | | e.g. `true` | `false` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__CATCHUP_INTERVAL` | | A single interval length for operations fetching | `5` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__POLLING_INTERVAL` | | Frequency for generating new real-time intervals | `0` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__RESTART_DELAY` | | | `60` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__RETRY_INTERVAL` | | Retry period length for failed tasks ( both intervals and operations)| `180` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__START_TIMESTAMP` | | All of the events before this epoch are essentially ignored. This could be used for partial sync | `0` |
+| `TAC_OPERATION_LIFECYCLE__RPC__AUTH_TOKEN` | | | `null` |
+| `TAC_OPERATION_LIFECYCLE__RPC__MAX_REQUEST_SIZE` | | | `104857600` |
+| `TAC_OPERATION_LIFECYCLE__RPC__MAX_RESPONSE_SIZE` | | | `104857600` |
+| `TAC_OPERATION_LIFECYCLE__RPC__REQUEST_PER_SECOND` | | | `100` |
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| url | String | "http://localhost" | URL of the RPC endpoint to connect to |
-| auth_token | Option<String> | None | Optional authentication token for the RPC endpoint |
-| max_request_size | u32 | 100 MB | Maximum size of requests sent to the RPC endpoint |
-| max_response_size | u32 | 100 MB | Maximum size of responses accepted from the RPC endpoint |
-| request_per_second | u32 | 100 | Rate limit for requests to the RPC endpoint |
+[anchor]: <> (anchors.envs.end.service)
 
 ### Usage Notes
 
