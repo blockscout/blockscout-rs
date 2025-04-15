@@ -1351,6 +1351,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "env-collector"
+version = "0.1.1"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=26eed65#26eed6545b89921c64bcb3c24bd36e9ba2ae132f"
+dependencies = [
+ "anyhow",
+ "config 0.14.1",
+ "itertools 0.13.0",
+ "json_dotpath",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "env-docs-generation"
+version = "0.1.0"
+dependencies = [
+ "env-collector",
+ "tac-operation-lifecycle-server",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2202,6 +2224,15 @@ checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
 
 [[package]]
 name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
@@ -2243,6 +2274,18 @@ dependencies = [
  "pest",
  "pest_derive",
  "serde",
+]
+
+[[package]]
+name = "json_dotpath"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbdcfef3cf5591f0cef62da413ae795e3d1f5a00936ccec0b2071499a32efd1a"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3080,7 +3123,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
  "heck 0.5.0",
- "itertools",
+ "itertools 0.14.0",
  "log",
  "multimap",
  "once_cell",
@@ -3100,7 +3143,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.98",
