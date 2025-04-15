@@ -26,7 +26,7 @@ use futures::{
     StreamExt,
 };
 use settings::IndexerSettings;
-use tokio::{sync::Mutex, task::unconstrained};
+use tokio::sync::Mutex;
 use tracing::{instrument, Instrument};
 use uuid::Uuid;
 #[derive(Debug, Clone)]
@@ -220,12 +220,12 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match unconstrained(self.database.query_pending_intervals(INTERVALS_QUERY_RESULT_SIZE, direction, from, to)
+                match self.database.query_pending_intervals(INTERVALS_QUERY_RESULT_SIZE, direction, from, to)
                     .instrument(tracing::debug_span!(
                         "INTERVALS",
                         span_id = span_id.to_string(),
                         direction = direction.sql_order_string()
-                    )))
+                    ))
                     .await {
                     Ok(selected) => {
                         for interval in selected {
@@ -252,11 +252,11 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match unconstrained(self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
+                match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
                     .instrument(tracing::debug_span!(
                         "PENDING OPERATIONS",
                         span_id = span_id.to_string()
-                    )))
+                    ))
                     .await {
                     Ok(selected) => {
                         for operation in selected {
@@ -284,11 +284,11 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match unconstrained(self.database.query_failed_intervals(INTERVALS_QUERY_RESULT_SIZE)
+                match self.database.query_failed_intervals(INTERVALS_QUERY_RESULT_SIZE)
                     .instrument(tracing::debug_span!(
                         "FAILED INTERVALS",
                         span_id = span_id.to_string()
-                    )))
+                    ))
                     .await {
                     Ok(selected) => {
                         tracing::debug!("Failed intervals found: {}", selected.len());
@@ -316,11 +316,11 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match unconstrained(self.database.query_failed_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
+                match self.database.query_failed_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
                     .instrument(tracing::debug_span!(
                         "FAILED OPERATIONS",
                         span_id = span_id.to_string()
-                    )))
+                    ))
                     .await {
                     Ok(selected) => {
                         tracing::debug!("Failed operations found: {}", selected.len());
@@ -366,11 +366,9 @@ impl Indexer {
                 let base_delay = 5; // 5 seconds base delay
                 let next_retry_after = (base_delay * 2i64.pow(retries as u32)) as i64;
 
-                let _ = unconstrained(
-                    self.database
-                        .set_interval_retry(&job.interval, next_retry_after),
-                )
-                .await;
+                let _ = self.database
+                        .set_interval_retry(&job.interval, next_retry_after)
+                        .await;
             }
         }
     }
@@ -418,17 +416,15 @@ impl Indexer {
                     .collect::<Vec<_>>()
                     .join(",\n\t")
             );
-            unconstrained(self.database.insert_pending_operations(&operations)).await?;
+            self.database.insert_pending_operations(&operations).await?;
 
             let max_timestamp = operations.iter().map(|o| o.timestamp).max().unwrap();
             self.set_realtime_boundary(max_timestamp);
         }
 
-        unconstrained(
-            self.database
-                .set_interval_status(&job.interval, EntityStatus::Finalized),
-        )
-        .await?;
+        self.database
+            .set_interval_status(&job.interval, EntityStatus::Finalized)
+            .await?;
 
         tracing::debug!(
             "[Thread {:?}] Successfully processed {} job (id={})",
@@ -455,11 +451,10 @@ impl Indexer {
                     // Find an associated operation in the input operations vector
                     match jobs.iter().find(|j| &j.operation.id == op_id) {
                         Some(job) => {
-                            let _ = unconstrained(
-                                self.database
-                                    .set_operation_data(&job.operation, operation_data),
-                            )
-                            .await;
+                            let _ = self
+                                .database
+                                .set_operation_data(&job.operation, operation_data)
+                                .await;
 
                             if operation_data.operation_type != OperationType::Pending {
                                 let _ = (self
@@ -489,11 +484,10 @@ impl Indexer {
                     let base_delay = 5; // 5 seconds base delay
                     let next_retry_after = (base_delay * 2i64.pow(retries as u32)) as i64;
 
-                    let _ = unconstrained(
-                        self.database
-                            .set_operation_retry(&job.operation, next_retry_after),
-                    )
-                    .await;
+                    let _ = self
+                        .database
+                        .set_operation_retry(&job.operation, next_retry_after)
+                        .await;
                 });
             }
         }
@@ -587,7 +581,7 @@ impl Indexer {
             tracing::debug!("Processing job: {:?}", job);
             match job {
                 IndexerJob::Realtime => {
-                    let wm = unconstrained(self.database.get_watermark()).await.unwrap();
+                    let wm = self.database.get_watermark().await?;
                     let now = chrono::Utc::now().timestamp() as u64;
                     if let Err(e) = self.database.generate_pending_interval(wm, now).await {
                         tracing::error!("Failed to generate real-time interval: {}", e);
