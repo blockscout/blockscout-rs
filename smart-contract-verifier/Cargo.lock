@@ -5464,17 +5464,13 @@ name = "smart-contract-verifier"
 version = "0.6.0"
 dependencies = [
  "alloy-core",
- "alloy-dyn-abi",
- "alloy-json-abi 0.8.20",
  "anyhow",
  "async-trait",
  "blockscout-display-bytes",
  "bytes",
  "chrono",
- "const_format",
  "cron",
  "era-compiler-common",
- "ethabi",
  "ethers-core",
  "ethers-solc",
  "foundry-compilers 0.13.3",
@@ -5483,7 +5479,6 @@ dependencies = [
  "hex",
  "lazy_static",
  "mismatch",
- "mockall",
  "nonempty",
  "parking_lot 0.12.3",
  "pretty_assertions",
@@ -5494,7 +5489,6 @@ dependencies = [
  "reqwest 0.11.27",
  "reqwest-middleware 0.1.6",
  "reqwest-retry 0.1.5",
- "rstest",
  "rust-s3",
  "semver 1.0.23",
  "serde",
@@ -5553,18 +5547,15 @@ dependencies = [
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "bytes",
- "config",
  "cron",
  "ethabi",
  "ethers-core",
  "ethers-solc",
  "foundry-compilers 0.3.9",
- "futures",
  "hex",
  "lazy_static",
  "pretty_assertions",
  "prometheus",
- "reqwest 0.11.27",
  "rstest",
  "rust-s3",
  "serde",
@@ -5573,14 +5564,12 @@ dependencies = [
  "serde_with",
  "smart-contract-verifier",
  "smart-contract-verifier-proto",
- "stdext",
  "tempfile",
  "thiserror 1.0.63",
  "tokio",
  "tonic",
  "tracing",
  "url",
- "uuid",
  "verification-common",
 ]
 
@@ -5809,12 +5798,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "stdext"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4af28eeb7c18ac2dbdb255d40bee63f203120e1db6b0024b177746ebec7049c1"
 
 [[package]]
 name = "string_cache"
