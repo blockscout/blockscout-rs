@@ -1,3 +1,9 @@
+//! Module for compiling solidity contracts using cmd args.
+//! ethers_solc compiler uses --standard-json method of input,
+//! because it's very easy and convient, however --standard-json flag
+//! was added only since 0.4.10 version. So, to compile older versions
+//! we need convert functions for CompilerInput and CompilerOutput.
+
 use super::solc_compiler::SolcInput;
 use foundry_compilers_new::{
     artifacts::solc,
