@@ -105,25 +105,17 @@ Parameters can be configured either using a `yaml`file or environment variables.
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT_OPTIONS__SQLX_LOGGING_LEVEL` | | | `debug` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__CREATE_DATABASE` | | e.g. `true` | `false` |
 | `TAC_OPERATION_LIFECYCLE__DATABASE__RUN_MIGRATIONS` | | e.g. `true` | `false` |
-| `TAC_OPERATION_LIFECYCLE__INDEXER__CATCHUP_INTERVAL` | | A single interval length for operations fetching | `5` |
-| `TAC_OPERATION_LIFECYCLE__INDEXER__POLLING_INTERVAL` | | Frequency for generating new real-time intervals | `0` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__CATCHUP_INTERVAL` | |  The catchup_interval defines the size of time windows used for processing historical data. Smaller intervals provide more granular processing but may increase the number of RPC calls. | `5` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__POLLING_INTERVAL` | | The polling_interval determines how frequently the indexer checks for new data. Setting it to 0 disables polling. | `0` |
 | `TAC_OPERATION_LIFECYCLE__INDEXER__RESTART_DELAY` | | | `60` |
-| `TAC_OPERATION_LIFECYCLE__INDEXER__RETRY_INTERVAL` | | Retry period length for failed tasks ( both intervals and operations)| `180` |
-| `TAC_OPERATION_LIFECYCLE__INDEXER__START_TIMESTAMP` | | All of the events before this epoch are essentially ignored. This could be used for partial sync | `0` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__RETRY_INTERVAL` | | The retry_interval is used as the base for exponential backoff when retrying failed operations. The actual retry delay will increase exponentially with each retry attempt.| `180` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__START_TIMESTAMP` | | The start_timestamp allows you to specify a custom starting point for historical data indexing. Setting it to 0 means the indexer will  start from the earliest available data. All of the events before this epoch are essentially ignored. This could be used for partial sync | `0` |
 | `TAC_OPERATION_LIFECYCLE__RPC__AUTH_TOKEN` | | | `null` |
 | `TAC_OPERATION_LIFECYCLE__RPC__MAX_REQUEST_SIZE` | | | `104857600` |
 | `TAC_OPERATION_LIFECYCLE__RPC__MAX_RESPONSE_SIZE` | | | `104857600` |
 | `TAC_OPERATION_LIFECYCLE__RPC__REQUEST_PER_SECOND` | | | `100` |
 
 [anchor]: <> (anchors.envs.end.service)
-
-### Usage Notes
-
-* The polling_interval determines how frequently the indexer checks for new data. Setting it to 0 disables polling.
-* The catchup_interval defines the size of time windows used for processing historical data. Smaller intervals provide more granular processing but may increase the number of RPC calls.
-* The retry_interval is used as the base for exponential backoff when retrying failed operations. The actual retry delay will increase exponentially with each retry attempt.
-* The start_timestamp allows you to specify a custom starting point for historical data indexing. Setting it to 0 means the indexer will  start from the earliest available data.
-* RPC settings control the connection to the blockchain node. Adjust max_request_size and max_response_size based on your network capabilities and the size of the data you expect to process.
 
 ## Dev
 
