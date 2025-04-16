@@ -19,7 +19,7 @@ pub struct ApiRequest {
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Files(pub BTreeMap<String, String>);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Success {
     pub file_name: String,
     pub contract_name: String,

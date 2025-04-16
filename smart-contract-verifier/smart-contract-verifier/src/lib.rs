@@ -11,7 +11,6 @@ mod proto_conversions;
 mod scheduler;
 #[cfg(test)]
 mod tests;
-mod verifier;
 pub mod verify_new;
 pub mod zksync;
 
@@ -31,19 +30,8 @@ pub use compiler::{
     CompactVersion, Compilers, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher,
     Version,
 };
-pub use verifier::{BytecodePart, Error as VerificationError};
 
 pub use crate::sourcify::{SourcifyApiClient, Success as SourcifySuccess};
 pub use lookup_methods::{find_methods, LookupMethodsRequest, LookupMethodsResponse};
-pub use solidity::{
-    Client as SolidityClient, SolcValidator, SolidityCompiler, Success as SoliditySuccess,
-};
-pub use vyper::{Client as VyperClient, Success as VyperSuccess, VyperCompiler};
-
-pub fn decode_hex(value: &str) -> Result<Vec<u8>, hex::FromHexError> {
-    if let Some(value) = value.strip_prefix("0x") {
-        hex::decode(value)
-    } else {
-        hex::decode(value)
-    }
-}
+pub use solidity::{Client as SolidityClient, SolcValidator, SolidityCompiler};
+pub use vyper::{Client as VyperClient, VyperCompiler};
