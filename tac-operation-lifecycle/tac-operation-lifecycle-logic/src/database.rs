@@ -509,7 +509,7 @@ impl TacDatabase {
                     UPDATE interval 
                     SET status = {}
                     WHERE id IN (SELECT id FROM selected_intervals)
-                    RETURNING id, start, "end", timestamp, status, next_retry, retry_count
+                    RETURNING id, start, finish, status, next_retry, retry_count, inserted_at, updated_at
                     "#,
             conditions.join(" AND "),
             order_clause,
@@ -543,13 +543,17 @@ impl TacDatabase {
                     UPDATE operation 
                     SET status = {}
                     WHERE id IN (SELECT id FROM selected_operations)
-                    RETURNING id, timestamp, status, next_retry, retry_count
+                    RETURNING id, timestamp, status, next_retry, retry_count, inserted_at, updated_at
                     "#,
             conditions.join(" AND "),
             order_clause,
             limit,
             update_status.to_id(),
         )
+    }
+
+    fn format_sql_for_logging(sql: &str) -> String {
+        sql.replace("\n", " ").replace("  ", " ")
     }
 
     pub async fn query_pending_intervals(
@@ -561,10 +565,12 @@ impl TacDatabase {
     ) -> anyhow::Result<Vec<interval::Model>> {
         let mut conditions = vec![format!("status = {}", EntityStatus::Pending.to_id())];
         if let Some(start) = from {
-            conditions.push(format!("start >= {}", start));
+            let start_naive = Self::timestamp_to_naive(start as i64);
+            conditions.push(format!("start >= '{}'", start_naive));
         }
-        if let Some(end) = to {
-            conditions.push(format!(r#""end" < {}"#, end));
+        if let Some(finish) = to {
+            let finish_naive = Self::timestamp_to_naive(finish as i64);
+            conditions.push(format!(r#"finish < '{}'"#, finish_naive));
         }
 
         let sql = self.build_interval_query(
@@ -575,7 +581,7 @@ impl TacDatabase {
         );
 
         self.query_intervals(&sql)
-            .instrument(tracing::debug_span!("query pending intervals",))
+            .instrument(tracing::info_span!("query pending intervals", sql = Self::format_sql_for_logging(&sql)))
             .await
     }
 
@@ -583,7 +589,7 @@ impl TacDatabase {
         let conditions = vec![
             format!("status = {}", EntityStatus::Pending.to_id()),
             format!("next_retry IS NOT NULL"),
-            format!("next_retry < {}", chrono::Utc::now().timestamp()),
+            format!("next_retry < '{}'", Self::timestamp_to_naive(chrono::Utc::now().timestamp())),
         ];
 
         let sql = self.build_interval_query(
@@ -617,7 +623,7 @@ impl TacDatabase {
             .instrument(tracing::debug_span!(
                 "executing update query for intervals",
                 tx_id = tx_id.to_string(),
-                // sql = format_sql_for_logging(sql.as_str())
+                sql = sql.as_str()
             ))
             .await
         {
@@ -660,7 +666,7 @@ impl TacDatabase {
         let conditions = vec![
             format!("status = {}", EntityStatus::Pending.to_id()),
             format!("next_retry IS NOT NULL"),
-            format!("next_retry < {}", chrono::Utc::now().timestamp()),
+            format!("next_retry < '{}'", Self::timestamp_to_naive(chrono::Utc::now().timestamp())),
         ];
 
         let sql = self.build_operation_query(
@@ -674,7 +680,8 @@ impl TacDatabase {
         self.query_operations(&sql)
             .instrument(tracing::debug_span!(
                 "query failed operations",
-                span_id = span_id.to_string()
+                span_id = span_id.to_string(),
+                sql = Self::format_sql_for_logging(sql.as_str())
             ))
             .await
     }
@@ -691,10 +698,10 @@ impl TacDatabase {
         match operation::Entity::find()
             .from_raw_sql(update_stmt)
             .all(self.db.as_ref())
-            .instrument(tracing::debug_span!(
+            .instrument(tracing::info_span!(
                 "executing update query for operations",
                 tx_id = tx_id.to_string(),
-                // sql = format_sql_for_logging(sql.as_str())
+                sql = Self::format_sql_for_logging(sql.as_str())
             ))
             .await
         {
@@ -921,13 +928,13 @@ impl TacDatabase {
                 WITH interval_stats AS (
                     SELECT
                         MIN(start) AS min_start,
-                        MAX("end") AS max_end,
+                        MAX(finish) AS max_finish,
                         COUNT(*) AS total_intervals,
                         COUNT(CASE WHEN "status" = {} THEN 1 END) AS pending_intervals,
                         COUNT(CASE WHEN "status" = {} THEN 1 END) AS processing_intervals,
                         COUNT(CASE WHEN "status" = {} THEN 1 END) AS finalized_intervals,
                         COUNT(CASE WHEN "status" != {} AND retry_count > 0 THEN 1 END) AS failed_intervals,
-                        SUM(CASE WHEN "status" = {} THEN ("end" - start) ELSE 0 END)::BIGINT AS finalized_period
+                        SUM(CASE WHEN "status" = {} THEN (finish - start) ELSE 0 END)::BIGINT AS finalized_period
                     FROM interval
                 )
                 SELECT * FROM interval_stats
@@ -946,7 +953,7 @@ impl TacDatabase {
                     .try_get::<Option<i64>>("", "min_start")?
                     .unwrap_or(0) as u64;
                 let last_timestamp = interval_data
-                    .try_get::<Option<i64>>("", "max_end")?
+                    .try_get::<Option<i64>>("", "max_finish")?
                     .unwrap_or(0) as u64;
                 let total_intervals = interval_data.try_get::<i64>("", "total_intervals")? as usize;
                 let pending_intervals = interval_data.try_get::<i64>("", "pending_intervals")? as usize;

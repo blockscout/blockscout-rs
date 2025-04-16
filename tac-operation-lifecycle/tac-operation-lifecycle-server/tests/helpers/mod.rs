@@ -180,7 +180,7 @@ mod tests {
                             let thread_id = std::thread::current().id();
                             tracing::debug!("Thread {:?} Received interval job: {:?}", thread_id, interval_job);
                             // Ensure we haven't seen this interval before
-                            let interval_key = (interval_job.interval.start, interval_job.interval.end);
+                            let interval_key = (interval_job.interval.start, interval_job.interval.finish);
                             let (start, end) = interval_key;
                             assert!(!seen_intervals.contains(&interval_key), "Received duplicate interval: {:?}", interval_key);
                             seen_intervals.insert(interval_key);
