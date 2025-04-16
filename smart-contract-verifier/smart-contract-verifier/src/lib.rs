@@ -14,8 +14,6 @@ mod tests;
 pub mod verify_new;
 pub mod zksync;
 
-pub(crate) use blockscout_display_bytes::Bytes as DisplayBytes;
-
 pub use consts::{
     DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST,
     DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
@@ -30,8 +28,8 @@ pub use compiler::{
     CompactVersion, Compilers, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher,
     Version,
 };
+pub use verify_new::EvmCompilersPool;
 
 pub use crate::sourcify::{SourcifyApiClient, Success as SourcifySuccess};
 pub use lookup_methods::{find_methods, LookupMethodsRequest, LookupMethodsResponse};
 pub use solidity::{Client as SolidityClient, SolcValidator, SolidityCompiler};
-pub use vyper::{Client as VyperClient, VyperCompiler};

@@ -1,5 +1,10 @@
 use super::client::Client;
-use crate::{compiler::DetailedVersion, verify_new, verify_new::SolcInput, OnChainContract};
+use crate::{
+    compiler::DetailedVersion,
+    verify_new,
+    verify_new::{SolcCompiler, SolcInput},
+    EvmCompilersPool, OnChainContract,
+};
 use foundry_compilers_new::artifacts;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
@@ -52,11 +57,10 @@ pub struct VerificationRequest {
 }
 
 pub async fn verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<SolcCompiler>,
     request: VerificationRequest,
 ) -> Result<verify_new::VerificationResult, verify_new::Error> {
     let to_verify = vec![request.contract];
-    let compilers = client.new_compilers();
 
     let solc_inputs: Vec<SolcInput> = request.content.into();
     for solc_input in solc_inputs {
@@ -95,11 +99,10 @@ pub struct BatchVerificationRequest {
 }
 
 pub async fn batch_verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<SolcCompiler>,
     request: BatchVerificationRequest,
 ) -> Result<Vec<verify_new::VerificationResult>, verify_new::Error> {
     let to_verify = request.contracts;
-    let compilers = client.new_compilers();
 
     let solc_inputs: Vec<SolcInput> = request.content.into();
     if solc_inputs.len() != 1 {

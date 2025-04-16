@@ -14,6 +14,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Semaphore;
+use tracing::instrument;
 
 #[async_trait]
 pub trait EvmCompiler {
@@ -73,6 +74,19 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
         }
     }
 
+    pub async fn load_from_dir(&self, dir: &PathBuf) {
+        match self.cache.load_from_dir(dir).await {
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(
+                    "cannot load local compilers from `{}` dir: {}",
+                    dir.to_string_lossy(),
+                    e
+                )
+            }
+        }
+    }
+
     pub fn normalize_compiler_version(
         &self,
         to_normalize: &DetailedVersion,
@@ -94,6 +108,7 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
         }
     }
 
+    #[instrument(name = "fetch_compiler", skip(self), level = "debug")]
     pub async fn fetch_compiler(&self, version: &DetailedVersion) -> Result<PathBuf, Error> {
         let path = self
             .cache
@@ -105,6 +120,7 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
         Ok(path)
     }
 
+    #[instrument(name = "compile", skip(self, input), level = "debug")]
     pub async fn compile(
         &self,
         compiler_path: &Path,
@@ -124,6 +140,10 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
             serde_path_to_error::deserialize(&raw).context("deserializing compiler output")?;
 
         Ok(CompileResult { output, raw })
+    }
+
+    pub fn all_versions(&self) -> Vec<DetailedVersion> {
+        self.fetcher.all_versions()
     }
 }
 

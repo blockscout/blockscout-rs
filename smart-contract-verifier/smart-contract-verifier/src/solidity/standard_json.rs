@@ -1,5 +1,8 @@
 use super::client::Client;
-use crate::{compiler::DetailedVersion, verify_new, OnChainContract};
+use crate::{
+    compiler::DetailedVersion, verify_new, verify_new::SolcCompiler, EvmCompilersPool,
+    OnChainContract,
+};
 use std::sync::Arc;
 
 type Content = verify_new::SolcInput;
@@ -11,11 +14,10 @@ pub struct VerificationRequest {
 }
 
 pub async fn verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<SolcCompiler>,
     request: VerificationRequest,
 ) -> Result<verify_new::VerificationResult, verify_new::Error> {
     let to_verify = vec![request.contract];
-    let compilers = client.new_compilers();
 
     let results = verify_new::compile_and_verify(
         to_verify,
@@ -40,11 +42,10 @@ pub struct BatchVerificationRequest {
 }
 
 pub async fn batch_verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<SolcCompiler>,
     request: BatchVerificationRequest,
 ) -> Result<Vec<verify_new::VerificationResult>, verify_new::Error> {
     let to_verify = request.contracts;
-    let compilers = client.new_compilers();
 
     let results = verify_new::compile_and_verify(
         to_verify,

@@ -133,13 +133,6 @@ where
         self.fetcher.all_versions()
     }
 
-    pub fn all_versions_sorted_str(&self) -> Vec<String> {
-        let mut versions = self.all_versions();
-        // sort in descending order
-        versions.sort_by(|x, y| x.cmp(y).reverse());
-        versions.into_iter().map(|v| v.to_string()).collect()
-    }
-
     pub async fn load_from_dir(&self, dir: &PathBuf) {
         match self.cache.load_from_dir(dir).await {
             Ok(_) => {}
