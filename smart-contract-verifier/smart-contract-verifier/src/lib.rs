@@ -25,11 +25,10 @@ pub use common_types::{
     RequestParseError,
 };
 pub use compiler::{
-    CompactVersion, Compilers, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher,
-    Version,
+    CompactVersion, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher, Version,
 };
 pub use verify_new::EvmCompilersPool;
 
 pub use crate::sourcify::{SourcifyApiClient, Success as SourcifySuccess};
 pub use lookup_methods::{find_methods, LookupMethodsRequest, LookupMethodsResponse};
-pub use solidity::{Client as SolidityClient, SolcValidator, SolidityCompiler};
+pub use solidity::SolcValidator;
