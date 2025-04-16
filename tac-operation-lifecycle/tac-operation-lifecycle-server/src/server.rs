@@ -6,7 +6,7 @@ use crate::{
     services::{HealthService, OperationsService, StatisticService},
     settings::Settings,
 };
-use blockscout_service_launcher::{launcher, launcher::LaunchSettings, tracing};
+use blockscout_service_launcher::{launcher::{self, GracefulShutdownHandler, LaunchSettings}, tracing};
 
 use tac_operation_lifecycle_logic::database::TacDatabase;
 
@@ -64,7 +64,8 @@ pub async fn run(
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: GracefulShutdownHandler::new(),
     };
 
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(launch_settings, http_router, grpc_router).await
 }

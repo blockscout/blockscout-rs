@@ -5,7 +5,7 @@ use reqwest::{Client as HttpClient, Method, Request, Response};
 use settings::RpcSettings;
 use tokio;
 use tower::{limit::RateLimit, Service, ServiceBuilder, ServiceExt};
-use tracing::debug;
+use tracing::{debug, Instrument};
 
 pub mod settings;
 
@@ -40,7 +40,7 @@ impl Client {
         let url = format!("{}/operation-ids?from={}&till={}", self.url(), start, end);
 
         let request = Request::new(Method::GET, url.parse()?);
-        let response = self.make_request(request).await?;
+        let response = self.make_request(request).instrument(tracing::debug_span!("get_operations", url = url)).await?;
         if !response.status().is_success() {
             let status = response.status();
             tracing::error!("Bad response status: {} from {url}", status);
@@ -93,7 +93,7 @@ impl Client {
             .body_mut()
             .replace(serde_json::to_vec(&request_body)?.into());
 
-        let response = self.make_request(request).await?;
+        let response = self.make_request(request).instrument(tracing::debug_span!("get_operations_stages", url = url)).await?;
 
         if response.status().is_success() {
             let text = response.text().await?;

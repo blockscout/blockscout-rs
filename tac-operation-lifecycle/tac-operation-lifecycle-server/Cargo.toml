@@ -12,13 +12,13 @@ tac-operation-lifecycle-migration = { path = "../tac-operation-lifecycle-migrati
 actix-web = "4.2"
 anyhow = "1.0"
 async-trait = "0.1"
-blockscout-service-launcher = { workspace = true, features = ["database-0_12" ] }
-config = "0.14"
-sea-orm = "0.12.2"
+blockscout-service-launcher = { workspace = true, features = ["database-1" ] }
+config = "0.15.11"
+sea-orm = "1.1.10"
 serde = "1.0"
 serde_json = "1.0.96"
 tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
-tonic = "0.12.3"
+tonic = "0.12"
 tracing = "0.1"
 chrono = "0.4.39"
 
@@ -29,7 +29,7 @@ chrono = "0.4.39"
 
 
 [dev-dependencies]
-blockscout-service-launcher = { workspace = true, features = [ "test-server","test-database"] }
+blockscout-service-launcher = { workspace = true, features = [ "test-server","test-database","database-1"] }
 tac-operation-lifecycle-entity = { path = "../tac-operation-lifecycle-entity" }
 pretty_assertions = "1.3"
 reqwest = { version = "0.12", features = ["json"]}
@@ -39,7 +39,7 @@ wiremock = "0.6"
 # mockall = "0.11"
 # bytes = "1.5.0"
 # hex = "0.4.3"
-rand = "0.8"
+rand = "0.9.0"
 # rstest = "0.18.2"
 # sea-orm = { version = "*", features = [ "sqlx-sqlite" ]}
 # tokio-stream = { version = "0.1", features = ["net"] }
