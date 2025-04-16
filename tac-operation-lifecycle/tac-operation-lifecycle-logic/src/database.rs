@@ -1,7 +1,6 @@
 use crate::client::models::{
     operations::Operations as ApiOperations, profiling::OperationData as ApiOperationData,
 };
-use chrono::TimeZone;
 use anyhow::anyhow;
 use sea_orm::{
     prelude::Expr,
@@ -113,8 +112,9 @@ impl TacDatabase {
 
     // Add helper function for timestamp conversion
     fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
-        chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0)
-            .unwrap_or_else(|| chrono::Utc::now().naive_utc())
+        chrono::DateTime::from_timestamp(timestamp, 0)
+            .unwrap()
+            .naive_utc()
     }
 
     // Retrieves the saved watermark from the database (returns 0 if not exist)
@@ -123,7 +123,7 @@ impl TacDatabase {
         let existing_watermark = watermark::Entity::find().one(self.db.as_ref()).await?;
 
         match existing_watermark {
-            Some(w) => Ok(w.timestamp.timestamp() as u64),
+            Some(w) => Ok(w.timestamp.and_utc().timestamp() as u64),
             _ => Ok(0),
         }
     }
@@ -267,7 +267,7 @@ impl TacDatabase {
                     let mut updated_watermark: Option<u64> = None;
                     if let Some(last_interval_from_batch) = chunk.last() {
                         if let ActiveValue::Set(finish) = &last_interval_from_batch.finish {
-                            updated_watermark = Some(finish.timestamp() as u64);
+                            updated_watermark = Some(finish.and_utc().timestamp() as u64);
                             let _ = self
                                 .set_watermark_internal(&tx, updated_watermark.unwrap())
                                 .await;

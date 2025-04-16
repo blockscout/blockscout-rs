@@ -4,7 +4,6 @@ use blockscout_service_launcher::test_server;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
-// #[ignore = "Needs database to run"]
 async fn test_startup_works() {
     let db = helpers::init_db("startup_works").await;
     let db_url = db.db_url();

@@ -388,10 +388,11 @@ impl Indexer {
 
 
         // Add helper function for timestamp conversion
-    fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
-        chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0)
-            .unwrap_or_else(|| chrono::Utc::now().naive_utc())
-    }
+        fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
+            chrono::DateTime::from_timestamp(timestamp, 0)
+                .unwrap()
+                .naive_utc()
+        }
         let realtime_boundary = timestamp_to_naive(self.get_realtime_boundary() as i64);
         let (job_type, request_start) = if job.interval.start >= realtime_boundary {
             ("REALTIME", realtime_boundary)

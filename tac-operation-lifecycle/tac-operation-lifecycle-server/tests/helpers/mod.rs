@@ -7,8 +7,7 @@ use tac_operation_lifecycle_logic::{client::settings::RpcSettings, database::Tac
 use tac_operation_lifecycle_server::Settings;
 
 pub async fn init_db(test_name: &str) -> TestDbGuard {
-    let db_name = format!("testdb_{test_name}");
-    TestDbGuard::new::<migration::Migrator>(db_name.as_str()).await
+    TestDbGuard::new::<migration::Migrator>(test_name).await
 }
 pub async fn init_tac_operation_lifecycle_server<F>(
     db_url: String,
@@ -105,11 +104,11 @@ mod tests {
         for i in 0..tasks_number as usize {
             let index = i as u64;
             assert_eq!(
-                intervals[i].start.timestamp() as u64,
+                intervals[i].start.and_utc().timestamp() as u64,
                 start_timestamp + index * catchup_interval.as_secs()
             );
             assert_eq!(
-                intervals[i].finish.timestamp() as u64,
+                intervals[i].finish.and_utc().timestamp() as u64,
                 start_timestamp + (index + 1) * catchup_interval.as_secs()
             );
         }
@@ -117,6 +116,12 @@ mod tests {
         assert_eq!(indexer.watermark().await.unwrap(), current_epoch);
     }
 
+
+    fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
+        chrono::DateTime::from_timestamp(timestamp, 0)
+            .unwrap()
+            .naive_utc()
+    }
     #[tokio::test]
     async fn test_job_stream() {
         use futures::stream::{select_with_strategy, PollNext};
@@ -137,11 +142,11 @@ mod tests {
             .unwrap()
             .as_secs();
         let start_timestamp = current_epoch - tasks_number * catchup_interval.as_secs();
-
+        let start_timestamp = timestamp_to_naive(start_timestamp as i64);
         let indexer_settings = IndexerSettings {
             concurrency: 1,
             catchup_interval,
-            start_timestamp,
+            start_timestamp: start_timestamp.and_utc().timestamp() as u64,
             ..Default::default()
         };
 
@@ -186,18 +191,17 @@ mod tests {
                             seen_intervals.insert(interval_key);
 
                             // Verify job timestamps are within expected range
-                            assert!(start >= start_timestamp as i64, "Job start time {} is before start_timestamp {}", start, start_timestamp);
-                            assert!(end <= current_epoch as i64, "Job end time {} is after current_epoch {}", end, current_epoch);
-
+                            assert!(start >= start_timestamp, "Job start time {} is before start_timestamp {}", start, start_timestamp);
+                            assert!(end <= (start_timestamp + catchup_interval), "Job end time {} is after current_epoch {}", end, current_epoch);
                             // Verify job interval matches catchup_interval
-                            assert_eq!(end - start, catchup_interval.as_secs() as i64,
+                            assert_eq!((end - start).num_seconds() as u64, catchup_interval.as_secs(),
                                 "Job interval {:?} doesn't match catchup_interval {}",
                                 (end - start), catchup_interval.as_secs());
 
                             // After each job, verify its interval is marked as in-progress
                             let intervals = interval::Entity::find()
                                 .filter(interval::Column::Start.eq(start))
-                                .filter(interval::Column::End.eq(end))
+                                .filter(interval::Column::Finish.eq(end))
                                 .one(db.client().as_ref())
                                 .await.unwrap();
 
@@ -396,21 +400,23 @@ mod tests {
                         IndexerJob::Interval(interval_job) => {
                             // Process the interval job
                             tracing::warn!("Processing interval job: {:?}", interval_job);
+                            let start = interval_job.interval.start.and_utc().timestamp();
+                            let end = interval_job.interval.finish.and_utc().timestamp();
                             if let Err(e) = indexer.fetch_operations(&interval_job, client.clone()).instrument(tracing::info_span!(
                                 "fetching operations",
                                 interval_id = interval_job.interval.id,
-                                start = interval_job.interval.start,
-                                end = interval_job.interval.end,
+                                start = start,
+                                end = end,
                             )).await {
                                 panic!("Failed to fetch operations: {} ", e);
                             }
 
                             // Verify interval contains our target timestamp
-                            if interval_job.interval.start <= 1741794238 && interval_job.interval.end >= 1741794238 {
+                            if start <= 1741794238 && end >= 1741794238 {
                                 // Verify interval is marked as processed
                                 let interval = interval::Entity::find()
-                                    .filter(interval::Column::Start.eq(interval_job.interval.start))
-                                    .filter(interval::Column::End.eq(interval_job.interval.end))
+                                    .filter(interval::Column::Start.eq(start))
+                                    .filter(interval::Column::Finish.eq(interval_job.interval.finish))
                                     .one(db.client().as_ref())
                                     .await
                                     .unwrap()
