@@ -1,6 +1,7 @@
 use crate::client::models::{
     operations::Operations as ApiOperations, profiling::OperationData as ApiOperationData,
 };
+use chrono::TimeZone;
 use anyhow::anyhow;
 use sea_orm::{
     prelude::Expr,
@@ -110,13 +111,19 @@ impl TacDatabase {
         Self { db }
     }
 
+    // Add helper function for timestamp conversion
+    fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
+        chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0)
+            .unwrap_or_else(|| chrono::Utc::now().naive_utc())
+    }
+
     // Retrieves the saved watermark from the database (returns 0 if not exist)
     // NOTE: the method doesn't perform any cachingm just read from the DB!
     pub async fn get_watermark(&self) -> anyhow::Result<u64> {
         let existing_watermark = watermark::Entity::find().one(self.db.as_ref()).await?;
 
         match existing_watermark {
-            Some(w) => Ok(w.timestamp as u64),
+            Some(w) => Ok(w.timestamp.timestamp() as u64),
             _ => Ok(0),
         }
     }
@@ -137,14 +144,16 @@ impl TacDatabase {
     ) -> anyhow::Result<()> {
         let existing_watermark = watermark::Entity::find().one(tx).await?;
 
+        let timestamp_naive = Self::timestamp_to_naive(timestamp as i64);
+
         let watermark_model = match existing_watermark {
             Some(w) => watermark::ActiveModel {
                 id: ActiveValue::Unchanged(w.id),
-                timestamp: ActiveValue::Set(timestamp as i64),
+                timestamp: ActiveValue::Set(timestamp_naive),
             },
             None => watermark::ActiveModel {
                 id: ActiveValue::NotSet,
-                timestamp: ActiveValue::Set(timestamp as i64),
+                timestamp: ActiveValue::Set(timestamp_naive),
             },
         };
 
@@ -171,11 +180,14 @@ impl TacDatabase {
     // Create interval with the specified boundary [from..to]
     // Update watermark in the database
     pub async fn generate_pending_interval(&self, from: u64, to: u64) -> anyhow::Result<()> {
+        let now = chrono::Utc::now().naive_utc();
+        
         let interval = interval::ActiveModel {
             id: ActiveValue::NotSet,
-            start: ActiveValue::Set(from as i64),
-            end: ActiveValue::Set(to as i64),
-            timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
+            start: ActiveValue::Set(Self::timestamp_to_naive(from as i64)),
+            finish: ActiveValue::Set(Self::timestamp_to_naive(to as i64)),
+            inserted_at: ActiveValue::Set(now),
+            updated_at: ActiveValue::Set(now),
             status: sea_orm::ActiveValue::Set(EntityStatus::Pending.to_id()),
             next_retry: ActiveValue::Set(None),
             retry_count: ActiveValue::Set(0 as i16),
@@ -211,17 +223,25 @@ impl TacDatabase {
         period_secs: u64,
     ) -> anyhow::Result<usize> {
         const DB_BATCH_SIZE: usize = 1000;
+        let now = chrono::Utc::now().naive_utc();
+        
         let intervals: Vec<interval::ActiveModel> = (from..to)
             .step_by(period_secs as usize)
-            .map(|timestamp| interval::ActiveModel {
-                id: ActiveValue::NotSet,
-                start: ActiveValue::Set(timestamp as i64),
-                //we don't want to save intervals that are out of specifiedboundaries
-                end: ActiveValue::Set(min(timestamp + period_secs, to) as i64),
-                timestamp: ActiveValue::Set(chrono::Utc::now().timestamp()),
-                status: sea_orm::ActiveValue::Set(EntityStatus::Pending.to_id()),
-                next_retry: ActiveValue::Set(None),
-                retry_count: ActiveValue::Set(0 as i16),
+            .map(|timestamp| {
+                let start_naive = Self::timestamp_to_naive(timestamp as i64);
+                let finish_naive = Self::timestamp_to_naive(min(timestamp + period_secs, to) as i64);
+                
+                interval::ActiveModel {
+                    id: ActiveValue::NotSet,
+                    start: ActiveValue::Set(start_naive),
+                    //we don't want to save intervals that are out of specifiedboundaries
+                    finish: ActiveValue::Set(finish_naive),
+                    inserted_at: ActiveValue::Set(now),
+                    updated_at: ActiveValue::Set(now),
+                    status: sea_orm::ActiveValue::Set(EntityStatus::Pending.to_id()),
+                    next_retry: ActiveValue::Set(None),
+                    retry_count: ActiveValue::Set(0 as i16),
+                }
             })
             .collect();
 
@@ -246,12 +266,14 @@ impl TacDatabase {
                     // [assume bathes are sorted by `start` field ascending at that point]
                     let mut updated_watermark: Option<u64> = None;
                     if let Some(last_interval_from_batch) = chunk.last() {
-                        updated_watermark =
-                            Some(last_interval_from_batch.end.clone().unwrap() as u64);
-                        let _ = self
-                            .set_watermark_internal(&tx, updated_watermark.unwrap())
-                            .await;
+                        if let ActiveValue::Set(finish) = &last_interval_from_batch.finish {
+                            updated_watermark = Some(finish.timestamp() as u64);
+                            let _ = self
+                                .set_watermark_internal(&tx, updated_watermark.unwrap())
+                                .await;
+                        }
                     }
+
 
                     tx.commit().await?;
                     tracing::debug!(
@@ -310,13 +332,17 @@ impl TacDatabase {
 
         // Save all operations
         for op in operations {
+            let now = chrono::Utc::now().naive_utc();
+            
             let operation_model = operation::ActiveModel {
                 id: Set(op.id.clone()),
                 operation_type: Set(None),
-                timestamp: Set(op.timestamp as i64),
-                status: Set(EntityStatus::Pending.to_id() as i32),
+                timestamp: Set(Self::timestamp_to_naive(op.timestamp as i64)),
+                status: Set(EntityStatus::Pending.to_id() as i16),
                 next_retry: Set(None),
                 retry_count: Set(0), // Initialize retry count
+                inserted_at: Set(now),
+                updated_at: Set(now),
             };
 
             tracing::debug!(
@@ -411,7 +437,7 @@ impl TacDatabase {
         status: EntityStatus,
     ) -> anyhow::Result<()> {
         let mut operation_active: operation::ActiveModel = operation_model.clone().into();
-        operation_active.status = Set(status.to_id() as i32);
+        operation_active.status = Set(status.to_id() as i16);
 
         // Saving changes
         operation_active
@@ -748,13 +774,16 @@ impl TacDatabase {
         // Store operation stages
         for (stage_type, stage_data) in operation_data.stages.iter() {
             if let Some(data) = &stage_data.stage_data {
+                let now = chrono::Utc::now().naive_utc();
+                
                 let stage_model = operation_stage::ActiveModel {
                     id: NotSet,
                     operation_id: Set(operation.id.clone()),
-                    stage_type_id: Set(stage_type.to_id()),
+                    stage_type_id: Set(stage_type.to_id() as i16),
                     success: Set(data.success),
-                    timestamp: Set(data.timestamp as i64),
+                    timestamp: Set(Self::timestamp_to_naive(data.timestamp as i64)),
                     note: Set(data.note.clone()),
+                    inserted_at: Set(now),
                 };
 
                 // TODO: Update operation_stage if existing
@@ -778,11 +807,14 @@ impl TacDatabase {
 
                         // store transactions for this stage
                         for tx in data.transactions.iter() {
+                            let now = chrono::Utc::now().naive_utc();
+                            
                             let tx_model = transaction::ActiveModel {
                                 id: NotSet,
-                                stage_id: Set(inserted_stage.id),
+                                stage_id: Set(inserted_stage.id as i16),
                                 hash: Set(tx.hash.clone()),
                                 blockchain_type: Set(tx.blockchain_type.to_string()),
+                                inserted_at: Set(now),
                             };
 
                             match transaction::Entity::insert(tx_model).exec(&txn).await {
@@ -834,10 +866,13 @@ impl TacDatabase {
     ) -> anyhow::Result<()> {
         // Update interval with next retry timestamp and increment retry count
         let mut interval_model: interval::ActiveModel = interval.clone().into();
+        let now = chrono::Utc::now().naive_utc();
+        
         interval_model.next_retry =
-            Set(Some(chrono::Utc::now().timestamp() + retry_after_delay_sec));
+            Set(Some(chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec)));
         interval_model.retry_count = Set(interval.retry_count + 1);
         interval_model.status = Set(EntityStatus::Pending.to_id()); // Reset status to pending
+        interval_model.updated_at = Set(now);
 
         match interval_model.update(self.db.as_ref()).await {
             Ok(_) => Ok(()),
@@ -855,10 +890,13 @@ impl TacDatabase {
     ) -> anyhow::Result<()> {
         // Update operation with next retry timestamp and increment retry count
         let mut operation_model: operation::ActiveModel = operation.clone().into();
+        let now = chrono::Utc::now().naive_utc();
+        
         operation_model.next_retry =
-            Set(Some(chrono::Utc::now().timestamp() + retry_after_delay_sec));
+            Set(Some(chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec)));
         operation_model.retry_count = Set(operation.retry_count + 1);
-        operation_model.status = Set(EntityStatus::Pending.to_id().into()); // Reset status to pending
+        operation_model.status = Set(EntityStatus::Pending.to_id() as i16); // Reset status to pending
+        operation_model.updated_at = Set(now);
 
         match operation_model.update(self.db.as_ref()).await {
             Ok(_) => Ok(()),
@@ -1068,13 +1106,17 @@ impl TacDatabase {
         }
 
         let op_row = &joined[0];
+        let now = chrono::Utc::now().naive_utc();
+        
         let op_model = operation::Model {
             id: op_row.op_id.clone(),
             operation_type: op_row.operation_type.clone(),
-            timestamp: op_row.timestamp,
+            timestamp: Self::timestamp_to_naive(op_row.timestamp),
             next_retry: None,
-            status: op_row.status,
+            status: op_row.status as i16,
             retry_count: 0,
+            inserted_at: now,
+            updated_at: now,
         };
 
         use std::collections::HashMap;
@@ -1089,10 +1131,11 @@ impl TacDatabase {
                         operation_stage::Model {
                             id: stage_id,
                             operation_id: op_model.id.clone(),
-                            stage_type_id: row.stage_type_id.unwrap_or_default(),
+                            stage_type_id: row.stage_type_id.unwrap_or_default() as i16,
                             success: row.stage_success,
-                            timestamp: row.stage_timestamp.unwrap_or_default(),
+                            timestamp: Self::timestamp_to_naive(row.stage_timestamp.unwrap_or_default()),
                             note: row.stage_note.clone(),
+                            inserted_at: now,
                         },
                         vec![],
                     )
@@ -1101,9 +1144,10 @@ impl TacDatabase {
                 if let Some(tx_id) = row.tx_id {
                     let tx = transaction::Model {
                         id: tx_id,
-                        stage_id: row.tx_stage_id.unwrap_or_default(),
+                        stage_id: row.tx_stage_id.unwrap_or_default() as i16,
                         hash: row.tx_hash.clone().unwrap_or_default(),
                         blockchain_type: row.tx_blockchain_type.clone().unwrap_or_default(),
+                        inserted_at: now,
                     };
                     entry.1.push(tx);
                 }

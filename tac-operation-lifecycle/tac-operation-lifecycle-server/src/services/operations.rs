@@ -42,15 +42,15 @@ impl OperationsService {
                 Ok(tonic::Response::new(OperationDetails {
                     operation_id: op.id,
                     r#type: op_type.to_id(),
-                    timestamp: Some(op.timestamp as u64),
+                    timestamp: Some(op.timestamp.timestamp() as u64),
                     sender: None,
                     status_history: stages
                         .iter()
                         .map(|(s, txs)| OperationStage {
-                            r#type: s.stage_type_id - 1,
+                            r#type: s.stage_type_id as i32 - 1,
                             is_exist: true,
                             is_success: Some(s.success),
-                            timestamp: Some(s.timestamp as u64),
+                            timestamp: Some(s.timestamp.timestamp() as u64),
                             transactions: txs
                                 .iter()
                                 .map(|tx| {
@@ -94,7 +94,7 @@ impl TacService for OperationsService {
             .await
         {
             Ok(operations) => {
-                let last_timestamp = operations.last().map(|op| op.timestamp as u64);
+                let last_timestamp = operations.last().map(|op| op.timestamp.timestamp() as u64);
 
                 Ok(tonic::Response::new(OperationsResponse {
                     operations: operations
@@ -107,7 +107,7 @@ impl TacService for OperationsService {
                             OperationBriefDetails {
                                 operation_id: op.id,
                                 r#type: op_type.to_id(),
-                                timestamp: Some(op.timestamp as u64),
+                                timestamp: Some(op.timestamp.timestamp() as u64),
                                 sender: None,
                             }
                         })

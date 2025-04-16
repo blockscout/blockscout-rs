@@ -7,11 +7,12 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub start: i64,
-    pub end: i64,
-    pub timestamp: i64,
+    pub start: DateTime,
+    pub finish: DateTime,
+    pub inserted_at: DateTime,
+    pub updated_at: DateTime,
     pub status: i16,
-    pub next_retry: Option<i64>,
+    pub next_retry: Option<DateTime>,
     pub retry_count: i16,
 }
 

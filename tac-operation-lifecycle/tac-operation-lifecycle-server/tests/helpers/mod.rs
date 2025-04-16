@@ -105,11 +105,11 @@ mod tests {
         for i in 0..tasks_number as usize {
             let index = i as u64;
             assert_eq!(
-                intervals[i].start as u64,
+                intervals[i].start.timestamp() as u64,
                 start_timestamp + index * catchup_interval.as_secs()
             );
             assert_eq!(
-                intervals[i].end as u64,
+                intervals[i].finish.timestamp() as u64,
                 start_timestamp + (index + 1) * catchup_interval.as_secs()
             );
         }

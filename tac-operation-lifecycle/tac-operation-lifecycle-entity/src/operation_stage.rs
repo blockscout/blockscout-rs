@@ -8,10 +8,11 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub operation_id: String,
-    pub stage_type_id: i32,
+    pub stage_type_id: i16,
     pub success: bool,
-    pub timestamp: i64,
+    pub timestamp: DateTime,
     pub note: Option<String>,
+    pub inserted_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

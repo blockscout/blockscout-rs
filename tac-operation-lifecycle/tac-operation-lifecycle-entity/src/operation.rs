@@ -8,11 +8,12 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
     pub operation_type: Option<String>,
-    pub timestamp: i64,
-    pub next_retry: Option<i64>,
-    pub status: i32,
-    #[sea_orm(column_name = "retry_count")]
-    pub retry_count: i32,
+    pub timestamp: DateTime,
+    pub next_retry: Option<DateTime>,
+    pub status: i16,
+    pub retry_count: i16,
+    pub inserted_at: DateTime,
+    pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

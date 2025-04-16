@@ -20,7 +20,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(WaterMark::Timestamp)
-                            .big_integer()
+                            .timestamp()
                             .not_null(),
                     )
                     .to_owned(),
@@ -41,12 +41,14 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Operation::OperationType).string().null())
                     .col(
                         ColumnDef::new(Operation::Timestamp)
-                            .big_integer()
+                            .timestamp()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(Operation::NextRetry).big_integer().null())
-                    .col(ColumnDef::new(Operation::Status).integer().not_null())
-                    .col(ColumnDef::new(Operation::RetryCount).integer().not_null())
+                    .col(ColumnDef::new(Operation::NextRetry).timestamp().null())
+                    .col(ColumnDef::new(Operation::Status).small_unsigned().not_null())
+                    .col(ColumnDef::new(Operation::RetryCount).small_unsigned().not_null())
+                    .col(ColumnDef::new(Operation::InsertedAt).timestamp().not_null())
+                    .col(ColumnDef::new(Operation::UpdatedAt).timestamp().not_null())
                     .to_owned(),
             )
             .await?;
@@ -96,11 +98,12 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Interval::Start).big_integer().not_null())
-                    .col(ColumnDef::new(Interval::End).big_integer().not_null())
-                    .col(ColumnDef::new(Interval::Timestamp).big_integer().not_null())
+                    .col(ColumnDef::new(Interval::Start).timestamp().not_null())
+                    .col(ColumnDef::new(Interval::Finish).timestamp().not_null())
+                    .col(ColumnDef::new(Interval::InsertedAt).timestamp().not_null())
+                    .col(ColumnDef::new(Interval::UpdatedAt).timestamp().not_null())
                     .col(ColumnDef::new(Interval::Status).small_unsigned().not_null())
-                    .col(ColumnDef::new(Interval::NextRetry).big_integer().null())
+                    .col(ColumnDef::new(Interval::NextRetry).timestamp().null())
                     .col(
                         ColumnDef::new(Interval::RetryCount)
                             .small_unsigned()
@@ -148,7 +151,7 @@ impl MigrationTrait for Migration {
                     .name("idx_interval_status_end")
                     .table(Interval::Table)
                     .col(Interval::Status)
-                    .col(Interval::End)
+                    .col(Interval::Finish)
                     .to_owned(),
             )
             .await?;
@@ -207,16 +210,17 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(OperationStage::StageTypeId)
-                            .integer()
+                            .small_unsigned()
                             .not_null(),
                     )
                     .col(ColumnDef::new(OperationStage::Success).boolean().not_null())
                     .col(
                         ColumnDef::new(OperationStage::Timestamp)
-                            .big_integer()
+                            .timestamp()
                             .not_null(),
                     )
                     .col(ColumnDef::new(OperationStage::Note).string().null())
+                    .col(ColumnDef::new(OperationStage::InsertedAt).timestamp().not_null())
                     .to_owned(),
             )
             .await?;
@@ -234,8 +238,9 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Transaction::StageId).integer().not_null())
+                    .col(ColumnDef::new(Transaction::StageId).small_unsigned().not_null())
                     .col(ColumnDef::new(Transaction::Hash).string().not_null())
+                    .col(ColumnDef::new(Transaction::InsertedAt).timestamp().not_null())
                     .col(
                         ColumnDef::new(Transaction::BlockchainType)
                             .string()
@@ -315,6 +320,8 @@ enum Operation {
     NextRetry,
     Status,
     RetryCount,
+    InsertedAt,
+    UpdatedAt,
 }
 
 #[derive(Iden)]
@@ -327,11 +334,12 @@ enum Interval {
     Table,
     Id,
     Start,
-    End,
-    Timestamp,
+    Finish,
     Status,
     NextRetry,
     RetryCount,
+    InsertedAt,
+    UpdatedAt,
 }
 
 #[derive(Iden)]
@@ -350,6 +358,8 @@ enum OperationStage {
     Success,
     Timestamp,
     Note,
+    InsertedAt,
+    
 }
 
 #[derive(Iden)]
@@ -359,4 +369,5 @@ enum Transaction {
     StageId,
     Hash,
     BlockchainType,
+    InsertedAt,
 }

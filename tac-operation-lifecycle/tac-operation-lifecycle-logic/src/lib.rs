@@ -386,20 +386,28 @@ impl Indexer {
             job
         );
 
-        let realtime_boundary = self.get_realtime_boundary();
-        let (job_type, request_start) = if job.interval.start as u64 >= realtime_boundary {
+
+        // Add helper function for timestamp conversion
+    fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
+        chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0)
+            .unwrap_or_else(|| chrono::Utc::now().naive_utc())
+    }
+        let realtime_boundary = timestamp_to_naive(self.get_realtime_boundary() as i64);
+        let (job_type, request_start) = if job.interval.start >= realtime_boundary {
             ("REALTIME", realtime_boundary)
         } else {
-            ("HISTORICAL", job.interval.start as u64)
+            ("HISTORICAL", job.interval.start)
         };
 
+        let request_start = request_start.and_utc().timestamp() as u64 ;
+        let request_end = job.interval.finish.and_utc().timestamp() as u64;
         let operations = client
-            .get_operations(request_start, job.interval.end as u64)
+            .get_operations(request_start, request_end)
             .instrument(tracing::debug_span!(
                 "get_operations",
                 interval_id = job.interval.id,
                 start = request_start,
-                end = job.interval.end,
+                finish = request_end,
             ))
             .await?;
         let ops_num = operations.len();
