@@ -143,7 +143,7 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
                     .context("acquiring lock")?
             };
 
-            let _compile_timer_guard = metrics::COMPILE_TIME.with_label_values(&[]).start_timer();
+            let _compile_timer_guard = metrics::COMPILE_TIME.start_timer();
             let _compile_gauge_guard = metrics::COMPILATIONS_IN_FLIGHT.guarded_inc();
 
             C::compile(compiler_path, compiler_version, input).await?
