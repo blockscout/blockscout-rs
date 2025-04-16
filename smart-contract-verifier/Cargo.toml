@@ -68,7 +68,7 @@ solidity-metadata = { version = "1.1.0" }
 sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "c4261d0" }
 sscanf = { version = "0.3" }
 stdext = { version = "0.3.2" }
-tempfile = { version = "3.3" }
+tempfile = { version = "3.19" }
 thiserror = { version = "1.0" }
 tokio = { version = "1" }
 tonic = { version = "0.12" }

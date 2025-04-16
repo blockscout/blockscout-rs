@@ -1,4 +1,4 @@
-use super::{evm_compilers, Error};
+use super::{evm_compilers, solc_compiler_cli, Error};
 use crate::{DetailedVersion, Language, Version};
 use anyhow::Context;
 use async_trait::async_trait;
@@ -75,7 +75,12 @@ impl evm_compilers::EvmCompiler for SolcCompiler {
         input: &Self::CompilerInput,
     ) -> Result<Value, Error> {
         if compiler_version.to_semver() < &semver::Version::new(0, 4, 11) {
-            todo!()
+            let output = solc_compiler_cli::compile_using_cli(compiler_path, input)
+                .await
+                .context("error compiling using cli")?;
+            return Ok(
+                serde_json::to_value(output).context("serializing compiler output into value")?
+            );
         }
         let solc = foundry_compilers_new::solc::Solc::new_with_version(
             compiler_path,

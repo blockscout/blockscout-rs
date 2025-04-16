@@ -3,6 +3,7 @@ mod compilation;
 mod compiler_output;
 mod evm_compilers;
 mod solc_compiler;
+mod solc_compiler_cli;
 mod verification;
 mod verifier;
 mod vyper_compiler;
