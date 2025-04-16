@@ -1,7 +1,7 @@
 use super::Error;
 use crate::{
-    compiler::DownloadCache, verify_new::compiler_output::SharedCompilerOutput, DetailedVersion,
-    Fetcher, Language,
+    compiler::DownloadCache, metrics, metrics::GuardedGauge,
+    verify_new::compiler_output::SharedCompilerOutput, DetailedVersion, Fetcher, Language,
 };
 use anyhow::Context;
 use async_trait::async_trait;
@@ -128,13 +128,27 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
         compiler_version: &DetailedVersion,
         input: &C::CompilerInput,
     ) -> Result<CompileResult<SharedCompilerOutput>, Error> {
-        let _permit = self
-            .threads_semaphore
-            .acquire()
-            .await
-            .context("acquiring lock")?;
+        let raw = {
+            let span = tracing::debug_span!(
+                "compile contract with foundry-compilers",
+                ver = compiler_version.to_string()
+            );
+            let _span_guard = span.enter();
 
-        let raw = C::compile(compiler_path, compiler_version, input).await?;
+            let _permit = {
+                let _wait_timer_guard = metrics::COMPILATION_QUEUE_TIME.start_timer();
+                let _wait_gauge_guard = metrics::COMPILATIONS_IN_QUEUE.guarded_inc();
+                self.threads_semaphore
+                    .acquire()
+                    .await
+                    .context("acquiring lock")?
+            };
+
+            let _compile_timer_guard = metrics::COMPILE_TIME.with_label_values(&[]).start_timer();
+            let _compile_gauge_guard = metrics::COMPILATIONS_IN_FLIGHT.guarded_inc();
+
+            C::compile(compiler_path, compiler_version, input).await?
+        };
 
         validate_no_errors::<C::CompilationError>(&raw)?;
         let output: SharedCompilerOutput =
