@@ -581,7 +581,7 @@ impl TacDatabase {
         );
 
         self.query_intervals(&sql)
-            .instrument(tracing::info_span!("query pending intervals", sql = Self::format_sql_for_logging(&sql)))
+            .instrument(tracing::debug_span!("query pending intervals", sql = Self::format_sql_for_logging(&sql)))
             .await
     }
 
@@ -698,7 +698,7 @@ impl TacDatabase {
         match operation::Entity::find()
             .from_raw_sql(update_stmt)
             .all(self.db.as_ref())
-            .instrument(tracing::info_span!(
+            .instrument(tracing::debug_span!(
                 "executing update query for operations",
                 tx_id = tx_id.to_string(),
                 sql = Self::format_sql_for_logging(sql.as_str())
