@@ -9,37 +9,32 @@ tac-operation-lifecycle-proto = { path = "../tac-operation-lifecycle-proto" }
 tac-operation-lifecycle-logic = { path = "../tac-operation-lifecycle-logic" }
 tac-operation-lifecycle-entity = { path = "../tac-operation-lifecycle-entity" }
 tac-operation-lifecycle-migration = { path = "../tac-operation-lifecycle-migration" }
-actix-web = "4.2"
-anyhow = "1.0"
-async-trait = "0.1"
+actix-web = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = ["database-1" ] }
-config = "0.15.11"
-sea-orm = "1.1.10"
-serde = "1.0"
-serde_json = "1.0.96"
-tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
-tonic = "0.12"
-tracing = "0.1"
-chrono = "0.4.39"
-
-# # Uncomment if needed
-# ethers = "2.0.0"
-# blockscout-display-bytes = "1.0"
-# serde_with = "2.1"
+config = { workspace = true }
+sea-orm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
+tonic = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
 
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = [ "test-server","test-database","database-1"] }
 tac-operation-lifecycle-entity = { path = "../tac-operation-lifecycle-entity" }
-pretty_assertions = "1.3"
-reqwest = { version = "0.12", features = ["json"]}
-futures = "0.3"
-wiremock = "0.6"
+pretty_assertions = { workspace = true }
+reqwest = { workspace = true, features = ["json"]}
+futures = { workspace = true }
+wiremock = { workspace = true }
 # # Uncomment if needed
 # mockall = "0.11"
 # bytes = "1.5.0"
 # hex = "0.4.3"
-rand = "0.9.0"
+rand = { workspace = true }
 # rstest = "0.18.2"
 # sea-orm = { version = "*", features = [ "sqlx-sqlite" ]}
 # tokio-stream = { version = "0.1", features = ["net"] }

@@ -9,11 +9,11 @@ name = "migration"
 path = "src/lib.rs"
 
 [dependencies]
-async-std = { version = "1", features = ["attributes", "tokio1"] }
+async-std = { workspace = true, features = ["attributes", "tokio1"] }
 tac-operation-lifecycle-entity = { path = "../tac-operation-lifecycle-entity" }
 
 [dependencies.sea-orm-migration]
-version = "1.1.10"
+workspace = true
 features = [
   # Enable at least one `ASYNC_RUNTIME` and `DATABASE_DRIVER` feature if you want to run migration via CLI.
   # View the list of supported features at https://www.sea-ql.org/SeaORM/docs/install-and-config/database-and-async-runtime.

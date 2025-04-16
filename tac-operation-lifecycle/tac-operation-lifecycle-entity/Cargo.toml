@@ -1,6 +1,6 @@
 [package]
 name = "tac-operation-lifecycle-entity"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 publish = false
 
@@ -8,4 +8,4 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-sea-orm = { version = "1.1.10", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
+sea-orm = { workspace = true, features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
