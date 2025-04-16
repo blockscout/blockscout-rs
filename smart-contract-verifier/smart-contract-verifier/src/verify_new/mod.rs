@@ -8,6 +8,9 @@ mod verification;
 mod verifier;
 mod vyper_compiler;
 
+#[cfg(test)]
+mod test_compilation;
+
 pub mod vyper_compiler_input;
 
 pub use evm_compilers::EvmCompilersPool;

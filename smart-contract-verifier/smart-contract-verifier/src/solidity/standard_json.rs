@@ -1,9 +1,7 @@
-use super::client::Client;
 use crate::{
     compiler::DetailedVersion, verify_new, verify_new::SolcCompiler, EvmCompilersPool,
     OnChainContract,
 };
-use std::sync::Arc;
 
 type Content = verify_new::SolcInput;
 

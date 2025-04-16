@@ -1,4 +1,3 @@
-use super::client::Client;
 use crate::{
     compiler::DetailedVersion,
     verify_new,
@@ -6,7 +5,7 @@ use crate::{
     EvmCompilersPool, OnChainContract,
 };
 use foundry_compilers_new::artifacts;
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Content {

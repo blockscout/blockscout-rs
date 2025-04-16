@@ -49,6 +49,7 @@ pub trait CompilationError:
     fn formatted_message(&self) -> String;
 }
 
+#[derive(Clone, Debug)]
 pub struct CompileResult<CompilerOutput> {
     pub output: CompilerOutput,
     pub raw: Value,
