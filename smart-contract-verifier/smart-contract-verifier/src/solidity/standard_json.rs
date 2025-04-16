@@ -1,9 +1,9 @@
 use crate::{
-    compiler::DetailedVersion, verify_new, verify_new::SolcCompiler, EvmCompilersPool,
-    OnChainContract,
+    compiler::DetailedVersion, verify, Error, EvmCompilersPool, OnChainContract, SolcCompiler,
+    SolcInput, VerificationResult,
 };
 
-type Content = verify_new::SolcInput;
+type Content = SolcInput;
 
 pub struct VerificationRequest {
     pub contract: OnChainContract,
@@ -14,10 +14,10 @@ pub struct VerificationRequest {
 pub async fn verify(
     compilers: &EvmCompilersPool<SolcCompiler>,
     request: VerificationRequest,
-) -> Result<verify_new::VerificationResult, verify_new::Error> {
+) -> Result<VerificationResult, Error> {
     let to_verify = vec![request.contract];
 
-    let results = verify_new::compile_and_verify(
+    let results = verify::compile_and_verify(
         to_verify,
         compilers,
         &request.compiler_version,
@@ -42,10 +42,10 @@ pub struct BatchVerificationRequest {
 pub async fn batch_verify(
     compilers: &EvmCompilersPool<SolcCompiler>,
     request: BatchVerificationRequest,
-) -> Result<Vec<verify_new::VerificationResult>, verify_new::Error> {
+) -> Result<Vec<VerificationResult>, Error> {
     let to_verify = request.contracts;
 
-    let results = verify_new::compile_and_verify(
+    let results = verify::compile_and_verify(
         to_verify,
         compilers,
         &request.compiler_version,

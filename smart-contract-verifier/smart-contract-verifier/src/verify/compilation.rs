@@ -1,13 +1,11 @@
 use super::{
     cbor_auxdata, compiler_output,
+    compiler_output::SharedCompilerOutput,
     evm_compilers::{CompilerInput, EvmCompiler, EvmCompilersPool},
     verification::RecompiledCode,
     Error,
 };
-use crate::{
-    verify_new::compiler_output::SharedCompilerOutput, DetailedVersion, FullyQualifiedName,
-    Language, Version,
-};
+use crate::{DetailedVersion, FullyQualifiedName, Language, Version};
 use anyhow::Context;
 use blockscout_display_bytes::decode_hex;
 use serde::Serialize;

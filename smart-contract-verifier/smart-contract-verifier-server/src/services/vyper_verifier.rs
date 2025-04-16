@@ -10,10 +10,7 @@ use crate::{
     types,
 };
 use anyhow::Context;
-use smart_contract_verifier::{
-    verify_new::{EvmCompilersPool, VyperCompiler},
-    vyper,
-};
+use smart_contract_verifier::{vyper, EvmCompilersPool, VyperCompiler};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};

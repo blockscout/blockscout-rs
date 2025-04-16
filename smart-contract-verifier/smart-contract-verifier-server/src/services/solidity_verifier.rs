@@ -13,9 +13,7 @@ use crate::{
 };
 use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity,
-    verify_new::{EvmCompilersPool, SolcCompiler},
-    SolcValidator,
+    find_methods, solidity, EvmCompilersPool, SolcCompiler, SolcValidator,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     LookupMethodsRequest, LookupMethodsResponse,

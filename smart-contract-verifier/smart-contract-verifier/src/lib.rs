@@ -11,7 +11,7 @@ mod proto_conversions;
 mod scheduler;
 #[cfg(test)]
 mod tests;
-pub mod verify_new;
+mod verify;
 pub mod zksync;
 
 pub use consts::{
@@ -19,7 +19,6 @@ pub use consts::{
     DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
 };
 
-pub use crate::sourcify::Error as SourcifyError;
 pub use common_types::{
     Contract, FullyQualifiedName, Language, MatchType, OnChainCode, OnChainContract,
     RequestParseError,
@@ -27,8 +26,11 @@ pub use common_types::{
 pub use compiler::{
     CompactVersion, DetailedVersion, Fetcher, FileValidator, ListFetcher, S3Fetcher, Version,
 };
-pub use verify_new::EvmCompilersPool;
+pub use verify::{
+    Error, EvmCompilersPool, SolcCompiler, SolcInput, VerificationResult, VerifyingContract,
+    VyperCompiler, VyperInput,
+};
 
-pub use crate::sourcify::{SourcifyApiClient, Success as SourcifySuccess};
 pub use lookup_methods::{find_methods, LookupMethodsRequest, LookupMethodsResponse};
 pub use solidity::SolcValidator;
+pub use sourcify::{Error as SourcifyError, SourcifyApiClient, Success as SourcifySuccess};

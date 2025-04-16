@@ -1,7 +1,6 @@
-use super::Error;
+use super::{compiler_output::SharedCompilerOutput, Error};
 use crate::{
-    compiler::DownloadCache, metrics, metrics::GuardedGauge,
-    verify_new::compiler_output::SharedCompilerOutput, DetailedVersion, Fetcher, Language,
+    compiler::DownloadCache, metrics, metrics::GuardedGauge, DetailedVersion, Fetcher, Language,
 };
 use anyhow::Context;
 use async_trait::async_trait;

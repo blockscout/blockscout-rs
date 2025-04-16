@@ -1,8 +1,6 @@
 use crate::{
-    compiler::DetailedVersion,
-    verify_new,
-    verify_new::{vyper_compiler_input, VyperCompiler, VyperInput},
-    EvmCompilersPool, OnChainContract,
+    compiler::DetailedVersion, verify, verify::vyper_compiler_input, Error, EvmCompilersPool,
+    OnChainContract, VerificationResult, VyperCompiler, VyperInput,
 };
 use foundry_compilers_new::{artifacts, artifacts::EvmVersion};
 use std::{collections::BTreeMap, path::PathBuf};
@@ -15,7 +13,7 @@ pub struct Content {
 }
 
 impl TryFrom<Content> for VyperInput {
-    type Error = verify_new::Error;
+    type Error = Error;
 
     fn try_from(content: Content) -> Result<Self, Self::Error> {
         let settings = vyper_compiler_input::Settings {
@@ -37,9 +35,7 @@ impl TryFrom<Content> for VyperInput {
                     .map(|interface| (path, interface))
             })
             .collect::<Result<_, _>>()
-            .map_err(|err| {
-                verify_new::Error::Compilation(vec![format!("cannot parse inteface: {err}")])
-            })?;
+            .map_err(|err| Error::Compilation(vec![format!("cannot parse inteface: {err}")]))?;
 
         Ok(VyperInput {
             language: "Vyper".to_string(),
@@ -60,17 +56,13 @@ pub struct VerificationRequest {
 pub async fn verify(
     compilers: &EvmCompilersPool<VyperCompiler>,
     request: VerificationRequest,
-) -> Result<verify_new::VerificationResult, verify_new::Error> {
+) -> Result<VerificationResult, Error> {
     let to_verify = vec![request.contract];
 
     let vyper_input = VyperInput::try_from(request.content)?;
-    let results = verify_new::compile_and_verify(
-        to_verify,
-        compilers,
-        &request.compiler_version,
-        vyper_input,
-    )
-    .await?;
+    let results =
+        verify::compile_and_verify(to_verify, compilers, &request.compiler_version, vyper_input)
+            .await?;
     let result = results
         .into_iter()
         .next()

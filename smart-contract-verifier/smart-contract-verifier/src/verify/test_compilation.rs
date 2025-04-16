@@ -1,7 +1,8 @@
-use super::compilation;
-use crate::{
-    verify_new::evm_compilers::EvmCompiler, DetailedVersion, EvmCompilersPool, ListFetcher,
+use super::{
+    compilation,
+    evm_compilers::{EvmCompiler, EvmCompilersPool},
 };
+use crate::{DetailedVersion, ListFetcher};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
@@ -18,7 +19,10 @@ async fn compilers<Compiler: EvmCompiler>(list_url: &str) -> EvmCompilersPool<Co
 mod solidity {
     use super::*;
     use crate::{
-        verify_new::{Error, SolcCompiler, SolcInput},
+        verify::{
+            solc_compiler::{SolcCompiler, SolcInput},
+            Error,
+        },
         DEFAULT_SOLIDITY_COMPILER_LIST,
     };
     use foundry_compilers_new::artifacts;
@@ -129,8 +133,8 @@ mod solidity {
 mod vyper {
     use super::*;
     use crate::{
-        verify_new::{VyperCompiler, VyperInput},
-        DetailedVersion, EvmCompilersPool, FullyQualifiedName, DEFAULT_VYPER_COMPILER_LIST,
+        verify::vyper_compiler::{VyperCompiler, VyperInput},
+        DetailedVersion, FullyQualifiedName, DEFAULT_VYPER_COMPILER_LIST,
     };
     use foundry_compilers_new::artifacts::Source;
     use std::{
