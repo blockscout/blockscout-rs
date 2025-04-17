@@ -224,17 +224,14 @@ async fn check_if_unsupported_charts_are_enabled(
     setup: &RuntimeSetup,
     blockscout_db: &DatabaseConnection,
 ) -> anyhow::Result<()> {
-    let migrations = BlockscoutMigrations::query_from_db(&blockscout_db).await?;
+    let migrations = BlockscoutMigrations::query_from_db(blockscout_db).await?;
     if !migrations.denormalization {
         let mut all_enabled_charts_with_deps = setup.update_groups.values().flat_map(|g| {
             g.group
                 .enabled_members_with_deps(&g.enabled_members)
                 .into_iter()
         });
-        if all_enabled_charts_with_deps
-            .find(|key| key.name() == NewBuilderAccounts::name())
-            .is_some()
-        {
+        if all_enabled_charts_with_deps.any(|key| key.name() == NewBuilderAccounts::name()) {
             return Err(anyhow!(
                 "Builder accounts are not supported without denormalized database. \
                 Ensure denormalization is complete or disable the corresponding charts."
