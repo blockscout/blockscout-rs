@@ -150,13 +150,9 @@ fn validate_verification_response<T: TestCase>(
             "Invalid evm version"
         );
         assert_eq!(
-            compiler_settings
-                .libraries
-                .into_values()
-                .flatten()
-                .collect::<BTreeMap<String, String>>(),
-            test_case.libraries(),
-            "Invalid contract libraries"
+            compiler_settings.libraries,
+            BTreeMap::default(),
+            "Invalid compiler settings libraries"
         );
         assert_eq!(
             compiler_settings.optimizer.enabled,
@@ -208,6 +204,12 @@ fn validate_verification_response<T: TestCase>(
         }
         _ => (),
     }
+
+    assert_eq!(
+        source.libraries,
+        test_case.libraries(),
+        "Invalid contract libraries"
+    );
 
     let constructor_arguments = source
         .constructor_arguments
@@ -439,8 +441,15 @@ mod success_tests {
     }
 
     #[tokio::test]
-    async fn supports_manually_linked_libraries() {
+    async fn standard_json_supports_manually_linked_libraries() {
         let test_case = solidity_types::from_file::<StandardJson>("libraries_manually_linked");
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
+    }
+
+    #[tokio::test]
+    async fn standard_json_supports_libraries_linked_by_compiler() {
+        let test_case = solidity_types::from_file::<StandardJson>("libraries_linked_by_compiler");
         test_success(&test_case, BytecodeType::CreationInput).await;
         test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }

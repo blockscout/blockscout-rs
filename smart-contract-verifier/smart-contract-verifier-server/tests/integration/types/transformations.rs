@@ -53,15 +53,6 @@ impl TestCaseRequest for TestCaseMultiPart {
             serde_json::from_value(test_case.compiler_settings.clone())
                 .expect("cannot deserialize compiler settings");
 
-        let libraries = compiler_settings
-            .libraries
-            .libs
-            .clone()
-            .clone()
-            .into_values()
-            .flatten()
-            .collect();
-
         let optimization_runs = compiler_settings
             .optimizer
             .enabled
@@ -82,7 +73,6 @@ impl TestCaseRequest for TestCaseMultiPart {
                 .as_ref()
                 .map(|value| value.to_string()),
             optimization_runs,
-            libraries,
         };
 
         serde_json::to_value(request).expect("cannot serialize request into value")

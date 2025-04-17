@@ -10,7 +10,6 @@ pub struct Content {
     pub sources: BTreeMap<PathBuf, String>,
     pub evm_version: Option<artifacts::EvmVersion>,
     pub optimization_runs: Option<u32>,
-    pub contract_libraries: BTreeMap<String, String>,
 }
 
 impl From<Content> for Vec<SolcInput> {
@@ -20,18 +19,6 @@ impl From<Content> for Vec<SolcInput> {
             settings.optimizer.enabled = Some(true);
             settings.optimizer.runs = Some(optimization_runs as usize);
         }
-
-        if !content.contract_libraries.is_empty() {
-            // we have to know filename for library, but we don't know,
-            // so we assume that every file MAY contain all libraries
-            let libs = content
-                .sources
-                .keys()
-                .map(|filename| (PathBuf::from(filename), content.contract_libraries.clone()))
-                .collect();
-            settings.libraries = artifacts::solc::Libraries { libs };
-        }
-
         settings.evm_version = content.evm_version;
 
         let sources: artifacts::Sources = content
@@ -215,15 +202,13 @@ mod tests {
             sources: sources(&[("source.sol", "pragma")]),
             evm_version: Some(EvmVersion::London),
             optimization_runs: Some(200),
-            contract_libraries: BTreeMap::from([("some_library".into(), "some_address".into())]),
         };
-        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{"source.sol":{"some_library":"some_address"}}}}"#;
+        let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
         test_to_input(multi_part, vec![expected]);
         let multi_part = Content {
             sources: sources(&[("source.sol", "")]),
             evm_version: Some(EvmVersion::SpuriousDragon),
             optimization_runs: None,
-            contract_libraries: BTreeMap::new(),
         };
         let expected = r#"{"language":"Solidity","sources":{"source.sol":{"content":""}},"settings":{"optimizer":{"enabled":false,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers"]}},"evmVersion":"spuriousDragon","libraries":{}}}"#;
         test_to_input(multi_part, vec![expected]);
@@ -239,7 +224,6 @@ mod tests {
             ]),
             evm_version: Some(EvmVersion::London),
             optimization_runs: Some(200),
-            contract_libraries: BTreeMap::new(),
         };
         let expected_solidity = r#"{"language":"Solidity","sources":{"source.sol":{"content":"pragma"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;
         let expected_yul = r#"{"language":"Yul","sources":{".yul":{"content":"object \"A\" {}"},"source2.yul":{"content":"object \"A\" {}"}},"settings":{"optimizer":{"enabled":true,"runs":200},"outputSelection":{"*":{"":["ast"],"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers"]}},"evmVersion":"london","libraries":{}}}"#;

@@ -38,7 +38,8 @@ async fn immutables() {
 
 #[tokio::test]
 async fn libraries_linked_by_compiler() {
-    test_success_multi_part_and_standard_json("libraries_linked_by_compiler").await
+    // we do not support libraries specification in multi_part requests
+    test_success::<TestCaseStandardJson>("libraries_linked_by_compiler").await;
 }
 
 #[tokio::test]
