@@ -156,6 +156,16 @@
             "title": "New accounts",
             "description": "Number of newly added accounts"
         },
+        "new_builder_accounts": {
+            "enabled": false,
+            "title": "New builder accounts",
+            "description": "Number of newly added accounts"
+        },
+        "builder_accounts_growth": {
+            "enabled": false,
+            "title": "Number of builder accounts",
+            "description": "Cumulative account growth over time that deployed at least one contract"
+        },
         "average_txn_fee": {
             "title": "Average transaction fee",
             "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction",

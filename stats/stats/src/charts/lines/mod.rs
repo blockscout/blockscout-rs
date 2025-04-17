@@ -86,6 +86,10 @@ pub use average_gas_price::{
 pub use average_txn_fee::{
     AverageTxnFee, AverageTxnFeeMonthly, AverageTxnFeeWeekly, AverageTxnFeeYearly,
 };
+pub use builder_accounts_growth::{
+    BuilderAccountsGrowth, BuilderAccountsGrowthMonthly, BuilderAccountsGrowthWeekly,
+    BuilderAccountsGrowthYearly,
+};
 pub use contracts_growth::{
     ContractsGrowth, ContractsGrowthMonthly, ContractsGrowthWeekly, ContractsGrowthYearly,
 };
@@ -101,6 +105,10 @@ pub use native_coin_supply::{
 };
 pub use new_accounts::{NewAccounts, NewAccountsMonthly, NewAccountsWeekly, NewAccountsYearly};
 pub use new_blocks::{NewBlocks, NewBlocksMonthly, NewBlocksWeekly, NewBlocksYearly};
+pub use new_builder_accounts::{
+    NewBuilderAccounts, NewBuilderAccountsMonthly, NewBuilderAccountsWeekly,
+    NewBuilderAccountsYearly,
+};
 pub use new_contracts::{
     NewContracts, NewContractsMonthly, NewContractsWeekly, NewContractsYearly,
 };
