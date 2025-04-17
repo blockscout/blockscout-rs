@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use sea_orm::{
     prelude::Expr,
     sea_query::OnConflict,
+    ActiveEnum,
     ActiveModelTrait,
     ActiveValue::{self, NotSet},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
@@ -12,9 +13,7 @@ use sea_orm::{
 };
 use std::{cmp::min, collections::HashMap, sync::Arc, thread, time::Instant};
 use tac_operation_lifecycle_entity::{
-    interval,
-    operation::{self, Column},
-    operation_stage, stage_type, transaction, watermark,
+    interval, operation::{self, Column}, operation_stage, sea_orm_active_enums::StatusEnum, stage_type, transaction, watermark
 };
 use tracing::Instrument;
 use uuid::Uuid;
@@ -85,7 +84,7 @@ struct JoinedRow {
     op_id: String,
     operation_type: Option<String>,
     timestamp: i64,
-    status: i32,
+    status: StatusEnum,
 
     //operation_stage
     stage_id: Option<i32>,
@@ -188,7 +187,7 @@ impl TacDatabase {
             finish: ActiveValue::Set(Self::timestamp_to_naive(to as i64)),
             inserted_at: ActiveValue::Set(now),
             updated_at: ActiveValue::Set(now),
-            status: sea_orm::ActiveValue::Set(EntityStatus::Pending.to_id()),
+            status: sea_orm::ActiveValue::Set(StatusEnum::Pending),
             next_retry: ActiveValue::Set(None),
             retry_count: ActiveValue::Set(0 as i16),
         };
@@ -238,7 +237,7 @@ impl TacDatabase {
                     finish: ActiveValue::Set(finish_naive),
                     inserted_at: ActiveValue::Set(now),
                     updated_at: ActiveValue::Set(now),
-                    status: sea_orm::ActiveValue::Set(EntityStatus::Pending.to_id()),
+                    status: sea_orm::ActiveValue::Set(StatusEnum::Pending),
                     next_retry: ActiveValue::Set(None),
                     retry_count: ActiveValue::Set(0 as i16),
                 }
@@ -338,7 +337,7 @@ impl TacDatabase {
                 id: Set(op.id.clone()),
                 operation_type: Set(None),
                 timestamp: Set(Self::timestamp_to_naive(op.timestamp as i64)),
-                status: Set(EntityStatus::Pending.to_id() as i16),
+                status: Set(StatusEnum::Pending),
                 next_retry: Set(None),
                 retry_count: Set(0), // Initialize retry count
                 inserted_at: Set(now),
@@ -386,10 +385,10 @@ impl TacDatabase {
     pub async fn set_interval_status(
         &self,
         interval_model: &interval::Model,
-        status: EntityStatus,
+        status: &StatusEnum,
     ) -> anyhow::Result<()> {
         let mut interval_active: interval::ActiveModel = interval_model.clone().into();
-        interval_active.status = Set(status.to_id());
+        interval_active.status = Set(status.clone());
 
         // Saving changes
         interval_active
@@ -397,9 +396,9 @@ impl TacDatabase {
             .await
             .map_err(|e| {
                 tracing::error!(
-                    "Failed to update interval {} status to {}: {:?}",
+                    "Failed to update interval {} status to {:?}: {:?}",
                     interval_model.id,
-                    status.to_string(),
+                    status.to_value(),
                     e
                 );
                 anyhow!(e)
@@ -411,7 +410,7 @@ impl TacDatabase {
     pub async fn set_interval_status_by_id(
         &self,
         interval_id: i32,
-        status: EntityStatus,
+        status: &StatusEnum,
     ) -> anyhow::Result<()> {
         // Found record by PK
         match interval::Entity::find_by_id(interval_id)
@@ -423,7 +422,7 @@ impl TacDatabase {
                 let err = anyhow!(
                     "Cannot update interval {} status to {}: not found",
                     interval_id,
-                    status.to_string()
+                    status.to_value()
                 );
                 tracing::error!("{}", err);
                 Err(err)
@@ -434,10 +433,10 @@ impl TacDatabase {
     pub async fn set_operation_status(
         &self,
         operation_model: &operation::Model,
-        status: EntityStatus,
+        status: &StatusEnum,
     ) -> anyhow::Result<()> {
         let mut operation_active: operation::ActiveModel = operation_model.clone().into();
-        operation_active.status = Set(status.to_id() as i16);
+        operation_active.status = Set(status.clone());
 
         // Saving changes
         operation_active
@@ -447,7 +446,7 @@ impl TacDatabase {
                 tracing::error!(
                     "Failed to update operation {} status to {}: {:?}",
                     operation_model.id,
-                    status.to_string(),
+                    status.to_value(),
                     e
                 );
                 anyhow!(e)
@@ -456,7 +455,7 @@ impl TacDatabase {
         tracing::debug!(
             "Successfully updated operation {} status to {}",
             operation_model.id,
-            status.to_string()
+            status.to_value()
         );
         Ok(())
     }
@@ -464,7 +463,7 @@ impl TacDatabase {
     pub async fn set_operation_status_by_id(
         &self,
         op_id: &String,
-        status: EntityStatus,
+        status: &StatusEnum,
     ) -> anyhow::Result<()> {
         // Found record by PK
         match operation::Entity::find_by_id(op_id)
@@ -476,7 +475,7 @@ impl TacDatabase {
                 let err = anyhow!(
                     "Cannot update operation {} status to {}: not found",
                     op_id,
-                    status.to_string()
+                    status.to_value()
                 );
                 tracing::error!("{}", err);
                 Err(err)
@@ -490,7 +489,7 @@ impl TacDatabase {
         conditions: Vec<String>,
         order_by: Option<(&str, OrderDirection)>,
         limit: usize,
-        update_status: EntityStatus,
+        update_status: &StatusEnum,
     ) -> String {
         let order_clause = if let Some((field, direction)) = order_by {
             format!("ORDER BY {} {}", field, direction.sql_order_string())
@@ -507,14 +506,14 @@ impl TacDatabase {
                     FOR UPDATE SKIP LOCKED
                     )
                     UPDATE interval 
-                    SET status = {}
+                    SET status = '{}'::status_enum
                     WHERE id IN (SELECT id FROM selected_intervals)
-                    RETURNING id, start, finish, status, next_retry, retry_count, inserted_at, updated_at
+                    RETURNING id, start, finish, status::status_enum, next_retry, retry_count, inserted_at, updated_at
                     "#,
             conditions.join(" AND "),
             order_clause,
             limit,
-            update_status.to_id(),
+            update_status.to_value(),
         )
     }
 
@@ -524,7 +523,7 @@ impl TacDatabase {
         conditions: Vec<String>,
         order_by: Option<(&str, OrderDirection)>,
         limit: usize,
-        update_status: EntityStatus,
+        update_status: &StatusEnum,
     ) -> String {
         let order_clause = if let Some((field, direction)) = order_by {
             format!("ORDER BY {} {}", field, direction.sql_order_string())
@@ -541,14 +540,14 @@ impl TacDatabase {
                     FOR UPDATE SKIP LOCKED
                     )
                     UPDATE operation 
-                    SET status = {}
+                    SET status = '{}'::status_enum
                     WHERE id IN (SELECT id FROM selected_operations)
                     RETURNING id, timestamp, status, next_retry, retry_count, inserted_at, updated_at
                     "#,
             conditions.join(" AND "),
             order_clause,
             limit,
-            update_status.to_id(),
+            update_status.to_value(),
         )
     }
 
@@ -563,7 +562,7 @@ impl TacDatabase {
         from: Option<u64>,
         to: Option<u64>,
     ) -> anyhow::Result<Vec<interval::Model>> {
-        let mut conditions = vec![format!("status = {}", EntityStatus::Pending.to_id())];
+        let mut conditions = vec![format!("status = '{}'", StatusEnum::Pending.to_value())];
         if let Some(start) = from {
             let start_naive = Self::timestamp_to_naive(start as i64);
             conditions.push(format!("start >= '{}'", start_naive));
@@ -577,7 +576,7 @@ impl TacDatabase {
             conditions,
             Some(("start", order)),
             num,
-            EntityStatus::Processing,
+            &StatusEnum::Processing,
         );
 
         self.query_intervals(&sql)
@@ -587,7 +586,7 @@ impl TacDatabase {
 
     pub async fn query_failed_intervals(&self, num: usize) -> anyhow::Result<Vec<interval::Model>> {
         let conditions = vec![
-            format!("status = {}", EntityStatus::Pending.to_id()),
+            format!("status = '{}'", StatusEnum::Pending.to_value()),
             format!("next_retry IS NOT NULL"),
             format!("next_retry < '{}'", Self::timestamp_to_naive(chrono::Utc::now().timestamp())),
         ];
@@ -596,7 +595,7 @@ impl TacDatabase {
             conditions,
             Some(("next_retry", OrderDirection::EarliestFirst)),
             num,
-            EntityStatus::Processing,
+            &StatusEnum::Processing,
         );
 
         let span_id = Uuid::new_v4();
@@ -611,6 +610,8 @@ impl TacDatabase {
     async fn query_intervals(&self, sql: &String) -> anyhow::Result<Vec<interval::Model>> {
         // Generate a unique transaction ID for tracking
         let tx_id = Uuid::new_v4();
+
+        tracing::info!("SQL: {}", sql);
 
         // Create the statement
         let update_stmt =
@@ -644,13 +645,13 @@ impl TacDatabase {
         num: usize,
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
-        let conditions = vec![format!("status = {}", EntityStatus::Pending.to_id())];
+        let conditions = vec![format!("status = '{}'::status_enum", StatusEnum::Pending.to_value())];
 
         let sql = self.build_operation_query(
             conditions,
             Some(("timestamp", order)),
             num,
-            EntityStatus::Processing,
+            &StatusEnum::Processing,
         );
 
         self.query_operations(&sql)
@@ -664,7 +665,7 @@ impl TacDatabase {
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
         let conditions = vec![
-            format!("status = {}", EntityStatus::Pending.to_id()),
+            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
             format!("next_retry IS NOT NULL"),
             format!("next_retry < '{}'", Self::timestamp_to_naive(chrono::Utc::now().timestamp())),
         ];
@@ -673,7 +674,7 @@ impl TacDatabase {
             conditions,
             Some(("next_retry", order)),
             num,
-            EntityStatus::Processing,
+            &StatusEnum::Processing,
         );
 
         let span_id = Uuid::new_v4();
@@ -759,7 +760,7 @@ impl TacDatabase {
         // Update operation type and status
         let mut operation_model: operation::ActiveModel = operation.clone().into();
         if operation_data.operation_type.is_finalized() {
-            operation_model.status = Set(EntityStatus::Finalized.to_id().into());
+            operation_model.status = Set(StatusEnum::Completed);
             // assume completed status
         }
         operation_model.operation_type = Set(Some(operation_data.operation_type.to_string()));
@@ -878,7 +879,7 @@ impl TacDatabase {
         interval_model.next_retry =
             Set(Some(chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec)));
         interval_model.retry_count = Set(interval.retry_count + 1);
-        interval_model.status = Set(EntityStatus::Pending.to_id()); // Reset status to pending
+        interval_model.status = Set(StatusEnum::Pending); // Reset status to pending
         interval_model.updated_at = Set(now);
 
         match interval_model.update(self.db.as_ref()).await {
@@ -902,7 +903,7 @@ impl TacDatabase {
         operation_model.next_retry =
             Set(Some(chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec)));
         operation_model.retry_count = Set(operation.retry_count + 1);
-        operation_model.status = Set(EntityStatus::Pending.to_id() as i16); // Reset status to pending
+        operation_model.status = Set(StatusEnum::Pending); // Reset status to pending
         operation_model.updated_at = Set(now);
 
         match operation_model.update(self.db.as_ref()).await {
@@ -939,11 +940,11 @@ impl TacDatabase {
                 )
                 SELECT * FROM interval_stats
                 "#,
-                EntityStatus::Pending.to_id(),
-                EntityStatus::Processing.to_id(),
-                EntityStatus::Finalized.to_id(),
-                EntityStatus::Finalized.to_id(),
-                EntityStatus::Finalized.to_id(),
+                StatusEnum::Pending.to_value(),
+                StatusEnum::Processing.to_value(),
+                StatusEnum::Completed.to_value(),
+                StatusEnum::Completed.to_value(),
+                StatusEnum::Completed.to_value(),
             ),
         );
     
@@ -998,10 +999,10 @@ impl TacDatabase {
                 )
                 SELECT * FROM operation_stats
                 "#,
-                EntityStatus::Pending.to_id(),
-                EntityStatus::Processing.to_id(),
-                EntityStatus::Finalized.to_id(),
-                EntityStatus::Finalized.to_id(),
+                StatusEnum::Pending.to_value(),
+                StatusEnum::Processing.to_value(),
+                StatusEnum::Completed.to_value(),
+                StatusEnum::Completed.to_value(),
             ),
         );
     
@@ -1120,7 +1121,7 @@ impl TacDatabase {
             operation_type: op_row.operation_type.clone(),
             timestamp: Self::timestamp_to_naive(op_row.timestamp),
             next_retry: None,
-            status: op_row.status as i16,
+            status: op_row.status.clone(),
             retry_count: 0,
             inserted_at: now,
             updated_at: now,
@@ -1194,9 +1195,9 @@ impl TacDatabase {
         let result = interval::Entity::update_many()
             .col_expr(
                 interval::Column::Status,
-                Expr::value(EntityStatus::Pending.to_id()),
+                StatusEnum::Pending.as_enum(),
             )
-            .filter(interval::Column::Status.eq(EntityStatus::Processing.to_id()))
+            .filter(interval::Column::Status.eq(StatusEnum::Processing))
             .exec(self.db.as_ref())
             .await?;
 
@@ -1207,9 +1208,9 @@ impl TacDatabase {
         let result = operation::Entity::update_many()
             .col_expr(
                 operation::Column::Status,
-                Expr::value(EntityStatus::Pending.to_id()),
+                StatusEnum::Pending.as_enum(),
             )
-            .filter(operation::Column::Status.eq(EntityStatus::Processing.to_id()))
+            .filter(operation::Column::Status.eq(StatusEnum::Processing))
             .exec(self.db.as_ref())
             .await?;
 

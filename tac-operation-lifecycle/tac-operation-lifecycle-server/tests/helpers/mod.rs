@@ -50,7 +50,7 @@ mod tests {
     use super::*;
     use migration::sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
     use sea_orm::Database;
-    use tac_operation_lifecycle_entity::interval;
+    use tac_operation_lifecycle_entity::{interval, sea_orm_active_enums::StatusEnum};
     use tac_operation_lifecycle_logic::{
         client::Client, database::OrderDirection, settings::IndexerSettings, Indexer, IndexerJob,
     };
@@ -205,7 +205,7 @@ mod tests {
                                 .await.unwrap();
 
                             if let Some(interval) = intervals {
-                                assert_eq!(interval.status, 1,
+                                assert_eq!(interval.status, StatusEnum::Processing,
                                     "Interval with start={}, end={} not marked as in-progress",
                                     start, end);
                             } else {
@@ -420,7 +420,7 @@ mod tests {
                                     .unwrap()
                                     .unwrap();
 
-                                assert_eq!(interval.status, 2, "Interval should be marked as processed");
+                                assert_eq!(interval.status, StatusEnum::Completed, "Interval should be marked as processed");
                                 interval_processed = true;
                             }
                         },

@@ -14,8 +14,8 @@ use client::{
     models::profiling::{BlockchainType, OperationType, StageType},
     Client,
 };
-use database::{EntityStatus, OrderDirection, TacDatabase};
-use tac_operation_lifecycle_entity::{interval, operation};
+use database::{OrderDirection, TacDatabase};
+use tac_operation_lifecycle_entity::{interval, operation, sea_orm_active_enums::StatusEnum};
 
 pub mod client;
 pub mod database;
@@ -432,7 +432,7 @@ impl Indexer {
         }
 
         self.database
-            .set_interval_status(&job.interval, EntityStatus::Finalized)
+            .set_interval_status(&job.interval, &StatusEnum::Completed)
             .await?;
 
         tracing::debug!(
@@ -468,7 +468,7 @@ impl Indexer {
                             if operation_data.operation_type != OperationType::Pending {
                                 let _ = (self
                                     .database
-                                    .set_operation_status(&job.operation, EntityStatus::Finalized))
+                                    .set_operation_status(&job.operation, &StatusEnum::Completed))
                                 .await;
                             } else {
                                 // TODO: Add operation to the fast-retry queue
@@ -535,7 +535,7 @@ impl Indexer {
                 updated_operations
             );
         }
-
+        
         // Create streams
         let realtime = self.realtime_stream();
         let realtime_intervals = self.interval_stream(

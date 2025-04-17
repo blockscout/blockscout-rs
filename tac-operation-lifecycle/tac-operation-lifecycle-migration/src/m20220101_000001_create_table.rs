@@ -1,11 +1,37 @@
+use sea_orm::{EnumIter, Iterable};
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
+#[derive(DeriveIden)]
+struct StatusEnum;
+
+#[derive(DeriveIden, EnumIter)]
+enum StatusVariants {
+    #[sea_orm(iden = "pending")]
+    Pending,
+    #[sea_orm(iden = "processing")]
+    Processing,
+    #[sea_orm(iden = "completed")]
+    Completed,
+    #[sea_orm(iden = "failed")]
+    Failed,
+}
+
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // Creating status type for `interval` and `operation` tables
+        manager
+            .create_type(
+                extension::postgres::Type::create()
+                    .as_enum(StatusEnum)
+                    .values(StatusVariants::iter())
+                    .to_owned()
+            )
+            .await?;
+
         manager
             .create_table(
                 Table::create()
@@ -45,7 +71,7 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(ColumnDef::new(Operation::NextRetry).timestamp().null())
-                    .col(ColumnDef::new(Operation::Status).small_unsigned().not_null())
+                    .col(ColumnDef::new(Interval::Status).custom(Alias::new("status_enum")).not_null())
                     .col(ColumnDef::new(Operation::RetryCount).small_unsigned().not_null())
                     .col(ColumnDef::new(Operation::InsertedAt).timestamp().not_null())
                     .col(ColumnDef::new(Operation::UpdatedAt).timestamp().not_null())
@@ -102,7 +128,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Interval::Finish).timestamp().not_null())
                     .col(ColumnDef::new(Interval::InsertedAt).timestamp().not_null())
                     .col(ColumnDef::new(Interval::UpdatedAt).timestamp().not_null())
-                    .col(ColumnDef::new(Interval::Status).small_unsigned().not_null())
+                    .col(ColumnDef::new(Interval::Status).custom(Alias::new("status_enum")).not_null())
                     .col(ColumnDef::new(Interval::NextRetry).timestamp().null())
                     .col(
                         ColumnDef::new(Interval::RetryCount)
@@ -306,6 +332,10 @@ impl MigrationTrait for Migration {
         manager
             .drop_table(Table::drop().table(Interval::Table).to_owned())
             .await?;
+        manager
+            .drop_type(extension::postgres::Type::drop().if_exists().name(Alias::new("status_enum")).to_owned())
+            .await?;
+
         Ok(())
     }
 }
