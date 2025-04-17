@@ -530,11 +530,6 @@ definitions:
         title: |-
           / If present, optimizations are enabled with specified number of runs,
           / otherwise optimizations are disabled
-      libraries:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a library name to its address
   v2BatchVerifySolidityStandardJsonRequest:
     type: object
     properties:
@@ -767,11 +762,6 @@ definitions:
         additionalProperties:
           type: string
         title: / Map from a source file name to the actual source code
-      libraries:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a library name to its address
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers
