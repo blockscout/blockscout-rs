@@ -8,7 +8,7 @@ async fn test_startup_works() {
     let db = helpers::init_db("startup_works").await;
     let db_url = db.db_url();
     let base =
-        helpers::init_tac_operation_lifecycle_server(db_url, "startup_works", |x| x, 0).await;
+        helpers::init_tac_operation_lifecycle_server(db_url, "startup_works", |x| x).await;
     let response: serde_json::Value = test_server::send_get_request(&base, "/health").await;
     assert_eq!(response, serde_json::json!({"status": "SERVING"}));
 }

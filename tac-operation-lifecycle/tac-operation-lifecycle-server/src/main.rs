@@ -17,11 +17,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let client = Arc::new(Mutex::new(Client::new(settings.rpc.clone())));
 
     let mut indexer = Indexer::new(settings.clone().indexer.unwrap(), db.clone()).await?;
-    let realtime_boundary = indexer.get_realtime_boundary();
 
     tokio::spawn(async move {
         indexer.start(client).await.unwrap();
     });
 
-    run(settings, db.clone(), realtime_boundary).await
+    run(settings, db.clone()).await
 }

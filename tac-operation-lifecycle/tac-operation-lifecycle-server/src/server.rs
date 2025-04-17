@@ -40,13 +40,12 @@ impl launcher::HttpRouter for Router {
 pub async fn run(
     settings: Settings,
     db: Arc<TacDatabase>,
-    realtime_boundary: u64,
 ) -> Result<(), anyhow::Error> {
     println!("running server");
     tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
-    let stat = Arc::new(StatisticService::new(db.clone(), realtime_boundary));
+    let stat = Arc::new(StatisticService::new(db.clone()));
     let operations = Arc::new(OperationsService::new(db.clone()));
 
     // TODO: init services here

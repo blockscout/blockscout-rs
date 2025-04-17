@@ -6,15 +6,11 @@ use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::{tac
 
 pub struct StatisticService {
     db: Arc<TacDatabase>,
-    realtime_boundary: u64,
 }
 
 impl StatisticService {
-    pub fn new(db: Arc<TacDatabase>, realtime_boundary: u64) -> Self {
-        Self {
-            db,
-            realtime_boundary,
-        }
+    pub fn new(db: Arc<TacDatabase>) -> Self {
+        Self { db }
     }
 }
 
