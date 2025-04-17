@@ -1,0 +1,38 @@
+[package]
+name = "tac-operation-lifecycle-logic"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+tac-operation-lifecycle-entity = { path = "../tac-operation-lifecycle-entity" }
+anyhow = { workspace = true }
+blockscout-display-bytes = { workspace = true }
+tracing = { workspace = true }
+
+sea-orm = { workspace = true, features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "macros",
+    "postgres-array",
+] }
+
+
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_with = { workspace = true }
+serde_json = { workspace = true }
+futures = { workspace = true }
+async-stream = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"]}
+tower = { workspace = true, features = ["limit"] }
+uuid = { workspace = true, features = ["v4", "fast-rng"] }
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = [ 
+    "test-database","database-1"
+] }
+pretty_assertions = { workspace = true }
+tac-operation-lifecycle-migration = {path = "../tac-operation-lifecycle-migration"}
