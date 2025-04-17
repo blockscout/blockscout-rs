@@ -708,11 +708,6 @@ definitions:
         additionalProperties:
           type: string
         title: / Map from a source file name to the actual source code
-      libraries:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a library name to its address
   v2VerifierAllianceBatchImportSolidityStandardJsonRequest:
     type: object
     properties:
@@ -812,11 +807,6 @@ definitions:
         additionalProperties:
           type: string
         title: / Map from a source file name to the actual source code
-      libraries:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a library name to its address
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers

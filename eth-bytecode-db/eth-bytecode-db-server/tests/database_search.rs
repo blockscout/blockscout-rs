@@ -38,7 +38,6 @@ fn default_verify_request() -> eth_bytecode_db_v2::VerifySolidityMultiPartReques
         evm_version: None,
         optimization_runs: None,
         source_files: Default::default(),
-        libraries: Default::default(),
         metadata: None,
     }
 }

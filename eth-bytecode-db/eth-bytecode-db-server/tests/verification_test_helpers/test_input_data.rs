@@ -32,6 +32,7 @@ impl TestInputData {
                 creation_input_artifacts: source.creation_input_artifacts.clone(),
                 deployed_bytecode_artifacts: source.deployed_bytecode_artifacts.clone(),
                 is_blueprint: source.is_blueprint,
+                libraries: Default::default(),
             }),
             extra_data: Some(extra_data),
             post_action_responses: None,
