@@ -10,13 +10,13 @@ use crate::{
     types,
 };
 use anyhow::Context;
-use smart_contract_verifier::{vyper, Compilers, VyperClient, VyperCompiler};
+use smart_contract_verifier::{vyper, EvmCompilersPool, VyperCompiler};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
 pub struct VyperVerifierService {
-    client: Arc<VyperClient>,
+    compilers: Arc<EvmCompilersPool<VyperCompiler>>,
 }
 
 impl VyperVerifierService {
@@ -32,13 +32,12 @@ impl VyperVerifierService {
         )
         .await
         .context("vyper fetcher initialization")?;
-        let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
+        let compilers: EvmCompilersPool<VyperCompiler> =
+            EvmCompilersPool::new(fetcher, compilers_threads_semaphore);
         compilers.load_from_dir(&settings.compilers_dir).await;
 
-        let client = VyperClient::new(compilers);
-
         Ok(Self {
-            client: Arc::new(client),
+            compilers: Arc::new(compilers),
         })
     }
 }
@@ -69,7 +68,7 @@ impl VyperVerifier for VyperVerifierService {
         let verification_request =
             common::process_solo_verification_request_conversion!(maybe_verification_request);
 
-        let result = vyper::multi_part::verify(self.client.clone(), verification_request).await;
+        let result = vyper::multi_part::verify(&self.compilers, verification_request).await;
 
         let verify_response = match result {
             Ok(value) => types::verification_result::process_verification_result(value)?,
@@ -110,7 +109,7 @@ impl VyperVerifier for VyperVerifierService {
         let verification_request =
             common::process_solo_verification_request_conversion!(maybe_verification_request);
 
-        let result = vyper::standard_json::verify(self.client.clone(), verification_request).await;
+        let result = vyper::standard_json::verify(&self.compilers, verification_request).await;
 
         let verify_response = match result {
             Ok(value) => types::verification_result::process_verification_result(value)?,
@@ -130,9 +129,9 @@ impl VyperVerifier for VyperVerifierService {
         &self,
         _request: Request<ListCompilerVersionsRequest>,
     ) -> Result<Response<ListCompilerVersionsResponse>, Status> {
-        let compiler_versions = self.client.compilers().all_versions_sorted_str();
+        let compiler_versions = self.compilers.all_versions();
         Ok(Response::new(ListCompilerVersionsResponse {
-            compiler_versions,
+            compiler_versions: common::versions_to_sorted_string(compiler_versions),
         }))
     }
 }

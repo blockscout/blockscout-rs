@@ -1,40 +1,69 @@
 //! Module for compiling solidity contracts using cmd args.
-//! ethers_solc compiler uses --standard-json method of input,
+//! foundry_compilers compiler uses --standard-json method of input,
 //! because it's very easy and convient, however --standard-json flag
 //! was added only since 0.4.10 version. So, to compile older versions
 //! we need convert functions for CompilerInput and CompilerOutput.
 
-use ethers_solc::{
-    artifacts::Severity,
+use super::solc_compiler::SolcInput;
+use foundry_compilers_new::{
+    artifacts::solc,
     error::{SolcError, SolcIoError},
-    CompilerOutput,
 };
-use foundry_compilers::CompilerInput;
 use std::{collections::BTreeMap, path::Path, process::Stdio};
 use tokio::process::Command;
 
-mod serde_helpers {
-    use serde::de;
+pub async fn compile_using_cli(
+    compiler_path: &Path,
+    input: &SolcInput,
+) -> Result<solc::CompilerOutput, SolcError> {
+    let output = {
+        let input = &input.0;
+        let input_args = types::InputArgs::from(input);
+        let input_files = types::InputFiles::try_from_compiler_input(input).await?;
+        Command::new(compiler_path)
+            .args(input_args.build())
+            .args(input_files.build()?)
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .output()
+            .await
+            .map_err(|err| SolcError::Io(SolcIoError::new(err, compiler_path)))?
+    };
 
-    pub fn deserialize_abi_string<'de, D>(
-        deserializer: D,
-    ) -> Result<Vec<serde_json::Value>, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
-        let s: String = de::Deserialize::deserialize(deserializer)?;
-        serde_json::from_str(&s).map_err(de::Error::custom)
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let compiler_output = if output.stderr.is_empty() {
+        let output_json: types::OutputJson = serde_json::from_slice(output.stdout.as_slice())?;
+        solc::CompilerOutput::try_from(output_json)?
+    } else {
+        solc::CompilerOutput {
+            errors: vec![compiler_error(stderr)],
+            sources: BTreeMap::new(),
+            contracts: BTreeMap::new(),
+        }
+    };
+    Ok(compiler_output)
+}
+
+fn compiler_error(message: String) -> solc::error::Error {
+    solc::Error {
+        source_location: None,
+        secondary_source_locations: vec![],
+        r#type: "".to_string(),
+        component: "".to_string(),
+        severity: solc::Severity::Error,
+        error_code: None,
+        message,
+        formatted_message: None,
     }
 }
 
 mod types {
     use super::serde_helpers;
-    use ethers_solc::{artifacts::Contract, error::SolcError, CompilerOutput};
-    use foundry_compilers::{artifacts::Libraries, CompilerInput};
+    use foundry_compilers_new::{artifacts::solc, error::SolcError};
     use serde::{Deserialize, Serialize};
     use std::{
         collections::{BTreeMap, HashMap},
-        path::PathBuf,
+        path::{Component, Path, PathBuf},
     };
     use tempfile::TempDir;
     use tokio::io::AsyncWriteExt;
@@ -46,7 +75,7 @@ mod types {
         pub libs: BTreeMap<String, String>,
     }
 
-    fn merge_libs(libraries: Libraries) -> BTreeMap<String, String> {
+    fn merge_libs(libraries: solc::Libraries) -> BTreeMap<String, String> {
         let mut result = BTreeMap::new();
         libraries
             .libs
@@ -55,15 +84,14 @@ mod types {
         result
     }
 
-    impl TryFrom<&CompilerInput> for InputArgs {
-        type Error = SolcError;
-        fn try_from(input: &CompilerInput) -> Result<Self, Self::Error> {
+    impl From<&solc::SolcInput> for InputArgs {
+        fn from(input: &solc::SolcInput) -> Self {
             let libs = merge_libs(input.settings.libraries.clone());
-            Ok(InputArgs {
+            InputArgs {
                 optimize: input.settings.optimizer.enabled.unwrap_or(false),
                 optimize_runs: input.settings.optimizer.runs,
                 libs,
-            })
+            }
         }
     }
 
@@ -101,13 +129,23 @@ mod types {
     }
 
     impl InputFiles {
-        pub async fn try_from_compiler_input(input: &CompilerInput) -> Result<Self, SolcError> {
+        pub async fn try_from_compiler_input(input: &solc::SolcInput) -> Result<Self, SolcError> {
             if !input.sources.is_empty() {
                 let files_dir =
                     tempfile::tempdir().map_err(|e| SolcError::Message(e.to_string()))?;
                 let mut file_names = Vec::new();
                 for (name, source) in input.sources.iter() {
                     let file_path = files_dir.path().join(name);
+
+                    // we don't allow any parent dir components,
+                    // as otherwise user may create something outside temporary files_dir
+                    if Self::contains_parent_dir(&file_path) {
+                        return Err(SolcError::Message(format!(
+                            "{} contains parent dir component",
+                            file_path.to_string_lossy()
+                        )));
+                    }
+
                     // name itself may contain some paths inside
                     let prefix = file_path.parent();
                     if let Some(prefix) = prefix {
@@ -142,6 +180,11 @@ mod types {
                     SolcError::Message("temp dir with contracts doesn't exist".to_string())
                 })
         }
+
+        fn contains_parent_dir(path: &Path) -> bool {
+            path.components()
+                .any(|comp| matches!(comp, Component::ParentDir))
+        }
     }
 
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -163,7 +206,7 @@ mod types {
         }
     }
 
-    impl TryFrom<OutputContract> for Contract {
+    impl TryFrom<OutputContract> for solc::Contract {
         type Error = SolcError;
 
         fn try_from(output_contract: OutputContract) -> Result<Self, Self::Error> {
@@ -178,7 +221,7 @@ mod types {
                     },
                 },
             });
-            let contract: Contract = serde_json::from_value(contract)?;
+            let contract: solc::Contract = serde_json::from_value(contract)?;
             Ok(contract)
         }
     }
@@ -194,7 +237,7 @@ mod types {
             .unwrap_or(name)
     }
 
-    impl TryFrom<OutputJson> for CompilerOutput {
+    impl TryFrom<OutputJson> for solc::CompilerOutput {
         type Error = SolcError;
 
         fn try_from(output_json: OutputJson) -> Result<Self, Self::Error> {
@@ -205,7 +248,7 @@ mod types {
                     let name = remove_path_from_contract_name(name);
                     output.try_into().map(|contract| (name, contract))
                 })
-                .collect::<Result<HashMap<String, Contract>, _>>()?;
+                .collect::<Result<HashMap<String, solc::Contract>, _>>()?;
             let contracts_raw = serde_json::to_value(&contracts)?;
             let compiler_output = serde_json::json!(
                 {
@@ -221,56 +264,25 @@ mod types {
     }
 }
 
-fn compiler_error(message: String) -> ethers_solc::artifacts::Error {
-    ethers_solc::artifacts::Error {
-        source_location: None,
-        secondary_source_locations: vec![],
-        r#type: "".to_string(),
-        component: "".to_string(),
-        severity: Severity::Error,
-        error_code: None,
-        message,
-        formatted_message: None,
+mod serde_helpers {
+    use serde::de;
+
+    pub fn deserialize_abi_string<'de, D>(
+        deserializer: D,
+    ) -> Result<Vec<serde_json::Value>, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        let s: String = de::Deserialize::deserialize(deserializer)?;
+        serde_json::from_str(&s).map_err(de::Error::custom)
     }
-}
-
-pub async fn compile_using_cli(
-    solc: &Path,
-    input: &CompilerInput,
-) -> Result<CompilerOutput, SolcError> {
-    let output = {
-        let input_args = types::InputArgs::try_from(input)?;
-        let input_files = types::InputFiles::try_from_compiler_input(input).await?;
-        Command::new(solc)
-            .args(input_args.build())
-            .args(input_files.build()?)
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .output()
-            .await
-            .map_err(|err| SolcError::Io(SolcIoError::new(err, solc)))?
-    };
-
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let compiler_output = if output.stderr.is_empty() {
-        let output_json: types::OutputJson = serde_json::from_slice(output.stdout.as_slice())?;
-        CompilerOutput::try_from(output_json)?
-    } else {
-        CompilerOutput {
-            errors: vec![compiler_error(stderr)],
-            sources: BTreeMap::new(),
-            contracts: BTreeMap::new(),
-        }
-    };
-    Ok(compiler_output)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::compiler::{DetailedVersion, Fetcher, ListFetcher};
-    use ethers_solc::Artifact;
-    use foundry_compilers::artifacts::{Settings, Source};
+    use foundry_compilers_new::Artifact;
     use hex::ToHex;
     use pretty_assertions::assert_eq;
     use std::{collections::HashSet, env::temp_dir, path::PathBuf, str::FromStr};
@@ -318,17 +330,17 @@ mod tests {
     {
         "contracts": {
             "A": {
-                "abi": "[{\"constant\":false,\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"}]",
+                "abi": "[{\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
                 "bin": "6060604052346000575b6096806100176000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634815918114603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b905600a165627a7a7230582062ac15c74e3af0aec92b47f64d9c8909939b731732d5ee4163c6ed3af70806550029",
                 "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634815918114603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b905600a165627a7a7230582062ac15c74e3af0aec92b47f64d9c8909939b731732d5ee4163c6ed3af70806550029"
             },
             "B": {
-                "abi": "[{\"constant\":false,\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"}]",
+                "abi": "[{\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
                 "bin": "6060604052346000575b6097806100176000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063f3d33cf414603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b6000650712e7ae7c7190505b905600a165627a7a723058201d98c5b92f01dbead603c6c3b4c7f04520fa048e1eacf0ce2dad63a406019c710029",
                 "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063f3d33cf414603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b6000650712e7ae7c7190505b905600a165627a7a723058201d98c5b92f01dbead603c6c3b4c7f04520fa048e1eacf0ce2dad63a406019c710029"
             },
             "Main": {
-                "abi": "[{\"constant\":false,\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"get\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"type\":\"function\"}]",
+                "abi": "[{\"inputs\":[],\"name\":\"get\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
                 "bin": "606060405234610000575b61010e806100196000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063481591811460505780636d4ce63c146070578063f3d33cf4146090575b6000565b34600057605a60b0565b6040518082815260200191505060405180910390f35b34600057607a60be565b6040518082815260200191505060405180910390f35b34600057609a60d3565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b90565b600060c660d3565b60cc60b0565b0190505b90565b6000650712e7ae7c7190505b905600a165627a7a72305820a80a9599b36625e94a3eadfd5c31475a2c507be6d1a9fa9a35e9cd4c54bce1390029",
                 "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063481591811460505780636d4ce63c146070578063f3d33cf4146090575b6000565b34600057605a60b0565b6040518082815260200191505060405180910390f35b34600057607a60be565b6040518082815260200191505060405180910390f35b34600057609a60d3565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b90565b600060c660d3565b60cc60b0565b0190505b90565b6000650712e7ae7c7190505b905600a165627a7a72305820a80a9599b36625e94a3eadfd5c31475a2c507be6d1a9fa9a35e9cd4c54bce1390029"
             }
@@ -374,9 +386,9 @@ mod tests {
 
     #[test]
     fn correct_input_args() {
-        let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
+        let input: SolcInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
 
-        let input_args = types::InputArgs::try_from(&input).expect("failed to convert args");
+        let input_args = types::InputArgs::from(&input.0);
         let expected_args = types::InputArgs {
             optimize: false,
             optimize_runs: Some(200),
@@ -407,9 +419,9 @@ mod tests {
 
     #[tokio::test]
     async fn correct_input_files() {
-        let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
+        let input: SolcInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
 
-        let input_files = types::InputFiles::try_from_compiler_input(&input)
+        let input_files = types::InputFiles::try_from_compiler_input(&input.0)
             .await
             .expect("failed to convert files");
         assert!(input_files.files_dir.path().exists());
@@ -423,14 +435,34 @@ mod tests {
         assert_eq!(string_args, &expected_files);
     }
 
+    #[tokio::test]
+    async fn fails_if_parent_directory_component_exists() {
+        let mut input: SolcInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
+
+        let file = input.0.sources.0.keys().next().unwrap();
+        let content = input.0.sources.0.get(file).unwrap();
+
+        let mut traversed_file = PathBuf::from("a/../");
+        traversed_file.push(file);
+        input
+            .0
+            .sources
+            .0
+            .insert(traversed_file.clone(), content.clone());
+
+        types::InputFiles::try_from_compiler_input(&input.0)
+            .await
+            .expect_err("should fail");
+    }
+
     #[test]
     fn correct_output() {
         let output_json: types::OutputJson = serde_json::from_str(DEFAULT_COMPILER_OUTPUT).unwrap();
-        let compiler_output =
-            CompilerOutput::try_from(output_json.clone()).expect("failed to convert output json");
+        let compiler_output = solc::CompilerOutput::try_from(output_json.clone())
+            .expect("failed to convert output json");
         assert_eq!(compiler_output.contracts.len(), 1);
         let filename = compiler_output.contracts.iter().next().unwrap().0;
-        assert_eq!(filename, "");
+        assert_eq!(filename, &PathBuf::from(""));
 
         for (name, contract) in compiler_output.contracts_iter() {
             let initial_contract = output_json
@@ -479,11 +511,11 @@ mod tests {
         fetcher
             .fetch(ver)
             .await
-            .expect("cannot fetch 0.4.8 version")
+            .unwrap_or_else(|err| panic!("cannot fetch {ver} version: {err}"))
     }
 
-    fn source(file: &str, content: &str) -> (PathBuf, Source) {
-        (file.into(), Source::new(content))
+    fn source(file: &str, content: &str) -> (PathBuf, solc::Source) {
+        (file.into(), solc::Source::new(content))
     }
 
     #[tokio::test]
@@ -492,8 +524,8 @@ mod tests {
             let version = DetailedVersion::from_str(ver).expect("valid version");
             let solc = get_solc(&version).await;
 
-            let input: CompilerInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
-            let output: CompilerOutput = compile_using_cli(&solc, &input)
+            let input: SolcInput = serde_json::from_str(DEFAULT_COMPILER_INPUT).unwrap();
+            let output: solc::CompilerOutput = compile_using_cli(&solc, &input)
                 .await
                 .unwrap_or_else(|_| panic!("failed to compile contracts with {ver}"));
             assert!(
@@ -510,22 +542,22 @@ mod tests {
                 BTreeMap::from_iter([source("main.sol", "")]),
                 BTreeMap::from_iter([source("main.sol", "some string")]),
             ] {
-                let input = CompilerInput {
-                    language: "Solidity".into(),
-                    sources,
-                    settings: Settings::default(),
-                };
-                let output: CompilerOutput = compile_using_cli(&solc, &input)
+                let input = SolcInput(solc::SolcInput {
+                    language: solc::SolcLanguage::Solidity,
+                    sources: solc::Sources(sources),
+                    settings: solc::Settings::default(),
+                });
+                let output: solc::CompilerOutput = compile_using_cli(&solc, &input)
                     .await
                     .expect("shouldn't return Err, but Ok with errors field");
                 assert!(output.has_error());
             }
 
-            let input = CompilerInput {
-                language: "Solidity".into(),
-                sources: BTreeMap::new(),
-                settings: Settings::default(),
-            };
+            let input = SolcInput(solc::SolcInput {
+                language: solc::SolcLanguage::Solidity,
+                sources: solc::Sources(BTreeMap::new()),
+                settings: solc::Settings::default(),
+            });
             compile_using_cli(&solc, &input)
                 .await
                 .expect_err("should not compile empty files");

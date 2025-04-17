@@ -1,10 +1,6 @@
 use blockscout_display_bytes::ToHex;
 use serde_json::Value;
-pub use smart_contract_verifier::verify_new::Error;
-use smart_contract_verifier::{
-    verify_new::{VerificationResult, VerifyingContract},
-    Language,
-};
+use smart_contract_verifier::{Error, Language, VerificationResult, VerifyingContract};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::{
     v2, v2::verify_response::extra_data,
 };

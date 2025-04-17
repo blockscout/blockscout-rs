@@ -1,7 +1,5 @@
-use crate::{
-    verify_new::{evm_compilers, Error},
-    DetailedVersion, Language, Version,
-};
+use super::{evm_compilers, Error};
+use crate::{DetailedVersion, Language, Version};
 use anyhow::Context;
 use async_trait::async_trait;
 use foundry_compilers_new::artifacts;

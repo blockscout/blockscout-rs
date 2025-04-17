@@ -1,7 +1,6 @@
-use super::Error;
+use super::{compiler_output::SharedCompilerOutput, Error};
 use crate::{
-    compiler::DownloadCache, verify_new::compiler_output::SharedCompilerOutput, DetailedVersion,
-    Fetcher, Language,
+    compiler::DownloadCache, metrics, metrics::GuardedGauge, DetailedVersion, Fetcher, Language,
 };
 use anyhow::Context;
 use async_trait::async_trait;
@@ -14,6 +13,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Semaphore;
+use tracing::instrument;
 
 #[async_trait]
 pub trait EvmCompiler {
@@ -48,6 +48,7 @@ pub trait CompilationError:
     fn formatted_message(&self) -> String;
 }
 
+#[derive(Clone, Debug)]
 pub struct CompileResult<CompilerOutput> {
     pub output: CompilerOutput,
     pub raw: Value,
@@ -73,6 +74,19 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
         }
     }
 
+    pub async fn load_from_dir(&self, dir: &PathBuf) {
+        match self.cache.load_from_dir(dir).await {
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(
+                    "cannot load local compilers from `{}` dir: {}",
+                    dir.to_string_lossy(),
+                    e
+                )
+            }
+        }
+    }
+
     pub fn normalize_compiler_version(
         &self,
         to_normalize: &DetailedVersion,
@@ -94,6 +108,7 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
         }
     }
 
+    #[instrument(name = "fetch_compiler", skip(self), level = "debug")]
     pub async fn fetch_compiler(&self, version: &DetailedVersion) -> Result<PathBuf, Error> {
         let path = self
             .cache
@@ -105,25 +120,44 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
         Ok(path)
     }
 
+    #[instrument(name = "compile", skip(self, input), level = "debug")]
     pub async fn compile(
         &self,
         compiler_path: &Path,
         compiler_version: &DetailedVersion,
         input: &C::CompilerInput,
     ) -> Result<CompileResult<SharedCompilerOutput>, Error> {
-        let _permit = self
-            .threads_semaphore
-            .acquire()
-            .await
-            .context("acquiring lock")?;
+        let raw = {
+            let span = tracing::debug_span!(
+                "compile contract with foundry-compilers",
+                ver = compiler_version.to_string()
+            );
+            let _span_guard = span.enter();
 
-        let raw = C::compile(compiler_path, compiler_version, input).await?;
+            let _permit = {
+                let _wait_timer_guard = metrics::COMPILATION_QUEUE_TIME.start_timer();
+                let _wait_gauge_guard = metrics::COMPILATIONS_IN_QUEUE.guarded_inc();
+                self.threads_semaphore
+                    .acquire()
+                    .await
+                    .context("acquiring lock")?
+            };
+
+            let _compile_timer_guard = metrics::COMPILE_TIME.start_timer();
+            let _compile_gauge_guard = metrics::COMPILATIONS_IN_FLIGHT.guarded_inc();
+
+            C::compile(compiler_path, compiler_version, input).await?
+        };
 
         validate_no_errors::<C::CompilationError>(&raw)?;
         let output: SharedCompilerOutput =
             serde_path_to_error::deserialize(&raw).context("deserializing compiler output")?;
 
         Ok(CompileResult { output, raw })
+    }
+
+    pub fn all_versions(&self) -> Vec<DetailedVersion> {
+        self.fetcher.all_versions()
     }
 }
 
