@@ -310,6 +310,19 @@ construct_update_group!(NewNativeCoinTransfersGroup {
     ],
 });
 
+construct_update_group!(NewBuilderAccountsGroup {
+    charts: [
+        NewBuilderAccounts,
+        NewBuilderAccountsWeekly,
+        NewBuilderAccountsMonthly,
+        NewBuilderAccountsYearly,
+        BuilderAccountsGrowth,
+        BuilderAccountsGrowthWeekly,
+        BuilderAccountsGrowthMonthly,
+        BuilderAccountsGrowthYearly,
+    ],
+});
+
 // Charts returned in contracts endpoint.
 //
 // They don't depend on each other, but single group

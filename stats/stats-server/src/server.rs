@@ -14,14 +14,14 @@ use crate::{
     update_service::UpdateService,
 };
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{
     database::{DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings},
     launcher::{self, GracefulShutdownHandler, LaunchSettings},
 };
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-use stats::metrics;
+use stats::{data_source::types::BlockscoutMigrations, lines::NewBuilderAccounts, metrics, Named};
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
     health_server::HealthServer,
@@ -58,6 +58,7 @@ pub async fn stats(
     let db = init_stats_db(&settings).await?;
     let blockscout = connect_to_blockscout_db(&settings).await?;
 
+    check_if_unsupported_charts_are_enabled(&charts, &blockscout).await?;
     create_charts_if_needed(&db, &charts).await?;
 
     if settings.metrics.enabled {
@@ -218,6 +219,30 @@ fn init_runtime_setup(
 ) -> anyhow::Result<Arc<RuntimeSetup>> {
     let setup = RuntimeSetup::new(charts_config, layout_config, update_groups_config)?;
     Ok(Arc::new(setup))
+}
+
+async fn check_if_unsupported_charts_are_enabled(
+    setup: &RuntimeSetup,
+    blockscout_db: &DatabaseConnection,
+) -> anyhow::Result<()> {
+    let migrations = BlockscoutMigrations::query_from_db(blockscout_db).await?;
+    if !migrations.denormalization {
+        let charts_without_normalization = &[NewBuilderAccounts::name()];
+        let mut all_enabled_charts_with_deps = setup.update_groups.values().flat_map(|g| {
+            g.group
+                .enabled_members_with_deps(&g.enabled_members)
+                .into_iter()
+        });
+        if let Some(key) = all_enabled_charts_with_deps
+            .find(|key| charts_without_normalization.contains(&key.name().to_string()))
+        {
+            return Err(anyhow!(
+                "chart with name '{key}' is not supported without denormalized database. \
+                Ensure denormalization is complete or disable the corresponding charts."
+            ));
+        }
+    }
+    Ok(())
 }
 
 async fn create_charts_if_needed(
