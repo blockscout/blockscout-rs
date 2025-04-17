@@ -14,12 +14,14 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let db = Arc::new(TacDatabase::new(Arc::new(db_connection)));
 
-    let client = Arc::new(Mutex::new(Client::new(settings.rpc.clone())));
+    let client = Arc::new(Mutex::new(Client::new(settings.clone().rpc)));
 
-    let mut indexer = Indexer::new(settings.clone().indexer.unwrap(), db.clone()).await?;
+    let indexer = Indexer::new(settings.clone().indexer.unwrap(), db.clone()).await?;
+
+    let concurrency = settings.clone().indexer.unwrap().concurrency as usize;
 
     tokio::spawn(async move {
-        indexer.start(client).await.unwrap();
+        indexer.start(client, concurrency).await.unwrap();
     });
 
     run(settings, db.clone()).await

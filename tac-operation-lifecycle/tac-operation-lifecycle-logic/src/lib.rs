@@ -507,7 +507,7 @@ impl Indexer {
     }
 
     #[instrument(name = "indexer", skip_all, level = "info")]
-    pub async fn start(&mut self, client: Arc<Mutex<Client>>) -> anyhow::Result<()> {
+    pub async fn start(&self, client: Arc<Mutex<Client>>, concurrency: usize) -> anyhow::Result<()> {
         tracing::warn!("Initializing TAC indexer");
 
         self.ensure_stages_types_exist().await?;
@@ -569,7 +569,7 @@ impl Indexer {
             historical_intervals_stream,
             Self::prio_left,
         );
-        let mut combined_stream = select_with_strategy(
+        let combined_stream = select_with_strategy(
             realtime,
             select_with_strategy(
                 operations,
@@ -584,36 +584,45 @@ impl Indexer {
             current_realtime_timestamp
         );
 
-        // Process the prioritized stream
-        while let Some(job) = combined_stream.next().await {
-            let span_id = Uuid::new_v4();
-            tracing::debug!("Processing job: {:?}", job);
-            match job {
-                IndexerJob::Realtime => {
-                    let wm = self.database.get_watermark().await?;
-                    let now = chrono::Utc::now().timestamp() as u64;
-                    if let Err(e) = self.database.generate_pending_interval(wm, now).await {
-                        tracing::error!("Failed to generate real-time interval: {}", e);
+        
+        let job_futures = combined_stream.map(|job| {
+            let client = client.clone();
+            async move {
+                match job {
+                    IndexerJob::Realtime => {
+                        let wm = self.database.get_watermark().await.map_err(|e| anyhow::anyhow!("Failed to get watermark: {}", e)).unwrap();
+                        let now = chrono::Utc::now().timestamp() as u64;
+                        if let Err(e) = self.database.generate_pending_interval(wm, now).await {
+                            tracing::error!("Failed to generate real-time interval: {}", e);
+                        }
+                        anyhow::Ok(())
+                    }
+                    IndexerJob::Interval(job) => {
+                        self.process_interval_with_retries(&job, client.clone())
+                            .instrument(tracing::debug_span!(
+                                "processing interval"
+                                
+                            ))
+                            .await;
+                        anyhow::Ok(())
+                    }
+                    IndexerJob::Operation(job) => {
+                        self.process_operation_with_retries([&job].to_vec(), client.clone())
+                            .instrument(tracing::debug_span!(
+                                "processing operation"
+                                
+                            ))
+                            .await;
+                        anyhow::Ok(())
                     }
                 }
-
-                IndexerJob::Interval(job) => {
-                    self.process_interval_with_retries(&job, client.clone())
-                        .instrument(tracing::debug_span!(
-                            "processing interval",
-                            span_id = span_id.to_string()
-                        ))
-                        .await;
-                }
-
-                IndexerJob::Operation(job) => {
-                    self.process_operation_with_retries([&job].to_vec(), client.clone())
-                        .instrument(tracing::debug_span!(
-                            "processing operation",
-                            span_id = span_id.to_string()
-                        ))
-                        .await;
-                }
+            }
+        });
+        
+        let mut buffered_stream = job_futures.buffer_unordered(concurrency);
+        while let Some(result) = buffered_stream.next().instrument(tracing::debug_span!("job processing", span_id = Uuid::new_v4().to_string())).await {
+            if let Err(e) = result {
+                tracing::error!("Job processing error: {}", e);
             }
         }
 
