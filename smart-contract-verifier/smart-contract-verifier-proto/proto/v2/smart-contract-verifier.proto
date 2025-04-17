@@ -86,6 +86,10 @@ message Source {
 
   /// If true, the verified contract was a ERC-5202 compatible blueprint contract
   bool is_blueprint = 13;
+
+  /// Mapping from fully qualified name to the address the library is deployed at
+  // (includes both automatically and manually linked libraries)
+  map<string, string> libraries = 14;
 }
 
 enum BytecodeType {

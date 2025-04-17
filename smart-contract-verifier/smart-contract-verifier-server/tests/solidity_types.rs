@@ -1,9 +1,9 @@
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{de::DeserializeOwned, Deserialize};
+use smart_contract_verifier::FullyQualifiedName;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::source::MatchType;
-use std::{borrow::Cow, collections::BTreeMap};
-
 pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BytecodeType;
+use std::{borrow::Cow, collections::BTreeMap};
 
 const TEST_CASES_DIR: &str = "tests/test_cases_solidity";
 
@@ -190,6 +190,8 @@ pub struct StandardJson {
 
     #[serde(deserialize_with = "StandardJson::deserialize_input")]
     pub input: String,
+    #[serde(default)]
+    pub manually_linked_libraries: BTreeMap<String, String>,
 
     pub is_full_match: Option<bool>,
     pub expected_constructor_argument: Option<DisplayBytes>,
@@ -280,10 +282,31 @@ impl TestCase for StandardJson {
         single_field_struct!(Input, settings, Option<Settings>);
 
         let input: Input = serde_json::from_str(&self.input).expect("libraries parsing failed");
-        input
+        let linked_libraries = input
             .settings
-            .map(|v| v.libraries.into_values().flatten().collect())
-            .unwrap_or_default()
+            .map(|v| {
+                v.libraries
+                    .into_iter()
+                    .fold(BTreeMap::new(), |mut libraries, (file, library)| {
+                        libraries.extend(library.into_iter().map(move |(name, address)| {
+                            let fully_qualified_name =
+                                FullyQualifiedName::from_file_and_contract_names(
+                                    file.clone(),
+                                    name,
+                                );
+                            (fully_qualified_name.to_string(), address)
+                        }));
+                        libraries
+                    })
+            })
+            .unwrap_or_default();
+
+        let manually_linked_libraries = self.manually_linked_libraries.clone();
+
+        linked_libraries
+            .into_iter()
+            .chain(manually_linked_libraries)
+            .collect()
     }
 
     fn optimizer_enabled(&self) -> Option<bool> {
