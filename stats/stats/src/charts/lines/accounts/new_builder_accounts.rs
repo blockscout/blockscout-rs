@@ -46,7 +46,17 @@ impl StatementFromRange for NewBuilderAccountsStatement {
             // the query is very complex + the chart is disabled by default
             // + it is expected to be used in 1-2 networks, therefore
             // won't bother to support pre-migration (that was done long before)
-            // todo: add error
+            tracing::error!("builder accounts charts are not supported without denormalized database; the chart will show zeroes");
+
+            return Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"
+                SELECT 
+                    now()::date as date,
+                    0::TEXT as value
+                "#,
+                [],
+            );
         }
 
         // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough
@@ -196,12 +206,12 @@ pub type NewBuilderAccountsYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart_with_migration_variants;
+    use crate::tests::simple_test::simple_test_chart;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_builder_accounts() {
-        simple_test_chart_with_migration_variants::<NewBuilderAccounts>(
+        simple_test_chart::<NewBuilderAccounts>(
             "update_new_builder_accounts",
             // internal txns case is not actually tested,
             // but it's not trivial to add, so leaving it as is;
