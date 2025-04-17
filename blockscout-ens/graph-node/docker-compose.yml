@@ -2,6 +2,7 @@ version: '3'
 services:
   graph-node:
     container_name: graph-node-dev
+    platform: linux/amd64
     image: graphprotocol/graph-node:v0.34.1
     ports:
       - '8000:8000'
@@ -26,6 +27,7 @@ services:
       - ./config.toml:/root/config.toml
   ipfs:
     container_name: gn-ipfs-dev
+    platform: linux/amd64
     image: ipfs/kubo:v0.14.0
     ports:
       - '5001:5001'
@@ -33,6 +35,7 @@ services:
       - ./data/ipfs:/data/ipfs
   postgres:
     container_name: gn-postgres-dev
+    platform: linux/amd64
     image: postgres:16.1
     ports:
       - '5432:5432'
