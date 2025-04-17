@@ -87,21 +87,21 @@ impl QuickSearchResult {
         filtered_items
     }
 
-    pub fn balance_entities(&mut self, n: usize) {
+    pub fn balance_entities(&mut self, total_limit: usize, entity_limit: usize) {
         macro_rules! balance_entities {
             ( $n:expr, $( $arg:expr => $ind:expr ),+ ) => {
                 let lengths = [$( $arg.len() ),*];
 
-                let result = evenly_take_elements(lengths, $n);
+                let result = evenly_take_elements(lengths, total_limit);
 
                 $(
-                    $arg.truncate(result[$ind]);
+                    $arg.truncate(result[$ind].min(entity_limit));
                 )*
             };
         }
 
         balance_entities!(
-            n,
+            total_limit,
             self.addresses => 0,
             self.blocks => 1,
             self.transactions => 2,
