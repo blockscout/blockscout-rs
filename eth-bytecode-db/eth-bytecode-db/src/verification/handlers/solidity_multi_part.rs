@@ -16,7 +16,6 @@ pub struct MultiPartFiles {
     pub source_files: BTreeMap<String, String>,
     pub evm_version: Option<String>,
     pub optimization_runs: Option<i32>,
-    pub libraries: BTreeMap<String, String>,
 }
 
 impl From<VerificationRequest<MultiPartFiles>> for VerifySolidityMultiPartRequest {
@@ -28,7 +27,6 @@ impl From<VerificationRequest<MultiPartFiles>> for VerifySolidityMultiPartReques
             source_files: request.content.source_files,
             evm_version: request.content.evm_version,
             optimization_runs: request.content.optimization_runs,
-            libraries: request.content.libraries,
             metadata: request.metadata.map(|metadata| metadata.into()),
             post_actions: vec![],
         }
@@ -98,7 +96,6 @@ mod tests {
                 ]),
                 evm_version: Some("london".to_string()),
                 optimization_runs: Some(200),
-                libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
@@ -117,7 +114,6 @@ mod tests {
             ]),
             evm_version: Some("london".to_string()),
             optimization_runs: Some(200),
-            libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
                 chain_id: Some("1".to_string()),
                 contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),
@@ -144,7 +140,6 @@ mod tests {
                 ]),
                 evm_version: Some("london".to_string()),
                 optimization_runs: Some(200),
-                libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             },
             metadata: Some(types::VerificationMetadata {
                 chain_id: Some(1),
@@ -163,7 +158,6 @@ mod tests {
             ]),
             evm_version: Some("london".to_string()),
             optimization_runs: Some(200),
-            libraries: BTreeMap::from([("lib1".into(), "0xcafe".into())]),
             metadata: Some(smart_contract_verifier::VerificationMetadata {
                 chain_id: Some("1".to_string()),
                 contract_address: Some("0x0101010101010101010101010101010101010101".to_string()),

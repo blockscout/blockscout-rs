@@ -95,7 +95,6 @@ pub struct MultiPart {
     pub sources: BTreeMap<String, String>,
     pub evm_version: Option<String>,
     pub optimization_runs: Option<u32>,
-    pub libraries: BTreeMap<String, String>,
 }
 
 impl From<AllianceImportRequest<MultiPart>>
@@ -108,7 +107,6 @@ impl From<AllianceImportRequest<MultiPart>>
             sources: value.content.sources,
             evm_version: value.content.evm_version,
             optimization_runs: value.content.optimization_runs,
-            libraries: value.content.libraries,
         }
     }
 }
@@ -132,7 +130,6 @@ impl TryFrom<eth_bytecode_db_v2::VerifierAllianceBatchImportSolidityMultiPartReq
                 sources: value.source_files,
                 evm_version: value.evm_version,
                 optimization_runs: value.optimization_runs,
-                libraries: value.libraries,
             },
         })
     }

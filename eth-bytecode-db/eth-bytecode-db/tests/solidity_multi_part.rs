@@ -21,7 +21,6 @@ fn default_request_content() -> MultiPartFiles {
         source_files: Default::default(),
         evm_version: Some("london".to_string()),
         optimization_runs: None,
-        libraries: Default::default(),
     }
 }
 
