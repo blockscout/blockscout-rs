@@ -5,6 +5,7 @@ use blockscout_service_launcher::{
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{formats::CommaSeparator, serde_as, StringWithSeparator};
+use std::time;
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,6 +43,11 @@ pub struct ServiceSettings {
     pub fetch_chains: bool,
     #[serde(default = "default_bens_protocols")]
     pub bens_protocols: Option<Vec<String>>,
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    #[serde(default = "default_marketplace_enabled_cache_update_interval")]
+    pub marketplace_enabled_cache_update_interval: time::Duration,
+    #[serde(default = "default_marketplace_enabled_cache_fetch_concurrency")]
+    pub marketplace_enabled_cache_fetch_concurrency: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -103,6 +109,10 @@ impl Settings {
                 quick_search_chains: default_quick_search_chains(),
                 fetch_chains: false,
                 bens_protocols: default_bens_protocols(),
+                marketplace_enabled_cache_update_interval:
+                    default_marketplace_enabled_cache_update_interval(),
+                marketplace_enabled_cache_fetch_concurrency:
+                    default_marketplace_enabled_cache_fetch_concurrency(),
             },
         }
     }
@@ -124,4 +134,12 @@ fn default_quick_search_chains() -> Vec<i64> {
 
 fn default_bens_protocols() -> Option<Vec<String>> {
     Some(vec!["ens".to_string()])
+}
+
+fn default_marketplace_enabled_cache_update_interval() -> time::Duration {
+    time::Duration::from_secs(6 * 60 * 60) // 6 hours
+}
+
+fn default_marketplace_enabled_cache_fetch_concurrency() -> usize {
+    10
 }

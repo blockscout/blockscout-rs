@@ -22,9 +22,11 @@ pub struct MultichainAggregator {
     api_settings: ApiSettings,
     quick_search_chains: Vec<types::ChainId>,
     bens_protocols: Option<Vec<String>>,
+    marketplace_enabled_cache: chains::MarketplaceEnabledCache,
 }
 
 impl MultichainAggregator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         repo: ReadWriteRepo,
         dapp_client: HttpApiClient,
@@ -33,6 +35,7 @@ impl MultichainAggregator {
         api_settings: ApiSettings,
         quick_search_chains: Vec<types::ChainId>,
         bens_protocols: Option<Vec<String>>,
+        marketplace_enabled_cache: chains::MarketplaceEnabledCache,
     ) -> Self {
         Self {
             api_key_manager: ApiKeyManager::new(repo.write_db().clone()),
@@ -43,6 +46,7 @@ impl MultichainAggregator {
             api_settings,
             quick_search_chains,
             bens_protocols,
+            marketplace_enabled_cache,
         }
     }
 
@@ -89,7 +93,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let chains = if only_active {
             let token_info_client = &self.token_info_client;
             let dapp_client = &self.dapp_client;
-            chains::list_active_chains(
+            chains::list_active_chains_cached(
                 self.repo.read_db(),
                 &[
                     chains::ChainSource::Repository,
@@ -294,16 +298,26 @@ impl MultichainAggregatorService for MultichainAggregator {
         &self,
         _request: Request<ListDappChainsRequest>,
     ) -> Result<Response<ListDappChainsResponse>, Status> {
-        let items = chains::list_active_chains(
+        let items = chains::list_active_chains_cached(
             self.repo.read_db(),
             &[chains::ChainSource::Dapp {
                 dapp_client: &self.dapp_client,
             }],
         )
-        .await?
-        .into_iter()
-        .filter_map(|c| c.try_into().ok())
-        .collect();
+        .await?;
+
+        let cache = self.marketplace_enabled_cache.read().await;
+        let items = items
+            .into_iter()
+            .filter_map(|c| {
+                let is_enabled = *cache.get(&c.id).unwrap_or(&false);
+                if is_enabled {
+                    c.try_into().ok()
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
 
         Ok(Response::new(ListDappChainsResponse { items }))
     }

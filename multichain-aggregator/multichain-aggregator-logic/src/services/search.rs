@@ -27,6 +27,7 @@ use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
 const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
+const QUICK_SEARCH_ENTITY_LIMIT: usize = 5;
 // TODO: for now, we just need any chain that has a primary ENS protocol.
 // Later, we will need to add a BENS handle that is chain-agnostic
 // and works directly with protocols.
@@ -351,7 +352,7 @@ pub async fn quick_search(
         })
         .filter_and_sort_entities_by_priority(chain_ids);
 
-    results.balance_entities(QUICK_SEARCH_NUM_ITEMS as usize);
+    results.balance_entities(QUICK_SEARCH_NUM_ITEMS as usize, QUICK_SEARCH_ENTITY_LIMIT);
 
     Ok(results)
 }
