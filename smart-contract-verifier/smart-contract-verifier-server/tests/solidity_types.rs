@@ -1,9 +1,9 @@
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{de::DeserializeOwned, Deserialize};
-use smart_contract_verifier::FullyQualifiedName;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::source::MatchType;
 pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BytecodeType;
 use std::{borrow::Cow, collections::BTreeMap};
+use verification_common::solidity_libraries;
 
 const TEST_CASES_DIR: &str = "tests/test_cases_solidity";
 
@@ -278,35 +278,16 @@ impl TestCase for StandardJson {
     }
 
     fn libraries(&self) -> BTreeMap<String, String> {
-        single_field_struct!(Settings, libraries, BTreeMap<String, BTreeMap<String, String>>);
-        single_field_struct!(Input, settings, Option<Settings>);
-
-        let input: Input = serde_json::from_str(&self.input).expect("libraries parsing failed");
-        let linked_libraries = input
-            .settings
-            .map(|v| {
-                v.libraries
-                    .into_iter()
-                    .fold(BTreeMap::new(), |mut libraries, (file, library)| {
-                        libraries.extend(library.into_iter().map(move |(name, address)| {
-                            let fully_qualified_name =
-                                FullyQualifiedName::from_file_and_contract_names(
-                                    file.clone(),
-                                    name,
-                                );
-                            (fully_qualified_name.to_string(), address)
-                        }));
-                        libraries
-                    })
-            })
-            .unwrap_or_default();
-
-        let manually_linked_libraries = self.manually_linked_libraries.clone();
+        let mut linked_libraries = BTreeMap::new();
+        if let Some(compiler_settings) = self.compiler_settings() {
+            linked_libraries.extend(
+                solidity_libraries::try_parse_compiler_linked_libraries(&compiler_settings)
+                    .unwrap(),
+            )
+        }
+        linked_libraries.extend(self.manually_linked_libraries.clone());
 
         linked_libraries
-            .into_iter()
-            .chain(manually_linked_libraries)
-            .collect()
     }
 
     fn optimizer_enabled(&self) -> Option<bool> {

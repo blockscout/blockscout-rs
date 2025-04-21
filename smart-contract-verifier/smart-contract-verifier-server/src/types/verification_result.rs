@@ -1,14 +1,15 @@
 use blockscout_display_bytes::ToHex;
 use serde_json::Value;
-use smart_contract_verifier::{
-    Error, FullyQualifiedName, Language, VerificationResult, VerifyingContract,
-};
+use smart_contract_verifier::{Error, Language, VerificationResult, VerifyingContract};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::{
     v2, v2::verify_response::extra_data,
 };
-use std::collections::BTreeMap;
 use tonic::Status;
-use verification_common::verifier_alliance::{CborAuxdata, CompilationArtifacts, Match};
+use verification_common::{
+    solidity_libraries,
+    solidity_libraries::parse_manually_linked_libraries,
+    verifier_alliance::{CborAuxdata, CompilationArtifacts, Match},
+};
 
 pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
     match error {
@@ -122,15 +123,16 @@ fn try_into_source(verifying_contract: VerifyingContract) -> Result<v2::Source, 
     let creation_code_artifacts = verifying_contract.creation_code_artifacts;
     let runtime_code_artifacts = verifying_contract.runtime_code_artifacts;
 
-    let libraries = try_parse_linked_libraries(&verifying_contract.compiler_settings)?
-        .into_iter()
-        .chain(try_parse_unlinked_libraries(
-            &verifying_contract.creation_match,
-        )?)
-        .chain(try_parse_unlinked_libraries(
-            &verifying_contract.runtime_match,
-        )?)
-        .collect();
+    let mut libraries = solidity_libraries::try_parse_compiler_linked_libraries(
+        &verifying_contract.compiler_settings,
+    )
+    .map_err(|err| Status::internal(err.to_string()))?;
+    if let Some(creation_match_) = verifying_contract.creation_match.as_ref() {
+        libraries.extend(parse_manually_linked_libraries(creation_match_));
+    }
+    if let Some(runtime_match_) = verifying_contract.runtime_match.as_ref() {
+        libraries.extend(parse_manually_linked_libraries(runtime_match_));
+    }
 
     let source = v2::Source {
         file_name: verifying_contract.fully_qualified_name.file_name(),
@@ -203,50 +205,4 @@ fn parse_match_type(
             "verifying contract doesn't have neither creation nor runtime matches",
         ))
     }
-}
-
-fn try_parse_linked_libraries(settings: &Value) -> Result<BTreeMap<String, String>, Status> {
-    let libraries = settings
-        .pointer("/libraries")
-        .map(|value| {
-            let libraries: BTreeMap<String, BTreeMap<String, String>> =
-                serde::Deserialize::deserialize(value).map_err(|err| {
-                    Status::internal(format!("cannot parse linked libraries: {err}"))
-                })?;
-            let compressed_libraries = libraries.into_iter().fold(
-                BTreeMap::new(),
-                |mut compressed_libraries, (file_name, file_libraries)| {
-                    file_libraries
-                        .into_iter()
-                        .for_each(|(contract_name, address)| {
-                            let fully_qualified_name =
-                                FullyQualifiedName::from_file_and_contract_names(
-                                    file_name.clone(),
-                                    contract_name,
-                                );
-                            compressed_libraries.insert(fully_qualified_name.to_string(), address);
-                        });
-                    compressed_libraries
-                },
-            );
-            Ok::<_, Status>(compressed_libraries)
-        })
-        .transpose()?;
-    Ok(libraries.unwrap_or_default())
-}
-
-fn try_parse_unlinked_libraries(
-    maybe_match_: &Option<Match>,
-) -> Result<BTreeMap<String, String>, Status> {
-    let mut libraries = BTreeMap::new();
-    if let Some(match_) = maybe_match_.as_ref() {
-        match_
-            .values
-            .libraries
-            .iter()
-            .for_each(|(fully_qualified_name, address)| {
-                libraries.insert(fully_qualified_name.clone(), address.to_hex());
-            })
-    }
-    Ok(libraries)
 }
