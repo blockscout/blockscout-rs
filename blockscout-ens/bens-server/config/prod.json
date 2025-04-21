@@ -611,8 +611,8 @@
         "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "ens_like",
-          "native_token_contract": "0x0000000000000000000000000000000000000000",
-          "empty_label_hash": "0x9d04eae796d3756d3dce06b5565abca2da7f6be25162ef9d2dffd67bec45c115"
+          "native_token_contract": "0x5c6cb93b1fc4e0a1274d07852cbd7ebd201b6593",
+          "empty_label_hash": "0x3f3fcc15032dacacd8a3864982ab4207e1f7bc7a882d8a98b48f9ac6dd2084cb"
         },
         "meta": {
           "short_name": "SPACE ID",
