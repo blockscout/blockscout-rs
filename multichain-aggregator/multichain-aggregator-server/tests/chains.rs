@@ -2,15 +2,13 @@ mod helpers;
 
 use blockscout_service_launcher::{database, test_server};
 use migration::Migrator;
-use multichain_aggregator_logic::{repository::chains, types::chains::Chain};
+use multichain_aggregator_logic::{
+    repository::{api_keys, chains},
+    types::{api_keys::ApiKey, chains::Chain},
+};
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1 as proto;
 use pretty_assertions::assert_eq;
-use reqwest::StatusCode;
-use serde_json::json;
-use wiremock::{
-    matchers::{method, path},
-    Mock, MockServer, ResponseTemplate,
-};
+use sea_orm::prelude::Uuid;
 
 #[tokio::test]
 #[ignore = "Needs database to run"]
@@ -43,14 +41,20 @@ async fn test_fetch_chains() {
     .await
     .unwrap();
 
-    let token_info_server = mock_token_info_server(&[2, 4]).await;
-    let dapp_server = mock_dapp_server(&[3, 5]).await;
-    let base = helpers::init_multichain_aggregator_server(db.db_url(), |mut x| {
-        x.service.dapp_client.url = dapp_server.uri().parse().unwrap();
-        x.service.token_info_client.url = token_info_server.uri().parse().unwrap();
-        x
-    })
-    .await;
+    api_keys::upsert_many(
+        db.client().as_ref(),
+        [2, 3]
+            .into_iter()
+            .map(|id| ApiKey {
+                key: Uuid::new_v4(),
+                chain_id: id,
+            })
+            .collect(),
+    )
+    .await
+    .unwrap();
+
+    let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
 
     let response: proto::ListChainsResponse =
         test_server::send_get_request(&base, "/api/v1/chains?only_active=true").await;
@@ -99,31 +103,4 @@ async fn test_fetch_chains() {
             },
         ]
     );
-}
-
-async fn mock_token_info_server(chain_ids: &[u64]) -> MockServer {
-    let mock = MockServer::start().await;
-    let payload = json!({
-        "chains": chain_ids
-    });
-    Mock::given(method("GET"))
-        .and(path("/api/v1/token-infos/chains"))
-        .respond_with(ResponseTemplate::new(StatusCode::OK).set_body_json(payload))
-        .mount(&mock)
-        .await;
-    mock
-}
-
-async fn mock_dapp_server(chain_ids: &[u64]) -> MockServer {
-    let mock = MockServer::start().await;
-    let payload = json!(chain_ids
-        .iter()
-        .map(|id| id.to_string())
-        .collect::<Vec<String>>());
-    Mock::given(method("GET"))
-        .and(path("/api/v1/marketplace/chains"))
-        .respond_with(ResponseTemplate::new(StatusCode::OK).set_body_json(payload))
-        .mount(&mock)
-        .await;
-    mock
 }

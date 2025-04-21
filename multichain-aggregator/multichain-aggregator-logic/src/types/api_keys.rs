@@ -1,7 +1,11 @@
 use super::ChainId;
 use crate::error::{ParseError, ServiceError};
-use entity::api_keys::Model;
-use sea_orm::{entity::prelude::Uuid, DbErr};
+use entity::api_keys::{ActiveModel, Model};
+use sea_orm::{
+    entity::prelude::Uuid,
+    ActiveValue::{NotSet, Set},
+    DbErr,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -34,6 +38,17 @@ impl From<Model> for ApiKey {
         Self {
             key: v.key,
             chain_id: v.chain_id,
+        }
+    }
+}
+
+impl From<ApiKey> for ActiveModel {
+    fn from(v: ApiKey) -> Self {
+        Self {
+            id: NotSet,
+            key: Set(v.key),
+            chain_id: Set(v.chain_id),
+            created_at: NotSet,
         }
     }
 }

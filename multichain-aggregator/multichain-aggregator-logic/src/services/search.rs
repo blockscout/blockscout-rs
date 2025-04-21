@@ -183,7 +183,7 @@ pub async fn search_hashes(
     db: &DatabaseConnection,
     query: String,
     hash_type: Option<HashType>,
-    chain_ids: Option<Vec<ChainId>>,
+    chain_ids: Vec<ChainId>,
     page_size: u64,
     page_token: Option<ChainId>,
 ) -> Result<(Vec<Hash>, Option<ChainId>), ServiceError> {
@@ -393,7 +393,7 @@ impl SearchTerm {
                     db,
                     hash,
                     None,
-                    Some(search_context.chain_ids.to_vec()),
+                    search_context.chain_ids.to_vec(),
                     QUICK_SEARCH_NUM_ITEMS,
                     None,
                 )
