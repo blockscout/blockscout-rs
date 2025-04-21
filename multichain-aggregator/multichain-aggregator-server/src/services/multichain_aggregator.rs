@@ -6,11 +6,11 @@ use crate::{
 use api_client_framework::HttpApiClient;
 use multichain_aggregator_logic::{
     clients::dapp,
-    error::ServiceError,
+    error::{ParseError, ServiceError},
     services::{api_key_manager::ApiKeyManager, chains, import, search},
     types,
 };
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 use tonic::{Request, Response, Status};
 
 pub struct MultichainAggregator {
@@ -54,6 +54,42 @@ impl MultichainAggregator {
         size.unwrap_or(self.api_settings.default_page_size)
             .clamp(1, self.api_settings.max_page_size)
     }
+
+    // If `chain_ids` is empty, meaning no filter is applied,
+    // we default to include all active chains.
+    // Otherwise, we validate that `chain_ids` only include the active ones.
+    async fn validate_and_prepare_chain_ids(
+        &self,
+        chain_ids: Vec<types::ChainId>,
+    ) -> Result<Vec<types::ChainId>, ServiceError> {
+        let active_chain_ids = chains::list_repo_chains_cached(self.repo.read_db(), true)
+            .await?
+            .into_iter()
+            .map(|c| c.id);
+
+        let chain_ids: Vec<_> = if chain_ids.is_empty() {
+            active_chain_ids.collect()
+        } else {
+            let active_chain_ids = active_chain_ids.collect::<HashSet<_>>();
+            let unsupported_chain_ids = chain_ids
+                .iter()
+                .filter(|chain_id| !active_chain_ids.contains(chain_id))
+                .map(|id| id.to_string())
+                .collect::<Vec<_>>();
+
+            if !unsupported_chain_ids.is_empty() {
+                return Err(ParseError::Custom(format!(
+                    "unsupported chain ids provided: {}",
+                    unsupported_chain_ids.join(", ")
+                ))
+                .into());
+            }
+
+            chain_ids
+        };
+
+        Ok(chain_ids)
+    }
 }
 
 #[async_trait::async_trait]
@@ -90,21 +126,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let only_active = inner.only_active.unwrap_or(false);
-        let chains = if only_active {
-            let token_info_client = &self.token_info_client;
-            let dapp_client = &self.dapp_client;
-            chains::list_active_chains_cached(
-                self.repo.read_db(),
-                &[
-                    chains::ChainSource::Repository,
-                    chains::ChainSource::TokenInfo { token_info_client },
-                    chains::ChainSource::Dapp { dapp_client },
-                ],
-            )
-            .await?
-        } else {
-            chains::list_repo_chains_cached(self.repo.read_db(), false).await?
-        };
+        let chains = chains::list_repo_chains_cached(self.repo.read_db(), only_active).await?;
 
         let items = chains
             .into_iter()
@@ -124,6 +146,10 @@ impl MultichainAggregatorService for MultichainAggregator {
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.map(parse_query_2).transpose()?;
 
+        let chain_ids = self
+            .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
+            .await?;
+
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
             &self.bens_client,
@@ -133,7 +159,7 @@ impl MultichainAggregatorService for MultichainAggregator {
                 bens_domain_lookup_limit: 1,
             },
             inner.q,
-            chain_id.map(|v| vec![v]).unwrap_or_default(),
+            chain_ids,
             page_size as u64,
             page_token,
         )
@@ -162,12 +188,16 @@ impl MultichainAggregatorService for MultichainAggregator {
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.map(parse_query_2).transpose()?;
 
+        let chain_ids = self
+            .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
+            .await?;
+
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
             &self.bens_client,
             search::AddressSearchConfig::NFTSearch,
             inner.q,
-            chain_id.map(|v| vec![v]).unwrap_or_default(),
+            chain_ids,
             page_size as u64,
             page_token,
         )
@@ -196,11 +226,15 @@ impl MultichainAggregatorService for MultichainAggregator {
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.map(parse_query).transpose()?;
 
+        let chain_ids = self
+            .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
+            .await?;
+
         let (transactions, next_page_token) = search::search_hashes(
             self.repo.read_db(),
             inner.q,
             Some(types::hashes::HashType::Transaction),
-            chain_id.map(|v| vec![v]),
+            chain_ids,
             page_size as u64,
             page_token,
         )
@@ -255,6 +289,8 @@ impl MultichainAggregatorService for MultichainAggregator {
             .collect::<Result<Vec<_>, _>>()?;
         let page_size = self.normalize_page_size(inner.page_size);
 
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+
         let (tokens, next_page_token) = search::search_tokens(
             self.repo.read_db(),
             &self.token_info_client,
@@ -285,6 +321,8 @@ impl MultichainAggregatorService for MultichainAggregator {
             .into_iter()
             .map(parse_query)
             .collect::<Result<Vec<_>, _>>()?;
+
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
 
         let dapps =
             search::search_dapps(&self.dapp_client, inner.q, inner.categories, chain_ids).await?;
