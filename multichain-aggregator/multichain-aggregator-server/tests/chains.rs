@@ -3,7 +3,7 @@ mod helpers;
 use blockscout_service_launcher::{database, test_server};
 use migration::Migrator;
 use multichain_aggregator_logic::{
-    repository::{api_keys, chains},
+    repository::chains,
     types::{api_keys::ApiKey, chains::Chain},
 };
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1 as proto;
@@ -41,7 +41,7 @@ async fn test_fetch_chains() {
     .await
     .unwrap();
 
-    api_keys::upsert_many(
+    helpers::upsert_api_keys(
         db.client().as_ref(),
         [2, 3]
             .into_iter()

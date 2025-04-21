@@ -2,7 +2,7 @@ mod helpers;
 mod test_db;
 
 use blockscout_service_launcher::{database, test_server};
-use multichain_aggregator_logic::{repository::api_keys, types::api_keys::ApiKey};
+use multichain_aggregator_logic::types::api_keys::ApiKey;
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1 as proto;
 use sea_orm::prelude::Uuid;
 
@@ -13,7 +13,7 @@ async fn test_list_addresses() {
 
     let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
 
-    api_keys::upsert_many(
+    helpers::upsert_api_keys(
         db.client().as_ref(),
         vec![ApiKey {
             key: Uuid::new_v4(),
@@ -55,7 +55,7 @@ async fn test_list_nfts() {
 
     let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
 
-    api_keys::upsert_many(
+    helpers::upsert_api_keys(
         db.client().as_ref(),
         vec![ApiKey {
             key: Uuid::new_v4(),
