@@ -29,7 +29,7 @@ where
     };
 
     let test_db = init_db(test_name).await;
-    let db = Arc::new(TacDatabase::new(test_db.client()));
+    let db = Arc::new(TacDatabase::new(test_db.client(), settings.indexer.clone().unwrap().start_timestamp));
 
     test_server::init_server(
         move || {
@@ -56,6 +56,17 @@ mod tests {
     };
     use tokio::sync::Mutex;
     use tracing::Instrument;
+
+
+    #[tokio::test]
+    async fn test_startup_works() {
+        let db = init_db("startup_works").await;
+        let db_url = db.db_url();
+        let base =
+            init_tac_operation_lifecycle_server(db_url, "startup_works", |x| x).await;
+    let response: serde_json::Value = test_server::send_get_request(&base, "/health").await;
+    assert_eq!(response, serde_json::json!({"status": "SERVING"}));
+}
 
     #[tokio::test]
     async fn test_save_intervals() {
@@ -86,7 +97,7 @@ mod tests {
         // let server = init_tac_operation_lifecycle_server(db.db_url(), |settings| settings).await;
         let indexer = Indexer::new(
             indexer_settings,
-            Arc::new(TacDatabase::new(Arc::new(conn_with_db))),
+            Arc::new(TacDatabase::new(Arc::new(conn_with_db), start_timestamp)),
         )
         .await
         .unwrap();
@@ -136,12 +147,9 @@ mod tests {
         let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
         let catchup_interval = time::Duration::from_secs(10); // Use fixed interval for predictable testing
         let tasks_number = 5; // Use fixed number of tasks for predictable testing
-        let current_epoch = time::SystemTime::now()
-            .duration_since(time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let start_timestamp = current_epoch - tasks_number * catchup_interval.as_secs();
-        let start_timestamp = timestamp_to_naive(start_timestamp as i64);
+        let current_epoch = chrono::Utc::now().naive_utc();
+        
+        let start_timestamp = current_epoch - tasks_number * catchup_interval;
         let indexer_settings = IndexerSettings {
             concurrency: 1,
             catchup_interval,
@@ -151,14 +159,14 @@ mod tests {
 
         let indexer = Indexer::new(
             indexer_settings,
-            Arc::new(TacDatabase::new(Arc::new(conn_with_db))),
+            Arc::new(TacDatabase::new(Arc::new(conn_with_db), start_timestamp.and_utc().timestamp() as u64)),
         )
         .await
         .unwrap();
 
         // Save intervals first
         indexer
-            .generate_historical_intervals(current_epoch)
+            .generate_historical_intervals(current_epoch.and_utc().timestamp() as u64)
             .await
             .unwrap();
 
@@ -274,6 +282,12 @@ mod tests {
             "indexing",
             |mut settings| {
                 settings.tracing.enabled = true;
+                settings.indexer = Some(IndexerSettings {
+                    concurrency: 1,
+                    catchup_interval: time::Duration::from_secs(10),
+                    start_timestamp: 1741794228,
+                    ..Default::default()
+                });
                 settings
             },
         )
@@ -364,7 +378,7 @@ mod tests {
 
         let indexer = Indexer::new(
             indexer_settings,
-            Arc::new(TacDatabase::new(Arc::new(conn_with_db))),
+            Arc::new(TacDatabase::new(Arc::new(conn_with_db), start_timestamp)),
         )
         .await
         .unwrap();
@@ -413,9 +427,14 @@ mod tests {
                             if start <= 1741794238 && end >= 1741794238 {
                                 // Verify interval is marked as processed
                                 let interval = interval::Entity::find()
-                                    .filter(interval::Column::Start.eq(start))
-                                    .filter(interval::Column::Finish.eq(interval_job.interval.finish))
+                                    .filter(interval::Column::Start.eq(timestamp_to_naive(start as i64)))
+                                    .filter(interval::Column::Finish.eq(timestamp_to_naive(end as i64)))
                                     .one(db.client().as_ref())
+                                    .instrument(tracing::info_span!(
+                                        "fetching interval",
+                                        start = start,
+                                        end = end,
+                                    ))
                                     .await
                                     .unwrap()
                                     .unwrap();

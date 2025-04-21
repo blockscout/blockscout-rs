@@ -102,11 +102,12 @@ struct JoinedRow {
 
 pub struct TacDatabase {
     db: Arc<DatabaseConnection>,
+    start_timestamp: u64,
 }
 
 impl TacDatabase {
-    pub fn new(db: Arc<DatabaseConnection>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<DatabaseConnection>, start_timestamp: u64) -> Self {
+        Self { db, start_timestamp }
     }
 
     // Add helper function for timestamp conversion
@@ -119,11 +120,18 @@ impl TacDatabase {
     // Retrieves the saved watermark from the database (returns 0 if not exist)
     // NOTE: the method doesn't perform any cachingm just read from the DB!
     pub async fn get_watermark(&self) -> anyhow::Result<u64> {
-        let existing_watermark = watermark::Entity::find().one(self.db.as_ref()).await?;
-
-        match existing_watermark {
-            Some(w) => Ok(w.timestamp.and_utc().timestamp() as u64),
-            _ => Ok(0),
+        let existing_watermark = watermark::Entity::find()
+            .order_by_asc(watermark::Column::Timestamp)
+            .all(self.db.as_ref())
+            .await?;
+        
+        if existing_watermark.len()==0 {
+            Ok(self.start_timestamp)
+        } else {
+            if existing_watermark.len()>1 {
+                tracing::error!("Found more than one watermark in the database");
+            }
+            Ok(existing_watermark[0].timestamp.and_utc().timestamp() as u64)
         }
     }
 
@@ -508,7 +516,7 @@ impl TacDatabase {
                     UPDATE interval 
                     SET status = '{}'::status_enum
                     WHERE id IN (SELECT id FROM selected_intervals)
-                    RETURNING id, start, finish, status::status_enum, next_retry, retry_count, inserted_at, updated_at
+                    RETURNING id, start, finish, status::text, next_retry, retry_count, inserted_at, updated_at
                     "#,
             conditions.join(" AND "),
             order_clause,
@@ -542,7 +550,7 @@ impl TacDatabase {
                     UPDATE operation 
                     SET status = '{}'::status_enum
                     WHERE id IN (SELECT id FROM selected_operations)
-                    RETURNING id, timestamp, status, next_retry, retry_count, inserted_at, updated_at
+                    RETURNING id, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
                     "#,
             conditions.join(" AND "),
             order_clause,
@@ -562,7 +570,7 @@ impl TacDatabase {
         from: Option<u64>,
         to: Option<u64>,
     ) -> anyhow::Result<Vec<interval::Model>> {
-        let mut conditions = vec![format!("status = '{}'", StatusEnum::Pending.to_value())];
+        let mut conditions = vec![format!("status = '{}'::status_enum", StatusEnum::Pending.to_value())];
         if let Some(start) = from {
             let start_naive = Self::timestamp_to_naive(start as i64);
             conditions.push(format!("start >= '{}'", start_naive));
@@ -586,7 +594,7 @@ impl TacDatabase {
 
     pub async fn query_failed_intervals(&self, num: usize) -> anyhow::Result<Vec<interval::Model>> {
         let conditions = vec![
-            format!("status = '{}'", StatusEnum::Pending.to_value()),
+            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
             format!("next_retry IS NOT NULL"),
             format!("next_retry < '{}'", Self::timestamp_to_naive(chrono::Utc::now().timestamp())),
         ];
