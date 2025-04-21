@@ -75,7 +75,12 @@ async fn list_dapp_chains_cached(
 
 pub enum ChainSource<'a> {
     Repository,
-    Dapp { dapp_client: &'a HttpApiClient },
+    TokenInfo {
+        token_info_client: &'a HttpApiClient,
+    },
+    Dapp {
+        dapp_client: &'a HttpApiClient,
+    },
 }
 
 pub async fn list_active_chains_cached(
@@ -92,6 +97,10 @@ pub async fn list_active_chains_cached(
                     .into_iter()
                     .map(|c| c.id);
                 chain_ids.extend(active_repo_chain_ids);
+            }
+            ChainSource::TokenInfo { token_info_client } => {
+                let token_info_chain_ids = list_token_info_chains_cached(token_info_client).await?;
+                chain_ids.extend(token_info_chain_ids);
             }
             ChainSource::Dapp { dapp_client } => {
                 let dapp_chain_ids = list_dapp_chains_cached(dapp_client).await?;
