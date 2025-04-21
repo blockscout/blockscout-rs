@@ -62,7 +62,7 @@ serde_json = { version = "1.0" }
 serde_with = { version = "3.12.0" }
 sha2 = { version = "0.10.8" }
 sha3 = { version = "0.10.8" }
-smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "9f04639" }
+smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "f6e4483" }
 solidity-metadata = { version = "1.0" }
 sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "457af68" }
 strum = { version = "0.26.3", default-features = false, features = ["derive"] }
@@ -75,4 +75,4 @@ tonic-build = { version = "0.12" }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
 url = { version = "2" }
-verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "9f04639" }
+verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "f6e4483" }
