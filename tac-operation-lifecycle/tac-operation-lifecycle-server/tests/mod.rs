@@ -43,6 +43,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use blockscout_service_launcher::tracing::{JaegerSettings, TracingSettings};
     use futures::stream::select_all;
     use rand::Rng;
     use std::{sync::Arc, time};
@@ -72,7 +73,8 @@ mod tests {
     async fn test_save_intervals() {
         let db = init_db("save_intervals").await;
         let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
-
+        
+        let _ =  blockscout_service_launcher::tracing::init_logs("test_save_intervals", &TracingSettings::default(), &JaegerSettings::default()).unwrap();
         let catchup_interval = time::Duration::from_secs(rand::rng().random_range(1..100));
         let tasks_number = rand::rng().random_range(1..100);
         let lag = tasks_number * catchup_interval.as_secs();
@@ -93,8 +95,6 @@ mod tests {
             start_timestamp,
             ..Default::default()
         };
-        // let settings = Settings::default("postgres://postgres:postgres@database:5432/blockscout".to_string());
-        // let server = init_tac_operation_lifecycle_server(db.db_url(), |settings| settings).await;
         let indexer = Indexer::new(
             indexer_settings,
             Arc::new(TacDatabase::new(Arc::new(conn_with_db), start_timestamp)),
