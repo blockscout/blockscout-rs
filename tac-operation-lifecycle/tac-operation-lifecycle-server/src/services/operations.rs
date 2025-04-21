@@ -24,8 +24,7 @@ impl OperationsService {
 }
 
 impl OperationsService {
-    pub async fn create_full_operation_response(
-        &self,
+    pub fn create_full_operation_response(
         db_data: anyhow::Result<
             Option<(
                 operation::Model,
@@ -133,7 +132,7 @@ impl TacService for OperationsService {
 
         let db_resp = self.db.get_operation_by_id(&inner.operation_id).await;
 
-        self.create_full_operation_response(db_resp).await
+        OperationsService::create_full_operation_response(db_resp)
     }
 
     async fn get_operation_by_transaction(
@@ -144,6 +143,6 @@ impl TacService for OperationsService {
 
         let db_resp = self.db.get_operation_by_tx_hash(&inner.tx_hash).await;
 
-        self.create_full_operation_response(db_resp).await
+        OperationsService::create_full_operation_response(db_resp)
     }
 }

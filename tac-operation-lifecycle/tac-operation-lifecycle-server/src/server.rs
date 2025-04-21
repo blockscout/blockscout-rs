@@ -16,16 +16,16 @@ const SERVICE_NAME: &str = "tac_operation_lifecycle";
 
 #[derive(Clone)]
 struct Router {
-    // TODO: add services here
     health: Arc<HealthService>,
     stat: Arc<StatisticService>,
     operations: Arc<OperationsService>,
 }
 
+
 impl Router {
+//GRPC is not required for this service, leaving this simply for compatibility with the launcher
     pub fn grpc_router(&self) -> tonic::transport::server::Router {
         tonic::transport::Server::builder().add_service(HealthServer::from_arc(self.health.clone()))
-        //.add_service(StatisticService::from_arc(self.stat.clone()))
     }
 }
 
@@ -48,7 +48,6 @@ pub async fn run(
     let stat = Arc::new(StatisticService::new(db.clone()));
     let operations = Arc::new(OperationsService::new(db.clone()));
 
-    // TODO: init services here
 
     let router = Router {
         health,

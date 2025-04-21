@@ -3,7 +3,6 @@ use crate::client::models::{
 };
 use anyhow::anyhow;
 use sea_orm::{
-    prelude::Expr,
     sea_query::OnConflict,
     ActiveEnum,
     ActiveModelTrait,
