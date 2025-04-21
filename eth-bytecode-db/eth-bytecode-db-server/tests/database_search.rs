@@ -93,7 +93,8 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
             compilation_artifacts: None,
             creation_input_artifacts: None,
             deployed_bytecode_artifacts: None,
-            is_blueprint: false
+            is_blueprint: false,
+            libraries: BTreeMap::new(),
         }
     ];
 
@@ -212,7 +213,8 @@ async fn search_all_sources(
                     compilation_artifacts: None,
                     creation_input_artifacts: None,
                     deployed_bytecode_artifacts: None,
-                    is_blueprint: false
+                    is_blueprint: false,
+                    libraries: BTreeMap::new(),
                 }
             ]
     };

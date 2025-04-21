@@ -46,6 +46,7 @@ impl<T> TestInputData<T> {
             creation_input_parts,
             deployed_bytecode_parts,
             is_blueprint: verifier_source.is_blueprint,
+            libraries: verifier_source.libraries.clone(),
         };
 
         let verifier_response = smart_contract_verifier_v2::VerifyResponse {
