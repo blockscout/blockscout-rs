@@ -79,3 +79,9 @@ provider = [
     { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }
 ]
 shard = "primary"
+
+[chains.morph-mainnet]
+provider = [
+    { label = "morph-mainnet", url = "https://rpc.morphl2.io", features = [] }
+]
+shard = "primary"
