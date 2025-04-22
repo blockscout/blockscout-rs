@@ -104,6 +104,11 @@
       "subgraph_path": "../subgraphs/mint-subgraph",
       "subgraph_name": "mint-subgraph",
       "network": "mint-mainnet"
+    },
+    "morph": {
+      "subgraph_path": "../subgraphs/morph-subgraph",
+      "subgraph_name": "morph-subgraph",
+      "network": "morph-mainnet"
     }
   }
 }

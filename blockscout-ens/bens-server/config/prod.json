@@ -234,6 +234,14 @@
         "use_protocols": [
           "ens"
         ]
+      },
+      "2818": {
+        "blockscout": {
+          "url": "https://explorer.morphl2.io/"
+        },
+        "use_protocols": [
+          "morph"
+        ]
       }
     },
     "protocols": {
@@ -613,6 +621,17 @@
           "type": "ens_like",
           "native_token_contract": "0x5c6cb93b1fc4e0a1274d07852cbd7ebd201b6593",
           "empty_label_hash": "0x3f3fcc15032dacacd8a3864982ab4207e1f7bc7a882d8a98b48f9ac6dd2084cb"
+        }
+      },
+      "morph": {
+        "tld_list": ["mph"],
+        "network_id": 2818,
+        "subgraph_name": "morph-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xe3b46508112af26f72b0d2d5f62d811ba20bcab0",
+          "empty_label_hash": "0x142333e25a92a966268fd01073bff15ebe24bf96050034d690952429654e538e"
         },
         "meta": {
           "short_name": "SPACE ID",

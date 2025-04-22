@@ -85,3 +85,8 @@ provider = [
     { label = "mint-mainnet", url = "https://rpc.mintchain.io", features = [] }
 ]
 shard = "primary"
+[chains.morph-mainnet]
+provider = [
+    { label = "morph-mainnet", url = "https://rpc.morphl2.io", features = [] }
+]
+shard = "primary"
