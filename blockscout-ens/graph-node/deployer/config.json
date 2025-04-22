@@ -99,6 +99,11 @@
       "subgraph_path": "../subgraphs/zeta-subgraph",
       "subgraph_name": "zeta-subgraph",
       "network": "zeta-mainnet"
+    },
+    "morph": {
+      "subgraph_path": "../subgraphs/morph-subgraph",
+      "subgraph_name": "morph-subgraph",
+      "network": "morph-mainnet"
     }
   }
 }
