@@ -220,7 +220,8 @@ mod tests {
             file_name: "file_name".to_string(),
             contract_name: "contract_name".to_string(),
             compiler_version: "compiler_version".to_string(),
-            compiler_settings: "compiler_settings".to_string(),
+            compiler_settings: "{\"libraries\":{\"file_name\":{\"library\":\"0x1234\"}}}"
+                .to_string(),
             source_type: proto::source::SourceType::Solidity.into(),
             source_files: BTreeMap::from([("source".into(), "content".into())]),
             abi: Some("abi".into()),

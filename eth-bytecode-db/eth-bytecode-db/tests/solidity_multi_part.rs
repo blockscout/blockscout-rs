@@ -90,7 +90,6 @@ async fn test_historical_data_is_added_into_database(service: MockSolidityVerifi
         "bytecode_type": "CreationInput",
         "compiler_version": "compiler_version",
         "evm_version": "london",
-        "libraries": {},
         "optimization_runs": null,
         "source_files": {}
     });
