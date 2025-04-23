@@ -264,7 +264,7 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Transaction::StageId).small_unsigned().not_null())
+                    .col(ColumnDef::new(Transaction::StageId).integer().not_null())
                     .col(ColumnDef::new(Transaction::Hash).string().not_null())
                     .col(ColumnDef::new(Transaction::InsertedAt).timestamp().not_null())
                     .col(

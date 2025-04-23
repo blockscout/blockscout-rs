@@ -3,6 +3,7 @@ use crate::client::models::{
 };
 use anyhow::anyhow;
 use sea_orm::{
+    prelude::DateTime,
     sea_query::OnConflict,
     ActiveEnum,
     ActiveModelTrait,
@@ -618,8 +619,6 @@ impl TacDatabase {
         // Generate a unique transaction ID for tracking
         let tx_id = Uuid::new_v4();
 
-        tracing::info!("SQL: {}", sql);
-
         // Create the statement
         let update_stmt =
             Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, vec![]);
@@ -801,7 +800,6 @@ impl TacDatabase {
                     inserted_at: Set(now),
                 };
 
-                // TODO: Update operation_stage if existing
                 match operation_stage::Entity::insert(stage_model)
                     .on_conflict(
                         sea_orm::sea_query::OnConflict::column(operation::Column::Id)
@@ -818,15 +816,13 @@ impl TacDatabase {
                             operation.id
                         );
 
-                        // TODO: Remove existing transactions for this stage first (selected by stage_id)
-
                         // store transactions for this stage
                         for tx in data.transactions.iter() {
                             let now = chrono::Utc::now().naive_utc();
                             
                             let tx_model = transaction::ActiveModel {
                                 id: NotSet,
-                                stage_id: Set(inserted_stage.id as i16),
+                                stage_id: Set(inserted_stage.id),
                                 hash: Set(tx.hash.clone()),
                                 blockchain_type: Set(tx.blockchain_type.to_string()),
                                 inserted_at: Set(now),
@@ -938,11 +934,13 @@ impl TacDatabase {
                         MIN(start) AS min_start,
                         MAX(finish) AS max_finish,
                         COUNT(*) AS total_intervals,
-                        COUNT(CASE WHEN "status" = {} THEN 1 END) AS pending_intervals,
-                        COUNT(CASE WHEN "status" = {} THEN 1 END) AS processing_intervals,
-                        COUNT(CASE WHEN "status" = {} THEN 1 END) AS finalized_intervals,
-                        COUNT(CASE WHEN "status" != {} AND retry_count > 0 THEN 1 END) AS failed_intervals,
-                        SUM(CASE WHEN "status" = {} THEN (finish - start) ELSE 0 END)::BIGINT AS finalized_period
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS pending_intervals,
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS processing_intervals,
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS finalized_intervals,
+                        COUNT(CASE WHEN status != '{}'::status_enum AND retry_count > 0 THEN 1 END) AS failed_intervals,
+                        SUM(CASE WHEN status = '{}'::status_enum 
+                                THEN EXTRACT(EPOCH FROM finish - start) ELSE 0 END
+                            )::BIGINT AS finalized_period
                     FROM interval
                 )
                 SELECT * FROM interval_stats
@@ -958,10 +956,12 @@ impl TacDatabase {
         match self.db.query_one(sql).await? {
             Some(interval_data) => {
                 let first_timestamp = interval_data
-                    .try_get::<Option<i64>>("", "min_start")?
-                    .unwrap_or(0) as u64;
+                    .try_get::<Option<DateTime>>("", "min_start")?
+                    .map(|dt| dt.and_utc().timestamp() as u64)
+                    .unwrap_or(0);
                 let last_timestamp = interval_data
-                    .try_get::<Option<i64>>("", "max_finish")?
+                    .try_get::<Option<DateTime>>("", "max_finish")?
+                    .map(|dt| dt.and_utc().timestamp() as u64)
                     .unwrap_or(0) as u64;
                 let total_intervals = interval_data.try_get::<i64>("", "total_intervals")? as usize;
                 let pending_intervals = interval_data.try_get::<i64>("", "pending_intervals")? as usize;
@@ -998,11 +998,11 @@ impl TacDatabase {
                     SELECT
                         MAX(timestamp) AS max_timestamp,
                         COUNT(*) AS total_operations,
-                        COUNT(CASE WHEN status = {} THEN 1 END) AS pending_operations,
-                        COUNT(CASE WHEN status = {} THEN 1 END) AS processing_operations,
-                        COUNT(CASE WHEN status = {} THEN 1 END) AS finalized_operations,
-                        COUNT(CASE WHEN status != {} AND retry_count > 0 THEN 1 END) AS failed_operations
-                    FROM interval
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS pending_operations,
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS processing_operations,
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS finalized_operations,
+                        COUNT(CASE WHEN status != '{}'::status_enum AND retry_count > 0 THEN 1 END) AS failed_operations
+                    FROM operation
                 )
                 SELECT * FROM operation_stats
                 "#,
@@ -1016,7 +1016,8 @@ impl TacDatabase {
         match self.db.query_one(sql).await? {
             Some(operation_data) => {
                 let max_timestamp = operation_data
-                    .try_get::<Option<i64>>("", "max_timestamp")?
+                    .try_get::<Option<DateTime>>("", "max_timestamp")?
+                    .map(|dt| dt.and_utc().timestamp() as u64)
                     .unwrap_or(0) as u64;
                 let total_operations = operation_data.try_get::<i64>("", "total_operations")? as usize;
                 let pending_operations = operation_data.try_get::<i64>("", "pending_operations")? as usize;
@@ -1159,7 +1160,7 @@ impl TacDatabase {
                 if let Some(tx_id) = row.tx_id {
                     let tx = transaction::Model {
                         id: tx_id,
-                        stage_id: row.tx_stage_id.unwrap_or_default() as i16,
+                        stage_id: row.tx_stage_id.unwrap_or_default(),
                         hash: row.tx_hash.clone().unwrap_or_default(),
                         blockchain_type: row.tx_blockchain_type.clone().unwrap_or_default(),
                         inserted_at: now,

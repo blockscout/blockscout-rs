@@ -7,7 +7,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub stage_id: i16,
+    pub stage_id: i32,
     pub hash: String,
     pub inserted_at: DateTime,
     pub blockchain_type: String,
