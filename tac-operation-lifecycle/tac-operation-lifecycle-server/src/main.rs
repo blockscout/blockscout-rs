@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use blockscout_service_launcher::{database, launcher::ConfigSettings};
 use migration::Migrator;
-use tac_operation_lifecycle_logic::{client::Client, database::TacDatabase, Indexer};
+use tac_operation_lifecycle_logic::{client::Client, database::TacDatabase};
 use tac_operation_lifecycle_server::{run, Settings};
 use tokio::sync::Mutex;
 
@@ -16,13 +16,5 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let client = Arc::new(Mutex::new(Client::new(settings.clone().rpc)));
 
-    let indexer = Indexer::new(settings.clone().indexer.unwrap(), db.clone()).await?;
-
-    let concurrency = settings.clone().indexer.unwrap().concurrency as usize;
-
-    tokio::spawn(async move {
-        indexer.start(client, concurrency).await.unwrap();
-    });
-
-    run(settings, db.clone()).await
+    run(&settings, db.clone(), client).await
 }

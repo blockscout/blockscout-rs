@@ -8,7 +8,9 @@ use crate::{
 };
 use blockscout_service_launcher::{launcher::{self, GracefulShutdownHandler, LaunchSettings}, tracing};
 
-use tac_operation_lifecycle_logic::database::TacDatabase;
+use tac_operation_lifecycle_logic::{client::Client, database::TacDatabase, Indexer};
+use tokio::sync::Mutex;
+
 
 use std::sync::Arc;
 
@@ -38,10 +40,10 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(
-    settings: Settings,
+    settings: &Settings,
     db: Arc<TacDatabase>,
+    client: Arc<Mutex<Client>>
 ) -> Result<(), anyhow::Error> {
-    println!("running server");
     tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
@@ -60,10 +62,17 @@ pub async fn run(
 
     let launch_settings = LaunchSettings {
         service_name: SERVICE_NAME.to_string(),
-        server: settings.server,
-        metrics: settings.metrics,
+        server: settings.server.clone(),
+        metrics: settings.metrics.clone(),
         graceful_shutdown: GracefulShutdownHandler::new(),
     };
+
+    // launching indexer in the thread
+    let indexer = Indexer::new(settings.clone().indexer.unwrap(), db.clone()).await?;
+    let concurrency = settings.clone().indexer.unwrap().concurrency as usize;
+    tokio::spawn(async move {
+        indexer.start(client, concurrency).await.unwrap();
+    });
 
     launcher::launch(launch_settings, http_router, grpc_router).await
 }
