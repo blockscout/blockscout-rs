@@ -81,7 +81,8 @@
             "charts_order": [
                 "average_gas_limit",
                 "average_gas_price",
-                "gas_used_growth"
+                "gas_used_growth",
+                "average_gas_used"
             ]
         },
         {

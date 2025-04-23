@@ -55,6 +55,7 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
             "averageGasPrice",
             "averageTxnFee",
             "gasUsedGrowth",
+            "averageGasUsed",
             // "nativeCoinHoldersGrowth",
             // "nativeCoinSupply",
             // "newNativeCoinHolders",

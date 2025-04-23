@@ -83,6 +83,9 @@ pub use average_gas_limit::{
 pub use average_gas_price::{
     AverageGasPrice, AverageGasPriceMonthly, AverageGasPriceWeekly, AverageGasPriceYearly,
 };
+pub use average_gas_used::{
+    AverageGasUsed, AverageGasUsedMonthly, AverageGasUsedWeekly, AverageGasUsedYearly,
+};
 pub use average_txn_fee::{
     AverageTxnFee, AverageTxnFeeMonthly, AverageTxnFeeWeekly, AverageTxnFeeYearly,
 };

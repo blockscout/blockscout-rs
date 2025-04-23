@@ -138,6 +138,15 @@ construct_update_group!(NewBlocksGroup {
         NewBlocksWeekly,
         NewBlocksMonthly,
         NewBlocksYearly,
+        // AverageGasUsed uses new blocks + gas used growth
+        GasUsedGrowth,
+        GasUsedGrowthWeekly,
+        GasUsedGrowthMonthly,
+        GasUsedGrowthYearly,
+        AverageGasUsed,
+        AverageGasUsedWeekly,
+        AverageGasUsedMonthly,
+        AverageGasUsedYearly,
         // if the following are enabled, then NewTxns is updated as well
         ArbitrumNewOperationalTxns,
         ArbitrumNewOperationalTxnsWeekly,
