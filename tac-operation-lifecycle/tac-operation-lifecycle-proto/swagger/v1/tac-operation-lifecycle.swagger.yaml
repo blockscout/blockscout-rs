@@ -53,45 +53,7 @@ paths:
             $ref: '#/definitions/rpcStatus'
       tags:
         - TacStatistic
-  /api/v1/tac/operation/tx/{tx_hash}:
-    get:
-      operationId: TacService_GetOperationByTransaction
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1OperationDetails'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: tx_hash
-          in: path
-          required: true
-          type: string
-      tags:
-        - TacService
-  /api/v1/tac/operation/{operation_id}:
-    get:
-      operationId: TacService_GetOperationDetails
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1OperationDetails'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: operation_id
-          in: path
-          required: true
-          type: string
-      tags:
-        - TacService
-  /api/v1/tac/operations/list:
+  /api/v1/tac/operations:
     get:
       operationId: TacService_GetOperations
       responses:
@@ -114,6 +76,44 @@ paths:
           required: false
           type: string
           format: uint64
+      tags:
+        - TacService
+  /api/v1/tac/operations/{operation_id}:
+    get:
+      operationId: TacService_GetOperationDetails
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationDetails'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - TacService
+  /api/v1/tac/operations:byTx/{tx_hash}:
+    get:
+      operationId: TacService_GetOperationByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationDetails'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
       tags:
         - TacService
   /health:

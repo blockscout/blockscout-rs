@@ -83,14 +83,14 @@ struct JoinedRow {
     // operation
     op_id: String,
     operation_type: Option<String>,
-    timestamp: i64,
+    timestamp: DateTime,
     status: StatusEnum,
 
     //operation_stage
     stage_id: Option<i32>,
-    stage_type_id: Option<i32>,
+    stage_type_id: i16,
     stage_success: bool,
-    stage_timestamp: Option<i64>,
+    stage_timestamp: Option<DateTime>,
     stage_note: Option<String>,
 
     // transaction
@@ -1057,7 +1057,7 @@ impl TacDatabase {
         let sql = format!(
             r#"
             SELECT 
-                o.id as op_id, o.operation_type, o.timestamp, o.status,
+                o.id as op_id, o.operation_type, o.timestamp, o.status::text,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1083,7 +1083,7 @@ impl TacDatabase {
         let sql = format!(
             r#"
             SELECT 
-                o.id as op_id, o.operation_type, o.timestamp, o.status,
+                o.id as op_id, o.operation_type, o.timestamp, o.status::text,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1132,7 +1132,7 @@ impl TacDatabase {
         let op_model = operation::Model {
             id: op_row.op_id.clone(),
             operation_type: op_row.operation_type.clone(),
-            timestamp: Self::timestamp_to_naive(op_row.timestamp),
+            timestamp: op_row.timestamp,
             next_retry: None,
             status: op_row.status.clone(),
             retry_count: 0,
@@ -1152,9 +1152,9 @@ impl TacDatabase {
                         operation_stage::Model {
                             id: stage_id,
                             operation_id: op_model.id.clone(),
-                            stage_type_id: row.stage_type_id.unwrap_or_default() as i16,
+                            stage_type_id: row.stage_type_id,
                             success: row.stage_success,
-                            timestamp: Self::timestamp_to_naive(row.stage_timestamp.unwrap_or_default()),
+                            timestamp: row.stage_timestamp.unwrap_or_default(),
                             note: row.stage_note.clone(),
                             inserted_at: now,
                         },
@@ -1191,7 +1191,7 @@ impl TacDatabase {
         let mut query = operation::Entity::find();
 
         if let Some(ts) = earlier_timestamp {
-            query = query.filter(Column::Timestamp.lt(ts as i64));
+            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(ts as i64)));
         }
 
         query = match sort {
