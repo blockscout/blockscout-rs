@@ -12,12 +12,12 @@ service TacService {
 }
 
 message Pagination {
-  uint64 page_timestamp = 1;
+  uint64 page_token = 1;
   uint32 page_items = 2;
 }
 
 message GetOperationsRequest {
-  optional uint64 page_timestamp = 1;
+  optional uint64 page_token = 1;
   optional uint64 page_items = 2;
 }
 

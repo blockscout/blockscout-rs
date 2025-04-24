@@ -66,7 +66,7 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: page_timestamp
+        - name: page_token
           in: query
           required: false
           type: string
@@ -351,7 +351,7 @@ definitions:
   v1Pagination:
     type: object
     properties:
-      page_timestamp:
+      page_token:
         type: string
         format: uint64
       page_items:

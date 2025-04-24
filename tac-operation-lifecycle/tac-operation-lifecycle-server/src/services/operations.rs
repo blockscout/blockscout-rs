@@ -89,7 +89,7 @@ impl TacService for OperationsService {
 
         match self
             .db
-            .get_operations(PAGE_SIZE, inner.page_timestamp, OrderDirection::LatestFirst)
+            .get_operations(PAGE_SIZE, inner.page_token, OrderDirection::LatestFirst)
             .await
         {
             Ok(operations) => {
@@ -113,7 +113,7 @@ impl TacService for OperationsService {
                         .collect(),
                     next_page_params: match last_timestamp {
                         Some(ts) => Some(Pagination {
-                            page_timestamp: ts,
+                            page_token: ts,
                             page_items: inner.page_items.unwrap_or(0) as u32 + PAGE_SIZE as u32,
                         }),
                         _ => None,
