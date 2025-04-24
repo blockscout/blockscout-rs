@@ -1,6 +1,7 @@
 use crate::{
     proto::{
         health_actix::route_health, health_server::HealthServer,
+        tac_service_server::TacServiceServer, tac_statistic_server::TacStatisticServer,
         tac_service_actix::route_tac_service, tac_statistic_actix::route_tac_statistic,
     },
     services::{HealthService, OperationsService, StatisticService},
@@ -25,9 +26,11 @@ struct Router {
 
 
 impl Router {
-//GRPC is not required for this service, leaving this simply for compatibility with the launcher
     pub fn grpc_router(&self) -> tonic::transport::server::Router {
-        tonic::transport::Server::builder().add_service(HealthServer::from_arc(self.health.clone()))
+        tonic::transport::Server::builder()
+            .add_service(HealthServer::from_arc(self.health.clone()))
+            .add_service(TacStatisticServer::from_arc(self.stat.clone()))
+            .add_service(TacServiceServer::from_arc(self.operations.clone()))
     }
 }
 
