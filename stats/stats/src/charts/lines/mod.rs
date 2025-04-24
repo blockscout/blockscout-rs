@@ -110,6 +110,10 @@ pub use native_coin_holders_growth::{
 pub use native_coin_supply::{
     NativeCoinSupply, NativeCoinSupplyMonthly, NativeCoinSupplyWeekly, NativeCoinSupplyYearly,
 };
+pub use network_utilization::{
+    NetworkUtilization, NetworkUtilizationMonthly, NetworkUtilizationWeekly,
+    NetworkUtilizationYearly,
+};
 pub use new_accounts::{NewAccounts, NewAccountsMonthly, NewAccountsWeekly, NewAccountsYearly};
 pub use new_blocks::{NewBlocks, NewBlocksMonthly, NewBlocksWeekly, NewBlocksYearly};
 pub use new_builder_accounts::{

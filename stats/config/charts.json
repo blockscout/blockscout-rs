@@ -316,6 +316,10 @@
             "description": "Average price (Gwei) per unit of gas",
             "units": "Gwei"
         },
+        "network_utilization": {
+            "title": "Network utilization",
+            "description": "Percentage of gas used compared to the gas limit"
+        },
         "new_verified_contracts": {
             "title": "New verified contracts",
             "description": "Number of newly verified contracts"

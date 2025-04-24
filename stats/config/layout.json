@@ -82,6 +82,7 @@
                 "average_gas_limit",
                 "average_gas_price",
                 "gas_used_growth",
+                "network_utilization",
                 "average_gas_used"
             ]
         },

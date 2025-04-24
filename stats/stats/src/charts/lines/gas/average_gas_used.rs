@@ -2,7 +2,7 @@ use crate::{
     data_source::kinds::{
         data_manipulation::{
             delta::Delta,
-            map::{MapCalculateAverage, MapParseTo, MapToString, StripExt},
+            map::{MapDivide, MapParseTo, MapToString, StripExt},
             resolutions::average::AverageLowerResolution,
         },
         local_db::{
@@ -51,7 +51,7 @@ define_and_impl_resolution_properties!(
 pub type TotalGasUsed = Delta<GasUsedGrowthInt>;
 
 pub type AverageGasUsed = DirectVecLocalDbChartSource<
-    MapToString<MapCalculateAverage<TotalGasUsed, NewBlocksInt>>,
+    MapToString<MapDivide<TotalGasUsed, NewBlocksInt>>,
     Batch30Days,
     Properties,
 >;
@@ -62,18 +62,21 @@ pub type AverageGasUsedWeekly = DirectVecLocalDbChartSource<
     Batch30Weeks,
     WeeklyProperties,
 >;
+pub type AverageGasUsedWeeklyFloat = MapParseTo<StripExt<AverageGasUsedWeekly>, f64>;
 
 pub type AverageGasUsedMonthly = DirectVecLocalDbChartSource<
     MapToString<AverageLowerResolution<AverageGasUsedFloat, NewBlocksInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
+pub type AverageGasUsedMonthlyFloat = MapParseTo<StripExt<AverageGasUsedMonthly>, f64>;
 
 pub type AverageGasUsedYearly = DirectVecLocalDbChartSource<
     MapToString<AverageLowerResolution<AverageGasUsedFloat, NewBlocksInt, Year>>,
     Batch30Years,
     YearlyProperties,
 >;
+pub type AverageGasUsedYearlyFloat = MapParseTo<StripExt<AverageGasUsedYearly>, f64>;
 
 #[cfg(test)]
 mod tests {

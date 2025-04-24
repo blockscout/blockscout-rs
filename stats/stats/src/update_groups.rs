@@ -147,6 +147,10 @@ construct_update_group!(NewBlocksGroup {
         AverageGasUsedWeekly,
         AverageGasUsedMonthly,
         AverageGasUsedYearly,
+        NetworkUtilization,
+        NetworkUtilizationWeekly,
+        NetworkUtilizationMonthly,
+        NetworkUtilizationYearly,
         // if the following are enabled, then NewTxns is updated as well
         ArbitrumNewOperationalTxns,
         ArbitrumNewOperationalTxnsWeekly,
