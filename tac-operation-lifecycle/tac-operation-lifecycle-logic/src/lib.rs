@@ -5,7 +5,6 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    thread,
     time::Duration,
 };
 
@@ -236,7 +235,7 @@ impl Indexer {
                         }
                     },
                     Err(e) => {
-                        tracing::error!("[Thread {:?}] Unable to select intervals from the database: {}", thread::current().id(), e);
+                        tracing::error!("Unable to select intervals from the database: {}", e);
                     },
                 }
 
@@ -300,7 +299,7 @@ impl Indexer {
                         }
                     },
                     Err(e) => {
-                        tracing::error!("[Thread {:?}] Unable to select failed intervals from the database: {}", thread::current().id(), e);
+                        tracing::error!("Unable to select failed intervals from the database: {}", e);
                     },
                 }
 
@@ -379,10 +378,8 @@ impl Indexer {
         client: Arc<Mutex<Client>>,
     ) -> Result<usize, Error> {
         let mut client = client.lock().await;
-        let thread_id = thread::current().id();
         tracing::debug!(
-            "[Thread {:?}] Processing interval job: {:?}",
-            thread_id,
+            "Processing interval job: {:?}",
             job
         );
 
@@ -403,7 +400,7 @@ impl Indexer {
         let request_start = request_start.and_utc().timestamp() as u64 ;
         let request_end = job.interval.finish.and_utc().timestamp() as u64;
         let operations = client
-            .get_operations(request_start, request_end)
+            .get_operations(request_start + 1, request_end)
             .instrument(tracing::debug_span!(
                 "get_operations",
                 interval_id = job.interval.id,
@@ -415,8 +412,7 @@ impl Indexer {
 
         if ops_num > 0 {
             tracing::info!(
-                "[Thread {:?}] Fetched {} {} operation_ids: [\n\t{}\n]",
-                thread_id,
+                "Fetched {} {} operation_ids: [\n\t{}\n]",
                 ops_num,
                 job_type,
                 operations
@@ -436,8 +432,7 @@ impl Indexer {
             .await?;
 
         tracing::debug!(
-            "[Thread {:?}] Successfully processed {} job (id={})",
-            thread_id,
+            "Successfully processed {} job (id={})",
             job_type,
             job.interval.id,
         );
@@ -535,7 +530,7 @@ impl Indexer {
                 updated_operations
             );
         }
-        
+
         // Create streams
         let realtime = self.realtime_stream();
         let realtime_intervals = self.interval_stream(

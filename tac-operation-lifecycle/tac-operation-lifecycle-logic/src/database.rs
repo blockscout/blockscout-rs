@@ -11,7 +11,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
-use std::{cmp::min, collections::HashMap, sync::Arc, thread, time::Instant};
+use std::{cmp::min, collections::HashMap, sync::Arc, time::Instant};
 use tac_operation_lifecycle_entity::{
     interval, operation::{self, Column}, operation_stage, sea_orm_active_enums::StatusEnum, stage_type, transaction, watermark
 };
@@ -332,8 +332,6 @@ impl TacDatabase {
         &self,
         operations: &ApiOperations,
     ) -> anyhow::Result<()> {
-        let thread_id = thread::current().id();
-
         // Start a transaction
         let txn = self.db.begin().await?;
 
@@ -353,8 +351,7 @@ impl TacDatabase {
             };
 
             tracing::debug!(
-                "[Thread {:?}] Attempting to insert operation: {:?}",
-                thread_id,
+                "Attempting to insert operation: {:?}",
                 operation_model
             );
 
@@ -365,17 +362,25 @@ impl TacDatabase {
                         .do_nothing()
                         .to_owned(),
                 )
-                .exec(&txn)
+                .exec_without_returning(&txn)
                 .await
             {
-                Ok(_) => tracing::debug!(
-                    "[Thread {:?}] Successfully inserted or skipped operation",
-                    thread_id
-                ),
+                Ok(cnt) => {
+                    if cnt > 0 {
+                        tracing::debug!(
+                            "Successfully inserted or skipped operation {}",
+                            op.id
+                        );
+                    } else {
+                        tracing::warn!(
+                            "Operation {} skipped due to conflict",
+                            op.id
+                        );
+                    }
+                }
                 Err(e) => {
-                    tracing::debug!(
-                        "[Thread {:?}] Error inserting operation: {:?}",
-                        thread_id,
+                    tracing::error!(
+                        "Error inserting operation: {:?}",
                         e
                     );
                     // Don't fail the entire batch for a single operation

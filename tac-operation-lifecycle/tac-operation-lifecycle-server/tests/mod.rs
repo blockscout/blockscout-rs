@@ -3,8 +3,9 @@ use std::sync::Arc;
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use futures::StreamExt;
 use reqwest::Url;
-use tac_operation_lifecycle_logic::{client::settings::RpcSettings, database::TacDatabase};
+use tac_operation_lifecycle_logic::{client::{Client, settings::RpcSettings}, database::TacDatabase};
 use tac_operation_lifecycle_server::Settings;
+use tokio::sync::Mutex;
 
 pub async fn init_db(test_name: &str) -> TestDbGuard {
     TestDbGuard::new::<migration::Migrator>(test_name).await
@@ -30,10 +31,12 @@ where
 
     let test_db = init_db(test_name).await;
     let db = Arc::new(TacDatabase::new(test_db.client(), settings.indexer.clone().unwrap().start_timestamp));
+    let client = Arc::new(Mutex::new(Client::new(settings.clone().rpc)));
+
 
     test_server::init_server(
         move || {
-            tac_operation_lifecycle_server::run(settings, db.clone())
+            tac_operation_lifecycle_server::run(settings, db.clone(), client)
         },
         &base,
     )

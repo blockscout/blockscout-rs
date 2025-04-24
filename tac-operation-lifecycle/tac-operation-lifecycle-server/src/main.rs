@@ -16,5 +16,5 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let client = Arc::new(Mutex::new(Client::new(settings.clone().rpc)));
 
-    run(&settings, db.clone(), client).await
+    run(settings, db.clone(), client).await
 }

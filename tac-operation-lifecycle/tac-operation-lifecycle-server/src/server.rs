@@ -40,7 +40,7 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(
-    settings: &Settings,
+    settings: Settings,
     db: Arc<TacDatabase>,
     client: Arc<Mutex<Client>>
 ) -> Result<(), anyhow::Error> {
