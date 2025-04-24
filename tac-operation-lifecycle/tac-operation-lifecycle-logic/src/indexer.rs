@@ -191,7 +191,10 @@ impl Indexer {
             self.realtime_boundary
                 .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
                     if new_boundary_candidate > current {
-                        tracing::info!("Realtime boundary is moved to {}", new_boundary_candidate);
+                        tracing::info!(
+                            new_value =? new_boundary_candidate,
+                            "Realtime boundary is moved forward"
+                        );
                         Some(new_boundary_candidate)
                     } else {
                         None
@@ -236,7 +239,14 @@ impl Indexer {
                         }
                     },
                     Err(e) => {
-                        tracing::error!("Unable to select intervals from the database: {}", e);
+                        tracing::error!(
+                            requested_count =? INTERVALS_QUERY_RESULT_SIZE,
+                            from,
+                            to,
+                            direction =? direction,
+                            err =? e,
+                            "Unable to select intervals from the database"
+                        );
                     },
                 }
 
@@ -265,7 +275,11 @@ impl Indexer {
                         }
                     },
                     Err(e) => {
-                        tracing::error!("Unable to select operations from the database: {}", e);
+                        tracing::error!(
+                            direction =? OrderDirection::EarliestFirst,
+                            err =? e,
+                            "Unable to select operations from the database"
+                        );
                     },
                 }
 
@@ -286,7 +300,7 @@ impl Indexer {
                     ))
                     .await {
                     Ok(selected) => {
-                        tracing::debug!("Failed intervals found: {}", selected.len());
+                        tracing::debug!(count =? selected.len(), "Found failed intervals");
                         for interval in selected {
                             // Yield the job
                             yield IndexerJob::Interval(Job {
@@ -295,7 +309,7 @@ impl Indexer {
                         }
                     },
                     Err(e) => {
-                        tracing::error!("Unable to select failed intervals from the database: {}", e);
+                        tracing::error!(err =? e, "Unable to select failed intervals from the database");
                     },
                 }
 
@@ -318,7 +332,7 @@ impl Indexer {
                     ))
                     .await {
                     Ok(selected) => {
-                        tracing::debug!("Failed operations found: {}", selected.len());
+                        tracing::debug!(count =? selected.len(), "Found failed operations");
                         for operation in selected {
                             // Yield the job
                             yield IndexerJob::Operation(OperationJob {
@@ -327,7 +341,7 @@ impl Indexer {
                         }
                     },
                     Err(e) => {
-                        tracing::error!("Unable to select failed operations from the database: {}", e);
+                        tracing::error!(err =? e, "Unable to select failed operations from the database");
                     },
                 }
 
@@ -346,15 +360,15 @@ impl Indexer {
             Ok(num) => {
                 if num > 0 {
                     tracing::debug!(
-                        "Successfully fetched {} operations for interval {}",
-                        num,
-                        job.interval.id
+                        interval_id =? job.interval.id,
+                        count =? num,
+                        "Successfully fetched operations for interval",
                     );
                 }
             }
 
             Err(e) => {
-                tracing::error!("Failed to fetch operations: {}", e);
+                tracing::error!(err =? e, "Failed to fetch operations");
 
                 // Schedule retry with exponential backoff
                 let retries = job.interval.retry_count;
@@ -375,8 +389,8 @@ impl Indexer {
     ) -> Result<usize, Error> {
         let mut client = client.lock().await;
         tracing::debug!(
-            "Processing interval job: {:?}",
-            job
+            job =? job,
+            "Processing interval job",
         );
 
 
@@ -408,8 +422,8 @@ impl Indexer {
 
         if ops_num > 0 {
             tracing::info!(
-                "Fetched {} {} operation_ids: [\n\t{}\n]",
-                ops_num,
+                count =? ops_num,
+                "Fetched {} operation_ids: [\n\t{}\n]",
                 job_type,
                 operations
                     .iter()
@@ -428,9 +442,9 @@ impl Indexer {
             .await?;
 
         tracing::debug!(
-            "Successfully processed {} job (id={})",
             job_type,
-            job.interval.id,
+            interval_id =? job.interval.id,
+            "Successfully processed job",
         );
 
         Ok(ops_num)
@@ -467,14 +481,17 @@ impl Indexer {
                             processed_operations = processed_operations + 1;
                         }
                         None => {
-                            tracing::error!("Stage profiling response contains unknown operation (id = {}). Skipping...", op_id);
+                            tracing::error!(
+                                operation_id =? op_id,
+                                "Stage profiling response contains unknown operation. Skipping..."
+                            );
                         }
                     }
                 }
 
-                tracing::debug!(
-                    "Successfully processed {} operations: [{}]",
-                    processed_operations,
+                tracing::info!(
+                    count =? processed_operations,
+                    "Successfully processed operations: [{}]",
                     op_ids.join(",\n\t")
                 );
             }
@@ -499,7 +516,7 @@ impl Indexer {
 
     #[instrument(name = "indexer", skip_all, level = "info")]
     pub async fn start(&self, client: Arc<Mutex<Client>>, concurrency: usize) -> anyhow::Result<()> {
-        tracing::warn!("Initializing TAC indexer");
+        tracing::info!("Initializing TAC indexer");
 
         self.ensure_stages_types_exist().await?;
 
@@ -509,21 +526,24 @@ impl Indexer {
             .generate_historical_intervals(current_realtime_timestamp)
             .await?;
         if new_intervals > 0 {
-            tracing::info!("Generated {} historical intervals", new_intervals);
+            tracing::info!(
+                intervals_count =? new_intervals,
+                "Generated historical intervals"
+            );
         }
 
         // Resetting intervals and operations status
         let (updated_intervals, updated_operations) = self.reset_processing_operations().await?;
         if updated_intervals > 0 {
             tracing::info!(
-                "Found and reset {} intervals in 'processing' state",
-                updated_intervals
+                count =? updated_intervals,
+                "Found and reset intervals in 'processing' state"
             );
         }
         if updated_operations > 0 {
             tracing::info!(
-                "Found and reset {} operations in 'processing' state",
-                updated_operations
+                count =? updated_operations,
+                "Found and reset operations in 'processing' state"
             );
         }
 
@@ -571,8 +591,8 @@ impl Indexer {
         );
 
         tracing::debug!(
-            "Starting TAC indexer. Realtime boundary is: {}",
-            current_realtime_timestamp
+            current_realtime_timestamp,
+            "Starting TAC indexer"
         );
 
         
@@ -584,7 +604,7 @@ impl Indexer {
                         let wm = self.database.get_watermark().await.map_err(|e| anyhow::anyhow!("Failed to get watermark: {}", e)).unwrap();
                         let now = chrono::Utc::now().timestamp() as u64;
                         if let Err(e) = self.database.generate_pending_interval(wm, now).await {
-                            tracing::error!("Failed to generate real-time interval: {}", e);
+                            tracing::error!(err =? e, "Failed to generate real-time interval");
                         }
                         anyhow::Ok(())
                     }
@@ -592,7 +612,6 @@ impl Indexer {
                         self.process_interval_with_retries(&job, client.clone())
                             .instrument(tracing::debug_span!(
                                 "processing interval"
-                                
                             ))
                             .await;
                         anyhow::Ok(())
@@ -601,7 +620,6 @@ impl Indexer {
                         self.process_operation_with_retries([&job].to_vec(), client.clone())
                             .instrument(tracing::debug_span!(
                                 "processing operation"
-                                
                             ))
                             .await;
                         anyhow::Ok(())
@@ -613,7 +631,7 @@ impl Indexer {
         let mut buffered_stream = job_futures.buffer_unordered(concurrency);
         while let Some(result) = buffered_stream.next().instrument(tracing::debug_span!("job processing", span_id = Uuid::new_v4().to_string())).await {
             if let Err(e) = result {
-                tracing::error!("Job processing error: {}", e);
+                tracing::error!(err =? e, "Job processing error");
             }
         }
 

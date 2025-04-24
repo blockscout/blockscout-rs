@@ -210,12 +210,20 @@ impl TacDatabase {
                 let _ = self.set_watermark_internal(&tx, to).await?;
 
                 tx.commit().await?;
-                tracing::debug!("Pending interval was added and watermark updated to {}", to);
+                tracing::debug!(
+                    new_watermark =? to,
+                    "Pending interval was added and watermark updated to"
+                );
             }
 
             Err(e) => {
                 tx.rollback().await?;
-                tracing::error!("Failed to add pending interval [{}..{}]: {}", from, to, e);
+                tracing::error!(
+                    from,
+                    to,
+                    err =? e,
+                    "Failed to add pending interval"
+                );
                 return Err(e.into());
             }
         };
@@ -244,7 +252,7 @@ impl TacDatabase {
                 interval::ActiveModel {
                     id: ActiveValue::NotSet,
                     start: ActiveValue::Set(start_naive),
-                    //we don't want to save intervals that are out of specifiedboundaries
+                    //we don't want to save intervals that are out of specified boundaries
                     finish: ActiveValue::Set(finish_naive),
                     inserted_at: ActiveValue::Set(now),
                     updated_at: ActiveValue::Set(now),
@@ -256,11 +264,11 @@ impl TacDatabase {
             .collect();
 
         tracing::debug!(
-            "Total {}s intervals were generated: {} ({}..{})",
-            period_secs,
-            intervals.len(),
+            total_intervals_generated =? intervals.len(),
+            interval_period_secs =? period_secs,
             from,
-            to
+            to,
+            "Pending intervals were generated",
         );
 
         // Process intervals in batches
@@ -287,18 +295,18 @@ impl TacDatabase {
 
                     tx.commit().await?;
                     tracing::debug!(
-                        "Successfully saved batch of {} intervals and updated watermark to {}",
-                        chunk.len(),
-                        if let Some(wm) = updated_watermark {
+                        batch_size =? chunk.len(),
+                        new_watermark =? if let Some(wm) = updated_watermark {
                             wm.to_string()
                         } else {
                             "[NOT_UPDATED]".to_string()
                         },
+                        "Successfully saved batch of intervals and updated watermark",
                     );
                 }
                 Err(e) => {
                     tx.rollback().await?;
-                    tracing::error!("Failed to save batch: {}", e);
+                    tracing::error!(err =? e, "Failed to save batch");
                     return Err(e.into());
                 }
             }
@@ -412,10 +420,10 @@ impl TacDatabase {
             .await
             .map_err(|e| {
                 tracing::error!(
-                    "Failed to update interval {} status to {:?}: {:?}",
-                    interval_model.id,
-                    status.to_value(),
-                    e
+                    interval_id =? interval_model.id,
+                    new_status =? status.to_value(),
+                    err =? e,
+                    "Failed to update interval status",
                 );
                 anyhow!(e)
             })?;
@@ -460,18 +468,18 @@ impl TacDatabase {
             .await
             .map_err(|e| {
                 tracing::error!(
-                    "Failed to update operation {} status to {}: {:?}",
-                    operation_model.id,
-                    status.to_value(),
-                    e
+                    operation_id =? operation_model.id,
+                    new_status =? status.to_value(),
+                    err =? e,
+                    "Failed to update operation status"
                 );
                 anyhow!(e)
             })?;
 
         tracing::debug!(
-            "Successfully updated operation {} status to {}",
-            operation_model.id,
-            status.to_value()
+            operation_id =? operation_model.id,
+            new_status =? status.to_value(),
+            "Successfully updated operation status"
         );
         Ok(())
     }
@@ -488,12 +496,13 @@ impl TacDatabase {
         {
             Some(operation_model) => self.set_operation_status(&operation_model, status).await,
             None => {
-                let err = anyhow!(
-                    "Cannot update operation {} status to {}: not found",
-                    op_id,
-                    status.to_value()
+                let err = anyhow!("operation not found");
+                tracing::error!(
+                    operation_id =? op_id,
+                    new_status =? status.to_value(),
+                    err =? err,
+                    "Cannot update operation status"
                 );
-                tracing::error!("{}", err);
                 Err(err)
             }
         }
@@ -643,11 +652,14 @@ impl TacDatabase {
             .await
         {
             Ok(intervals) => {
-                tracing::debug!("Updated intervals: {}", intervals.len());
+                tracing::debug!(
+                    intervals_count =? intervals.len(),
+                    "Intervals were updated"
+                );
                 Ok(intervals)
             }
             Err(e) => {
-                tracing::error!("Failed to update intervals: {}", e);
+                tracing::error!(err =? e, "Failed to update intervals");
                 Err(e.into())
             }
         }
@@ -721,11 +733,14 @@ impl TacDatabase {
             .await
         {
             Ok(operations) => {
-                tracing::debug!("Updated operations: {}", operations.len());
+                tracing::debug!(
+                    operations_count =? operations.len(),
+                    "Operations were updated"
+                );
                 Ok(operations)
             }
             Err(e) => {
-                tracing::error!("Failed to update operations: {}", e);
+                tracing::error!(err =? e, "Failed to update operations");
                 Err(e.into())
             }
         }
@@ -738,19 +753,16 @@ impl TacDatabase {
     ) -> anyhow::Result<()> {
         let tx_id = Uuid::new_v4();
         let start_time = Instant::now();
-        tracing::debug!(
-            "[TX-{:?}] Beginning transaction for set_operation_data",
-            tx_id
-        );
+        tracing::debug!(tx_id =? tx_id, "Beginning transaction for set_operation_data");
 
         let txn = match self.db.begin().await {
             Ok(txn) => txn,
             Err(e) => {
                 tracing::error!(
-                    "[TX-{:?}] Failed to begin transaction after {:?}ms: {}",
-                    tx_id,
-                    start_time.elapsed().as_millis(),
-                    e
+                    tx_id =? tx_id,
+                    time_elapsed_ms =? start_time.elapsed().as_millis(),
+                    err =? e,
+                    "Failed to begin transaction",
                 );
                 return Err(anyhow!(e));
             }
@@ -763,9 +775,9 @@ impl TacDatabase {
             .await
         {
             tracing::error!(
-                "Failed to delete existing stages for operation {}: {}",
-                operation.id,
-                e
+                operation_id =? operation.id,
+                err =? e,
+                "Failed to delete existing stages for operation"
             );
             let _ = txn.rollback().await;
             return Err(e.into());
@@ -775,7 +787,6 @@ impl TacDatabase {
         let mut operation_model: operation::ActiveModel = operation.clone().into();
         if operation_data.operation_type.is_finalized() {
             operation_model.status = Set(StatusEnum::Completed);
-            // assume completed status
         }
         operation_model.operation_type = Set(Some(operation_data.operation_type.to_string()));
 
@@ -787,7 +798,10 @@ impl TacDatabase {
             ))
             .await
         {
-            tracing::error!("Failed to update operation status: {}", e);
+            tracing::error!(
+                operation_id =? operation.id,
+                err =? e, "Failed to update operation status"
+            );
             let _ = txn.rollback().await;
 
             return Err(e.into());
@@ -819,9 +833,9 @@ impl TacDatabase {
                 {
                     Ok(inserted_stage) => {
                         tracing::debug!(
-                            "Successfully inserted stage {} for op_id {}",
-                            inserted_stage.stage_type_id,
-                            operation.id
+                            stage_type =? inserted_stage.stage_type_id,
+                            operation_id =? operation.id,
+                            "Successfully inserted stage for operation"
                         );
 
                         // store transactions for this stage
@@ -838,15 +852,19 @@ impl TacDatabase {
 
                             match transaction::Entity::insert(tx_model).exec(&txn).await {
                                 Ok(_) => tracing::debug!(
-                                    "Successfully inserted transaction for stage_id {}",
-                                    inserted_stage.id
+                                    stage_id =? inserted_stage.id,
+                                    "Successfully inserted transaction for stage",
                                 ),
-                                Err(e) => tracing::error!("Error inserting transaction: {:?}", e),
+                                Err(e) => tracing::error!(
+                                    stage_id =? inserted_stage.id,
+                                    err =? e,
+                                    "Error inserting transaction for stage"
+                                ),
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::debug!("Error inserting stage: {:?}", e);
+                        tracing::debug!(err =? e, "Error inserting stage");
                         // Don't fail the entire batch for a single operation
                         continue;
                     }
@@ -868,10 +886,10 @@ impl TacDatabase {
             Ok(_) => Ok(()),
             Err(e) => {
                 tracing::error!(
-                    "[TX-{:?}] Failed to commit transaction after {:?}ms: {}",
-                    tx_id,
-                    commit_start.elapsed().as_millis(),
-                    e
+                    tx_id =? tx_id,
+                    time_elapsed_ms =? commit_start.elapsed().as_millis(),
+                    err =? e,
+                    "Failed to commit transaction",
                 );
                 Err(e.into())
             }
@@ -896,7 +914,11 @@ impl TacDatabase {
         match interval_model.update(self.db.as_ref()).await {
             Ok(_) => Ok(()),
             Err(e) => {
-                tracing::error!("Failed to update interval {} for retry: {}", interval.id, e);
+                tracing::error!(
+                    interval_id =? interval.id,
+                    err =? e,
+                    "Failed to update interval for retry"
+                );
                 Err(e.into())
             }
         }
@@ -921,9 +943,9 @@ impl TacDatabase {
             Ok(_) => Ok(()),
             Err(e) => {
                 tracing::error!(
-                    "Failed to update operation {} for retry: {}",
-                    operation.id,
-                    e
+                    interval_id =? operation.id,
+                    err =? e,
+                    "Failed to update operation for retry"
                 );
                 Err(e.into())
             }

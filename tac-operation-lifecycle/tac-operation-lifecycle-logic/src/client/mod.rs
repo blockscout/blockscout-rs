@@ -43,8 +43,12 @@ impl Client {
         let response = self.make_request(request).instrument(tracing::debug_span!("get_operations", url = url)).await?;
         if !response.status().is_success() {
             let status = response.status();
-            tracing::error!("Bad response status: {} from {url}", status);
-            tracing::error!("Response body: {}", response.text().await?);
+            tracing::error!(
+                status =? status,
+                url =? url,
+                response_body =? response.text().await?,
+                "Bad response"
+            );
 
             return Err(anyhow::anyhow!(
                 "HTTP error {}: {}",
@@ -56,14 +60,17 @@ impl Client {
         let text = response.text().await?;
 
         if text.is_empty() {
-            tracing::error!("Received empty response from {url}");
+            tracing::error!(url =? url, "Received empty response");
             return Ok(Vec::new());
         }
 
         match serde_json::from_str::<OperationIdsApiResponse>(&text) {
             Ok(response) => Ok(response.response.operations),
             Err(e) => {
-                tracing::error!("Failed to parse operations list ({}) response: {}", url, e);
+                tracing::error!(
+                    url =? url,
+                    err =? e,
+                    "Failed to parse operations list response");
                 Err(e.into())
             }
         }
@@ -99,14 +106,14 @@ impl Client {
             let text = response.text().await?;
 
             if text.is_empty() {
-                tracing::error!("Received empty response from {url} (staging for {:?})", id);
+                tracing::error!(url, "Received empty response");
                 return Err(anyhow::anyhow!("Received empty response from {url}"));
             }
 
             match serde_json::from_str::<StageProfilingApiResponse>(&text) {
                 Ok(response) => Ok(response.response),
                 Err(e) => {
-                    tracing::error!("Failed to parse response (staging for {:?}): {}", id, e);
+                    tracing::error!(url, err =? e, "Failed to parse staging response");
                     Err(e.into())
                 }
             }
@@ -143,8 +150,10 @@ impl Client {
                     retries += 1;
                     if retries < MAX_RETRIES {
                         debug!(
-                            "Rate limit exceeded, retrying in {}ms (attempt {}/{})",
-                            RETRY_DELAY_MS, retries, MAX_RETRIES
+                            retry_delay_ms =? RETRY_DELAY_MS,
+                            attempt =? retries,
+                            max_attempts =? MAX_RETRIES,
+                            "Rate limit exceeded"
                         );
                         tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
                     } else {
