@@ -149,7 +149,10 @@ impl TacDatabase {
         tx: &DatabaseTransaction,
         timestamp: u64,
     ) -> anyhow::Result<()> {
-        let existing_watermark = watermark::Entity::find().one(tx).await?;
+        let existing_watermark = watermark::Entity::find()
+            .order_by_asc(watermark::Column::Timestamp)
+            .one(tx)
+            .await?;
 
         let timestamp_naive = Self::timestamp_to_naive(timestamp as i64);
 
