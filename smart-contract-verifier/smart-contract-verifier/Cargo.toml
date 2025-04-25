@@ -8,15 +8,12 @@ keywords = ["ethereum", "web3", "solidity"]
 
 [dependencies]
 alloy-core = { workspace = true }
-alloy-dyn-abi = { workspace = true }
-alloy-json-abi = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 cron = { workspace = true }
-ethabi = { workspace = true }
 ethers-core = { workspace = true }
 ethers-solc = { workspace = true, features = ["async"] }
 foundry-compilers = { workspace = true, features = ["async"] }
@@ -54,12 +51,9 @@ vyper-cbor-auxdata = { workspace = true }
 era-compiler-common = { workspace = true }
 
 [dev-dependencies]
-const_format = { workspace = true }
-mockall = { workspace = true }
 pretty_assertions = { workspace = true }
 quick-xml = { workspace = true, features = ["serialize"] }
 rand = { workspace = true }
-rstest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["sync", "parking_lot"] }
 wiremock = { workspace = true }

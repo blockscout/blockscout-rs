@@ -43,10 +43,13 @@ impl Display for FullyQualifiedName {
 }
 
 impl FullyQualifiedName {
-    pub fn from_file_and_contract_names(file_name: String, contract_name: String) -> Self {
+    pub fn from_file_and_contract_names(
+        file_name: impl Into<String>,
+        contract_name: impl Into<String>,
+    ) -> Self {
         Self {
-            file_name,
-            contract_name,
+            file_name: file_name.into(),
+            contract_name: contract_name.into(),
         }
     }
 

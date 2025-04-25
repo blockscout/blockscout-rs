@@ -90,6 +90,7 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__DISABLE_INTERNAL_TRANSACTIONS` | | Disable functionality that utilizes internal transactions. In particular, disable internal transactions ratio check for starting the service and related charts (`newContracts`, `lastNewContracts`, and `contractsGrowth`). It has a higher priority than config files and respective envs. | `false` |
 | `STATS__ENABLE_ALL_ARBITRUM` | | Enable Arbitrum-specific charts. Variable for convenience only, the same charts can be enabled one-by-one. | `false` |
 | `STATS__ENABLE_ALL_OP_STACK` | | Enable OP-Stack-specific charts. Variable for convenience only, the same charts can be enabled one-by-one. | `false` |
+| `STATS__ENABLE_ALL_EIP_7702` | | Enable EIP-7702-specific charts. Variable for convenience only, the same charts can be enabled one-by-one. | `false` |
 | `STATS__API_KEYS__<KEY_NAME>` | | E.g. `very_secure_key_value`. Allows access to key-protected functinoality | `null` |
 
 [anchor]: <> (anchors.envs.end.service)
@@ -118,6 +119,7 @@ The service will periodically check the enabled start conditions and start updat
 | `STATS__SERVER__HTTP__CORS__SEND_WILDCARD` | | Send wildcard for allowed origins in CORS | `false` |
 | `STATS__SERVER__HTTP__ENABLED` | | Enable the HTTP server | `true` |
 | `STATS__SERVER__HTTP__MAX_BODY_SIZE` | | Maximum allowed size for HTTP request bodies (in bytes) | `2097152` |
+| `STATS__SERVER__HTTP__BASE_PATH` | | Path prefix to use before all services' endpoints. E.g. "/abcd" will make the service endpoints start with `/abcd/api/v1/...` instead of `/api/v1/...` | `null` |
 
 [anchor]: <> (anchors.envs.end.server)
 

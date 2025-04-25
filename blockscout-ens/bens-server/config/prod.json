@@ -81,6 +81,14 @@
           "story"
         ]
       },
+      "7000": {
+        "blockscout": {
+          "url": "https://zetachain.blockscout.com/"
+        },
+        "use_protocols": [
+          "zeta"
+        ]
+      },
       "1625": {
         "blockscout": {
           "url": "https://explorer.gravity.xyz/"
@@ -561,6 +569,24 @@
           "type": "ens_like",
           "native_token_contract": "0xf8d9d86a4594ffc975ca9c760c5887bd9a3b6232",
           "empty_label_hash": "0x438c16e05212074ed5b2d4beba06988729060b93431f68bf346c93c64a1ce640"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "zeta": {
+        "tld_list": ["zeta"],
+        "network_id": 7000,
+        "subgraph_name": "zeta-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xfcd0df2d5b1023c3ce210bed17c3bcf40d4ed5cd",
+          "empty_label_hash": "0xd7bafc09d4bd42d7efec92efd054d59897c310ed1f1eab50e65fe9de8b1bae19"
         },
         "meta": {
           "short_name": "SPACE ID",

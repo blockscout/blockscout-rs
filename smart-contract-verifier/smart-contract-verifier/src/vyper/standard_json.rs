@@ -1,8 +1,9 @@
-use super::client::Client;
-use crate::{compiler::DetailedVersion, verify_new, OnChainContract};
-use std::sync::Arc;
+use crate::{
+    compiler::DetailedVersion, verify, Error, EvmCompilersPool, OnChainContract,
+    VerificationResult, VyperCompiler, VyperInput,
+};
 
-pub type Content = verify_new::VyperInput;
+pub type Content = VyperInput;
 
 #[derive(Clone, Debug)]
 pub struct VerificationRequest {
@@ -12,13 +13,12 @@ pub struct VerificationRequest {
 }
 
 pub async fn verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<VyperCompiler>,
     request: VerificationRequest,
-) -> Result<verify_new::VerificationResult, verify_new::Error> {
+) -> Result<VerificationResult, Error> {
     let to_verify = vec![request.contract];
-    let compilers = client.new_compilers();
 
-    let results = verify_new::compile_and_verify(
+    let results = verify::compile_and_verify(
         to_verify,
         compilers,
         &request.compiler_version,

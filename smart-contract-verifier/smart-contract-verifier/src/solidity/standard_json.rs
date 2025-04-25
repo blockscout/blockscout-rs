@@ -1,8 +1,9 @@
-use super::client::Client;
-use crate::{compiler::DetailedVersion, verify_new, OnChainContract};
-use std::sync::Arc;
+use crate::{
+    compiler::DetailedVersion, verify, Error, EvmCompilersPool, OnChainContract, SolcCompiler,
+    SolcInput, VerificationResult,
+};
 
-type Content = verify_new::SolcInput;
+type Content = SolcInput;
 
 pub struct VerificationRequest {
     pub contract: OnChainContract,
@@ -11,13 +12,12 @@ pub struct VerificationRequest {
 }
 
 pub async fn verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<SolcCompiler>,
     request: VerificationRequest,
-) -> Result<verify_new::VerificationResult, verify_new::Error> {
+) -> Result<VerificationResult, Error> {
     let to_verify = vec![request.contract];
-    let compilers = client.new_compilers();
 
-    let results = verify_new::compile_and_verify(
+    let results = verify::compile_and_verify(
         to_verify,
         compilers,
         &request.compiler_version,
@@ -40,13 +40,12 @@ pub struct BatchVerificationRequest {
 }
 
 pub async fn batch_verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<SolcCompiler>,
     request: BatchVerificationRequest,
-) -> Result<Vec<verify_new::VerificationResult>, verify_new::Error> {
+) -> Result<Vec<VerificationResult>, Error> {
     let to_verify = request.contracts;
-    let compilers = client.new_compilers();
 
-    let results = verify_new::compile_and_verify(
+    let results = verify::compile_and_verify(
         to_verify,
         compilers,
         &request.compiler_version,

@@ -32,6 +32,8 @@
                 "accounts_growth",
                 "active_accounts",
                 "new_accounts",
+                "new_builder_accounts",
+                "builder_accounts_growth",
                 "active_recurring_accounts_60_days",
                 "active_recurring_accounts_90_days",
                 "active_recurring_accounts_120_days"
@@ -49,7 +51,9 @@
                 "op_stack_operational_txns_growth",
                 "new_operational_txns",
                 "operational_txns_growth",
-                "txns_success_rate"
+                "txns_success_rate",
+                "new_eip_7702_auths",
+                "eip_7702_auths_growth"
             ]
         },
         {

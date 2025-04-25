@@ -30,6 +30,17 @@ Bugs are tracked as GitHub issues. Create an issue and provide the following inf
 
 ### Contributing Code
 
+We welcome code contributions of all sizes - from fixing typos to implementing new features. However, if you're only fixing typos, we encourage you to bundle these changes with other meaningful code improvements to maximize the impact of your contribution.
+
+For example, while fixing typos, you could:
+
+- Add missing code comments
+- Improve error messages
+- Update outdated examples
+- Enhance test coverage
+
+This helps ensure that each pull request provides substantial value to the project.
+
 If you want to help us improve the project, you can contribute code. To do so, follow these steps:
 
 * Fork (https://github.com/blockscout/blockscout-rs/fork) the repository and make changes on your fork in a feature branch.

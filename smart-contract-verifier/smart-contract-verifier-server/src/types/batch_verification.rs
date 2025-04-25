@@ -1,9 +1,6 @@
 use blockscout_display_bytes::ToHex;
 use serde_json::Value;
-use smart_contract_verifier::{
-    verify_new::{Error, VerificationResult},
-    Language,
-};
+use smart_contract_verifier::{Error, Language, VerificationResult};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::{
     v2 as proto,
     v2::{BatchVerifyResponse, CompilationFailure},
@@ -30,6 +27,9 @@ pub fn process_error(error: Error) -> Result<BatchVerifyResponse, Status> {
             let formatted_error = format!("{err:#?}");
             tracing::error!(err = formatted_error, "internal error");
             Err(Status::internal(formatted_error))
+        }
+        err @ Error::NotConsistentBlueprintOnChainCode { .. } => {
+            Err(Status::invalid_argument(err.to_string()))
         }
         err @ Error::Compilation(_) => Ok(compilation_error(err.to_string())),
     }

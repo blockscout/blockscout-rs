@@ -3,7 +3,7 @@ use user_ops_indexer_proto::blockscout::user_ops_indexer::v1;
 #[derive(Default, Clone)]
 pub struct IndexerStatus {
     pub v06: EntryPointIndexerStatus,
-    pub v07: EntryPointIndexerStatus,
+    pub v07_v08: EntryPointIndexerStatus,
 }
 
 #[derive(Default, Clone)]
@@ -30,9 +30,9 @@ impl From<IndexerStatus> for v1::IndexerStatus {
     fn from(status: IndexerStatus) -> Self {
         Self {
             finished_past_indexing: status.v06.finished_past_indexing()
-                && status.v07.finished_past_indexing(),
+                && status.v07_v08.finished_past_indexing(),
             v06: Some(status.v06.into()),
-            v07: Some(status.v07.into()),
+            v07_v08: Some(status.v07_v08.into()),
         }
     }
 }
@@ -67,7 +67,7 @@ impl IndexerStatusMessage {
     pub fn update_status(self, status: &mut IndexerStatus) {
         let status = match self.version.as_str() {
             "v0.6" => &mut status.v06,
-            "v0.7" => &mut status.v07,
+            "v0.7-v0.8" => &mut status.v07_v08,
             _ => return,
         };
         self.message.update_status(status);

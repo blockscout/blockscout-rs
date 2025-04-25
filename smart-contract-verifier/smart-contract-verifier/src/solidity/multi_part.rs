@@ -1,7 +1,9 @@
-use super::client::Client;
-use crate::{compiler::DetailedVersion, verify_new, verify_new::SolcInput, OnChainContract};
+use crate::{
+    compiler::DetailedVersion, verify, Error, EvmCompilersPool, OnChainContract, SolcCompiler,
+    SolcInput, VerificationResult,
+};
 use foundry_compilers_new::artifacts;
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Content {
@@ -52,11 +54,10 @@ pub struct VerificationRequest {
 }
 
 pub async fn verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<SolcCompiler>,
     request: VerificationRequest,
-) -> Result<verify_new::VerificationResult, verify_new::Error> {
+) -> Result<VerificationResult, Error> {
     let to_verify = vec![request.contract];
-    let compilers = client.new_compilers();
 
     let solc_inputs: Vec<SolcInput> = request.content.into();
     for solc_input in solc_inputs {
@@ -64,7 +65,7 @@ pub async fn verify(
             let mut solc_input = solc_input.clone();
             solc_input.0.settings.metadata = metadata;
 
-            let results = verify_new::compile_and_verify(
+            let results = verify::compile_and_verify(
                 to_verify.clone(),
                 compilers,
                 &request.compiler_version,
@@ -95,22 +96,21 @@ pub struct BatchVerificationRequest {
 }
 
 pub async fn batch_verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<SolcCompiler>,
     request: BatchVerificationRequest,
-) -> Result<Vec<verify_new::VerificationResult>, verify_new::Error> {
+) -> Result<Vec<VerificationResult>, Error> {
     let to_verify = request.contracts;
-    let compilers = client.new_compilers();
 
     let solc_inputs: Vec<SolcInput> = request.content.into();
     if solc_inputs.len() != 1 {
-        return Err(verify_new::Error::Compilation(vec![
+        return Err(Error::Compilation(vec![
             "exactly one of `.sol` or `.yul` files should exist".to_string(),
         ]));
     }
 
     let content = solc_inputs.into_iter().next().unwrap();
     let results =
-        verify_new::compile_and_verify(to_verify, compilers, &request.compiler_version, content)
+        verify::compile_and_verify(to_verify, compilers, &request.compiler_version, content)
             .await?;
 
     Ok(results)

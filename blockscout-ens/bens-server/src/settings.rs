@@ -128,6 +128,7 @@ impl Settings {
             subgraphs_reader: Default::default(),
             database: DatabaseSettings {
                 connect: DatabaseConnectSettings::Url(database_url),
+                connect_options: Default::default(),
                 create_database: Default::default(),
                 run_migrations: Default::default(),
             },

@@ -1,6 +1,6 @@
 use crate::{
     solidity,
-    verify_new::{SolcInput, VyperInput},
+    verify::{SolcInput, VyperInput},
     vyper, OnChainCode, OnChainContract, RequestParseError,
 };
 use anyhow::Context;
