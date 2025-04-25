@@ -12,70 +12,13 @@ shard = "primary"
 indexers = ["default"]
 
 [chains]
-ingestor = "block_ingestor_node"
+ingestor = "taiko-mainnet"
 
-[chains.mainnet]
+[chains.taiko-mainnet]
 provider = [
-    { label = "mainnet", url = "https://ethereum-rpc.publicnode.com", features = [] }
+    { label = "taiko-mainnet", url = "https://taiko.blockpi.network/v1/rpc/514714a92fe54d19610f310279e097d642a9f3ca", features = [] }
 ]
-shard = "primary"
-
-[chains.sepolia]
-provider = [
-    { label = "sepolia", url = "https://sepolia.gateway.tenderly.co", features = [] }
-]
-shard = "primary"
-
-[chains.gnosis-chiado]
-provider = [
-    { label = "gnosis-chiado", url = "https://rpc.eu-central-2.gateway.fm/v4/gnosis/archival/chiado", features = [] }
-]
-shard = "primary"
-
-[chains.mode-sepolia]
-provider = [
-    { label = "mode-sepolia", url = "https://sepolia.mode.network", features = [] }
-]
-shard = "primary"
-
-[chains.shibarium]
-provider = [
-    { label = "shibarium", url = "https://www.shibrpc.com", features = [] }
-]
-shard = "primary"
-
-[chains.shibarium-testnet]
-provider = [
-    { label = "shibarium-testnet", url = "https://puppynet.shibrpc.com", features = [] }
-]
-shard = "primary"
-
-[chains.ape-mainnet]
-provider = [
-    { label = "ape-mainnet", url = "https://rpc.apechain.com", features = [] }
-]
-shard = "primary"
-
-[chains.ape-testnet]
-provider = [
-    { label = "ape-testnet", url = "https://curtis.rpc.caldera.xyz/http", features = [] }
-]
-shard = "primary"
-
-[chains.story-mainnet]
-provider = [
-    { label = "story-mainnet", url = "https://frequent-hidden-telescope.story-mainnet.quiknode.pro/9934ef7bc4e5bcc89ef9768b5ca2f39fcb937c46", features = [] }
-]
-shard = "primary"
-
-[chains.zeta-mainnet]
-provider = [
-    { label = "zeta-mainnet", url = "https://zeta-chain.drpc.org", features = [] }
-]
-shard = "primary"
-
-[chains.gravity-mainnet]
-provider = [
-    { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }
-]
+max_block_range = 100
+chunk_size = 32
+polling_interval = 1200
 shard = "primary"

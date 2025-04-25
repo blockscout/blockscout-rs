@@ -21,7 +21,8 @@ services:
       postgres_db: graph-node
       ipfs: 'ipfs:5001'
       GRAPH_NODE_CONFIG: /root/config.toml
-      GRAPH_LOG: info
+      GRAPH_LOG: graph_chain_ethereum=debug,graph_chain_ipc=debug,reqwest=warn
+      ETHEREUM_BLOCK_BATCH_SIZE: "100"
     volumes:
       - ./config.toml:/root/config.toml
   ipfs:
