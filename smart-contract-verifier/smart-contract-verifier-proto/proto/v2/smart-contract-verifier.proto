@@ -88,7 +88,7 @@ message Source {
   bool is_blueprint = 13;
 
   /// Mapping from fully qualified name to the address the library is deployed at
-  // (includes both automatically and manually linked libraries)
+  /// (includes both automatically and manually linked libraries)
   map<string, string> libraries = 14;
 }
 
