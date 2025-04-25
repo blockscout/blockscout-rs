@@ -41,7 +41,7 @@ jobs:
         ports:
           - 5432:5432
     env:
-      JOBS: 3
+      JOBS: 2
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
