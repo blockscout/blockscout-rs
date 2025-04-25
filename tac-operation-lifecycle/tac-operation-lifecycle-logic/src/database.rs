@@ -522,23 +522,22 @@ impl TacDatabase {
             "".to_string()
         };
 
+        let conditions_joined = conditions.join(" AND ");
+        let new_status = update_status.to_value();
         format!(
-            r#" WITH selected_intervals AS (
-                    SELECT * FROM interval 
-                    WHERE {} 
-                    {} 
-                    LIMIT {}
-                    FOR UPDATE SKIP LOCKED
-                    )
-                    UPDATE interval 
-                    SET status = '{}'::status_enum
-                    WHERE id IN (SELECT id FROM selected_intervals)
-                    RETURNING id, start, finish, status::text, next_retry, retry_count, inserted_at, updated_at
-                    "#,
-            conditions.join(" AND "),
-            order_clause,
-            limit,
-            update_status.to_value(),
+            r#"
+            WITH selected_intervals AS (
+                SELECT * FROM interval
+                WHERE {conditions_joined}
+                {order_clause}
+                LIMIT {limit}
+                FOR UPDATE SKIP LOCKED
+            )
+            UPDATE interval
+            SET status = '{new_status}'::status_enum
+            WHERE id IN (SELECT id FROM selected_intervals)
+            RETURNING id, start, finish, status::text, next_retry, retry_count, inserted_at, updated_at
+            "#
         )
     }
 
@@ -556,23 +555,22 @@ impl TacDatabase {
             "".to_string()
         };
 
+        let conditions_joined = conditions.join(" AND ");
+        let new_status = update_status.to_value();
         format!(
-            r#" WITH selected_operations AS (
-                    SELECT * FROM operation 
-                    WHERE {} 
-                    {} 
-                    LIMIT {}
-                    FOR UPDATE SKIP LOCKED
-                    )
-                    UPDATE operation 
-                    SET status = '{}'::status_enum
-                    WHERE id IN (SELECT id FROM selected_operations)
-                    RETURNING id, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
-                    "#,
-            conditions.join(" AND "),
-            order_clause,
-            limit,
-            update_status.to_value(),
+            r#"
+            WITH selected_operations AS (
+                SELECT * FROM operation 
+                WHERE {conditions_joined} 
+                {order_clause} 
+                LIMIT {limit}
+                FOR UPDATE SKIP LOCKED
+            )
+            UPDATE operation 
+            SET status = '{new_status}'::status_enum
+            WHERE id IN (SELECT id FROM selected_operations)
+            RETURNING id, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
+            "#,
         )
     }
 
