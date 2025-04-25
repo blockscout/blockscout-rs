@@ -92,7 +92,7 @@ pub struct OperationDbStatistic {
 struct JoinedRow {
     // operation
     op_id: String,
-    operation_type: Option<String>,
+    op_type: Option<String>,
     timestamp: DateTime,
     status: StatusEnum,
 
@@ -1099,7 +1099,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.operation_type, o.timestamp, o.status::text,
+                o.id as op_id, o.op_type, o.timestamp, o.status::text,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1123,7 +1123,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.operation_type, o.timestamp, o.status::text,
+                o.id as op_id, o.op_type, o.timestamp, o.status::text,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1171,7 +1171,7 @@ impl TacDatabase {
 
         let op_model = operation::Model {
             id: op_row.op_id.clone(),
-            op_type: op_row.operation_type.clone(),
+            op_type: op_row.op_type.clone(),
             timestamp: op_row.timestamp,
             next_retry: None,
             status: op_row.status.clone(),
