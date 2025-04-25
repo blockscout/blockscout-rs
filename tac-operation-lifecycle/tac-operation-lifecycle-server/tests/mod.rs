@@ -96,6 +96,16 @@ mod tests {
         tracing::debug!("catchup_interval: {}", catchup_interval.as_secs());
         tracing::debug!("tasks_number: {}", tasks_number);
         tracing::debug!("current_epoch: {}", current_epoch);
+
+        // Initialize mock server and associated client
+        use wiremock::MockServer;
+        let mock_server = MockServer::start().await;
+        let mock_rpc_settings = RpcSettings {
+            url: mock_server.uri(),
+            ..Default::default()
+        };
+        let client = Arc::new(Mutex::new(Client::new(mock_rpc_settings)));
+
         let indexer_settings = IndexerSettings {
             concurrency: 1,
             //random catchup interval from 1 to 100
@@ -104,9 +114,11 @@ mod tests {
             start_timestamp,
             ..Default::default()
         };
+
         let indexer = Indexer::new(
             indexer_settings,
             Arc::new(TacDatabase::new(Arc::new(conn_with_db), start_timestamp)),
+            client,
         )
         .await
         .unwrap();
@@ -165,12 +177,22 @@ mod tests {
             ..Default::default()
         };
 
+        // Initialize mock server and associated client
+        use wiremock::MockServer;
+        let mock_server = MockServer::start().await;
+        let mock_rpc_settings = RpcSettings {
+            url: mock_server.uri(),
+            ..Default::default()
+        };
+        let client = Arc::new(Mutex::new(Client::new(mock_rpc_settings)));
+
         let indexer = Indexer::new(
             indexer_settings,
             Arc::new(TacDatabase::new(
                 Arc::new(conn_with_db),
-                start_timestamp.and_utc().timestamp() as u64,
+                start_timestamp.and_utc().timestamp() as u64
             )),
+            client,
         )
         .await
         .unwrap();
@@ -387,6 +409,7 @@ mod tests {
         let indexer = Indexer::new(
             indexer_settings,
             Arc::new(TacDatabase::new(Arc::new(conn_with_db), start_timestamp)),
+            client,
         )
         .await
         .unwrap();
@@ -422,7 +445,7 @@ mod tests {
                             tracing::warn!("Processing interval job: {:?}", interval_job);
                             let start = interval_job.interval.start.and_utc().timestamp();
                             let end = interval_job.interval.finish.and_utc().timestamp();
-                            if let Err(e) = indexer.fetch_operations(&interval_job, client.clone()).instrument(tracing::info_span!(
+                            if let Err(e) = indexer.fetch_operations(&interval_job).instrument(tracing::info_span!(
                                 "fetching operations",
                                 interval_id = interval_job.interval.id,
                                 start = start,
@@ -453,7 +476,7 @@ mod tests {
                         },
                         IndexerJob::Operation(operation_job) => {
                             // Process the operation job
-                            indexer.process_operation_with_retries(vec![&operation_job], client.clone()).await;
+                            indexer.process_operation_with_retries(vec![&operation_job]).await;
 
                             // Verify operation ID matches our mock
                             assert_eq!(
