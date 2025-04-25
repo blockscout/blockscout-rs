@@ -40,7 +40,10 @@ impl Client {
         let url = format!("{}/operation-ids?from={}&till={}", self.url(), start, end);
 
         let request = Request::new(Method::GET, url.parse()?);
-        let response = self.make_request(request).instrument(tracing::debug_span!("get_operations", url = url)).await?;
+        let response = self
+            .make_request(request)
+            .instrument(tracing::debug_span!("get_operations", url = url))
+            .await?;
         if !response.status().is_success() {
             let status = response.status();
             tracing::error!(url, status =? status, "Bad response");
@@ -92,7 +95,10 @@ impl Client {
             .body_mut()
             .replace(serde_json::to_vec(&request_body)?.into());
 
-        let response = self.make_request(request).instrument(tracing::debug_span!("get_operations_stages", url = url)).await?;
+        let response = self
+            .make_request(request)
+            .instrument(tracing::debug_span!("get_operations_stages", url = url))
+            .await?;
 
         if response.status().is_success() {
             let text = response.text().await?;

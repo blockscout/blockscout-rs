@@ -2,8 +2,10 @@ use env_collector::{run_env_collector_cli, PrefixFilter};
 use tac_operation_lifecycle_server::Settings;
 
 fn main() {
-
-    println!("Current working directory: {}", std::env::current_dir().unwrap().display());
+    println!(
+        "Current working directory: {}",
+        std::env::current_dir().unwrap().display()
+    );
     run_env_collector_cli::<Settings>(
         "TAC_OPERATION_LIFECYCLE",
         "../README.md",
@@ -18,5 +20,4 @@ fn main() {
         ]),
         Some("service"),
     );
-   
 }

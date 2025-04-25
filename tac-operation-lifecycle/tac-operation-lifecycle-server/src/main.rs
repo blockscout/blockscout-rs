@@ -12,7 +12,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let db_connection = database::initialize_postgres::<Migrator>(&settings.database).await?;
 
-    let db = Arc::new(TacDatabase::new(Arc::new(db_connection), settings.indexer.clone().unwrap().start_timestamp));
+    let db = Arc::new(TacDatabase::new(
+        Arc::new(db_connection),
+        settings.indexer.clone().unwrap().start_timestamp,
+    ));
 
     let client = Arc::new(Mutex::new(Client::new(settings.clone().rpc)));
 

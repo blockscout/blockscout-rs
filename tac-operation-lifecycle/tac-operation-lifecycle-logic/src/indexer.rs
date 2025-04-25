@@ -1,6 +1,8 @@
 use std::{
     cmp::max,
     collections::HashMap,
+    fmt,
+    str::FromStr,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -8,19 +10,19 @@ use std::{
     time::Duration,
 };
 
+use crate::database::{OrderDirection, TacDatabase};
 use anyhow::Error;
 use client::{
     models::profiling::{BlockchainType, OperationType, StageType},
     Client,
 };
-use crate::database::{OrderDirection, TacDatabase};
 use tac_operation_lifecycle_entity::{interval, operation, sea_orm_active_enums::StatusEnum};
 
+use crate::settings::IndexerSettings;
 use futures::{
     stream::{select, select_with_strategy, BoxStream, PollNext},
     StreamExt,
 };
-use crate::settings::IndexerSettings;
 use tokio::sync::Mutex;
 use tracing::{instrument, Instrument};
 use uuid::Uuid;
@@ -50,10 +52,6 @@ pub enum IndexerJob {
 }
 
 impl OperationType {
-    pub fn from_str(s: &str) -> Self {
-        serde_json::from_str(&format!("\"{}\"", s)).unwrap_or(OperationType::ErrorType)
-    }
-
     pub fn to_id(&self) -> i32 {
         match self {
             OperationType::Pending => 1,
@@ -66,16 +64,28 @@ impl OperationType {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        // SCREAMING_SNAKE_CASE
-        serde_json::to_string(self)
-            .unwrap()
-            .trim_matches('"')
-            .to_string()
-    }
-
     pub fn is_finalized(&self) -> bool {
         self != &OperationType::Pending && self != &OperationType::Unknown
+    }
+}
+
+impl fmt::Display for OperationType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // SCREAMING_SNAKE_CASE
+        let s = serde_json::to_string(self)
+            .unwrap()
+            .trim_matches('"')
+            .to_string();
+
+        write!(f, "{}", s)
+    }
+}
+
+impl FromStr for OperationType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(serde_json::from_str(&format!("\"{}\"", s)).unwrap_or(OperationType::ErrorType))
     }
 }
 
@@ -90,15 +100,17 @@ impl StageType {
             StageType::ExecutedInTON => 6,
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for StageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
-impl BlockchainType {
-    pub fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for BlockchainType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
@@ -116,7 +128,11 @@ pub struct Indexer {
 }
 
 impl Indexer {
-    pub async fn new(settings: IndexerSettings, db: Arc<TacDatabase>, client: Arc<Mutex<Client>>) -> anyhow::Result<Self> {
+    pub async fn new(
+        settings: IndexerSettings,
+        db: Arc<TacDatabase>,
+        client: Arc<Mutex<Client>>,
+    ) -> anyhow::Result<Self> {
         const REALTIME_LAG_MINUTES: i64 = 30;
         // realtime boundary evaluation: few minutes before (to avoid remote service sync issues)
         let realtime_boundary_hard = (chrono::Utc::now()
@@ -271,9 +287,7 @@ impl Indexer {
                     Ok(selected) => {
                         for operation in selected {
                             // Yield the job
-                            yield IndexerJob::Operation(OperationJob {
-                                operation: operation,
-                            });
+                            yield IndexerJob::Operation(OperationJob { operation });
                         }
                     },
                     Err(e) => {
@@ -337,9 +351,7 @@ impl Indexer {
                         tracing::debug!(count =? selected.len(), "Found failed operations");
                         for operation in selected {
                             // Yield the job
-                            yield IndexerJob::Operation(OperationJob {
-                                operation: operation,
-                            });
+                            yield IndexerJob::Operation(OperationJob { operation });
                         }
                     },
                     Err(e) => {
@@ -353,9 +365,9 @@ impl Indexer {
         })
     }
 
-    pub async fn process_interval_with_retries(&self, job: &Job) -> () {
+    pub async fn process_interval_with_retries(&self, job: &Job) {
         match self
-            .fetch_operations(&job)
+            .fetch_operations(job)
             .instrument(tracing::debug_span!("fetching operations for interval",))
             .await
         {
@@ -375,25 +387,22 @@ impl Indexer {
                 // Schedule retry with exponential backoff
                 let retries = job.interval.retry_count;
                 let base_delay = 5; // 5 seconds base delay
-                let next_retry_after = (base_delay * 2i64.pow(retries as u32)) as i64;
+                let next_retry_after = base_delay * 2i64.pow(retries as u32);
 
-                let _ = self.database
-                        .set_interval_retry(&job.interval, next_retry_after)
-                        .await;
+                let _ = self
+                    .database
+                    .set_interval_retry(&job.interval, next_retry_after)
+                    .await;
             }
         }
     }
 
-    pub async fn fetch_operations(
-        &self,
-        job: &Job,
-    ) -> Result<usize, Error> {
+    pub async fn fetch_operations(&self, job: &Job) -> Result<usize, Error> {
         let mut client = self.client.lock().await;
         tracing::debug!(
             job =? job,
             "Processing interval job",
         );
-
 
         // Add helper function for timestamp conversion
         fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
@@ -408,7 +417,7 @@ impl Indexer {
             ("HISTORICAL", job.interval.start)
         };
 
-        let request_start = request_start.and_utc().timestamp() as u64 ;
+        let request_start = request_start.and_utc().timestamp() as u64;
         let request_end = job.interval.finish.and_utc().timestamp() as u64;
         let operations = client
             .get_operations(request_start + 1, request_end)
@@ -451,10 +460,7 @@ impl Indexer {
         Ok(ops_num)
     }
 
-    pub async fn process_operation_with_retries(
-        &self,
-        jobs: Vec<&OperationJob>,
-    ) -> () {
+    pub async fn process_operation_with_retries(&self, jobs: Vec<&OperationJob>) {
         let mut client = self.client.lock().await;
         let op_ids: Vec<&str> = jobs.iter().map(|j| j.operation.id.as_str()).collect();
 
@@ -478,7 +484,7 @@ impl Indexer {
                             } else {
                                 // TODO: Add operation to the fast-retry queue
                             }
-                            processed_operations = processed_operations + 1;
+                            processed_operations += 1;
                         }
                         None => {
                             tracing::error!(
@@ -499,7 +505,7 @@ impl Indexer {
                 let _ = jobs.iter().map(|job| async {
                     let retries = job.operation.retry_count;
                     let base_delay = 5; // 5 seconds base delay
-                    let next_retry_after = (base_delay * 2i64.pow(retries as u32)) as i64;
+                    let next_retry_after = base_delay * 2i64.pow(retries as u32);
 
                     let _ = self
                         .database
@@ -590,45 +596,47 @@ impl Indexer {
             Self::prio_left,
         );
 
-        tracing::debug!(
-            current_realtime_timestamp,
-            "Starting TAC indexer"
-        );
+        tracing::debug!(current_realtime_timestamp, "Starting TAC indexer");
 
-        
-        let job_futures = combined_stream.map(|job| {
-            async move {
-                match job {
-                    IndexerJob::Realtime => {
-                        let wm = self.database.get_watermark().await.map_err(|e| anyhow::anyhow!("Failed to get watermark: {}", e)).unwrap();
-                        let now = chrono::Utc::now().timestamp() as u64;
-                        if let Err(e) = self.database.generate_pending_interval(wm, now).await {
-                            tracing::error!(err =? e, "Failed to generate real-time interval");
-                        }
-                        anyhow::Ok(())
+        let job_futures = combined_stream.map(|job| async move {
+            match job {
+                IndexerJob::Realtime => {
+                    let wm = self
+                        .database
+                        .get_watermark()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Failed to get watermark: {}", e))
+                        .unwrap();
+                    let now = chrono::Utc::now().timestamp() as u64;
+                    if let Err(e) = self.database.generate_pending_interval(wm, now).await {
+                        tracing::error!(err =? e, "Failed to generate real-time interval");
                     }
-                    IndexerJob::Interval(job) => {
-                        self.process_interval_with_retries(&job)
-                            .instrument(tracing::debug_span!(
-                                "processing interval"
-                            ))
-                            .await;
-                        anyhow::Ok(())
-                    }
-                    IndexerJob::Operation(job) => {
-                        self.process_operation_with_retries([&job].to_vec())
-                            .instrument(tracing::debug_span!(
-                                "processing operation"
-                            ))
-                            .await;
-                        anyhow::Ok(())
-                    }
+                    anyhow::Ok(())
+                }
+                IndexerJob::Interval(job) => {
+                    self.process_interval_with_retries(&job)
+                        .instrument(tracing::debug_span!("processing interval"))
+                        .await;
+                    anyhow::Ok(())
+                }
+                IndexerJob::Operation(job) => {
+                    self.process_operation_with_retries([&job].to_vec())
+                        .instrument(tracing::debug_span!("processing operation"))
+                        .await;
+                    anyhow::Ok(())
                 }
             }
         });
-        
+
         let mut buffered_stream = job_futures.buffer_unordered(self.settings.concurrency as usize);
-        while let Some(result) = buffered_stream.next().instrument(tracing::debug_span!("job processing", span_id = Uuid::new_v4().to_string())).await {
+        while let Some(result) = buffered_stream
+            .next()
+            .instrument(tracing::debug_span!(
+                "job processing",
+                span_id = Uuid::new_v4().to_string()
+            ))
+            .await
+        {
             if let Err(e) = result {
                 tracing::error!(err =? e, "Job processing error");
             }

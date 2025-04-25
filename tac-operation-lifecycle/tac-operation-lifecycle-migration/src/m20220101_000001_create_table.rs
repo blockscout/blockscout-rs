@@ -28,7 +28,7 @@ impl MigrationTrait for Migration {
                 extension::postgres::Type::create()
                     .as_enum(StatusEnum)
                     .values(StatusVariants::iter())
-                    .to_owned()
+                    .to_owned(),
             )
             .await?;
 
@@ -44,11 +44,7 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(
-                        ColumnDef::new(WaterMark::Timestamp)
-                            .timestamp()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(WaterMark::Timestamp).timestamp().not_null())
                     .to_owned(),
             )
             .await?;
@@ -65,14 +61,18 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(Operation::OperationType).string().null())
+                    .col(ColumnDef::new(Operation::Timestamp).timestamp().not_null())
+                    .col(ColumnDef::new(Operation::NextRetry).timestamp().null())
                     .col(
-                        ColumnDef::new(Operation::Timestamp)
-                            .timestamp()
+                        ColumnDef::new(Interval::Status)
+                            .custom(Alias::new("status_enum"))
                             .not_null(),
                     )
-                    .col(ColumnDef::new(Operation::NextRetry).timestamp().null())
-                    .col(ColumnDef::new(Interval::Status).custom(Alias::new("status_enum")).not_null())
-                    .col(ColumnDef::new(Operation::RetryCount).small_unsigned().not_null())
+                    .col(
+                        ColumnDef::new(Operation::RetryCount)
+                            .small_unsigned()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Operation::InsertedAt).timestamp().not_null())
                     .col(ColumnDef::new(Operation::UpdatedAt).timestamp().not_null())
                     .to_owned(),
@@ -128,7 +128,11 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Interval::Finish).timestamp().not_null())
                     .col(ColumnDef::new(Interval::InsertedAt).timestamp().not_null())
                     .col(ColumnDef::new(Interval::UpdatedAt).timestamp().not_null())
-                    .col(ColumnDef::new(Interval::Status).custom(Alias::new("status_enum")).not_null())
+                    .col(
+                        ColumnDef::new(Interval::Status)
+                            .custom(Alias::new("status_enum"))
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Interval::NextRetry).timestamp().null())
                     .col(
                         ColumnDef::new(Interval::RetryCount)
@@ -246,7 +250,11 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(ColumnDef::new(OperationStage::Note).string().null())
-                    .col(ColumnDef::new(OperationStage::InsertedAt).timestamp().not_null())
+                    .col(
+                        ColumnDef::new(OperationStage::InsertedAt)
+                            .timestamp()
+                            .not_null(),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -266,7 +274,11 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Transaction::StageId).integer().not_null())
                     .col(ColumnDef::new(Transaction::Hash).string().not_null())
-                    .col(ColumnDef::new(Transaction::InsertedAt).timestamp().not_null())
+                    .col(
+                        ColumnDef::new(Transaction::InsertedAt)
+                            .timestamp()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(Transaction::BlockchainType)
                             .string()
@@ -333,7 +345,12 @@ impl MigrationTrait for Migration {
             .drop_table(Table::drop().table(Interval::Table).to_owned())
             .await?;
         manager
-            .drop_type(extension::postgres::Type::drop().if_exists().name(Alias::new("status_enum")).to_owned())
+            .drop_type(
+                extension::postgres::Type::drop()
+                    .if_exists()
+                    .name(Alias::new("status_enum"))
+                    .to_owned(),
+            )
             .await?;
 
         Ok(())
@@ -389,7 +406,6 @@ enum OperationStage {
     Timestamp,
     Note,
     InsertedAt,
-    
 }
 
 #[derive(Iden)]

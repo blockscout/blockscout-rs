@@ -23,19 +23,19 @@ impl OperationsService {
     }
 }
 
+type OperationWithStages = Option<(
+    operation::Model,
+    Vec<(operation_stage::Model, Vec<transaction::Model>)>,
+)>;
+
 impl OperationsService {
     pub fn create_full_operation_response(
-        db_data: anyhow::Result<
-            Option<(
-                operation::Model,
-                Vec<(operation_stage::Model, Vec<transaction::Model>)>,
-            )>,
-        >,
+        db_data: anyhow::Result<OperationWithStages>,
     ) -> Result<tonic::Response<OperationDetails>, tonic::Status> {
         match db_data {
             Ok(Some((op, stages))) => {
                 let op_type = match op.operation_type {
-                    Some(t) => OperationType::from_str(&t.clone()),
+                    Some(t) => t.parse().unwrap_or(OperationType::ErrorType),
                     _ => OperationType::Unknown,
                 };
                 Ok(tonic::Response::new(OperationDetails {
@@ -93,14 +93,16 @@ impl TacService for OperationsService {
             .await
         {
             Ok(operations) => {
-                let last_timestamp = operations.last().map(|op| op.timestamp.and_utc().timestamp() as u64);
+                let last_timestamp = operations
+                    .last()
+                    .map(|op| op.timestamp.and_utc().timestamp() as u64);
 
                 Ok(tonic::Response::new(OperationsResponse {
                     operations: operations
                         .into_iter()
                         .map(|op| {
                             let op_type = match op.operation_type {
-                                Some(t) => OperationType::from_str(&t.clone()),
+                                Some(t) => t.parse().unwrap_or(OperationType::ErrorType),
                                 _ => OperationType::Unknown,
                             };
                             OperationBriefDetails {
@@ -111,13 +113,10 @@ impl TacService for OperationsService {
                             }
                         })
                         .collect(),
-                    next_page_params: match last_timestamp {
-                        Some(ts) => Some(Pagination {
-                            page_token: ts,
-                            page_items: inner.page_items.unwrap_or(0) as u32 + PAGE_SIZE as u32,
-                        }),
-                        _ => None,
-                    },
+                    next_page_params: last_timestamp.map(|ts| Pagination {
+                        page_token: ts,
+                        page_items: inner.page_items.unwrap_or(0) as u32 + PAGE_SIZE as u32,
+                    }),
                 }))
             }
             Err(e) => Err(tonic::Status::internal(e.to_string())),

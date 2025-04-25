@@ -3,7 +3,10 @@ use std::sync::Arc;
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use futures::StreamExt;
 use reqwest::Url;
-use tac_operation_lifecycle_logic::{client::{Client, settings::RpcSettings}, database::TacDatabase};
+use tac_operation_lifecycle_logic::{
+    client::{settings::RpcSettings, Client},
+    database::TacDatabase,
+};
 use tac_operation_lifecycle_server::Settings;
 use tokio::sync::Mutex;
 
@@ -30,14 +33,14 @@ where
     };
 
     let test_db = init_db(test_name).await;
-    let db = Arc::new(TacDatabase::new(test_db.client(), settings.indexer.clone().unwrap().start_timestamp));
+    let db = Arc::new(TacDatabase::new(
+        test_db.client(),
+        settings.indexer.clone().unwrap().start_timestamp,
+    ));
     let client = Arc::new(Mutex::new(Client::new(settings.clone().rpc)));
 
-
     test_server::init_server(
-        move || {
-            tac_operation_lifecycle_server::run(settings, db.clone(), client)
-        },
+        move || tac_operation_lifecycle_server::run(settings, db.clone(), client),
         &base,
     )
     .await;
@@ -61,23 +64,26 @@ mod tests {
     use tokio::sync::Mutex;
     use tracing::Instrument;
 
-
     #[tokio::test]
     async fn test_startup_works() {
         let db = init_db("startup_works").await;
         let db_url = db.db_url();
-        let base =
-            init_tac_operation_lifecycle_server(db_url, "startup_works", |x| x).await;
-    let response: serde_json::Value = test_server::send_get_request(&base, "/health").await;
-    assert_eq!(response, serde_json::json!({"status": "SERVING"}));
-}
+        let base = init_tac_operation_lifecycle_server(db_url, "startup_works", |x| x).await;
+        let response: serde_json::Value = test_server::send_get_request(&base, "/health").await;
+        assert_eq!(response, serde_json::json!({"status": "SERVING"}));
+    }
 
     #[tokio::test]
     async fn test_save_intervals() {
         let db = init_db("save_intervals").await;
         let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
-        
-        let _ =  blockscout_service_launcher::tracing::init_logs("test_save_intervals", &TracingSettings::default(), &JaegerSettings::default()).unwrap();
+
+        let _ = blockscout_service_launcher::tracing::init_logs(
+            "test_save_intervals",
+            &TracingSettings::default(),
+            &JaegerSettings::default(),
+        )
+        .unwrap();
         let catchup_interval = time::Duration::from_secs(rand::rng().random_range(1..100));
         let tasks_number = rand::rng().random_range(1..100);
         let lag = tasks_number * catchup_interval.as_secs();
@@ -129,7 +135,6 @@ mod tests {
         assert_eq!(indexer.watermark().await.unwrap(), current_epoch);
     }
 
-
     fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
         chrono::DateTime::from_timestamp(timestamp, 0)
             .unwrap()
@@ -151,7 +156,7 @@ mod tests {
         let catchup_interval = time::Duration::from_secs(10); // Use fixed interval for predictable testing
         let tasks_number = 5; // Use fixed number of tasks for predictable testing
         let current_epoch = chrono::Utc::now().naive_utc();
-        
+
         let start_timestamp = current_epoch - tasks_number * catchup_interval;
         let indexer_settings = IndexerSettings {
             concurrency: 1,
@@ -162,7 +167,10 @@ mod tests {
 
         let indexer = Indexer::new(
             indexer_settings,
-            Arc::new(TacDatabase::new(Arc::new(conn_with_db), start_timestamp.and_utc().timestamp() as u64)),
+            Arc::new(TacDatabase::new(
+                Arc::new(conn_with_db),
+                start_timestamp.and_utc().timestamp() as u64,
+            )),
         )
         .await
         .unwrap();
@@ -280,10 +288,8 @@ mod tests {
         let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
         let mock_server = MockServer::start().await;
 
-        let _server = init_tac_operation_lifecycle_server(
-            db.db_url(),
-            "indexing",
-            |mut settings| {
+        let _server =
+            init_tac_operation_lifecycle_server(db.db_url(), "indexing", |mut settings| {
                 settings.tracing.enabled = true;
                 settings.indexer = Some(IndexerSettings {
                     concurrency: 1,
@@ -292,9 +298,8 @@ mod tests {
                     ..Default::default()
                 });
                 settings
-            },
-        )
-        .await;
+            })
+            .await;
         // Set up the mock for /operationIds endpoint
         Mock::given(method("GET"))
             .and(path("/operation-ids"))

@@ -5,15 +5,18 @@ use anyhow::anyhow;
 use sea_orm::{
     prelude::DateTime,
     sea_query::OnConflict,
-    ActiveEnum,
-    ActiveModelTrait,
+    ActiveEnum, ActiveModelTrait,
     ActiveValue::{self, NotSet},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
-use std::{cmp::min, collections::HashMap, sync::Arc, time::Instant};
+use std::{cmp::min, collections::HashMap, fmt, sync::Arc, time::Instant};
 use tac_operation_lifecycle_entity::{
-    interval, operation::{self, Column}, operation_stage, sea_orm_active_enums::StatusEnum, stage_type, transaction, watermark
+    interval,
+    operation::{self, Column},
+    operation_stage,
+    sea_orm_active_enums::StatusEnum,
+    stage_type, transaction, watermark,
 };
 use tracing::Instrument;
 use uuid::Uuid;
@@ -50,9 +53,16 @@ impl EntityStatus {
             EntityStatus::Finalized => 2,
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for EntityStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            EntityStatus::Pending => "Pending",
+            EntityStatus::Processing => "Processing",
+            EntityStatus::Finalized => "Finalized",
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -107,7 +117,10 @@ pub struct TacDatabase {
 
 impl TacDatabase {
     pub fn new(db: Arc<DatabaseConnection>, start_timestamp: u64) -> Self {
-        Self { db, start_timestamp }
+        Self {
+            db,
+            start_timestamp,
+        }
     }
 
     // Add helper function for timestamp conversion
@@ -124,11 +137,11 @@ impl TacDatabase {
             .order_by_asc(watermark::Column::Timestamp)
             .all(self.db.as_ref())
             .await?;
-        
-        if existing_watermark.len()==0 {
+
+        if existing_watermark.is_empty() {
             Ok(self.start_timestamp)
         } else {
-            if existing_watermark.len()>1 {
+            if existing_watermark.len() > 1 {
                 tracing::error!("Found more than one watermark in the database");
             }
             Ok(existing_watermark[0].timestamp.and_utc().timestamp() as u64)
@@ -191,7 +204,7 @@ impl TacDatabase {
     // Update watermark in the database
     pub async fn generate_pending_interval(&self, from: u64, to: u64) -> anyhow::Result<()> {
         let now = chrono::Utc::now().naive_utc();
-        
+
         let interval = interval::ActiveModel {
             id: ActiveValue::NotSet,
             start: ActiveValue::Set(Self::timestamp_to_naive(from as i64)),
@@ -200,14 +213,14 @@ impl TacDatabase {
             updated_at: ActiveValue::Set(now),
             status: sea_orm::ActiveValue::Set(StatusEnum::Pending),
             next_retry: ActiveValue::Set(None),
-            retry_count: ActiveValue::Set(0 as i16),
+            retry_count: ActiveValue::Set(0_i16),
         };
 
         let tx = self.db.begin().await?;
 
         match interval::Entity::insert(interval).exec(&tx).await {
             Ok(_) => {
-                let _ = self.set_watermark_internal(&tx, to).await?;
+                self.set_watermark_internal(&tx, to).await?;
 
                 tx.commit().await?;
                 tracing::debug!(
@@ -242,13 +255,14 @@ impl TacDatabase {
     ) -> anyhow::Result<usize> {
         const DB_BATCH_SIZE: usize = 1000;
         let now = chrono::Utc::now().naive_utc();
-        
+
         let intervals: Vec<interval::ActiveModel> = (from..to)
             .step_by(period_secs as usize)
             .map(|timestamp| {
                 let start_naive = Self::timestamp_to_naive(timestamp as i64);
-                let finish_naive = Self::timestamp_to_naive(min(timestamp + period_secs, to) as i64);
-                
+                let finish_naive =
+                    Self::timestamp_to_naive(min(timestamp + period_secs, to) as i64);
+
                 interval::ActiveModel {
                     id: ActiveValue::NotSet,
                     start: ActiveValue::Set(start_naive),
@@ -258,7 +272,7 @@ impl TacDatabase {
                     updated_at: ActiveValue::Set(now),
                     status: sea_orm::ActiveValue::Set(StatusEnum::Pending),
                     next_retry: ActiveValue::Set(None),
-                    retry_count: ActiveValue::Set(0 as i16),
+                    retry_count: ActiveValue::Set(0_i16),
                 }
             })
             .collect();
@@ -286,13 +300,10 @@ impl TacDatabase {
                     if let Some(last_interval_from_batch) = chunk.last() {
                         if let ActiveValue::Set(finish) = &last_interval_from_batch.finish {
                             let timestamp = finish.and_utc().timestamp() as u64;
-                            let _ = self
-                                .set_watermark_internal(&tx, timestamp)
-                                .await;
+                            let _ = self.set_watermark_internal(&tx, timestamp).await;
                             updated_watermark = Some(timestamp);
                         }
                     }
-
 
                     tx.commit().await?;
                     tracing::debug!(
@@ -321,7 +332,7 @@ impl TacDatabase {
         &self,
         stage_types: &HashMap<i32, String>,
     ) -> anyhow::Result<()> {
-        for (stage_id, stage_name) in stage_types.into_iter() {
+        for (stage_id, stage_name) in stage_types.iter() {
             let stage_type_model = stage_type::ActiveModel {
                 id: Set(*stage_id),
                 name: Set(stage_name.to_string()),
@@ -350,7 +361,7 @@ impl TacDatabase {
         // Save all operations
         for op in operations {
             let now = chrono::Utc::now().naive_utc();
-            
+
             let operation_model = operation::ActiveModel {
                 id: Set(op.id.clone()),
                 operation_type: Set(None),
@@ -362,10 +373,7 @@ impl TacDatabase {
                 updated_at: Set(now),
             };
 
-            tracing::debug!(
-                "Attempting to insert operation: {:?}",
-                operation_model
-            );
+            tracing::debug!("Attempting to insert operation: {:?}", operation_model);
 
             // Use on_conflict().do_nothing() with proper error handling
             match operation::Entity::insert(operation_model)
@@ -379,22 +387,13 @@ impl TacDatabase {
             {
                 Ok(cnt) => {
                     if cnt > 0 {
-                        tracing::debug!(
-                            "Successfully inserted or skipped operation {}",
-                            op.id
-                        );
+                        tracing::debug!("Successfully inserted or skipped operation {}", op.id);
                     } else {
-                        tracing::warn!(
-                            "Operation {} skipped due to conflict",
-                            op.id
-                        );
+                        tracing::warn!("Operation {} skipped due to conflict", op.id);
                     }
                 }
                 Err(e) => {
-                    tracing::error!(
-                        "Error inserting operation: {:?}",
-                        e
-                    );
+                    tracing::error!("Error inserting operation: {:?}", e);
                     // Don't fail the entire batch for a single operation
                     continue;
                 }
@@ -586,7 +585,10 @@ impl TacDatabase {
         from: Option<u64>,
         to: Option<u64>,
     ) -> anyhow::Result<Vec<interval::Model>> {
-        let mut conditions = vec![format!("status = '{}'::status_enum", StatusEnum::Pending.to_value())];
+        let mut conditions = vec![format!(
+            "status = '{}'::status_enum",
+            StatusEnum::Pending.to_value()
+        )];
         if let Some(start) = from {
             let start_naive = Self::timestamp_to_naive(start as i64);
             conditions.push(format!("start >= '{}'", start_naive));
@@ -604,7 +606,10 @@ impl TacDatabase {
         );
 
         self.query_intervals(&sql)
-            .instrument(tracing::debug_span!("query pending intervals", sql = Self::format_sql_for_logging(&sql)))
+            .instrument(tracing::debug_span!(
+                "query pending intervals",
+                sql = Self::format_sql_for_logging(&sql)
+            ))
             .await
     }
 
@@ -612,7 +617,10 @@ impl TacDatabase {
         let conditions = vec![
             format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
             format!("next_retry IS NOT NULL"),
-            format!("next_retry < '{}'", Self::timestamp_to_naive(chrono::Utc::now().timestamp())),
+            format!(
+                "next_retry < '{}'",
+                Self::timestamp_to_naive(chrono::Utc::now().timestamp())
+            ),
         ];
 
         let sql = self.build_interval_query(
@@ -670,7 +678,10 @@ impl TacDatabase {
         num: usize,
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
-        let conditions = vec![format!("status = '{}'::status_enum", StatusEnum::Pending.to_value())];
+        let conditions = vec![format!(
+            "status = '{}'::status_enum",
+            StatusEnum::Pending.to_value()
+        )];
 
         let sql = self.build_operation_query(
             conditions,
@@ -692,7 +703,10 @@ impl TacDatabase {
         let conditions = vec![
             format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
             format!("next_retry IS NOT NULL"),
-            format!("next_retry < '{}'", Self::timestamp_to_naive(chrono::Utc::now().timestamp())),
+            format!(
+                "next_retry < '{}'",
+                Self::timestamp_to_naive(chrono::Utc::now().timestamp())
+            ),
         ];
 
         let sql = self.build_operation_query(
@@ -810,7 +824,7 @@ impl TacDatabase {
         for (stage_type, stage_data) in operation_data.stages.iter() {
             if let Some(data) = &stage_data.stage_data {
                 let now = chrono::Utc::now().naive_utc();
-                
+
                 let stage_model = operation_stage::ActiveModel {
                     id: NotSet,
                     operation_id: Set(operation.id.clone()),
@@ -840,7 +854,7 @@ impl TacDatabase {
                         // store transactions for this stage
                         for tx in data.transactions.iter() {
                             let now = chrono::Utc::now().naive_utc();
-                            
+
                             let tx_model = transaction::ActiveModel {
                                 id: NotSet,
                                 stage_id: Set(inserted_stage.id),
@@ -903,9 +917,10 @@ impl TacDatabase {
         // Update interval with next retry timestamp and increment retry count
         let mut interval_model: interval::ActiveModel = interval.clone().into();
         let now = chrono::Utc::now().naive_utc();
-        
-        interval_model.next_retry =
-            Set(Some(chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec)));
+
+        interval_model.next_retry = Set(Some(
+            chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec),
+        ));
         interval_model.retry_count = Set(interval.retry_count + 1);
         interval_model.status = Set(StatusEnum::Pending); // Reset status to pending
         interval_model.updated_at = Set(now);
@@ -931,9 +946,10 @@ impl TacDatabase {
         // Update operation with next retry timestamp and increment retry count
         let mut operation_model: operation::ActiveModel = operation.clone().into();
         let now = chrono::Utc::now().naive_utc();
-        
-        operation_model.next_retry =
-            Set(Some(chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec)));
+
+        operation_model.next_retry = Set(Some(
+            chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec),
+        ));
         operation_model.retry_count = Set(operation.retry_count + 1);
         operation_model.status = Set(StatusEnum::Pending); // Reset status to pending
         operation_model.updated_at = Set(now);
@@ -951,9 +967,7 @@ impl TacDatabase {
         }
     }
 
-    pub async fn get_intervals_statistic(
-        &self,
-    ) -> anyhow::Result<IntervalDbStatistic> {
+    pub async fn get_intervals_statistic(&self) -> anyhow::Result<IntervalDbStatistic> {
         let sql = Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
             format!(
@@ -981,7 +995,7 @@ impl TacDatabase {
                 StatusEnum::Completed.to_value(),
             ),
         );
-    
+
         match self.db.query_one(sql).await? {
             Some(interval_data) => {
                 let first_timestamp = interval_data
@@ -991,14 +1005,18 @@ impl TacDatabase {
                 let last_timestamp = interval_data
                     .try_get::<Option<DateTime>>("", "max_finish")?
                     .map(|dt| dt.and_utc().timestamp() as u64)
-                    .unwrap_or(0) as u64;
+                    .unwrap_or(0);
                 let total_intervals = interval_data.try_get::<i64>("", "total_intervals")? as usize;
-                let pending_intervals = interval_data.try_get::<i64>("", "pending_intervals")? as usize;
-                let processing_intervals = interval_data.try_get::<i64>("", "processing_intervals")? as usize;
-                let finalized_intervals = interval_data.try_get::<i64>("", "finalized_intervals")? as usize;
-                let failed_intervals = interval_data.try_get::<i64>("", "failed_intervals")? as usize;
+                let pending_intervals =
+                    interval_data.try_get::<i64>("", "pending_intervals")? as usize;
+                let processing_intervals =
+                    interval_data.try_get::<i64>("", "processing_intervals")? as usize;
+                let finalized_intervals =
+                    interval_data.try_get::<i64>("", "finalized_intervals")? as usize;
+                let failed_intervals =
+                    interval_data.try_get::<i64>("", "failed_intervals")? as usize;
                 let finalized_period = interval_data.try_get::<i64>("", "finalized_period")? as u64;
-            
+
                 Ok(IntervalDbStatistic {
                     first_timestamp,
                     last_timestamp,
@@ -1009,16 +1027,13 @@ impl TacDatabase {
                     finalized_intervals,
                     finalized_period,
                 })
-            },
+            }
 
             _ => Ok(IntervalDbStatistic::default()),
         }
-
     }
 
-    pub async fn get_operations_statistic(
-        &self,
-    ) -> anyhow::Result<OperationDbStatistic> {
+    pub async fn get_operations_statistic(&self) -> anyhow::Result<OperationDbStatistic> {
         let sql = Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
             format!(
@@ -1041,19 +1056,24 @@ impl TacDatabase {
                 StatusEnum::Completed.to_value(),
             ),
         );
-    
+
         match self.db.query_one(sql).await? {
             Some(operation_data) => {
                 let max_timestamp = operation_data
                     .try_get::<Option<DateTime>>("", "max_timestamp")?
                     .map(|dt| dt.and_utc().timestamp() as u64)
-                    .unwrap_or(0) as u64;
-                let total_operations = operation_data.try_get::<i64>("", "total_operations")? as usize;
-                let pending_operations = operation_data.try_get::<i64>("", "pending_operations")? as usize;
-                let processing_operations = operation_data.try_get::<i64>("", "processing_operations")? as usize;
-                let finalized_operations = operation_data.try_get::<i64>("", "finalized_operations")? as usize;
-                let failed_operations = operation_data.try_get::<i64>("", "failed_operations")? as usize;
-            
+                    .unwrap_or(0);
+                let total_operations =
+                    operation_data.try_get::<i64>("", "total_operations")? as usize;
+                let pending_operations =
+                    operation_data.try_get::<i64>("", "pending_operations")? as usize;
+                let processing_operations =
+                    operation_data.try_get::<i64>("", "processing_operations")? as usize;
+                let finalized_operations =
+                    operation_data.try_get::<i64>("", "finalized_operations")? as usize;
+                let failed_operations =
+                    operation_data.try_get::<i64>("", "failed_operations")? as usize;
+
                 Ok(OperationDbStatistic {
                     max_timestamp,
                     total_operations,
@@ -1062,11 +1082,10 @@ impl TacDatabase {
                     finalized_operations,
                     failed_operations,
                 })
-            },
+            }
 
             _ => Ok(OperationDbStatistic::default()),
         }
-
     }
 
     pub async fn get_operation_by_id(
@@ -1078,8 +1097,7 @@ impl TacDatabase {
             Vec<(operation_stage::Model, Vec<transaction::Model>)>,
         )>,
     > {
-        let sql = 
-            r#"
+        let sql = r#"
             SELECT 
                 o.id as op_id, o.operation_type, o.timestamp, o.status::text,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
@@ -1090,7 +1108,8 @@ impl TacDatabase {
             WHERE o.id = $1
             "#;
 
-        self.get_full_operation_with_sql(&sql.into(), [id.into()]).await
+        self.get_full_operation_with_sql(&sql.into(), [id.into()])
+            .await
     }
 
     pub async fn get_operation_by_tx_hash(
@@ -1102,8 +1121,7 @@ impl TacDatabase {
             Vec<(operation_stage::Model, Vec<transaction::Model>)>,
         )>,
     > {
-        let sql = 
-            r#"
+        let sql = r#"
             SELECT 
                 o.id as op_id, o.operation_type, o.timestamp, o.status::text,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
@@ -1121,7 +1139,8 @@ impl TacDatabase {
             )
             "#;
 
-        self.get_full_operation_with_sql(&sql.into(), [tx_hash.into()]).await
+        self.get_full_operation_with_sql(&sql.into(), [tx_hash.into()])
+            .await
     }
 
     async fn get_full_operation_with_sql(
@@ -1149,7 +1168,7 @@ impl TacDatabase {
 
         let op_row = &joined[0];
         let now = chrono::Utc::now().naive_utc();
-        
+
         let op_model = operation::Model {
             id: op_row.op_id.clone(),
             operation_type: op_row.operation_type.clone(),
@@ -1196,7 +1215,7 @@ impl TacDatabase {
             }
         }
 
-        let mut stages: Vec<_> = stages_map.into_iter().map(|(_, v)| v).collect();
+        let mut stages: Vec<_> = stages_map.into_values().collect();
 
         stages.sort_by_key(|(stage, _)| stage.timestamp);
 
@@ -1227,10 +1246,7 @@ impl TacDatabase {
 
     pub async fn reset_processing_intervals(&self) -> anyhow::Result<usize> {
         let result = interval::Entity::update_many()
-            .col_expr(
-                interval::Column::Status,
-                StatusEnum::Pending.as_enum(),
-            )
+            .col_expr(interval::Column::Status, StatusEnum::Pending.as_enum())
             .filter(interval::Column::Status.eq(StatusEnum::Processing))
             .exec(self.db.as_ref())
             .await?;
@@ -1240,10 +1256,7 @@ impl TacDatabase {
 
     pub async fn reset_processing_operations(&self) -> anyhow::Result<usize> {
         let result = operation::Entity::update_many()
-            .col_expr(
-                operation::Column::Status,
-                StatusEnum::Pending.as_enum(),
-            )
+            .col_expr(operation::Column::Status, StatusEnum::Pending.as_enum())
             .filter(operation::Column::Status.eq(StatusEnum::Processing))
             .exec(self.db.as_ref())
             .await?;

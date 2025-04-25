@@ -1,17 +1,19 @@
 use crate::{
     proto::{
         health_actix::route_health, health_server::HealthServer,
-        tac_service_server::TacServiceServer, tac_statistic_server::TacStatisticServer,
-        tac_service_actix::route_tac_service, tac_statistic_actix::route_tac_statistic,
+        tac_service_actix::route_tac_service, tac_service_server::TacServiceServer,
+        tac_statistic_actix::route_tac_statistic, tac_statistic_server::TacStatisticServer,
     },
     services::{HealthService, OperationsService, StatisticService},
     settings::Settings,
 };
-use blockscout_service_launcher::{launcher::{self, GracefulShutdownHandler, LaunchSettings}, tracing as bs_tracing};
+use blockscout_service_launcher::{
+    launcher::{self, GracefulShutdownHandler, LaunchSettings},
+    tracing as bs_tracing,
+};
 
 use tac_operation_lifecycle_logic::{client::Client, database::TacDatabase, Indexer};
 use tokio::sync::Mutex;
-
 
 use std::sync::Arc;
 
@@ -23,7 +25,6 @@ struct Router {
     stat: Arc<StatisticService>,
     operations: Arc<OperationsService>,
 }
-
 
 impl Router {
     pub fn grpc_router(&self) -> tonic::transport::server::Router {
@@ -45,14 +46,13 @@ impl launcher::HttpRouter for Router {
 pub async fn run(
     settings: Settings,
     db: Arc<TacDatabase>,
-    client: Arc<Mutex<Client>>
+    client: Arc<Mutex<Client>>,
 ) -> Result<(), anyhow::Error> {
     bs_tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
     let stat = Arc::new(StatisticService::new(db.clone()));
     let operations = Arc::new(OperationsService::new(db.clone()));
-
 
     let router = Router {
         health,
@@ -71,7 +71,12 @@ pub async fn run(
     };
 
     // launching indexer in the thread
-    let indexer = Indexer::new(settings.clone().indexer.unwrap(), db.clone(), client.clone()).await?;
+    let indexer = Indexer::new(
+        settings.clone().indexer.unwrap(),
+        db.clone(),
+        client.clone(),
+    )
+    .await?;
     tokio::spawn(async move {
         indexer.start().await.unwrap();
     });
