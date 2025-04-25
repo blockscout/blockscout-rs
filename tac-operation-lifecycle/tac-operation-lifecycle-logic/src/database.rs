@@ -1078,7 +1078,7 @@ impl TacDatabase {
             Vec<(operation_stage::Model, Vec<transaction::Model>)>,
         )>,
     > {
-        let sql = format!(
+        let sql = 
             r#"
             SELECT 
                 o.id as op_id, o.operation_type, o.timestamp, o.status::text,
@@ -1087,12 +1087,10 @@ impl TacDatabase {
             FROM operation o
             LEFT JOIN operation_stage s ON o.id = s.operation_id
             LEFT JOIN transaction t ON s.id = t.stage_id
-            WHERE o.id = '{}'
-            "#,
-            id
-        );
+            WHERE o.id = $1
+            "#;
 
-        self.get_full_operation_with_sql(&sql).await
+        self.get_full_operation_with_sql(&sql.into(), [id.into()]).await
     }
 
     pub async fn get_operation_by_tx_hash(
@@ -1104,7 +1102,7 @@ impl TacDatabase {
             Vec<(operation_stage::Model, Vec<transaction::Model>)>,
         )>,
     > {
-        let sql = format!(
+        let sql = 
             r#"
             SELECT 
                 o.id as op_id, o.operation_type, o.timestamp, o.status::text,
@@ -1118,19 +1116,18 @@ impl TacDatabase {
                 FROM operation o2
                 JOIN operation_stage s2 ON o2.id = s2.operation_id
                 JOIN transaction t2 ON s2.id = t2.stage_id
-                WHERE t2.hash = '{}'
+                WHERE t2.hash = $1
                 LIMIT 1
             )
-            "#,
-            tx_hash
-        );
+            "#;
 
-        self.get_full_operation_with_sql(&sql).await
+        self.get_full_operation_with_sql(&sql.into(), [tx_hash.into()]).await
     }
 
     async fn get_full_operation_with_sql(
         &self,
         sql: &String,
+        values: impl IntoIterator<Item = sea_orm::Value>,
     ) -> anyhow::Result<
         Option<(
             operation::Model,
@@ -1141,7 +1138,7 @@ impl TacDatabase {
             JoinedRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
                 sea_orm::DatabaseBackend::Postgres,
                 sql,
-                vec![],
+                values,
             ))
             .all(self.db.as_ref())
             .await?;
