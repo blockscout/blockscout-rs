@@ -364,7 +364,7 @@ impl TacDatabase {
 
             let operation_model = operation::ActiveModel {
                 id: Set(op.id.clone()),
-                operation_type: Set(None),
+                op_type: Set(None),
                 timestamp: Set(Self::timestamp_to_naive(op.timestamp as i64)),
                 status: Set(StatusEnum::Pending),
                 next_retry: Set(None),
@@ -801,7 +801,7 @@ impl TacDatabase {
         if operation_data.operation_type.is_finalized() {
             operation_model.status = Set(StatusEnum::Completed);
         }
-        operation_model.operation_type = Set(Some(operation_data.operation_type.to_string()));
+        operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
 
         if let Err(e) = operation_model
             .update(&txn)
@@ -1171,7 +1171,7 @@ impl TacDatabase {
 
         let op_model = operation::Model {
             id: op_row.op_id.clone(),
-            operation_type: op_row.operation_type.clone(),
+            op_type: op_row.operation_type.clone(),
             timestamp: op_row.timestamp,
             next_retry: None,
             status: op_row.status.clone(),

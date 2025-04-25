@@ -278,7 +278,7 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
+                match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::LatestFirst)
                     .instrument(tracing::debug_span!(
                         "PENDING OPERATIONS",
                         span_id = span_id.to_string()
@@ -292,9 +292,8 @@ impl Indexer {
                     },
                     Err(e) => {
                         tracing::error!(
-                            direction =? OrderDirection::EarliestFirst,
                             err =? e,
-                            "Unable to select operations from the database"
+                            "Unable to select latest operations from the database"
                         );
                     },
                 }
@@ -477,12 +476,12 @@ impl Indexer {
                                 .await;
 
                             if operation_data.operation_type != OperationType::Pending {
+                                // The case when operation has a finalized status
+                                // otherwise they will be catched by operation stream
                                 let _ = (self
                                     .database
                                     .set_operation_status(&job.operation, &StatusEnum::Completed))
                                 .await;
-                            } else {
-                                // TODO: Add operation to the fast-retry queue
                             }
                             processed_operations += 1;
                         }

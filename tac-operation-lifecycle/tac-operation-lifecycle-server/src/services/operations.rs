@@ -34,7 +34,7 @@ impl OperationsService {
     ) -> Result<tonic::Response<OperationDetails>, tonic::Status> {
         match db_data {
             Ok(Some((op, stages))) => {
-                let op_type = match op.operation_type {
+                let op_type = match op.op_type {
                     Some(t) => t.parse().unwrap_or(OperationType::ErrorType),
                     _ => OperationType::Unknown,
                 };
@@ -101,7 +101,7 @@ impl TacService for OperationsService {
                     operations: operations
                         .into_iter()
                         .map(|op| {
-                            let op_type = match op.operation_type {
+                            let op_type = match op.op_type {
                                 Some(t) => t.parse().unwrap_or(OperationType::ErrorType),
                                 _ => OperationType::Unknown,
                             };

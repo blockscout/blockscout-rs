@@ -60,7 +60,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Operation::OperationType).string().null())
+                    .col(ColumnDef::new(Operation::OpType).string().null())
                     .col(ColumnDef::new(Operation::Timestamp).timestamp().not_null())
                     .col(ColumnDef::new(Operation::NextRetry).timestamp().null())
                     .col(
@@ -362,7 +362,7 @@ impl MigrationTrait for Migration {
 enum Operation {
     Table,
     Id,
-    OperationType,
+    OpType,
     Timestamp,
     NextRetry,
     Status,
