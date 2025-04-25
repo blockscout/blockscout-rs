@@ -43,12 +43,7 @@ impl Client {
         let response = self.make_request(request).instrument(tracing::debug_span!("get_operations", url = url)).await?;
         if !response.status().is_success() {
             let status = response.status();
-            tracing::error!(
-                status =? status,
-                url =? url,
-                response_body =? response.text().await?,
-                "Bad response"
-            );
+            tracing::error!(url, status =? status, "Bad response");
 
             return Err(anyhow::anyhow!(
                 "HTTP error {}: {}",
@@ -60,17 +55,14 @@ impl Client {
         let text = response.text().await?;
 
         if text.is_empty() {
-            tracing::error!(url =? url, "Received empty response");
+            tracing::error!(url, "Received empty response");
             return Ok(Vec::new());
         }
 
         match serde_json::from_str::<OperationIdsApiResponse>(&text) {
             Ok(response) => Ok(response.response.operations),
             Err(e) => {
-                tracing::error!(
-                    url =? url,
-                    err =? e,
-                    "Failed to parse operations list response");
+                tracing::error!(url, err =? e, "Failed to parse operations list response");
                 Err(e.into())
             }
         }

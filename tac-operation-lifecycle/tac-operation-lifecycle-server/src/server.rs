@@ -7,7 +7,7 @@ use crate::{
     services::{HealthService, OperationsService, StatisticService},
     settings::Settings,
 };
-use blockscout_service_launcher::{launcher::{self, GracefulShutdownHandler, LaunchSettings}, tracing};
+use blockscout_service_launcher::{launcher::{self, GracefulShutdownHandler, LaunchSettings}, tracing as bs_tracing};
 
 use tac_operation_lifecycle_logic::{client::Client, database::TacDatabase, Indexer};
 use tokio::sync::Mutex;
@@ -47,7 +47,7 @@ pub async fn run(
     db: Arc<TacDatabase>,
     client: Arc<Mutex<Client>>
 ) -> Result<(), anyhow::Error> {
-    tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    bs_tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let health = Arc::new(HealthService::default());
     let stat = Arc::new(StatisticService::new(db.clone()));
@@ -71,10 +71,9 @@ pub async fn run(
     };
 
     // launching indexer in the thread
-    let indexer = Indexer::new(settings.clone().indexer.unwrap(), db.clone()).await?;
-    let concurrency = settings.clone().indexer.unwrap().concurrency as usize;
+    let indexer = Indexer::new(settings.clone().indexer.unwrap(), db.clone(), client.clone()).await?;
     tokio::spawn(async move {
-        indexer.start(client, concurrency).await.unwrap();
+        indexer.start().await.unwrap();
     });
 
     launcher::launch(launch_settings, http_router, grpc_router).await

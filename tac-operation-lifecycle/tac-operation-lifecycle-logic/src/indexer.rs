@@ -112,10 +112,11 @@ pub struct Indexer {
     // The boundary can be updated on inserting new operations
     realtime_boundary: AtomicU64,
     database: Arc<TacDatabase>,
+    client: Arc<Mutex<Client>>,
 }
 
 impl Indexer {
-    pub async fn new(settings: IndexerSettings, db: Arc<TacDatabase>) -> anyhow::Result<Self> {
+    pub async fn new(settings: IndexerSettings, db: Arc<TacDatabase>, client: Arc<Mutex<Client>>) -> anyhow::Result<Self> {
         const REALTIME_LAG_MINUTES: i64 = 30;
         // realtime boundary evaluation: few minutes before (to avoid remote service sync issues)
         let realtime_boundary_hard = (chrono::Utc::now()
@@ -130,6 +131,7 @@ impl Indexer {
             settings,
             realtime_boundary: AtomicU64::new(max(realtime_boundary_hard, relatime_boundary_db)),
             database: db,
+            client,
         })
     }
 }
@@ -351,9 +353,9 @@ impl Indexer {
         })
     }
 
-    pub async fn process_interval_with_retries(&self, job: &Job, client: Arc<Mutex<Client>>) -> () {
+    pub async fn process_interval_with_retries(&self, job: &Job) -> () {
         match self
-            .fetch_operations(&job, client.clone())
+            .fetch_operations(&job)
             .instrument(tracing::debug_span!("fetching operations for interval",))
             .await
         {
@@ -385,9 +387,8 @@ impl Indexer {
     pub async fn fetch_operations(
         &self,
         job: &Job,
-        client: Arc<Mutex<Client>>,
     ) -> Result<usize, Error> {
-        let mut client = client.lock().await;
+        let mut client = self.client.lock().await;
         tracing::debug!(
             job =? job,
             "Processing interval job",
@@ -453,9 +454,8 @@ impl Indexer {
     pub async fn process_operation_with_retries(
         &self,
         jobs: Vec<&OperationJob>,
-        client: Arc<Mutex<Client>>,
     ) -> () {
-        let mut client = client.lock().await;
+        let mut client = self.client.lock().await;
         let op_ids: Vec<&str> = jobs.iter().map(|j| j.operation.id.as_str()).collect();
 
         match client.get_operations_stages(op_ids.clone()).await {
@@ -515,7 +515,7 @@ impl Indexer {
     }
 
     #[instrument(name = "indexer", skip_all, level = "info")]
-    pub async fn start(&self, client: Arc<Mutex<Client>>, concurrency: usize) -> anyhow::Result<()> {
+    pub async fn start(&self) -> anyhow::Result<()> {
         tracing::info!("Initializing TAC indexer");
 
         self.ensure_stages_types_exist().await?;
@@ -597,7 +597,6 @@ impl Indexer {
 
         
         let job_futures = combined_stream.map(|job| {
-            let client = client.clone();
             async move {
                 match job {
                     IndexerJob::Realtime => {
@@ -609,7 +608,7 @@ impl Indexer {
                         anyhow::Ok(())
                     }
                     IndexerJob::Interval(job) => {
-                        self.process_interval_with_retries(&job, client.clone())
+                        self.process_interval_with_retries(&job)
                             .instrument(tracing::debug_span!(
                                 "processing interval"
                             ))
@@ -617,7 +616,7 @@ impl Indexer {
                         anyhow::Ok(())
                     }
                     IndexerJob::Operation(job) => {
-                        self.process_operation_with_retries([&job].to_vec(), client.clone())
+                        self.process_operation_with_retries([&job].to_vec())
                             .instrument(tracing::debug_span!(
                                 "processing operation"
                             ))
@@ -628,7 +627,7 @@ impl Indexer {
             }
         });
         
-        let mut buffered_stream = job_futures.buffer_unordered(concurrency);
+        let mut buffered_stream = job_futures.buffer_unordered(self.settings.concurrency as usize);
         while let Some(result) = buffered_stream.next().instrument(tracing::debug_span!("job processing", span_id = Uuid::new_v4().to_string())).await {
             if let Err(e) = result {
                 tracing::error!(err =? e, "Job processing error");
