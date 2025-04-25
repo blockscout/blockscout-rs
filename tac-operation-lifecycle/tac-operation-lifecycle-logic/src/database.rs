@@ -285,10 +285,11 @@ impl TacDatabase {
                     let mut updated_watermark: Option<u64> = None;
                     if let Some(last_interval_from_batch) = chunk.last() {
                         if let ActiveValue::Set(finish) = &last_interval_from_batch.finish {
-                            updated_watermark = Some(finish.and_utc().timestamp() as u64);
+                            let timestamp = finish.and_utc().timestamp() as u64;
                             let _ = self
-                                .set_watermark_internal(&tx, updated_watermark.unwrap())
+                                .set_watermark_internal(&tx, timestamp)
                                 .await;
+                            updated_watermark = Some(timestamp);
                         }
                     }
 
