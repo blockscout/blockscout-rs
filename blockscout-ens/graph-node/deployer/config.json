@@ -114,6 +114,11 @@
       "subgraph_path": "../subgraphs/manta-subgraph",
       "subgraph_name": "manta-subgraph",
       "network": "manta-mainnet"
+    },
+    "arb": {
+      "subgraph_path": "../subgraphs/arb-subgraph",
+      "subgraph_name": "arb-subgraph",
+      "network": "arb-mainnet"
     }
   }
 }
