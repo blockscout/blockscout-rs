@@ -99,6 +99,11 @@
       "subgraph_path": "../subgraphs/zeta-subgraph",
       "subgraph_name": "zeta-subgraph",
       "network": "zeta-mainnet"
+    },
+    "manta": {
+      "subgraph_path": "../subgraphs/manta-subgraph",
+      "subgraph_name": "manta-subgraph",
+      "network": "manta-mainnet"
     }
   }
 }

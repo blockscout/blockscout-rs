@@ -226,6 +226,14 @@
         "use_protocols": [
           "ens"
         ]
+      },
+      "168": {
+        "blockscout": {
+          "url": "https://pacific-explorer.manta.network"
+        },
+        "use_protocols": [
+          "manta"
+        ]
       }
     },
     "protocols": {
@@ -587,6 +595,24 @@
           "type": "ens_like",
           "native_token_contract": "0xfcd0df2d5b1023c3ce210bed17c3bcf40d4ed5cd",
           "empty_label_hash": "0xd7bafc09d4bd42d7efec92efd054d59897c310ed1f1eab50e65fe9de8b1bae19"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "manta": {
+        "tld_list": ["manta"],
+        "network_id": 168,
+        "subgraph_name": "manta-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xc492a2565f95dd20c304150b229a6cd21dddd629",
+          "empty_label_hash": "a8f7d4c6fcae674aad63ccf20c2dc72b14197ed3915639316d7e8e15139f3f5a"
         },
         "meta": {
           "short_name": "SPACE ID",
