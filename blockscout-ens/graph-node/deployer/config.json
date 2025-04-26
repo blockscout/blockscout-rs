@@ -109,6 +109,11 @@
       "subgraph_path": "../subgraphs/morph-subgraph",
       "subgraph_name": "morph-subgraph",
       "network": "morph-mainnet"
+    },
+    "manta": {
+      "subgraph_path": "../subgraphs/manta-subgraph",
+      "subgraph_name": "manta-subgraph",
+      "network": "manta-mainnet"
     }
   }
 }

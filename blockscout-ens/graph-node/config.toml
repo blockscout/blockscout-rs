@@ -90,3 +90,8 @@ provider = [
     { label = "morph-mainnet", url = "https://rpc.morphl2.io", features = [] }
 ]
 shard = "primary"
+[chains.manta-mainnet]
+provider = [
+    { label = "manta-mainnet", url = "https://manta-pacific.drpc.org", features = [] }
+]
+shard = "primary"
