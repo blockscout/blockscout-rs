@@ -79,3 +79,9 @@ provider = [
     { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }
 ]
 shard = "primary"
+
+[chains.arb-mainnet]
+provider = [
+    { label = "arb-mainnet", url = "https://1rpc.io/arb", features = [] }
+]
+shard = "primary"
