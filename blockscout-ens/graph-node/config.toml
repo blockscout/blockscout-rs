@@ -79,3 +79,9 @@ provider = [
     { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }
 ]
 shard = "primary"
+
+[chains.taiko-mainnet]
+provider = [
+    { label = "taiko-mainnet", url = "https://taiko.drpc.org", features = [] }
+]
+shard = "primary"

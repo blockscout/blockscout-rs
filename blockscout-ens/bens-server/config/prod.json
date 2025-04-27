@@ -226,6 +226,14 @@
         "use_protocols": [
           "ens"
         ]
+      },
+      "167000": {
+        "blockscout": {
+          "url": "https://taikoscan.io"
+        },
+        "use_protocols": [
+          "taiko"
+        ]
       }
     },
     "protocols": {
@@ -587,6 +595,24 @@
           "type": "ens_like",
           "native_token_contract": "0xfcd0df2d5b1023c3ce210bed17c3bcf40d4ed5cd",
           "empty_label_hash": "0xd7bafc09d4bd42d7efec92efd054d59897c310ed1f1eab50e65fe9de8b1bae19"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "taiko": {
+        "tld_list": ["taiko"],
+        "network_id": 167000,
+        "subgraph_name": "mint-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x411B954302Eceed7266A1D11720103bA8fbb3786",
+          "empty_label_hash": "0xe1741fe4f9059fe5d633915d64d5dde873d7a7c2aa322bcd05eec8aa26cb0499"
         },
         "meta": {
           "short_name": "SPACE ID",
