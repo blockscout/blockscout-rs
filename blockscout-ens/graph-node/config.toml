@@ -100,3 +100,8 @@ provider = [
     { label = "arb-mainnet", url = "https://1rpc.io/arb", features = [] }
 ]
 shard = "primary"
+[chains.taiko-mainnet]
+provider = [
+    { label = "taiko-mainnet", url = "https://taiko.drpc.org", features = [] }
+]
+shard = "primary"
