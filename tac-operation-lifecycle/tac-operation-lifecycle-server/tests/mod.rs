@@ -135,15 +135,14 @@ mod tests {
             .unwrap();
         assert_eq!(intervals_number, tasks_number as usize);
         assert_eq!(intervals.len(), tasks_number as usize);
-        for i in 0..tasks_number as usize {
-            let index = i as u64;
+        for (index, interval) in intervals.iter().enumerate().take(tasks_number as usize) {
             assert_eq!(
-                intervals[i].start.and_utc().timestamp() as u64,
-                start_timestamp + index * catchup_interval_secs
+                interval.start.and_utc().timestamp() as u64,
+                start_timestamp + index as u64 * catchup_interval_secs
             );
             assert_eq!(
-                intervals[i].finish.and_utc().timestamp() as u64,
-                start_timestamp + (index + 1) * catchup_interval_secs
+                interval.finish.and_utc().timestamp() as u64,
+                start_timestamp + (index as u64 + 1) * catchup_interval_secs
             );
         }
 
@@ -460,8 +459,8 @@ mod tests {
                             if start <= 1741794238 && end >= 1741794238 {
                                 // Verify interval is marked as processed
                                 let interval = interval::Entity::find()
-                                    .filter(interval::Column::Start.eq(timestamp_to_naive(start as i64)))
-                                    .filter(interval::Column::Finish.eq(timestamp_to_naive(end as i64)))
+                                    .filter(interval::Column::Start.eq(timestamp_to_naive(start)))
+                                    .filter(interval::Column::Finish.eq(timestamp_to_naive(end)))
                                     .one(db.client().as_ref())
                                     .instrument(tracing::info_span!(
                                         "fetching interval",

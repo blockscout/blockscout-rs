@@ -55,8 +55,8 @@ flush-database:
 
 format:
     cargo sort --workspace
-    cargo fmt --all -- --config imports_granularity=crate
+    cargo fmt --all -- --config imports_granularity=Crate
 
 check:
     cargo check
-    cargo clippy
+    cargo clippy --all --all-targets --all-features -- -D warnings
