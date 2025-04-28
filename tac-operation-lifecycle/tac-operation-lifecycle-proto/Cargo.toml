@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix-web = { workspace = true }
 actix-prost = { git = "https://github.com/blockscout/actix-prost" }
 actix-prost-macros = { git = "https://github.com/blockscout/actix-prost" }
+actix-web = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_with = { workspace = true }

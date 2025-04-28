@@ -52,3 +52,11 @@ migrate-down:
 flush-database:
     sea-orm-cli migrate -d tac-operation-lifecycle-migration down
     sea-orm-cli migrate -d tac-operation-lifecycle-migration up
+
+format:
+    cargo sort --workspace
+    cargo fmt --all -- --config imports_granularity=crate
+
+check:
+    cargo check
+    cargo clippy

@@ -11,6 +11,8 @@ use tac_operation_lifecycle_logic::{
 use tac_operation_lifecycle_server::Settings;
 use tokio::sync::Mutex;
 
+use rstest::rstest;
+
 pub async fn init_db(test_name: &str) -> TestDbGuard {
     TestDbGuard::new::<migration::Migrator>(test_name).await
 }
@@ -51,10 +53,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use blockscout_service_launcher::tracing::{JaegerSettings, TracingSettings};
     use chrono::Timelike;
     use futures::stream::select_all;
-    use rand::Rng;
     use std::{sync::Arc, time};
 
     use super::*;
@@ -67,6 +67,7 @@ mod tests {
     use tokio::sync::Mutex;
     use tracing::Instrument;
 
+    #[rstest]
     #[tokio::test]
     async fn test_startup_works() {
         let db = init_db("startup_works").await;
@@ -76,30 +77,30 @@ mod tests {
         assert_eq!(response, serde_json::json!({"status": "SERVING"}));
     }
 
+    #[rstest(
+        catchup_interval_secs => [1, 5, 10],
+        tasks_number => [1, 5, 20, 80, 200, 500],
+        current_epoch => [1_600_000_000, 1_745_000_000, 2_000_000_000],
+    )]
     #[tokio::test]
-    async fn test_save_intervals() {
-        let db = init_db("save_intervals").await;
+    async fn test_save_intervals(
+        catchup_interval_secs: u64,
+        tasks_number: u64,
+        current_epoch: u64,
+    ) {
+        let db_name = format!(
+            "save_intervals_{}_{}_{}",
+            catchup_interval_secs, tasks_number, current_epoch
+        );
+        let db = init_db(&db_name).await;
         let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
 
-        let _ = blockscout_service_launcher::tracing::init_logs(
-            "test_save_intervals",
-            &TracingSettings::default(),
-            &JaegerSettings::default(),
-        )
-        .unwrap();
-
-        let catchup_interval = time::Duration::from_secs(rand::rng().random_range(1..100));
-        let tasks_number = rand::rng().random_range(1..100);
-        let lag = tasks_number * catchup_interval.as_secs();
-        let current_epoch = time::SystemTime::now()
-            .duration_since(time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let lag = tasks_number * catchup_interval_secs;
         let start_timestamp = current_epoch - lag;
-        tracing::debug!("start_timestamp: {}", start_timestamp);
-        tracing::debug!("catchup_interval: {}", catchup_interval.as_secs());
-        tracing::debug!("tasks_number: {}", tasks_number);
-        tracing::debug!("current_epoch: {}", current_epoch);
+        println!("start_timestamp: {}", start_timestamp);
+        println!("catchup_interval: {}", catchup_interval_secs);
+        println!("tasks_number: {}", tasks_number);
+        println!("current_epoch: {}", current_epoch);
 
         // Initialize mock server and associated client
         use wiremock::MockServer;
@@ -112,9 +113,7 @@ mod tests {
 
         let indexer_settings = IndexerSettings {
             concurrency: 1,
-            //random catchup interval from 1 to 100
-            catchup_interval,
-            // current epoch - random from 1 to 100 times catchup interval
+            catchup_interval: time::Duration::from_secs(catchup_interval_secs),
             start_timestamp,
             ..Default::default()
         };
@@ -140,11 +139,11 @@ mod tests {
             let index = i as u64;
             assert_eq!(
                 intervals[i].start.and_utc().timestamp() as u64,
-                start_timestamp + index * catchup_interval.as_secs()
+                start_timestamp + index * catchup_interval_secs
             );
             assert_eq!(
                 intervals[i].finish.and_utc().timestamp() as u64,
-                start_timestamp + (index + 1) * catchup_interval.as_secs()
+                start_timestamp + (index + 1) * catchup_interval_secs
             );
         }
 
@@ -156,6 +155,8 @@ mod tests {
             .unwrap()
             .naive_utc()
     }
+
+    #[rstest]
     #[tokio::test]
     async fn test_job_stream() {
         use futures::stream::{select_with_strategy, PollNext};
@@ -227,7 +228,7 @@ mod tests {
                     match job {
                         IndexerJob::Interval(interval_job) => {
                             let thread_id = std::thread::current().id();
-                            tracing::debug!("Thread {:?} Received interval job: {:?}", thread_id, interval_job);
+                            println!("Thread {:?} Received interval job: {:?}", thread_id, interval_job);
                             // Ensure we haven't seen this interval before
                             let interval_key = (interval_job.interval.start, interval_job.interval.finish);
                             let (start, end) = interval_key;
@@ -266,10 +267,10 @@ mod tests {
                             }
 
                             received_jobs.push(interval_job);
-                            tracing::debug!("Received {} jobs", received_jobs.len());
+                            println!("Received {} jobs", received_jobs.len());
 
                             if received_jobs.len() >= tasks_number as usize {
-                                tracing::debug!("all jobs received");
+                                println!("all jobs received");
                                 all_jobs_received = true;
                             }
                         },
@@ -285,10 +286,10 @@ mod tests {
             }
         }
 
-        tracing::debug!("--------------------------------");
-        tracing::debug!("Received {} jobs", received_jobs.len());
-        tracing::debug!("all_jobs_received: {}", all_jobs_received);
-        tracing::debug!("--------------------------------");
+        println!("--------------------------------");
+        println!("Received {} jobs", received_jobs.len());
+        println!("all_jobs_received: {}", all_jobs_received);
+        println!("--------------------------------");
 
         // Verify we received all expected jobs
         assert_eq!(
@@ -309,6 +310,7 @@ mod tests {
         // }
     }
 
+    #[rstest]
     #[tokio::test]
     async fn test_operation_lifecycle_indexing() {
         use serde_json::json;
@@ -442,7 +444,7 @@ mod tests {
                     match job {
                         IndexerJob::Interval(interval_job) => {
                             // Process the interval job
-                            tracing::warn!("Processing interval job: {:?}", interval_job);
+                            println!("Processing interval job: {:?}", interval_job);
                             let start = interval_job.interval.start.and_utc().timestamp();
                             let end = interval_job.interval.finish.and_utc().timestamp();
                             if let Err(e) = indexer.fetch_operations(&interval_job).instrument(tracing::info_span!(
