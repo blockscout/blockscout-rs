@@ -92,17 +92,17 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
 }
 
 pub struct ReadWriteRepo {
-    write_db: DatabaseConnection,
-    read_db: Option<ReplicaRepo>,
+    main_db: DatabaseConnection,
+    replica_db: Option<ReplicaRepo>,
 }
 
 impl ReadWriteRepo {
     pub async fn new<Migrator: MigratorTrait>(
-        write_db_settings: &DatabaseSettings,
-        read_db_settings: Option<&ReplicaDatabaseSettings>,
+        main_db_settings: &DatabaseSettings,
+        replica_db_settings: Option<&ReplicaDatabaseSettings>,
     ) -> anyhow::Result<Self> {
-        let write_db = initialize_postgres::<Migrator>(write_db_settings).await?;
-        let read_db = if let Some(settings) = read_db_settings {
+        let main_db = initialize_postgres::<Migrator>(main_db_settings).await?;
+        let replica_db = if let Some(settings) = replica_db_settings {
             let db_url = settings.connect.clone().url();
             let connect_options = settings.connect_options.apply_to(db_url.into());
             Database::connect(connect_options)
@@ -115,24 +115,29 @@ impl ReadWriteRepo {
                 })
                 .ok()
                 .map(|db| {
-                    let read_db = ReplicaRepo::new(db, settings.max_lag, settings.health_check_interval);
-                    read_db.spawn_health_check();
-                    read_db
+                    let replica_db = ReplicaRepo::new(db, settings.max_lag, settings.health_check_interval);
+                    replica_db.spawn_health_check();
+                    replica_db
                 })
         } else {
             None
         };
-        Ok(Self { write_db, read_db })
+        Ok(Self {
+            main_db,
+            replica_db,
+        })
     }
 
-    pub fn write_db(&self) -> &DatabaseConnection {
-        &self.write_db
+    /// The main database connection supporting read and write operations.
+    pub fn main_db(&self) -> &DatabaseConnection {
+        &self.main_db
     }
 
+    /// The read-only database connection, will fallback to the main database if the replica is unhealthy.
     pub fn read_db(&self) -> &DatabaseConnection {
-        match &self.read_db {
-            Some(read_db) if read_db.is_healthy() => &read_db.db,
-            _ => &self.write_db,
+        match &self.replica_db {
+            Some(replica_db) if replica_db.is_healthy() => &replica_db.db,
+            _ => &self.main_db,
         }
     }
 }
