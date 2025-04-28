@@ -1,0 +1,359 @@
+swagger: "2.0"
+info:
+  title: v1/tac-operation-lifecycle.proto
+  version: version not set
+tags:
+  - name: TacService
+  - name: TacStatistic
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/stat/full:
+    get:
+      operationId: TacStatistic_GetFullStatistics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetFullStatisticResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - TacStatistic
+  /api/v1/stat/intervals:
+    get:
+      operationId: TacStatistic_GetIntervalStatistics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetIntervalStatisticsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - TacStatistic
+  /api/v1/stat/operations:
+    get:
+      operationId: TacStatistic_GetOperationStatistics
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetOperationStatisticsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - TacStatistic
+  /api/v1/tac/operations:
+    get:
+      operationId: TacService_GetOperations
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: page_token
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: page_items
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - TacService
+  /api/v1/tac/operations/{operation_id}:
+    get:
+      operationId: TacService_GetOperationDetails
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationDetails'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: operation_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - TacService
+  /api/v1/tac/operations:byTx/{tx_hash}:
+    get:
+      operationId: TacService_GetOperationByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationDetails'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+      tags:
+        - TacService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  OperationRelatedTransactionBlockchainType:
+    type: string
+    enum:
+      - TAC
+      - TON
+      - Unknown
+    default: TAC
+  OperationStageStageType:
+    type: string
+    enum:
+      - CollectedInTAC
+      - IncludedInTACConsensus
+      - ExecutedInTAC
+      - CollectedInTON
+      - IncludedInTONConsensus
+      - ExecutedInTON
+    default: CollectedInTAC
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1GetFullStatisticResponse:
+    type: object
+    properties:
+      timestamp:
+        type: string
+        format: uint64
+      watermark:
+        type: string
+        format: uint64
+      intervals:
+        $ref: '#/definitions/v1IntervalStatistic'
+      operations:
+        $ref: '#/definitions/v1OperationStatistic'
+  v1GetIntervalStatisticsResponse:
+    type: object
+    properties:
+      timestamp:
+        type: string
+        format: uint64
+      intervals:
+        $ref: '#/definitions/v1IntervalStatistic'
+  v1GetOperationStatisticsResponse:
+    type: object
+    properties:
+      timestamp:
+        type: string
+        format: uint64
+      operations:
+        $ref: '#/definitions/v1OperationStatistic'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1IntervalStatistic:
+    type: object
+    properties:
+      first_timestamp:
+        type: string
+        format: uint64
+      last_timestamp:
+        type: string
+        format: uint64
+      total_intervals:
+        type: string
+        format: uint64
+      pending_intervals:
+        type: string
+        format: uint64
+      processing_intervals:
+        type: string
+        format: uint64
+      finalized_intervals:
+        type: string
+        format: uint64
+      failed_intervals:
+        type: string
+        format: uint64
+      finalized_period:
+        type: string
+        format: uint64
+      sync_completeness:
+        type: number
+        format: double
+  v1OperationBriefDetails:
+    type: object
+    properties:
+      operation_id:
+        type: string
+      type:
+        $ref: '#/definitions/v1OperationType'
+      timestamp:
+        type: string
+        format: uint64
+      sender:
+        type: string
+  v1OperationDetails:
+    type: object
+    properties:
+      operation_id:
+        type: string
+      type:
+        $ref: '#/definitions/v1OperationType'
+      timestamp:
+        type: string
+        format: uint64
+      sender:
+        type: string
+      status_history:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1OperationStage'
+  v1OperationRelatedTransaction:
+    type: object
+    properties:
+      hash:
+        type: string
+      type:
+        $ref: '#/definitions/OperationRelatedTransactionBlockchainType'
+  v1OperationStage:
+    type: object
+    properties:
+      type:
+        $ref: '#/definitions/OperationStageStageType'
+      is_exist:
+        type: boolean
+      is_success:
+        type: boolean
+      timestamp:
+        type: string
+        format: uint64
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1OperationRelatedTransaction'
+      note:
+        type: string
+  v1OperationStatistic:
+    type: object
+    properties:
+      last_timestamp:
+        type: string
+        format: uint64
+      total_operations:
+        type: string
+        format: uint64
+      pending_operations:
+        type: string
+        format: uint64
+      processing_operations:
+        type: string
+        format: uint64
+      finalized_operations:
+        type: string
+        format: uint64
+      failed_operations:
+        type: string
+        format: uint64
+      sync_completeness:
+        type: number
+        format: double
+  v1OperationType:
+    type: string
+    enum:
+      - Error
+      - Pending
+      - TonTacTon
+      - TacTon
+      - TonTac
+      - Rollback
+      - Unknown
+    default: Error
+  v1OperationsResponse:
+    type: object
+    properties:
+      operations:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1OperationBriefDetails'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1Pagination:
+    type: object
+    properties:
+      page_token:
+        type: string
+        format: uint64
+      page_items:
+        type: integer
+        format: int64

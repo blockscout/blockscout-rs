@@ -1,0 +1,32 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    
+    #################### Operations ####################
+
+    - selector: blockscout.tacOperationLifecycle.v1.TacService.GetOperations
+      get: /api/v1/tac/operations
+
+    - selector: blockscout.tacOperationLifecycle.v1.TacService.GetOperationDetails
+      get: /api/v1/tac/operations/{operation_id}
+
+    - selector: blockscout.tacOperationLifecycle.v1.TacService.GetOperationByTransaction
+      get: /api/v1/tac/operations:byTx/{tx_hash}
+
+    #################### Statistics ####################
+
+    - selector: blockscout.tacOperationLifecycle.v1.TacStatistic.GetFullStatistics
+      get: /api/v1/stat/full
+
+    - selector: blockscout.tacOperationLifecycle.v1.TacStatistic.GetIntervalStatistics
+      get: /api/v1/stat/intervals
+
+    - selector: blockscout.tacOperationLifecycle.v1.TacStatistic.GetOperationStatistics
+      get: /api/v1/stat/operations
+    
+    #################### Health ####################
+
+    - selector: blockscout.tacOperationLifecycle.v1.Health.Check
+      get: /health
