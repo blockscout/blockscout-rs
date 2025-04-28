@@ -24,7 +24,7 @@ pub struct IndexerSettings {
 }
 
 fn default_start_timestamp() -> u64 {
-    0
+    1740787200 // Mar 01 2025 00:00:00 GMT+0000
 }
 
 fn default_polling_interval() -> time::Duration {

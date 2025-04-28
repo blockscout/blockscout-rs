@@ -6,6 +6,7 @@ use reqwest::Url;
 use tac_operation_lifecycle_logic::{
     client::{settings::RpcSettings, Client},
     database::TacDatabase,
+    settings::IndexerSettings,
 };
 use tac_operation_lifecycle_server::Settings;
 use tokio::sync::Mutex;
@@ -25,6 +26,7 @@ where
         let mut settings = Settings::default(db_url.clone());
         let (server_settings, base) = test_server::get_test_server_settings();
         settings.server = server_settings;
+        settings.indexer = IndexerSettings::default().into();
         settings.metrics.enabled = false;
         settings.tracing.enabled = false;
         settings.jaeger.enabled = false;
@@ -50,6 +52,7 @@ where
 #[cfg(test)]
 mod tests {
     use blockscout_service_launcher::tracing::{JaegerSettings, TracingSettings};
+    use chrono::Timelike;
     use futures::stream::select_all;
     use rand::Rng;
     use std::{sync::Arc, time};
@@ -84,6 +87,7 @@ mod tests {
             &JaegerSettings::default(),
         )
         .unwrap();
+
         let catchup_interval = time::Duration::from_secs(rand::rng().random_range(1..100));
         let tasks_number = rand::rng().random_range(1..100);
         let lag = tasks_number * catchup_interval.as_secs();
@@ -190,7 +194,7 @@ mod tests {
             indexer_settings,
             Arc::new(TacDatabase::new(
                 Arc::new(conn_with_db),
-                start_timestamp.and_utc().timestamp() as u64
+                start_timestamp.and_utc().timestamp() as u64,
             )),
             client,
         )
@@ -231,8 +235,16 @@ mod tests {
                             seen_intervals.insert(interval_key);
 
                             // Verify job timestamps are within expected range
-                            assert!(start >= start_timestamp, "Job start time {} is before start_timestamp {}", start, start_timestamp);
-                            assert!(end <= (start_timestamp + catchup_interval), "Job end time {} is after current_epoch {}", end, current_epoch);
+                            assert!(
+                                start.with_nanosecond(0).unwrap() >=
+                                start_timestamp.with_nanosecond(0).unwrap(),
+                                "Job start time {} is before start_timestamp {}", start, start_timestamp
+                            );
+                            assert!(
+                                end.with_nanosecond(0).unwrap() <=
+                                current_epoch.with_nanosecond(0).unwrap(),
+                                "Job end time {} is after current_epoch {}", end, current_epoch
+                            );
                             // Verify job interval matches catchup_interval
                             assert_eq!((end - start).num_seconds() as u64, catchup_interval.as_secs(),
                                 "Job interval {:?} doesn't match catchup_interval {}",
@@ -310,18 +322,6 @@ mod tests {
         let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
         let mock_server = MockServer::start().await;
 
-        let _server =
-            init_tac_operation_lifecycle_server(db.db_url(), "indexing", |mut settings| {
-                settings.tracing.enabled = true;
-                settings.indexer = Some(IndexerSettings {
-                    concurrency: 1,
-                    catchup_interval: time::Duration::from_secs(10),
-                    start_timestamp: 1741794228,
-                    ..Default::default()
-                });
-                settings
-            })
-            .await;
         // Set up the mock for /operationIds endpoint
         Mock::given(method("GET"))
             .and(path("/operation-ids"))
