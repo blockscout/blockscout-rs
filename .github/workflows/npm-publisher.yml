@@ -9,12 +9,7 @@ on:
                 required: true
             project_name:
                 description: Project name
-                type: choice
-                options:
-                    - blockscout-ens
-                    - stats
-                    - visualizer
-                    - tac-operation-lifecycle
+                type: string
                 required: true
     workflow_call:
         inputs:
@@ -56,7 +51,7 @@ jobs:
         - name: Build the package
           run: |
             cd ./${{ inputs.project_name }}/types
-            npm install
+            npm ci || npm install
             npm run build
       
         - name: Publish to NPM registry
