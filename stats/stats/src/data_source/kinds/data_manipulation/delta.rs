@@ -3,7 +3,12 @@
 //!
 //! I.e. chart "New accounts" is a delta of  "Total accounts".
 
-use std::{fmt::Display, marker::PhantomData, ops::SubAssign, str::FromStr};
+use std::{
+    fmt::Display,
+    marker::PhantomData,
+    ops::{RangeBounds, SubAssign},
+    str::FromStr,
+};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, TimeDelta, Utc};
@@ -13,7 +18,8 @@ use crate::{
     data_processing::deltas,
     data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
     range::UniversalRange,
-    types::TimespanValue,
+    types::{Timespan, TimespanValue},
+    utils::day_start,
     ChartError,
 };
 
@@ -31,7 +37,7 @@ where
 impl<DS, Resolution, Value> AdapterDataSource for Delta<DS>
 where
     DS: DataSource<Output = Vec<TimespanValue<Resolution, Value>>>,
-    Resolution: Send,
+    Resolution: Timespan + Clone + Send,
     Value: FromStr + SubAssign + Zero + Clone + Display + Send,
     TimespanValue<Resolution, Value>: Default,
     <Value as FromStr>::Err: Display,
@@ -46,14 +52,17 @@ where
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<Self::Output, ChartError> {
         let mut request_range = range.clone();
+        // needed to compute deltas for the whole range
         request_range.start = request_range.start.map(|s| {
             s.checked_sub_signed(TimeDelta::days(1))
-                .unwrap_or(DateTime::<Utc>::MAX_UTC)
+                .unwrap_or(DateTime::<Utc>::MIN_UTC)
         });
         let start_is_bounded = request_range.start.is_some();
-
         let cum_data = DS::query_data(cx, request_range, dependency_data_fetch_timer).await?;
-        let (prev_value, cum_data) = if start_is_bounded {
+        let first_point_is_outside_range = cum_data
+            .first()
+            .is_some_and(|first| !range.contains(&day_start(&first.timespan.clone().into_date())));
+        let (prev_value, cum_data) = if start_is_bounded && first_point_is_outside_range {
             let mut cum_data = cum_data.into_iter();
             let Some(range_start) = cum_data.next() else {
                 tracing::warn!("Value before the range was not found, finishing update");

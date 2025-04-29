@@ -307,10 +307,18 @@
             "title": "Total gas usage",
             "description": "Cumulative gas used over time"
         },
+        "average_gas_used": {
+            "title": "Average gas used",
+            "description": "Average amount of gas used per block"
+        },
         "average_gas_price": {
             "title": "Average gas price",
             "description": "Average price (Gwei) per unit of gas",
             "units": "Gwei"
+        },
+        "network_utilization": {
+            "title": "Network utilization",
+            "description": "Percentage of gas used compared to the gas limit"
         },
         "new_verified_contracts": {
             "title": "New verified contracts",
