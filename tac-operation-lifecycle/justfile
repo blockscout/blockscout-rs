@@ -8,7 +8,7 @@ db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "tac_operation_lifecycle")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
 
-docker-name := env_var_or_default('DOCKER_NAME', "tac-operation-lifecycle-postgres")
+docker-name := env_var_or_default('DOCKER_NAME', "tac-operation-lifecycle-postgres-dev")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
 
 
@@ -34,7 +34,7 @@ stop-test-postgres:
 
 run:
     TAC_OPERATION_LIFECYCLE__DATABASE__CONNECT__URL={{DATABASE_URL}} \
-    TAC_OPERATION_LIFECYCLE__CONFIG=tac-operation-lifecycle-server/config.yaml \
+    TAC_OPERATION_LIFECYCLE__CONFIG=tac-operation-lifecycle-server/config/testnet.toml \
     cargo run --bin tac-operation-lifecycle-server
 
 generate-entities:
