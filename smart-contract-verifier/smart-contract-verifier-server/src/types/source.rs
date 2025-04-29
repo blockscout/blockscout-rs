@@ -24,6 +24,7 @@ pub fn from_sourcify_success(value: SourcifySuccess) -> Source {
         creation_input_artifacts: None,
         deployed_bytecode_artifacts: None,
         is_blueprint: false,
+        libraries: value.contract_libraries,
     }
 }
 
@@ -45,7 +46,7 @@ mod tests {
             contract_name: "contract_name".to_string(),
             abi: "abi".to_string(),
             sources: BTreeMap::from([("file_name".into(), "content".into())]),
-            contract_libraries: BTreeMap::from([("lib_name".into(), "lib_address".into())]),
+            contract_libraries: BTreeMap::from([("file_name:lib_name".into(), "0x1234".into())]),
             compiler_settings: "compiler_settings".to_string(),
             match_type: MatchType::Full,
         };
@@ -65,6 +66,7 @@ mod tests {
             creation_input_artifacts: None,
             deployed_bytecode_artifacts: None,
             is_blueprint: false,
+            libraries: BTreeMap::from([("file_name:lib_name".into(), "0x1234".into())]),
         };
 
         assert_eq!(expected, result);

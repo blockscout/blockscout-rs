@@ -6614,6 +6614,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "tracing",
 ]
 
 [[package]]

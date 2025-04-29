@@ -5,7 +5,11 @@ use smart_contract_verifier_proto::blockscout::smart_contract_verifier::{
     v2, v2::verify_response::extra_data,
 };
 use tonic::Status;
-use verification_common::verifier_alliance::{CborAuxdata, CompilationArtifacts, Match};
+use verification_common::{
+    solidity_libraries,
+    solidity_libraries::parse_manually_linked_libraries,
+    verifier_alliance::{CborAuxdata, CompilationArtifacts, Match},
+};
 
 pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
     match error {
@@ -119,6 +123,17 @@ fn try_into_source(verifying_contract: VerifyingContract) -> Result<v2::Source, 
     let creation_code_artifacts = verifying_contract.creation_code_artifacts;
     let runtime_code_artifacts = verifying_contract.runtime_code_artifacts;
 
+    let mut libraries = solidity_libraries::try_parse_compiler_linked_libraries(
+        &verifying_contract.compiler_settings,
+    )
+    .map_err(|err| Status::internal(err.to_string()))?;
+    if let Some(creation_match_) = verifying_contract.creation_match.as_ref() {
+        libraries.extend(parse_manually_linked_libraries(creation_match_));
+    }
+    if let Some(runtime_match_) = verifying_contract.runtime_match.as_ref() {
+        libraries.extend(parse_manually_linked_libraries(runtime_match_));
+    }
+
     let source = v2::Source {
         file_name: verifying_contract.fully_qualified_name.file_name(),
         contract_name: verifying_contract.fully_qualified_name.contract_name(),
@@ -137,6 +152,7 @@ fn try_into_source(verifying_contract: VerifyingContract) -> Result<v2::Source, 
         creation_input_artifacts: Some(Value::from(creation_code_artifacts).to_string()),
         deployed_bytecode_artifacts: Some(Value::from(runtime_code_artifacts).to_string()),
         is_blueprint: verifying_contract.is_blueprint,
+        libraries,
     };
     Ok(source)
 }
