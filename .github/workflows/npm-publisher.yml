@@ -14,6 +14,7 @@ on:
                     - blockscout-ens
                     - stats
                     - visualizer
+                    - tac-operation-lifecycle
                 required: true
     workflow_call:
         inputs:
