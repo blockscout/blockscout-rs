@@ -7,6 +7,7 @@ use blockscout_service_launcher::database::ReadWriteRepo;
 use multichain_aggregator_logic::{
     clients::dapp,
     error::{ParseError, ServiceError},
+    repository::interop_messages,
     services::{api_key_manager::ApiKeyManager, chains, import, search},
     types,
 };
@@ -415,6 +416,52 @@ impl MultichainAggregatorService for MultichainAggregator {
             }),
         }))
     }
+
+    async fn list_interop_messages(
+        &self,
+        request: Request<ListInteropMessagesRequest>,
+    ) -> Result<Response<ListInteropMessagesResponse>, Status> {
+        let inner = request.into_inner();
+
+        let init_chain_id = inner.init_chain_id.map(parse_query).transpose()?;
+        let relay_chain_id = inner.relay_chain_id.map(parse_query).transpose()?;
+
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query_3).transpose()?;
+
+        let (interop_messages, next_page_token) = search::search_interop_messages(
+            self.repo.read_db(),
+            init_chain_id,
+            relay_chain_id,
+            inner.nonce,
+            page_size as u64,
+            page_token,
+        )
+        .await?;
+
+        Ok(Response::new(ListInteropMessagesResponse {
+            items: interop_messages.into_iter().map(|i| i.into()).collect(),
+            next_page_params: next_page_token.map(|(t, i, n)| Pagination {
+                page_token: format!("{},{},{}", t, i, n),
+                page_size,
+            }),
+        }))
+    }
+
+    async fn count_interop_messages(
+        &self,
+        request: Request<CountInteropMessagesRequest>,
+    ) -> Result<Response<CountInteropMessagesResponse>, Status> {
+        let inner = request.into_inner();
+
+        let chain_id = parse_query(inner.chain_id)?;
+
+        let count = interop_messages::count(self.repo.read_db(), chain_id)
+            .await
+            .map_err(ServiceError::from)?;
+
+        Ok(Response::new(CountInteropMessagesResponse { count }))
+    }
 }
 
 #[allow(clippy::result_large_err)]
@@ -438,6 +485,25 @@ where
         [v1, v2] => Ok((
             parse_query::<T1>(v1.to_string())?,
             parse_query::<T2>(v2.to_string())?,
+        )),
+        _ => Err(Status::invalid_argument("invalid page_token format")),
+    }
+}
+
+#[inline]
+fn parse_query_3<T1: FromStr, T2: FromStr, T3: FromStr>(
+    input: String,
+) -> Result<(T1, T2, T3), Status>
+where
+    <T1 as FromStr>::Err: std::fmt::Display,
+    <T2 as FromStr>::Err: std::fmt::Display,
+    <T3 as FromStr>::Err: std::fmt::Display,
+{
+    match input.split(',').collect::<Vec<&str>>().as_slice() {
+        [v1, v2, v3] => Ok((
+            parse_query::<T1>(v1.to_string())?,
+            parse_query::<T2>(v2.to_string())?,
+            parse_query::<T3>(v3.to_string())?,
         )),
         _ => Err(Status::invalid_argument("invalid page_token format")),
     }

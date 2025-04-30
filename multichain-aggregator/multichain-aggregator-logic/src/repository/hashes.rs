@@ -47,7 +47,7 @@ pub async fn list<C>(
 where
     C: ConnectionTrait,
 {
-    let mut c = Entity::find()
+    let c = Entity::find()
         .filter(Column::Hash.eq(hash.as_slice()))
         .apply_if(hash_type, |q, hash_type| {
             q.filter(Column::HashType.eq(hash_type))
@@ -58,9 +58,5 @@ where
         )
         .cursor_by(Column::ChainId);
 
-    if let Some(page_token) = page_token {
-        c.after(page_token);
-    }
-
-    paginate_cursor(db, c, page_size, |u| u.chain_id).await
+    paginate_cursor(db, c, page_size, page_token, |u| u.chain_id).await
 }
