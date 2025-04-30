@@ -290,7 +290,7 @@ impl SubgraphReader {
                     .await?;
             }
         }
-
+        println!("find_domains_input: {find_domains_input:?}");
         let domains = sql::find_domains(
             self.pool.as_ref(),
             find_domains_input.clone(),
@@ -313,7 +313,9 @@ impl SubgraphReader {
             };
             domain
         });
+        println!("domains: {domains:?}");
         let output = lookup_output_from_domains(domains, &self.protocoler)?;
+        println!("output: {output:?}");
         let paginated = input
             .pagination
             .paginate_result(output)
@@ -526,7 +528,7 @@ fn lookup_output_from_domains(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{protocols::DomainNameOnProtocol, subgraph::sql, test_utils::mocked_reader};
+    use crate::{protocols::DomainNameOnProtocol, subgraph::{sql, DomainPaginationInput}, test_utils::mocked_reader};
     use alloy::primitives::Address;
     use pretty_assertions::assert_eq;
 
@@ -622,20 +624,24 @@ mod tests {
                 .map(|output| output.domain.name.as_deref())
                 .collect::<Vec<_>>(),
         );
+        let pagination_for_domain = DomainPaginationInput {
+            page_size: 2,               
+            ..Default::default()        
+        };
 
         let result = reader
             .lookup_domain_name(LookupDomainInput {
                 network_id: 1337,
                 name: Some("abcnews".to_string()),
                 only_active: false,
-                pagination: Default::default(),
+                pagination: pagination_for_domain,
                 maybe_filter_protocols: None,
             })
             .await
             .expect("failed to get abcnews domains");
         assert_eq!(result.next_page_token, None);
-        let result = result.items;
         println!("result: {result:?}");
+        let result = result.items;
         assert_eq!(
             vec![Some("abcnews.eth"), Some("abcnews.gno")],
             result

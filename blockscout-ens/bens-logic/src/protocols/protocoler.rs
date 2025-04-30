@@ -312,6 +312,9 @@ impl Protocoler {
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+        println!("name: {:?}", name);
+        println!("network_id: {:?}", network_id);
+        println!("maybe_filter: {:?}", maybe_filter);
         if name.contains('.') {
             let direct = self.fetch_domain_options(name, network_id, maybe_filter)?;
 
@@ -326,7 +329,7 @@ impl Protocoler {
                 .filter_map(|protocol_name| self.protocols.get(protocol_name))
                 .flat_map(|protocol| protocol.info.tld_list.iter().cloned())
                 .collect::<Vec<Tld>>();
-
+            println!("tlds: {:?}", tlds);
             let all_names_with_protocols: Vec<_> = tlds
                 .into_iter()
                 .map(|tld| format!("{}.{}", name, tld.0))
@@ -336,7 +339,9 @@ impl Protocoler {
                 })
                 .take(MAX_NETWORKS_LIMIT)
                 .collect();
+
             println!("all_names_with_protocols: {:?}", all_names_with_protocols);
+
             if all_names_with_protocols.is_empty() {
                 Err(ProtocolError::InvalidName {
                     name: name.to_string(),
