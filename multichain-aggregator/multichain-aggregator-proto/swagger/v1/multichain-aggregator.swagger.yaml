@@ -167,6 +167,62 @@ paths:
             $ref: '#/definitions/v1BatchImportRequest'
       tags:
         - MultichainAggregatorService
+  /api/v1/interop/messages:
+    get:
+      operationId: MultichainAggregatorService_ListInteropMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListInteropMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: init_chain_id
+          in: query
+          required: false
+          type: string
+        - name: relay_chain_id
+          in: query
+          required: false
+          type: string
+        - name: nonce
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/interop/messages/count:
+    get:
+      operationId: MultichainAggregatorService_CountInteropMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CountInteropMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /api/v1/nfts:
     get:
       operationId: MultichainAggregatorService_ListNfts
@@ -343,6 +399,34 @@ definitions:
         type: string
       hash_type:
         $ref: '#/definitions/v1HashType'
+  BatchImportRequestInteropMessageImport:
+    type: object
+    properties:
+      sender:
+        type: string
+      target:
+        type: string
+      nonce:
+        type: string
+        format: int64
+      init_chain_id:
+        type: string
+      init_transaction_hash:
+        type: string
+      block_number:
+        type: string
+        format: uint64
+      timestamp:
+        type: string
+        format: int64
+      relay_chain_id:
+        type: string
+      relay_transaction_hash:
+        type: string
+      payload:
+        type: string
+      failed:
+        type: boolean
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -433,6 +517,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/BatchImportRequestHashImport'
+      interop_messages:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestInteropMessageImport'
       api_key:
         type: string
   v1BatchImportResponse:
@@ -451,6 +540,12 @@ definitions:
         type: string
       icon_url:
         type: string
+  v1CountInteropMessagesResponse:
+    type: object
+    properties:
+      count:
+        type: string
+        format: uint64
   v1Domain:
     type: object
     properties:
@@ -494,6 +589,33 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1InteropMessage:
+    type: object
+    properties:
+      sender:
+        type: string
+      target:
+        type: string
+      nonce:
+        type: string
+        format: int64
+      init_chain_id:
+        type: string
+      init_transaction_hash:
+        type: string
+      block_number:
+        type: string
+        format: uint64
+      timestamp:
+        type: string
+      relay_chain_id:
+        type: string
+      relay_transaction_hash:
+        type: string
+      payload:
+        type: string
+      failed:
+        type: boolean
   v1ListAddressesResponse:
     type: object
     properties:
@@ -543,6 +665,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Domain'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListInteropMessagesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1InteropMessage'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListNftsResponse:

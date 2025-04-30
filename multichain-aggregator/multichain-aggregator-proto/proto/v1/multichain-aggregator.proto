@@ -20,6 +20,10 @@ service MultichainAggregatorService {
   rpc ListDappCategories(ListDappCategoriesRequest)
       returns (ListDappCategoriesResponse) {}
   rpc ListDomains(ListDomainsRequest) returns (ListDomainsResponse) {}
+  rpc ListInteropMessages(ListInteropMessagesRequest)
+      returns (ListInteropMessagesResponse) {}
+  rpc CountInteropMessages(CountInteropMessagesRequest)
+      returns (CountInteropMessagesResponse) {}
 }
 
 enum TokenType {
@@ -95,6 +99,20 @@ message Domain {
   google.protobuf.Struct protocol = 4;
 }
 
+message InteropMessage {
+  optional string sender = 1;
+  optional string target = 2;
+  int64 nonce = 3;
+  string init_chain_id = 4;
+  optional string init_transaction_hash = 5;
+  optional uint64 block_number = 6;
+  optional string timestamp = 7;
+  string relay_chain_id = 8;
+  optional string relay_transaction_hash = 9;
+  optional string payload = 10;
+  optional bool failed = 11;
+}
+
 message BatchImportRequest {
   message AddressImport {
     string hash = 1;
@@ -117,11 +135,26 @@ message BatchImportRequest {
     uint64 max_block_number = 2;
   }
 
+  message InteropMessageImport {
+    optional string sender = 1;
+    optional string target = 2;
+    int64 nonce = 3;
+    string init_chain_id = 4;
+    optional string init_transaction_hash = 5;
+    optional uint64 block_number = 6;
+    optional int64 timestamp = 7;
+    string relay_chain_id = 8;
+    optional string relay_transaction_hash = 9;
+    optional string payload = 10;
+    optional bool failed = 11;
+  }
+
   string chain_id = 1;
   repeated AddressImport addresses = 2;
   repeated BlockRangeImport block_ranges = 3;
   repeated HashImport hashes = 4;
-  string api_key = 5;
+  repeated InteropMessageImport interop_messages = 5;
+  string api_key = 6;
 }
 
 message BatchImportResponse { string status = 1; }
@@ -199,13 +232,9 @@ message Chain {
   string icon_url = 4;
 }
 
-message ListChainsRequest {
-  optional bool only_active = 1;
-}
+message ListChainsRequest { optional bool only_active = 1; }
 
-message ListChainsResponse {
-  repeated Chain items = 1;
-}
+message ListChainsResponse { repeated Chain items = 1; }
 
 message ListDappsRequest {
   optional string q = 1;
@@ -213,21 +242,15 @@ message ListDappsRequest {
   repeated string chain_ids = 3;
 }
 
-message ListDappsResponse {
-  repeated MarketplaceDapp items = 1;
-}
+message ListDappsResponse { repeated MarketplaceDapp items = 1; }
 
 message ListDappChainsRequest {}
 
-message ListDappChainsResponse {
-  repeated Chain items = 1;
-}
+message ListDappChainsResponse { repeated Chain items = 1; }
 
 message ListDappCategoriesRequest {}
 
-message ListDappCategoriesResponse {
-  repeated string items = 1;
-}
+message ListDappCategoriesResponse { repeated string items = 1; }
 
 message ListDomainsRequest {
   string q = 1;
@@ -239,3 +262,22 @@ message ListDomainsResponse {
   repeated Domain items = 1;
   Pagination next_page_params = 2;
 }
+
+message ListInteropMessagesRequest {
+  optional string init_chain_id = 1;
+  optional string relay_chain_id = 2;
+  optional int64 nonce = 3;
+  optional uint32 page_size = 4;
+  optional string page_token = 5;
+}
+
+message ListInteropMessagesResponse {
+  repeated InteropMessage items = 1;
+  Pagination next_page_params = 2;
+}
+
+message CountInteropMessagesRequest {
+  string chain_id = 1;
+}
+
+message CountInteropMessagesResponse { uint64 count = 1; }
