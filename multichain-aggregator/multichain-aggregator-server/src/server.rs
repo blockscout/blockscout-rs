@@ -4,7 +4,7 @@ use crate::{
         multichain_aggregator_service_actix::route_multichain_aggregator_service,
         multichain_aggregator_service_server::MultichainAggregatorServiceServer,
     },
-    services::{HealthService, MultichainAggregator, ReadWriteRepo},
+    services::{HealthService, MultichainAggregator},
     settings::Settings,
 };
 use blockscout_service_launcher::{
@@ -57,17 +57,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    let db = database::initialize_postgres::<Migrator>(&settings.database).await?;
-    let replica_db = if let Some(db) = settings.replica_database {
-        Some(database::initialize_postgres::<Migrator>(&db).await?)
-    } else {
-        None
-    };
-
-    let repo = ReadWriteRepo::new(db, replica_db);
+    let repo = database::ReadWriteRepo::new::<Migrator>(
+        &settings.database,
+        settings.replica_database.as_ref(),
+    )
+    .await?;
 
     if settings.service.fetch_chains {
-        fetch_and_upsert_blockscout_chains(repo.write_db()).await?;
+        fetch_and_upsert_blockscout_chains(repo.main_db()).await?;
     }
 
     let dapp_client = dapp::new_client(settings.service.dapp_client.url)?;

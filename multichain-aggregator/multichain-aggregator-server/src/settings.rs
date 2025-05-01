@@ -1,5 +1,5 @@
 use blockscout_service_launcher::{
-    database::{DatabaseConnectSettings, DatabaseSettings},
+    database::{DatabaseConnectSettings, DatabaseSettings, ReplicaDatabaseSettings},
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
@@ -22,7 +22,7 @@ pub struct Settings {
     pub database: DatabaseSettings,
     // Optional database read-only replica. If provided, all search queries will be redirected to this database.
     #[serde(default)]
-    pub replica_database: Option<DatabaseSettings>,
+    pub replica_database: Option<ReplicaDatabaseSettings>,
     pub service: ServiceSettings,
 }
 
