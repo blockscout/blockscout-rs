@@ -65,6 +65,14 @@
         ],
         "rpc_url": "https://puppynet.shibrpc.com"
       },
+      "185": {
+        "blockscout": {
+          "url": "https://explorer.mintchain.io/"
+        },
+        "use_protocols": [
+          "mint"
+        ]
+      },
       "690": {
         "blockscout": {
           "url": "https://explorer.redstone.xyz/"
@@ -587,6 +595,24 @@
           "type": "ens_like",
           "native_token_contract": "0xfcd0df2d5b1023c3ce210bed17c3bcf40d4ed5cd",
           "empty_label_hash": "0xd7bafc09d4bd42d7efec92efd054d59897c310ed1f1eab50e65fe9de8b1bae19"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "mint": {
+        "tld_list": ["mint"],
+        "network_id": 185,
+        "subgraph_name": "mint-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x5c6cb93b1fc4e0a1274d07852cbd7ebd201b6593",
+          "empty_label_hash": "0x3f3fcc15032dacacd8a3864982ab4207e1f7bc7a882d8a98b48f9ac6dd2084cb"
         },
         "meta": {
           "short_name": "SPACE ID",
