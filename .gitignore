@@ -30,3 +30,4 @@ libs/Cargo.lock
 ## Secrets
 **.decrypted~**
 **.dec**
+/tac-operation-lifecycle/database/
