@@ -38,7 +38,6 @@ fn default_verify_request() -> eth_bytecode_db_v2::VerifySolidityMultiPartReques
         evm_version: None,
         optimization_runs: None,
         source_files: Default::default(),
-        libraries: Default::default(),
         metadata: None,
     }
 }
@@ -94,7 +93,8 @@ async fn search_sourcify_sources(service: MockSolidityVerifierService) {
             compilation_artifacts: None,
             creation_input_artifacts: None,
             deployed_bytecode_artifacts: None,
-            is_blueprint: false
+            is_blueprint: false,
+            libraries: BTreeMap::new(),
         }
     ];
 
@@ -213,7 +213,8 @@ async fn search_all_sources(
                     compilation_artifacts: None,
                     creation_input_artifacts: None,
                     deployed_bytecode_artifacts: None,
-                    is_blueprint: false
+                    is_blueprint: false,
+                    libraries: BTreeMap::new(),
                 }
             ]
     };

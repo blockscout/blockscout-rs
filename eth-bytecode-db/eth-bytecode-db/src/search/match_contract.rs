@@ -13,6 +13,7 @@ use sea_orm::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use verification_common::solidity_libraries;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchContract {
@@ -20,7 +21,7 @@ pub struct MatchContract {
     pub file_name: String,
     pub contract_name: String,
     pub compiler_version: String,
-    pub compiler_settings: String,
+    pub compiler_settings: serde_json::Value,
     pub source_type: SourceType,
     pub source_files: BTreeMap<String, String>,
     pub abi: Option<String>,
@@ -32,6 +33,7 @@ pub struct MatchContract {
     pub raw_creation_input: Vec<u8>,
     pub raw_deployed_bytecode: Vec<u8>,
     pub is_blueprint: bool,
+    pub libraries: BTreeMap<String, String>,
 }
 
 impl MatchContract {
@@ -86,12 +88,17 @@ impl MatchContract {
             .into_iter()
             .map(|f| (f.name, f.content))
             .collect();
+        let libraries =
+            solidity_libraries::try_parse_compiler_linked_libraries(&source.compiler_settings)
+                .inspect_err(|e| {
+                    tracing::error!("failed to parse compiler linked libraries: {e:#?}");
+                })?;
         let match_contract = MatchContract {
             updated_at: source.updated_at,
             file_name: source.file_name,
             contract_name: source.contract_name,
             compiler_version: source.compiler_version,
-            compiler_settings: source.compiler_settings.to_string(),
+            compiler_settings: source.compiler_settings,
             source_type: source.source_type.into(),
             source_files,
             abi: source.abi.map(|abi| abi.to_string()),
@@ -107,6 +114,7 @@ impl MatchContract {
             raw_creation_input: source.raw_creation_input,
             raw_deployed_bytecode: source.raw_deployed_bytecode,
             is_blueprint: false,
+            libraries,
         };
 
         Ok(match_contract)
@@ -206,10 +214,7 @@ mod tests {
         assert_eq!(result.file_name, source.file_name);
         assert_eq!(result.contract_name, source.contract_name);
         assert_eq!(result.compiler_version, source.compiler_version);
-        assert_eq!(
-            result.compiler_settings,
-            source.compiler_settings.to_string()
-        );
+        assert_eq!(result.compiler_settings, source.compiler_settings,);
         assert_eq!(result.source_type, source.source_type.into());
         assert_eq!(
             result.source_files,

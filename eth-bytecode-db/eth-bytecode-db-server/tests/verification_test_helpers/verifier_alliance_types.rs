@@ -55,6 +55,8 @@ pub struct TestCase {
 
     #[serde(default)]
     pub is_genesis: bool,
+    #[serde(default)]
+    pub libraries: BTreeMap<String, String>,
 }
 
 fn default_chain_id() -> usize {
@@ -167,6 +169,7 @@ impl TestCase {
             creation_input_artifacts: Some(self.creation_code_artifacts.to_string()),
             deployed_bytecode_artifacts: Some(self.runtime_code_artifacts.to_string()),
             is_blueprint: false,
+            libraries: self.libraries.clone(),
         }
     }
 

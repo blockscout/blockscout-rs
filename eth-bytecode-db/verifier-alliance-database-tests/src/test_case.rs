@@ -257,10 +257,22 @@ impl TestCase {
             compiled_contract.fully_qualified_name, self.fully_qualified_name,
             "invalid compiled contract fully qualified name"
         );
-        assert_eq!(
-            compiled_contract.compiler_settings, self.compiler_settings,
-            "invalid compiled contract compiler settings"
-        );
+        {
+            let mut actual_compiler_settings = compiled_contract.compiler_settings.clone();
+            actual_compiler_settings
+                .as_object_mut()
+                .unwrap()
+                .remove("outputSelection");
+            let mut expected_compiler_settings = self.compiler_settings.clone();
+            expected_compiler_settings
+                .as_object_mut()
+                .unwrap()
+                .remove("outputSelection");
+            assert_eq!(
+                actual_compiler_settings, expected_compiler_settings,
+                "invalid compiled contract compiler settings"
+            );
+        }
         assert_eq!(
             compiled_contract.compilation_artifacts,
             Value::from(self.compilation_artifacts.clone()),

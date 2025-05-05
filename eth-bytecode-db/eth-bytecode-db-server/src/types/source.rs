@@ -27,6 +27,7 @@ impl From<verification::Source> for SourceWrapper {
             creation_input_artifacts: value.creation_input_artifacts,
             deployed_bytecode_artifacts: value.deployed_bytecode_artifacts,
             is_blueprint: value.is_blueprint,
+            libraries: value.libraries,
         }
         .into()
     }
@@ -40,7 +41,7 @@ impl From<search::MatchContract> for SourceWrapper {
             file_name: value.file_name,
             contract_name: value.contract_name,
             compiler_version: value.compiler_version,
-            compiler_settings: value.compiler_settings,
+            compiler_settings: value.compiler_settings.to_string(),
             source_type: source_type.into(),
             source_files: value.source_files,
             abi: value.abi,
@@ -50,6 +51,7 @@ impl From<search::MatchContract> for SourceWrapper {
             creation_input_artifacts: value.creation_input_artifacts,
             deployed_bytecode_artifacts: value.deployed_bytecode_artifacts,
             is_blueprint: value.is_blueprint,
+            libraries: value.libraries,
         }
         .into()
     }
@@ -70,7 +72,7 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for SourceWrapper {
         // Compiler settings inside metadata contains a "compilationTarget"
         // which does not exist in compiler input. We should remove the key
         // to make the settings which could be used for the compiler input.
-        let compiler_settings = {
+        let compiler_settings: serde_json::Value = {
             let mut compiler_settings = value
                 .metadata
                 .as_object()
@@ -82,7 +84,7 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for SourceWrapper {
                 .clone();
 
             compiler_settings.remove("compilationTarget");
-            compiler_settings
+            compiler_settings.into()
         };
 
         let abi = value
@@ -121,6 +123,7 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for SourceWrapper {
             creation_input_artifacts: None,
             deployed_bytecode_artifacts: None,
             is_blueprint: false,
+            libraries: metadata.settings.libraries,
         }
         .into())
     }
@@ -130,6 +133,7 @@ impl TryFrom<sourcify::GetSourceFilesResponse> for SourceWrapper {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use serde_json::json;
     use std::collections::BTreeMap;
 
     #[test]
@@ -166,6 +170,7 @@ mod tests {
                 },
             ],
             is_blueprint: false,
+            libraries: BTreeMap::from([("file_name:library".into(), "0x1234".into())]),
         };
 
         let expected = proto::Source {
@@ -182,6 +187,7 @@ mod tests {
             creation_input_artifacts: Some("creation_input_artifacts".into()),
             deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
             is_blueprint: false,
+            libraries: BTreeMap::from([("file_name:library".into(), "0x1234".into())]),
         };
 
         let result = SourceWrapper::from(verification_source).into_inner();
@@ -195,7 +201,7 @@ mod tests {
             file_name: "file_name".to_string(),
             contract_name: "contract_name".to_string(),
             compiler_version: "compiler_version".to_string(),
-            compiler_settings: "compiler_settings".to_string(),
+            compiler_settings: json!({"libraries":{"file_name": {"library": "0x1234"}}}),
             source_type: verification::SourceType::Solidity,
             source_files: BTreeMap::from([("source".into(), "content".into())]),
             abi: Some("abi".into()),
@@ -207,13 +213,15 @@ mod tests {
             raw_creation_input: vec![0u8, 1u8, 2u8, 3u8, 4u8],
             raw_deployed_bytecode: vec![5u8, 6u8, 7u8, 8u8],
             is_blueprint: false,
+            libraries: BTreeMap::from([("file_name:library".into(), "0x1234".into())]),
         };
 
         let expected = proto::Source {
             file_name: "file_name".to_string(),
             contract_name: "contract_name".to_string(),
             compiler_version: "compiler_version".to_string(),
-            compiler_settings: "compiler_settings".to_string(),
+            compiler_settings: "{\"libraries\":{\"file_name\":{\"library\":\"0x1234\"}}}"
+                .to_string(),
             source_type: proto::source::SourceType::Solidity.into(),
             source_files: BTreeMap::from([("source".into(), "content".into())]),
             abi: Some("abi".into()),
@@ -223,6 +231,7 @@ mod tests {
             creation_input_artifacts: Some("creation_input_artifacts".into()),
             deployed_bytecode_artifacts: Some("deployed_bytecode_artifacts".into()),
             is_blueprint: false,
+            libraries: BTreeMap::from([("file_name:library".into(), "0x1234".into())]),
         };
 
         let result = SourceWrapper::from(search_source).into_inner();
@@ -231,7 +240,7 @@ mod tests {
 
     #[test]
     fn try_from_sourcify_get_source_files_response_to_proto_source() {
-        let sourcify_response: sourcify::GetSourceFilesResponse = serde_json::from_value(serde_json::json!({
+        let sourcify_response: sourcify::GetSourceFilesResponse = serde_json::from_value(serde_json::json ! ({
             "status": "full",
             "files": [
                 {
@@ -290,7 +299,8 @@ mod tests {
             compilation_artifacts: None,
             creation_input_artifacts: None,
             deployed_bytecode_artifacts: None,
-            is_blueprint: false
+            is_blueprint: false,
+            libraries: BTreeMap::new(),
         };
 
         let result = SourceWrapper::try_from(sourcify_response)

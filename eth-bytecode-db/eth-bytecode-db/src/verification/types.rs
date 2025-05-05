@@ -186,6 +186,7 @@ pub struct Source {
     pub creation_input_parts: Vec<BytecodePart>,
     pub deployed_bytecode_parts: Vec<BytecodePart>,
     pub is_blueprint: bool,
+    pub libraries: BTreeMap<String, String>,
 }
 
 impl
@@ -250,6 +251,7 @@ impl
             creation_input_parts,
             deployed_bytecode_parts,
             is_blueprint: source.is_blueprint,
+            libraries: source.libraries,
         })
     }
 }

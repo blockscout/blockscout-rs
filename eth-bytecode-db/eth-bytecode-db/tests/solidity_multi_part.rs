@@ -21,7 +21,6 @@ fn default_request_content() -> MultiPartFiles {
         source_files: Default::default(),
         evm_version: Some("london".to_string()),
         optimization_runs: None,
-        libraries: Default::default(),
     }
 }
 
@@ -91,7 +90,6 @@ async fn test_historical_data_is_added_into_database(service: MockSolidityVerifi
         "bytecode_type": "CreationInput",
         "compiler_version": "compiler_version",
         "evm_version": "london",
-        "libraries": {},
         "optimization_runs": null,
         "source_files": {}
     });

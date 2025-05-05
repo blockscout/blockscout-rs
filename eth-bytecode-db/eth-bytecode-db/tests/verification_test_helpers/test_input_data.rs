@@ -46,6 +46,7 @@ impl<T> TestInputData<T> {
             creation_input_parts,
             deployed_bytecode_parts,
             is_blueprint: verifier_source.is_blueprint,
+            libraries: verifier_source.libraries.clone(),
         };
 
         let verifier_response = smart_contract_verifier_v2::VerifyResponse {
@@ -64,7 +65,7 @@ impl<T> TestInputData<T> {
     }
 
     fn from_verifier_source_type(verifier_source_type: i32) -> SourceType {
-        match smart_contract_verifier_v2::source::SourceType::from_i32(verifier_source_type)
+        match smart_contract_verifier_v2::source::SourceType::try_from(verifier_source_type)
             .expect("Invalid source type in smart contract verifier `Source`")
         {
             smart_contract_verifier_v2::source::SourceType::Unspecified => {
@@ -77,7 +78,7 @@ impl<T> TestInputData<T> {
     }
 
     fn from_verifier_match_type(verifier_match_type: i32) -> MatchType {
-        match smart_contract_verifier_v2::source::MatchType::from_i32(verifier_match_type)
+        match smart_contract_verifier_v2::source::MatchType::try_from(verifier_match_type)
             .expect("Invalid match type in smart contract verifier `Source`")
         {
             smart_contract_verifier_v2::source::MatchType::Unspecified => MatchType::Unknown,
@@ -144,6 +145,7 @@ pub fn input_data_1<T>(request: T, source_type: SourceType) -> TestInputData<T> 
             "{ \"sourceMap\": \"10:11:12:-:0;;;;;;;;;;;;;;;;;;;\" }".to_string(),
         ),
         is_blueprint: false,
+        libraries: Default::default(),
     };
 
     let verifier_extra_data = smart_contract_verifier_v2::verify_response::ExtraData {

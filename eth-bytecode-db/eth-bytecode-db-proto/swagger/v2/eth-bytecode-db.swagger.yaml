@@ -630,6 +630,13 @@ definitions:
       isBlueprint:
         type: boolean
         title: / If true, the verified contract was a ERC-5202 compatible blueprint contract
+      libraries:
+        type: object
+        additionalProperties:
+          type: string
+        title: |-
+          / Mapping from fully qualified name to the address the library is deployed at
+          (includes both automatically and manually linked libraries)
   v2SourceMatchType:
     type: string
     enum:
@@ -708,11 +715,6 @@ definitions:
         additionalProperties:
           type: string
         title: / Map from a source file name to the actual source code
-      libraries:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a library name to its address
   v2VerifierAllianceBatchImportSolidityStandardJsonRequest:
     type: object
     properties:
@@ -812,11 +814,6 @@ definitions:
         additionalProperties:
           type: string
         title: / Map from a source file name to the actual source code
-      libraries:
-        type: object
-        additionalProperties:
-          type: string
-        title: / Map from a library name to its address
       metadata:
         $ref: '#/definitions/v2VerificationMetadata'
         title: / An optional field to be filled by explorers
