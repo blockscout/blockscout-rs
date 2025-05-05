@@ -71,12 +71,12 @@ message OperationRelatedTransaction {
 
 message OperationStage {
   enum StageType {
-    CollectedInTAC = 0;
-    IncludedInTACConsensus = 1;
-    ExecutedInTAC = 2;
-    CollectedInTON = 3;
-    IncludedInTONConsensus = 4;
-    ExecutedInTON = 5;
+    COLLECTED_IN_TAC = 0;
+    INCLUDED_IN_TAC_CONSENSUS = 1;
+    EXECUTED_IN_TAC = 2;
+    COLLECTED_IN_TON = 3;
+    INCLUDED_IN_TON_CONSENSUS = 4;
+    EXECUTED_IN_TON = 5;
   }
   StageType type = 1;
   bool is_exist = 2;

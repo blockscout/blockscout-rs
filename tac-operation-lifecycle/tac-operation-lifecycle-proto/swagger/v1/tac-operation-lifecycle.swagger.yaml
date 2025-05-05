@@ -158,13 +158,13 @@ definitions:
   OperationStageStageType:
     type: string
     enum:
-      - CollectedInTAC
-      - IncludedInTACConsensus
-      - ExecutedInTAC
-      - CollectedInTON
-      - IncludedInTONConsensus
-      - ExecutedInTON
-    default: CollectedInTAC
+      - COLLECTED_IN_TAC
+      - INCLUDED_IN_TAC_CONSENSUS
+      - EXECUTED_IN_TAC
+      - COLLECTED_IN_TON
+      - INCLUDED_IN_TON_CONSENSUS
+      - EXECUTED_IN_TON
+    default: COLLECTED_IN_TAC
   protobufAny:
     type: object
     properties:
