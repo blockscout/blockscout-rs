@@ -148,5 +148,6 @@ impl TacService for OperationsService {
 }
 
 fn db_datetime_to_string(ts: NaiveDateTime) -> String {
-    ts.and_utc().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+    ts.and_utc()
+        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
