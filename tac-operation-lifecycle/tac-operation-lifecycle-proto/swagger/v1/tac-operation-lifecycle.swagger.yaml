@@ -158,13 +158,13 @@ definitions:
   OperationStageStageType:
     type: string
     enum:
-      - CollectedInTAC
-      - IncludedInTACConsensus
-      - ExecutedInTAC
-      - CollectedInTON
-      - IncludedInTONConsensus
-      - ExecutedInTON
-    default: CollectedInTAC
+      - COLLECTED_IN_TAC
+      - INCLUDED_IN_TAC_CONSENSUS
+      - EXECUTED_IN_TAC
+      - COLLECTED_IN_TON
+      - INCLUDED_IN_TON_CONSENSUS
+      - EXECUTED_IN_TON
+    default: COLLECTED_IN_TAC
   protobufAny:
     type: object
     properties:
@@ -257,7 +257,6 @@ definitions:
         $ref: '#/definitions/v1OperationType'
       timestamp:
         type: string
-        format: uint64
       sender:
         type: string
   v1OperationDetails:
@@ -269,7 +268,6 @@ definitions:
         $ref: '#/definitions/v1OperationType'
       timestamp:
         type: string
-        format: uint64
       sender:
         type: string
       status_history:
@@ -295,7 +293,6 @@ definitions:
         type: boolean
       timestamp:
         type: string
-        format: uint64
       transactions:
         type: array
         items:
@@ -341,7 +338,7 @@ definitions:
   v1OperationsResponse:
     type: object
     properties:
-      operations:
+      items:
         type: array
         items:
           type: object

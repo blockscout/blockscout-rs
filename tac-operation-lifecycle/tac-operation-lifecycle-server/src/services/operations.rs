@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::NaiveDateTime;
 use tac_operation_lifecycle_entity::{operation, operation_stage, transaction};
 use tac_operation_lifecycle_logic::{
     client::models::profiling::OperationType,
@@ -41,7 +42,7 @@ impl OperationsService {
                 Ok(tonic::Response::new(OperationDetails {
                     operation_id: op.id,
                     r#type: op_type.to_id(),
-                    timestamp: Some(op.timestamp.and_utc().timestamp() as u64),
+                    timestamp: db_datetime_to_string(op.timestamp),
                     sender: None,
                     status_history: stages
                         .iter()
@@ -49,7 +50,7 @@ impl OperationsService {
                             r#type: s.stage_type_id as i32 - 1,
                             is_exist: true,
                             is_success: Some(s.success),
-                            timestamp: Some(s.timestamp.and_utc().timestamp() as u64),
+                            timestamp: Some(db_datetime_to_string(s.timestamp)),
                             transactions: txs
                                 .iter()
                                 .map(|tx| {
@@ -98,7 +99,7 @@ impl TacService for OperationsService {
                     .map(|op| op.timestamp.and_utc().timestamp() as u64);
 
                 Ok(tonic::Response::new(OperationsResponse {
-                    operations: operations
+                    items: operations
                         .into_iter()
                         .map(|op| {
                             let op_type = match op.op_type {
@@ -108,7 +109,7 @@ impl TacService for OperationsService {
                             OperationBriefDetails {
                                 operation_id: op.id,
                                 r#type: op_type.to_id(),
-                                timestamp: Some(op.timestamp.and_utc().timestamp() as u64),
+                                timestamp: db_datetime_to_string(op.timestamp),
                                 sender: None,
                             }
                         })
@@ -144,4 +145,9 @@ impl TacService for OperationsService {
 
         OperationsService::create_full_operation_response(db_resp)
     }
+}
+
+fn db_datetime_to_string(ts: NaiveDateTime) -> String {
+    ts.and_utc()
+        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
