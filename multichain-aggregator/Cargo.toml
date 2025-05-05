@@ -65,6 +65,8 @@ reqwest = "0.12"
 thiserror = "1.0"
 url = "2.4"
 futures = "0.3"
+lazy_static = { version = "1.4" }
+prometheus = { version = "0.13" }
 
 # tests
 pretty_assertions = "1.3"
