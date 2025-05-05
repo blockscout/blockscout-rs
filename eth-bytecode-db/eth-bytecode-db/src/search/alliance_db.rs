@@ -121,15 +121,13 @@ fn extract_libraries(
 ) -> Result<BTreeMap<String, String>, anyhow::Error> {
     let mut libraries = solidity_libraries::try_parse_compiler_linked_libraries(compiler_settings)?;
     match verified_contract_matches {
-        VerifiedContractMatches::OnlyCreation { creation_match } => {
-            libraries.extend(solidity_libraries::parse_manually_linked_libraries(
-                creation_match,
-            ));
+        VerifiedContractMatches::OnlyCreation {
+            creation_match: match_,
         }
-        VerifiedContractMatches::OnlyRuntime { runtime_match } => {
-            libraries.extend(solidity_libraries::parse_manually_linked_libraries(
-                runtime_match,
-            ));
+        | VerifiedContractMatches::OnlyRuntime {
+            runtime_match: match_,
+        } => {
+            libraries.extend(solidity_libraries::parse_manually_linked_libraries(match_));
         }
         VerifiedContractMatches::Complete {
             creation_match,
