@@ -6,35 +6,33 @@ use serde_with::serde_as;
 #[serde(deny_unknown_fields)]
 pub struct RpcSettings {
     pub url: String,
-    pub auth_token: Option<String>,
-    #[serde(default = "default_max_request_size")]
-    pub max_request_size: u32,
-    #[serde(default = "default_max_response_size")]
-    pub max_response_size: u32,
     #[serde(default = "default_request_per_second")]
     pub request_per_second: u32,
-}
-
-fn default_max_request_size() -> u32 {
-    100 * 1024 * 1024 // 100 Mb
-}
-
-fn default_max_response_size() -> u32 {
-    100 * 1024 * 1024 // 100 Mb
+    #[serde(default = "default_num_of_retries")]
+    pub num_of_retries: u32,
+    #[serde(default = "default_retry_delay_ms")]
+    pub retry_delay_ms: u32,
 }
 
 fn default_request_per_second() -> u32 {
     100
 }
 
+fn default_num_of_retries() -> u32 {
+    10
+}
+
+fn default_retry_delay_ms() -> u32 {
+    1000
+}
+
 impl Default for RpcSettings {
     fn default() -> Self {
         Self {
             url: "http://localhost".to_string(),
-            auth_token: None,
-            max_request_size: default_max_request_size(),
-            max_response_size: default_max_response_size(),
             request_per_second: default_request_per_second(),
+            num_of_retries: default_num_of_retries(),
+            retry_delay_ms: default_retry_delay_ms(),
         }
     }
 }

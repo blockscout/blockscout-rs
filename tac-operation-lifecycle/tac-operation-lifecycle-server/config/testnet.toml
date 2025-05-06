@@ -19,3 +19,6 @@ catchup_interval = 300
 
 [rpc]
 url = "https://data.turin.tac.build/"
+request_per_second = 50
+num_of_retries = 10
+retry_delay_ms = 1000

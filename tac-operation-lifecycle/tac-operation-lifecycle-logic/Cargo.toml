@@ -9,7 +9,7 @@ async-stream = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
-
+governor = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 
 sea-orm = { workspace = true, features = [

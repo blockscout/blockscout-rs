@@ -9,7 +9,6 @@ use tac_operation_lifecycle_logic::{
     settings::IndexerSettings,
 };
 use tac_operation_lifecycle_server::Settings;
-use tokio::sync::Mutex;
 
 use rstest::rstest;
 
@@ -41,7 +40,7 @@ where
         test_db.client(),
         settings.indexer.clone().unwrap().start_timestamp,
     ));
-    let client = Arc::new(Mutex::new(Client::new(settings.clone().rpc)));
+    let client = Arc::new(Client::new(settings.clone().rpc));
 
     test_server::init_server(
         move || tac_operation_lifecycle_server::run(settings, db.clone(), client),
@@ -64,7 +63,6 @@ mod tests {
     use tac_operation_lifecycle_logic::{
         client::Client, database::OrderDirection, settings::IndexerSettings, Indexer, IndexerJob,
     };
-    use tokio::sync::Mutex;
     use tracing::Instrument;
 
     #[rstest]
@@ -109,7 +107,7 @@ mod tests {
             url: mock_server.uri(),
             ..Default::default()
         };
-        let client = Arc::new(Mutex::new(Client::new(mock_rpc_settings)));
+        let client = Arc::new(Client::new(mock_rpc_settings));
 
         let indexer_settings = IndexerSettings {
             concurrency: 1,
@@ -188,7 +186,7 @@ mod tests {
             url: mock_server.uri(),
             ..Default::default()
         };
-        let client = Arc::new(Mutex::new(Client::new(mock_rpc_settings)));
+        let client = Arc::new(Client::new(mock_rpc_settings));
 
         let indexer = Indexer::new(
             indexer_settings,
@@ -398,7 +396,7 @@ mod tests {
             ..Default::default()
         };
 
-        let client = Arc::new(Mutex::new(Client::new(mock_rpc_settings)));
+        let client = Arc::new(Client::new(mock_rpc_settings));
         let indexer_settings = IndexerSettings {
             concurrency: 1,
             catchup_interval,

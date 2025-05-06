@@ -23,7 +23,6 @@ use futures::{
     stream::{select, select_with_strategy, BoxStream, PollNext},
     StreamExt,
 };
-use tokio::sync::Mutex;
 use tracing::{instrument, Instrument};
 use uuid::Uuid;
 
@@ -124,14 +123,14 @@ pub struct Indexer {
     // The boundary can be updated on inserting new operations
     realtime_boundary: AtomicU64,
     database: Arc<TacDatabase>,
-    client: Arc<Mutex<Client>>,
+    client: Arc<Client>,
 }
 
 impl Indexer {
     pub async fn new(
         settings: IndexerSettings,
         db: Arc<TacDatabase>,
-        client: Arc<Mutex<Client>>,
+        client: Arc<Client>,
     ) -> anyhow::Result<Self> {
         const REALTIME_LAG_MINUTES: i64 = 30;
         // realtime boundary evaluation: few minutes before (to avoid remote service sync issues)
@@ -397,7 +396,6 @@ impl Indexer {
     }
 
     pub async fn fetch_operations(&self, job: &Job) -> Result<usize, Error> {
-        let mut client = self.client.lock().await;
         tracing::debug!(
             job =? job,
             "Processing interval job",
@@ -418,7 +416,8 @@ impl Indexer {
 
         let request_start = request_start.and_utc().timestamp() as u64;
         let request_end = job.interval.finish.and_utc().timestamp() as u64;
-        let operations = client
+        let operations = self
+            .client
             .get_operations(request_start + 1, request_end)
             .instrument(tracing::debug_span!(
                 "get_operations",
@@ -460,10 +459,9 @@ impl Indexer {
     }
 
     pub async fn process_operation_with_retries(&self, jobs: Vec<&OperationJob>) {
-        let mut client = self.client.lock().await;
         let op_ids: Vec<&str> = jobs.iter().map(|j| j.operation.id.as_str()).collect();
 
-        match client.get_operations_stages(op_ids.clone()).await {
+        match self.client.get_operations_stages(op_ids.clone()).await {
             Ok(operations_map) => {
                 let mut processed_operations = 0;
                 for (op_id, operation_data) in operations_map.iter() {

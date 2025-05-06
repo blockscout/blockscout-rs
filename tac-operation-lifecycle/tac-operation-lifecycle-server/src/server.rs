@@ -13,7 +13,6 @@ use blockscout_service_launcher::{
 };
 
 use tac_operation_lifecycle_logic::{client::Client, database::TacDatabase, Indexer};
-use tokio::sync::Mutex;
 
 use std::sync::Arc;
 
@@ -46,7 +45,7 @@ impl launcher::HttpRouter for Router {
 pub async fn run(
     settings: Settings,
     db: Arc<TacDatabase>,
-    client: Arc<Mutex<Client>>,
+    client: Arc<Client>,
 ) -> Result<(), anyhow::Error> {
     bs_tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
