@@ -37,6 +37,12 @@ http:
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDomains
       get: /api/v1/domains
 
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListInteropMessages
+      get: /api/v1/interop/messages
+
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.CountInteropMessages
+      get: /api/v1/interop/messages/count
+
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check
