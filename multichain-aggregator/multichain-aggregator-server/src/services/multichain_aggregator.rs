@@ -1,9 +1,9 @@
-use super::repo::ReadWriteRepo;
 use crate::{
     proto::{multichain_aggregator_service_server::MultichainAggregatorService, *},
     settings::ApiSettings,
 };
 use api_client_framework::HttpApiClient;
+use blockscout_service_launcher::database::ReadWriteRepo;
 use multichain_aggregator_logic::{
     clients::dapp,
     error::{ParseError, ServiceError},
@@ -38,7 +38,7 @@ impl MultichainAggregator {
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
     ) -> Self {
         Self {
-            api_key_manager: ApiKeyManager::new(repo.write_db().clone()),
+            api_key_manager: ApiKeyManager::new(repo.main_db().clone()),
             repo,
             dapp_client,
             token_info_client,
@@ -108,7 +108,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let import_request: types::batch_import_request::BatchImportRequest = inner.try_into()?;
 
-        import::batch_import(self.repo.write_db(), import_request)
+        import::batch_import(self.repo.main_db(), import_request)
             .await
             .inspect_err(|err| {
                 tracing::error!(error = ?err, "failed to batch import");

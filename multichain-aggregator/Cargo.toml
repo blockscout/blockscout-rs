@@ -20,7 +20,7 @@ actix-prost = { version = "0.1.0" }
 actix-prost-build = { version = "0.1.0" }
 actix-prost-macros = { version = "0.1.0" }
 actix-web = "4.2"
-blockscout-service-launcher = { version = "0.19.0", features = ["database-1"] }
+blockscout-service-launcher = { version = "0.20.0", features = ["database-1"] }
 prost = "0.13"
 prost-build = "0.13"
 prost-wkt = "0.6.0"
@@ -65,6 +65,8 @@ reqwest = "0.12"
 thiserror = "1.0"
 url = "2.4"
 futures = "0.3"
+lazy_static = { version = "1.4" }
+prometheus = { version = "0.13" }
 
 # tests
 pretty_assertions = "1.3"
