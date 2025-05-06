@@ -26,7 +26,6 @@ impl BatchImportRequest {
                     *entity_metrics.entry(e.chain_id).or_insert(0) += 1;
                 }
                 for (chain_id, count) in entity_metrics {
-                    dbg!(&chain_id, &count);
                     IMPORT_ENTITIES_COUNT
                         .with_label_values(&[chain_id.to_string().as_str(), $entity_name])
                         .inc_by(count);
