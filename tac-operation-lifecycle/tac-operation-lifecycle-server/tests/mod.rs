@@ -271,7 +271,7 @@ mod tests {
                                 all_jobs_received = true;
                             }
                         },
-                        IndexerJob::Operation(_) | IndexerJob::Realtime => {
+                        IndexerJob::Operation(_) => {
                             // Skip operation jobs in this test as we're only testing intervals
                             continue;
                         }
@@ -444,7 +444,7 @@ mod tests {
                             println!("Processing interval job: {:?}", interval_job);
                             let start = interval_job.interval.start.and_utc().timestamp();
                             let end = interval_job.interval.finish.and_utc().timestamp();
-                            if let Err(e) = indexer.fetch_operations(&interval_job).instrument(tracing::info_span!(
+                            if let Err(e) = indexer.fetch_historical_operations(&interval_job).instrument(tracing::info_span!(
                                 "fetching operations",
                                 interval_id = interval_job.interval.id,
                                 start = start,
@@ -485,10 +485,6 @@ mod tests {
                             );
                             operation_id_fetched = true;
                             stage_history_fetched = true;
-                        }
-                        IndexerJob::Realtime => {
-                            // Skip realtime jobs in this test as we're only testing operations
-                            continue;
                         }
                     }
 

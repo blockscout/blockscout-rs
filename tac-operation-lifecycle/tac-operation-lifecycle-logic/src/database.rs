@@ -190,11 +190,11 @@ impl TacDatabase {
         match operation::Entity::find()
             .select_only()
             .column_as(operation::Column::Timestamp.max(), "max_timestamp")
-            .into_tuple::<Option<u64>>()
+            .into_tuple::<Option<DateTime>>()
             .one(self.db.as_ref())
             .await
         {
-            Ok(Some(ts)) => Ok(ts),
+            Ok(Some(Some(ts))) => Ok(Some(ts.and_utc().timestamp() as u64)),
             Err(e) => Err(e.into()),
             _ => Ok(None),
         }
@@ -277,7 +277,7 @@ impl TacDatabase {
             })
             .collect();
 
-        tracing::debug!(
+        tracing::info!(
             total_intervals_generated =? intervals.len(),
             interval_period_secs =? period_secs,
             from,
@@ -325,6 +325,52 @@ impl TacDatabase {
         }
 
         Ok(intervals.len())
+    }
+
+    pub async fn add_completed_interval(
+        &self,
+        from: u64,
+        to: u64,
+    ) -> anyhow::Result<()> {
+        let start_naive = Self::timestamp_to_naive(from as i64);
+        let finish_naive = Self::timestamp_to_naive(to as i64);
+        let now_naive = chrono::Utc::now().naive_utc();
+
+        let new_interval = interval::ActiveModel {
+            id: ActiveValue::NotSet,
+            start: ActiveValue::Set(start_naive),
+            finish: ActiveValue::Set(finish_naive),
+            inserted_at: ActiveValue::Set(now_naive),
+            updated_at: ActiveValue::Set(now_naive),
+            status: sea_orm::ActiveValue::Set(StatusEnum::Completed),
+            next_retry: ActiveValue::Set(None),
+            retry_count: ActiveValue::Set(0_i16),
+        };
+
+        let tx = self.db.begin().await?;
+
+        match interval::Entity::insert(new_interval)
+            .exec_with_returning(&tx)
+            .await
+        {
+            Ok(_) => {
+                // Update watermark if needed
+                let _ = self.set_watermark_internal(&tx, to).await;
+
+                tx.commit().await?;
+                tracing::debug!(
+                    new_watermark =? to,
+                    "Successfully saved an interval and updated watermark",
+                );
+            }
+            Err(e) => {
+                tx.rollback().await?;
+                tracing::error!(err =? e, "Failed to save batch");
+                return Err(e.into());
+            }
+        }
+
+        Ok(())
     }
 
     // stage_types is a vector Id->StageName
@@ -615,7 +661,7 @@ impl TacDatabase {
 
     pub async fn query_failed_intervals(&self, num: usize) -> anyhow::Result<Vec<interval::Model>> {
         let conditions = vec![
-            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
+            format!("status = '{}'::status_enum", StatusEnum::Failed.to_value()),
             format!("next_retry IS NOT NULL"),
             format!(
                 "next_retry < '{}'",
@@ -701,7 +747,7 @@ impl TacDatabase {
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
         let conditions = vec![
-            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
+            format!("status = '{}'::status_enum", StatusEnum::Failed.to_value()),
             format!("next_retry IS NOT NULL"),
             format!(
                 "next_retry < '{}'",
@@ -914,7 +960,7 @@ impl TacDatabase {
         interval: &interval::Model,
         retry_after_delay_sec: i64,
     ) -> anyhow::Result<()> {
-        // Update interval with next retry timestamp and increment retry count
+        // Update interval with next retry timestamp, increment retry count and set 'failed' state
         let mut interval_model: interval::ActiveModel = interval.clone().into();
         let now = chrono::Utc::now().naive_utc();
 
@@ -922,7 +968,7 @@ impl TacDatabase {
             chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec),
         ));
         interval_model.retry_count = Set(interval.retry_count + 1);
-        interval_model.status = Set(StatusEnum::Pending); // Reset status to pending
+        interval_model.status = Set(StatusEnum::Failed);
         interval_model.updated_at = Set(now);
 
         match interval_model.update(self.db.as_ref()).await {
@@ -943,7 +989,7 @@ impl TacDatabase {
         operation: &operation::Model,
         retry_after_delay_sec: i64,
     ) -> anyhow::Result<()> {
-        // Update operation with next retry timestamp and increment retry count
+        // Update operation with next retry timestamp, increment retry count and set 'failed' state
         let mut operation_model: operation::ActiveModel = operation.clone().into();
         let now = chrono::Utc::now().naive_utc();
 
@@ -951,7 +997,7 @@ impl TacDatabase {
             chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec),
         ));
         operation_model.retry_count = Set(operation.retry_count + 1);
-        operation_model.status = Set(StatusEnum::Pending); // Reset status to pending
+        operation_model.status = Set(StatusEnum::Failed);
         operation_model.updated_at = Set(now);
 
         match operation_model.update(self.db.as_ref()).await {
@@ -980,7 +1026,7 @@ impl TacDatabase {
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS pending_intervals,
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS processing_intervals,
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS finalized_intervals,
-                        COUNT(CASE WHEN status != '{}'::status_enum AND retry_count > 0 THEN 1 END) AS failed_intervals,
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS failed_intervals,
                         SUM(CASE WHEN status = '{}'::status_enum 
                                 THEN EXTRACT(EPOCH FROM finish - start) ELSE 0 END
                             )::BIGINT AS finalized_period
@@ -991,7 +1037,7 @@ impl TacDatabase {
                 StatusEnum::Pending.to_value(),
                 StatusEnum::Processing.to_value(),
                 StatusEnum::Completed.to_value(),
-                StatusEnum::Completed.to_value(),
+                StatusEnum::Failed.to_value(),
                 StatusEnum::Completed.to_value(),
             ),
         );
@@ -1045,7 +1091,7 @@ impl TacDatabase {
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS pending_operations,
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS processing_operations,
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS finalized_operations,
-                        COUNT(CASE WHEN status != '{}'::status_enum AND retry_count > 0 THEN 1 END) AS failed_operations
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS failed_operations
                     FROM operation
                 )
                 SELECT * FROM operation_stats
@@ -1053,7 +1099,7 @@ impl TacDatabase {
                 StatusEnum::Pending.to_value(),
                 StatusEnum::Processing.to_value(),
                 StatusEnum::Completed.to_value(),
-                StatusEnum::Completed.to_value(),
+                StatusEnum::Failed.to_value(),
             ),
         );
 

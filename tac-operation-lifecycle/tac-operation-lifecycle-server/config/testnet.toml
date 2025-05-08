@@ -15,10 +15,10 @@ run_migrations = true
 concurrency = 10
 start_timestamp = 1741554000
 polling_interval = 2
-catchup_interval = 300
+catchup_interval = 600
 
 [rpc]
 url = "https://data.turin.tac.build/"
-request_per_second = 50
+request_per_second = 100
 num_of_retries = 10
 retry_delay_ms = 1000
