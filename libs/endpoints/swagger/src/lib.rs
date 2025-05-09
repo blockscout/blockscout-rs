@@ -18,3 +18,44 @@ pub fn route_swagger(
         config.route(route, get().to(serve_swagger));
     });
 }
+
+pub fn default_swagger_path_from_service_name(service_name: &str) -> PathBuf {
+    let options = [
+        PathBuf::from(format!(
+            "./{}-proto/swagger/{}.swagger.yaml",
+            service_name, service_name
+        )),
+        PathBuf::from(format!(
+            "./{}-proto/swagger/v1/{}.swagger.yaml",
+            service_name, service_name
+        )),
+        PathBuf::from(format!(
+            "../{}-proto/swagger/{}.swagger.yaml",
+            service_name, service_name
+        )),
+        PathBuf::from(format!(
+            "../{}-proto/swagger/v1/{}.swagger.yaml",
+            service_name, service_name
+        )),
+    ];
+
+    for option in options.iter() {
+        if option.exists() {
+            return option.clone();
+        }
+    }
+    options[0].clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_swagger_path_from_service_name() {
+        assert_eq!(
+            default_swagger_path_from_service_name("stats"),
+            PathBuf::from("./stats-proto/swagger/stats.swagger.yaml")
+        );
+    }
+}
