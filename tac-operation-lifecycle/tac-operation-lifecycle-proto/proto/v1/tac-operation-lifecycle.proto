@@ -37,13 +37,13 @@ message GetOperationByTxHashRequest {
 }
 
 enum OperationType {
-  Error = 0;
-  Pending = 1;
-  TonTacTon = 2;
-  TacTon = 3;
-  TonTac = 4;
-  Rollback = 5;
-  Unknown = 6;
+  ERROR = 0;
+  PENDING = 1;
+  TON_TAC_TON = 2;
+  TAC_TON = 3;
+  TON_TAC = 4;
+  ROLLBACK = 5;
+  UNKNOWN = 6;
 }
 
 message OperationsResponse {
@@ -71,7 +71,7 @@ message OperationRelatedTransaction {
   enum BlockchainType {
     TAC = 0;
     TON = 1;
-    Unknown = 2;
+    UNKNOWN = 2;
   }
   BlockchainType type = 2;
 }

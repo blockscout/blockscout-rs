@@ -182,7 +182,7 @@ definitions:
     enum:
       - TAC
       - TON
-      - Unknown
+      - UNKNOWN
     default: TAC
   OperationStageStageType:
     type: string
@@ -356,14 +356,14 @@ definitions:
   v1OperationType:
     type: string
     enum:
-      - Error
-      - Pending
-      - TonTacTon
-      - TacTon
-      - TonTac
-      - Rollback
-      - Unknown
-    default: Error
+      - ERROR
+      - PENDING
+      - TON_TAC_TON
+      - TAC_TON
+      - TON_TAC
+      - ROLLBACK
+      - UNKNOWN
+    default: ERROR
   v1OperationsFullResponse:
     type: object
     properties:
