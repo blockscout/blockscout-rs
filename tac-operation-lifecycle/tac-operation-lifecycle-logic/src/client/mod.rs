@@ -44,28 +44,38 @@ impl Client {
     pub async fn get_operations(&self, start: u64, end: u64) -> Result<Operations, Error> {
         let mut all_operations = Vec::new();
         let mut offset = 0;
-    
+
         loop {
-            let url = format!("{}/operation-ids?from={}&till={}&offset={}", self.url(), start, end, offset);
+            let url = format!(
+                "{}/operation-ids?from={}&till={}&offset={}",
+                self.url(),
+                start,
+                end,
+                offset
+            );
             let request = Request::new(Method::GET, url.parse()?);
             let response = self
                 .make_request(request)
                 .instrument(tracing::debug_span!("get_operations", url = %url))
                 .await?;
-    
+
             if !response.status().is_success() {
                 let status = response.status();
                 tracing::error!(%url, status =? status, "Bad response");
-                return Err(anyhow::anyhow!("HTTP error {}: {}", status, status.as_str()));
+                return Err(anyhow::anyhow!(
+                    "HTTP error {}: {}",
+                    status,
+                    status.as_str()
+                ));
             }
-    
+
             let text = response.text().await?;
-    
+
             if text.is_empty() {
                 tracing::error!(%url, "Received empty response");
                 break;
             }
-    
+
             let parsed = match serde_json::from_str::<OperationIdsApiResponse>(&text) {
                 Ok(response) => response.response,
                 Err(e) => {
@@ -73,20 +83,19 @@ impl Client {
                     return Err(e.into());
                 }
             };
-    
+
             let count = parsed.operations.len();
             all_operations.extend(parsed.operations);
-    
+
             if all_operations.len() >= parsed.total.try_into().unwrap() || count == 0 {
                 break;
             }
-    
+
             offset = all_operations.len();
         }
-    
+
         Ok(all_operations)
     }
-    
 
     pub async fn get_operations_stages(
         &self,

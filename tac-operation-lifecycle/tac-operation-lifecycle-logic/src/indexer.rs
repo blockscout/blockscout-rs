@@ -1,11 +1,4 @@
-use std::{
-    cmp::max,
-    collections::HashMap,
-    fmt,
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{cmp::max, collections::HashMap, fmt, str::FromStr, sync::Arc, time::Duration};
 
 use crate::database::{OrderDirection, TacDatabase};
 use anyhow::Error;
@@ -151,7 +144,11 @@ impl Indexer {
             _ => 0,
         };
 
-        tracing::info!("Realtime boundary: hard = {}, from_db = {}", realtime_boundary_hard, relatime_boundary_db);
+        tracing::info!(
+            "Realtime boundary: hard = {}, from_db = {}",
+            realtime_boundary_hard,
+            relatime_boundary_db
+        );
 
         Ok(Self {
             settings,
@@ -209,7 +206,11 @@ impl Indexer {
         self.database.get_watermark().await
     }
 
-    fn create_realtime_thread(&self, initial_realtime_boundary: u64, polling_interval: Duration) -> JoinHandle<()> {
+    fn create_realtime_thread(
+        &self,
+        initial_realtime_boundary: u64,
+        polling_interval: Duration,
+    ) -> JoinHandle<()> {
         let db = self.database.clone();
         let client = self.client.clone();
 
@@ -233,13 +234,15 @@ impl Indexer {
                                     .collect::<Vec<_>>()
                                     .join(", ")
                             );
-                            
+
                             match db.insert_pending_operations(&operations).await {
                                 Ok(_) => {
-                                    let max_timestamp = operations.iter().map(|o| o.timestamp).max().unwrap();
+                                    let max_timestamp =
+                                        operations.iter().map(|o| o.timestamp).max().unwrap();
                                     if max_timestamp > realtime_bnd {
-
-                                        let _ = db.add_completed_interval(realtime_bnd, max_timestamp).await;
+                                        let _ = db
+                                            .add_completed_interval(realtime_bnd, max_timestamp)
+                                            .await;
 
                                         realtime_bnd = max_timestamp + 1;
                                         tracing::info!(
@@ -247,7 +250,7 @@ impl Indexer {
                                             "Realtime boundary is moved forward"
                                         );
                                     }
-                                },
+                                }
 
                                 Err(e) => {
                                     tracing::error!(
@@ -258,7 +261,7 @@ impl Indexer {
                                 }
                             }
                         }
-                    },
+                    }
 
                     Err(e) => {
                         tracing::error!(err =? e, "Failed to fetch REALTIME interval");
@@ -590,10 +593,8 @@ impl Indexer {
 
         // Start generating realtime intervals in the separated thread;
         let initial_realtime_boundary = self.database.get_watermark().await?;
-        let realtime_thread = self.create_realtime_thread(
-            initial_realtime_boundary,
-            self.settings.polling_interval
-        );
+        let realtime_thread =
+            self.create_realtime_thread(initial_realtime_boundary, self.settings.polling_interval);
 
         // Create streams
         let realtime_intervals = self.interval_stream(

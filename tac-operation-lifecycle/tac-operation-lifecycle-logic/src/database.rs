@@ -327,11 +327,7 @@ impl TacDatabase {
         Ok(intervals.len())
     }
 
-    pub async fn add_completed_interval(
-        &self,
-        from: u64,
-        to: u64,
-    ) -> anyhow::Result<()> {
+    pub async fn add_completed_interval(&self, from: u64, to: u64) -> anyhow::Result<()> {
         let start_naive = Self::timestamp_to_naive(from as i64);
         let finish_naive = Self::timestamp_to_naive(to as i64);
         let now_naive = chrono::Utc::now().naive_utc();
@@ -1134,6 +1130,18 @@ impl TacDatabase {
         }
     }
 
+    pub async fn get_brief_operation_by_id(
+        &self,
+        id: &str,
+    ) -> anyhow::Result<Option<operation::Model>> {
+        let op = operation::Entity::find()
+            .filter(operation::Column::Id.eq(id))
+            .one(self.db.as_ref())
+            .await?;
+
+        Ok(op)
+    }
+
     pub async fn get_operation_by_id(
         &self,
         id: &String,
@@ -1154,15 +1162,21 @@ impl TacDatabase {
             WHERE o.id = $1
             "#;
 
-        self.get_full_operation_with_sql(&sql.into(), [id.into()])
+        match self
+            .get_full_operations_with_sql(&sql.into(), [id.into()])
             .await
+        {
+            Ok(arr) if !arr.is_empty() => Ok(Some(arr[0].clone())),
+            Ok(_) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
-    pub async fn get_operation_by_tx_hash(
+    pub async fn get_full_operations_by_tx_hash(
         &self,
         tx_hash: &String,
     ) -> anyhow::Result<
-        Option<(
+        Vec<(
             operation::Model,
             Vec<(operation_stage::Model, Vec<transaction::Model>)>,
         )>,
@@ -1175,26 +1189,44 @@ impl TacDatabase {
             FROM operation o
             LEFT JOIN operation_stage s ON o.id = s.operation_id
             LEFT JOIN transaction t ON s.id = t.stage_id
-            WHERE o.id = (
+            WHERE o.id IN (
                 SELECT o2.id
                 FROM operation o2
                 JOIN operation_stage s2 ON o2.id = s2.operation_id
                 JOIN transaction t2 ON s2.id = t2.stage_id
                 WHERE t2.hash = $1
-                LIMIT 1
             )
             "#;
 
-        self.get_full_operation_with_sql(&sql.into(), [tx_hash.into()])
+        self.get_full_operations_with_sql(&sql.into(), [tx_hash.into()])
             .await
     }
 
-    async fn get_full_operation_with_sql(
+    pub async fn get_brief_operations_by_tx_hash(
+        &self,
+        tx_hash: &String,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let sql = r#"
+            SELECT id, op_type, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
+            FROM operation
+            WHERE id IN (
+                SELECT s.operation_id
+                FROM operation_stage s
+                JOIN transaction t ON s.id = t.stage_id
+                WHERE t.hash = $1
+            )
+            ORDER BY timestamp;
+            "#;
+
+        self.get_operations_with_sql(sql, [tx_hash.into()]).await
+    }
+
+    async fn get_full_operations_with_sql(
         &self,
         sql: &String,
         values: impl IntoIterator<Item = sea_orm::Value>,
     ) -> anyhow::Result<
-        Option<(
+        Vec<(
             operation::Model,
             Vec<(operation_stage::Model, Vec<transaction::Model>)>,
         )>,
@@ -1208,36 +1240,36 @@ impl TacDatabase {
             .all(self.db.as_ref())
             .await?;
 
-        if joined.is_empty() {
-            return Ok(None);
-        }
-
-        let op_row = &joined[0];
-        let now = chrono::Utc::now().naive_utc();
-
-        let op_model = operation::Model {
-            id: op_row.op_id.clone(),
-            op_type: op_row.op_type.clone(),
-            timestamp: op_row.timestamp,
-            next_retry: None,
-            status: op_row.status.clone(),
-            retry_count: 0,
-            inserted_at: now,
-            updated_at: now,
-        };
-
         use std::collections::HashMap;
 
-        let mut stages_map: HashMap<i32, (operation_stage::Model, Vec<transaction::Model>)> =
-            HashMap::new();
+        let now = chrono::Utc::now().naive_utc();
+
+        // Map of operation_id -> (operation model, stage map)
+        let mut operations_map = HashMap::new();
 
         for row in joined {
+            let op_entry = operations_map.entry(row.op_id.clone()).or_insert_with(|| {
+                (
+                    operation::Model {
+                        id: row.op_id.clone(),
+                        op_type: row.op_type.clone(),
+                        timestamp: row.timestamp,
+                        next_retry: None,
+                        status: row.status.clone(),
+                        retry_count: 0,
+                        inserted_at: now,
+                        updated_at: now,
+                    },
+                    HashMap::new(),
+                )
+            });
+
             if let Some(stage_id) = row.stage_id {
-                let entry = stages_map.entry(stage_id).or_insert_with(|| {
+                let stage_entry = op_entry.1.entry(stage_id).or_insert_with(|| {
                     (
                         operation_stage::Model {
                             id: stage_id,
-                            operation_id: op_model.id.clone(),
+                            operation_id: row.op_id.clone(),
                             stage_type_id: row.stage_type_id,
                             success: row.stage_success,
                             timestamp: row.stage_timestamp.unwrap_or_default(),
@@ -1256,16 +1288,20 @@ impl TacDatabase {
                         blockchain_type: row.tx_blockchain_type.clone().unwrap_or_default(),
                         inserted_at: now,
                     };
-                    entry.1.push(tx);
+                    stage_entry.1.push(tx);
                 }
             }
         }
 
-        let mut stages: Vec<_> = stages_map.into_values().collect();
+        // Convert operations_map into desired output format
+        let mut result = vec![];
+        for (op_model, stages_map) in operations_map.into_values() {
+            let mut stages: Vec<_> = stages_map.into_values().collect();
+            stages.sort_by_key(|(stage, _)| stage.timestamp);
+            result.push((op_model, stages));
+        }
 
-        stages.sort_by_key(|(stage, _)| stage.timestamp);
-
-        Ok(Some((op_model, stages)))
+        Ok(result)
     }
 
     pub async fn get_operations(
@@ -1286,6 +1322,20 @@ impl TacDatabase {
         };
 
         let operations = query.limit(count as u64).all(self.db.as_ref()).await?;
+
+        Ok(operations)
+    }
+
+    async fn get_operations_with_sql(
+        &self,
+        sql: &str,
+        values: impl IntoIterator<Item = sea_orm::Value>,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let db: &DatabaseConnection = &self.db;
+
+        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, values);
+
+        let operations = operation::Entity::find().from_raw_sql(stmt).all(db).await?;
 
         Ok(operations)
     }

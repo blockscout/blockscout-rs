@@ -4515,6 +4515,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "blockscout-service-launcher",
  "chrono",
  "config 0.15.11",
