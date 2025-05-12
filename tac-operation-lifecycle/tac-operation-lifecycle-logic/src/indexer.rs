@@ -19,13 +19,6 @@ use uuid::Uuid;
 
 use crate::client;
 
-const INTERVALS_QUERY_BATCH: usize = 10;
-const INTERVALS_RETRY_BATCH: usize = 10;
-const INTERVALS_LOOP_DELAY_INTERVAL_MS: u64 = 100;
-const OPERATIONS_QUERY_BATCH: usize = 10;
-const OPERATIONS_RETRY_BATCH: usize = 10;
-const OPERATIONS_LOOP_DELAY_INTERVAL_MS: u64 = 200;
-
 #[derive(Debug, Clone)]
 pub struct Job {
     pub interval: interval::Model,
@@ -282,7 +275,7 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.query_pending_intervals(INTERVALS_QUERY_BATCH, direction, from, to)
+                match self.database.query_pending_intervals(self.settings.intervals_query_batch, direction, from, to)
                     .instrument(tracing::debug_span!(
                         "INTERVALS",
                         span_id = span_id.to_string(),
@@ -299,7 +292,7 @@ impl Indexer {
                     },
                     Err(e) => {
                         tracing::error!(
-                            requested_count =? INTERVALS_QUERY_BATCH,
+                            requested_count =? self.settings.intervals_query_batch,
                             from,
                             to,
                             direction =? direction,
@@ -310,7 +303,7 @@ impl Indexer {
                 }
 
                 // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(Duration::from_millis(INTERVALS_LOOP_DELAY_INTERVAL_MS)).await;
+                tokio::time::sleep(self.settings.intervals_loop_delay_ms).await;
             }
         })
     }
@@ -319,7 +312,7 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.query_pending_operations(OPERATIONS_QUERY_BATCH, OrderDirection::LatestFirst)
+                match self.database.query_pending_operations(self.settings.operations_query_batch, OrderDirection::LatestFirst)
                     .instrument(tracing::debug_span!(
                         "PENDING OPERATIONS",
                         span_id = span_id.to_string()
@@ -340,7 +333,7 @@ impl Indexer {
                 }
 
                 // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(Duration::from_millis(OPERATIONS_LOOP_DELAY_INTERVAL_MS)).await;
+                tokio::time::sleep(self.settings.operations_loop_delay_ms).await;
             }
         })
     }
@@ -349,7 +342,7 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.query_failed_intervals(INTERVALS_RETRY_BATCH)
+                match self.database.query_failed_intervals(self.settings.intervals_retry_batch)
                     .instrument(tracing::debug_span!(
                         "FAILED INTERVALS",
                         span_id = span_id.to_string()
@@ -372,7 +365,7 @@ impl Indexer {
                 }
 
                 // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(Duration::from_millis(INTERVALS_LOOP_DELAY_INTERVAL_MS)).await;
+                tokio::time::sleep(self.settings.intervals_loop_delay_ms).await;
             }
         })
     }
@@ -381,7 +374,7 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.query_failed_operations(OPERATIONS_RETRY_BATCH, OrderDirection::EarliestFirst)
+                match self.database.query_failed_operations(self.settings.operations_retry_batch, OrderDirection::EarliestFirst)
                     .instrument(tracing::debug_span!(
                         "FAILED OPERATIONS",
                         span_id = span_id.to_string()
@@ -402,7 +395,7 @@ impl Indexer {
                 }
 
                 // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(Duration::from_millis(OPERATIONS_LOOP_DELAY_INTERVAL_MS)).await;
+                tokio::time::sleep(self.settings.operations_loop_delay_ms).await;
             }
         })
     }
@@ -490,6 +483,8 @@ impl Indexer {
         match self.client.get_operations_stages(op_ids.clone()).await {
             Ok(operations_map) => {
                 let mut processed_operations = 0;
+                let mut completed_operations = 0;
+                let forever_pending_operation_cap = (chrono::Utc::now() - self.settings.forever_pending_operations_age_sec).timestamp();
                 for (op_id, operation_data) in operations_map.iter() {
                     // Find an associated operation in the input operations vector
                     match jobs.iter().find(|j| &j.operation.id == op_id) {
@@ -499,9 +494,16 @@ impl Indexer {
                                 .set_operation_data(&job.operation, operation_data)
                                 .await;
 
-                            let new_status = if operation_data.operation_type.is_finalized() {
+                            let new_status = if operation_data.operation_type.is_finalized()
+                            {
                                 // The case when operation has a finalized status
                                 // otherwise they will be catched by operation stream
+                                StatusEnum::Completed
+                            } else if operation_data.operation_type == OperationType::Pending && 
+                                job.operation.timestamp.and_utc().timestamp() < forever_pending_operation_cap
+                            {
+                                // The operations whitch remains PENDING after forever_pending_operations_age_sec
+                                // are considered to be forever pending. We shouldn't recheck them anymore
                                 StatusEnum::Completed
                             } else {
                                 StatusEnum::Pending
@@ -513,6 +515,9 @@ impl Indexer {
                             .await;
 
                             processed_operations += 1;
+                            if new_status == StatusEnum::Completed {
+                                completed_operations += 1;
+                            }
                         }
                         None => {
                             tracing::error!(
@@ -524,7 +529,8 @@ impl Indexer {
                 }
 
                 tracing::info!(
-                    count =? processed_operations,
+                    processed =? processed_operations,
+                    completed =? completed_operations,
                     "Successfully processed operations: [{}]",
                     op_ids.join(", ")
                 );
@@ -634,6 +640,7 @@ impl Indexer {
             Self::prio_left,
         );
 
+        tracing::info!(forever_pending_hardcap =? self.settings.forever_pending_operations_age_sec, "NOTE: Old operations with PENDING type will considered as completed!");
         tracing::info!(current_realtime_timestamp, concurrency =? self.settings.concurrency, "Starting indexing stream...");
 
         combined_stream

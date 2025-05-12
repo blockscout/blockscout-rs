@@ -12,10 +12,18 @@ create_database = true
 run_migrations = true
 
 [indexer]
-concurrency = 10
+concurrency = 2
 start_timestamp = 1741554000
 polling_interval = 2
+retry_interval = 120
 catchup_interval = 600
+intervals_query_batch = 10
+intervals_retry_batch = 10
+intervals_loop_delay_ms = 100
+operations_query_batch = 10
+operations_retry_batch = 10
+operations_loop_delay_ms = 200
+forever_pending_operations_age_sec = 604800
 
 [rpc]
 url = "https://data.turin.tac.build/"

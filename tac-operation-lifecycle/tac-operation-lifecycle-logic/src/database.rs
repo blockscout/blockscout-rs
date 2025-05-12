@@ -98,8 +98,8 @@ struct JoinedRow {
 
     //operation_stage
     stage_id: Option<i32>,
-    stage_type_id: i16,
-    stage_success: bool,
+    stage_type_id: Option<i16>,
+    stage_success: Option<bool>,
     stage_timestamp: Option<DateTime>,
     stage_note: Option<String>,
 
@@ -1264,14 +1264,16 @@ impl TacDatabase {
                 )
             });
 
-            if let Some(stage_id) = row.stage_id {
+            if let (Some(stage_id), Some(stage_type_id)) = 
+                    (row.stage_id, row.stage_type_id)
+            {
                 let stage_entry = op_entry.1.entry(stage_id).or_insert_with(|| {
                     (
                         operation_stage::Model {
                             id: stage_id,
                             operation_id: row.op_id.clone(),
-                            stage_type_id: row.stage_type_id,
-                            success: row.stage_success,
+                            stage_type_id: stage_type_id,
+                            success: row.stage_success.unwrap_or(false),
                             timestamp: row.stage_timestamp.unwrap_or_default(),
                             note: row.stage_note.clone(),
                             inserted_at: now,
@@ -1280,10 +1282,12 @@ impl TacDatabase {
                     )
                 });
 
-                if let Some(tx_id) = row.tx_id {
+                if let (Some(tx_id), Some(tx_stage_id)) = 
+                        (row.tx_id, row.tx_stage_id)
+                {
                     let tx = transaction::Model {
                         id: tx_id,
-                        stage_id: row.tx_stage_id.unwrap_or_default(),
+                        stage_id: tx_stage_id,
                         hash: row.tx_hash.clone().unwrap_or_default(),
                         blockchain_type: row.tx_blockchain_type.clone().unwrap_or_default(),
                         inserted_at: now,
