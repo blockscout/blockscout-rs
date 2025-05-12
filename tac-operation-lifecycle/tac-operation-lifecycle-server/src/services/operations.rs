@@ -9,8 +9,8 @@ use tac_operation_lifecycle_logic::{
 };
 use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::{
     GetOperationByTxHashRequest, GetOperationDetailsRequest, GetOperationsRequest,
-    OperationBriefDetails, OperationDetails, OperationRelatedTransaction, SearchOperationRequest,
-    OperationStage, OperationsFullResponse, OperationsResponse, Pagination,
+    OperationBriefDetails, OperationDetails, OperationRelatedTransaction, OperationStage,
+    OperationsFullResponse, OperationsResponse, Pagination, SearchOperationRequest,
 };
 
 pub struct OperationsService {

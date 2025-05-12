@@ -1264,15 +1264,13 @@ impl TacDatabase {
                 )
             });
 
-            if let (Some(stage_id), Some(stage_type_id)) = 
-                    (row.stage_id, row.stage_type_id)
-            {
+            if let (Some(stage_id), Some(stage_type_id)) = (row.stage_id, row.stage_type_id) {
                 let stage_entry = op_entry.1.entry(stage_id).or_insert_with(|| {
                     (
                         operation_stage::Model {
                             id: stage_id,
                             operation_id: row.op_id.clone(),
-                            stage_type_id: stage_type_id,
+                            stage_type_id,
                             success: row.stage_success.unwrap_or(false),
                             timestamp: row.stage_timestamp.unwrap_or_default(),
                             note: row.stage_note.clone(),
@@ -1282,9 +1280,7 @@ impl TacDatabase {
                     )
                 });
 
-                if let (Some(tx_id), Some(tx_stage_id)) = 
-                        (row.tx_id, row.tx_stage_id)
-                {
+                if let (Some(tx_id), Some(tx_stage_id)) = (row.tx_id, row.tx_stage_id) {
                     let tx = transaction::Model {
                         id: tx_id,
                         stage_id: tx_stage_id,

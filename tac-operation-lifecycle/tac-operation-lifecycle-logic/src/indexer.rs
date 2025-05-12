@@ -364,8 +364,7 @@ impl Indexer {
                     },
                 }
 
-                // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(self.settings.intervals_loop_delay_ms).await;
+                tokio::time::sleep(self.settings.retry_interval).await;
             }
         })
     }
@@ -394,8 +393,7 @@ impl Indexer {
                     },
                 }
 
-                // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(self.settings.operations_loop_delay_ms).await;
+                tokio::time::sleep(self.settings.retry_interval).await;
             }
         })
     }
@@ -484,7 +482,9 @@ impl Indexer {
             Ok(operations_map) => {
                 let mut processed_operations = 0;
                 let mut completed_operations = 0;
-                let forever_pending_operation_cap = (chrono::Utc::now() - self.settings.forever_pending_operations_age_sec).timestamp();
+                let forever_pending_operation_cap = (chrono::Utc::now()
+                    - self.settings.forever_pending_operations_age_sec)
+                    .timestamp();
                 for (op_id, operation_data) in operations_map.iter() {
                     // Find an associated operation in the input operations vector
                     match jobs.iter().find(|j| &j.operation.id == op_id) {
@@ -494,13 +494,13 @@ impl Indexer {
                                 .set_operation_data(&job.operation, operation_data)
                                 .await;
 
-                            let new_status = if operation_data.operation_type.is_finalized()
-                            {
+                            let new_status = if operation_data.operation_type.is_finalized() {
                                 // The case when operation has a finalized status
                                 // otherwise they will be catched by operation stream
                                 StatusEnum::Completed
-                            } else if operation_data.operation_type == OperationType::Pending && 
-                                job.operation.timestamp.and_utc().timestamp() < forever_pending_operation_cap
+                            } else if operation_data.operation_type == OperationType::Pending
+                                && job.operation.timestamp.and_utc().timestamp()
+                                    < forever_pending_operation_cap
                             {
                                 // The operations whitch remains PENDING after forever_pending_operations_age_sec
                                 // are considered to be forever pending. We shouldn't recheck them anymore

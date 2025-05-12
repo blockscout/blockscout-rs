@@ -60,3 +60,6 @@ format:
 check:
     cargo check
     cargo clippy --all --all-targets --all-features -- -D warnings
+
+check-envs:
+    cargo run --bin env-docs-generation

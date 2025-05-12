@@ -56,7 +56,7 @@ fn default_polling_interval() -> time::Duration {
 }
 
 fn default_retry_interval() -> time::Duration {
-    time::Duration::from_secs(180)
+    time::Duration::from_secs(60)
 }
 
 fn default_catchup_interval() -> time::Duration {
