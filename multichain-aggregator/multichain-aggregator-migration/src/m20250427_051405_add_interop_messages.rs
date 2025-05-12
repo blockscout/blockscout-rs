@@ -9,17 +9,20 @@ impl MigrationTrait for Migration {
         // TODO: add indexes
         let sql = r#"
             CREATE TABLE interop_messages (
-                sender bytea,
-                target bytea,
+                sender_address_hash bytea,
+                target_address_hash bytea,
                 nonce bigint NOT NULL,
                 init_chain_id bigint NOT NULL REFERENCES chains (id),
                 init_transaction_hash bytea,
-                block_number bigint,
                 timestamp timestamp,
                 relay_chain_id bigint NOT NULL REFERENCES chains (id),
                 relay_transaction_hash bytea,
                 payload bytea,
                 failed boolean,
+                transfer_token_address_hash bytea,
+                transfer_from_address_hash bytea,
+                transfer_to_address_hash bytea,
+                transfer_amount NUMERIC(78, 0),
                 created_at timestamp NOT NULL DEFAULT (now()),
                 updated_at timestamp NOT NULL DEFAULT (now()),
                 PRIMARY KEY (init_chain_id, nonce)

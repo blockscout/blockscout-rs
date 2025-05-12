@@ -100,17 +100,20 @@ message Domain {
 }
 
 message InteropMessage {
-  optional string sender = 1;
-  optional string target = 2;
+  optional string sender_address_hash = 1;
+  optional string target_address_hash = 2;
   int64 nonce = 3;
   string init_chain_id = 4;
   optional string init_transaction_hash = 5;
-  optional uint64 block_number = 6;
-  optional string timestamp = 7;
-  string relay_chain_id = 8;
-  optional string relay_transaction_hash = 9;
-  optional string payload = 10;
-  optional bool failed = 11;
+  optional string timestamp = 6;
+  string relay_chain_id = 7;
+  optional string relay_transaction_hash = 8;
+  optional string payload = 9;
+  optional bool failed = 10;
+  optional string transfer_token_address_hash = 11;
+  optional string transfer_from_address_hash = 12;
+  optional string transfer_to_address_hash = 13;
+  optional string transfer_amount = 14;
 }
 
 message BatchImportRequest {
@@ -136,17 +139,33 @@ message BatchImportRequest {
   }
 
   message InteropMessageImport {
-    optional string sender = 1;
-    optional string target = 2;
-    int64 nonce = 3;
-    string init_chain_id = 4;
-    optional string init_transaction_hash = 5;
-    optional uint64 block_number = 6;
-    optional int64 timestamp = 7;
-    string relay_chain_id = 8;
-    optional string relay_transaction_hash = 9;
-    optional string payload = 10;
-    optional bool failed = 11;
+    message Init {
+      string sender_address_hash = 1;
+      string target_address_hash = 2;
+      int64 nonce = 3;
+      string init_chain_id = 4;
+      string init_transaction_hash = 5;
+      int64 timestamp = 6;
+      string relay_chain_id = 7;
+      string payload = 8;
+      optional string transfer_token_address_hash = 9;
+      optional string transfer_from_address_hash = 10;
+      optional string transfer_to_address_hash = 11;
+      optional string transfer_amount = 12;
+    }
+
+    message Relay {
+      int64 nonce = 1;
+      string init_chain_id = 2;
+      string relay_chain_id = 3;
+      string relay_transaction_hash = 4;
+      bool failed = 5;
+    }
+
+    oneof message {
+      Init init = 1;
+      Relay relay = 2;
+    }
   }
 
   string chain_id = 1;
@@ -276,8 +295,6 @@ message ListInteropMessagesResponse {
   Pagination next_page_params = 2;
 }
 
-message CountInteropMessagesRequest {
-  string chain_id = 1;
-}
+message CountInteropMessagesRequest { string chain_id = 1; }
 
 message CountInteropMessagesResponse { uint64 count = 1; }
