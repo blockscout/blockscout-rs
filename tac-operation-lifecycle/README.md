@@ -105,7 +105,6 @@ Parameters can be configured either using a `yaml`file or environment variables.
 | `TAC_OPERATION_LIFECYCLE__INDEXER__OPERATIONS_RETRY_BATCH` | | The number of failed operations simultaneously fetched from the database during the retry cycle. Lower values will reduce database load. | `10` |
 | `TAC_OPERATION_LIFECYCLE__INDEXER__OPERATIONS_LOOP_DELAY_MS` | | Delay between operation fetches (from the database) to prevent a tight loop. The value is in milliseconds. | `200` |
 | `TAC_OPERATION_LIFECYCLE__RPC__URL` | | TAC Staging Service RPC endpoint. | `https://data.turin.tac.build/` |
-| `TAC_OPERATION_LIFECYCLE__RPC__AUTH_TOKEN` | | Currently not used. | `null` |
 | `TAC_OPERATION_LIFECYCLE__RPC__REQUEST_PER_SECOND` | | The rate limit for requests per second. | `100` |
 | `TAC_OPERATION_LIFECYCLE__RPC__NUM_OF_RETRIES` | | The number of retries for each request. A request is considered failed after this number of retries. | `10` |
 | `TAC_OPERATION_LIFECYCLE__RPC__RETRY_DELAY_MS` | | The delay in milliseconds between retries. | `1000` |

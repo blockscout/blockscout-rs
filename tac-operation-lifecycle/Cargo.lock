@@ -4459,7 +4459,7 @@ dependencies = [
 
 [[package]]
 name = "tac-operation-lifecycle-logic"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -4494,7 +4494,7 @@ dependencies = [
 
 [[package]]
 name = "tac-operation-lifecycle-proto"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-prost",
  "actix-prost-build",
@@ -4510,7 +4510,7 @@ dependencies = [
 
 [[package]]
 name = "tac-operation-lifecycle-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-web",
  "anyhow",
