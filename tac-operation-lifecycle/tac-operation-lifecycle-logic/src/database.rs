@@ -715,15 +715,38 @@ impl TacDatabase {
     }
 
     // Extract up to `num` operations in the pending state and switch them status to `processing`
+    pub async fn query_new_operations(
+        &self,
+        num: usize,
+        order: OrderDirection,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let conditions = vec![
+            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
+            "op_type IS NULL".to_string(),
+        ];
+
+        let sql = self.build_operation_query(
+            conditions,
+            Some(("timestamp", order)),
+            num,
+            &StatusEnum::Processing,
+        );
+
+        self.query_operations(&sql)
+            .instrument(tracing::debug_span!("query new operations"))
+            .await
+    }
+
+    // Extract up to `num` operations in the pending state and switch them status to `processing`
     pub async fn query_pending_operations(
         &self,
         num: usize,
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
-        let conditions = vec![format!(
-            "status = '{}'::status_enum",
-            StatusEnum::Pending.to_value()
-        )];
+        let conditions = vec![
+            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
+            "op_type = 'PENDING'".to_string(),
+        ];
 
         let sql = self.build_operation_query(
             conditions,

@@ -308,7 +308,37 @@ impl Indexer {
         })
     }
 
-    pub fn operations_stream(&self) -> BoxStream<'_, IndexerJob> {
+    pub fn new_operations_stream(&self) -> BoxStream<'_, IndexerJob> {
+        Box::pin(async_stream::stream! {
+            loop {
+                let span_id = Uuid::new_v4();
+                match self.database.query_new_operations(self.settings.operations_query_batch, OrderDirection::LatestFirst)
+                    .instrument(tracing::debug_span!(
+                        "NEW OPERATIONS",
+                        span_id = span_id.to_string()
+                    ))
+                    .await {
+                    Ok(selected) => {
+                        for operation in selected {
+                            // Yield the job
+                            yield IndexerJob::Operation(OperationJob { operation });
+                        }
+                    },
+                    Err(e) => {
+                        tracing::error!(
+                            err =? e,
+                            "Unable to select latest operations from the database"
+                        );
+                    },
+                }
+
+                // Sleep a bit before next iteration to prevent tight loop
+                tokio::time::sleep(self.settings.operations_loop_delay_ms).await;
+            }
+        })
+    }
+
+    pub fn pending_operations_stream(&self) -> BoxStream<'_, IndexerJob> {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
@@ -618,7 +648,8 @@ impl Indexer {
             None,
             Some(current_realtime_timestamp),
         );
-        let operations = self.operations_stream();
+        let pending_operations = self.pending_operations_stream();
+        let new_operations = self.new_operations_stream();
         let failed_intervals = self.retry_intervals_stream();
         let failed_operations = self.retry_operations_stream();
 
@@ -635,7 +666,7 @@ impl Indexer {
             Self::prio_left,
         );
         let combined_stream = select_with_strategy(
-            operations,
+            select_with_strategy(pending_operations, new_operations, Self::prio_left),
             select_with_strategy(intervals_stream, retry_stream, Self::prio_left),
             Self::prio_left,
         );

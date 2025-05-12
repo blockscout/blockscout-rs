@@ -423,7 +423,7 @@ mod tests {
         // Get the stream of jobs
         let interval_stream = indexer.interval_stream(OrderDirection::EarliestFirst, None, None);
 
-        let operations_stream = indexer.operations_stream();
+        let operations_stream = indexer.new_operations_stream();
 
         let mut job_stream = select_all(vec![interval_stream, operations_stream]);
 
