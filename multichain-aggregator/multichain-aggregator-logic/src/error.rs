@@ -1,4 +1,4 @@
-use crate::types::api_keys::ApiKeyError;
+use crate::types::{api_keys::ApiKeyError, ChainId};
 use alloy_primitives::hex::FromHexError;
 use sea_orm::{sqlx::types::uuid, DbErr};
 use std::num::ParseIntError;
@@ -35,6 +35,8 @@ pub enum ParseError {
     ParseUrl(#[from] url::ParseError),
     #[error("parse error: invalid json")]
     Json(#[from] serde_json::Error),
+    #[error("parse error: chain id mismatch: expected {0}, got {1}")]
+    ChainIdMismatch(ChainId, ChainId),
     #[error("parse error: {0}")]
     Custom(String),
 }

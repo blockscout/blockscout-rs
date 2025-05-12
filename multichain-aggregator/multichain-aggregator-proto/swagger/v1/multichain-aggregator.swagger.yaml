@@ -402,31 +402,10 @@ definitions:
   BatchImportRequestInteropMessageImport:
     type: object
     properties:
-      sender:
-        type: string
-      target:
-        type: string
-      nonce:
-        type: string
-        format: int64
-      init_chain_id:
-        type: string
-      init_transaction_hash:
-        type: string
-      block_number:
-        type: string
-        format: uint64
-      timestamp:
-        type: string
-        format: int64
-      relay_chain_id:
-        type: string
-      relay_transaction_hash:
-        type: string
-      payload:
-        type: string
-      failed:
-        type: boolean
+      init:
+        $ref: '#/definitions/InteropMessageImportInit'
+      relay:
+        $ref: '#/definitions/InteropMessageImportRelay'
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -436,6 +415,49 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  InteropMessageImportInit:
+    type: object
+    properties:
+      sender_address_hash:
+        type: string
+      target_address_hash:
+        type: string
+      nonce:
+        type: string
+        format: int64
+      init_chain_id:
+        type: string
+      init_transaction_hash:
+        type: string
+      timestamp:
+        type: string
+        format: int64
+      relay_chain_id:
+        type: string
+      payload:
+        type: string
+      transfer_token_address_hash:
+        type: string
+      transfer_from_address_hash:
+        type: string
+      transfer_to_address_hash:
+        type: string
+      transfer_amount:
+        type: string
+  InteropMessageImportRelay:
+    type: object
+    properties:
+      nonce:
+        type: string
+        format: int64
+      init_chain_id:
+        type: string
+      relay_chain_id:
+        type: string
+      relay_transaction_hash:
+        type: string
+      failed:
+        type: boolean
   QuickSearchResponseChainBlockNumber:
     type: object
     properties:
@@ -592,9 +614,9 @@ definitions:
   v1InteropMessage:
     type: object
     properties:
-      sender:
+      sender_address_hash:
         type: string
-      target:
+      target_address_hash:
         type: string
       nonce:
         type: string
@@ -603,9 +625,6 @@ definitions:
         type: string
       init_transaction_hash:
         type: string
-      block_number:
-        type: string
-        format: uint64
       timestamp:
         type: string
       relay_chain_id:
@@ -616,6 +635,14 @@ definitions:
         type: string
       failed:
         type: boolean
+      transfer_token_address_hash:
+        type: string
+      transfer_from_address_hash:
+        type: string
+      transfer_to_address_hash:
+        type: string
+      transfer_amount:
+        type: string
   v1ListAddressesResponse:
     type: object
     properties:

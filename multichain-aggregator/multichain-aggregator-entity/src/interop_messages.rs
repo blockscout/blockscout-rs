@@ -6,16 +6,15 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "interop_messages")]
 pub struct Model {
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
-    pub sender: Option<Vec<u8>>,
+    pub sender_address_hash: Option<Vec<u8>>,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
-    pub target: Option<Vec<u8>>,
+    pub target_address_hash: Option<Vec<u8>>,
     #[sea_orm(primary_key, auto_increment = false)]
     pub nonce: i64,
     #[sea_orm(primary_key, auto_increment = false)]
     pub init_chain_id: i64,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub init_transaction_hash: Option<Vec<u8>>,
-    pub block_number: Option<i64>,
     pub timestamp: Option<DateTime>,
     pub relay_chain_id: i64,
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
@@ -23,6 +22,14 @@ pub struct Model {
     #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
     pub payload: Option<Vec<u8>>,
     pub failed: Option<bool>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub transfer_token_address_hash: Option<Vec<u8>>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub transfer_from_address_hash: Option<Vec<u8>>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub transfer_to_address_hash: Option<Vec<u8>>,
+    #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
+    pub transfer_amount: Option<Decimal>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
