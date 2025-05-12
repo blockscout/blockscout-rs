@@ -3,6 +3,7 @@ use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
 
 mod m20220101_000001_initial_tables;
 mod m20250130_084023_add_chains_name;
+mod m20250505_111131_add_token_and_coin_balances;
 
 pub struct Migrator;
 
@@ -12,6 +13,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20220101_000001_initial_tables::Migration),
             Box::new(m20250130_084023_add_chains_name::Migration),
+            Box::new(m20250505_111131_add_token_and_coin_balances::Migration),
         ]
     }
 }
