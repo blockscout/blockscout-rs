@@ -7,6 +7,7 @@ use crate::{
     services::{HealthService, OperationsService, StatisticService},
     settings::Settings,
 };
+use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{
     launcher::{self, GracefulShutdownHandler, LaunchSettings},
     tracing as bs_tracing,
@@ -15,7 +16,7 @@ use blockscout_service_launcher::{
 use tac_operation_lifecycle_logic::{client::Client, database::TacDatabase, Indexer};
 use tokio::sync::Mutex;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 const SERVICE_NAME: &str = "tac_operation_lifecycle";
 
@@ -24,6 +25,7 @@ struct Router {
     health: Arc<HealthService>,
     stat: Arc<StatisticService>,
     operations: Arc<OperationsService>,
+    swagger_path: PathBuf,
 }
 
 impl Router {
@@ -40,6 +42,13 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config.configure(|config| route_tac_service(config, self.operations.clone()));
         service_config.configure(|config| route_tac_statistic(config, self.stat.clone()));
+        service_config.configure(|config| {
+            route_swagger(
+                config,
+                self.swagger_path.clone(),
+                "/api/v1/docs/swagger.yaml",
+            )
+        });
     }
 }
 
@@ -58,6 +67,7 @@ pub async fn run(
         health,
         stat,
         operations,
+        swagger_path: settings.swagger_path.clone(),
     };
 
     let grpc_router = router.grpc_router();
