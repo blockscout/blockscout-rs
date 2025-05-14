@@ -371,6 +371,8 @@ impl TacDatabase {
                 retry_count: Set(0), // Initialize retry count
                 inserted_at: Set(now),
                 updated_at: Set(now),
+                sender_address: Set(None),
+                sender_blockchain: Set(None),
             };
 
             tracing::debug!("Attempting to insert operation: {:?}", operation_model);
@@ -1178,6 +1180,8 @@ impl TacDatabase {
             retry_count: 0,
             inserted_at: now,
             updated_at: now,
+            sender_address: None,
+            sender_blockchain: None,
         };
 
         use std::collections::HashMap;
