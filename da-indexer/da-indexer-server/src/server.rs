@@ -3,6 +3,7 @@ use crate::{
     services::{CelestiaService, EigenDaService, HealthService},
     settings::Settings,
 };
+use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 
 use da_indexer_logic::celestia::l2_router::L2Router;
@@ -12,7 +13,7 @@ use da_indexer_proto::blockscout::da_indexer::v1::{
 };
 use sea_orm::DatabaseConnection;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 const SERVICE_NAME: &str = "da_indexer";
 
@@ -21,6 +22,7 @@ struct Router {
     health: Arc<HealthService>,
     celestia: Arc<CelestiaService>,
     eigenda: Arc<EigenDaService>,
+    swagger_path: PathBuf,
 }
 
 impl Router {
@@ -37,6 +39,13 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config.configure(|config| route_celestia_service(config, self.celestia.clone()));
         service_config.configure(|config| route_eigen_da_service(config, self.eigenda.clone()));
+        service_config.configure(|config| {
+            route_swagger(
+                config,
+                self.swagger_path.clone(),
+                "/api/v1/docs/swagger.yaml",
+            )
+        });
     }
 }
 
@@ -53,6 +62,7 @@ pub async fn run(
         health,
         celestia,
         eigenda,
+        swagger_path: settings.swagger_path,
     };
 
     let grpc_router = router.grpc_router();

@@ -148,8 +148,6 @@ impl<S: StatsService> launcher::HttpRouter for HttpRouter<S> {
                 route_swagger(
                     config,
                     self.swagger_path.clone(),
-                    // it's ok to not have this endpoint in swagger, as it is
-                    // the swagger itself
                     "/api/v1/docs/swagger.yaml",
                 )
             });

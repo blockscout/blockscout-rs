@@ -1526,7 +1526,7 @@ dependencies = [
 [[package]]
 name = "blockscout-endpoint-swagger"
 version = "0.1.1"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=c7d61095b6863155c42634951d1447077bbea56e#c7d61095b6863155c42634951d1447077bbea56e"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=4a755c5#4a755c5ed2b7d1915f2bc8aa5bd14fdf953958e6"
 dependencies = [
  "actix-files",
  "actix-web",
