@@ -14,9 +14,10 @@ use bens_proto::blockscout::bens::v1::{
     domains_extractor_server::DomainsExtractorServer, health_actix::route_health,
     health_server::HealthServer,
 };
+use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 use sqlx::{postgres::PgPoolOptions, Executor};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio_cron_scheduler::JobScheduler;
 
 const SERVICE_NAME: &str = "bens";
@@ -25,6 +26,7 @@ const SERVICE_NAME: &str = "bens";
 struct Router {
     domains_extractor: Arc<DomainsExtractorService>,
     health: Arc<HealthService>,
+    swagger_path: PathBuf,
 }
 
 impl Router {
@@ -42,6 +44,13 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config
             .configure(|config| route_domains_extractor(config, self.domains_extractor.clone()));
+        service_config.configure(|config| {
+            route_swagger(
+                config,
+                self.swagger_path.clone(),
+                "/api/v1/docs/swagger.yaml",
+            )
+        });
     }
 }
 
@@ -161,6 +170,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let router = Router {
         domains_extractor,
         health,
+        swagger_path: settings.swagger_path,
     };
 
     let grpc_router = router.grpc_router();

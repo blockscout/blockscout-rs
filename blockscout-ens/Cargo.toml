@@ -50,3 +50,4 @@ tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", default-features = false }
 url = { version = "2.4" }
 wiremock = { version = "0.6" }
+blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "c7d61095b6863155c42634951d1447077bbea56e" }
