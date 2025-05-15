@@ -1,7 +1,7 @@
-use std::{thread, time};
-
 use serde::Deserialize;
 use serde_with::serde_as;
+use std::{thread, time};
+
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, serde::Serialize)]
 #[serde(deny_unknown_fields)]

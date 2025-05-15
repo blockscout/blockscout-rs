@@ -1,24 +1,23 @@
-use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
-
 use anyhow::Error;
-use governor::{clock::DefaultClock, state::InMemoryState, Quota, RateLimiter};
-use reqwest::{Client as HttpClient, Method, Request, Response};
-
-pub mod models;
-pub mod settings;
-
-use settings::RpcSettings;
-use tracing::Instrument;
-
+use governor::{
+    clock::DefaultClock,
+    state::{InMemoryState, NotKeyed},
+    Quota, RateLimiter,
+};
 use models::{
     operations::{OperationIdsApiResponse, Operations},
     profiling::{OperationData, StageProfilingApiResponse},
 };
+use reqwest::{Client as HttpClient, Method, Request, Response};
+use settings::RpcSettings;
+use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 use tokio::time::{timeout, Duration};
+use tracing::Instrument;
+
+pub mod models;
+pub mod settings;
 
 type Limiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
-
-use governor::state::NotKeyed;
 
 #[derive(Clone)]
 pub struct Client {

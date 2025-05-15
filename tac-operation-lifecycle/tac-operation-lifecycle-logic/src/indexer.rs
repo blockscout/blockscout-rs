@@ -1,19 +1,19 @@
-use std::{cmp::max, collections::HashMap, fmt, str::FromStr, sync::Arc, time::Duration};
-
-use crate::database::{OrderDirection, TacDatabase};
+use crate::{
+    database::{OrderDirection, TacDatabase},
+    settings::IndexerSettings,
+};
 use anyhow::Error;
 use client::{
     models::profiling::{BlockchainType, OperationType, StageType},
     Client,
 };
-use tac_operation_lifecycle_entity::{interval, operation, sea_orm_active_enums::StatusEnum};
-use tokio::{task::JoinHandle, time};
-
-use crate::settings::IndexerSettings;
 use futures::{
     stream::{select, select_with_strategy, BoxStream, PollNext},
     StreamExt,
 };
+use std::{cmp::max, collections::HashMap, fmt, str::FromStr, sync::Arc, time::Duration};
+use tac_operation_lifecycle_entity::{interval, operation, sea_orm_active_enums::StatusEnum};
+use tokio::{task::JoinHandle, time};
 use tracing::{instrument, Instrument};
 use uuid::Uuid;
 
