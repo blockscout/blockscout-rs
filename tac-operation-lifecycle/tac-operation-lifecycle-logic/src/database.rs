@@ -1185,10 +1185,10 @@ impl TacDatabase {
             WHERE o.id = $1
             "#;
 
-        self
-            .get_full_operations_with_sql(&sql.into(), [id.into()])
+        self.get_full_operations_with_sql(&sql.into(), [id.into()])
             .await
             .map(|arr| arr.first().cloned())
+    }
 
     pub async fn get_full_operations_by_tx_hash(
         &self,
@@ -1349,12 +1349,11 @@ impl TacDatabase {
         sql: &str,
         values: impl IntoIterator<Item = sea_orm::Value>,
     ) -> anyhow::Result<Vec<operation::Model>> {
-        let db: &DatabaseConnection = &self.db;
-
         let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, values);
-
-        let operations = operation::Entity::find().from_raw_sql(stmt).all(db).await?;
-
+        let operations = operation::Entity::find()
+            .from_raw_sql(stmt)
+            .all(self.db.as_ref())
+            .await?;
         Ok(operations)
     }
 
