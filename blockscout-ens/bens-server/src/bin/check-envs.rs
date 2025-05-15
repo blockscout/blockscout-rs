@@ -13,6 +13,7 @@ fn main() {
             "BENS__DATABASE__CONNECT_OPTIONS",
             "BENS__METRICS",
             "BENS__JAEGER",
+            "BENS__SWAGGER_PATH",
         ]),
         Some("envs_main"),
     );

@@ -6,7 +6,7 @@ use blockscout_service_launcher::{
 };
 use nonempty::NonEmpty;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -23,6 +23,8 @@ pub struct Settings {
     #[serde(default)]
     pub subgraphs_reader: SubgraphsReaderSettings,
     pub database: DatabaseSettings,
+    #[serde(default = "default_swagger_path")]
+    pub swagger_path: PathBuf,
 }
 
 impl ConfigSettings for Settings {
@@ -118,6 +120,10 @@ impl Default for BlockscoutSettings {
     }
 }
 
+fn default_swagger_path() -> PathBuf {
+    blockscout_endpoint_swagger::default_swagger_path_from_service_name("bens")
+}
+
 impl Settings {
     pub fn default(database_url: String) -> Self {
         Self {
@@ -132,6 +138,7 @@ impl Settings {
                 create_database: Default::default(),
                 run_migrations: Default::default(),
             },
+            swagger_path: default_swagger_path(),
         }
     }
 }

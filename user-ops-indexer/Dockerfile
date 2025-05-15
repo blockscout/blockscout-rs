@@ -26,6 +26,10 @@ RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER
 
 COPY --from=build /app/target/release/user-ops-indexer-server /app/user-ops-indexer-server
+
+ENV USER_OPS_INDEXER__SWAGGER_PATH=/app/static/user-ops-indexer.swagger.yaml
+COPY ./user-ops-indexer-proto/swagger/user-ops-indexer.swagger.yaml $USER_OPS_INDEXER__SWAGGER_PATH
+
 # Change directory access for app user
 RUN chown -R $APP_USER:$APP_USER /app
 USER app

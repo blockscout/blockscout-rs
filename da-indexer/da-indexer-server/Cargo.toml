@@ -22,6 +22,7 @@ tracing = "0.1"
 base64 = "0.22.0"
 hex = "0.4.3"
 blockscout-display-bytes = "1.0.0"
+blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "4a755c5" }
 
 
 [dev-dependencies]

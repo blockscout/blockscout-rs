@@ -7,9 +7,10 @@ use crate::{
     services::{HealthService, UserOpsService},
     settings::Settings,
 };
+use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 use sea_orm::DatabaseConnection;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use user_ops_indexer_logic::indexer::status::IndexerStatus;
 
@@ -19,6 +20,7 @@ const SERVICE_NAME: &str = "user_ops_indexer_server";
 struct Router {
     health: Arc<HealthService>,
     user_ops: Arc<UserOpsService>,
+    swagger_path: PathBuf,
 }
 
 impl Router {
@@ -33,6 +35,13 @@ impl launcher::HttpRouter for Router {
     fn register_routes(&self, service_config: &mut actix_web::web::ServiceConfig) {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config.configure(|config| route_user_ops_service(config, self.user_ops.clone()));
+        service_config.configure(|config| {
+            route_swagger(
+                config,
+                self.swagger_path.clone(),
+                "/api/v1/docs/swagger.yaml",
+            )
+        });
     }
 }
 
@@ -48,7 +57,11 @@ pub async fn run(
         status,
     ));
 
-    let router = Router { health, user_ops };
+    let router = Router {
+        health,
+        user_ops,
+        swagger_path: settings.swagger_path,
+    };
 
     let grpc_router = router.grpc_router();
     let http_router = router;

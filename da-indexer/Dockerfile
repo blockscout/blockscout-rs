@@ -26,6 +26,10 @@ RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER
 
 COPY --from=build /app/target/release/da-indexer-server /app/da-indexer-server
+
+ENV DA_INDEXER__SWAGGER_PATH=/app/static/da-indexer.swagger.yaml
+COPY ./da-indexer-proto/swagger/v1/da-indexer.swagger.yaml $DA_INDEXER__SWAGGER_PATH
+
 # Change directory access for app user
 RUN chown -R $APP_USER:$APP_USER /app
 USER app

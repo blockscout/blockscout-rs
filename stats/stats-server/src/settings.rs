@@ -70,13 +70,17 @@ pub struct Settings {
     pub layout_config: PathBuf,
     pub update_groups_config: PathBuf,
     /// Location of swagger file to serve
-    pub swagger_file: PathBuf,
+    pub swagger_path: PathBuf,
     pub api_keys: HashMap<String, String>,
 
     pub server: ServerSettings,
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub tracing: TracingSettings,
+}
+
+fn default_swagger_path() -> PathBuf {
+    blockscout_endpoint_swagger::default_swagger_path_from_service_name("stats")
 }
 
 impl Default for Settings {
@@ -105,7 +109,7 @@ impl Default for Settings {
             charts_config: PathBuf::from_str("config/charts.json").unwrap(),
             layout_config: PathBuf::from_str("config/layout.json").unwrap(),
             update_groups_config: PathBuf::from_str("config/update_groups.json").unwrap(),
-            swagger_file: PathBuf::from("../stats-proto/swagger/stats.swagger.yaml"),
+            swagger_path: default_swagger_path(),
             blockscout_db_url: Default::default(),
             blockscout_api_url: None,
             ignore_blockscout_api_absence: false,

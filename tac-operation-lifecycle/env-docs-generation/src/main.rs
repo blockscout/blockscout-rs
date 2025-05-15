@@ -17,6 +17,7 @@ fn main() {
             "TAC_OPERATION_LIFECYCLE__TRACING",
             "TAC_OPERATION_LIFECYCLE__JAEGER",
             "TAC_OPERATION_LIFECYCLE__METRICS",
+            "TAC_OPERATION_LIFECYCLE__SWAGGER_PATH",
         ]),
         Some("service"),
     );
