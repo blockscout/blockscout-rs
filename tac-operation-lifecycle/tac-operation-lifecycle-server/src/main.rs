@@ -16,7 +16,7 @@ async fn main() -> Result<(), anyhow::Error> {
         settings.indexer.clone().unwrap().start_timestamp,
     ));
 
-    let client = Arc::new(Client::new(settings.clone().rpc));
+    let client = Arc::new(Client::new(settings.rpc.clone()));
 
     run(settings, db.clone(), client).await
 }
