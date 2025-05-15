@@ -13,6 +13,7 @@ fn main() {
             "STATS__TRACING",
             "STATS__JAEGER",
             "STATS__METRICS",
+            "STATS__SWAGGER_PATH",
         ]),
         Some("service"),
     );
