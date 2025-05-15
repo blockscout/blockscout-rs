@@ -714,7 +714,7 @@ impl TacDatabase {
         }
     }
 
-    // Extract up to `num` operations in the pending state and switch them status to `processing`
+    // Extract up to `num` operations in the pending state and switch their status to `processing`
     pub async fn query_new_operations(
         &self,
         num: usize,
