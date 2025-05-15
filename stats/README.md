@@ -74,7 +74,6 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__CHARTS_CONFIG` | | Path to config file for charts | `"config/charts.json"` |
 | `STATS__LAYOUT_CONFIG` | | Path to config file for chart layout | `"config/layout.json"` |
 | `STATS__UPDATE_GROUPS_CONFIG` | | Path to config file for update groups | `"config/update_groups.json"` |
-| `STATS__SWAGGER_FILE` | | Path of the swagger file to serve in the swagger endpoint | `"../stats-proto/swagger/stats.swagger.yaml"` |
 | `STATS__FORCE_UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
 | `STATS__CONCURRENT_START_UPDATES` | | Amount of concurrent charts update on start | `3` |
 | `STATS__DEFAULT_SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
