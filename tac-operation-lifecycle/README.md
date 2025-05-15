@@ -92,7 +92,7 @@ Parameters can be configured either using a `yaml`file or environment variables.
 
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
-| `TAC_OPERATION_LIFECYCLE__INDEXER__CONCURRENCY` | | The number of jobs simultaneously fetched from the common job stream. | `14` |
+| `TAC_OPERATION_LIFECYCLE__INDEXER__CONCURRENCY` | | The number of jobs simultaneously fetched from the common job stream. | `num_of_cores` |
 | `TAC_OPERATION_LIFECYCLE__INDEXER__CATCHUP_INTERVAL` | | The size of time windows (in seconds) used for processing historical data. Smaller intervals provide more granular processing but may increase the number of RPC calls. | `5` |
 | `TAC_OPERATION_LIFECYCLE__INDEXER__POLLING_INTERVAL` | | Determines how frequently the indexer checks for new (realtime) data. The value is provided in seconds. | `2` |
 | `TAC_OPERATION_LIFECYCLE__INDEXER__RETRY_INTERVAL` | | Determines how frequently the indexer will retry failed intervals and operations. The value is provided in seconds. | `120` |
