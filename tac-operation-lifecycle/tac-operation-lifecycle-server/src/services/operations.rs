@@ -128,24 +128,26 @@ impl TacService for OperationsService {
         let q = request.into_inner().q;
         if is_generic_hash(&q) {
             // operation_id or tx_hash
-            match self.db.get_brief_operation_by_id(&q).await {
-                Ok(Some(op)) => Ok(tonic::Response::new(OperationsResponse {
-                    items: OperationsService::convert_short_db_operation_into_response(
-                        [op].to_vec(),
-                    ),
-                    next_page_params: None,
-                })),
-                _ => match self.db.get_brief_operations_by_tx_hash(&q).await {
-                    Ok(res) => Ok(tonic::Response::new(OperationsResponse {
-                        items: OperationsService::convert_short_db_operation_into_response(res),
-                        next_page_params: None,
-                    })),
-                    _ => Ok(tonic::Response::new(OperationsResponse {
-                        items: vec![],
-                        next_page_params: None,
-                    })),
-                },
-            }
+            let map_internal = |e: anyhow::Error| tonic::Status::internal(e.to_string());
+
+            let operations = match self
+                .db
+                .get_brief_operation_by_id(&q)
+                .await
+                .map_err(map_internal)?
+            {
+                Some(op) => vec![op],
+                None => self
+                    .db
+                    .get_brief_operations_by_tx_hash(&q)
+                    .await
+                    .map_err(map_internal)?,
+            };
+
+            Ok(tonic::Response::new(OperationsResponse {
+                items: OperationsService::convert_short_db_operation_into_response(operations),
+                next_page_params: None,
+            }))
         } else if is_tac_address(&q) || is_ton_address(&q) {
             // sender (TON-TAC format)
             // TODO: unimplemented for this version of the database.
