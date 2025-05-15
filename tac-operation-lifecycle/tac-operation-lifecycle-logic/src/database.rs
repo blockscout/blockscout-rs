@@ -1185,15 +1185,10 @@ impl TacDatabase {
             WHERE o.id = $1
             "#;
 
-        match self
+        self
             .get_full_operations_with_sql(&sql.into(), [id.into()])
             .await
-        {
-            Ok(arr) if !arr.is_empty() => Ok(Some(arr[0].clone())),
-            Ok(_) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
+            .map(|arr| arr.first().cloned())
 
     pub async fn get_full_operations_by_tx_hash(
         &self,
