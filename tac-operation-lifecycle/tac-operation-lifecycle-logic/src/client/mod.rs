@@ -61,7 +61,7 @@ impl Client {
 
             if !response.status().is_success() {
                 let status = response.status();
-                tracing::error!(%url, status =? status, "Bad response");
+                tracing::error!(%url, status =? status, "Bad response during operation list request");
                 return Err(anyhow::anyhow!(
                     "HTTP error {}: {}",
                     status,
@@ -72,7 +72,7 @@ impl Client {
             let text = response.text().await?;
 
             if text.is_empty() {
-                tracing::error!(%url, "Received empty response");
+                tracing::error!(%url, "Received empty response from operations list");
                 break;
             }
 
@@ -123,7 +123,7 @@ impl Client {
         if response.status().is_success() {
             let text = response.text().await?;
             if text.is_empty() {
-                tracing::error!(url, "Received empty response");
+                tracing::error!(url, "Received empty response from stage profiling");
                 return Err(anyhow::anyhow!("Received empty response from {url}"));
             }
 
@@ -135,6 +135,8 @@ impl Client {
                 }
             }
         } else {
+            let status = response.status();
+            tracing::error!(%url, status =? status, "Bad response during stage profiling request");
             Err(anyhow::anyhow!(
                 "HTTP error {}: {}",
                 response.status().as_u16(),

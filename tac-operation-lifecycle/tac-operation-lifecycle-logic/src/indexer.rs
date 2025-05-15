@@ -138,9 +138,9 @@ impl Indexer {
         };
 
         tracing::info!(
-            "Realtime boundary: hard = {}, from_db = {}",
-            realtime_boundary_hard,
-            relatime_boundary_db
+            realtime_boundary_hard =? realtime_boundary_hard,
+            relatime_boundary_db =? relatime_boundary_db,
+            "Indexer created"
         );
 
         Ok(Self {
