@@ -171,7 +171,7 @@ impl TacService for OperationsService {
     ) -> Result<tonic::Response<OperationDetails>, tonic::Status> {
         let inner = request.into_inner();
 
-        match self.db.get_operation_by_id(&inner.operation_id).await {
+        match self.db.get_full_operation_by_id(&inner.operation_id).await {
             Ok(Some(full_data)) => Ok(tonic::Response::new(
                 OperationsService::convert_full_db_operation_into_response(full_data),
             )),

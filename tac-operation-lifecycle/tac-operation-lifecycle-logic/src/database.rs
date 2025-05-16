@@ -382,6 +382,9 @@ impl TacDatabase {
         Ok(())
     }
 
+    // Store operations fetched from the TAC API into the database
+    // A few fields are set to None, because they are not available at this point
+    // The operation status is set to 'pending' to indicate that the operation is not yet processed
     pub async fn insert_pending_operations(
         &self,
         operations: &ApiOperations,
@@ -392,13 +395,13 @@ impl TacDatabase {
                 id: Set(op.id.clone()),
                 op_type: Set(None),
                 timestamp: Set(Self::timestamp_to_naive(op.timestamp as i64)),
+                sender_address: Set(None),
+                sender_blockchain: Set(None),
                 status: Set(StatusEnum::Pending),
                 next_retry: Set(None),
                 retry_count: Set(0), // Initialize retry count
                 inserted_at: Set(chrono::Utc::now().naive_utc()),
                 updated_at: Set(chrono::Utc::now().naive_utc()),
-                sender_address: Set(None),
-                sender_blockchain: Set(None),
             })
             .collect();
 
@@ -585,7 +588,8 @@ impl TacDatabase {
             UPDATE operation 
             SET status = '{new_status}'::status_enum
             WHERE id IN (SELECT id FROM selected_operations)
-            RETURNING id, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
+            RETURNING id, timestamp, status::text, sender_address, sender_blockchain,
+                      next_retry, retry_count, inserted_at, updated_at
             "#,
         )
     }
@@ -1074,7 +1078,7 @@ impl TacDatabase {
         Ok(op)
     }
 
-    pub async fn get_operation_by_id(
+    pub async fn get_full_operation_by_id(
         &self,
         id: &String,
     ) -> anyhow::Result<
@@ -1085,7 +1089,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.timestamp, o.status::text,
+                o.id as op_id, o.op_type, o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1110,7 +1114,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.timestamp, o.status::text,
+                o.id as op_id, o.op_type, o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1134,7 +1138,8 @@ impl TacDatabase {
         tx_hash: &String,
     ) -> anyhow::Result<Vec<operation::Model>> {
         let sql = r#"
-            SELECT id, op_type, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
+            SELECT id, op_type, timestamp, status::text, sender_address, sender_blockchain, 
+                   next_retry, retry_count, inserted_at, updated_at
             FROM operation
             WHERE id IN (
                 SELECT s.operation_id
@@ -1186,6 +1191,8 @@ impl TacDatabase {
                         retry_count: 0,
                         inserted_at: now,
                         updated_at: now,
+                        sender_address: None,
+                        sender_blockchain: None,
                     },
                     HashMap::new(),
                 )
