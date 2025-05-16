@@ -1,38 +1,23 @@
-use std::{
-    cmp::max,
-    collections::HashMap,
-    fmt,
-    str::FromStr,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
+use crate::{
+    database::{OrderDirection, TacDatabase},
+    settings::IndexerSettings,
 };
-
-use crate::database::{OrderDirection, TacDatabase};
 use anyhow::Error;
 use client::{
     models::profiling::{BlockchainType, OperationType, StageType},
     Client,
 };
-use tac_operation_lifecycle_entity::{interval, operation, sea_orm_active_enums::StatusEnum};
-
-use crate::settings::IndexerSettings;
 use futures::{
     stream::{select, select_with_strategy, BoxStream, PollNext},
     StreamExt,
 };
-use tokio::sync::Mutex;
+use std::{cmp::max, collections::HashMap, fmt, str::FromStr, sync::Arc, time::Duration};
+use tac_operation_lifecycle_entity::{interval, operation, sea_orm_active_enums::StatusEnum};
+use tokio::{task::JoinHandle, time};
 use tracing::{instrument, Instrument};
 use uuid::Uuid;
 
 use crate::client;
-
-const INTERVALS_QUERY_RESULT_SIZE: usize = 1;
-const INTERVALS_LOOP_DELAY_INTERVAL_MS: u64 = 100;
-const OPERATIONS_QUERY_RESULT_SIZE: usize = 10;
-const OPERATIONS_LOOP_DELAY_INTERVAL_MS: u64 = 200;
 
 #[derive(Debug, Clone)]
 pub struct Job {
@@ -46,9 +31,17 @@ pub struct OperationJob {
 
 #[derive(Debug, Clone)]
 pub enum IndexerJob {
-    Realtime,                // to generate realtime intervals
     Interval(Job),           // to request operation IDs within interval
     Operation(OperationJob), // to request profiling data for the operations
+}
+
+impl IndexerJob {
+    pub fn job_type(&self) -> String {
+        match self {
+            IndexerJob::Interval(_) => "IntervalJob".to_string(),
+            IndexerJob::Operation(_) => "OperationJob".to_string(),
+        }
+    }
 }
 
 impl OperationType {
@@ -122,18 +115,18 @@ pub struct Indexer {
     //  - the realtime intervals are always fetched FROM the realtime boundary
     //    (to avoid remote service sync issues)
     // The boundary can be updated on inserting new operations
-    realtime_boundary: AtomicU64,
+    realtime_boundary: u64,
     database: Arc<TacDatabase>,
-    client: Arc<Mutex<Client>>,
+    client: Arc<Client>,
 }
 
 impl Indexer {
     pub async fn new(
         settings: IndexerSettings,
         db: Arc<TacDatabase>,
-        client: Arc<Mutex<Client>>,
+        client: Arc<Client>,
     ) -> anyhow::Result<Self> {
-        const REALTIME_LAG_MINUTES: i64 = 30;
+        const REALTIME_LAG_MINUTES: i64 = 10;
         // realtime boundary evaluation: few minutes before (to avoid remote service sync issues)
         let realtime_boundary_hard = (chrono::Utc::now()
             - chrono::Duration::minutes(REALTIME_LAG_MINUTES))
@@ -143,9 +136,16 @@ impl Indexer {
             Ok(Some(ts)) => ts,
             _ => 0,
         };
+
+        tracing::info!(
+            realtime_boundary_hard =? realtime_boundary_hard,
+            relatime_boundary_db =? relatime_boundary_db,
+            "Indexer created"
+        );
+
         Ok(Self {
             settings,
-            realtime_boundary: AtomicU64::new(max(realtime_boundary_hard, relatime_boundary_db)),
+            realtime_boundary: max(realtime_boundary_hard, relatime_boundary_db),
             database: db,
             client,
         })
@@ -165,13 +165,13 @@ impl Indexer {
     // Generate intervals between current epoch and watermark and save them to the db
     // Returns number of the generated intervals
     #[instrument(name = "generate_historical_intervals", skip_all, level = "info")]
-    pub async fn generate_historical_intervals(&self, now: u64) -> anyhow::Result<usize> {
+    pub async fn generate_historical_intervals(&self, up_to: u64) -> anyhow::Result<usize> {
         let watermark = self.database.get_watermark().await?;
         let catchup_period = self.settings.catchup_interval.as_secs();
         let global_start = self.settings.start_timestamp;
 
         self.database
-            .generate_pending_intervals(max(watermark, global_start), now, catchup_period)
+            .generate_pending_intervals(max(watermark, global_start), up_to, catchup_period)
             .await
     }
 
@@ -199,35 +199,69 @@ impl Indexer {
         self.database.get_watermark().await
     }
 
-    pub fn get_realtime_boundary(&self) -> u64 {
-        self.realtime_boundary.load(Ordering::Acquire)
-    }
+    fn create_realtime_thread(
+        &self,
+        initial_realtime_boundary: u64,
+        polling_interval: Duration,
+    ) -> JoinHandle<()> {
+        let db = self.database.clone();
+        let client = self.client.clone();
 
-    fn set_realtime_boundary(&self, new_boundary_candidate: u64) {
-        // !the boundary cannot be set less than current
-        let _ =
-            self.realtime_boundary
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                    if new_boundary_candidate > current {
-                        tracing::info!(
-                            new_value =? new_boundary_candidate,
-                            "Realtime boundary is moved forward"
-                        );
-                        Some(new_boundary_candidate)
-                    } else {
-                        None
-                    }
-                });
-    }
-
-    pub fn realtime_stream(&self) -> BoxStream<'_, IndexerJob> {
-        let interval_duration = self.settings.polling_interval;
-
-        Box::pin(async_stream::stream! {
+        tokio::spawn(async move {
+            let mut realtime_bnd = initial_realtime_boundary;
             loop {
-                tokio::time::sleep(interval_duration).await;
+                let now = chrono::Utc::now().timestamp() as u64;
 
-                yield IndexerJob::Realtime;
+                tracing::info!(period =? (now - realtime_bnd), from =? realtime_bnd, to =? now, "Requesting for realtime operations");
+
+                match client.get_operations(realtime_bnd, now).await {
+                    Ok(operations) => {
+                        if !operations.is_empty() {
+                            tracing::info!(
+                                count =? operations.len(),
+                                period_sec = now - realtime_bnd,
+                                "Fetched REALTIME operations: [{}]",
+                                operations
+                                    .iter()
+                                    .map(|o| format!("{} [{}]", o.id.clone(), o.timestamp))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            );
+
+                            match db.insert_pending_operations(&operations).await {
+                                Ok(_) => {
+                                    let max_timestamp =
+                                        operations.iter().map(|o| o.timestamp).max().unwrap();
+                                    if max_timestamp > realtime_bnd {
+                                        let _ = db
+                                            .add_completed_interval(realtime_bnd, max_timestamp)
+                                            .await;
+
+                                        realtime_bnd = max_timestamp + 1;
+                                        tracing::info!(
+                                            new_value =? realtime_bnd,
+                                            "Realtime boundary is moved forward"
+                                        );
+                                    }
+                                }
+
+                                Err(e) => {
+                                    tracing::error!(
+                                        err =? e,
+                                        count =? operations.len(),
+                                        "Failed to store realtime operations",
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    Err(e) => {
+                        tracing::error!(err =? e, "Failed to fetch REALTIME interval");
+                    }
+                }
+
+                time::sleep(polling_interval).await;
             }
         })
     }
@@ -241,7 +275,7 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.query_pending_intervals(INTERVALS_QUERY_RESULT_SIZE, direction, from, to)
+                match self.database.query_pending_intervals(self.settings.intervals_query_batch, direction, from, to)
                     .instrument(tracing::debug_span!(
                         "INTERVALS",
                         span_id = span_id.to_string(),
@@ -258,7 +292,7 @@ impl Indexer {
                     },
                     Err(e) => {
                         tracing::error!(
-                            requested_count =? INTERVALS_QUERY_RESULT_SIZE,
+                            requested_count =? self.settings.intervals_query_batch,
                             from,
                             to,
                             direction =? direction,
@@ -269,16 +303,46 @@ impl Indexer {
                 }
 
                 // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(Duration::from_millis(INTERVALS_LOOP_DELAY_INTERVAL_MS)).await;
+                tokio::time::sleep(self.settings.intervals_loop_delay_ms).await;
             }
         })
     }
 
-    pub fn operations_stream(&self) -> BoxStream<'_, IndexerJob> {
+    pub fn new_operations_stream(&self) -> BoxStream<'_, IndexerJob> {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.query_pending_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::LatestFirst)
+                match self.database.query_new_operations(self.settings.operations_query_batch, OrderDirection::LatestFirst)
+                    .instrument(tracing::debug_span!(
+                        "NEW OPERATIONS",
+                        span_id = span_id.to_string()
+                    ))
+                    .await {
+                    Ok(selected) => {
+                        for operation in selected {
+                            // Yield the job
+                            yield IndexerJob::Operation(OperationJob { operation });
+                        }
+                    },
+                    Err(e) => {
+                        tracing::error!(
+                            err =? e,
+                            "Unable to select latest operations from the database"
+                        );
+                    },
+                }
+
+                // Sleep a bit before next iteration to prevent tight loop
+                tokio::time::sleep(self.settings.operations_loop_delay_ms).await;
+            }
+        })
+    }
+
+    pub fn pending_operations_stream(&self) -> BoxStream<'_, IndexerJob> {
+        Box::pin(async_stream::stream! {
+            loop {
+                let span_id = Uuid::new_v4();
+                match self.database.query_pending_operations(self.settings.operations_query_batch, OrderDirection::LatestFirst)
                     .instrument(tracing::debug_span!(
                         "PENDING OPERATIONS",
                         span_id = span_id.to_string()
@@ -299,7 +363,7 @@ impl Indexer {
                 }
 
                 // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(Duration::from_millis(OPERATIONS_LOOP_DELAY_INTERVAL_MS)).await;
+                tokio::time::sleep(self.settings.operations_loop_delay_ms).await;
             }
         })
     }
@@ -308,19 +372,21 @@ impl Indexer {
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.query_failed_intervals(INTERVALS_QUERY_RESULT_SIZE)
+                match self.database.query_failed_intervals(self.settings.intervals_retry_batch)
                     .instrument(tracing::debug_span!(
                         "FAILED INTERVALS",
                         span_id = span_id.to_string()
                     ))
                     .await {
                     Ok(selected) => {
-                        tracing::debug!(count =? selected.len(), "Found failed intervals");
-                        for interval in selected {
-                            // Yield the job
-                            yield IndexerJob::Interval(Job {
-                                interval: interval.clone(),
-                            });
+                        if !selected.is_empty() {
+                            tracing::info!(count =? selected.len(), "Found failed intervals");
+                            for interval in selected {
+                                // Yield the job
+                                yield IndexerJob::Interval(Job {
+                                    interval: interval.clone(),
+                                });
+                            }
                         }
                     },
                     Err(e) => {
@@ -328,29 +394,28 @@ impl Indexer {
                     },
                 }
 
-                // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(Duration::from_millis(INTERVALS_LOOP_DELAY_INTERVAL_MS)).await;
+                tokio::time::sleep(self.settings.retry_interval).await;
             }
         })
     }
 
     pub fn retry_operations_stream(&self) -> BoxStream<'_, IndexerJob> {
-        const OPERATIONS_QUERY_RESULT_SIZE: usize = 1;
-        const OPERATIONS_LOOP_DELAY_INTERVAL_MS: u64 = 2000;
         Box::pin(async_stream::stream! {
             loop {
                 let span_id = Uuid::new_v4();
-                match self.database.query_failed_operations(OPERATIONS_QUERY_RESULT_SIZE, OrderDirection::EarliestFirst)
+                match self.database.query_failed_operations(self.settings.operations_retry_batch, OrderDirection::EarliestFirst)
                     .instrument(tracing::debug_span!(
                         "FAILED OPERATIONS",
                         span_id = span_id.to_string()
                     ))
                     .await {
                     Ok(selected) => {
-                        tracing::debug!(count =? selected.len(), "Found failed operations");
-                        for operation in selected {
-                            // Yield the job
-                            yield IndexerJob::Operation(OperationJob { operation });
+                        if !selected.is_empty() {
+                            tracing::info!(count =? selected.len(), "Found failed operations");
+                            for operation in selected {
+                                // Yield the job
+                                yield IndexerJob::Operation(OperationJob { operation });
+                            }
                         }
                     },
                     Err(e) => {
@@ -358,15 +423,14 @@ impl Indexer {
                     },
                 }
 
-                // Sleep a bit before next iteration to prevent tight loop
-                tokio::time::sleep(Duration::from_millis(OPERATIONS_LOOP_DELAY_INTERVAL_MS)).await;
+                tokio::time::sleep(self.settings.retry_interval).await;
             }
         })
     }
 
     pub async fn process_interval_with_retries(&self, job: &Job) {
         match self
-            .fetch_operations(job)
+            .fetch_historical_operations(job)
             .instrument(tracing::debug_span!("fetching operations for interval",))
             .await
         {
@@ -375,18 +439,17 @@ impl Indexer {
                     tracing::debug!(
                         interval_id =? job.interval.id,
                         count =? num,
-                        "Successfully fetched operations for interval",
+                        "Successfully fetched interval",
                     );
                 }
             }
 
             Err(e) => {
-                tracing::error!(err =? e, "Failed to fetch operations");
+                tracing::error!(err =? e, "Failed to fetch interval");
 
-                // Schedule retry with exponential backoff
-                let retries = job.interval.retry_count;
+                let attempt = job.interval.retry_count + 1;
                 let base_delay = 5; // 5 seconds base delay
-                let next_retry_after = base_delay * 2i64.pow(retries as u32);
+                let next_retry_after = base_delay * attempt as i64;
 
                 let _ = self
                     .database
@@ -396,29 +459,16 @@ impl Indexer {
         }
     }
 
-    pub async fn fetch_operations(&self, job: &Job) -> Result<usize, Error> {
-        let mut client = self.client.lock().await;
+    pub async fn fetch_historical_operations(&self, job: &Job) -> Result<usize, Error> {
         tracing::debug!(
             job =? job,
             "Processing interval job",
         );
 
-        // Add helper function for timestamp conversion
-        fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
-            chrono::DateTime::from_timestamp(timestamp, 0)
-                .unwrap()
-                .naive_utc()
-        }
-        let realtime_boundary = timestamp_to_naive(self.get_realtime_boundary() as i64);
-        let (job_type, request_start) = if job.interval.start >= realtime_boundary {
-            ("REALTIME", realtime_boundary)
-        } else {
-            ("HISTORICAL", job.interval.start)
-        };
-
-        let request_start = request_start.and_utc().timestamp() as u64;
+        let request_start = job.interval.start.and_utc().timestamp() as u64;
         let request_end = job.interval.finish.and_utc().timestamp() as u64;
-        let operations = client
+        let operations = self
+            .client
             .get_operations(request_start + 1, request_end)
             .instrument(tracing::debug_span!(
                 "get_operations",
@@ -432,18 +482,15 @@ impl Indexer {
         if ops_num > 0 {
             tracing::info!(
                 count =? ops_num,
-                "Fetched {} operation_ids: [\n\t{}\n]",
-                job_type,
+                period_sec = request_end - request_start,
+                "Fetched HISTORICAL operations: [{}]",
                 operations
                     .iter()
                     .map(|o| o.id.clone())
                     .collect::<Vec<_>>()
-                    .join(",\n\t")
+                    .join(", ")
             );
             self.database.insert_pending_operations(&operations).await?;
-
-            let max_timestamp = operations.iter().map(|o| o.timestamp).max().unwrap();
-            self.set_realtime_boundary(max_timestamp);
         }
 
         self.database
@@ -451,7 +498,6 @@ impl Indexer {
             .await?;
 
         tracing::debug!(
-            job_type,
             interval_id =? job.interval.id,
             "Successfully processed job",
         );
@@ -460,12 +506,15 @@ impl Indexer {
     }
 
     pub async fn process_operation_with_retries(&self, jobs: Vec<&OperationJob>) {
-        let mut client = self.client.lock().await;
         let op_ids: Vec<&str> = jobs.iter().map(|j| j.operation.id.as_str()).collect();
 
-        match client.get_operations_stages(op_ids.clone()).await {
+        match self.client.get_operations_stages(op_ids.clone()).await {
             Ok(operations_map) => {
                 let mut processed_operations = 0;
+                let mut completed_operations = 0;
+                let forever_pending_operation_cap = (chrono::Utc::now()
+                    - self.settings.forever_pending_operations_age_sec)
+                    .timestamp();
                 for (op_id, operation_data) in operations_map.iter() {
                     // Find an associated operation in the input operations vector
                     match jobs.iter().find(|j| &j.operation.id == op_id) {
@@ -475,15 +524,30 @@ impl Indexer {
                                 .set_operation_data(&job.operation, operation_data)
                                 .await;
 
-                            if operation_data.operation_type != OperationType::Pending {
+                            let new_status = if operation_data.operation_type.is_finalized() {
                                 // The case when operation has a finalized status
                                 // otherwise they will be catched by operation stream
-                                let _ = (self
-                                    .database
-                                    .set_operation_status(&job.operation, &StatusEnum::Completed))
-                                .await;
-                            }
+                                StatusEnum::Completed
+                            } else if operation_data.operation_type == OperationType::Pending
+                                && job.operation.timestamp.and_utc().timestamp()
+                                    < forever_pending_operation_cap
+                            {
+                                // The operations whitch remains PENDING after forever_pending_operations_age_sec
+                                // are considered to be forever pending. We shouldn't recheck them anymore
+                                StatusEnum::Completed
+                            } else {
+                                StatusEnum::Pending
+                            };
+
+                            let _ = (self
+                                .database
+                                .set_operation_status(&job.operation, &new_status))
+                            .await;
+
                             processed_operations += 1;
+                            if new_status == StatusEnum::Completed {
+                                completed_operations += 1;
+                            }
                         }
                         None => {
                             tracing::error!(
@@ -495,22 +559,31 @@ impl Indexer {
                 }
 
                 tracing::info!(
-                    count =? processed_operations,
+                    processed =? processed_operations,
+                    completed =? completed_operations,
                     "Successfully processed operations: [{}]",
-                    op_ids.join(",\n\t")
+                    op_ids.join(", ")
                 );
             }
-            _ => {
-                let _ = jobs.iter().map(|job| async {
-                    let retries = job.operation.retry_count;
+            Err(e) => {
+                tracing::error!(
+                    err =? e,
+                    count =? op_ids.len(),
+                    jobs_cnt =? jobs.len(),
+                    "Failed to fetch operations: [{}]",
+                    op_ids.join(", ")
+                );
+
+                for job in jobs {
+                    let attempt = job.operation.retry_count + 1;
                     let base_delay = 5; // 5 seconds base delay
-                    let next_retry_after = base_delay * 2i64.pow(retries as u32);
+                    let next_retry_after = base_delay * attempt as i64;
 
                     let _ = self
                         .database
                         .set_operation_retry(&job.operation, next_retry_after)
                         .await;
-                });
+                }
             }
         }
     }
@@ -526,12 +599,14 @@ impl Indexer {
         self.ensure_stages_types_exist().await?;
 
         // Generate historical intervals
-        let current_realtime_timestamp = self.get_realtime_boundary();
+        let current_realtime_timestamp = self.realtime_boundary;
+
         let new_intervals = self
-            .generate_historical_intervals(current_realtime_timestamp)
+            .generate_historical_intervals(self.realtime_boundary)
             .await?;
         if new_intervals > 0 {
             tracing::info!(
+                realtime_boundary =? self.realtime_boundary,
                 intervals_count =? new_intervals,
                 "Generated historical intervals"
             );
@@ -552,8 +627,12 @@ impl Indexer {
             );
         }
 
+        // Start generating realtime intervals in the separated thread;
+        let initial_realtime_boundary = self.database.get_watermark().await?;
+        let realtime_thread =
+            self.create_realtime_thread(initial_realtime_boundary, self.settings.polling_interval);
+
         // Create streams
-        let realtime = self.realtime_stream();
         let realtime_intervals = self.interval_stream(
             OrderDirection::EarliestFirst,
             Some(current_realtime_timestamp),
@@ -569,7 +648,8 @@ impl Indexer {
             None,
             Some(current_realtime_timestamp),
         );
-        let operations = self.operations_stream();
+        let pending_operations = self.pending_operations_stream();
+        let new_operations = self.new_operations_stream();
         let failed_intervals = self.retry_intervals_stream();
         let failed_operations = self.retry_operations_stream();
 
@@ -586,60 +666,38 @@ impl Indexer {
             Self::prio_left,
         );
         let combined_stream = select_with_strategy(
-            realtime,
-            select_with_strategy(
-                operations,
-                select_with_strategy(intervals_stream, retry_stream, Self::prio_left),
-                Self::prio_left,
-            ),
+            select_with_strategy(pending_operations, new_operations, Self::prio_left),
+            select_with_strategy(intervals_stream, retry_stream, Self::prio_left),
             Self::prio_left,
         );
 
-        tracing::debug!(current_realtime_timestamp, "Starting TAC indexer");
+        tracing::info!(forever_pending_hardcap =? self.settings.forever_pending_operations_age_sec, "NOTE: Old operations with PENDING type will considered as completed!");
+        tracing::info!(current_realtime_timestamp, concurrency =? self.settings.concurrency, "Starting indexing stream...");
 
-        let job_futures = combined_stream.map(|job| async move {
-            match job {
-                IndexerJob::Realtime => {
-                    let wm = self
-                        .database
-                        .get_watermark()
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Failed to get watermark: {}", e))
-                        .unwrap();
-                    let now = chrono::Utc::now().timestamp() as u64;
-                    if let Err(e) = self.database.generate_pending_interval(wm, now).await {
-                        tracing::error!(err =? e, "Failed to generate real-time interval");
+        combined_stream
+            .for_each_concurrent(Some(self.settings.concurrency as usize), |job| async move {
+                tracing::debug!("Getting a {}", job.job_type());
+                match job {
+                    IndexerJob::Interval(job) => {
+                        self.process_interval_with_retries(&job)
+                            .instrument(tracing::debug_span!("processing interval"))
+                            .await;
+                        anyhow::Ok(())
                     }
-                    anyhow::Ok(())
+                    IndexerJob::Operation(job) => {
+                        self.process_operation_with_retries([&job].to_vec())
+                            .instrument(tracing::debug_span!("processing operation"))
+                            .await;
+                        anyhow::Ok(())
+                    }
                 }
-                IndexerJob::Interval(job) => {
-                    self.process_interval_with_retries(&job)
-                        .instrument(tracing::debug_span!("processing interval"))
-                        .await;
-                    anyhow::Ok(())
-                }
-                IndexerJob::Operation(job) => {
-                    self.process_operation_with_retries([&job].to_vec())
-                        .instrument(tracing::debug_span!("processing operation"))
-                        .await;
-                    anyhow::Ok(())
-                }
-            }
-        });
+                .unwrap_or_else(|err| {
+                    tracing::error!(err =? err, "Failed to process job");
+                })
+            })
+            .await;
 
-        let mut buffered_stream = job_futures.buffer_unordered(self.settings.concurrency as usize);
-        while let Some(result) = buffered_stream
-            .next()
-            .instrument(tracing::debug_span!(
-                "job processing",
-                span_id = Uuid::new_v4().to_string()
-            ))
-            .await
-        {
-            if let Err(e) = result {
-                tracing::error!(err =? e, "Job processing error");
-            }
-        }
+        realtime_thread.await?;
 
         Ok(())
     }

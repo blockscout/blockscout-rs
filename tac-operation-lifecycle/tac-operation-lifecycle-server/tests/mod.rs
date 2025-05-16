@@ -9,7 +9,6 @@ use tac_operation_lifecycle_logic::{
     settings::IndexerSettings,
 };
 use tac_operation_lifecycle_server::Settings;
-use tokio::sync::Mutex;
 
 use rstest::rstest;
 
@@ -41,7 +40,7 @@ where
         test_db.client(),
         settings.indexer.clone().unwrap().start_timestamp,
     ));
-    let client = Arc::new(Mutex::new(Client::new(settings.clone().rpc)));
+    let client = Arc::new(Client::new(settings.clone().rpc));
 
     test_server::init_server(
         move || tac_operation_lifecycle_server::run(settings, db.clone(), client),
@@ -64,7 +63,6 @@ mod tests {
     use tac_operation_lifecycle_logic::{
         client::Client, database::OrderDirection, settings::IndexerSettings, Indexer, IndexerJob,
     };
-    use tokio::sync::Mutex;
     use tracing::Instrument;
 
     #[rstest]
@@ -109,7 +107,7 @@ mod tests {
             url: mock_server.uri(),
             ..Default::default()
         };
-        let client = Arc::new(Mutex::new(Client::new(mock_rpc_settings)));
+        let client = Arc::new(Client::new(mock_rpc_settings));
 
         let indexer_settings = IndexerSettings {
             concurrency: 1,
@@ -188,7 +186,7 @@ mod tests {
             url: mock_server.uri(),
             ..Default::default()
         };
-        let client = Arc::new(Mutex::new(Client::new(mock_rpc_settings)));
+        let client = Arc::new(Client::new(mock_rpc_settings));
 
         let indexer = Indexer::new(
             indexer_settings,
@@ -273,7 +271,7 @@ mod tests {
                                 all_jobs_received = true;
                             }
                         },
-                        IndexerJob::Operation(_) | IndexerJob::Realtime => {
+                        IndexerJob::Operation(_) => {
                             // Skip operation jobs in this test as we're only testing intervals
                             continue;
                         }
@@ -398,7 +396,7 @@ mod tests {
             ..Default::default()
         };
 
-        let client = Arc::new(Mutex::new(Client::new(mock_rpc_settings)));
+        let client = Arc::new(Client::new(mock_rpc_settings));
         let indexer_settings = IndexerSettings {
             concurrency: 1,
             catchup_interval,
@@ -425,7 +423,7 @@ mod tests {
         // Get the stream of jobs
         let interval_stream = indexer.interval_stream(OrderDirection::EarliestFirst, None, None);
 
-        let operations_stream = indexer.operations_stream();
+        let operations_stream = indexer.new_operations_stream();
 
         let mut job_stream = select_all(vec![interval_stream, operations_stream]);
 
@@ -446,7 +444,7 @@ mod tests {
                             println!("Processing interval job: {:?}", interval_job);
                             let start = interval_job.interval.start.and_utc().timestamp();
                             let end = interval_job.interval.finish.and_utc().timestamp();
-                            if let Err(e) = indexer.fetch_operations(&interval_job).instrument(tracing::info_span!(
+                            if let Err(e) = indexer.fetch_historical_operations(&interval_job).instrument(tracing::info_span!(
                                 "fetching operations",
                                 interval_id = interval_job.interval.id,
                                 start = start,
@@ -487,10 +485,6 @@ mod tests {
                             );
                             operation_id_fetched = true;
                             stage_history_fetched = true;
-                        }
-                        IndexerJob::Realtime => {
-                            // Skip realtime jobs in this test as we're only testing operations
-                            continue;
                         }
                     }
 

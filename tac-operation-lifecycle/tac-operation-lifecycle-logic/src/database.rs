@@ -7,10 +7,10 @@ use sea_orm::{
     sea_query::OnConflict,
     ActiveEnum, ActiveModelTrait,
     ActiveValue::{self, NotSet},
-    ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
-use std::{cmp::min, collections::HashMap, fmt, sync::Arc, time::Instant};
+use std::{cmp::min, collections::HashMap, fmt, sync::Arc};
 use tac_operation_lifecycle_entity::{
     interval,
     operation::{self, Column},
@@ -98,8 +98,8 @@ struct JoinedRow {
 
     //operation_stage
     stage_id: Option<i32>,
-    stage_type_id: i16,
-    stage_success: bool,
+    stage_type_id: Option<i16>,
+    stage_success: Option<bool>,
     stage_timestamp: Option<DateTime>,
     stage_note: Option<String>,
 
@@ -150,15 +150,19 @@ impl TacDatabase {
 
     // Find and update existing watermark or create new one
     pub async fn set_watermark(&self, timestamp: u64) -> anyhow::Result<()> {
-        let tx = self.db.begin().await?;
-        self.set_watermark_internal(&tx, timestamp).await?;
-        tx.commit().await?;
+        self.db
+            .transaction::<_, (), DbErr>(|tx| {
+                Box::pin(async move {
+                    let _ = Self::set_watermark_internal(tx, timestamp).await;
+                    Ok(())
+                })
+            })
+            .await?;
 
         Ok(())
     }
 
     async fn set_watermark_internal(
-        &self,
         tx: &DatabaseTransaction,
         timestamp: u64,
     ) -> anyhow::Result<()> {
@@ -190,11 +194,11 @@ impl TacDatabase {
         match operation::Entity::find()
             .select_only()
             .column_as(operation::Column::Timestamp.max(), "max_timestamp")
-            .into_tuple::<Option<u64>>()
+            .into_tuple::<Option<DateTime>>()
             .one(self.db.as_ref())
             .await
         {
-            Ok(Some(ts)) => Ok(ts),
+            Ok(Some(Some(ts))) => Ok(Some(ts.and_utc().timestamp() as u64)),
             Err(e) => Err(e.into()),
             _ => Ok(None),
         }
@@ -216,30 +220,22 @@ impl TacDatabase {
             retry_count: ActiveValue::Set(0_i16),
         };
 
-        let tx = self.db.begin().await?;
+        self.db
+            .transaction::<_, (), DbErr>(|tx| {
+                Box::pin(async move {
+                    interval.save(tx).await?;
+                    // Update watermark if needed
+                    let _ = Self::set_watermark_internal(tx, to).await;
 
-        match interval::Entity::insert(interval).exec(&tx).await {
-            Ok(_) => {
-                self.set_watermark_internal(&tx, to).await?;
+                    tracing::debug!(
+                        new_watermark =? to,
+                        "Pending interval was added and watermark updated to"
+                    );
 
-                tx.commit().await?;
-                tracing::debug!(
-                    new_watermark =? to,
-                    "Pending interval was added and watermark updated to"
-                );
-            }
-
-            Err(e) => {
-                tx.rollback().await?;
-                tracing::error!(
-                    from,
-                    to,
-                    err =? e,
-                    "Failed to add pending interval"
-                );
-                return Err(e.into());
-            }
-        };
+                    Ok(())
+                })
+            })
+            .await?;
 
         Ok(())
     }
@@ -277,7 +273,7 @@ impl TacDatabase {
             })
             .collect();
 
-        tracing::debug!(
+        tracing::info!(
             total_intervals_generated =? intervals.len(),
             interval_period_secs =? period_secs,
             from,
@@ -286,45 +282,80 @@ impl TacDatabase {
         );
 
         // Process intervals in batches
-        for chunk in intervals.chunks(DB_BATCH_SIZE) {
-            let tx = self.db.begin().await?;
+        for chunk in intervals.chunks(DB_BATCH_SIZE).map(|chunk| chunk.to_vec()) {
+            self.db
+                .transaction::<_, (), DbErr>(|tx| {
+                    let chunk_cloned = chunk.clone();
+                    Box::pin(async move {
+                        // Store the intervals chunk into the database
+                        interval::Entity::insert_many(chunk)
+                            .exec_with_returning(tx)
+                            .await?;
 
-            match interval::Entity::insert_many(chunk.to_vec())
-                .exec_with_returning(&tx)
-                .await
-            {
-                Ok(_) => {
-                    // Update watermark to the end of the last interval in this batch
-                    // [assume bathes are sorted by `start` field ascending at that point]
-                    let mut updated_watermark: Option<u64> = None;
-                    if let Some(last_interval_from_batch) = chunk.last() {
-                        if let ActiveValue::Set(finish) = &last_interval_from_batch.finish {
-                            let timestamp = finish.and_utc().timestamp() as u64;
-                            let _ = self.set_watermark_internal(&tx, timestamp).await;
-                            updated_watermark = Some(timestamp);
+                        // Update watermark to the end of the last interval in this batch
+                        // [assume bathes are sorted by `start` field ascending at that point]
+                        let mut updated_watermark: Option<u64> = None;
+                        if let Some(last_interval_from_batch) = chunk_cloned.last() {
+                            if let ActiveValue::Set(finish) = &last_interval_from_batch.finish {
+                                let timestamp = finish.and_utc().timestamp() as u64;
+                                let _ = Self::set_watermark_internal(tx, timestamp).await;
+                                updated_watermark = Some(timestamp);
+                            }
                         }
-                    }
 
-                    tx.commit().await?;
-                    tracing::debug!(
-                        batch_size =? chunk.len(),
-                        new_watermark =? if let Some(wm) = updated_watermark {
-                            wm.to_string()
-                        } else {
-                            "[NOT_UPDATED]".to_string()
-                        },
-                        "Successfully saved batch of intervals and updated watermark",
-                    );
-                }
-                Err(e) => {
-                    tx.rollback().await?;
-                    tracing::error!(err =? e, "Failed to save batch");
-                    return Err(e.into());
-                }
-            }
+                        tracing::debug!(
+                            batch_size =? chunk_cloned.len(),
+                            new_watermark =? if let Some(wm) = updated_watermark {
+                                wm.to_string()
+                            } else {
+                                "[NOT_UPDATED]".to_string()
+                            },
+                            "Successfully saved batch of intervals and updated watermark",
+                        );
+
+                        Ok(())
+                    })
+                })
+                .await?;
         }
 
         Ok(intervals.len())
+    }
+
+    pub async fn add_completed_interval(&self, from: u64, to: u64) -> anyhow::Result<()> {
+        let start_naive = Self::timestamp_to_naive(from as i64);
+        let finish_naive = Self::timestamp_to_naive(to as i64);
+        let now_naive = chrono::Utc::now().naive_utc();
+
+        let new_interval = interval::ActiveModel {
+            id: ActiveValue::NotSet,
+            start: ActiveValue::Set(start_naive),
+            finish: ActiveValue::Set(finish_naive),
+            inserted_at: ActiveValue::Set(now_naive),
+            updated_at: ActiveValue::Set(now_naive),
+            status: sea_orm::ActiveValue::Set(StatusEnum::Completed),
+            next_retry: ActiveValue::Set(None),
+            retry_count: ActiveValue::Set(0_i16),
+        };
+
+        self.db
+            .transaction::<_, (), DbErr>(|tx| {
+                Box::pin(async move {
+                    new_interval.save(tx).await?;
+                    // Update watermark if needed
+                    let _ = Self::set_watermark_internal(tx, to).await;
+
+                    tracing::info!(
+                        new_watermark =? to,
+                        "Successfully saved an interval and updated watermark",
+                    );
+
+                    Ok(())
+                })
+            })
+            .await?;
+
+        Ok(())
     }
 
     // stage_types is a vector Id->StageName
@@ -355,55 +386,38 @@ impl TacDatabase {
         &self,
         operations: &ApiOperations,
     ) -> anyhow::Result<()> {
-        // Start a transaction
-        let txn = self.db.begin().await?;
-
-        // Save all operations
-        for op in operations {
-            let now = chrono::Utc::now().naive_utc();
-
-            let operation_model = operation::ActiveModel {
+        let models: Vec<operation::ActiveModel> = operations
+            .iter()
+            .map(|op| operation::ActiveModel {
                 id: Set(op.id.clone()),
                 op_type: Set(None),
                 timestamp: Set(Self::timestamp_to_naive(op.timestamp as i64)),
                 status: Set(StatusEnum::Pending),
                 next_retry: Set(None),
                 retry_count: Set(0), // Initialize retry count
-                inserted_at: Set(now),
-                updated_at: Set(now),
+                inserted_at: Set(chrono::Utc::now().naive_utc()),
+                updated_at: Set(chrono::Utc::now().naive_utc()),
                 sender_address: Set(None),
                 sender_blockchain: Set(None),
-            };
+            })
+            .collect();
 
-            tracing::debug!("Attempting to insert operation: {:?}", operation_model);
+        let cnt = operation::Entity::insert_many(models)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::column(operation::Column::Id)
+                    .do_nothing()
+                    .to_owned(),
+            )
+            .exec_without_returning(self.db.as_ref())
+            .await?;
 
-            // Use on_conflict().do_nothing() with proper error handling
-            match operation::Entity::insert(operation_model)
-                .on_conflict(
-                    sea_orm::sea_query::OnConflict::column(operation::Column::Id)
-                        .do_nothing()
-                        .to_owned(),
-                )
-                .exec_without_returning(&txn)
-                .await
-            {
-                Ok(cnt) => {
-                    if cnt > 0 {
-                        tracing::debug!("Successfully inserted or skipped operation {}", op.id);
-                    } else {
-                        tracing::warn!("Operation {} skipped due to conflict", op.id);
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Error inserting operation: {:?}", e);
-                    // Don't fail the entire batch for a single operation
-                    continue;
-                }
-            }
+        if cnt < operations.len().try_into().unwrap() {
+            tracing::warn!(
+                inserted =? cnt,
+                skipped =? operations.len() - cnt as usize,
+                "Some operations were skipped due to conflict"
+            );
         }
-
-        // Commit transaction
-        txn.commit().await?;
 
         Ok(())
     }
@@ -617,7 +631,7 @@ impl TacDatabase {
 
     pub async fn query_failed_intervals(&self, num: usize) -> anyhow::Result<Vec<interval::Model>> {
         let conditions = vec![
-            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
+            format!("status = '{}'::status_enum", StatusEnum::Failed.to_value()),
             format!("next_retry IS NOT NULL"),
             format!(
                 "next_retry < '{}'",
@@ -674,16 +688,39 @@ impl TacDatabase {
         }
     }
 
+    // Extract up to `num` operations in the pending state and switch their status to `processing`
+    pub async fn query_new_operations(
+        &self,
+        num: usize,
+        order: OrderDirection,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let conditions = vec![
+            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
+            "op_type IS NULL".to_string(),
+        ];
+
+        let sql = self.build_operation_query(
+            conditions,
+            Some(("timestamp", order)),
+            num,
+            &StatusEnum::Processing,
+        );
+
+        self.query_operations(&sql)
+            .instrument(tracing::debug_span!("query new operations"))
+            .await
+    }
+
     // Extract up to `num` operations in the pending state and switch them status to `processing`
     pub async fn query_pending_operations(
         &self,
         num: usize,
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
-        let conditions = vec![format!(
-            "status = '{}'::status_enum",
-            StatusEnum::Pending.to_value()
-        )];
+        let conditions = vec![
+            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
+            "op_type = 'PENDING'".to_string(),
+        ];
 
         let sql = self.build_operation_query(
             conditions,
@@ -703,7 +740,7 @@ impl TacDatabase {
         order: OrderDirection,
     ) -> anyhow::Result<Vec<operation::Model>> {
         let conditions = vec![
-            format!("status = '{}'::status_enum", StatusEnum::Pending.to_value()),
+            format!("status = '{}'::status_enum", StatusEnum::Failed.to_value()),
             format!("next_retry IS NOT NULL"),
             format!(
                 "next_retry < '{}'",
@@ -767,148 +804,83 @@ impl TacDatabase {
         operation_data: &ApiOperationData,
     ) -> anyhow::Result<()> {
         let tx_id = Uuid::new_v4();
-        let start_time = Instant::now();
         tracing::debug!(tx_id =? tx_id, "Beginning transaction for set_operation_data");
 
-        let txn = match self.db.begin().await {
-            Ok(txn) => txn,
-            Err(e) => {
-                tracing::error!(
-                    tx_id =? tx_id,
-                    time_elapsed_ms =? start_time.elapsed().as_millis(),
-                    err =? e,
-                    "Failed to begin transaction",
-                );
-                return Err(anyhow!(e));
-            }
-        };
+        let operation = operation.clone();
+        let operation_data = operation_data.clone();
 
-        // Remove associated stages with transactions
-        if let Err(e) = operation_stage::Entity::delete_many()
-            .filter(operation_stage::Column::OperationId.eq(&operation.id))
-            .exec(&txn)
-            .await
-        {
-            tracing::error!(
-                operation_id =? operation.id,
-                err =? e,
-                "Failed to delete existing stages for operation"
-            );
-            let _ = txn.rollback().await;
-            return Err(e.into());
-        }
+        self.db
+            .transaction::<_, (), DbErr>(|tx| {
+                Box::pin(async move {
+                    // Remove associated stages with transactions
+                    operation_stage::Entity::delete_many()
+                        .filter(operation_stage::Column::OperationId.eq(&operation.id))
+                        .exec(tx)
+                        .await?;
 
-        // Update operation type and status
-        let mut operation_model: operation::ActiveModel = operation.clone().into();
-        if operation_data.operation_type.is_finalized() {
-            operation_model.status = Set(StatusEnum::Completed);
-        }
-        operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
+                    // Update operation type and status
+                    let mut operation_model: operation::ActiveModel = operation.clone().into();
+                    if operation_data.operation_type.is_finalized() {
+                        operation_model.status = Set(StatusEnum::Completed);
+                    }
+                    operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
 
-        if let Err(e) = operation_model
-            .update(&txn)
-            .instrument(tracing::debug_span!(
-                "updating operation",
-                tx_id = tx_id.to_string()
-            ))
-            .await
-        {
-            tracing::error!(
-                operation_id =? operation.id,
-                err =? e, "Failed to update operation status"
-            );
-            let _ = txn.rollback().await;
+                    operation_model
+                        .update(tx)
+                        .instrument(tracing::debug_span!(
+                            "updating operation",
+                            tx_id = tx_id.to_string(),
+                        ))
+                        .await?;
 
-            return Err(e.into());
-        }
-
-        // Store operation stages
-        for (stage_type, stage_data) in operation_data.stages.iter() {
-            if let Some(data) = &stage_data.stage_data {
-                let now = chrono::Utc::now().naive_utc();
-
-                let stage_model = operation_stage::ActiveModel {
-                    id: NotSet,
-                    operation_id: Set(operation.id.clone()),
-                    stage_type_id: Set(stage_type.to_id() as i16),
-                    success: Set(data.success),
-                    timestamp: Set(Self::timestamp_to_naive(data.timestamp as i64)),
-                    note: Set(data.note.clone()),
-                    inserted_at: Set(now),
-                };
-
-                match operation_stage::Entity::insert(stage_model)
-                    .on_conflict(
-                        sea_orm::sea_query::OnConflict::column(operation::Column::Id)
-                            .do_nothing()
-                            .to_owned(),
-                    )
-                    .exec_with_returning(&txn)
-                    .await
-                {
-                    Ok(inserted_stage) => {
-                        tracing::debug!(
-                            stage_type =? inserted_stage.stage_type_id,
-                            operation_id =? operation.id,
-                            "Successfully inserted stage for operation"
-                        );
-
-                        // store transactions for this stage
-                        for tx in data.transactions.iter() {
-                            let now = chrono::Utc::now().naive_utc();
-
-                            let tx_model = transaction::ActiveModel {
+                    // Store operation stages
+                    for (stage_type, stage_data) in operation_data.stages.iter() {
+                        if let Some(data) = &stage_data.stage_data {
+                            // prepare and inserting stage model
+                            let stage_model = operation_stage::ActiveModel {
                                 id: NotSet,
-                                stage_id: Set(inserted_stage.id),
-                                hash: Set(tx.hash.clone()),
-                                blockchain_type: Set(tx.blockchain_type.to_string()),
-                                inserted_at: Set(now),
+                                operation_id: Set(operation.id.clone()),
+                                stage_type_id: Set(stage_type.to_id() as i16),
+                                success: Set(data.success),
+                                timestamp: Set(Self::timestamp_to_naive(data.timestamp as i64)),
+                                note: Set(data.note.clone()),
+                                inserted_at: Set(chrono::Utc::now().naive_utc()),
                             };
 
-                            match transaction::Entity::insert(tx_model).exec(&txn).await {
-                                Ok(_) => tracing::debug!(
-                                    stage_id =? inserted_stage.id,
-                                    "Successfully inserted transaction for stage",
-                                ),
-                                Err(e) => tracing::error!(
-                                    stage_id =? inserted_stage.id,
-                                    err =? e,
-                                    "Error inserting transaction for stage"
-                                ),
-                            }
+                            let inserted_stage = operation_stage::Entity::insert(stage_model)
+                                .on_conflict(
+                                    sea_orm::sea_query::OnConflict::column(operation::Column::Id)
+                                        .do_nothing()
+                                        .to_owned(),
+                                )
+                                .exec_with_returning(tx)
+                                .await?;
+
+                            // store transactions for this stage
+                            let transaction_models = data
+                                .transactions
+                                .iter()
+                                .map(|a_tx| transaction::ActiveModel {
+                                    id: NotSet,
+                                    stage_id: Set(inserted_stage.id),
+                                    hash: Set(a_tx.hash.clone()),
+                                    blockchain_type: Set(a_tx.blockchain_type.to_string()),
+                                    inserted_at: Set(chrono::Utc::now().naive_utc()),
+                                })
+                                .collect::<Vec<_>>();
+
+                            transaction::Entity::insert_many(transaction_models)
+                                .exec(tx)
+                                .await?;
                         }
                     }
-                    Err(e) => {
-                        tracing::debug!(err =? e, "Error inserting stage");
-                        // Don't fail the entire batch for a single operation
-                        continue;
-                    }
-                }
-            }
-        }
 
-        // Commit transaction
-        let commit_start = Instant::now();
+                    Ok(())
+                })
+            })
+            .await?;
 
-        match txn
-            .commit()
-            .instrument(tracing::debug_span!(
-                "commiting insert transaction",
-                tx_id = tx_id.to_string()
-            ))
-            .await
-        {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                tracing::error!(
-                    tx_id =? tx_id,
-                    time_elapsed_ms =? commit_start.elapsed().as_millis(),
-                    err =? e,
-                    "Failed to commit transaction",
-                );
-                Err(e.into())
-            }
-        }
+        Ok(())
     }
 
     pub async fn set_interval_retry(
@@ -916,7 +888,7 @@ impl TacDatabase {
         interval: &interval::Model,
         retry_after_delay_sec: i64,
     ) -> anyhow::Result<()> {
-        // Update interval with next retry timestamp and increment retry count
+        // Update interval with next retry timestamp, increment retry count and set 'failed' state
         let mut interval_model: interval::ActiveModel = interval.clone().into();
         let now = chrono::Utc::now().naive_utc();
 
@@ -924,7 +896,7 @@ impl TacDatabase {
             chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec),
         ));
         interval_model.retry_count = Set(interval.retry_count + 1);
-        interval_model.status = Set(StatusEnum::Pending); // Reset status to pending
+        interval_model.status = Set(StatusEnum::Failed);
         interval_model.updated_at = Set(now);
 
         match interval_model.update(self.db.as_ref()).await {
@@ -945,7 +917,7 @@ impl TacDatabase {
         operation: &operation::Model,
         retry_after_delay_sec: i64,
     ) -> anyhow::Result<()> {
-        // Update operation with next retry timestamp and increment retry count
+        // Update operation with next retry timestamp, increment retry count and set 'failed' state
         let mut operation_model: operation::ActiveModel = operation.clone().into();
         let now = chrono::Utc::now().naive_utc();
 
@@ -953,7 +925,7 @@ impl TacDatabase {
             chrono::Utc::now().naive_utc() + chrono::Duration::seconds(retry_after_delay_sec),
         ));
         operation_model.retry_count = Set(operation.retry_count + 1);
-        operation_model.status = Set(StatusEnum::Pending); // Reset status to pending
+        operation_model.status = Set(StatusEnum::Failed);
         operation_model.updated_at = Set(now);
 
         match operation_model.update(self.db.as_ref()).await {
@@ -982,7 +954,7 @@ impl TacDatabase {
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS pending_intervals,
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS processing_intervals,
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS finalized_intervals,
-                        COUNT(CASE WHEN status != '{}'::status_enum AND retry_count > 0 THEN 1 END) AS failed_intervals,
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS failed_intervals,
                         SUM(CASE WHEN status = '{}'::status_enum 
                                 THEN EXTRACT(EPOCH FROM finish - start) ELSE 0 END
                             )::BIGINT AS finalized_period
@@ -993,7 +965,7 @@ impl TacDatabase {
                 StatusEnum::Pending.to_value(),
                 StatusEnum::Processing.to_value(),
                 StatusEnum::Completed.to_value(),
-                StatusEnum::Completed.to_value(),
+                StatusEnum::Failed.to_value(),
                 StatusEnum::Completed.to_value(),
             ),
         );
@@ -1047,7 +1019,7 @@ impl TacDatabase {
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS pending_operations,
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS processing_operations,
                         COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS finalized_operations,
-                        COUNT(CASE WHEN status != '{}'::status_enum AND retry_count > 0 THEN 1 END) AS failed_operations
+                        COUNT(CASE WHEN status = '{}'::status_enum THEN 1 END) AS failed_operations
                     FROM operation
                 )
                 SELECT * FROM operation_stats
@@ -1055,7 +1027,7 @@ impl TacDatabase {
                 StatusEnum::Pending.to_value(),
                 StatusEnum::Processing.to_value(),
                 StatusEnum::Completed.to_value(),
-                StatusEnum::Completed.to_value(),
+                StatusEnum::Failed.to_value(),
             ),
         );
 
@@ -1090,6 +1062,18 @@ impl TacDatabase {
         }
     }
 
+    pub async fn get_brief_operation_by_id(
+        &self,
+        id: &str,
+    ) -> anyhow::Result<Option<operation::Model>> {
+        let op = operation::Entity::find()
+            .filter(operation::Column::Id.eq(id))
+            .one(self.db.as_ref())
+            .await?;
+
+        Ok(op)
+    }
+
     pub async fn get_operation_by_id(
         &self,
         id: &String,
@@ -1110,15 +1094,16 @@ impl TacDatabase {
             WHERE o.id = $1
             "#;
 
-        self.get_full_operation_with_sql(&sql.into(), [id.into()])
+        self.get_full_operations_with_sql(&sql.into(), [id.into()])
             .await
+            .map(|arr| arr.first().cloned())
     }
 
-    pub async fn get_operation_by_tx_hash(
+    pub async fn get_full_operations_by_tx_hash(
         &self,
         tx_hash: &String,
     ) -> anyhow::Result<
-        Option<(
+        Vec<(
             operation::Model,
             Vec<(operation_stage::Model, Vec<transaction::Model>)>,
         )>,
@@ -1131,26 +1116,44 @@ impl TacDatabase {
             FROM operation o
             LEFT JOIN operation_stage s ON o.id = s.operation_id
             LEFT JOIN transaction t ON s.id = t.stage_id
-            WHERE o.id = (
+            WHERE o.id IN (
                 SELECT o2.id
                 FROM operation o2
                 JOIN operation_stage s2 ON o2.id = s2.operation_id
                 JOIN transaction t2 ON s2.id = t2.stage_id
                 WHERE t2.hash = $1
-                LIMIT 1
             )
             "#;
 
-        self.get_full_operation_with_sql(&sql.into(), [tx_hash.into()])
+        self.get_full_operations_with_sql(&sql.into(), [tx_hash.into()])
             .await
     }
 
-    async fn get_full_operation_with_sql(
+    pub async fn get_brief_operations_by_tx_hash(
+        &self,
+        tx_hash: &String,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let sql = r#"
+            SELECT id, op_type, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
+            FROM operation
+            WHERE id IN (
+                SELECT s.operation_id
+                FROM operation_stage s
+                JOIN transaction t ON s.id = t.stage_id
+                WHERE t.hash = $1
+            )
+            ORDER BY timestamp;
+            "#;
+
+        self.get_operations_with_sql(sql, [tx_hash.into()]).await
+    }
+
+    async fn get_full_operations_with_sql(
         &self,
         sql: &String,
         values: impl IntoIterator<Item = sea_orm::Value>,
     ) -> anyhow::Result<
-        Option<(
+        Vec<(
             operation::Model,
             Vec<(operation_stage::Model, Vec<transaction::Model>)>,
         )>,
@@ -1164,40 +1167,38 @@ impl TacDatabase {
             .all(self.db.as_ref())
             .await?;
 
-        if joined.is_empty() {
-            return Ok(None);
-        }
-
-        let op_row = &joined[0];
-        let now = chrono::Utc::now().naive_utc();
-
-        let op_model = operation::Model {
-            id: op_row.op_id.clone(),
-            op_type: op_row.op_type.clone(),
-            timestamp: op_row.timestamp,
-            next_retry: None,
-            status: op_row.status.clone(),
-            retry_count: 0,
-            inserted_at: now,
-            updated_at: now,
-            sender_address: None,
-            sender_blockchain: None,
-        };
-
         use std::collections::HashMap;
 
-        let mut stages_map: HashMap<i32, (operation_stage::Model, Vec<transaction::Model>)> =
-            HashMap::new();
+        let now = chrono::Utc::now().naive_utc();
+
+        // Map of operation_id -> (operation model, stage map)
+        let mut operations_map = HashMap::new();
 
         for row in joined {
-            if let Some(stage_id) = row.stage_id {
-                let entry = stages_map.entry(stage_id).or_insert_with(|| {
+            let op_entry = operations_map.entry(row.op_id.clone()).or_insert_with(|| {
+                (
+                    operation::Model {
+                        id: row.op_id.clone(),
+                        op_type: row.op_type.clone(),
+                        timestamp: row.timestamp,
+                        next_retry: None,
+                        status: row.status.clone(),
+                        retry_count: 0,
+                        inserted_at: now,
+                        updated_at: now,
+                    },
+                    HashMap::new(),
+                )
+            });
+
+            if let (Some(stage_id), Some(stage_type_id)) = (row.stage_id, row.stage_type_id) {
+                let stage_entry = op_entry.1.entry(stage_id).or_insert_with(|| {
                     (
                         operation_stage::Model {
                             id: stage_id,
-                            operation_id: op_model.id.clone(),
-                            stage_type_id: row.stage_type_id,
-                            success: row.stage_success,
+                            operation_id: row.op_id.clone(),
+                            stage_type_id,
+                            success: row.stage_success.unwrap_or(false),
                             timestamp: row.stage_timestamp.unwrap_or_default(),
                             note: row.stage_note.clone(),
                             inserted_at: now,
@@ -1206,24 +1207,28 @@ impl TacDatabase {
                     )
                 });
 
-                if let Some(tx_id) = row.tx_id {
+                if let (Some(tx_id), Some(tx_stage_id)) = (row.tx_id, row.tx_stage_id) {
                     let tx = transaction::Model {
                         id: tx_id,
-                        stage_id: row.tx_stage_id.unwrap_or_default(),
+                        stage_id: tx_stage_id,
                         hash: row.tx_hash.clone().unwrap_or_default(),
                         blockchain_type: row.tx_blockchain_type.clone().unwrap_or_default(),
                         inserted_at: now,
                     };
-                    entry.1.push(tx);
+                    stage_entry.1.push(tx);
                 }
             }
         }
 
-        let mut stages: Vec<_> = stages_map.into_values().collect();
+        // Convert operations_map into desired output format
+        let mut result = vec![];
+        for (op_model, stages_map) in operations_map.into_values() {
+            let mut stages: Vec<_> = stages_map.into_values().collect();
+            stages.sort_by_key(|(stage, _)| stage.timestamp);
+            result.push((op_model, stages));
+        }
 
-        stages.sort_by_key(|(stage, _)| stage.timestamp);
-
-        Ok(Some((op_model, stages)))
+        Ok(result)
     }
 
     pub async fn get_operations(
@@ -1245,6 +1250,19 @@ impl TacDatabase {
 
         let operations = query.limit(count as u64).all(self.db.as_ref()).await?;
 
+        Ok(operations)
+    }
+
+    async fn get_operations_with_sql(
+        &self,
+        sql: &str,
+        values: impl IntoIterator<Item = sea_orm::Value>,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, values);
+        let operations = operation::Entity::find()
+            .from_raw_sql(stmt)
+            .all(self.db.as_ref())
+            .await?;
         Ok(operations)
     }
 

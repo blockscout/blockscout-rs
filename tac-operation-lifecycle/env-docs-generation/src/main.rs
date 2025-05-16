@@ -8,15 +8,16 @@ fn main() {
     );
     run_env_collector_cli::<Settings>(
         "TAC_OPERATION_LIFECYCLE",
-        "../README.md",
+        "README.md",
         // it's not meant to be read from the file, but it is used to give example
         // values as well as for map var to be generated
-        "example_configs/indexer.yaml",
+        "env-docs-generation/example_configs/indexer.toml",
         PrefixFilter::blacklist(&[
             "TAC_OPERATION_LIFECYCLE__SERVER",
             "TAC_OPERATION_LIFECYCLE__TRACING",
             "TAC_OPERATION_LIFECYCLE__JAEGER",
             "TAC_OPERATION_LIFECYCLE__METRICS",
+            "TAC_OPERATION_LIFECYCLE__INDEXER__CONCURRENCY",
         ]),
         Some("service"),
     );

@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-endpoint-swagger"
-version = "0.1.0"
+version = "0.1.1"
 description = "Configuration tools for enabling swagger endpoint"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"

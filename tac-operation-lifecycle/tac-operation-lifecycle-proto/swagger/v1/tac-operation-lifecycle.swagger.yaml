@@ -78,6 +78,35 @@ paths:
           format: uint64
       tags:
         - TacService
+  /api/v1/tac/operations/search/quick:
+    get:
+      operationId: TacService_SearchOperations
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1OperationsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: page_token
+          in: query
+          required: false
+          type: string
+          format: uint64
+        - name: page_items
+          in: query
+          required: false
+          type: string
+          format: uint64
+      tags:
+        - TacService
   /api/v1/tac/operations/{operation_id}:
     get:
       operationId: TacService_GetOperationDetails
@@ -99,12 +128,12 @@ paths:
         - TacService
   /api/v1/tac/operations:byTx/{tx_hash}:
     get:
-      operationId: TacService_GetOperationByTransaction
+      operationId: TacService_GetOperationsByTransaction
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1OperationDetails'
+            $ref: '#/definitions/v1OperationsFullResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -153,7 +182,7 @@ definitions:
     enum:
       - TAC
       - TON
-      - Unknown
+      - UNKNOWN
     default: TAC
   OperationStageStageType:
     type: string
@@ -327,14 +356,22 @@ definitions:
   v1OperationType:
     type: string
     enum:
-      - Error
-      - Pending
-      - TonTacTon
-      - TacTon
-      - TonTac
-      - Rollback
-      - Unknown
-    default: Error
+      - ERROR
+      - PENDING
+      - TON_TAC_TON
+      - TAC_TON
+      - TON_TAC
+      - ROLLBACK
+      - UNKNOWN
+    default: ERROR
+  v1OperationsFullResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1OperationDetails'
   v1OperationsResponse:
     type: object
     properties:
