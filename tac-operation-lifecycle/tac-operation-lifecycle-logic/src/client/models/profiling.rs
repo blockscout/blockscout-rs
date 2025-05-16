@@ -7,7 +7,7 @@ pub struct StageProfilingApiResponse {
     pub response: HashMap<String, OperationData>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct OperationData {
     #[serde(rename = "operationType")]
     pub operation_type: OperationType,
@@ -15,7 +15,7 @@ pub struct OperationData {
     pub stages: HashMap<StageType, Stage>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum OperationType {
     Pending,
@@ -31,7 +31,7 @@ pub enum OperationType {
     ErrorType,
 }
 
-#[derive(Debug, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum StageType {
     CollectedInTAC,
@@ -42,14 +42,14 @@ pub enum StageType {
     ExecutedInTON,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Stage {
     pub exists: bool,
     pub stage_data: Option<StageData>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct StageData {
     pub success: bool,
     pub timestamp: u64,
@@ -58,7 +58,7 @@ pub struct StageData {
     pub note: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum BlockchainType {
     Tac,
@@ -67,7 +67,7 @@ pub enum BlockchainType {
     Unknown,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: String,
