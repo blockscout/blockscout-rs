@@ -18,14 +18,13 @@ message Pagination {
 }
 
 message GetOperationsRequest {
-  optional uint64 page_token = 1;
-  optional uint64 page_items = 2;
+  optional string q = 1;  // multi-search by operation_id, tx_hash and sender
+  optional uint64 page_token = 2;
+  optional uint64 page_items = 3;
 }
 
 message SearchOperationRequest {
-  string q = 1;
-  optional uint64 page_token = 2;
-  optional uint64 page_items = 3;
+  string q = 1; // search by operation_id only
 }
 
 message GetOperationDetailsRequest {
