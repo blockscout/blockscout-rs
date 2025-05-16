@@ -1,10 +1,9 @@
 use crate::{
-    database::{OrderDirection, TacDatabase},
-    settings::IndexerSettings,
+    client::models::profiling::BlockchainTypeUppercase, database::{OrderDirection, TacDatabase}, settings::IndexerSettings
 };
 use anyhow::Error;
 use client::{
-    models::profiling::{BlockchainType, OperationType, StageType},
+    models::profiling::{OperationType, StageType},
     Client,
 };
 use futures::{
@@ -101,7 +100,7 @@ impl fmt::Display for StageType {
     }
 }
 
-impl fmt::Display for BlockchainType {
+impl fmt::Display for BlockchainTypeUppercase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }

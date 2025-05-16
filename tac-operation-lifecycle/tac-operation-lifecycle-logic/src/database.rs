@@ -828,6 +828,7 @@ impl TacDatabase {
                         operation_model.status = Set(StatusEnum::Completed);
                     }
                     operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
+                    //operation_model.
 
                     operation_model
                         .update(tx)

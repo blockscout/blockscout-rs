@@ -7,10 +7,12 @@ pub struct StageProfilingApiResponse {
     pub response: HashMap<String, OperationData>,
 }
 
+
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OperationData {
-    #[serde(rename = "operationType")]
     pub operation_type: OperationType,
+    pub meta_info: Option<OperationMetaInfo>,
     #[serde(flatten)]
     pub stages: HashMap<StageType, Stage>,
 }
@@ -29,6 +31,24 @@ pub enum OperationType {
     Unknown,
     #[serde(other)]
     ErrorType,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationMetaInfo {
+    pub initial_caller: Option<Address>,
+    #[serde(flatten)]
+    pub valid_executors: HashMap<BlockchainTypeLowercase, Vec<String>>,
+    #[serde(flatten)]
+    pub fee_info: HashMap<BlockchainTypeLowercase, FeeValue>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeValue {
+    pub protocol_fee: String,
+    pub executor_fee: String,
+    pub token_fee_symbol: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash)]
@@ -58,8 +78,7 @@ pub struct StageData {
     pub note: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash)]
 pub enum BlockchainType {
     Tac,
     Ton,
@@ -68,10 +87,31 @@ pub enum BlockchainType {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct BlockchainTypeUppercase {
+    #[serde(flatten)]
+    inner: BlockchainType,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub struct BlockchainTypeLowercase {
+    #[serde(flatten)]
+    inner: BlockchainType,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: String,
-    pub blockchain_type: BlockchainType,
+    pub blockchain_type: BlockchainTypeUppercase,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Address {
+    pub address: String,
+    pub blockchain_type: BlockchainTypeUppercase,
 }
 
 fn deserialize_note_to_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
