@@ -66,32 +66,8 @@ paths:
           schema:
             $ref: '#/definitions/rpcStatus'
       parameters:
-        - name: page_token
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: page_items
-          in: query
-          required: false
-          type: string
-          format: uint64
-      tags:
-        - TacService
-  /api/v1/tac/operations/search/quick:
-    get:
-      operationId: TacService_SearchOperations
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1OperationsResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
         - name: q
+          description: multi-search by operation_id, tx_hash and sender
           in: query
           required: false
           type: string
