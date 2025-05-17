@@ -10,7 +10,7 @@ use tac_operation_lifecycle_logic::{
 use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::{
     GetOperationByTxHashRequest, GetOperationDetailsRequest, GetOperationsRequest,
     OperationBriefDetails, OperationDetails, OperationRelatedTransaction, OperationStage,
-    OperationsFullResponse, OperationsResponse, Pagination, SearchOperationRequest,
+    OperationsFullResponse, OperationsResponse, Pagination,
 };
 
 pub struct OperationsService {
@@ -168,38 +168,6 @@ impl TacService for OperationsService {
                     Err(e) => Err(tonic::Status::internal(e.to_string())),
                 }
             }
-        }
-    }
-
-    async fn search_operations(
-        &self,
-        request: tonic::Request<SearchOperationRequest>,
-    ) -> Result<tonic::Response<OperationsResponse>, tonic::Status> {
-        let q = request.into_inner().q;
-        if is_generic_hash(&q) {
-            // operation_id
-            let map_internal = |e: anyhow::Error| tonic::Status::internal(e.to_string());
-
-            let operations = match self
-                .db
-                .get_brief_operation_by_id(&q)
-                .await
-                .map_err(map_internal)?
-            {
-                Some(op) => vec![op],
-                None => vec![],
-            };
-
-            Ok(tonic::Response::new(OperationsResponse {
-                items: OperationsService::convert_short_db_operation_into_response(operations),
-                next_page_params: None,
-            }))
-        } else {
-            // unknown query string -> return void array without DB interacting
-            Ok(tonic::Response::new(OperationsResponse {
-                items: vec![],
-                next_page_params: None,
-            }))
         }
     }
 

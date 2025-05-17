@@ -83,26 +83,6 @@ paths:
           format: uint64
       tags:
         - TacService
-  /api/v1/tac/operations/search/quick:
-    get:
-      operationId: TacService_SearchOperations
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1OperationsResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: q
-          description: search by operation_id only
-          in: query
-          required: false
-          type: string
-      tags:
-        - TacService
   /api/v1/tac/operations/{operation_id}:
     get:
       operationId: TacService_GetOperationDetails
