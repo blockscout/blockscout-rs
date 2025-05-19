@@ -417,6 +417,7 @@ impl MultichainAggregatorService for MultichainAggregator {
     }
 }
 
+#[allow(clippy::result_large_err)]
 #[inline]
 fn parse_query<T: FromStr>(input: String) -> Result<T, Status>
 where
@@ -426,6 +427,7 @@ where
         .map_err(|e| Status::invalid_argument(format!("invalid value {}: {e}", input)))
 }
 
+#[allow(clippy::result_large_err)]
 #[inline]
 fn parse_query_2<T1: FromStr, T2: FromStr>(input: String) -> Result<(T1, T2), Status>
 where
