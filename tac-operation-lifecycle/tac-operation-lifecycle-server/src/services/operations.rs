@@ -1,5 +1,4 @@
 use crate::proto::tac_service_server::TacService;
-use base64::prelude::*;
 use chrono::NaiveDateTime;
 use std::sync::Arc;
 use tac_operation_lifecycle_entity::{operation, operation_stage, transaction};
@@ -101,72 +100,37 @@ impl TacService for OperationsService {
 
         match inner.q {
             Some(q) => {
-                // multisearch by the following fields: operation_id, tx_hash, sender
-                if is_generic_hash(&q) {
-                    // operation_id or tx_hash
-                    let map_internal = |e: anyhow::Error| tonic::Status::internal(e.to_string());
+                let operations = self
+                    .db
+                    .search_operations(&q)
+                    .await
+                    .map_err(map_db_error)?;
 
-                    let operations = match self
-                        .db
-                        .get_brief_operation_by_id(&q)
-                        .await
-                        .map_err(map_internal)?
-                    {
-                        Some(op) => vec![op],
-                        None => self
-                            .db
-                            .get_brief_operations_by_tx_hash(&q)
-                            .await
-                            .map_err(map_internal)?,
-                    };
-
-                    Ok(tonic::Response::new(OperationsResponse {
-                        items: OperationsService::convert_short_db_operation_into_response(
-                            operations,
-                        ),
-                        next_page_params: None,
-                    }))
-                } else if is_tac_address(&q) || is_ton_address(&q) {
-                    // sender (TON-TAC format)
-                    // TODO: unimplemented for this version of the database.
-                    // The corresponding field doesn't exist for the operation entity.
-                    Ok(tonic::Response::new(OperationsResponse {
-                        items: vec![],
-                        next_page_params: None,
-                    }))
-                } else {
-                    // unknown query string -> return void array without DB interacting
-                    Ok(tonic::Response::new(OperationsResponse {
-                        items: vec![],
-                        next_page_params: None,
-                    }))
-                }
+                Ok(tonic::Response::new(OperationsResponse {
+                    items: OperationsService::convert_short_db_operation_into_response(operations),
+                    next_page_params: None,
+                }))
             }
 
             None => {
                 // simple operations list with pagination
-                match self
+                let operations = self
                     .db
                     .get_operations(PAGE_SIZE, inner.page_token, OrderDirection::LatestFirst)
                     .await
-                {
-                    Ok(operations) => {
-                        let last_timestamp = operations
-                            .last()
-                            .map(|op| op.timestamp.and_utc().timestamp() as u64);
+                    .map_err(map_db_error)?;
 
-                        Ok(tonic::Response::new(OperationsResponse {
-                            items: OperationsService::convert_short_db_operation_into_response(
-                                operations,
-                            ),
-                            next_page_params: last_timestamp.map(|ts| Pagination {
-                                page_token: ts,
-                                page_items: inner.page_items.unwrap_or(0) as u32 + PAGE_SIZE as u32,
-                            }),
-                        }))
-                    }
-                    Err(e) => Err(tonic::Status::internal(e.to_string())),
-                }
+                let last_timestamp = operations
+                    .last()
+                    .map(|op| op.timestamp.and_utc().timestamp() as u64);
+
+                Ok(tonic::Response::new(OperationsResponse {
+                    items: OperationsService::convert_short_db_operation_into_response(operations),
+                    next_page_params: last_timestamp.map(|ts| Pagination {
+                        page_token: ts,
+                        page_items: inner.page_items.unwrap_or(0) as u32 + PAGE_SIZE as u32,
+                    }),
+                }))
             }
         }
     }
@@ -184,7 +148,7 @@ impl TacService for OperationsService {
 
             Ok(None) => Err(tonic::Status::not_found("cannot find operation id")),
 
-            Err(e) => Err(tonic::Status::internal(e.to_string())),
+            Err(e) => Err(map_db_error(e)),
         }
     }
 
@@ -214,18 +178,6 @@ fn db_datetime_to_string(ts: NaiveDateTime) -> String {
         .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
-fn is_generic_hash(q: &str) -> bool {
-    q.starts_with("0x") && q.len() == 66 && q[2..].chars().all(|c| c.is_ascii_hexdigit())
-}
-
-fn is_tac_address(q: &str) -> bool {
-    q.starts_with("0x") && q.len() == 42 && q[2..].chars().all(|c| c.is_ascii_hexdigit())
-}
-
-fn is_ton_address(q: &str) -> bool {
-    base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(q)
-        .ok()
-        .map(|bytes| bytes.len() == 36)
-        .unwrap_or(false)
+fn map_db_error(err: anyhow::Error) -> tonic::Status {
+    tonic::Status::internal(err.to_string())
 }
