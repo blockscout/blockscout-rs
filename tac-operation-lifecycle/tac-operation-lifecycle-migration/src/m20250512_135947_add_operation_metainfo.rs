@@ -12,11 +12,7 @@ impl MigrationTrait for Migration {
                 Table::alter()
                     .table(Operation::Table)
                     .add_column(ColumnDef::new(Operation::SenderAddress).string().null())
-                    .add_column(
-                        ColumnDef::new(Operation::SenderBlockchain)
-                            .string()
-                            .null(),
-                    )
+                    .add_column(ColumnDef::new(Operation::SenderBlockchain).string().null())
                     .to_owned(),
             )
             .await?;
@@ -54,12 +50,36 @@ impl MigrationTrait for Migration {
                             .array(ColumnType::Text)
                             .null(),
                     )
-                    .col(ColumnDef::new(OperationMetaInfo::TacProtocolFee).decimal().null())
-                    .col(ColumnDef::new(OperationMetaInfo::TacExecutorFee).decimal().null())
-                    .col(ColumnDef::new(OperationMetaInfo::TacTokenFeeSymbol).string().null())
-                    .col(ColumnDef::new(OperationMetaInfo::TonProtocolFee).decimal().null())
-                    .col(ColumnDef::new(OperationMetaInfo::TonExecutorFee).decimal().null())
-                    .col(ColumnDef::new(OperationMetaInfo::TonTokenFeeSymbol).string().null())
+                    .col(
+                        ColumnDef::new(OperationMetaInfo::TacProtocolFee)
+                            .decimal()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(OperationMetaInfo::TacExecutorFee)
+                            .decimal()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(OperationMetaInfo::TacTokenFeeSymbol)
+                            .string()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(OperationMetaInfo::TonProtocolFee)
+                            .decimal()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(OperationMetaInfo::TonExecutorFee)
+                            .decimal()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(OperationMetaInfo::TonTokenFeeSymbol)
+                            .string()
+                            .null(),
+                    )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_meta_info_operation")

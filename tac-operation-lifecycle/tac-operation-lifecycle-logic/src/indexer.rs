@@ -1,5 +1,7 @@
 use crate::{
-    client::models::profiling::BlockchainTypeUppercase, database::{OrderDirection, TacDatabase}, settings::IndexerSettings
+    client::models::profiling::BlockchainType,
+    database::{OrderDirection, TacDatabase},
+    settings::IndexerSettings,
 };
 use anyhow::Error;
 use client::{
@@ -100,7 +102,7 @@ impl fmt::Display for StageType {
     }
 }
 
-impl fmt::Display for BlockchainTypeUppercase {
+impl fmt::Display for BlockchainType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }

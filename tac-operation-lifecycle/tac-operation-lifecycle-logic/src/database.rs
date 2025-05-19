@@ -1,20 +1,21 @@
 use crate::client::models::{
-    operations::Operations as ApiOperations, profiling::OperationData as ApiOperationData,
+    operations::Operations as ApiOperations,
+    profiling::{BlockchainTypeLowercase, OperationData as ApiOperationData},
 };
 use anyhow::anyhow;
 use sea_orm::{
-    prelude::DateTime,
+    prelude::{DateTime, Decimal},
     sea_query::OnConflict,
     ActiveEnum, ActiveModelTrait,
     ActiveValue::{self, NotSet},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
-use std::{cmp::min, collections::HashMap, fmt, sync::Arc};
+use std::{cmp::min, collections::HashMap, fmt, str::FromStr, sync::Arc};
 use tac_operation_lifecycle_entity::{
     interval,
     operation::{self, Column},
-    operation_stage,
+    operation_meta_info, operation_stage,
     sea_orm_active_enums::StatusEnum,
     stage_type, transaction, watermark,
 };
@@ -95,6 +96,8 @@ struct JoinedRow {
     op_type: Option<String>,
     timestamp: DateTime,
     status: StatusEnum,
+    sender_address: Option<String>,
+    sender_blockchain: Option<String>,
 
     //operation_stage
     stage_id: Option<i32>,
@@ -822,13 +825,22 @@ impl TacDatabase {
                         .exec(tx)
                         .await?;
 
-                    // Update operation type and status
+                    // Update operation type, status and sender
                     let mut operation_model: operation::ActiveModel = operation.clone().into();
                     if operation_data.operation_type.is_finalized() {
                         operation_model.status = Set(StatusEnum::Completed);
                     }
                     operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
-                    //operation_model.
+
+                    if let Some(initial_caller) = operation_data
+                        .meta_info
+                        .as_ref()
+                        .and_then(|meta| meta.initial_caller.clone())
+                    {
+                        operation_model.sender_address = Set(Some(initial_caller.address));
+                        operation_model.sender_blockchain =
+                            Set(Some(initial_caller.blockchain_type.to_string()));
+                    }
 
                     operation_model
                         .update(tx)
@@ -878,6 +890,51 @@ impl TacDatabase {
                                 .exec(tx)
                                 .await?;
                         }
+                    }
+
+                    // Store operation metainfo
+                    if let Some(meta_info) = operation_data.meta_info.clone() {
+                        let get_fee = |chain: BlockchainTypeLowercase| {
+                            meta_info
+                                .fee_info
+                                .get(&chain)
+                                .and_then(|fee_opt| fee_opt.as_ref())
+                        };
+
+                        let get_executors = |chain: BlockchainTypeLowercase| {
+                            meta_info.valid_executors.get(&chain).cloned().flatten()
+                        };
+
+                        let parse_decimal = |s: &str| Decimal::from_str(s).ok();
+
+                        let meta_model = operation_meta_info::ActiveModel {
+                            operation_id: Set(operation.id.clone()),
+                            tac_valid_executors: Set(get_executors(BlockchainTypeLowercase::Tac)),
+                            ton_valid_executors: Set(get_executors(BlockchainTypeLowercase::Ton)),
+                            tac_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+                            tac_executor_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                                .and_then(|fee| parse_decimal(&fee.executor_fee))),
+                            tac_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Tac)
+                                .map(|fee| fee.token_fee_symbol.clone())),
+                            ton_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+                            ton_executor_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                                .and_then(|fee| parse_decimal(&fee.executor_fee))),
+                            ton_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Ton)
+                                .map(|fee| fee.token_fee_symbol.clone())),
+                        };
+
+                        operation_meta_info::Entity::insert(meta_model)
+                            .on_conflict(
+                                sea_orm::sea_query::OnConflict::column(
+                                    operation_meta_info::Column::OperationId,
+                                )
+                                .do_nothing()
+                                .to_owned(),
+                            )
+                            .exec(tx)
+                            .await?;
                     }
 
                     Ok(())
@@ -1192,8 +1249,8 @@ impl TacDatabase {
                         retry_count: 0,
                         inserted_at: now,
                         updated_at: now,
-                        sender_address: None,
-                        sender_blockchain: None,
+                        sender_address: row.sender_address.clone(),
+                        sender_blockchain: row.sender_blockchain.clone(),
                     },
                     HashMap::new(),
                 )

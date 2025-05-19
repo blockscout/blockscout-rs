@@ -8,9 +8,9 @@ use tac_operation_lifecycle_logic::{
     database::{OrderDirection, TacDatabase},
 };
 use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::{
-    GetOperationByTxHashRequest, GetOperationDetailsRequest, GetOperationsRequest,
-    OperationBriefDetails, OperationDetails, OperationRelatedTransaction, OperationStage,
-    OperationsFullResponse, OperationsResponse, Pagination, SearchOperationRequest,
+    BlockchainAddress, GetOperationByTxHashRequest, GetOperationDetailsRequest,
+    GetOperationsRequest, OperationBriefDetails, OperationDetails, OperationRelatedTransaction,
+    OperationStage, OperationsFullResponse, OperationsResponse, Pagination, SearchOperationRequest,
 };
 
 pub struct OperationsService {
@@ -31,21 +31,39 @@ type OperationWithStages = (
 const PAGE_SIZE: usize = 50;
 
 impl OperationsService {
+    fn extract_sender(operation: &operation::Model) -> Option<BlockchainAddress> {
+        match (
+            operation.sender_address.clone(),
+            operation.sender_blockchain.clone(),
+        ) {
+            (Some(addr), Some(chain)) => Some(BlockchainAddress {
+                address: addr,
+                blockchain: match chain.as_str() {
+                    "Tac" => 0,
+                    "Ton" => 1,
+                    _ => 2,
+                },
+            }),
+            _ => None,
+        }
+    }
+
     pub fn convert_short_db_operation_into_response(
         db_data: Vec<operation::Model>,
     ) -> Vec<OperationBriefDetails> {
         db_data
             .into_iter()
             .map(|op| {
-                let op_type = match op.op_type {
+                let op_type = match op.op_type.clone() {
                     Some(t) => t.parse().unwrap_or(OperationType::ErrorType),
                     _ => OperationType::Unknown,
                 };
+
                 OperationBriefDetails {
-                    operation_id: op.id,
+                    operation_id: op.id.clone(),
                     r#type: op_type.to_id(),
                     timestamp: db_datetime_to_string(op.timestamp),
-                    sender: None,
+                    sender: OperationsService::extract_sender(&op),
                 }
             })
             .collect()
@@ -54,15 +72,15 @@ impl OperationsService {
     pub fn convert_full_db_operation_into_response(
         (op, stages): OperationWithStages,
     ) -> OperationDetails {
-        let op_type = match op.op_type {
+        let op_type = match op.op_type.clone() {
             Some(t) => t.parse().unwrap_or(OperationType::ErrorType),
             _ => OperationType::Unknown,
         };
         OperationDetails {
-            operation_id: op.id,
+            operation_id: op.id.clone(),
             r#type: op_type.to_id(),
             timestamp: db_datetime_to_string(op.timestamp),
-            sender: None,
+            sender: OperationsService::extract_sender(&op),
             status_history: stages
                 .iter()
                 .map(|(s, txs)| OperationStage {
