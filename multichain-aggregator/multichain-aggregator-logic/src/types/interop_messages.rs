@@ -25,6 +25,22 @@ pub struct InteropMessage {
     pub transfer_amount: Option<Decimal>,
 }
 
+pub enum Status {
+    Pending,
+    Failed,
+    Success,
+}
+
+impl From<Status> for proto::interop_message::Status {
+    fn from(v: Status) -> Self {
+        match v {
+            Status::Pending => proto::interop_message::Status::Pending,
+            Status::Failed => proto::interop_message::Status::Failed,
+            Status::Success => proto::interop_message::Status::Success,
+        }
+    }
+}
+
 impl InteropMessage {
     pub fn base(nonce: i64, init_chain_id: ChainId, relay_chain_id: ChainId) -> Self {
         Self {
@@ -43,6 +59,14 @@ impl InteropMessage {
             transfer_from_address_hash: None,
             transfer_to_address_hash: None,
             transfer_amount: None,
+        }
+    }
+
+    pub fn status(&self) -> Status {
+        match (self.relay_transaction_hash, self.failed) {
+            (None, _) => Status::Pending,
+            (_, Some(true)) => Status::Failed,
+            _ => Status::Success,
         }
     }
 }
@@ -115,6 +139,7 @@ impl TryFrom<Model> for InteropMessage {
 
 impl From<InteropMessage> for proto::InteropMessage {
     fn from(v: InteropMessage) -> Self {
+        let status = proto::interop_message::Status::from(v.status()).into();
         Self {
             sender_address_hash: v.sender_address_hash.map(|a| a.to_string()),
             target_address_hash: v.target_address_hash.map(|a| a.to_string()),
@@ -133,6 +158,7 @@ impl From<InteropMessage> for proto::InteropMessage {
             transfer_from_address_hash: v.transfer_from_address_hash.map(|a| a.to_string()),
             transfer_to_address_hash: v.transfer_to_address_hash.map(|a| a.to_string()),
             transfer_amount: v.transfer_amount.map(|a| a.to_string()),
+            status,
         }
     }
 }

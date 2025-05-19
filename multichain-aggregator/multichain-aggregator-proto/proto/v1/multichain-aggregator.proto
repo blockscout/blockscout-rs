@@ -100,6 +100,12 @@ message Domain {
 }
 
 message InteropMessage {
+  enum Status {
+    STATUS_PENDING = 0;
+    STATUS_FAILED = 1;
+    STATUS_SUCCESS = 2;
+  }
+
   optional string sender_address_hash = 1;
   optional string target_address_hash = 2;
   int64 nonce = 3;
@@ -114,6 +120,7 @@ message InteropMessage {
   optional string transfer_from_address_hash = 12;
   optional string transfer_to_address_hash = 13;
   optional string transfer_amount = 14;
+  Status status = 15;
 }
 
 message BatchImportRequest {
