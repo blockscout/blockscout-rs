@@ -12,6 +12,7 @@ use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::{
     GetOperationsRequest, OperationBriefDetails, OperationDetails, OperationRelatedTransaction,
     OperationStage, OperationsFullResponse, OperationsResponse, Pagination, SearchOperationRequest,
 };
+use tonlib_core::TonAddress;
 
 pub struct OperationsService {
     db: Arc<TacDatabase>,
@@ -235,6 +236,7 @@ fn is_tac_address(q: &str) -> bool {
 }
 
 fn is_ton_address(q: &str) -> bool {
+    
     base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(q)
         .ok()

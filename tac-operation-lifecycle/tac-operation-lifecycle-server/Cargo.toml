@@ -34,6 +34,7 @@ rand = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 rstest = { workspace = true }
 tac-operation-lifecycle-entity = { path = "../tac-operation-lifecycle-entity" }
+tonlib-core = { workspace = true }
 wiremock = { workspace = true }
 # rstest = "0.18.2"
 # sea-orm = { version = "*", features = [ "sqlx-sqlite" ]}

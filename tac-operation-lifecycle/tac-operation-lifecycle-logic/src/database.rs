@@ -1191,6 +1191,18 @@ impl TacDatabase {
             .await
     }
 
+    pub async fn get_brief_operations_by_sender(
+        &self,
+        address: &str,
+    ) -> anyhow::Result<Vec<operation::Model>> {
+        let op = operation::Entity::find()
+            .filter(operation::Column::SenderAddress.eq(address))
+            .all(self.db.as_ref())
+            .await?;
+
+        Ok(op)
+    }
+
     pub async fn get_brief_operations_by_tx_hash(
         &self,
         tx_hash: &String,
