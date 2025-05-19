@@ -100,11 +100,7 @@ impl TacService for OperationsService {
 
         match inner.q {
             Some(q) => {
-                let operations = self
-                    .db
-                    .search_operations(&q)
-                    .await
-                    .map_err(map_db_error)?;
+                let operations = self.db.search_operations(&q).await.map_err(map_db_error)?;
 
                 Ok(tonic::Response::new(OperationsResponse {
                     items: OperationsService::convert_short_db_operation_into_response(operations),

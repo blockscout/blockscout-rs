@@ -1289,15 +1289,15 @@ impl TacDatabase {
 
     // Multisearch by the following fields: operation_id, tx_hash, sender
     pub async fn search_operations(&self, q: &String) -> anyhow::Result<Vec<operation::Model>> {
-        if is_generic_hash(&q) {
+        if is_generic_hash(q) {
             // operation_id or tx_hash
-            let operations = match self.get_brief_operation_by_id(&q).await? {
+            let operations = match self.get_brief_operation_by_id(q).await? {
                 Some(op) => vec![op],
                 None => self.get_brief_operations_by_tx_hash(q).await?,
             };
 
             Ok(operations)
-        } else if is_tac_address(&q) || is_ton_address(&q) {
+        } else if is_tac_address(q) || is_ton_address(q) {
             // sender (TON-TAC format)
             // TODO: unimplemented for this version of the database.
             // The corresponding field doesn't exist for the operation entity.
