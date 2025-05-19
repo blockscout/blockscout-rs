@@ -1,7 +1,6 @@
 use lazy_static::lazy_static;
 use prometheus::{
-    register_gauge, register_histogram, register_histogram_vec, register_int_counter, Gauge,
-    Histogram, HistogramVec, IntCounter,
+    register_gauge, register_histogram, register_int_counter, Gauge, Histogram, IntCounter,
 };
 
 lazy_static! {
@@ -21,11 +20,9 @@ lazy_static! {
         vec![0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 20.0],
     )
     .unwrap();
-    // pub static ref COMPILE_TIME: Histogram = register_histogram!(
-    pub static ref COMPILE_TIME: HistogramVec = register_histogram_vec!(
+    pub static ref COMPILE_TIME: Histogram = register_histogram!(
         "smart_contract_verifier_compile_time_seconds",
         "contract compilation time in seconds",
-        &["chain_id"]
     )
     .unwrap();
     pub static ref COMPILATIONS_IN_FLIGHT: Gauge = register_gauge!(

@@ -89,6 +89,21 @@
         "subgraph_path": "../subgraphs/story-subgraph",
         "subgraph_name": "story-subgraph",
         "network": "story-mainnet"
+    },
+    "gravity": {
+      "subgraph_path": "../subgraphs/gravity-subgraph",
+      "subgraph_name": "gravity-subgraph",
+      "network": "gravity-mainnet"
+    },
+    "zeta": {
+      "subgraph_path": "../subgraphs/zeta-subgraph",
+      "subgraph_name": "zeta-subgraph",
+      "network": "zeta-mainnet"
+    },
+    "mint": {
+      "subgraph_path": "../subgraphs/mint-subgraph",
+      "subgraph_name": "mint-subgraph",
+      "network": "mint-mainnet"
     }
   }
 }

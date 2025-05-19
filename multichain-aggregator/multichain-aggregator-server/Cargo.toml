@@ -19,6 +19,7 @@ config = { workspace = true }
 sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_with = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
@@ -26,6 +27,8 @@ env-collector = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
+multichain-aggregator-entity = { workspace = true }
 blockscout-service-launcher = { workspace = true, features = [ "test-server","test-database"] }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true, features = ["json"]}
+wiremock = { workspace = true }

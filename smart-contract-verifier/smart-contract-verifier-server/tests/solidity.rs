@@ -150,13 +150,9 @@ fn validate_verification_response<T: TestCase>(
             "Invalid evm version"
         );
         assert_eq!(
-            compiler_settings
-                .libraries
-                .into_values()
-                .flatten()
-                .collect::<BTreeMap<String, String>>(),
-            test_case.libraries(),
-            "Invalid contract libraries"
+            compiler_settings.libraries,
+            BTreeMap::default(),
+            "Invalid compiler settings libraries"
         );
         assert_eq!(
             compiler_settings.optimizer.enabled,
@@ -208,6 +204,12 @@ fn validate_verification_response<T: TestCase>(
         }
         _ => (),
     }
+
+    assert_eq!(
+        source.libraries,
+        test_case.libraries(),
+        "Invalid contract libraries"
+    );
 
     let constructor_arguments = source
         .constructor_arguments
@@ -355,9 +357,11 @@ mod success_tests {
         // Now auxdata is not retrieved for contracts compiled without metadata hash.
         // TODO: should be removed, when that is fixed
         let remove_cbor_auxdata_from_artifacts = |artifacts: &mut serde_json::Value| {
-            artifacts
-                .as_object_mut()
-                .map(|artifacts| artifacts.remove("cborAuxdata"))
+            artifacts.as_object_mut().map(|artifacts| {
+                if let Some(value) = artifacts.get_mut("cborAuxdata") {
+                    *value = serde_json::Value::Object(Default::default());
+                }
+            })
         };
 
         let mut test_case = solidity_types::from_file::<StandardJson>("no_metadata_hash");
@@ -434,5 +438,19 @@ mod success_tests {
         let verification_response =
             get_verification_response(&test_case, BytecodeType::CreationInput).await;
         validate_verification_response(&initial_test_case, verification_response);
+    }
+
+    #[tokio::test]
+    async fn standard_json_supports_manually_linked_libraries() {
+        let test_case = solidity_types::from_file::<StandardJson>("libraries_manually_linked");
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
+    }
+
+    #[tokio::test]
+    async fn standard_json_supports_libraries_linked_by_compiler() {
+        let test_case = solidity_types::from_file::<StandardJson>("libraries_linked_by_compiler");
+        test_success(&test_case, BytecodeType::CreationInput).await;
+        test_success(&test_case, BytecodeType::DeployedBytecode).await;
     }
 }

@@ -12,11 +12,13 @@
         "total_native_coin_transfers",
         "total_tokens",
         "total_txns",
+        "op_stack_total_operational_txns",
         "total_operational_txns",
         "total_user_ops",
         "total_account_abstraction_wallets",
         "total_verified_contracts",
         "new_txns_24h",
+        "op_stack_new_operational_txns_24h",
         "new_operational_txns_24h",
         "pending_txns_30m",
         "txns_fee_24h",
@@ -30,6 +32,8 @@
                 "accounts_growth",
                 "active_accounts",
                 "new_accounts",
+                "new_builder_accounts",
+                "builder_accounts_growth",
                 "active_recurring_accounts_60_days",
                 "active_recurring_accounts_90_days",
                 "active_recurring_accounts_120_days"
@@ -43,9 +47,13 @@
                 "new_txns",
                 "txns_fee",
                 "txns_growth",
+                "op_stack_new_operational_txns",
+                "op_stack_operational_txns_growth",
                 "new_operational_txns",
                 "operational_txns_growth",
-                "txns_success_rate"
+                "txns_success_rate",
+                "new_eip_7702_auths",
+                "eip_7702_auths_growth"
             ]
         },
         {
@@ -73,7 +81,9 @@
             "charts_order": [
                 "average_gas_limit",
                 "average_gas_price",
-                "gas_used_growth"
+                "gas_used_growth",
+                "network_utilization",
+                "average_gas_used"
             ]
         },
         {

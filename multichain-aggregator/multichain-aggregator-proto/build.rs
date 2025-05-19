@@ -1,6 +1,10 @@
 use actix_prost_build::{ActixGenerator, GeneratorList};
 use prost_build::{Config, ServiceGenerator};
-use std::path::Path;
+use prost_wkt_build::{FileDescriptorSet, Message};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 // custom function to include custom generator
 fn compile(
@@ -8,9 +12,13 @@ fn compile(
     includes: &[impl AsRef<Path>],
     generator: Box<dyn ServiceGenerator>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let out = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR environment variable not set"));
+    let descriptor_file = out.join("file_descriptor_set.bin");
+
     let mut config = Config::new();
     config
         .service_generator(generator)
+        .file_descriptor_set_path(descriptor_file.clone())
         .compile_well_known_types()
         .protoc_arg("--openapiv2_out=swagger/v1")
         .protoc_arg("--openapiv2_opt")
@@ -18,13 +26,28 @@ fn compile(
         .bytes(["."])
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
+        .type_attribute(".google.protobuf", "#[derive(serde::Serialize,serde::Deserialize)]")
         // Rename token_type enum values
         .field_attribute(".blockscout.multichainAggregator.v1.BatchImportRequest.AddressImport.token_type", "#[serde(default)]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_20", "#[serde(rename = \"ERC-20\")]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_721", "#[serde(rename = \"ERC-721\")]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_1155", "#[serde(rename = \"ERC-1155\")]")
-        .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_404", "#[serde(rename = \"ERC-404\")]");
+        .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_404", "#[serde(rename = \"ERC-404\")]")
+        // Comma separator for ListDappsRequest.chain_ids
+        .type_attribute("ListDappsRequest", "#[serde_with::serde_as]")
+        .field_attribute("ListDappsRequest.chain_ids", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
+        .field_attribute("ListDappsRequest.chain_ids", "#[serde(default)]")
+        // Comma separator for ListTokensRequest.chain_id
+        .type_attribute("ListTokensRequest", "#[serde_with::serde_as]")
+        .field_attribute("ListTokensRequest.chain_id", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
+        .field_attribute("ListTokensRequest.chain_id", "#[serde(default)]")
+        .extern_path(".google.protobuf", "::prost-wkt-types");
     config.compile_protos(protos, includes)?;
+
+    let descriptor_bytes = fs::read(descriptor_file).unwrap();
+
+    let descriptor = FileDescriptorSet::decode(&descriptor_bytes[..]).unwrap();
+    prost_wkt_build::add_serde(out, descriptor);
     Ok(())
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-service-launcher"
-version = "0.18.0"
+version = "0.20.0"
 description = "Allows to launch blazingly fast blockscout rust services"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
@@ -27,7 +27,7 @@ reqwest = { version = "0.12", features = ["json"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 serde_with = { version = "3", optional = true }
-tokio = { version = "1", optional = true }
+tokio = { version = "1.44", optional = true }
 tokio-util = { version = "0.7.13", features = ["rt"], optional = true }
 tonic = { version = "0.12", optional = true }
 tracing = { version = "0.1", optional = true }

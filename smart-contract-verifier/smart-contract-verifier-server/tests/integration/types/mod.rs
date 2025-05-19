@@ -19,10 +19,14 @@ where
     let test_case_path = format!("{test_cases_dir}/{test_case}.json");
     let content = std::fs::read_to_string(test_case_path).expect("failed to read file");
 
+    let deserializer = &mut serde_json::Deserializer::from_str(&content);
     let request: Request =
-        serde_json::from_str(&content).expect("invalid test case request format");
+        serde_path_to_error::deserialize(deserializer).expect("invalid test case request format");
+
+    let deserializer = &mut serde_json::Deserializer::from_str(&content);
     let response: Response =
-        serde_json::from_str(&content).expect("invalid test case response format");
+        serde_path_to_error::deserialize(deserializer).expect("invalid test case response format");
+
     (request, response)
 }
 

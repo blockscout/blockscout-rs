@@ -13,30 +13,30 @@ multichain-aggregator-entity = { path = "./multichain-aggregator-entity" }
 multichain-aggregator-logic = { path = "./multichain-aggregator-logic" }
 multichain-aggregator-migration = { path = "./multichain-aggregator-migration" }
 multichain-aggregator-proto = { path = "./multichain-aggregator-proto" }
+bens-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "741fc40" }
 
 # web
 actix-prost = { version = "0.1.0" }
-actix-prost-build = { version = "0.1.0", features = [
-    "conversions",
-] }
+actix-prost-build = { version = "0.1.0" }
 actix-prost-macros = { version = "0.1.0" }
 actix-web = "4.2"
-blockscout-service-launcher = { version = "0.17.0", features = [
-    "database-1_0",
-] }
+blockscout-service-launcher = { version = "0.20.0", features = ["database-1"] }
 prost = "0.13"
 prost-build = "0.13"
+prost-wkt = "0.6.0"
+prost-wkt-types = "0.6.0"
+prost-wkt-build = "0.6.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tonic = "0.12"
 tonic-build = "0.12"
 
 # db
-sea-orm = { version = "1", features = [
+sea-orm = { version = "1.1.7", features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
     "macros",
 ] }
-sea-orm-migration = { version = "1", features = [
+sea-orm-migration = { version = "1.1.7", features = [
     "runtime-tokio-rustls",
     "sqlx-postgres",
 ] }
@@ -60,9 +60,14 @@ blockscout-chains = { git = "https://github.com/blockscout/blockscout-rs", versi
 cached = { version = "0.55", default-features = false }
 config = "0.13"
 env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.1.1" }
-pretty_assertions = "1.3"
 regex = "1.10"
 reqwest = "0.12"
 thiserror = "1.0"
 url = "2.4"
 futures = "0.3"
+lazy_static = { version = "1.4" }
+prometheus = { version = "0.13" }
+
+# tests
+pretty_assertions = "1.3"
+wiremock = "0.6.2"

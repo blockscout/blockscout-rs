@@ -17,6 +17,9 @@ use user_ops::*;
 #[cfg(test)]
 mod mock;
 
+pub use new_txns::op_stack_operational::{
+    ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH,
+};
 pub use new_txns_window::WINDOW as NEW_TXNS_WINDOW_RANGE;
 
 pub use aa_wallets_growth::{
@@ -34,6 +37,15 @@ pub use new_aa_wallets::{
     NewAccountAbstractionWallets, NewAccountAbstractionWalletsMonthly,
     NewAccountAbstractionWalletsWeekly, NewAccountAbstractionWalletsYearly,
 };
+pub use new_txns::op_stack_operational::{
+    OpStackNewOperationalTxns, OpStackNewOperationalTxnsMonthly, OpStackNewOperationalTxnsWeekly,
+    OpStackNewOperationalTxnsYearly,
+};
+pub use new_txns_window::op_stack_operational::OpStackNewOperationalTxnsWindow;
+pub use op_stack_operational_txns_growth::{
+    OpStackOperationalTxnsGrowth, OpStackOperationalTxnsGrowthMonthly,
+    OpStackOperationalTxnsGrowthWeekly, OpStackOperationalTxnsGrowthYearly,
+};
 #[rustfmt::skip]
 pub use active_recurring_accounts::{
     ActiveRecurringAccountsDailyRecurrence120Days, ActiveRecurringAccountsMonthlyRecurrence120Days,
@@ -49,6 +61,15 @@ pub use active_recurring_accounts::{
     ActiveRecurringAccountsDailyRecurrence90Days, ActiveRecurringAccountsMonthlyRecurrence90Days,
     ActiveRecurringAccountsWeeklyRecurrence90Days, ActiveRecurringAccountsYearlyRecurrence90Days,
 };
+pub use arbitrum_new_operational_txns::{
+    ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsMonthly,
+    ArbitrumNewOperationalTxnsWeekly, ArbitrumNewOperationalTxnsYearly,
+};
+pub use arbitrum_new_operational_txns_window::ArbitrumNewOperationalTxnsWindow;
+pub use arbitrum_operational_txns_growth::{
+    ArbitrumOperationalTxnsGrowth, ArbitrumOperationalTxnsGrowthMonthly,
+    ArbitrumOperationalTxnsGrowthWeekly, ArbitrumOperationalTxnsGrowthYearly,
+};
 pub use average_block_rewards::{
     AverageBlockRewards, AverageBlockRewardsMonthly, AverageBlockRewardsWeekly,
     AverageBlockRewardsYearly,
@@ -62,11 +83,22 @@ pub use average_gas_limit::{
 pub use average_gas_price::{
     AverageGasPrice, AverageGasPriceMonthly, AverageGasPriceWeekly, AverageGasPriceYearly,
 };
+pub use average_gas_used::{
+    AverageGasUsed, AverageGasUsedMonthly, AverageGasUsedWeekly, AverageGasUsedYearly,
+};
 pub use average_txn_fee::{
     AverageTxnFee, AverageTxnFeeMonthly, AverageTxnFeeWeekly, AverageTxnFeeYearly,
 };
+pub use builder_accounts_growth::{
+    BuilderAccountsGrowth, BuilderAccountsGrowthMonthly, BuilderAccountsGrowthWeekly,
+    BuilderAccountsGrowthYearly,
+};
 pub use contracts_growth::{
     ContractsGrowth, ContractsGrowthMonthly, ContractsGrowthWeekly, ContractsGrowthYearly,
+};
+pub use eip_7702_auths_growth::{
+    Eip7702AuthsGrowth, Eip7702AuthsGrowthMonthly, Eip7702AuthsGrowthWeekly,
+    Eip7702AuthsGrowthYearly,
 };
 pub use gas_used_growth::{
     GasUsedGrowth, GasUsedGrowthMonthly, GasUsedGrowthWeekly, GasUsedGrowthYearly,
@@ -78,10 +110,21 @@ pub use native_coin_holders_growth::{
 pub use native_coin_supply::{
     NativeCoinSupply, NativeCoinSupplyMonthly, NativeCoinSupplyWeekly, NativeCoinSupplyYearly,
 };
+pub use network_utilization::{
+    NetworkUtilization, NetworkUtilizationMonthly, NetworkUtilizationWeekly,
+    NetworkUtilizationYearly,
+};
 pub use new_accounts::{NewAccounts, NewAccountsMonthly, NewAccountsWeekly, NewAccountsYearly};
 pub use new_blocks::{NewBlocks, NewBlocksMonthly, NewBlocksWeekly, NewBlocksYearly};
+pub use new_builder_accounts::{
+    NewBuilderAccounts, NewBuilderAccountsMonthly, NewBuilderAccountsWeekly,
+    NewBuilderAccountsYearly,
+};
 pub use new_contracts::{
     NewContracts, NewContractsMonthly, NewContractsWeekly, NewContractsYearly,
+};
+pub use new_eip_7702_auths::{
+    NewEip7702Auths, NewEip7702AuthsMonthly, NewEip7702AuthsWeekly, NewEip7702AuthsYearly,
 };
 pub use new_native_coin_holders::{
     NewNativeCoinHolders, NewNativeCoinHoldersMonthly, NewNativeCoinHoldersWeekly,
@@ -91,11 +134,6 @@ pub use new_native_coin_transfers::{
     NewNativeCoinTransfers, NewNativeCoinTransfersMonthly, NewNativeCoinTransfersWeekly,
     NewNativeCoinTransfersYearly,
 };
-pub use new_operational_txns::{
-    NewOperationalTxns, NewOperationalTxnsMonthly, NewOperationalTxnsWeekly,
-    NewOperationalTxnsYearly,
-};
-pub use new_operational_txns_window::NewOperationalTxnsWindow;
 pub use new_txns::{NewTxns, NewTxnsMonthly, NewTxnsWeekly, NewTxnsYearly};
 pub use new_txns_window::NewTxnsWindow;
 pub use new_user_ops::{
@@ -104,10 +142,6 @@ pub use new_user_ops::{
 pub use new_verified_contracts::{
     NewVerifiedContracts, NewVerifiedContractsMonthly, NewVerifiedContractsWeekly,
     NewVerifiedContractsYearly,
-};
-pub use operational_txns_growth::{
-    OperationalTxnsGrowth, OperationalTxnsGrowthMonthly, OperationalTxnsGrowthWeekly,
-    OperationalTxnsGrowthYearly,
 };
 pub use txns_fee::{TxnsFee, TxnsFeeMonthly, TxnsFeeWeekly, TxnsFeeYearly};
 pub use txns_growth::{TxnsGrowth, TxnsGrowthMonthly, TxnsGrowthWeekly, TxnsGrowthYearly};
@@ -125,7 +159,10 @@ pub use verified_contracts_growth::{
 pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub(crate) use new_blocks::NewBlocksStatement;
 pub(crate) use new_native_coin_transfers::NewNativeCoinTransfersInt;
-pub(crate) use new_txns::{NewTxnsInt, NewTxnsStatement};
+pub(crate) use new_txns::{
+    op_stack_operational::transactions_filter as op_stack_operational_transactions_filter,
+    NewTxnsCombinedStatement, NewTxnsInt,
+};
 pub(crate) use new_txns_window::NewTxnsWindowInt;
 
 #[cfg(test)]

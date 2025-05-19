@@ -1,25 +1,22 @@
 use crate::{
     metrics,
     proto::{
-        vyper_verifier_server::VyperVerifier, BytecodeType, ListCompilerVersionsRequest,
+        vyper_verifier_server::VyperVerifier, ListCompilerVersionsRequest,
         ListCompilerVersionsResponse, VerifyResponse, VerifyVyperMultiPartRequest,
         VerifyVyperStandardJsonRequest,
     },
     services::common,
     settings::VyperSettings,
-    types::{
-        StandardJsonParseError, VerifyResponseWrapper, VerifyVyperMultiPartRequestWrapper,
-        VerifyVyperStandardJsonRequestWrapper,
-    },
+    types,
 };
 use anyhow::Context;
-use smart_contract_verifier::{vyper, Compilers, VerificationError, VyperClient, VyperCompiler};
+use smart_contract_verifier::{vyper, EvmCompilersPool, VyperCompiler};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
 pub struct VyperVerifierService {
-    client: Arc<VyperClient>,
+    compilers: Arc<EvmCompilersPool<VyperCompiler>>,
 }
 
 impl VyperVerifierService {
@@ -35,13 +32,12 @@ impl VyperVerifierService {
         )
         .await
         .context("vyper fetcher initialization")?;
-        let compilers = Compilers::new(fetcher, VyperCompiler::new(), compilers_threads_semaphore);
+        let compilers: EvmCompilersPool<VyperCompiler> =
+            EvmCompilersPool::new(fetcher, compilers_threads_semaphore);
         compilers.load_from_dir(&settings.compilers_dir).await;
 
-        let client = VyperClient::new(compilers);
-
         Ok(Self {
-            client: Arc::new(client),
+            compilers: Arc::new(compilers),
         })
     }
 }
@@ -52,162 +48,90 @@ impl VyperVerifier for VyperVerifierService {
         &self,
         request: Request<VerifyVyperMultiPartRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        let request: VerifyVyperMultiPartRequestWrapper = request.into_inner().into();
+        let request = request.into_inner();
+
         let chain_id = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.chain_id.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.chain_id.clone());
         let contract_address = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.contract_address.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.contract_address.clone());
         tracing::info!(
-            chain_id = chain_id,
-            contract_address = contract_address,
-            "Vyper multi-part verification request received"
+            chain_id =? chain_id,
+            contract_address =? contract_address,
+            "vyper multi-part verification request received"
         );
 
-        tracing::debug!(
-            bytecode = request.bytecode,
-            bytecode_type = BytecodeType::try_from(request.bytecode_type)
-                .unwrap()
-                .as_str_name(),
-            compiler_version = request.compiler_version,
-            evm_version = request.evm_version,
-            source_files = ?request.source_files,
-            interfaces = ?request.interfaces,
-            "Request details"
-        );
+        let maybe_verification_request = vyper::multi_part::VerificationRequest::try_from(request);
+        let verification_request =
+            common::process_solo_verification_request_conversion!(maybe_verification_request);
 
-        let mut verification_request: vyper::multi_part::VerificationRequest =
-            request.try_into()?;
-        verification_request.compiler_version = common::normalize_request_compiler_version(
-            &self.client.compilers().all_versions(),
-            &verification_request.compiler_version,
-        )?;
+        let result = vyper::multi_part::verify(&self.compilers, verification_request).await;
 
-        let result = vyper::multi_part::verify(self.client.clone(), verification_request).await;
-
-        let response = if let Ok(verification_success) = result {
-            tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
-            VerifyResponseWrapper::ok(verification_success)
-        } else {
-            let err = result.unwrap_err();
-            tracing::info!(err=%err, "Request processing failed");
-            match err {
-                VerificationError::Compilation(_)
-                | VerificationError::NoMatchingContracts
-                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
-                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    return Err(Status::invalid_argument(err.to_string()));
-                }
-                VerificationError::Internal(err) => {
-                    tracing::error!("internal error: {err:#?}");
-                    return Err(Status::internal(err.to_string()));
-                }
-            }
+        let verify_response = match result {
+            Ok(value) => types::verification_result::process_verification_result(value)?,
+            Err(error) => types::verification_result::process_error(error)?,
         };
 
         metrics::count_verify_contract(
-            chain_id.as_ref(),
+            &chain_id.unwrap_or_default(),
             "vyper",
-            response.status().as_str_name(),
+            verify_response.status().as_str_name(),
             "multi-part",
         );
-        return Ok(Response::new(response.into_inner()));
+        Ok(Response::new(verify_response))
     }
 
     async fn verify_standard_json(
         &self,
         request: Request<VerifyVyperStandardJsonRequest>,
     ) -> Result<Response<VerifyResponse>, Status> {
-        let request: VerifyVyperStandardJsonRequestWrapper = request.into_inner().into();
+        let request = request.into_inner();
+
         let chain_id = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.chain_id.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.chain_id.clone());
         let contract_address = request
             .metadata
             .as_ref()
-            .and_then(|metadata| metadata.contract_address.clone())
-            .unwrap_or_default();
+            .and_then(|metadata| metadata.contract_address.clone());
         tracing::info!(
-            chain_id = chain_id,
-            contract_address = contract_address,
-            "Vyper standard-json verification request received"
+            chain_id =? chain_id,
+            contract_address =? contract_address,
+            "vyper standard-json verification request received"
         );
 
-        tracing::debug!(
-            bytecode = request.bytecode,
-            bytecode_type = BytecodeType::try_from(request.bytecode_type)
-                .unwrap()
-                .as_str_name(),
-            compiler_version = request.compiler_version,
-            input = request.input,
-            "Request details"
-        );
+        let maybe_verification_request =
+            vyper::standard_json::VerificationRequest::try_from(request);
+        let verification_request =
+            common::process_solo_verification_request_conversion!(maybe_verification_request);
 
-        let mut verification_request: vyper::standard_json::VerificationRequest = {
-            let request: Result<_, StandardJsonParseError> = request.try_into();
-            if let Err(err) = request {
-                match err {
-                    StandardJsonParseError::InvalidContent(_) => {
-                        let response = VerifyResponseWrapper::err(err).into_inner();
-                        return Ok(Response::new(response));
-                    }
-                    StandardJsonParseError::BadRequest(_) => {
-                        return Err(Status::invalid_argument(err.to_string()));
-                    }
-                }
-            }
-            request.unwrap()
-        };
-        verification_request.compiler_version = common::normalize_request_compiler_version(
-            &self.client.compilers().all_versions(),
-            &verification_request.compiler_version,
-        )?;
+        let result = vyper::standard_json::verify(&self.compilers, verification_request).await;
 
-        let result = vyper::standard_json::verify(self.client.clone(), verification_request).await;
-
-        let response = if let Ok(verification_success) = result {
-            tracing::info!(match_type=?verification_success.match_type, "Request processed successfully");
-            VerifyResponseWrapper::ok(verification_success)
-        } else {
-            let err = result.unwrap_err();
-            tracing::info!(err=%err, "Request processing failed");
-            match err {
-                VerificationError::Compilation(_)
-                | VerificationError::NoMatchingContracts
-                | VerificationError::CompilerVersionMismatch(_) => VerifyResponseWrapper::err(err),
-                VerificationError::Initialization(_) | VerificationError::VersionNotFound(_) => {
-                    return Err(Status::invalid_argument(err.to_string()));
-                }
-                VerificationError::Internal(err) => {
-                    tracing::error!("internal error: {err:#?}");
-                    return Err(Status::internal(err.to_string()));
-                }
-            }
+        let verify_response = match result {
+            Ok(value) => types::verification_result::process_verification_result(value)?,
+            Err(error) => types::verification_result::process_error(error)?,
         };
 
         metrics::count_verify_contract(
-            chain_id.as_ref(),
+            &chain_id.unwrap_or_default(),
             "vyper",
-            response.status().as_str_name(),
+            verify_response.status().as_str_name(),
             "standard-json",
         );
-        return Ok(Response::new(response.into_inner()));
+        Ok(Response::new(verify_response))
     }
 
     async fn list_compiler_versions(
         &self,
         _request: Request<ListCompilerVersionsRequest>,
     ) -> Result<Response<ListCompilerVersionsResponse>, Status> {
-        let compiler_versions = self.client.compilers().all_versions_sorted_str();
+        let compiler_versions = self.compilers.all_versions();
         Ok(Response::new(ListCompilerVersionsResponse {
-            compiler_versions,
+            compiler_versions: common::versions_to_sorted_string(compiler_versions),
         }))
     }
 }

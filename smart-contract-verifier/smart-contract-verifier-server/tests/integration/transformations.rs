@@ -38,7 +38,8 @@ async fn immutables() {
 
 #[tokio::test]
 async fn libraries_linked_by_compiler() {
-    test_success_multi_part_and_standard_json("libraries_linked_by_compiler").await
+    // we do not support libraries specification in multi_part requests
+    test_success::<TestCaseStandardJson>("libraries_linked_by_compiler").await;
 }
 
 #[tokio::test]
@@ -51,9 +52,11 @@ async fn metadata_hash_absent() {
     // Now auxdata is not retrieved for contracts compiled without metadata hash.
     // TODO: should be removed, when that is fixed
     let remove_cbor_auxdata_from_artifacts = |artifacts: &mut serde_json::Value| {
-        artifacts
-            .as_object_mut()
-            .map(|artifacts| artifacts.remove("cborAuxdata"))
+        artifacts.as_object_mut().map(|artifacts| {
+            if let Some(value) = artifacts.get_mut("cborAuxdata") {
+                *value = serde_json::Value::Object(Default::default());
+            }
+        })
     };
 
     let (mut test_case_request, mut test_case_response) =

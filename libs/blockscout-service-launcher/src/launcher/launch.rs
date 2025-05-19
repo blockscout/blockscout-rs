@@ -129,7 +129,13 @@ fn http_serve<R>(
 where
     R: HttpRouter + Send + Sync + Clone + 'static,
 {
-    tracing::info!("starting http server on addr {}", settings.addr);
+    let base_path = settings.base_path.clone();
+    let addr_debug = if let Some(base_path) = base_path.clone() {
+        format!("{}{}", settings.addr, String::from(base_path))
+    } else {
+        settings.addr.to_string()
+    };
+    tracing::info!("starting http server on addr {}", addr_debug);
 
     // Initialize the tracing logger not to print http request and response messages on health endpoint
     CompactRootSpanBuilder::init_skip_http_trace_paths(["/health"]);
@@ -145,7 +151,7 @@ where
                 .wrap(metrics.clone())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
-                .configure(configure_router(&http))
+                .configure(configure_router(&http, base_path.clone().map(|p| p.into())))
         })
         .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)
@@ -158,7 +164,7 @@ where
                 .wrap(TracingLogger::<CompactRootSpanBuilder>::new())
                 .wrap(Condition::new(cors_enabled, cors))
                 .app_data(json_cfg.clone())
-                .configure(configure_router(&http))
+                .configure(configure_router(&http, base_path.clone().map(|p| p.into())))
         })
         .shutdown_timeout(SHUTDOWN_TIMEOUT_SEC)
         .bind(settings.addr)

@@ -27,7 +27,7 @@ stop-test-postgres:
 
 run:
     MULTICHAIN_AGGREGATOR__DATABASE__CONNECT__URL={{DATABASE_URL}} \
-    dotenvy -f multichain-aggregator-server/config/base.env cargo run --bin multichain-aggregator-server
+    cargo run --bin multichain-aggregator-server
 
 generate-entities:
     sea-orm-cli generate entity --lib -o multichain-aggregator-entity/src
@@ -45,5 +45,6 @@ test *args:
     cargo test {{args}} -- --include-ignored
 
 test-with-db *args:
+    -just                                                                          stop-test-postgres 2> /dev/null
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
     just db-port="{{test-db-port}}" db-name=""                                    test {{args}}

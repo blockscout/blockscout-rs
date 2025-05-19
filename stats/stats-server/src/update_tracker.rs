@@ -23,6 +23,16 @@ impl InitialUpdateTracker {
         }
     }
 
+    pub async fn get_all_charts_with_exact_status(
+        &self,
+        status: &proto_v1::ChartSubsetUpdateStatus,
+    ) -> HashSet<ChartKey> {
+        self.inner
+            .lock()
+            .await
+            .get_all_charts_with_exact_status(status)
+    }
+
     /// will skip tracking in a subset if not a part of the subset
     async fn mark_all_trackers(&self, charts: &HashSet<ChartKey>, status: UpdateStatusChange) {
         let mut inner = self.inner.lock().await;
@@ -31,6 +41,11 @@ impl InitialUpdateTracker {
 
     pub async fn mark_waiting_for_starting_condition(&self, charts: &HashSet<ChartKey>) {
         self.mark_all_trackers(charts, UpdateStatusChange::WaitingForStartingCondition)
+            .await
+    }
+
+    pub async fn mark_queued_for_initial_update(&self, charts: &HashSet<ChartKey>) {
+        self.mark_all_trackers(charts, UpdateStatusChange::QueuedForInitialUpdate)
             .await
     }
 
@@ -91,7 +106,7 @@ struct InitialUpdateTrackerInner {
 
 impl InitialUpdateTrackerInner {
     /// Need charts with their status requirements
-    pub fn new(charts: &BTreeMap<ChartKey, IndexingStatus>) -> Self {
+    fn new(charts: &BTreeMap<ChartKey, IndexingStatus>) -> Self {
         let charts_satisfying_status =
             |charts: &BTreeMap<ChartKey, IndexingStatus>, status: &IndexingStatus| -> HashSet<_> {
                 charts
@@ -145,6 +160,22 @@ impl InitialUpdateTrackerInner {
         }
     }
 
+    fn get_all_charts_with_exact_status(
+        &self,
+        status: &proto_v1::ChartSubsetUpdateStatus,
+    ) -> HashSet<ChartKey> {
+        let all_trackers = [
+            &self.independent,
+            &self.blocks_dependent,
+            &self.internal_transactions_dependent,
+            &self.user_ops_dependent,
+        ];
+        all_trackers
+            .into_iter()
+            .flat_map(|tracker| tracker.get_charts_with_exact_status(status).clone())
+            .collect()
+    }
+
     fn verify_tracking_all_charts(
         charts: &BTreeMap<ChartKey, IndexingStatus>,
         tracking: &[&HashSet<ChartKey>],
@@ -179,7 +210,7 @@ impl InitialUpdateTrackerInner {
     }
 
     fn joint_counts_by_status(&self) -> Vec<(String, usize)> {
-        let mut counts = [0usize; 4];
+        let mut counts = [0usize; 5];
         for subset in [
             &self.independent,
             &self.blocks_dependent,
@@ -194,8 +225,9 @@ impl InitialUpdateTrackerInner {
         vec![
             ("pending".to_string(), counts[0]),
             ("waiting_for_starting_condition".to_string(), counts[1]),
-            ("running_initial_update".to_string(), counts[2]),
-            ("completed_initial_update".to_string(), counts[3]),
+            ("queued_for_initial_update".to_string(), counts[2]),
+            ("running_initial_update".to_string(), counts[3]),
+            ("completed_initial_update".to_string(), counts[4]),
         ]
     }
 
@@ -231,12 +263,15 @@ impl InitialUpdateTrackerInner {
     }
 }
 
+/// does not represent the proto encoding in any way;
+/// it only shows the logical order of statuses
 fn status_to_int(status: &proto_v1::ChartSubsetUpdateStatus) -> u32 {
     match status {
         proto_v1::ChartSubsetUpdateStatus::Pending => 0,
         proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition => 1,
-        proto_v1::ChartSubsetUpdateStatus::RunningInitialUpdate => 2,
-        proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate => 3,
+        proto_v1::ChartSubsetUpdateStatus::QueuedForInitialUpdate => 2,
+        proto_v1::ChartSubsetUpdateStatus::RunningInitialUpdate => 3,
+        proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate => 4,
     }
 }
 
@@ -257,6 +292,7 @@ struct UpdateChartSubsetTracker {
     /// charts for which no actions were taken yet
     pending: HashSet<ChartKey>,
     waiting_for_starting_condition: HashSet<ChartKey>,
+    queued_for_initial_update: HashSet<ChartKey>,
     running_initial_update: HashSet<ChartKey>,
     completed_initial_update: HashSet<ChartKey>,
 }
@@ -264,6 +300,7 @@ struct UpdateChartSubsetTracker {
 #[derive(Debug, Clone)]
 enum UpdateStatusChange {
     WaitingForStartingCondition,
+    QueuedForInitialUpdate,
     RunningInitialUpdate,
     CompletedInitialUpdate,
 }
@@ -273,6 +310,7 @@ impl UpdateChartSubsetTracker {
         Self {
             pending: charts,
             waiting_for_starting_condition: HashSet::new(),
+            queued_for_initial_update: HashSet::new(),
             running_initial_update: HashSet::new(),
             completed_initial_update: HashSet::new(),
         }
@@ -281,13 +319,19 @@ impl UpdateChartSubsetTracker {
     pub fn track_status_change(&mut self, chart: &ChartKey, change: UpdateStatusChange) {
         let key_from_previous_status = match change {
             UpdateStatusChange::WaitingForStartingCondition => self.pending.take(chart),
-            UpdateStatusChange::RunningInitialUpdate => self
+            UpdateStatusChange::QueuedForInitialUpdate => self
                 .waiting_for_starting_condition
                 .take(chart)
+                .or_else(|| self.pending.take(chart)),
+            UpdateStatusChange::RunningInitialUpdate => self
+                .queued_for_initial_update
+                .take(chart)
+                .or_else(|| self.waiting_for_starting_condition.take(chart))
                 .or_else(|| self.pending.take(chart)),
             UpdateStatusChange::CompletedInitialUpdate => self
                 .running_initial_update
                 .take(chart)
+                .or_else(|| self.queued_for_initial_update.take(chart))
                 .or_else(|| self.waiting_for_starting_condition.take(chart))
                 .or_else(|| self.pending.take(chart)),
         };
@@ -295,6 +339,9 @@ impl UpdateChartSubsetTracker {
             match change {
                 UpdateStatusChange::WaitingForStartingCondition => {
                     self.waiting_for_starting_condition.insert(key);
+                }
+                UpdateStatusChange::QueuedForInitialUpdate => {
+                    self.queued_for_initial_update.insert(key);
                 }
                 UpdateStatusChange::RunningInitialUpdate => {
                     self.running_initial_update.insert(key);
@@ -310,24 +357,48 @@ impl UpdateChartSubsetTracker {
         match (
             self.pending.is_empty(),
             self.waiting_for_starting_condition.is_empty(),
+            self.queued_for_initial_update.is_empty(),
             self.running_initial_update.is_empty(),
             self.completed_initial_update.is_empty(),
         ) {
-            (true, true, true, true) | (true, true, true, false) => {
+            (true, true, true, true, true) | (true, true, true, true, false) => {
                 proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate
             }
-            (true, true, false, _) => proto_v1::ChartSubsetUpdateStatus::RunningInitialUpdate,
-            (true, false, _, _) => proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition,
-            (false, _, _, _) => proto_v1::ChartSubsetUpdateStatus::Pending,
+            (true, true, true, false, _) => proto_v1::ChartSubsetUpdateStatus::RunningInitialUpdate,
+            (true, true, false, _, _) => proto_v1::ChartSubsetUpdateStatus::QueuedForInitialUpdate,
+            (true, false, _, _, _) => {
+                proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition
+            }
+            (false, _, _, _, _) => proto_v1::ChartSubsetUpdateStatus::Pending,
         }
     }
 
-    pub fn counts(&self) -> [usize; 4] {
+    pub fn counts(&self) -> [usize; 5] {
         [
             self.pending.len(),
             self.waiting_for_starting_condition.len(),
+            self.queued_for_initial_update.len(),
             self.running_initial_update.len(),
             self.completed_initial_update.len(),
         ]
+    }
+
+    pub fn get_charts_with_exact_status(
+        &self,
+        status: &proto_v1::ChartSubsetUpdateStatus,
+    ) -> &HashSet<ChartKey> {
+        match status {
+            proto_v1::ChartSubsetUpdateStatus::Pending => &self.pending,
+            proto_v1::ChartSubsetUpdateStatus::WaitingForStartingCondition => {
+                &self.waiting_for_starting_condition
+            }
+            proto_v1::ChartSubsetUpdateStatus::QueuedForInitialUpdate => {
+                &self.queued_for_initial_update
+            }
+            proto_v1::ChartSubsetUpdateStatus::RunningInitialUpdate => &self.running_initial_update,
+            proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate => {
+                &self.completed_initial_update
+            }
+        }
     }
 }

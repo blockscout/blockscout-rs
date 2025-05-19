@@ -5,6 +5,8 @@ pub async fn batch_import(
     db: &DatabaseConnection,
     request: BatchImportRequest,
 ) -> Result<(), ServiceError> {
+    request.record_metrics();
+
     let tx = db.begin().await?;
     repository::addresses::upsert_many(&tx, request.addresses)
         .await

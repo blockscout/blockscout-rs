@@ -8,13 +8,13 @@ use std::{collections::BTreeMap, sync::Arc};
 use tonic::{Request, Response, Status};
 
 pub struct VyperVerifierService {
-    blockscout_clients: Arc<BTreeMap<String, blockscout_client::Client>>,
+    blockscout_clients: Arc<BTreeMap<String, proxy_verifier_logic::blockscout::Client>>,
     eth_bytecode_db_client: Arc<eth_bytecode_db_proto::http_client::Client>,
 }
 
 impl VyperVerifierService {
     pub fn new(
-        blockscout_clients: Arc<BTreeMap<String, blockscout_client::Client>>,
+        blockscout_clients: Arc<BTreeMap<String, proxy_verifier_logic::blockscout::Client>>,
         eth_bytecode_db_client: Arc<eth_bytecode_db_proto::http_client::Client>,
     ) -> Self {
         Self {

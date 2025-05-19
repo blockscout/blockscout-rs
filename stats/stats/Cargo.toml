@@ -30,6 +30,8 @@ prometheus = "0.13"
 anyhow = "1"
 itertools = "0.13.0"
 rust_decimal = "1.27"
+hex = { workspace = true }
+num-traits = { workspace = true }
 
 # Dependencies for test-utils only
 pretty_assertions = { version = "1.2", optional = true }

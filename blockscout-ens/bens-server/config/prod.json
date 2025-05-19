@@ -65,6 +65,14 @@
         ],
         "rpc_url": "https://puppynet.shibrpc.com"
       },
+      "185": {
+        "blockscout": {
+          "url": "https://explorer.mintchain.io/"
+        },
+        "use_protocols": [
+          "mint"
+        ]
+      },
       "690": {
         "blockscout": {
           "url": "https://explorer.redstone.xyz/"
@@ -75,10 +83,26 @@
       },
       "1514": {
         "blockscout": {
-          "url": "https://www.storyscan.xyz/"
+          "url": "https://www.storyscan.io/"
         },
         "use_protocols": [
           "story"
+        ]
+      },
+      "7000": {
+        "blockscout": {
+          "url": "https://zetachain.blockscout.com/"
+        },
+        "use_protocols": [
+          "zeta"
+        ]
+      },
+      "1625": {
+        "blockscout": {
+          "url": "https://explorer.gravity.xyz/"
+        },
+        "use_protocols": [
+          "gravity"
         ]
       },
       "10200": {
@@ -185,6 +209,14 @@
         },
         "use_protocols": [
           "ens", "zns-ink"
+        ]
+      },
+      "80094": {
+        "blockscout": {
+          "url": "https://bera.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
         ]
       },
       "130": {
@@ -527,6 +559,60 @@
           "type": "ens_like",
           "native_token_contract": "0xff829d3ea4d8f25bf8be2d8774c080a8046cb7e1",
           "empty_label_hash": "0x699d90c22b22a5d5d34ff98b3e55748d93f2f4564862200c93b7d5d90b511710"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "gravity": {
+        "tld_list": ["g"],
+        "network_id": 1625,
+        "subgraph_name": "gravity-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xf8d9d86a4594ffc975ca9c760c5887bd9a3b6232",
+          "empty_label_hash": "0x438c16e05212074ed5b2d4beba06988729060b93431f68bf346c93c64a1ce640"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "zeta": {
+        "tld_list": ["zeta"],
+        "network_id": 7000,
+        "subgraph_name": "zeta-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xfcd0df2d5b1023c3ce210bed17c3bcf40d4ed5cd",
+          "empty_label_hash": "0xd7bafc09d4bd42d7efec92efd054d59897c310ed1f1eab50e65fe9de8b1bae19"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "mint": {
+        "tld_list": ["mint"],
+        "network_id": 185,
+        "subgraph_name": "mint-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x5c6cb93b1fc4e0a1274d07852cbd7ebd201b6593",
+          "empty_label_hash": "0x3f3fcc15032dacacd8a3864982ab4207e1f7bc7a882d8a98b48f9ac6dd2084cb"
         },
         "meta": {
           "short_name": "SPACE ID",

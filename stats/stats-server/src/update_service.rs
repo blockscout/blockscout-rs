@@ -157,6 +157,10 @@ impl UpdateService {
         init_update_tracker: &InitialUpdateTracker,
     ) {
         {
+            init_update_tracker
+                .mark_queued_for_initial_update(&group_entry.enabled_members)
+                .await;
+            init_update_tracker.report().await;
             let _init_update_permit = initial_update_semaphore
                 .acquire()
                 .await
@@ -164,6 +168,7 @@ impl UpdateService {
             init_update_tracker
                 .mark_started_initial_update(&group_entry.enabled_members)
                 .await;
+            init_update_tracker.report().await;
             if let Some(force_full) = force_update_on_start {
                 self.clone()
                     .update(group_entry.clone(), force_full, None)
@@ -391,14 +396,17 @@ impl UpdateService {
         else {
             return;
         };
+        let enabled_charts = enabled_charts_overwrite.unwrap_or(&group_entry.enabled_members);
         let update_parameters = UpdateParameters {
             db: &self.db,
             blockscout: &self.blockscout_db,
             blockscout_applied_migrations: active_migrations,
+            enabled_update_charts_recursive: group_entry
+                .group
+                .enabled_members_with_deps(enabled_charts),
             update_time_override: None,
             force_full,
         };
-        let enabled_charts = enabled_charts_overwrite.unwrap_or(&group_entry.enabled_members);
         let result = group_entry
             .group
             .update_charts_sync(update_parameters, enabled_charts)
@@ -472,6 +480,10 @@ impl UpdateService {
                 .await
                 .into(),
         }
+    }
+
+    pub fn initial_update_tracker(&self) -> &InitialUpdateTracker {
+        &self.init_update_tracker
     }
 
     /// (accepted_chart_keys, accepted_chart_names, rejected_chart_names)

@@ -349,7 +349,12 @@ mod flattened {
 
         let mut test_case = vyper_types::from_file::<Flattened>("simple");
         test_case.creation_bytecode = "0xkeklol".to_string();
-        test_error(test_case, StatusCode::BAD_REQUEST, "Invalid bytecode: ").await;
+        test_error(
+            test_case,
+            StatusCode::BAD_REQUEST,
+            "bytecode is not valid hex",
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -477,7 +482,7 @@ mod standard_json {
         test_error(
             test_case,
             StatusCode::BAD_REQUEST,
-            "Invalid compiler version",
+            "invalid compiler version",
         )
         .await;
     }

@@ -68,3 +68,20 @@ provider = [
 ]
 shard = "primary"
 
+[chains.zeta-mainnet]
+provider = [
+    { label = "zeta-mainnet", url = "https://zeta-chain.drpc.org", features = [] }
+]
+shard = "primary"
+
+[chains.gravity-mainnet]
+provider = [
+    { label = "gravity-mainnet", url = "https://rpc.gravity.xyz", features = [] }
+]
+shard = "primary"
+
+[chains.mint-mainnet]
+provider = [
+    { label = "mint-mainnet", url = "https://rpc.mintchain.io", features = [] }
+]
+shard = "primary"

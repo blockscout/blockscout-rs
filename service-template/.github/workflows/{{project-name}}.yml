@@ -84,3 +84,17 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: {{project-name}}
+
+  {%- if types %}
+  publish_types_package:
+    name: Publish types package
+    uses: './.github/workflows/npm-publisher.yml'
+    needs: docker
+    if: needs.docker.outputs.tag-value != ''
+    secrets: inherit
+    with:
+      {% raw %}
+      version: ${{ needs.docker.outputs.tag-value }}
+      {% endraw %}
+      project_name: {{project-name}}
+  {%- endif %}

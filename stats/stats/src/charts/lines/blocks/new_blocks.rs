@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -21,7 +21,7 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -31,7 +31,11 @@ use sea_orm::{DbBackend, Statement};
 pub struct NewBlocksStatement;
 
 impl StatementFromRange for NewBlocksStatement {
-    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(
+        range: Option<Range<DateTime<Utc>>>,
+        _: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
+    ) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -171,6 +175,7 @@ mod tests {
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
+            enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             force_full: false,
         });
         NewBlocks::update_recursively(&cx).await.unwrap();
@@ -246,6 +251,7 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
         });
@@ -341,6 +347,7 @@ mod tests {
             db: &db,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
         });

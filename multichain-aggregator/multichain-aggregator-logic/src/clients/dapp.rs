@@ -3,6 +3,7 @@ use api_client_framework::{
 };
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
+use serde_with::{formats::CommaSeparator, serde_as, StringWithSeparator};
 use url::Url;
 
 pub fn new_client(url: Url) -> Result<Client, Error> {
@@ -17,11 +18,16 @@ pub mod search_dapps {
         pub params: SearchDappsParams,
     }
 
+    #[serde_as]
+    #[serde_with::skip_serializing_none]
     #[derive(Serialize, Clone, Debug, Default, PartialEq)]
+    #[serde(rename_all = "camelCase")]
     pub struct SearchDappsParams {
         pub title: Option<String>,
         pub categories: Option<String>,
-        pub chain_ids: Option<String>,
+        #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        pub chain_ids: Vec<i64>,
     }
 
     impl Endpoint for SearchDapps {

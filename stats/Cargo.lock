@@ -838,9 +838,9 @@ source = "git+https://github.com/blockscout/blockscout-rs?rev=980634e#980634e7ad
 
 [[package]]
 name = "blockscout-service-launcher"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "087aeee353791366619f5e95fc1a62d776297a8c22ef1d23d9f66632484f0d93"
+checksum = "5318f8f4e6262dbd3fa564866941421adae8df44e756bc343ce6262c52d0dc73"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -4591,10 +4591,12 @@ dependencies = [
  "chrono",
  "entity",
  "futures",
+ "hex",
  "hex-literal",
  "itertools 0.13.0",
  "lazy_static",
  "migration",
+ "num-traits",
  "paste",
  "portrait",
  "pretty_assertions",
@@ -4922,9 +4924,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.43.0"
+version = "1.44.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d61fa4ffa3de412bfea335c6ecff681de2b609ba3c77ef3e00e521813a9ed9e"
+checksum = "e6b88822cbe49de4185e3a4cbf8321dd487cf5fe0c5c65695fef6346371e9c48"
 dependencies = [
  "backtrace",
  "bytes",

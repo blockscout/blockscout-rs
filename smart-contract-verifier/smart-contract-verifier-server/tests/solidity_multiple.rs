@@ -189,6 +189,11 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid compiler version"
     );
 
+    assert_eq!(
+        result_source.libraries, input.contract_libraries,
+        "Invalid contract libraries"
+    );
+
     mod compiler_settings {
         use serde::Deserialize;
 
@@ -222,13 +227,9 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid evm version"
     );
     assert_eq!(
-        result_compiler_settings
-            .libraries
-            .into_values()
-            .next()
-            .unwrap_or_default(),
-        input.contract_libraries,
-        "Invalid contract libraries"
+        result_compiler_settings.libraries,
+        BTreeMap::new(),
+        "Invalid compiler settings libraries"
     );
     assert_eq!(
         result_compiler_settings.optimizer.enabled,
@@ -332,8 +333,8 @@ mod success_tests {
         let contract_dir = "contract_with_lib";
         let mut libraries = BTreeMap::new();
         libraries.insert(
-            "BadSafeMath".to_string(),
-            "0x9Bca1BF2810c9b68F25c82e8eBb9dC0A5301e310".to_string(),
+            "tests/contracts/contract_with_lib/source.sol:BadSafeMath".to_string(),
+            "0x9bca1bf2810c9b68f25c82e8ebb9dc0a5301e310".to_string(),
         );
         // let test_input = TestInput::new("SimpleStorage", "v0.5.11+commit.c082d0b4")
         let test_input = TestInput::new("SimpleStorage", "v0.5.11+commit.22be8592")
@@ -445,32 +446,32 @@ mod failure_tests {
         test_failure(contract_dir, test_input, "ParserError").await;
     }
 
-    #[tokio::test]
-    async fn returns_compiler_version_mismatch() {
-        let contract_dir = "solidity_0.5.14";
+    // #[tokio::test]
+    // async fn returns_compiler_version_mismatch() { TODO: uncomment when support for compiler version mismatch is returned
+    // let contract_dir = "solidity_0.5.14";
+    //
+    // // Another version
+    // let test_input = TestInput::new("A", "v0.5.15+commit.6a57276f");
+    // test_failure(
+    //     contract_dir,
+    //     test_input,
+    //     "Invalid compiler version: Expected 0.5.14, found 0.5.15",
+    // )
+    // .await;
 
-        // Another version
-        let test_input = TestInput::new("A", "v0.5.15+commit.6a57276f");
-        test_failure(
-            contract_dir,
-            test_input,
-            "Invalid compiler version: Expected 0.5.14, found 0.5.15",
-        )
-        .await;
+    // Currently due to the nature of bytecodes comparing (see `base_verifier::compare_creation_tx_inputs`)
+    // if on chain creation transaction input length is less than the local creation transaction input,
+    // the verifier returns `NoMatchingContracts` error. Thus, the test case below would not work.
+    //
+    // TODO: see how difficult it would be to fix that
 
-        // Currently due to the nature of bytecodes comparing (see `base_verifier::compare_creation_tx_inputs`)
-        // if on chain creation transaction input length is less than the local creation transaction input,
-        // the verifier returns `NoMatchingContracts` error. Thus, the test case below would not work.
-        //
-        // TODO: see how difficult it would be to fix that
-
-        // // Another nightly version
-        // let settings_json = "{ \"solidity\": { \"fetcher\": { \"list\": { \"list_url\": \"https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json\" } } } }";
-        // let settings = serde_json::from_str(settings_json).expect("Settings is valid json");
-        // let local_app_router = local_app_router(settings).await;
-        // let test_input = TestInput::new("A", "v0.5.14-nightly.2019.12.10+commit.45aa7a88").with_app_router(local_app_router);
-        // test_failure(contract_dir, test_input, "Invalid compiler version").await;
-    }
+    // // Another nightly version
+    // let settings_json = "{ \"solidity\": { \"fetcher\": { \"list\": { \"list_url\": \"https://raw.githubusercontent.com/blockscout/solc-bin/main/list.json\" } } } }";
+    // let settings = serde_json::from_str(settings_json).expect("Settings is valid json");
+    // let local_app_router = local_app_router(settings).await;
+    // let test_input = TestInput::new("A", "v0.5.14-nightly.2019.12.10+commit.45aa7a88").with_app_router(local_app_router);
+    // test_failure(contract_dir, test_input, "Invalid compiler version").await;
+    // }
 }
 
 mod bad_request_error_tests {

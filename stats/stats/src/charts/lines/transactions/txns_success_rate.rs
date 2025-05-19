@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -21,7 +21,7 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -36,6 +36,7 @@ impl StatementFromRange for TxnsSuccessRateStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
     ) -> Statement {
         if completed_migrations.denormalization {
             sql_with_range_filter_opt!(
@@ -153,6 +154,7 @@ mod tests {
                 ("2022-12-01", "1"),
                 ("2023-01-01", "1"),
                 ("2023-02-01", "1"),
+                ("2023-03-01", "1"),
             ],
         )
         .await;
@@ -168,7 +170,7 @@ mod tests {
                 ("2022-11-28", "1"),
                 ("2022-12-26", "1"),
                 ("2023-01-30", "1"),
-                ("2023-02-27", "0"),
+                ("2023-02-27", "1"),
             ],
         )
         .await;
@@ -184,7 +186,7 @@ mod tests {
                 ("2022-12-01", "1"),
                 ("2023-01-01", "1"),
                 ("2023-02-01", "1"),
-                ("2023-03-01", "0"),
+                ("2023-03-01", "1"),
             ],
         )
         .await;
@@ -195,7 +197,7 @@ mod tests {
     async fn update_txns_success_rate_yearly() {
         simple_test_chart_with_migration_variants::<TxnsSuccessRateYearly>(
             "update_txns_success_rate_yearly",
-            vec![("2022-01-01", "1"), ("2023-01-01", "0.8571428571428571")],
+            vec![("2022-01-01", "1"), ("2023-01-01", "1")],
         )
         .await;
     }

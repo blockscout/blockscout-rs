@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -22,7 +22,7 @@ use crate::{
     lines::{new_txns::NewTxnsMonthlyInt, NewTxnsInt},
     types::timespans::{Month, Week, Year},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartProperties, Named,
+    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -37,6 +37,7 @@ impl StatementFromRange for AverageGasPriceStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
     ) -> Statement {
         if completed_migrations.denormalization {
             // TODO: consider supporting such case in macro ?
@@ -176,7 +177,7 @@ mod tests {
                 ("2022-12-01", "7.115226330333333"),
                 ("2023-01-01", "1.123456789"),
                 ("2023-02-01", "10.111111101"),
-                ("2023-03-01", "1.123456789"),
+                ("2023-03-01", "0.5617283945"),
             ],
         )
         .await;
@@ -192,7 +193,7 @@ mod tests {
                 ("2022-11-28", "7.115226330333333"),
                 ("2022-12-26", "1.123456789"),
                 ("2023-01-30", "10.111111101"),
-                ("2023-02-27", "1.123456789"),
+                ("2023-02-27", "0.5617283945"),
             ],
         )
         .await;
@@ -208,7 +209,7 @@ mod tests {
                 ("2022-12-01", "7.115226330333333"),
                 ("2023-01-01", "1.123456789"),
                 ("2023-02-01", "10.111111101"),
-                ("2023-03-01", "1.123456789"),
+                ("2023-03-01", "0.5617283945"),
             ],
         )
         .await;
@@ -221,7 +222,7 @@ mod tests {
             "update_average_gas_price_yearly",
             vec![
                 ("2022-01-01", "3.5576131651666665"),
-                ("2023-01-01", "7.543209869000001"),
+                ("2023-01-01", "6.600308635375001"),
             ],
         )
         .await;

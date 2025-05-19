@@ -4,19 +4,22 @@ package blockscout.multichainAggregator.v1;
 
 option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
 
+import "google/protobuf/struct.proto";
+
 service MultichainAggregatorService {
   rpc BatchImport(BatchImportRequest) returns (BatchImportResponse) {}
   rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
   rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse) {}
   rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
   rpc ListTransactions(ListTransactionsRequest)
-  returns (ListTransactionsResponse) {}
+      returns (ListTransactionsResponse) {}
   rpc ListNfts(ListNftsRequest) returns (ListNftsResponse) {}
   rpc ListChains(ListChainsRequest) returns (ListChainsResponse) {}
   rpc ListDapps(ListDappsRequest) returns (ListDappsResponse) {}
   rpc ListDappChains(ListDappChainsRequest) returns (ListDappChainsResponse) {}
   rpc ListDappCategories(ListDappCategoriesRequest)
       returns (ListDappCategoriesResponse) {}
+  rpc ListDomains(ListDomainsRequest) returns (ListDomainsResponse) {}
 }
 
 enum TokenType {
@@ -37,9 +40,16 @@ message Pagination {
   uint32 page_size = 2;
 }
 
+message DomainInfo {
+  string address = 1;
+  string name = 2;
+  optional string expiry_date = 3;
+  uint32 names_count = 4;
+}
+
 message Address {
   string hash = 1;
-  optional string ens_name = 2;
+  DomainInfo domain_info = 2;
   optional string contract_name = 3;
   optional string token_name = 4;
   TokenType token_type = 5;
@@ -75,6 +85,14 @@ message Token {
   string name = 3;
   string symbol = 4;
   string chain_id = 5;
+  bool is_verified_contract = 6;
+}
+
+message Domain {
+  string address = 1;
+  string name = 2;
+  optional string expiry_date = 3;
+  google.protobuf.Struct protocol = 4;
 }
 
 message BatchImportRequest {
@@ -123,6 +141,7 @@ message QuickSearchResponse {
   repeated MarketplaceDapp dapps = 5;
   repeated Token tokens = 6;
   repeated Address nfts = 7;
+  repeated Domain domains = 8;
 }
 
 message ListAddressesRequest {
@@ -139,7 +158,7 @@ message ListAddressesResponse {
 
 message ListTokensRequest {
   string q = 1;
-  optional string chain_id = 2;
+  repeated string chain_id = 2;
   optional uint32 page_size = 3;
   optional string page_token = 4;
 }
@@ -191,7 +210,7 @@ message ListChainsResponse {
 message ListDappsRequest {
   optional string q = 1;
   optional string categories = 2;
-  optional string chain_ids = 3;
+  repeated string chain_ids = 3;
 }
 
 message ListDappsResponse {
@@ -208,4 +227,15 @@ message ListDappCategoriesRequest {}
 
 message ListDappCategoriesResponse {
   repeated string items = 1;
+}
+
+message ListDomainsRequest {
+  string q = 1;
+  optional uint32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message ListDomainsResponse {
+  repeated Domain items = 1;
+  Pagination next_page_params = 2;
 }

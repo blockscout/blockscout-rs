@@ -40,6 +40,8 @@ jobs:
           --name postgres
         ports:
           - 5432:5432
+    env:
+      JOBS: 2
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -49,9 +51,16 @@ jobs:
         with:
           working-directory: stats
 
+      - name: Set Swap Space
+        id: swapfile
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 14
+
       - name: Build
         id: build
-        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
+        if: steps.swapfile.outcome == 'success'
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features --jobs $JOBS
 
       - name: ENVs in documentation
         run: cargo run --bin env-docs-generation
@@ -59,11 +68,11 @@ jobs:
           VALIDATE_ONLY: true
 
       - name: Unit tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins --jobs $JOBS -- --nocapture
         if: steps.build.outcome == 'success'
 
       - name: Doc tests
-        run: cargo test --locked --workspace --all-features --doc
+        run: cargo test --locked --workspace --all-features --doc --jobs $JOBS
         if: steps.build.outcome == 'success'
 
       - name: Integration tests
@@ -107,7 +116,6 @@ jobs:
     with:
       version: ${{ needs.docker.outputs.tag-value }}
       project_name: stats
-
 
   push-swagger:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))

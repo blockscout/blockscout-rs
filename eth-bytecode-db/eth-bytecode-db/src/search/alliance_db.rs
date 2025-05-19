@@ -2,6 +2,8 @@ use super::MatchContract;
 use crate::{verification::MatchType, ToHex};
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
+use std::collections::BTreeMap;
+use verification_common::solidity_libraries;
 use verifier_alliance_database::VerifiedContractMatches;
 
 pub async fn find_contract(
@@ -46,12 +48,16 @@ fn match_from_verified_contract(
     let creation_code_artifacts: serde_json::Value =
         compiled_contract.creation_code_artifacts.into();
     let runtime_code_artifacts: serde_json::Value = compiled_contract.runtime_code_artifacts.into();
+    let libraries = extract_libraries(
+        &compiled_contract.compiler_settings,
+        &verified_contract.matches,
+    )?;
     let match_contract = MatchContract {
         updated_at,
         file_name: extract_file_name(&compiled_contract.fully_qualified_name)?,
         contract_name: compiled_contract.name,
         compiler_version: compiled_contract.version,
-        compiler_settings: compiled_contract.compiler_settings.to_string(),
+        compiler_settings: compiled_contract.compiler_settings,
         source_type: compiled_contract.language.into(),
         source_files: compiled_contract.sources,
         abi: abi.as_ref().map(|value| value.to_string()),
@@ -63,6 +69,7 @@ fn match_from_verified_contract(
         raw_creation_input: compiled_contract.creation_code,
         raw_deployed_bytecode: compiled_contract.runtime_code,
         is_blueprint: false,
+        libraries,
     };
 
     Ok(match_contract)
@@ -106,4 +113,33 @@ fn extract_match_type(verified_contract_matches: &VerifiedContractMatches) -> Ma
     } else {
         MatchType::Partial
     }
+}
+
+fn extract_libraries(
+    compiler_settings: &serde_json::Value,
+    verified_contract_matches: &VerifiedContractMatches,
+) -> Result<BTreeMap<String, String>, anyhow::Error> {
+    let mut libraries = solidity_libraries::try_parse_compiler_linked_libraries(compiler_settings)?;
+    match verified_contract_matches {
+        VerifiedContractMatches::OnlyCreation {
+            creation_match: match_,
+        }
+        | VerifiedContractMatches::OnlyRuntime {
+            runtime_match: match_,
+        } => {
+            libraries.extend(solidity_libraries::parse_manually_linked_libraries(match_));
+        }
+        VerifiedContractMatches::Complete {
+            creation_match,
+            runtime_match,
+        } => {
+            libraries.extend(solidity_libraries::parse_manually_linked_libraries(
+                creation_match,
+            ));
+            libraries.extend(solidity_libraries::parse_manually_linked_libraries(
+                runtime_match,
+            ));
+        }
+    }
+    Ok(libraries)
 }

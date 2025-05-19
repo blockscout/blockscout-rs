@@ -1,73 +1,57 @@
-use super::{client::Client, types::Success};
 use crate::{
-    batch_verifier::BatchError,
-    compiler::DetailedVersion,
-    verifier::{ContractVerifier, Error},
-    BatchVerificationResult, Contract,
+    compiler::DetailedVersion, verify, Error, EvmCompilersPool, OnChainContract, SolcCompiler,
+    SolcInput, VerificationResult,
 };
-use bytes::Bytes;
-use foundry_compilers::CompilerInput;
-use std::sync::Arc;
+
+type Content = SolcInput;
 
 pub struct VerificationRequest {
-    pub deployed_bytecode: Bytes,
-    pub creation_bytecode: Option<Bytes>,
+    pub contract: OnChainContract,
     pub compiler_version: DetailedVersion,
-
-    pub content: StandardJsonContent,
-
-    // Required for the metrics. Has no functional meaning.
-    // In case if chain_id has not been provided, results in empty string.
-    pub chain_id: Option<String>,
+    pub content: Content,
 }
 
-pub struct StandardJsonContent {
-    pub input: CompilerInput,
-}
+pub async fn verify(
+    compilers: &EvmCompilersPool<SolcCompiler>,
+    request: VerificationRequest,
+) -> Result<VerificationResult, Error> {
+    let to_verify = vec![request.contract];
 
-impl From<StandardJsonContent> for CompilerInput {
-    fn from(content: StandardJsonContent) -> Self {
-        content.input
-    }
-}
-
-pub async fn verify(client: Arc<Client>, request: VerificationRequest) -> Result<Success, Error> {
-    let compiler_input = CompilerInput::from(request.content);
-    let verifier = ContractVerifier::new(
-        false,
-        client.compilers(),
+    let results = verify::compile_and_verify(
+        to_verify,
+        compilers,
         &request.compiler_version,
-        request.creation_bytecode,
-        request.deployed_bytecode,
-        request.chain_id,
-    )?;
-    let result = verifier.verify(&compiler_input).await?;
+        request.content,
+    )
+    .await?;
+    let result = results
+        .into_iter()
+        .next()
+        .expect("we sent exactly one contract to verify");
 
-    // If case of success, we allow middlewares to process success and only then return it to the caller
-    let success = Success::from((compiler_input, result));
-
-    Ok(success)
+    Ok(result)
 }
 
+#[derive(Clone, Debug)]
 pub struct BatchVerificationRequest {
-    pub contracts: Vec<Contract>,
+    pub contracts: Vec<OnChainContract>,
     pub compiler_version: DetailedVersion,
-    pub content: StandardJsonContent,
+    pub content: Content,
 }
 
 pub async fn batch_verify(
-    client: Arc<Client>,
+    compilers: &EvmCompilersPool<SolcCompiler>,
     request: BatchVerificationRequest,
-) -> Result<Vec<BatchVerificationResult>, BatchError> {
-    let compiler_input = CompilerInput::from(request.content);
+) -> Result<Vec<VerificationResult>, Error> {
+    let to_verify = request.contracts;
 
-    let verification_result = crate::batch_verifier::verify_solidity(
-        client.compilers(),
-        request.compiler_version,
-        request.contracts,
-        &compiler_input,
+    let results = verify::compile_and_verify(
+        to_verify,
+        compilers,
+        &request.compiler_version,
+        request.content,
     )
     .await?;
 
-    Ok(verification_result)
+    Ok(results)
 }

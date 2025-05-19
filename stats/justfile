@@ -8,13 +8,16 @@ db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "stats")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
 export RUST_LOG := env_var_or_default('RUST_LOG', "error")
-export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "1")
+export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "0")
 
 docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
 
-docker-build *args:
-    docker build --build-context proto=../proto . {{args}}
+docker-build-dev *args:
+    docker compose -f docker-compose.dev.yml build
+
+docker-run-dev *args:
+    docker compose -f docker-compose.dev.yml up
 
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping
@@ -26,19 +29,25 @@ start-postgres:
 stop-postgres:
     docker kill {{docker-name}}
 
+start-test-postgres:
+    just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
+
+stop-test-postgres:
+    just docker-name="{{docker-name}}-test" stop-postgres
+
 test *args:
     cargo test {{args}} -- --include-ignored --nocapture
 
 test-with-db *args:
     # remove db from previous run (if failed)
-    -just                            docker-name="{{docker-name}}-test" stop-postgres 2> /dev/null
-    just start-postgres-and-build-tests
-    just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
-    just                            docker-name="{{docker-name}}-test" stop-postgres
+    -just                                           stop-test-postgres              2> /dev/null
+    just                                            start-postgres-and-build-tests
+    just db-port="{{test-db-port}}" db-name=""      test                            {{args}}
+    just                                            stop-test-postgres
 
 start-postgres-and-build-tests:
     #!/bin/bash -eux
-    just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres &
+    just start-test-postgres &
     cargo build --tests &
     trap 'kill $(jobs -pr) || true' EXIT
     wait

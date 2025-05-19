@@ -1,10 +1,12 @@
+use super::ChainId;
 use crate::{
     proto,
     types::{
-        addresses::Address, block_ranges::ChainBlockNumber, dapp::MarketplaceDapp, hashes::Hash,
-        token_info::Token,
+        addresses::Address, block_ranges::ChainBlockNumber, dapp::MarketplaceDapp, domains::Domain,
+        hashes::Hash, token_info::Token,
     },
 };
+use std::collections::{HashMap, HashSet};
 
 #[derive(Default, Debug)]
 pub struct QuickSearchResult {
@@ -15,6 +17,7 @@ pub struct QuickSearchResult {
     pub dapps: Vec<MarketplaceDapp>,
     pub tokens: Vec<Token>,
     pub nfts: Vec<Address>,
+    pub domains: Vec<Domain>,
 }
 
 impl QuickSearchResult {
@@ -26,30 +29,87 @@ impl QuickSearchResult {
         self.dapps.extend(other.dapps);
         self.tokens.extend(other.tokens);
         self.nfts.extend(other.nfts);
+        self.domains.extend(other.domains);
     }
 
-    pub fn balance_entities(&mut self, n: usize) {
+    pub fn filter_and_sort_entities_by_priority(mut self, chain_ids: &[ChainId]) -> Self {
+        macro_rules! filter_and_sort_by_priority {
+            ($search_result: ident, [$($field: ident),*]) => {
+                $(
+                    $search_result.$field = Self::filter_and_sort_array_by_priority($search_result.$field, |e| e.chain_id, chain_ids);
+                )*
+            };
+        }
+
+        filter_and_sort_by_priority!(
+            self,
+            [
+                addresses,
+                blocks,
+                transactions,
+                block_numbers,
+                dapps,
+                tokens,
+                nfts
+            ]
+        );
+
+        self
+    }
+
+    fn filter_and_sort_array_by_priority<T>(
+        items: impl IntoIterator<Item = T>,
+        get_chain_id: impl Fn(&T) -> ChainId,
+        chain_ids: &[ChainId],
+    ) -> Vec<T> {
+        // Filter to keep only one item per chain_id,
+        // assuming they are already presented in a relevant order.
+        let mut seen_chain_ids = HashSet::new();
+        let mut filtered_items = items
+            .into_iter()
+            .filter(|item| {
+                let chain_id = get_chain_id(item);
+                chain_ids.contains(&chain_id) && seen_chain_ids.insert(chain_id)
+            })
+            .collect::<Vec<_>>();
+
+        let chain_id_priority = chain_ids
+            .iter()
+            .enumerate()
+            .map(|(idx, &chain_id)| (chain_id, idx))
+            .collect::<HashMap<_, _>>();
+        filtered_items.sort_by_key(|item| {
+            chain_id_priority
+                .get(&get_chain_id(item))
+                .unwrap_or(&usize::MAX)
+        });
+
+        filtered_items
+    }
+
+    pub fn balance_entities(&mut self, total_limit: usize, entity_limit: usize) {
         macro_rules! balance_entities {
             ( $n:expr, $( $arg:expr => $ind:expr ),+ ) => {
                 let lengths = [$( $arg.len() ),*];
 
-                let result = evenly_take_elements(lengths, $n);
+                let result = evenly_take_elements(lengths, total_limit);
 
                 $(
-                    $arg.truncate(result[$ind]);
+                    $arg.truncate(result[$ind].min(entity_limit));
                 )*
             };
         }
 
         balance_entities!(
-            n,
+            total_limit,
             self.addresses => 0,
             self.blocks => 1,
             self.transactions => 2,
             self.block_numbers => 3,
             self.dapps => 4,
             self.tokens => 5,
-            self.nfts => 6
+            self.nfts => 6,
+            self.domains => 7
         );
     }
 }
@@ -64,6 +124,7 @@ impl From<QuickSearchResult> for proto::QuickSearchResponse {
             dapps: v.dapps.into_iter().map(|d| d.into()).collect(),
             tokens: v.tokens.into_iter().map(|t| t.into()).collect(),
             nfts: v.nfts.into_iter().map(|n| n.into()).collect(),
+            domains: v.domains.into_iter().map(|d| d.into()).collect(),
         }
     }
 }

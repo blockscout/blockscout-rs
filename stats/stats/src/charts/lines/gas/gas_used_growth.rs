@@ -1,11 +1,11 @@
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 use crate::{
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{Map, MapFunction, StripExt},
+                map::{Map, MapFunction, MapParseTo, StripExt},
                 resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
@@ -21,7 +21,7 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -32,7 +32,11 @@ use sea_orm::{DbBackend, Statement};
 pub struct GasUsedPartialStatement;
 
 impl StatementFromRange for GasUsedPartialStatement {
-    fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations) -> Statement {
+    fn get_statement(
+        range: Option<Range<DateTime<Utc>>>,
+        _: &BlockscoutMigrations,
+        _: &HashSet<ChartKey>,
+    ) -> Statement {
         sql_with_range_filter_opt!(
             DbBackend::Postgres,
             r#"
@@ -106,6 +110,7 @@ define_and_impl_resolution_properties!(
 
 pub type GasUsedGrowth = DailyCumulativeLocalDbChartSource<NewGasUsedRemote, Properties>;
 type GasUsedGrowthS = StripExt<GasUsedGrowth>;
+pub type GasUsedGrowthInt = MapParseTo<StripExt<GasUsedGrowth>, i64>;
 pub type GasUsedGrowthWeekly = DirectVecLocalDbChartSource<
     LastValueLowerResolution<GasUsedGrowthS, Week>,
     Batch30Weeks,

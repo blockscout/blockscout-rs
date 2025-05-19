@@ -4,7 +4,7 @@ use blockscout_db::entity::{
     address_coin_balances_daily, addresses, block_rewards, blocks, internal_transactions,
     migrations_status,
     sea_orm_active_enums::{EntryPointVersion, SponsorType},
-    smart_contracts, tokens, transactions, user_operations,
+    signed_authorizations, smart_contracts, tokens, transactions, user_operations,
 };
 use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
 use hex_literal::hex;
@@ -16,6 +16,8 @@ use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
 };
+
+use crate::lines::{ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH};
 
 pub async fn default_mock_blockscout_api() -> MockServer {
     mock_blockscout_api(
@@ -99,6 +101,12 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .exec(blockscout)
         .await
         .unwrap();
+    let attributes_deposited_transaction_accounts =
+        mock_attributes_deposited_transaction_addresses();
+    addresses::Entity::insert_many(attributes_deposited_transaction_accounts)
+        .exec(blockscout)
+        .await
+        .unwrap();
 
     let contracts = (21..40)
         .map(|seed| mock_address(seed, true, false))
@@ -128,7 +136,7 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
     let failed_block = blocks.last().unwrap();
 
     let txns = mock_transactions(&blocks, &accounts);
-    transactions::Entity::insert_many(txns)
+    transactions::Entity::insert_many(txns.clone())
         .exec(blockscout)
         .await
         .unwrap();
@@ -140,6 +148,12 @@ pub async fn fill_mock_blockscout_data(blockscout: &DatabaseConnection, max_date
         .await
         .unwrap();
     user_operations::Entity::insert_many(user_ops)
+        .exec(blockscout)
+        .await
+        .unwrap();
+
+    let signed_authorizations = mock_signed_authorizations(&txns, &contracts, &accounts);
+    signed_authorizations::Entity::insert_many(signed_authorizations)
         .exec(blockscout)
         .await
         .unwrap();
@@ -403,7 +417,7 @@ fn mock_addresses() -> Vec<addresses::ActiveModel> {
 
 fn mock_address(seed: i64, is_contract: bool, is_verified: bool) -> addresses::ActiveModel {
     let mut hash = seed.to_le_bytes().to_vec();
-    hash.extend(std::iter::repeat(0).take(32 - hash.len()));
+    hash.extend(std::iter::repeat_n(0, 32 - hash.len()));
     let contract_code = is_contract.then(|| vec![60u8, 80u8]);
     let verified = is_contract.then_some(is_verified);
     addresses::ActiveModel {
@@ -469,6 +483,12 @@ fn mock_transactions(
                 ),
             ]
         })
+        .chain([mock_attributes_deposit_transaction(
+            blocks.last().unwrap(),
+            43_887,
+            // just in case the block number is `% 3 != 1`
+            3,
+        )])
         .collect()
 }
 
@@ -568,6 +588,38 @@ fn mock_transaction(
         created_contract_code_indexed_at: Set(created_contract_code_indexed_at),
         ..Default::default()
     }
+}
+
+fn mock_attributes_deposited_transaction_addresses() -> Vec<addresses::ActiveModel> {
+    [ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH]
+        .into_iter()
+        .map(|hash| {
+            let hash = hex::decode(hash).unwrap();
+            let contract_code = vec![60u8, 80u8];
+            addresses::ActiveModel {
+                hash: Set(hash),
+                contract_code: Set(Some(contract_code)),
+                verified: Set(Some(false)),
+                inserted_at: Set(Default::default()),
+                updated_at: Set(Default::default()),
+                ..Default::default()
+            }
+        })
+        .collect_vec()
+}
+
+// https://specs.optimism.io/protocol/deposits.html#l1-attributes-deposited-transaction
+fn mock_attributes_deposit_transaction(
+    block: &blocks::ActiveModel,
+    gas: i64,
+    index: i32,
+) -> transactions::ActiveModel {
+    let mut address_list = mock_attributes_deposited_transaction_addresses();
+    // adjust choice of from/to in `mock_transaction`
+    if block.number.as_ref() % 2 == 1 {
+        address_list.reverse();
+    };
+    mock_transaction(block, gas, 0, &address_list, index, TxType::ContractCall)
 }
 
 fn mock_failed_transaction(
@@ -812,6 +864,50 @@ fn mock_user_operation(
         updated_at: Set(Default::default()),
     };
     (txn, op)
+}
+
+fn mock_signed_authorizations(
+    transactions: &[transactions::ActiveModel],
+    contracts: &[addresses::ActiveModel],
+    accounts: &[addresses::ActiveModel],
+) -> Vec<signed_authorizations::ActiveModel> {
+    let transaction_indices = [3usize, 10, 24];
+    let mut authorizations = Vec::new();
+    for (i, transaction_idx) in transaction_indices.into_iter().enumerate() {
+        let Some(transaction) = &transactions.get(transaction_idx) else {
+            continue;
+        };
+        for auth_index in 0..=i {
+            authorizations.push(mock_signed_authorization(
+                transaction,
+                contracts[auth_index].hash.clone().unwrap(),
+                accounts[auth_index].hash.clone().unwrap(),
+                auth_index as i32,
+            ));
+        }
+    }
+    authorizations
+}
+
+fn mock_signed_authorization(
+    transaction: &transactions::ActiveModel,
+    address: Vec<u8>,
+    authority: Vec<u8>,
+    index: i32,
+) -> signed_authorizations::ActiveModel {
+    signed_authorizations::ActiveModel {
+        transaction_hash: Set(transaction.hash.as_ref().clone()),
+        index: Set(index),
+        chain_id: Set(1),
+        address: Set(address),
+        nonce: Set(index * 1000),
+        v: Set(27), // Dummy signature components
+        r: Set(Decimal::from(123)),
+        s: Set(Decimal::from(321)),
+        authority: Set(Some(authority)),
+        inserted_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
+    }
 }
 
 fn mock_migration(name: &str, completed: Option<bool>) -> migrations_status::ActiveModel {

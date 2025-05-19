@@ -40,7 +40,7 @@ pub async fn list<C>(
     db: &C,
     hash: BlockHash,
     hash_type: Option<db_enum::HashType>,
-    chain_id: Option<ChainId>,
+    chain_ids: Vec<ChainId>,
     page_size: u64,
     page_token: Option<ChainId>,
 ) -> Result<(Vec<Model>, Option<ChainId>), DbErr>
@@ -52,9 +52,10 @@ where
         .apply_if(hash_type, |q, hash_type| {
             q.filter(Column::HashType.eq(hash_type))
         })
-        .apply_if(chain_id, |q, chain_id| {
-            q.filter(Column::ChainId.eq(chain_id))
-        })
+        .apply_if(
+            (!chain_ids.is_empty()).then_some(chain_ids),
+            |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
+        )
         .cursor_by(Column::ChainId);
 
     if let Some(page_token) = page_token {

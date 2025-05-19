@@ -15,7 +15,7 @@ use bens_proto::blockscout::bens::v1::{
     health_server::HealthServer,
 };
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{postgres::PgPoolOptions, Executor};
 use std::{collections::HashMap, sync::Arc};
 use tokio_cron_scheduler::JobScheduler;
 
@@ -57,7 +57,30 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let database_url = settings.database.connect.url();
     let pool = Arc::new(
         PgPoolOptions::new()
-            .max_connections(40)
+            .max_connections(
+                settings
+                    .database
+                    .connect_options
+                    .max_connections
+                    .unwrap_or(40),
+            )
+            .min_connections(
+                settings
+                    .database
+                    .connect_options
+                    .min_connections
+                    .unwrap_or(1),
+            )
+            .idle_timeout(settings.database.connect_options.idle_timeout)
+            .max_lifetime(settings.database.connect_options.max_lifetime)
+            .after_connect(|conn, _meta| {
+                Box::pin(async move {
+                    conn.execute(format!("SET application_name = '{}';", SERVICE_NAME).as_str())
+                        .await?;
+                    conn.execute("SET statement_timeout = '60s';").await?;
+                    Ok(())
+                })
+            })
             .connect(&database_url)
             .await
             .context("database connect")?,
@@ -147,8 +170,9 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: Default::default(),
     };
 
     tracing::info!("launching web service");
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(launch_settings, http_router, grpc_router).await
 }

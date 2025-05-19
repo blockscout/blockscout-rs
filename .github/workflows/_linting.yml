@@ -27,3 +27,41 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --all --all-targets --all-features -- -D warnings
         working-directory: ${{ inputs.working-directory }}
+
+  check-types-build:
+    runs-on: ubuntu-latest
+    name: Check build of types package
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Check if types directory exists
+        id: check-directory
+        run: |
+          if [ -d "${{ inputs.working-directory }}/types" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        if: steps.check-directory.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install Protoc
+        if: steps.check-directory.outputs.exists == 'true'
+        uses: arduino/setup-protoc@v3
+
+      - name: Install dependencies
+        if: steps.check-directory.outputs.exists == 'true'
+        run: |
+          cd ${{ inputs.working-directory }}/types
+          npm ci || npm install
+
+      - name: Build types package
+        if: steps.check-directory.outputs.exists == 'true'
+        run: |
+          cd ${{ inputs.working-directory }}/types
+          npm run build
