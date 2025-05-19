@@ -90,6 +90,25 @@ impl MultichainAggregator {
 
         Ok(chain_ids)
     }
+
+    async fn filter_marketplace_enabled_chains<T>(
+        &self,
+        items: impl IntoIterator<Item = T>,
+        get_chain_id: impl Fn(&T) -> types::ChainId,
+    ) -> Vec<T> {
+        let cache = self.marketplace_enabled_cache.read().await;
+        items
+            .into_iter()
+            .filter_map(|c| {
+                let is_enabled = *cache.get(&get_chain_id(&c)).unwrap_or(&false);
+                if is_enabled {
+                    Some(c)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
 }
 
 #[async_trait::async_trait]
@@ -322,7 +341,9 @@ impl MultichainAggregatorService for MultichainAggregator {
             .map(parse_query)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+        let chain_ids = self
+            .filter_marketplace_enabled_chains(chain_ids, |id| *id)
+            .await;
 
         let dapps =
             search::search_dapps(&self.dapp_client, inner.q, inner.categories, chain_ids).await?;
@@ -344,18 +365,12 @@ impl MultichainAggregatorService for MultichainAggregator {
         )
         .await?;
 
-        let cache = self.marketplace_enabled_cache.read().await;
-        let items = items
+        let items = self
+            .filter_marketplace_enabled_chains(items, |c| c.id)
+            .await
             .into_iter()
-            .filter_map(|c| {
-                let is_enabled = *cache.get(&c.id).unwrap_or(&false);
-                if is_enabled {
-                    c.try_into().ok()
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+            .filter_map(|c| c.try_into().ok())
+            .collect();
 
         Ok(Response::new(ListDappChainsResponse { items }))
     }
