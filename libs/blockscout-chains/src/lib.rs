@@ -20,6 +20,14 @@ impl BlockscoutChainsClient {
         let chains: BlockscoutChains = res.json().await?;
         Ok(chains)
     }
+
+    /// Fetch a single chain by its ID from the Blockscout Chains API.
+    pub async fn fetch_one_by_id(&self, chain_id: &str) -> Result<BlockscoutChainData, reqwest_middleware::Error> {
+        let url = format!("{}/{}", self.url.trim_end_matches('/'), chain_id);
+        let res = self.client.get(&url).send().await?;
+        let chain: BlockscoutChainData = res.json().await?;
+        Ok(chain)
+    }
 }
 
 impl Default for BlockscoutChainsClient {
@@ -108,5 +116,16 @@ mod tests {
             .await
             .unwrap();
         assert!(!chains.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_specific_blockscout_chain() {
+        let client = BlockscoutChainsClient::builder()
+            .with_max_retries(0)
+            .build();
+        // Chain ID "1" is Ethereum Mainnet and should always exist
+        let chain = client.fetch_one_by_id("1").await.unwrap();
+        assert_eq!(chain.name, "Ethereum");
+        assert!(chain.website.contains("ethereum.org"));
     }
 }
