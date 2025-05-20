@@ -2,6 +2,7 @@ use super::{interop_message_transfers, paginate_cursor};
 use crate::types::{
     interop_message_transfers::InteropMessageTransfer, interop_messages::InteropMessage, ChainId,
 };
+use alloy_primitives::TxHash;
 use entity::interop_messages::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     prelude::{DateTime, Expr},
@@ -70,8 +71,8 @@ pub async fn list<C>(
     relay_chain_id: Option<ChainId>,
     nonce: Option<i64>,
     page_size: u64,
-    page_token: Option<(DateTime, ChainId, i64)>,
-) -> Result<(Vec<Model>, Option<(DateTime, ChainId, i64)>), DbErr>
+    page_token: Option<(DateTime, TxHash)>,
+) -> Result<(Vec<Model>, Option<(DateTime, TxHash)>), DbErr>
 where
     C: ConnectionTrait,
 {
@@ -84,14 +85,20 @@ where
             q.filter(Column::RelayChainId.eq(relay_chain_id))
         })
         .apply_if(nonce, |q, nonce| q.filter(Column::Nonce.eq(nonce)))
-        .cursor_by((Column::Timestamp, Column::InitChainId, Column::Nonce));
+        .cursor_by((Column::Timestamp, Column::InitTransactionHash));
     c.desc();
 
+    let page_token = page_token.map(|(t, h)| (t, h.to_vec()));
+
     paginate_cursor(db, c, page_size, page_token, |u| {
+        let init_transaction_hash = u
+            .init_transaction_hash
+            .as_ref()
+            .expect("init_transaction_hash is not null")
+            .as_slice();
         (
             u.timestamp.expect("timestamp is not null"),
-            u.init_chain_id,
-            u.nonce,
+            TxHash::try_from(init_transaction_hash).expect("init_transaction_hash is valid"),
         )
     })
     .await

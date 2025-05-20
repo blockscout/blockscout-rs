@@ -18,7 +18,7 @@ use crate::{
         ChainId,
     },
 };
-use alloy_primitives::Address as AddressAlloy;
+use alloy_primitives::{Address as AddressAlloy, TxHash};
 use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use regex::Regex;
@@ -211,8 +211,8 @@ pub async fn search_interop_messages(
     relay_chain_id: Option<ChainId>,
     nonce: Option<i64>,
     page_size: u64,
-    page_token: Option<(DateTime, ChainId, i64)>,
-) -> Result<(Vec<InteropMessage>, Option<(DateTime, ChainId, i64)>), ServiceError> {
+    page_token: Option<(DateTime, TxHash)>,
+) -> Result<(Vec<InteropMessage>, Option<(DateTime, TxHash)>), ServiceError> {
     let (interop_messages, next_page_token) = interop_messages::list(
         db,
         init_chain_id,

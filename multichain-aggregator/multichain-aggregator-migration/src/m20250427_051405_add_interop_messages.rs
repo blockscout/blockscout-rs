@@ -6,7 +6,6 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // TODO: add indexes
         let sql = r#"
             CREATE TABLE interop_messages (
                 id bigserial NOT NULL,
@@ -24,7 +23,8 @@ impl MigrationTrait for Migration {
                 updated_at timestamp NOT NULL DEFAULT (now()),
                 PRIMARY KEY (id)
             );
-            CREATE UNIQUE INDEX interop_messages_init_chain_id_nonce_unique_index ON interop_messages (init_chain_id, nonce);
+            CREATE UNIQUE INDEX interop_messages_init_chain_id_nonce_unique_index ON interop_messages (nonce, init_chain_id);
+            CREATE INDEX interop_messages_timestamp_init_transaction_hash_index ON interop_messages (timestamp, init_transaction_hash);
 
             CREATE TABLE interop_messages_transfers (
                 interop_message_id bigint NOT NULL REFERENCES interop_messages (id),
