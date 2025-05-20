@@ -490,6 +490,7 @@ where
     }
 }
 
+#[allow(clippy::result_large_err)]
 #[inline]
 fn parse_query_3<T1: FromStr, T2: FromStr, T3: FromStr>(
     input: String,

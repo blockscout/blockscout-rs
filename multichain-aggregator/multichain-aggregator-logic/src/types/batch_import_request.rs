@@ -11,10 +11,9 @@ use crate::{
     metrics::IMPORT_ENTITIES_COUNT,
     proto,
 };
-use std::collections::HashMap;
 use chrono::NaiveDateTime;
 use sea_orm::prelude::Decimal;
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 #[derive(Debug, Clone)]
 pub struct BatchImportRequest {
@@ -27,10 +26,10 @@ pub struct BatchImportRequest {
 impl BatchImportRequest {
     pub fn record_metrics(&self) {
         macro_rules! calculate_entity_metrics {
-            ($entities: expr, $entity_name: expr) => {
+            ($entities: expr, $get_chain_id: expr, $entity_name: expr) => {
                 let mut entity_metrics = HashMap::new();
                 for e in $entities {
-                    *entity_metrics.entry(e.chain_id).or_insert(0) += 1;
+                    *entity_metrics.entry($get_chain_id(e)).or_insert(0) += 1;
                 }
                 for (chain_id, count) in entity_metrics {
                     IMPORT_ENTITIES_COUNT
@@ -40,9 +39,24 @@ impl BatchImportRequest {
             };
         }
 
-        calculate_entity_metrics!(&self.block_ranges, "block_ranges");
-        calculate_entity_metrics!(&self.hashes, "hashes");
-        calculate_entity_metrics!(&self.addresses, "addresses");
+        calculate_entity_metrics!(
+            &self.block_ranges,
+            |br: &BlockRange| br.chain_id,
+            "block_ranges"
+        );
+        calculate_entity_metrics!(&self.hashes, |h: &Hash| h.chain_id, "hashes");
+        calculate_entity_metrics!(&self.addresses, |a: &Address| a.chain_id, "addresses");
+        calculate_entity_metrics!(
+            &self.interop_messages,
+            |(m, _): &(InteropMessage, _)| {
+                if m.init_transaction_hash.is_some() {
+                    m.init_chain_id
+                } else {
+                    m.relay_chain_id
+                }
+            },
+            "interop_messages"
+        );
     }
 }
 
