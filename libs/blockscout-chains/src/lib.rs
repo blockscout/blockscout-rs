@@ -22,7 +22,10 @@ impl BlockscoutChainsClient {
     }
 
     /// Fetch a single chain by its ID from the Blockscout Chains API.
-    pub async fn fetch_one_by_id(&self, chain_id: &str) -> Result<BlockscoutChainData, reqwest_middleware::Error> {
+    pub async fn fetch_one_by_id(
+        &self,
+        chain_id: &str,
+    ) -> Result<BlockscoutChainData, reqwest_middleware::Error> {
         let url = format!("{}/{}", self.url.trim_end_matches('/'), chain_id);
         let res = self.client.get(&url).send().await?;
         let chain: BlockscoutChainData = res.json().await?;
