@@ -2,6 +2,7 @@ use super::{
     addresses::{proto_token_type_to_db_token_type, Address},
     block_ranges::BlockRange,
     hashes::{proto_hash_type_to_db_hash_type, Hash},
+    interop_message_transfers::InteropMessageTransfer,
     interop_messages::InteropMessage,
     ChainId,
 };
@@ -20,7 +21,7 @@ pub struct BatchImportRequest {
     pub block_ranges: Vec<BlockRange>,
     pub hashes: Vec<Hash>,
     pub addresses: Vec<Address>,
-    pub interop_messages: Vec<InteropMessage>,
+    pub interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
 }
 
 impl BatchImportRequest {
@@ -69,7 +70,7 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
             interop_messages: value
                 .interop_messages
                 .into_iter()
-                .map(|m| (chain_id, m).try_into())
+                .map(|m| InteropMessageWithTransfer::try_from((chain_id, m)).map(|a| (a.0, a.1)))
                 .collect::<Result<Vec<_>, _>>()?,
         })
     }
@@ -122,7 +123,11 @@ impl TryFrom<(ChainId, proto::batch_import_request::AddressImport)> for Address 
     }
 }
 
-impl TryFrom<(ChainId, proto::batch_import_request::InteropMessageImport)> for InteropMessage {
+struct InteropMessageWithTransfer(InteropMessage, Option<InteropMessageTransfer>);
+
+impl TryFrom<(ChainId, proto::batch_import_request::InteropMessageImport)>
+    for InteropMessageWithTransfer
+{
     type Error = ParseError;
 
     fn try_from(
@@ -131,28 +136,30 @@ impl TryFrom<(ChainId, proto::batch_import_request::InteropMessageImport)> for I
         let message = m.message.ok_or_else(|| {
             ParseError::Custom("interop message is missing or invalid".to_string())
         })?;
-        let msg = match message {
+        let (msg, transfer) = match message {
             proto::batch_import_request::interop_message_import::Message::Init(init) => {
-                let msg: Self = init.try_into()?;
+                let InteropMessageWithTransfer(msg, transfer) = init.try_into()?;
                 if msg.init_chain_id != chain_id {
                     return Err(ParseError::ChainIdMismatch(chain_id, msg.init_chain_id));
                 }
-                msg
+                (msg, transfer)
             }
             proto::batch_import_request::interop_message_import::Message::Relay(relay) => {
-                let msg: Self = relay.try_into()?;
+                let msg: InteropMessage = relay.try_into()?;
                 if msg.relay_chain_id != chain_id {
                     return Err(ParseError::ChainIdMismatch(chain_id, msg.relay_chain_id));
                 }
-                msg
+                (msg, None)
             }
         };
 
-        Ok(msg)
+        Ok(Self(msg, transfer))
     }
 }
 
-impl TryFrom<proto::batch_import_request::interop_message_import::Init> for InteropMessage {
+impl TryFrom<proto::batch_import_request::interop_message_import::Init>
+    for InteropMessageWithTransfer
+{
     type Error = ParseError;
 
     fn try_from(
@@ -164,22 +171,42 @@ impl TryFrom<proto::batch_import_request::interop_message_import::Init> for Inte
         let timestamp = Some(parse_timestamp_secs(m.timestamp)?);
         let payload = Some(m.payload.parse()?);
 
-        let transfer_token_address_hash = m
-            .transfer_token_address_hash
-            .map(|s| s.parse())
-            .transpose()?;
-        let transfer_from_address_hash = m
-            .transfer_from_address_hash
-            .map(|s| s.parse())
-            .transpose()?;
-        let transfer_to_address_hash = m.transfer_to_address_hash.map(|s| s.parse()).transpose()?;
-        let transfer_amount = m
-            .transfer_amount
-            .map(|d| {
-                Decimal::from_str(&d)
-                    .map_err(|_| ParseError::Custom(format!("invalid decimal: {}", d)))
-            })
-            .transpose()?;
+        let transfer = match m {
+            proto::batch_import_request::interop_message_import::Init {
+                transfer_token_address_hash,
+                transfer_from_address_hash: Some(transfer_from_address_hash),
+                transfer_to_address_hash: Some(transfer_to_address_hash),
+                transfer_amount: Some(transfer_amount),
+                ..
+            } => {
+                let token_address_hash =
+                    transfer_token_address_hash.map(|s| s.parse()).transpose()?;
+                let from_address_hash = transfer_from_address_hash.parse()?;
+                let to_address_hash = transfer_to_address_hash.parse()?;
+                let amount = Decimal::from_str(&transfer_amount).map_err(|_| {
+                    ParseError::Custom(format!("invalid decimal: {}", transfer_amount))
+                })?;
+
+                Some(InteropMessageTransfer {
+                    token_address_hash,
+                    from_address_hash,
+                    to_address_hash,
+                    amount,
+                })
+            }
+            proto::batch_import_request::interop_message_import::Init {
+                transfer_token_address_hash: None,
+                transfer_from_address_hash: None,
+                transfer_to_address_hash: None,
+                transfer_amount: None,
+                ..
+            } => None,
+            _ => {
+                return Err(ParseError::Custom(
+                    "invalid interop message: transfer fields are inconsistent".to_string(),
+                ));
+            }
+        };
 
         let base_msg = {
             let nonce = m.nonce;
@@ -189,18 +216,16 @@ impl TryFrom<proto::batch_import_request::interop_message_import::Init> for Inte
             InteropMessage::base(nonce, init_chain_id, relay_chain_id)
         };
 
-        Ok(Self {
+        let msg = InteropMessage {
             sender_address_hash,
             target_address_hash,
             init_transaction_hash,
             timestamp,
             payload,
-            transfer_token_address_hash,
-            transfer_from_address_hash,
-            transfer_to_address_hash,
-            transfer_amount,
             ..base_msg
-        })
+        };
+
+        Ok(Self(msg, transfer))
     }
 }
 

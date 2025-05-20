@@ -23,7 +23,7 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert hashes");
         })?;
-    repository::interop_messages::upsert_many(&tx, request.interop_messages)
+    repository::interop_messages::upsert_many_with_transfers(&tx, request.interop_messages)
         .await
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert interop messages");

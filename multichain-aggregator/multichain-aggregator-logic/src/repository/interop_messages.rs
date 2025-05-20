@@ -1,30 +1,65 @@
-use super::paginate_cursor;
-use crate::types::{interop_messages::InteropMessage, ChainId};
+use super::{interop_message_transfers, paginate_cursor};
+use crate::types::{
+    interop_message_transfers::InteropMessageTransfer, interop_messages::InteropMessage, ChainId,
+};
 use entity::interop_messages::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     prelude::{DateTime, Expr},
     sea_query::OnConflict,
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, Iterable, PaginatorTrait, QueryFilter,
-    QueryTrait,
+    QueryTrait, TransactionError, TransactionTrait,
 };
 
-pub async fn upsert_many<C>(db: &C, mut interop_messages: Vec<InteropMessage>) -> Result<(), DbErr>
+pub async fn upsert_many_with_transfers<C>(
+    db: &C,
+    mut interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
+) -> Result<(), DbErr>
 where
-    C: ConnectionTrait,
+    C: ConnectionTrait + TransactionTrait,
 {
-    interop_messages.sort_by(|a, b| (a.init_chain_id, a.nonce).cmp(&(b.init_chain_id, b.nonce)));
-    let interop_messages = interop_messages.into_iter().map(ActiveModel::from);
+    // Return early because we don't use `.do_nothing()` for messages batch insert
+    // to avoid pattern matching on `TryInsertResult`
+    if interop_messages.is_empty() {
+        return Ok(());
+    }
 
-    Entity::insert_many(interop_messages)
-        .on_conflict(
-            OnConflict::columns([Column::InitChainId, Column::Nonce])
-                .update_columns(non_primary_columns())
-                .value(Column::UpdatedAt, Expr::current_timestamp())
-                .to_owned(),
-        )
-        .do_nothing()
-        .exec_without_returning(db)
-        .await?;
+    interop_messages
+        .sort_by(|(a, _), (b, _)| (a.init_chain_id, a.nonce).cmp(&(b.init_chain_id, b.nonce)));
+
+    let (interop_messages, transfers): (Vec<_>, Vec<_>) = interop_messages
+        .into_iter()
+        .map(|(m, t)| (ActiveModel::from(m), t))
+        .unzip();
+
+    db.transaction(|tx| {
+        Box::pin(async move {
+            let message_ids = Entity::insert_many(interop_messages)
+                .on_conflict(
+                    OnConflict::columns([Column::InitChainId, Column::Nonce])
+                        .update_columns(non_primary_columns())
+                        .value(Column::UpdatedAt, Expr::current_timestamp())
+                        .to_owned(),
+                )
+                .exec_with_returning_keys(tx)
+                .await?;
+
+            // Set interop_message_id for each corresponding transfer after all messages are inserted
+            let transfers = message_ids
+                .into_iter()
+                .zip(transfers)
+                .filter_map(|(id, transfer)| transfer.map(|t| (t, id)))
+                .collect();
+
+            interop_message_transfers::upsert_many(tx, transfers).await?;
+
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|err| match err {
+        TransactionError::Connection(e) => e,
+        TransactionError::Transaction(e) => e,
+    })?;
 
     Ok(())
 }
@@ -81,7 +116,11 @@ fn non_primary_columns() -> impl Iterator<Item = Column> {
     Column::iter().filter(|col| {
         !matches!(
             col,
-            Column::InitChainId | Column::Nonce | Column::CreatedAt | Column::UpdatedAt
+            Column::Id
+                | Column::InitChainId
+                | Column::Nonce
+                | Column::CreatedAt
+                | Column::UpdatedAt
         )
     })
 }

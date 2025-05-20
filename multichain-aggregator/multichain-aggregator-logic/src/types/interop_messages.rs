@@ -2,10 +2,7 @@ use super::ChainId;
 use crate::{error::ParseError, proto};
 use alloy_primitives::{Address, Bytes, TxHash};
 use entity::interop_messages::{ActiveModel, Model};
-use sea_orm::{
-    prelude::{DateTime, Decimal},
-    ActiveValue::Set,
-};
+use sea_orm::{prelude::DateTime, ActiveValue::Set};
 
 #[derive(Debug, Clone)]
 pub struct InteropMessage {
@@ -19,10 +16,6 @@ pub struct InteropMessage {
     pub relay_transaction_hash: Option<TxHash>,
     pub payload: Option<Bytes>,
     pub failed: Option<bool>,
-    pub transfer_token_address_hash: Option<Address>,
-    pub transfer_from_address_hash: Option<Address>,
-    pub transfer_to_address_hash: Option<Address>,
-    pub transfer_amount: Option<Decimal>,
 }
 
 pub enum Status {
@@ -55,10 +48,6 @@ impl InteropMessage {
             relay_transaction_hash: None,
             payload: None,
             failed: None,
-            transfer_token_address_hash: None,
-            transfer_from_address_hash: None,
-            transfer_to_address_hash: None,
-            transfer_amount: None,
         }
     }
 
@@ -84,10 +73,6 @@ impl From<InteropMessage> for ActiveModel {
             relay_transaction_hash: Set(v.relay_transaction_hash.map(|h| h.to_vec())),
             payload: Set(v.payload.map(|p| p.to_vec())),
             failed: Set(v.failed),
-            transfer_token_address_hash: Set(v.transfer_token_address_hash.map(|a| a.to_vec())),
-            transfer_from_address_hash: Set(v.transfer_from_address_hash.map(|a| a.to_vec())),
-            transfer_to_address_hash: Set(v.transfer_to_address_hash.map(|a| a.to_vec())),
-            transfer_amount: Set(v.transfer_amount),
             ..Default::default()
         }
     }
@@ -120,19 +105,6 @@ impl TryFrom<Model> for InteropMessage {
                 .transpose()?,
             payload: v.payload.map(Bytes::from),
             failed: v.failed,
-            transfer_token_address_hash: v
-                .transfer_token_address_hash
-                .map(|a| Address::try_from(a.as_slice()))
-                .transpose()?,
-            transfer_from_address_hash: v
-                .transfer_from_address_hash
-                .map(|a| Address::try_from(a.as_slice()))
-                .transpose()?,
-            transfer_to_address_hash: v
-                .transfer_to_address_hash
-                .map(|a| Address::try_from(a.as_slice()))
-                .transpose()?,
-            transfer_amount: v.transfer_amount,
         })
     }
 }
@@ -154,10 +126,6 @@ impl From<InteropMessage> for proto::InteropMessage {
             relay_transaction_hash: v.relay_transaction_hash.map(|h| h.to_string()),
             payload: v.payload.map(|p| p.to_string()),
             failed: v.failed,
-            transfer_token_address_hash: v.transfer_token_address_hash.map(|a| a.to_string()),
-            transfer_from_address_hash: v.transfer_from_address_hash.map(|a| a.to_string()),
-            transfer_to_address_hash: v.transfer_to_address_hash.map(|a| a.to_string()),
-            transfer_amount: v.transfer_amount.map(|a| a.to_string()),
             status,
         }
     }

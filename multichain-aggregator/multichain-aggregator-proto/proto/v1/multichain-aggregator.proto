@@ -116,11 +116,7 @@ message InteropMessage {
   optional string relay_transaction_hash = 8;
   optional string payload = 9;
   optional bool failed = 10;
-  optional string transfer_token_address_hash = 11;
-  optional string transfer_from_address_hash = 12;
-  optional string transfer_to_address_hash = 13;
-  optional string transfer_amount = 14;
-  Status status = 15;
+  Status status = 11;
 }
 
 message BatchImportRequest {

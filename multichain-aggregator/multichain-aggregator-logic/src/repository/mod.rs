@@ -3,6 +3,7 @@ pub mod api_keys;
 pub mod block_ranges;
 pub mod chains;
 pub mod hashes;
+pub mod interop_message_transfers;
 pub mod interop_messages;
 
 use sea_orm::{sea_query::IntoValueTuple, ConnectionTrait, Cursor, DbErr, SelectorTrait};

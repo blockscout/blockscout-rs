@@ -635,14 +635,6 @@ definitions:
         type: string
       failed:
         type: boolean
-      transfer_token_address_hash:
-        type: string
-      transfer_from_address_hash:
-        type: string
-      transfer_to_address_hash:
-        type: string
-      transfer_amount:
-        type: string
       status:
         $ref: '#/definitions/v1InteropMessageStatus'
   v1InteropMessageStatus:
