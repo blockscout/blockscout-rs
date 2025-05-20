@@ -1,4 +1,4 @@
-use super::{hash_name::hash_ens_domain_name, ProtocolError, Tld};
+use super::{hash_name::{ hash_ens_domain_name}, ProtocolError, Tld};
 use crate::{hex, protocols::protocoler::DeployedProtocol};
 use alloy::primitives::{keccak256, Address, B256};
 
@@ -17,7 +17,12 @@ const SEPARATOR: char = '.';
 impl DomainName {
     pub fn new(name: &str, empty_label_hash: Option<B256>) -> Result<Self, ProtocolError> {
         let name = ens_normalize(name)?;
+        println!(
+            "DomainName::new: name: {}, empty_label_hash: {:?}",
+            name, empty_label_hash
+        );
         let (label_name, _) = name.split_once(SEPARATOR).unwrap_or((&name, ""));
+
         let id_bytes = hash_ens_domain_name(&name, empty_label_hash);
         let id = hex(id_bytes);
         let tld = Tld::from_domain_name(&name).ok_or_else(|| ProtocolError::InvalidName {
@@ -168,11 +173,14 @@ mod tests {
                 ".levvv.gno",
                 Some(
                     B256::from_hex(
-                        "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
+                        //"0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
+                        "0x6cbb71e02aa156be31c9be2644cd7e3fe375b291d0786c825495af35fe98ee72",
+                        // "0xa3504cdec527495c69c760c85d5be9996252f853b91fd0df04c5b6aa2deb3347"
                     )
                     .unwrap(),
                 ),
-                "0xa3504cdec527495c69c760c85d5be9996252f853b91fd0df04c5b6aa2deb3347",
+                //"0xa3504cdec527495c69c760c85d5be9996252f853b91fd0df04c5b6aa2deb3347",
+                "0xee0d974a92a402a2581ef6a9c12dff015d72db42ec089df75e708fd54a7eb269",
                 "levvv",
                 "levvv.gno",
             ),
