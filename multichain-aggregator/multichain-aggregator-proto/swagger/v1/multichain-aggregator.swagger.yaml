@@ -193,6 +193,14 @@ paths:
           required: false
           type: string
           format: int64
+        - name: address
+          in: query
+          required: false
+          type: string
+        - name: direction
+          in: query
+          required: false
+          type: string
         - name: page_size
           in: query
           required: false

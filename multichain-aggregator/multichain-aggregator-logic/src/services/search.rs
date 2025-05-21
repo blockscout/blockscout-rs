@@ -12,7 +12,7 @@ use crate::{
         dapp::MarketplaceDapp,
         domains::Domain,
         hashes::{Hash, HashType},
-        interop_messages::InteropMessage,
+        interop_messages::{InteropMessage, MessageDirection},
         search_results::QuickSearchResult,
         token_info::Token,
         ChainId,
@@ -205,10 +205,13 @@ pub async fn search_hashes(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn search_interop_messages(
     db: &DatabaseConnection,
     init_chain_id: Option<ChainId>,
     relay_chain_id: Option<ChainId>,
+    address: Option<AddressAlloy>,
+    direction: Option<MessageDirection>,
     nonce: Option<i64>,
     page_size: u64,
     page_token: Option<(DateTime, TxHash)>,
@@ -217,6 +220,8 @@ pub async fn search_interop_messages(
         db,
         init_chain_id,
         relay_chain_id,
+        address,
+        direction,
         nonce,
         page_size,
         page_token,

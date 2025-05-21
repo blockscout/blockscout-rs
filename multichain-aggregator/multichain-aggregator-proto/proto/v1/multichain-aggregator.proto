@@ -289,8 +289,10 @@ message ListInteropMessagesRequest {
   optional string init_chain_id = 1;
   optional string relay_chain_id = 2;
   optional int64 nonce = 3;
-  optional uint32 page_size = 4;
-  optional string page_token = 5;
+  optional string address = 4;
+  optional string direction = 5;
+  optional uint32 page_size = 6;
+  optional string page_token = 7;
 }
 
 message ListInteropMessagesResponse {

@@ -1,8 +1,10 @@
 use super::{interop_message_transfers, paginate_cursor};
 use crate::types::{
-    interop_message_transfers::InteropMessageTransfer, interop_messages::InteropMessage, ChainId,
+    interop_message_transfers::InteropMessageTransfer,
+    interop_messages::{InteropMessage, MessageDirection},
+    ChainId,
 };
-use alloy_primitives::TxHash;
+use alloy_primitives::{Address as AddressAlloy, TxHash};
 use entity::interop_messages::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     prelude::{DateTime, Expr},
@@ -65,10 +67,13 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn list<C>(
     db: &C,
     init_chain_id: Option<ChainId>,
     relay_chain_id: Option<ChainId>,
+    address: Option<AddressAlloy>,
+    direction: Option<MessageDirection>,
     nonce: Option<i64>,
     page_size: u64,
     page_token: Option<(DateTime, TxHash)>,
@@ -83,6 +88,16 @@ where
         })
         .apply_if(relay_chain_id, |q, relay_chain_id| {
             q.filter(Column::RelayChainId.eq(relay_chain_id))
+        })
+        .apply_if(address, |q, address| {
+            let address = address.as_slice();
+            let sender_cond = Column::SenderAddressHash.eq(address);
+            let target_cond = Column::TargetAddressHash.eq(address);
+            match direction {
+                Some(MessageDirection::From) => q.filter(sender_cond),
+                Some(MessageDirection::To) => q.filter(target_cond),
+                None => q.filter(sender_cond.or(target_cond)),
+            }
         })
         .apply_if(nonce, |q, nonce| q.filter(Column::Nonce.eq(nonce)))
         .cursor_by((Column::Timestamp, Column::InitTransactionHash));

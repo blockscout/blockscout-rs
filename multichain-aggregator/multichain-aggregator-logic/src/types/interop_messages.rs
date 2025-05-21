@@ -3,6 +3,7 @@ use crate::{error::ParseError, proto};
 use alloy_primitives::{Address, Bytes, TxHash};
 use entity::interop_messages::{ActiveModel, Model};
 use sea_orm::{prelude::DateTime, ActiveValue::Set};
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct InteropMessage {
@@ -127,6 +128,26 @@ impl From<InteropMessage> for proto::InteropMessage {
             payload: v.payload.map(|p| p.to_string()),
             failed: v.failed,
             status,
+        }
+    }
+}
+
+pub enum MessageDirection {
+    From,
+    To,
+}
+
+impl FromStr for MessageDirection {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "from" => Ok(MessageDirection::From),
+            "to" => Ok(MessageDirection::To),
+            _ => Err(ParseError::Custom(format!(
+                "invalid message direction: {}",
+                s
+            ))),
         }
     }
 }

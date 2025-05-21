@@ -425,6 +425,8 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let init_chain_id = inner.init_chain_id.map(parse_query).transpose()?;
         let relay_chain_id = inner.relay_chain_id.map(parse_query).transpose()?;
+        let address = inner.address.map(parse_query).transpose()?;
+        let direction = inner.direction.map(parse_query).transpose()?;
 
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.map(parse_query_2).transpose()?;
@@ -433,6 +435,8 @@ impl MultichainAggregatorService for MultichainAggregator {
             self.repo.read_db(),
             init_chain_id,
             relay_chain_id,
+            address,
+            direction,
             inner.nonce,
             page_size as u64,
             page_token,
