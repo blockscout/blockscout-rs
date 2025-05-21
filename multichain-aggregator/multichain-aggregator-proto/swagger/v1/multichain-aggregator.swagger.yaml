@@ -194,10 +194,12 @@ paths:
           type: string
           format: int64
         - name: address
+          description: Address of the sender or receiver.
           in: query
           required: false
           type: string
         - name: direction
+          description: 'Message direction: "from" or "to". Valid only when address is provided.'
           in: query
           required: false
           type: string

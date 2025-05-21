@@ -289,7 +289,9 @@ message ListInteropMessagesRequest {
   optional string init_chain_id = 1;
   optional string relay_chain_id = 2;
   optional int64 nonce = 3;
+  // Address of the sender or receiver.
   optional string address = 4;
+  // Message direction: "from" or "to". Valid only when address is provided.
   optional string direction = 5;
   optional uint32 page_size = 6;
   optional string page_token = 7;
