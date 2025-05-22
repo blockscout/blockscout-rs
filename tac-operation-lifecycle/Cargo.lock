@@ -4463,6 +4463,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-stream",
+ "base64 0.22.1",
  "blockscout-display-bytes",
  "blockscout-service-launcher",
  "chrono",
@@ -4515,7 +4516,6 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
- "base64 0.22.1",
  "blockscout-service-launcher",
  "chrono",
  "config 0.15.11",
