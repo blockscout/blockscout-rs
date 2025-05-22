@@ -36,7 +36,7 @@ const DOMAIN_PRIMARY_CHAIN_ID: ChainId = 1;
 
 fn domain_name_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\w+\.\w+").unwrap())
+    RE.get_or_init(|| Regex::new(r"^\b\w{3,}\b").unwrap())
 }
 
 pub enum AddressSearchConfig<'a> {
@@ -685,5 +685,13 @@ mod tests {
             replace_coingecko_logo_uri_to_large(other_source_logo),
             other_source_logo
         );
+    }
+
+    #[test]
+    fn test_domain_name_regex() {
+        assert!(domain_name_regex().is_match("test"));
+        assert!(domain_name_regex().is_match("test.eth"));
+        assert!(!domain_name_regex().is_match("te"));
+        assert!(!domain_name_regex().is_match("te.eth"));
     }
 }
