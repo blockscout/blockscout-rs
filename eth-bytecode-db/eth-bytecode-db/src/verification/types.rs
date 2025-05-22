@@ -647,6 +647,7 @@ pub struct AllianceContractImportSuccess {
     pub runtime_match_details: Option<MatchDetails>,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AllianceContractImportResult {
     Success(AllianceContractImportSuccess),
