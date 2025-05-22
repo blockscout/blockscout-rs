@@ -1,6 +1,8 @@
-use crate::client::models::{
-    operations::Operations as ApiOperations,
-    profiling::{BlockchainTypeLowercase, OperationData as ApiOperationData},
+use crate::{
+    client::models::{
+        operations::Operations as ApiOperations, profiling::OperationData as ApiOperationData,
+    },
+    utils::{is_generic_hash, is_tac_address, is_ton_address},
 };
 use anyhow::anyhow;
 use sea_orm::{
@@ -1126,7 +1128,7 @@ impl TacDatabase {
 
     pub async fn get_brief_operation_by_id(
         &self,
-        id: &str,
+        id: &String,
     ) -> anyhow::Result<Option<operation::Model>> {
         let op = operation::Entity::find()
             .filter(operation::Column::Id.eq(id))
@@ -1361,5 +1363,26 @@ impl TacDatabase {
             .await?;
 
         Ok(result.rows_affected as usize)
+    }
+
+    // Multisearch by the following fields: operation_id, tx_hash, sender
+    pub async fn search_operations(&self, q: &String) -> anyhow::Result<Vec<operation::Model>> {
+        if is_generic_hash(q) {
+            // operation_id or tx_hash
+            let operations = match self.get_brief_operation_by_id(q).await? {
+                Some(op) => vec![op],
+                None => self.get_brief_operations_by_tx_hash(q).await?,
+            };
+
+            Ok(operations)
+        } else if is_tac_address(q) || is_ton_address(q) {
+            // sender (TON-TAC format)
+            // TODO: unimplemented for this version of the database.
+            // The corresponding field doesn't exist for the operation entity.
+            Ok(vec![])
+        } else {
+            // unknown query string -> return void array without DB interacting
+            Ok(vec![])
+        }
     }
 }
