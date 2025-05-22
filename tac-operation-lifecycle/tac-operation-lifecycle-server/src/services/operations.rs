@@ -7,11 +7,8 @@ use tac_operation_lifecycle_logic::{
     database::{OrderDirection, TacDatabase},
 };
 use tac_operation_lifecycle_proto::blockscout::tac_operation_lifecycle::v1::{
-    GetOperationByTxHashRequest, GetOperationDetailsRequest, GetOperationsRequest,
-    OperationBriefDetails, OperationDetails, OperationRelatedTransaction, OperationStage,
-    OperationsFullResponse, OperationsResponse, Pagination,
+    BlockchainAddress, GetOperationByTxHashRequest, GetOperationDetailsRequest, GetOperationsRequest, OperationBriefDetails, OperationDetails, OperationRelatedTransaction, OperationStage, OperationsFullResponse, OperationsResponse, Pagination
 };
-use tonlib_core::TonAddress;
 
 pub struct OperationsService {
     db: Arc<TacDatabase>,

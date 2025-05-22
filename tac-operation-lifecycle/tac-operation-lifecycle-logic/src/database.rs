@@ -1,6 +1,6 @@
 use crate::{
     client::models::{
-        operations::Operations as ApiOperations, profiling::OperationData as ApiOperationData,
+        operations::Operations as ApiOperations, profiling::{BlockchainTypeLowercase, OperationData as ApiOperationData},
     },
     utils::{is_generic_hash, is_tac_address, is_ton_address},
 };
