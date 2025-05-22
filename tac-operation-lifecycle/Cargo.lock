@@ -4526,6 +4526,7 @@ dependencies = [
  "tac-operation-lifecycle-entity",
  "tac-operation-lifecycle-migration",
  "tokio",
+ "tonlib-core",
  "tower 0.5.2",
  "tracing",
  "tracing-subscriber",

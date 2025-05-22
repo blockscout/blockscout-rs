@@ -2,7 +2,7 @@ use crate::{
     client::models::{
         operations::Operations as ApiOperations, profiling::{BlockchainTypeLowercase, OperationData as ApiOperationData},
     },
-    utils::{is_generic_hash, is_tac_address, is_ton_address},
+    utils::{blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address},
 };
 use anyhow::anyhow;
 use sea_orm::{
@@ -834,14 +834,21 @@ impl TacDatabase {
                     }
                     operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
 
-                    if let Some(initial_caller) = operation_data
+                    if let Some((address, blockchain)) = operation_data
                         .meta_info
                         .as_ref()
                         .and_then(|meta| meta.initial_caller.clone())
+                        .and_then(|caller| {
+                            blockchain_address_to_db_format(&caller.address)
+                                .ok()
+                                .map(|addr| (addr, caller.blockchain_type.to_string()))
+                        })
+
                     {
-                        operation_model.sender_address = Set(Some(initial_caller.address));
-                        operation_model.sender_blockchain =
-                            Set(Some(initial_caller.blockchain_type.to_string()));
+                        operation_model.sender_address = Set(Some(address));
+                        operation_model.sender_blockchain = Set(Some(blockchain));
+                    } else {
+                        tracing::warn!(op_id =? operation.id, "Storing operation without sender")
                     }
 
                     operation_model
@@ -1197,8 +1204,9 @@ impl TacDatabase {
         &self,
         address: &str,
     ) -> anyhow::Result<Vec<operation::Model>> {
+        let address_cast = blockchain_address_to_db_format(address)?;
         let op = operation::Entity::find()
-            .filter(operation::Column::SenderAddress.eq(address))
+            .filter(operation::Column::SenderAddress.eq(address_cast))
             .all(self.db.as_ref())
             .await?;
 
@@ -1377,9 +1385,7 @@ impl TacDatabase {
             Ok(operations)
         } else if is_tac_address(q) || is_ton_address(q) {
             // sender (TON-TAC format)
-            // TODO: unimplemented for this version of the database.
-            // The corresponding field doesn't exist for the operation entity.
-            Ok(vec![])
+            Ok(self.get_brief_operations_by_sender(q).await?)
         } else {
             // unknown query string -> return void array without DB interacting
             Ok(vec![])
