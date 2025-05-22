@@ -11,6 +11,7 @@ use verification_common::{
     verifier_alliance::{CborAuxdata, CompilationArtifacts, Match},
 };
 
+#[allow(clippy::result_large_err)]
 pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
     match error {
         err @ Error::CompilerNotFound(_) => Err(Status::invalid_argument(err.to_string())),
@@ -35,6 +36,7 @@ pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn process_verification_result(
     value: VerificationResult,
 ) -> Result<v2::VerifyResponse, Status> {
@@ -118,6 +120,7 @@ fn new_bytecode_part(type_: &str, data: &[u8]) -> extra_data::BytecodePart {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn try_into_source(verifying_contract: VerifyingContract) -> Result<v2::Source, Status> {
     let compilation_artifacts = verifying_contract.compilation_artifacts;
     let creation_code_artifacts = verifying_contract.creation_code_artifacts;
@@ -185,6 +188,7 @@ fn parse_constructor_arguments(creation_match: &Option<Match>) -> Option<String>
         .map(|value| value.to_hex())
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_match_type(
     creation_match: &Option<Match>,
     runtime_match: &Option<Match>,

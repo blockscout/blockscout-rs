@@ -20,6 +20,7 @@ pub fn compilation_error(message: impl Into<String>) -> BatchVerifyResponse {
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn process_error(error: Error) -> Result<BatchVerifyResponse, Status> {
     match error {
         err @ Error::CompilerNotFound(_) => Err(Status::invalid_argument(err.to_string())),
@@ -35,6 +36,7 @@ pub fn process_error(error: Error) -> Result<BatchVerifyResponse, Status> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn process_verification_results(
     values: Vec<VerificationResult>,
 ) -> Result<BatchVerifyResponse, Status> {
@@ -52,6 +54,7 @@ pub fn process_verification_results(
     })
 }
 
+#[allow(clippy::result_large_err)]
 fn process_verification_result(
     value: VerificationResult,
 ) -> Result<proto::ContractVerificationResult, Status> {
