@@ -321,26 +321,27 @@ impl Protocoler {
             .iter()
             .filter_map(|proto_name| self.protocols.get(proto_name))
             .collect::<Vec<_>>();
-    
+
         for proto in &protocols {
             let empty_hash = match &proto.info.protocol_specific {
                 ProtocolSpecific::EnsLike(cfg) => cfg.empty_label_hash,
                 _ => None,
             };
-    
+
             if let Ok(domain) = DomainName::new(name, empty_hash) {
                 if domain.level_gt_tld() {
-                    let fetched = self.fetch_domain_options(&domain.name, network_id, maybe_filter)?;
+                    let fetched =
+                        self.fetch_domain_options(&domain.name, network_id, maybe_filter)?;
                     return Ok(fetched.into_iter().collect());
                 }
             }
         }
-    
+
         let tlds = protocols
             .iter()
             .flat_map(|proto| proto.info.tld_list.iter().cloned())
             .collect::<Vec<_>>();
-    
+
         let mut all = Vec::new();
         for tld in tlds {
             let fullname = format!("{}.{}", name.trim_end_matches('.'), tld.0);
@@ -352,7 +353,7 @@ impl Protocoler {
                 break;
             }
         }
-    
+
         if all.is_empty() {
             Err(ProtocolError::InvalidName {
                 name: name.to_string(),
@@ -362,7 +363,6 @@ impl Protocoler {
             Ok(all)
         }
     }
-    
 
     pub fn names_options_in_network(
         &self,
