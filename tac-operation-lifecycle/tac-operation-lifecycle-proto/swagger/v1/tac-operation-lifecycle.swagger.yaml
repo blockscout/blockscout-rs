@@ -153,13 +153,6 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
-  OperationRelatedTransactionBlockchainType:
-    type: string
-    enum:
-      - TAC
-      - TON
-      - UNKNOWN
-    default: TAC
   OperationStageStageType:
     type: string
     enum:
@@ -189,6 +182,20 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
+  v1BlockchainAddress:
+    type: object
+    properties:
+      address:
+        type: string
+      blockchain:
+        $ref: '#/definitions/v1BlockchainType'
+  v1BlockchainType:
+    type: string
+    enum:
+      - TAC
+      - TON
+      - UNKNOWN_BLOCKCHAIN
+    default: TAC
   v1GetFullStatisticResponse:
     type: object
     properties:
@@ -263,7 +270,7 @@ definitions:
       timestamp:
         type: string
       sender:
-        type: string
+        $ref: '#/definitions/v1BlockchainAddress'
   v1OperationDetails:
     type: object
     properties:
@@ -274,7 +281,7 @@ definitions:
       timestamp:
         type: string
       sender:
-        type: string
+        $ref: '#/definitions/v1BlockchainAddress'
       status_history:
         type: array
         items:
@@ -286,7 +293,7 @@ definitions:
       hash:
         type: string
       type:
-        $ref: '#/definitions/OperationRelatedTransactionBlockchainType'
+        $ref: '#/definitions/v1BlockchainType'
   v1OperationStage:
     type: object
     properties:

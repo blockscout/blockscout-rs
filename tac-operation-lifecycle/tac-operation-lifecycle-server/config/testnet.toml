@@ -26,7 +26,7 @@ operations_loop_delay_ms = 200
 forever_pending_operations_age_sec = 604800
 
 [rpc]
-url = "https://data.turin.tac.build/"
+url = "https://datav3-combat.turin.tac.build/"
 request_per_second = 100
 num_of_retries = 10
 retry_delay_ms = 1000

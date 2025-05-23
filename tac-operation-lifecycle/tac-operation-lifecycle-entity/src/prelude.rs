@@ -2,6 +2,7 @@
 
 pub use super::{
     interval::Entity as Interval, operation::Entity as Operation,
-    operation_stage::Entity as OperationStage, stage_type::Entity as StageType,
-    transaction::Entity as Transaction, watermark::Entity as Watermark,
+    operation_meta_info::Entity as OperationMetaInfo, operation_stage::Entity as OperationStage,
+    stage_type::Entity as StageType, transaction::Entity as Transaction,
+    watermark::Entity as Watermark,
 };

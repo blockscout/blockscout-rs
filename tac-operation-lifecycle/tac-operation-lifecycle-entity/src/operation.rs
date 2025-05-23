@@ -15,12 +15,22 @@ pub struct Model {
     pub retry_count: i16,
     pub inserted_at: DateTime,
     pub updated_at: DateTime,
+    pub sender_address: Option<String>,
+    pub sender_blockchain: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_one = "super::operation_meta_info::Entity")]
+    OperationMetaInfo,
     #[sea_orm(has_many = "super::operation_stage::Entity")]
     OperationStage,
+}
+
+impl Related<super::operation_meta_info::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OperationMetaInfo.def()
+    }
 }
 
 impl Related<super::operation_stage::Entity> for Entity {

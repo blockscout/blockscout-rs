@@ -1,10 +1,11 @@
 use crate::{
+    client::models::profiling::BlockchainType,
     database::{OrderDirection, TacDatabase},
     settings::IndexerSettings,
 };
 use anyhow::Error;
 use client::{
-    models::profiling::{BlockchainType, OperationType, StageType},
+    models::profiling::{OperationType, StageType},
     Client,
 };
 use futures::{

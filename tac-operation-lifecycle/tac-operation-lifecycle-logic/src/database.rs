@@ -1,23 +1,24 @@
 use crate::{
     client::models::{
-        operations::Operations as ApiOperations, profiling::OperationData as ApiOperationData,
+        operations::Operations as ApiOperations,
+        profiling::{BlockchainTypeLowercase, OperationData as ApiOperationData},
     },
-    utils::{is_generic_hash, is_tac_address, is_ton_address},
+    utils::{blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address},
 };
 use anyhow::anyhow;
 use sea_orm::{
-    prelude::DateTime,
+    prelude::{DateTime, Decimal},
     sea_query::OnConflict,
     ActiveEnum, ActiveModelTrait,
     ActiveValue::{self, NotSet},
     ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
-use std::{cmp::min, collections::HashMap, fmt, sync::Arc};
+use std::{cmp::min, collections::HashMap, fmt, str::FromStr, sync::Arc};
 use tac_operation_lifecycle_entity::{
     interval,
     operation::{self, Column},
-    operation_stage,
+    operation_meta_info, operation_stage,
     sea_orm_active_enums::StatusEnum,
     stage_type, transaction, watermark,
 };
@@ -98,6 +99,8 @@ struct JoinedRow {
     op_type: Option<String>,
     timestamp: DateTime,
     status: StatusEnum,
+    sender_address: Option<String>,
+    sender_blockchain: Option<String>,
 
     //operation_stage
     stage_id: Option<i32>,
@@ -112,6 +115,14 @@ struct JoinedRow {
     tx_hash: Option<String>,
     tx_blockchain_type: Option<String>,
 }
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LogicPagination {
+    pub count: usize,
+    pub earlier_timestamp: u64,
+}
+
+const PAGE_SIZE: usize = 50;
 
 pub struct TacDatabase {
     db: Arc<DatabaseConnection>,
@@ -385,6 +396,9 @@ impl TacDatabase {
         Ok(())
     }
 
+    // Store operations fetched from the TAC API into the database
+    // A few fields are set to None, because they are not available at this point
+    // The operation status is set to 'pending' to indicate that the operation is not yet processed
     pub async fn insert_pending_operations(
         &self,
         operations: &ApiOperations,
@@ -395,6 +409,8 @@ impl TacDatabase {
                 id: Set(op.id.clone()),
                 op_type: Set(None),
                 timestamp: Set(Self::timestamp_to_naive(op.timestamp as i64)),
+                sender_address: Set(None),
+                sender_blockchain: Set(None),
                 status: Set(StatusEnum::Pending),
                 next_retry: Set(None),
                 retry_count: Set(0), // Initialize retry count
@@ -586,7 +602,8 @@ impl TacDatabase {
             UPDATE operation 
             SET status = '{new_status}'::status_enum
             WHERE id IN (SELECT id FROM selected_operations)
-            RETURNING id, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
+            RETURNING id, timestamp, status::text, sender_address, sender_blockchain,
+                      next_retry, retry_count, inserted_at, updated_at
             "#,
         )
     }
@@ -819,12 +836,28 @@ impl TacDatabase {
                         .exec(tx)
                         .await?;
 
-                    // Update operation type and status
+                    // Update operation type, status and sender
                     let mut operation_model: operation::ActiveModel = operation.clone().into();
                     if operation_data.operation_type.is_finalized() {
                         operation_model.status = Set(StatusEnum::Completed);
                     }
                     operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
+
+                    if let Some((address, blockchain)) = operation_data
+                        .meta_info
+                        .as_ref()
+                        .and_then(|meta| meta.initial_caller.clone())
+                        .and_then(|caller| {
+                            blockchain_address_to_db_format(&caller.address)
+                                .ok()
+                                .map(|addr| (addr, caller.blockchain_type.to_string()))
+                        })
+                    {
+                        operation_model.sender_address = Set(Some(address));
+                        operation_model.sender_blockchain = Set(Some(blockchain));
+                    } else {
+                        tracing::warn!(op_id =? operation.id, "Storing operation without sender")
+                    }
 
                     operation_model
                         .update(tx)
@@ -874,6 +907,51 @@ impl TacDatabase {
                                 .exec(tx)
                                 .await?;
                         }
+                    }
+
+                    // Store operation metainfo
+                    if let Some(meta_info) = operation_data.meta_info.clone() {
+                        let get_fee = |chain: BlockchainTypeLowercase| {
+                            meta_info
+                                .fee_info
+                                .get(&chain)
+                                .and_then(|fee_opt| fee_opt.as_ref())
+                        };
+
+                        let get_executors = |chain: BlockchainTypeLowercase| {
+                            meta_info.valid_executors.get(&chain).cloned().flatten()
+                        };
+
+                        let parse_decimal = |s: &str| Decimal::from_str(s).ok();
+
+                        let meta_model = operation_meta_info::ActiveModel {
+                            operation_id: Set(operation.id.clone()),
+                            tac_valid_executors: Set(get_executors(BlockchainTypeLowercase::Tac)),
+                            ton_valid_executors: Set(get_executors(BlockchainTypeLowercase::Ton)),
+                            tac_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+                            tac_executor_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                                .and_then(|fee| parse_decimal(&fee.executor_fee))),
+                            tac_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Tac)
+                                .map(|fee| fee.token_fee_symbol.clone())),
+                            ton_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+                            ton_executor_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                                .and_then(|fee| parse_decimal(&fee.executor_fee))),
+                            ton_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Ton)
+                                .map(|fee| fee.token_fee_symbol.clone())),
+                        };
+
+                        operation_meta_info::Entity::insert(meta_model)
+                            .on_conflict(
+                                sea_orm::sea_query::OnConflict::column(
+                                    operation_meta_info::Column::OperationId,
+                                )
+                                .do_nothing()
+                                .to_owned(),
+                            )
+                            .exec(tx)
+                            .await?;
                     }
 
                     Ok(())
@@ -1075,7 +1153,7 @@ impl TacDatabase {
         Ok(op)
     }
 
-    pub async fn get_operation_by_id(
+    pub async fn get_full_operation_by_id(
         &self,
         id: &String,
     ) -> anyhow::Result<
@@ -1086,7 +1164,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.timestamp, o.status::text,
+                o.id as op_id, o.op_type, o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1111,7 +1189,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.timestamp, o.status::text,
+                o.id as op_id, o.op_type, o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1130,12 +1208,52 @@ impl TacDatabase {
             .await
     }
 
+    pub async fn get_brief_operations_by_sender(
+        &self,
+        address: &str,
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
+        let address_cast = blockchain_address_to_db_format(address)?;
+        let mut query =
+            operation::Entity::find().filter(operation::Column::SenderAddress.eq(address_cast));
+
+        if let Some(pagination) = pagination_input {
+            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(
+                pagination.earlier_timestamp as i64,
+            )));
+        }
+
+        query = query.order_by_desc(Column::Timestamp);
+
+        // request more records than needed to check if additional records are available.
+        let mut operations = query
+            .limit(PAGE_SIZE as u64 + 1)
+            .all(self.db.as_ref())
+            .await?;
+
+        let mut pagination_output = None;
+        let need_pagination = operations.len() > PAGE_SIZE; // the pagination criteria
+        operations.pop(); // remove the last one aux element (if exist)
+        if need_pagination {
+            // seems we should turn on the pagination
+            pagination_output = Some(TacDatabase::calculate_pagination(
+                pagination_input,
+                &operations,
+            ));
+        }
+
+        Ok((operations, pagination_output))
+    }
+
     pub async fn get_brief_operations_by_tx_hash(
         &self,
-        tx_hash: &String,
-    ) -> anyhow::Result<Vec<operation::Model>> {
-        let sql = r#"
-            SELECT id, op_type, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
+        tx_hash: &str,
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
+        let mut sql = String::from(
+            r#"
+            SELECT id, op_type, timestamp, status::text, sender_address, sender_blockchain, 
+                   next_retry, retry_count, inserted_at, updated_at
             FROM operation
             WHERE id IN (
                 SELECT s.operation_id
@@ -1144,9 +1262,32 @@ impl TacDatabase {
                 WHERE t.hash = $1
             )
             ORDER BY timestamp;
-            "#;
+            "#,
+        );
 
-        self.get_operations_with_sql(sql, [tx_hash.into()]).await
+        let mut values: Vec<sea_orm::Value> = vec![tx_hash.into()];
+
+        if let Some(pagination) = pagination_input {
+            sql.push_str(" AND timestamp < $2");
+            values.push(Self::timestamp_to_naive(pagination.earlier_timestamp as i64).into());
+        }
+
+        sql.push_str(" ORDER BY timestamp DESC LIMIT $3");
+        values.push((PAGE_SIZE as u64 + 1).into());
+
+        let mut operations = self.get_operations_with_sql(&sql, values).await?;
+
+        let mut pagination_output = None;
+        let need_pagination = operations.len() > PAGE_SIZE;
+        operations.truncate(PAGE_SIZE);
+        if need_pagination {
+            pagination_output = Some(TacDatabase::calculate_pagination(
+                pagination_input,
+                &operations,
+            ));
+        }
+
+        Ok((operations, pagination_output))
     }
 
     async fn get_full_operations_with_sql(
@@ -1187,6 +1328,8 @@ impl TacDatabase {
                         retry_count: 0,
                         inserted_at: now,
                         updated_at: now,
+                        sender_address: row.sender_address.clone(),
+                        sender_blockchain: row.sender_blockchain.clone(),
                     },
                     HashMap::new(),
                 )
@@ -1234,24 +1377,50 @@ impl TacDatabase {
 
     pub async fn get_operations(
         &self,
-        count: usize,
-        earlier_timestamp: Option<u64>,
-        sort: OrderDirection,
-    ) -> anyhow::Result<Vec<operation::Model>> {
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
         let mut query = operation::Entity::find();
 
-        if let Some(ts) = earlier_timestamp {
-            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(ts as i64)));
+        if let Some(pagination) = pagination_input {
+            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(
+                pagination.earlier_timestamp as i64,
+            )));
         }
 
-        query = match sort {
-            OrderDirection::EarliestFirst => query.order_by_asc(Column::Timestamp),
-            OrderDirection::LatestFirst => query.order_by_desc(Column::Timestamp),
-        };
+        query = query.order_by_desc(Column::Timestamp);
 
-        let operations = query.limit(count as u64).all(self.db.as_ref()).await?;
+        // request more records than needed to check if additional records are available.
+        let mut operations = query
+            .limit(PAGE_SIZE as u64 + 1)
+            .all(self.db.as_ref())
+            .await?;
 
-        Ok(operations)
+        let mut pagination_output = None;
+        let need_pagination = operations.len() > PAGE_SIZE; // the pagination criteria
+        operations.pop(); // remove the last one aux element (if exist)
+        if need_pagination {
+            // seems we should turn on the pagination
+            pagination_output = Some(TacDatabase::calculate_pagination(
+                pagination_input,
+                &operations,
+            ));
+        }
+
+        Ok((operations, pagination_output))
+    }
+
+    fn calculate_pagination(
+        pagination_input: Option<LogicPagination>,
+        ops: &[operation::Model],
+    ) -> LogicPagination {
+        let prev_count = pagination_input.map_or(0, |p| p.count);
+
+        let earlier_timestamp = ops.last().unwrap().timestamp.and_utc().timestamp() as u64;
+
+        LogicPagination {
+            count: prev_count + PAGE_SIZE,
+            earlier_timestamp,
+        }
     }
 
     async fn get_operations_with_sql(
@@ -1288,23 +1457,27 @@ impl TacDatabase {
     }
 
     // Multisearch by the following fields: operation_id, tx_hash, sender
-    pub async fn search_operations(&self, q: &String) -> anyhow::Result<Vec<operation::Model>> {
+    pub async fn search_operations(
+        &self,
+        q: &String,
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
         if is_generic_hash(q) {
             // operation_id or tx_hash
-            let operations = match self.get_brief_operation_by_id(q).await? {
-                Some(op) => vec![op],
-                None => self.get_brief_operations_by_tx_hash(q).await?,
-            };
-
-            Ok(operations)
+            match self.get_brief_operation_by_id(q).await? {
+                Some(op) => Ok((vec![op], None)),
+                None => Ok(self
+                    .get_brief_operations_by_tx_hash(q, pagination_input)
+                    .await?),
+            }
         } else if is_tac_address(q) || is_ton_address(q) {
             // sender (TON-TAC format)
-            // TODO: unimplemented for this version of the database.
-            // The corresponding field doesn't exist for the operation entity.
-            Ok(vec![])
+            Ok(self
+                .get_brief_operations_by_sender(q, pagination_input)
+                .await?)
         } else {
             // unknown query string -> return void array without DB interacting
-            Ok(vec![])
+            Ok((vec![], None))
         }
     }
 }
