@@ -234,6 +234,7 @@ pub async fn find_domains(
     };
 
     let mut query = sqlx::query_as(&sql);
+    tracing::debug!(sql = sql, "build SQL query for 'find_domains'");
     if let FindDomainsInput::Names(names) = &input {
         query = query.bind(names.iter().map(|n| n.inner.id.clone()).collect::<Vec<_>>());
     }
