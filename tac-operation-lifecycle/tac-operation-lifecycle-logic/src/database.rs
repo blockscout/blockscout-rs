@@ -14,7 +14,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
-use std::{cmp::min, collections::HashMap, fmt, fs::OpenOptions, str::FromStr, sync::Arc};
+use std::{cmp::min, collections::HashMap, fmt, str::FromStr, sync::Arc};
 use tac_operation_lifecycle_entity::{
     interval,
     operation::{self, Column},
@@ -1247,7 +1247,7 @@ impl TacDatabase {
 
     pub async fn get_brief_operations_by_tx_hash(
         &self,
-        tx_hash: &String,
+        tx_hash: &str,
         pagination_input: Option<LogicPagination>,
     ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
         let mut sql = String::from(
@@ -1265,7 +1265,7 @@ impl TacDatabase {
             "#,
         );
 
-        let mut values: Vec<sea_orm::Value> = vec![tx_hash.clone().into()];
+        let mut values: Vec<sea_orm::Value> = vec![tx_hash.into()];
 
         if let Some(pagination) = pagination_input {
             sql.push_str(" AND timestamp < $2");
@@ -1411,7 +1411,7 @@ impl TacDatabase {
 
     fn calculate_pagination(
         pagination_input: Option<LogicPagination>,
-        ops: &Vec<operation::Model>,
+        ops: &[operation::Model],
     ) -> LogicPagination {
         let prev_count = pagination_input.map_or(0, |p| p.count);
 
