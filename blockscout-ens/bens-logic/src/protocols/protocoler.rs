@@ -313,8 +313,6 @@ impl Protocoler {
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        let clean_name = name.trim_end_matches('.');
-
         let protocols = self
             .networks
             .get(&network_id)
@@ -323,29 +321,29 @@ impl Protocoler {
             .iter()
             .filter_map(|proto_name| self.protocols.get(proto_name))
             .collect::<Vec<_>>();
-
+    
         for proto in &protocols {
-            let hash = match &proto.info.protocol_specific {
+            let empty_hash = match &proto.info.protocol_specific {
                 ProtocolSpecific::EnsLike(cfg) => cfg.empty_label_hash,
                 _ => None,
             };
-            if let Ok(domain) = DomainName::new(clean_name, hash) {
+    
+            if let Ok(domain) = DomainName::new(name, empty_hash) {
                 if domain.level_gt_tld() {
-                    let fetched =
-                        self.fetch_domain_options(clean_name, network_id, maybe_filter)?;
+                    let fetched = self.fetch_domain_options(&domain.name, network_id, maybe_filter)?;
                     return Ok(fetched.into_iter().collect());
                 }
             }
         }
-
+    
         let tlds = protocols
             .iter()
             .flat_map(|proto| proto.info.tld_list.iter().cloned())
             .collect::<Vec<_>>();
-
+    
         let mut all = Vec::new();
         for tld in tlds {
-            let fullname = format!("{}.{}", clean_name, tld.0);
+            let fullname = format!("{}.{}", name.trim_end_matches('.'), tld.0);
             let mut opts = self
                 .fetch_domain_options(&fullname, network_id, maybe_filter.clone())
                 .unwrap_or_default();
@@ -354,16 +352,17 @@ impl Protocoler {
                 break;
             }
         }
-
+    
         if all.is_empty() {
             Err(ProtocolError::InvalidName {
-                name: clean_name.to_string(),
+                name: name.to_string(),
                 reason: "No valid TLDs".to_string(),
             })
         } else {
             Ok(all)
         }
     }
+    
 
     pub fn names_options_in_network(
         &self,
