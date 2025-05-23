@@ -94,6 +94,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
     .await;
     assert_eq!(actual, expected);
 
+    // all domains lookup + check pagination
     let expected_domains = data_file_as_json!("domains/lookup_ens.json", &context)
         .as_array()
         .unwrap()
@@ -277,7 +278,7 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
         data_file_as_json!("domains/levvv_gno/detailed.json", &context)
     );
 
-    let expected_domains = data_file_as_json!("domains/lookup_ens_genome.json", &context)
+    let expected_domains = data_file_as_json!("domains/lookup_genome.json", &context)
         .as_array()
         .unwrap()
         .clone();
@@ -285,7 +286,10 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
     let (actual, expected) = check_list_result(
         &base,
         "/api/v1/1337/domains:lookup",
-        HashMap::from_iter([("page_size".into(), "2".into())]),
+        HashMap::from_iter([
+            ("protocols".into(), "genome".into()),
+            ("page_size".into(), "2".into()),
+        ]),
         expected_domains,
         Some((2, Some(page_token.clone()))),
     )
