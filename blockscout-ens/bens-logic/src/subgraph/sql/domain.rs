@@ -218,7 +218,6 @@ pub async fn find_domains(
             })
             .collect::<Vec<_>>(),
     };
-
     let queries = queries.into_iter().map(|mut q| {
         let mut q = q.with_block_range().to_owned();
         if only_active {
@@ -235,7 +234,6 @@ pub async fn find_domains(
     };
 
     let mut query = sqlx::query_as(&sql);
-
     if let FindDomainsInput::Names(names) = &input {
         query = query.bind(names.iter().map(|n| n.inner.id.clone()).collect::<Vec<_>>());
     }

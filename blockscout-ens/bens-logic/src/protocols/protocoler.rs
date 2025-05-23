@@ -1,3 +1,4 @@
+use super::DomainName;
 use crate::{
     blockscout::BlockscoutClient,
     protocols::{DomainNameOnProtocol, ProtocolError},
@@ -9,8 +10,6 @@ use sea_query::{Alias, IntoTableRef, TableRef};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use url::Url;
-
-use super::DomainName;
 
 const MAX_NETWORKS_LIMIT: usize = 5;
 
