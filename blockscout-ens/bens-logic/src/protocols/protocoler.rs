@@ -290,7 +290,6 @@ impl Protocoler {
         let tld = self.extract_tld(name_with_tld)?;
 
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
-
         let domain_names: Vec<_> = protocols
             .into_iter()
             .filter_map(|p| DomainNameOnProtocol::from_str(name_with_tld, p).ok())
@@ -312,9 +311,6 @@ impl Protocoler {
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        println!("name: {:?}", name);
-        println!("network_id: {:?}", network_id);
-        println!("maybe_filter: {:?}", maybe_filter);
         if name.contains('.') {
             let direct = self.fetch_domain_options(name, network_id, maybe_filter)?;
 
@@ -329,7 +325,6 @@ impl Protocoler {
                 .filter_map(|protocol_name| self.protocols.get(protocol_name))
                 .flat_map(|protocol| protocol.info.tld_list.iter().cloned())
                 .collect::<Vec<Tld>>();
-            println!("tlds: {:?}", tlds);
             let all_names_with_protocols: Vec<_> = tlds
                 .into_iter()
                 .map(|tld| format!("{}.{}", name, tld.0))
@@ -339,8 +334,6 @@ impl Protocoler {
                 })
                 .take(MAX_NETWORKS_LIMIT)
                 .collect();
-
-            println!("all_names_with_protocols: {:?}", all_names_with_protocols);
 
             if all_names_with_protocols.is_empty() {
                 Err(ProtocolError::InvalidName {
@@ -447,6 +440,10 @@ mod tld_tests {
         let domain = "vitalik.eth";
         let tld = Tld::from_domain_name(domain).unwrap();
         assert_eq!(tld.0, "eth");
+
+        let domain = "abcnews.gno";
+        let tld = Tld::from_domain_name(domain).unwrap();
+        assert_eq!(tld.0, "gno");
     }
 
     #[test]

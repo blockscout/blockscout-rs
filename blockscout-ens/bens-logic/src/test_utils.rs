@@ -1,9 +1,12 @@
 use crate::{
     blockscout::BlockscoutClient,
-    protocols::{Network, ProtocolInfo, Tld},
+    protocols::{EnsLikeProtocol, Network, ProtocolInfo, ProtocolSpecific, Tld},
     subgraph::SubgraphReader,
 };
-use alloy::primitives::TxHash;
+use alloy::{
+    hex,
+    primitives::{TxHash, B256},
+};
 use nonempty::nonempty;
 use sqlx::PgPool;
 use std::{collections::HashMap, sync::Arc};
@@ -107,6 +110,14 @@ pub async fn mocked_networks_and_protocols(
             },
         ),
         (
+            10200,
+            Network {
+                blockscout_client: client.clone(),
+                use_protocols: vec!["genome".to_string()],
+                rpc_url: None,
+            },
+        ),
+        (
             1337,
             Network {
                 blockscout_client: client.clone(),
@@ -131,9 +142,16 @@ pub async fn mocked_networks_and_protocols(
             "genome".to_string(),
             ProtocolInfo {
                 slug: "genome".to_string(),
-                network_id: 1337,
+                network_id: 10200,
                 tld_list: nonempty![Tld::new("gno")],
                 subgraph_name: "genome-subgraph".to_string(),
+                protocol_specific: ProtocolSpecific::EnsLike(EnsLikeProtocol {
+                    registry_contract: None,
+                    empty_label_hash: Some(B256::from(hex!(
+                        "1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6"
+                    ))),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         ),

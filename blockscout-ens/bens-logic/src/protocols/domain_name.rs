@@ -1,4 +1,4 @@
-use super::{hash_name::{ hash_ens_domain_name}, ProtocolError, Tld};
+use super::{hash_name::hash_ens_domain_name, ProtocolError, Tld};
 use crate::{hex, protocols::protocoler::DeployedProtocol};
 use alloy::primitives::{keccak256, Address, B256};
 
@@ -17,10 +17,6 @@ const SEPARATOR: char = '.';
 impl DomainName {
     pub fn new(name: &str, empty_label_hash: Option<B256>) -> Result<Self, ProtocolError> {
         let name = ens_normalize(name)?;
-        println!(
-            "DomainName::new: name: {}, empty_label_hash: {:?}",
-            name, empty_label_hash
-        );
         let (label_name, _) = name.split_once(SEPARATOR).unwrap_or((&name, ""));
 
         let id_bytes = hash_ens_domain_name(&name, empty_label_hash);
@@ -180,7 +176,7 @@ mod tests {
                     .unwrap(),
                 ),
                 //"0xa3504cdec527495c69c760c85d5be9996252f853b91fd0df04c5b6aa2deb3347",
-                "0xee0d974a92a402a2581ef6a9c12dff015d72db42ec089df75e708fd54a7eb269",
+                "0x79e028f97b232b1600b2ed68cc7d9811c28595c3ab859b166d13980bcfcece9d",
                 "levvv",
                 "levvv.gno",
             ),
