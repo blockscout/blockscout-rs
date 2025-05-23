@@ -5,23 +5,24 @@ use crate::{
         token_info::search_token_infos,
     },
     error::{ParseError, ServiceError},
-    repository::{addresses, block_ranges, hashes},
+    repository::{addresses, block_ranges, hashes, interop_messages},
     types::{
         addresses::{Address, DomainInfo, TokenType},
         block_ranges::ChainBlockNumber,
         dapp::MarketplaceDapp,
         domains::Domain,
         hashes::{Hash, HashType},
+        interop_messages::{InteropMessage, MessageDirection},
         search_results::QuickSearchResult,
         token_info::Token,
         ChainId,
     },
 };
-use alloy_primitives::Address as AddressAlloy;
+use alloy_primitives::{Address as AddressAlloy, TxHash};
 use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use regex::Regex;
-use sea_orm::DatabaseConnection;
+use sea_orm::{prelude::DateTime, DatabaseConnection};
 use std::{collections::HashSet, str::FromStr, sync::OnceLock};
 use tracing::instrument;
 
@@ -35,7 +36,7 @@ const DOMAIN_PRIMARY_CHAIN_ID: ChainId = 1;
 
 fn domain_name_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\w+\.\w+").unwrap())
+    RE.get_or_init(|| Regex::new(r"^\b\w{3,}\b").unwrap())
 }
 
 pub enum AddressSearchConfig<'a> {
@@ -201,6 +202,38 @@ pub async fn search_hashes(
             .map(Hash::try_from)
             .collect::<Result<Vec<_>, _>>()?,
         page_token,
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn search_interop_messages(
+    db: &DatabaseConnection,
+    init_chain_id: Option<ChainId>,
+    relay_chain_id: Option<ChainId>,
+    address: Option<AddressAlloy>,
+    direction: Option<MessageDirection>,
+    nonce: Option<i64>,
+    page_size: u64,
+    page_token: Option<(DateTime, TxHash)>,
+) -> Result<(Vec<InteropMessage>, Option<(DateTime, TxHash)>), ServiceError> {
+    let (interop_messages, next_page_token) = interop_messages::list(
+        db,
+        init_chain_id,
+        relay_chain_id,
+        address,
+        direction,
+        nonce,
+        page_size,
+        page_token,
+    )
+    .await?;
+
+    Ok((
+        interop_messages
+            .into_iter()
+            .map(InteropMessage::try_from)
+            .collect::<Result<Vec<_>, _>>()?,
+        next_page_token,
     ))
 }
 
@@ -652,5 +685,13 @@ mod tests {
             replace_coingecko_logo_uri_to_large(other_source_logo),
             other_source_logo
         );
+    }
+
+    #[test]
+    fn test_domain_name_regex() {
+        assert!(domain_name_regex().is_match("test"));
+        assert!(domain_name_regex().is_match("test.eth"));
+        assert!(!domain_name_regex().is_match("te"));
+        assert!(!domain_name_regex().is_match("te.eth"));
     }
 }

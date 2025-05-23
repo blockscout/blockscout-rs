@@ -18,6 +18,7 @@ cached = { workspace = true, features = [
 ] }
 lazy_static = { workspace = true }
 prometheus = { workspace = true }
+chrono = { workspace = true }
 tracing = { workspace = true }
 sea-orm = { workspace = true }
 alloy-primitives = { workspace = true }

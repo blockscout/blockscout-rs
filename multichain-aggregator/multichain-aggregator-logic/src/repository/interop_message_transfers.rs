@@ -1,0 +1,36 @@
+use crate::types::interop_message_transfers::InteropMessageTransfer;
+use entity::interop_messages_transfers::{ActiveModel, Column, Entity};
+use sea_orm::{
+    sea_query::OnConflict, ActiveValue::Set, ConnectionTrait, DbErr, EntityTrait, Iterable,
+};
+
+pub async fn upsert_many<C>(
+    db: &C,
+    transfers: Vec<(InteropMessageTransfer, i64)>,
+) -> Result<(), DbErr>
+where
+    C: ConnectionTrait,
+{
+    let transfers = transfers.into_iter().map(|(transfer, id)| {
+        let mut t = ActiveModel::from(transfer);
+        t.interop_message_id = Set(id);
+        t
+    });
+
+    Entity::insert_many(transfers)
+        .on_conflict(
+            OnConflict::columns([Column::InteropMessageId])
+                .do_nothing()
+                .update_columns(non_primary_columns())
+                .to_owned(),
+        )
+        .do_nothing()
+        .exec_without_returning(db)
+        .await?;
+
+    Ok(())
+}
+
+fn non_primary_columns() -> impl Iterator<Item = Column> {
+    Column::iter().filter(|col| !matches!(col, Column::InteropMessageId))
+}

@@ -1242,8 +1242,10 @@ checksum = "1a7964611d71df112cb1730f2ee67324fcf4d0fc6606acbbe9bfe06df124637c"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link",
 ]
 
@@ -2993,6 +2995,7 @@ dependencies = [
  "blockscout-chains",
  "blockscout-service-launcher",
  "cached",
+ "chrono",
  "futures",
  "lazy_static",
  "multichain-aggregator-entity",
