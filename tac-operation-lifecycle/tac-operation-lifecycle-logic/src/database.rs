@@ -1,6 +1,7 @@
 use crate::{
     client::models::{
-        operations::Operations as ApiOperations, profiling::{BlockchainTypeLowercase, OperationData as ApiOperationData},
+        operations::Operations as ApiOperations,
+        profiling::{BlockchainTypeLowercase, OperationData as ApiOperationData},
     },
     utils::{blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address},
 };
@@ -13,7 +14,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
-use std::{cmp::min, collections::HashMap, fmt, str::FromStr, sync::Arc};
+use std::{cmp::min, collections::HashMap, fmt, fs::OpenOptions, str::FromStr, sync::Arc};
 use tac_operation_lifecycle_entity::{
     interval,
     operation::{self, Column},
@@ -114,6 +115,14 @@ struct JoinedRow {
     tx_hash: Option<String>,
     tx_blockchain_type: Option<String>,
 }
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LogicPagination {
+    pub count: usize,
+    pub earlier_timestamp: u64,
+}
+
+const PAGE_SIZE: usize = 50;
 
 pub struct TacDatabase {
     db: Arc<DatabaseConnection>,
@@ -843,7 +852,6 @@ impl TacDatabase {
                                 .ok()
                                 .map(|addr| (addr, caller.blockchain_type.to_string()))
                         })
-
                     {
                         operation_model.sender_address = Set(Some(address));
                         operation_model.sender_blockchain = Set(Some(blockchain));
@@ -1203,21 +1211,47 @@ impl TacDatabase {
     pub async fn get_brief_operations_by_sender(
         &self,
         address: &str,
-    ) -> anyhow::Result<Vec<operation::Model>> {
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
         let address_cast = blockchain_address_to_db_format(address)?;
-        let op = operation::Entity::find()
-            .filter(operation::Column::SenderAddress.eq(address_cast))
+        let mut query =
+            operation::Entity::find().filter(operation::Column::SenderAddress.eq(address_cast));
+
+        if let Some(pagination) = pagination_input {
+            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(
+                pagination.earlier_timestamp as i64,
+            )));
+        }
+
+        query = query.order_by_desc(Column::Timestamp);
+
+        // request more records than needed to check if additional records are available.
+        let mut operations = query
+            .limit(PAGE_SIZE as u64 + 1)
             .all(self.db.as_ref())
             .await?;
 
-        Ok(op)
+        let mut pagination_output = None;
+        let need_pagination = operations.len() > PAGE_SIZE; // the pagination criteria
+        operations.pop(); // remove the last one aux element (if exist)
+        if need_pagination {
+            // seems we should turn on the pagination
+            pagination_output = Some(TacDatabase::calculate_pagination(
+                pagination_input,
+                &operations,
+            ));
+        }
+
+        Ok((operations, pagination_output))
     }
 
     pub async fn get_brief_operations_by_tx_hash(
         &self,
         tx_hash: &String,
-    ) -> anyhow::Result<Vec<operation::Model>> {
-        let sql = r#"
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
+        let mut sql = String::from(
+            r#"
             SELECT id, op_type, timestamp, status::text, sender_address, sender_blockchain, 
                    next_retry, retry_count, inserted_at, updated_at
             FROM operation
@@ -1228,9 +1262,32 @@ impl TacDatabase {
                 WHERE t.hash = $1
             )
             ORDER BY timestamp;
-            "#;
+            "#,
+        );
 
-        self.get_operations_with_sql(sql, [tx_hash.into()]).await
+        let mut values: Vec<sea_orm::Value> = vec![tx_hash.clone().into()];
+
+        if let Some(pagination) = pagination_input {
+            sql.push_str(" AND timestamp < $2");
+            values.push(Self::timestamp_to_naive(pagination.earlier_timestamp as i64).into());
+        }
+
+        sql.push_str(" ORDER BY timestamp DESC LIMIT $3");
+        values.push((PAGE_SIZE as u64 + 1).into());
+
+        let mut operations = self.get_operations_with_sql(&sql, values).await?;
+
+        let mut pagination_output = None;
+        let need_pagination = operations.len() > PAGE_SIZE;
+        operations.truncate(PAGE_SIZE);
+        if need_pagination {
+            pagination_output = Some(TacDatabase::calculate_pagination(
+                pagination_input,
+                &operations,
+            ));
+        }
+
+        Ok((operations, pagination_output))
     }
 
     async fn get_full_operations_with_sql(
@@ -1320,24 +1377,50 @@ impl TacDatabase {
 
     pub async fn get_operations(
         &self,
-        count: usize,
-        earlier_timestamp: Option<u64>,
-        sort: OrderDirection,
-    ) -> anyhow::Result<Vec<operation::Model>> {
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
         let mut query = operation::Entity::find();
 
-        if let Some(ts) = earlier_timestamp {
-            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(ts as i64)));
+        if let Some(pagination) = pagination_input {
+            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(
+                pagination.earlier_timestamp as i64,
+            )));
         }
 
-        query = match sort {
-            OrderDirection::EarliestFirst => query.order_by_asc(Column::Timestamp),
-            OrderDirection::LatestFirst => query.order_by_desc(Column::Timestamp),
-        };
+        query = query.order_by_desc(Column::Timestamp);
 
-        let operations = query.limit(count as u64).all(self.db.as_ref()).await?;
+        // request more records than needed to check if additional records are available.
+        let mut operations = query
+            .limit(PAGE_SIZE as u64 + 1)
+            .all(self.db.as_ref())
+            .await?;
 
-        Ok(operations)
+        let mut pagination_output = None;
+        let need_pagination = operations.len() > PAGE_SIZE; // the pagination criteria
+        operations.pop(); // remove the last one aux element (if exist)
+        if need_pagination {
+            // seems we should turn on the pagination
+            pagination_output = Some(TacDatabase::calculate_pagination(
+                pagination_input,
+                &operations,
+            ));
+        }
+
+        Ok((operations, pagination_output))
+    }
+
+    fn calculate_pagination(
+        pagination_input: Option<LogicPagination>,
+        ops: &Vec<operation::Model>,
+    ) -> LogicPagination {
+        let prev_count = pagination_input.map_or(0, |p| p.count);
+
+        let earlier_timestamp = ops.last().unwrap().timestamp.and_utc().timestamp() as u64;
+
+        LogicPagination {
+            count: prev_count + PAGE_SIZE,
+            earlier_timestamp,
+        }
     }
 
     async fn get_operations_with_sql(
@@ -1374,21 +1457,27 @@ impl TacDatabase {
     }
 
     // Multisearch by the following fields: operation_id, tx_hash, sender
-    pub async fn search_operations(&self, q: &String) -> anyhow::Result<Vec<operation::Model>> {
+    pub async fn search_operations(
+        &self,
+        q: &String,
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
         if is_generic_hash(q) {
             // operation_id or tx_hash
-            let operations = match self.get_brief_operation_by_id(q).await? {
-                Some(op) => vec![op],
-                None => self.get_brief_operations_by_tx_hash(q).await?,
-            };
-
-            Ok(operations)
+            match self.get_brief_operation_by_id(q).await? {
+                Some(op) => Ok((vec![op], None)),
+                None => Ok(self
+                    .get_brief_operations_by_tx_hash(q, pagination_input)
+                    .await?),
+            }
         } else if is_tac_address(q) || is_ton_address(q) {
             // sender (TON-TAC format)
-            Ok(self.get_brief_operations_by_sender(q).await?)
+            Ok(self
+                .get_brief_operations_by_sender(q, pagination_input)
+                .await?)
         } else {
             // unknown query string -> return void array without DB interacting
-            Ok(vec![])
+            Ok((vec![], None))
         }
     }
 }
