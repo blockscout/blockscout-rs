@@ -328,6 +328,35 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
     .await;
     assert_eq!(actual, expected);
 
+    let route_trailing_dot = build_query(
+        "/api/v1/1337/domains:lookup",
+        &HashMap::from_iter([
+            ("name".into(), "abcnews.".into()),
+            ("page_size".into(), "2".into()),
+        ]),
+    );
+    let resp_trailing: Value = send_get_request(&base, &route_trailing_dot).await;
+    let items = resp_trailing
+        .get("items")
+        .and_then(|v| v.as_array())
+        .expect("No `items` in response");
+
+    let names: Vec<&str> = items
+        .iter()
+        .map(|item| item["name"].as_str().unwrap())
+        .collect();
+
+    assert!(
+        names.contains(&"abcnews.gno"),
+        "No abcnews.gno in response, names={:?}",
+        names
+    );
+    assert!(
+        names.contains(&"abcnews.eth"),
+        "No abcnews.eth in response, names={:?}",
+        names
+    );
+
     let route_with_query = build_query(
         "/api/v1/1337/domains:lookup",
         &HashMap::from_iter([("page_size".into(), "100".into())]),

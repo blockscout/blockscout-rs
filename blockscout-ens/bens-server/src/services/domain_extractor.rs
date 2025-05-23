@@ -20,6 +20,7 @@ impl DomainsExtractorService {
     }
 }
 
+#[allow(clippy::result_large_err)]
 #[async_trait]
 impl DomainsExtractor for DomainsExtractorService {
     async fn get_domain(

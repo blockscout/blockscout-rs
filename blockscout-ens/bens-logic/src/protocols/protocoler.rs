@@ -10,6 +10,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use url::Url;
 
+use super::DomainName;
+
 const MAX_NETWORKS_LIMIT: usize = 5;
 
 #[derive(Debug, Clone)]
@@ -311,38 +313,55 @@ impl Protocoler {
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        if name.contains('.') {
-            let direct = self.fetch_domain_options(name, network_id, maybe_filter)?;
+        let clean_name = name.trim_end_matches('.');
 
-            Ok(direct.into_iter().collect())
-        } else {
-            let tlds = self
-                .networks
-                .get(&network_id)
-                .ok_or_else(|| ProtocolError::NetworkNotFound(network_id))?
-                .use_protocols
-                .iter()
-                .filter_map(|protocol_name| self.protocols.get(protocol_name))
-                .flat_map(|protocol| protocol.info.tld_list.iter().cloned())
-                .collect::<Vec<Tld>>();
-            let all_names_with_protocols: Vec<_> = tlds
-                .into_iter()
-                .map(|tld| format!("{}.{}", name, tld.0))
-                .flat_map(|name_with_tld| {
-                    self.fetch_domain_options(&name_with_tld, network_id, maybe_filter.clone())
-                        .unwrap_or_default()
-                })
-                .take(MAX_NETWORKS_LIMIT)
-                .collect();
+        let protocols = self
+            .networks
+            .get(&network_id)
+            .ok_or_else(|| ProtocolError::NetworkNotFound(network_id))?
+            .use_protocols
+            .iter()
+            .filter_map(|proto_name| self.protocols.get(proto_name))
+            .collect::<Vec<_>>();
 
-            if all_names_with_protocols.is_empty() {
-                Err(ProtocolError::InvalidName {
-                    name: name.to_string(),
-                    reason: "No valid TLDs".to_string(),
-                })
-            } else {
-                Ok(all_names_with_protocols)
+        for proto in &protocols {
+            let hash = match &proto.info.protocol_specific {
+                ProtocolSpecific::EnsLike(cfg) => cfg.empty_label_hash,
+                _ => None,
+            };
+            if let Ok(domain) = DomainName::new(clean_name, hash) {
+                if domain.level_gt_tld() {
+                    let fetched =
+                        self.fetch_domain_options(clean_name, network_id, maybe_filter)?;
+                    return Ok(fetched.into_iter().collect());
+                }
             }
+        }
+
+        let tlds = protocols
+            .iter()
+            .flat_map(|proto| proto.info.tld_list.iter().cloned())
+            .collect::<Vec<_>>();
+
+        let mut all = Vec::new();
+        for tld in tlds {
+            let fullname = format!("{}.{}", clean_name, tld.0);
+            let mut opts = self
+                .fetch_domain_options(&fullname, network_id, maybe_filter.clone())
+                .unwrap_or_default();
+            all.append(&mut opts);
+            if all.len() >= MAX_NETWORKS_LIMIT {
+                break;
+            }
+        }
+
+        if all.is_empty() {
+            Err(ProtocolError::InvalidName {
+                name: clean_name.to_string(),
+                reason: "No valid TLDs".to_string(),
+            })
+        } else {
+            Ok(all)
         }
     }
 
