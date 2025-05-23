@@ -32,6 +32,7 @@ impl TestInputData {
                 creation_input_artifacts: source.creation_input_artifacts.clone(),
                 deployed_bytecode_artifacts: source.deployed_bytecode_artifacts.clone(),
                 is_blueprint: source.is_blueprint,
+                libraries: Default::default(),
             }),
             extra_data: Some(extra_data),
             post_action_responses: None,
@@ -54,6 +55,7 @@ impl TestInputData {
                 creation_input_artifacts: source.creation_input_artifacts,
                 deployed_bytecode_artifacts: source.deployed_bytecode_artifacts,
                 is_blueprint: source.is_blueprint,
+                libraries: source.libraries,
             }),
         };
 
@@ -141,6 +143,15 @@ impl TestInputData {
             .unwrap()
             .is_blueprint = is_blueprint;
     }
+
+    pub fn set_libraries(&mut self, libraries: BTreeMap<String, String>) {
+        self.verifier_response.source.as_mut().unwrap().libraries = libraries.clone();
+        self.eth_bytecode_db_response
+            .source
+            .as_mut()
+            .unwrap()
+            .libraries = libraries;
+    }
 }
 
 pub fn basic(source_type: SourceType, match_type: MatchType) -> TestInputData {
@@ -173,6 +184,7 @@ pub fn basic(source_type: SourceType, match_type: MatchType) -> TestInputData {
             "{\"sourceMap\":\"10:11:12:-:0;;;;;;;;;;;;;;;;;;;\"}".to_string(),
         ),
         is_blueprint: false,
+        libraries: BTreeMap::new(),
     };
 
     let extra_data = smart_contract_verifier_proto_v2::verify_response::ExtraData {

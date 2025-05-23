@@ -29,6 +29,7 @@ impl VerifyResponseWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     #[test]
     fn ok_verify_response() {
@@ -50,6 +51,7 @@ mod tests {
             creation_input_parts: vec![],
             deployed_bytecode_parts: vec![],
             is_blueprint: false,
+            libraries: BTreeMap::new(),
         };
 
         let expected = proto::VerifyResponse {

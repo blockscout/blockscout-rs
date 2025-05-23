@@ -75,6 +75,7 @@ impl LocalBytecode {
     }
 }
 
+#[allow(clippy::result_large_err)]
 #[derive(Error, Clone, Debug, PartialEq, Eq)]
 pub enum CompareError {
     #[error("bytecode length is less than expected: {part}; bytecodes: {raw}")]
@@ -95,6 +96,7 @@ pub enum CompareError {
     InvalidConstructorArguments(DisplayBytes),
 }
 
+#[allow(clippy::result_large_err)]
 pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<MatchType, CompareError> {
     let local_bytecode = &local.raw_bytecode();
 
@@ -129,6 +131,7 @@ pub fn compare(remote_bytecode: &Bytes, local: &LocalBytecode) -> Result<MatchTy
     Ok(MatchType::Partial)
 }
 
+#[allow(clippy::result_large_err)]
 pub fn extract_constructor_args(
     remote_raw: &Bytes,
     local_raw: &Bytes,
@@ -163,6 +166,7 @@ pub fn extract_constructor_args(
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn compare_bytecode_parts(
     remote_raw: &Bytes,
     local_raw: &Bytes,
@@ -235,6 +239,7 @@ fn compare_bytecode_parts(
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_constructor_args(
     encoded_args: Bytes,
     abi_constructor: &Constructor,

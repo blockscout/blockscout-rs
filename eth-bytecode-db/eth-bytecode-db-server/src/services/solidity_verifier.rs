@@ -55,7 +55,6 @@ impl solidity_verifier_server::SolidityVerifier for SolidityVerifierService {
                 source_files: request.source_files,
                 evm_version: request.evm_version,
                 optimization_runs: request.optimization_runs,
-                libraries: request.libraries,
             },
             metadata: request
                 .metadata

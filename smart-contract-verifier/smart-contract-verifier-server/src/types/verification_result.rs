@@ -1,16 +1,17 @@
 use blockscout_display_bytes::ToHex;
 use serde_json::Value;
-pub use smart_contract_verifier::verify_new::Error;
-use smart_contract_verifier::{
-    verify_new::{VerificationResult, VerifyingContract},
-    Language,
-};
+use smart_contract_verifier::{Error, Language, VerificationResult, VerifyingContract};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::{
     v2, v2::verify_response::extra_data,
 };
 use tonic::Status;
-use verification_common::verifier_alliance::{CborAuxdata, CompilationArtifacts, Match};
+use verification_common::{
+    solidity_libraries,
+    solidity_libraries::parse_manually_linked_libraries,
+    verifier_alliance::{CborAuxdata, CompilationArtifacts, Match},
+};
 
+#[allow(clippy::result_large_err)]
 pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
     match error {
         err @ Error::CompilerNotFound(_) => Err(Status::invalid_argument(err.to_string())),
@@ -18,6 +19,9 @@ pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
             let formatted_error = format!("{err:#?}");
             tracing::error!(err = formatted_error, "internal error");
             Err(Status::internal(formatted_error))
+        }
+        err @ Error::NotConsistentBlueprintOnChainCode { .. } => {
+            Err(Status::invalid_argument(err.to_string()))
         }
         err @ Error::Compilation(_) => {
             let response = v2::VerifyResponse {
@@ -32,6 +36,7 @@ pub fn process_error(error: Error) -> Result<v2::VerifyResponse, Status> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn process_verification_result(
     value: VerificationResult,
 ) -> Result<v2::VerifyResponse, Status> {
@@ -115,10 +120,22 @@ fn new_bytecode_part(type_: &str, data: &[u8]) -> extra_data::BytecodePart {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn try_into_source(verifying_contract: VerifyingContract) -> Result<v2::Source, Status> {
     let compilation_artifacts = verifying_contract.compilation_artifacts;
     let creation_code_artifacts = verifying_contract.creation_code_artifacts;
     let runtime_code_artifacts = verifying_contract.runtime_code_artifacts;
+
+    let mut libraries = solidity_libraries::try_parse_compiler_linked_libraries(
+        &verifying_contract.compiler_settings,
+    )
+    .map_err(|err| Status::internal(err.to_string()))?;
+    if let Some(creation_match_) = verifying_contract.creation_match.as_ref() {
+        libraries.extend(parse_manually_linked_libraries(creation_match_));
+    }
+    if let Some(runtime_match_) = verifying_contract.runtime_match.as_ref() {
+        libraries.extend(parse_manually_linked_libraries(runtime_match_));
+    }
 
     let source = v2::Source {
         file_name: verifying_contract.fully_qualified_name.file_name(),
@@ -137,7 +154,8 @@ fn try_into_source(verifying_contract: VerifyingContract) -> Result<v2::Source, 
         compilation_artifacts: Some(Value::from(compilation_artifacts).to_string()),
         creation_input_artifacts: Some(Value::from(creation_code_artifacts).to_string()),
         deployed_bytecode_artifacts: Some(Value::from(runtime_code_artifacts).to_string()),
-        is_blueprint: false,
+        is_blueprint: verifying_contract.is_blueprint,
+        libraries,
     };
     Ok(source)
 }
@@ -170,6 +188,7 @@ fn parse_constructor_arguments(creation_match: &Option<Match>) -> Option<String>
         .map(|value| value.to_hex())
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_match_type(
     creation_match: &Option<Match>,
     runtime_match: &Option<Match>,

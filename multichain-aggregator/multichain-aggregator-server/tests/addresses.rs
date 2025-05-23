@@ -2,7 +2,9 @@ mod helpers;
 mod test_db;
 
 use blockscout_service_launcher::{database, test_server};
+use multichain_aggregator_logic::types::api_keys::ApiKey;
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1 as proto;
+use sea_orm::prelude::Uuid;
 
 #[tokio::test]
 #[ignore = "Needs database to run"]
@@ -10,6 +12,16 @@ async fn test_list_addresses() {
     let db = database!(test_db::TestMigrator);
 
     let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
+
+    helpers::upsert_api_keys(
+        db.client().as_ref(),
+        vec![ApiKey {
+            key: Uuid::new_v4(),
+            chain_id: 1,
+        }],
+    )
+    .await
+    .unwrap();
 
     let validate_address =
         |item: &proto::Address| item.token_type() == proto::TokenType::Unspecified;
@@ -42,6 +54,16 @@ async fn test_list_nfts() {
     let db = database!(test_db::TestMigrator);
 
     let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
+
+    helpers::upsert_api_keys(
+        db.client().as_ref(),
+        vec![ApiKey {
+            key: Uuid::new_v4(),
+            chain_id: 1,
+        }],
+    )
+    .await
+    .unwrap();
 
     let validate_nft = |item: &proto::Address| {
         matches!(

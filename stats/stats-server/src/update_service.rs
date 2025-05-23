@@ -157,6 +157,10 @@ impl UpdateService {
         init_update_tracker: &InitialUpdateTracker,
     ) {
         {
+            init_update_tracker
+                .mark_queued_for_initial_update(&group_entry.enabled_members)
+                .await;
+            init_update_tracker.report().await;
             let _init_update_permit = initial_update_semaphore
                 .acquire()
                 .await

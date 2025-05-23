@@ -1,0 +1,26 @@
+{
+  "name": "@blockscout/{{project-name}}-types",
+  "version": "0.0.1",
+  "description": "TypeScript definitions for {{project-name-title}} microservice",
+  "main": "./dist/{{project-name}}-proto/proto/v1/{{project-name}}.js",
+  "types": "./dist/{{project-name}}-proto/proto/v1/{{project-name}}.d.ts",
+  "scripts": {
+    "build": "npm run compile:proto && npm run compile:ts",
+    "compile:proto": "mkdir -p ./dist && protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt=snakeToCamel=false --ts_proto_opt=exportCommonSymbols=false --ts_proto_opt=stringEnums=true --ts_proto_opt=onlyTypes=true --ts_proto_opt=emitImportedFiles=false --proto_path=../ --proto_path=../../proto/ --ts_proto_out=./dist ../{{project-name}}-proto/proto/v1/{{project-name}}.proto",
+    "compile:ts": "tsc --declaration ./dist/{{project-name}}-proto/proto/v1/{{project-name}}.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blockscout/blockscout-rs.git",
+    "directory": "{{project-name}}/types"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/blockscout/blockscout-rs/issues"
+  },
+  "homepage": "https://github.com/blockscout/blockscout-rs#readme",
+  "devDependencies": {
+    "ts-proto": "1.176.2",
+    "typescript": "5.4.5"
+  }
+}

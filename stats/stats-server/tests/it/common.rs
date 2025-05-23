@@ -116,6 +116,7 @@ pub fn get_test_stats_settings(
     settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());
     settings.enable_all_arbitrum = true;
     settings.enable_all_op_stack = true;
+    settings.enable_all_eip_7702 = true;
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;
     // initialized separately to prevent errors (with `try_init`)

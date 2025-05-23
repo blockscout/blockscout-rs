@@ -11,6 +11,7 @@ members = [
 smart-contract-verifier = { path = "smart-contract-verifier" }
 smart-contract-verifier-proto = { path = "smart-contract-verifier-proto" }
 smart-contract-verifier-server = { path = "smart-contract-verifier-server" }
+verification-common = { path = "verification-common" }
 vyper-cbor-auxdata = { path = "vyper-cbor-auxdata" }
 
 actix-prost = { version = "0.1.0" }
@@ -27,8 +28,6 @@ blockscout-display-bytes = "1.1.0"
 blockscout-service-launcher = "0.17.0"
 bytes = { version = "1.2" }
 chrono = { version = "0.4" }
-config = { version = "0.13" }
-const_format = { version = "0.2" }
 cron = { version = "0.11" }
 era-compiler-common = { git = "https://github.com/matter-labs/era-compiler-common", rev = "9969de1" }
 ethabi = { version = "18.0" }
@@ -51,6 +50,7 @@ prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 quick-xml = { version = "0.24" }
 rand = { version = "0.8" }
+readonly = { version = "0.2" }
 reqwest = { version = "0.11" }
 reqwest-middleware = { version = "0.1" }
 reqwest-retry = { version = "0.1" }
@@ -65,14 +65,11 @@ sha2 = { version = "0.10" }
 solidity-metadata = { version = "1.1.0" }
 sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "c4261d0" }
 sscanf = { version = "0.3" }
-stdext = { version = "0.3.2" }
-tempfile = { version = "3.3" }
+tempfile = { version = "3.19" }
 thiserror = { version = "1.0" }
 tokio = { version = "1" }
 tonic = { version = "0.12" }
 tonic-build = { version = "0.12" }
 tracing = { version = "0.1" }
 url = { version = "2.4" }
-uuid = { version = "1.6.1" }
-verification-common = { git = "https://github.com/blockscout/blockscout-rs/", rev = "510d8b5" }
 wiremock = { version = "0.5" }

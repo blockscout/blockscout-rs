@@ -31,6 +31,10 @@ pub enum ParseError {
     ParseUuid(#[from] uuid::Error),
     #[error("parse error: invalid slice")]
     TryFromSlice(#[from] core::array::TryFromSliceError),
+    #[error("parse error: invalid url")]
+    ParseUrl(#[from] url::ParseError),
+    #[error("parse error: invalid json")]
+    Json(#[from] serde_json::Error),
     #[error("parse error: {0}")]
     Custom(String),
 }

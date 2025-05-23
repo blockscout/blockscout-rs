@@ -92,6 +92,7 @@ pub mod test_cases {
     use eth_bytecode_db::verification::MatchType;
     use pretty_assertions::assert_eq;
     use serde::Serialize;
+    use std::collections::BTreeMap;
 
     pub async fn test_returns_valid_source<Service, Request>(
         test_suite_name: &str,
@@ -132,6 +133,37 @@ pub mod test_cases {
 
         let mut test_data = test_input_data::basic(source_type, MatchType::Partial);
         test_data.set_is_blueprint(true);
+
+        let db_url = db.db_url();
+        let verifier_addr =
+            init_verifier_server(Service::default(), test_data.verifier_response).await;
+
+        let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+        let verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, Service::ROUTE, &request).await;
+
+        assert_eq!(
+            test_data.eth_bytecode_db_response, verification_response,
+            "Invalid verification response"
+        );
+    }
+
+    pub async fn test_propagates_libraries_in_response<Service, Request>(
+        test_suite_name: &str,
+        request: Request,
+        source_type: SourceType,
+    ) where
+        Service: VerifierService<Request, smart_contract_verifier_v2::VerifyResponse> + Default,
+        Request: Serialize,
+    {
+        let db = init_db(test_suite_name, "test_propagates_libraries_in_response").await;
+
+        let mut test_data = test_input_data::basic(source_type, MatchType::Partial);
+        test_data.set_libraries(BTreeMap::from([(
+            "file.sol:library".into(),
+            "0x1234".into(),
+        )]));
 
         let db_url = db.db_url();
         let verifier_addr =

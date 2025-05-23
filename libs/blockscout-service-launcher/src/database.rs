@@ -1,18 +1,26 @@
 use anyhow::Context;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
-use std::{str::FromStr, time::Duration};
+use std::{
+    str::FromStr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+use tokio::time::interval;
 use tracing::log::LevelFilter;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "database-1")] {
-        pub use sea_orm_1::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
+        pub use sea_orm_1 as sea_orm;
         pub use sea_orm_migration_1::MigratorTrait;
     } else if #[cfg(feature = "database-0_11")] {
-        pub use sea_orm_0_11::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
+        pub use sea_orm_0_11 as sea_orm;
         pub use sea_orm_migration_0_11::MigratorTrait;
     } else if #[cfg(feature = "database-0_10")] {
-        pub use sea_orm_0_10::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement, DatabaseConnection, DbErr};
+        pub use sea_orm_0_10 as sea_orm;
         pub use sea_orm_migration_0_10::MigratorTrait;
     } else {
         compile_error!(
@@ -21,6 +29,10 @@ cfg_if::cfg_if! {
         );
     }
 }
+pub use sea_orm::{
+    ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, DbErr,
+    FromQueryResult, Statement,
+};
 
 const DEFAULT_DB: &str = "postgres";
 
@@ -79,6 +91,131 @@ pub async fn initialize_postgres<Migrator: MigratorTrait>(
     Ok(db)
 }
 
+pub struct ReadWriteRepo {
+    main_db: DatabaseConnection,
+    replica_db: Option<ReplicaRepo>,
+}
+
+impl ReadWriteRepo {
+    pub async fn new<Migrator: MigratorTrait>(
+        main_db_settings: &DatabaseSettings,
+        replica_db_settings: Option<&ReplicaDatabaseSettings>,
+    ) -> anyhow::Result<Self> {
+        let main_db = initialize_postgres::<Migrator>(main_db_settings).await?;
+        let replica_db = if let Some(settings) = replica_db_settings {
+            let db_url = settings.connect.clone().url();
+            let connect_options = settings.connect_options.apply_to(db_url.into());
+            Database::connect(connect_options)
+                .await
+                .inspect_err(|err| {
+                    tracing::warn!(
+                        err = ?err,
+                        "failed to connect to read db, connection will not be retried; fallback to write db"
+                    )
+                })
+                .ok()
+                .map(|db| {
+                    let replica_db = ReplicaRepo::new(db, settings.max_lag, settings.health_check_interval);
+                    replica_db.spawn_health_check();
+                    replica_db
+                })
+        } else {
+            None
+        };
+        Ok(Self {
+            main_db,
+            replica_db,
+        })
+    }
+
+    /// The main database connection supporting read and write operations.
+    pub fn main_db(&self) -> &DatabaseConnection {
+        &self.main_db
+    }
+
+    /// The read-only database connection, will fallback to the main database if the replica is unhealthy.
+    pub fn read_db(&self) -> &DatabaseConnection {
+        match &self.replica_db {
+            Some(replica_db) if replica_db.is_healthy() => &replica_db.db,
+            _ => &self.main_db,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ReplicaRepo {
+    db: DatabaseConnection,
+    is_healthy: Arc<AtomicBool>,
+    max_lag: Duration,
+    health_check_interval: Duration,
+}
+
+impl ReplicaRepo {
+    pub fn new(db: DatabaseConnection, max_lag: Duration, health_check_interval: Duration) -> Self {
+        Self {
+            db,
+            is_healthy: Arc::new(AtomicBool::new(true)),
+            max_lag,
+            health_check_interval,
+        }
+    }
+
+    pub fn is_healthy(&self) -> bool {
+        self.is_healthy.load(Ordering::Relaxed)
+    }
+
+    pub fn spawn_health_check(&self) {
+        let repo = self.clone();
+
+        tracing::info!("starting replica db health check");
+        tokio::spawn(async move {
+            let mut interval = interval(repo.health_check_interval);
+
+            loop {
+                interval.tick().await;
+                let is_healthy = repo.check_health().await;
+                let prev_is_healthy = repo.is_healthy.swap(is_healthy, Ordering::Relaxed);
+                if prev_is_healthy && !is_healthy {
+                    tracing::warn!("replica db is unhealthy, fallback to write db");
+                }
+                if !prev_is_healthy && is_healthy {
+                    tracing::info!("replica db became healthy");
+                }
+            }
+        });
+    }
+
+    async fn check_health(&self) -> bool {
+        #[derive(FromQueryResult)]
+        struct HealthResult {
+            is_in_recovery: bool,
+            lag: i32,
+        }
+
+        let query = r#"
+        SELECT pg_is_in_recovery() AS is_in_recovery,
+        (EXTRACT(EPOCH FROM now()) - EXTRACT(EPOCH FROM pg_last_xact_replay_timestamp()))::int AS lag;
+        "#;
+
+        let res = HealthResult::find_by_statement(Statement::from_string(
+            self.db.get_database_backend(),
+            query,
+        ))
+        .one(&self.db)
+        .await;
+
+        // replica is considered unhealthy when :
+        // 1. recovery is still in progress
+        // 2. sync delay is greater than max_lag
+        let is_unhealthy = match res {
+            Ok(Some(r)) => r.is_in_recovery && Duration::from_secs(r.lag as u64) > self.max_lag,
+            _ => true,
+        };
+
+        !is_unhealthy
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DatabaseSettings {
@@ -89,6 +226,29 @@ pub struct DatabaseSettings {
     pub create_database: bool,
     #[serde(default)]
     pub run_migrations: bool,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ReplicaDatabaseSettings {
+    pub connect: DatabaseConnectSettings,
+    #[serde(default)]
+    pub connect_options: DatabaseConnectOptionsSettings,
+    #[serde(default = "default_max_lag")]
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    pub max_lag: Duration,
+    #[serde(default = "default_health_check_interval")]
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    pub health_check_interval: Duration,
+}
+
+fn default_max_lag() -> Duration {
+    Duration::from_secs(5 * 60)
+}
+
+fn default_health_check_interval() -> Duration {
+    Duration::from_secs(10)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

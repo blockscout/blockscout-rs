@@ -46,6 +46,7 @@ impl TryFrom<VerificationMetadataWrapper> for verification::VerificationMetadata
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn from_optional_string<T: FromStr>(
     value: Option<String>,
     arg_name: &str,

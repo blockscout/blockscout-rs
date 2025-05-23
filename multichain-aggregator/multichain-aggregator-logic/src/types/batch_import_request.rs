@@ -5,14 +5,38 @@ use super::{
 };
 use crate::{
     error::{ParseError, ServiceError},
+    metrics::IMPORT_ENTITIES_COUNT,
     proto,
 };
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct BatchImportRequest {
     pub block_ranges: Vec<BlockRange>,
     pub hashes: Vec<Hash>,
     pub addresses: Vec<Address>,
+}
+
+impl BatchImportRequest {
+    pub fn record_metrics(&self) {
+        macro_rules! calculate_entity_metrics {
+            ($entities: expr, $entity_name: expr) => {
+                let mut entity_metrics = HashMap::new();
+                for e in $entities {
+                    *entity_metrics.entry(e.chain_id).or_insert(0) += 1;
+                }
+                for (chain_id, count) in entity_metrics {
+                    IMPORT_ENTITIES_COUNT
+                        .with_label_values(&[chain_id.to_string().as_str(), $entity_name])
+                        .inc_by(count);
+                }
+            };
+        }
+
+        calculate_entity_metrics!(&self.block_ranges, "block_ranges");
+        calculate_entity_metrics!(&self.hashes, "hashes");
+        calculate_entity_metrics!(&self.addresses, "addresses");
+    }
 }
 
 impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
@@ -53,7 +77,7 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
                     Ok(Address {
                         chain_id,
                         hash,
-                        ens_name: a.ens_name,
+                        domain_info: None,
                         contract_name: a.contract_name,
                         token_name: a.token_name,
                         token_type,

@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package blockscout.tacOperationLifecycle.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/tac-operation-lifecycle";
+
+
+service TacService {
+  rpc GetOperations(GetOperationsRequest) returns (OperationsResponse) {}
+  rpc GetOperationDetails(GetOperationDetailsRequest) returns (OperationDetails) {}
+  rpc GetOperationsByTransaction(GetOperationByTxHashRequest) returns (OperationsFullResponse) {}
+}
+
+message Pagination {
+  uint64 page_token = 1;
+  uint32 page_items = 2;
+}
+
+message GetOperationsRequest {
+  optional string q = 1;  // multi-search by operation_id, tx_hash and sender
+  optional uint64 page_token = 2;
+  optional uint64 page_items = 3;
+}
+
+message GetOperationDetailsRequest {
+  string operation_id = 1;
+}
+
+message GetOperationByTxHashRequest {
+  string tx_hash = 1;
+}
+
+enum OperationType {
+  ERROR = 0;
+  PENDING = 1;
+  TON_TAC_TON = 2;
+  TAC_TON = 3;
+  TON_TAC = 4;
+  ROLLBACK = 5;
+  UNKNOWN = 6;
+}
+
+message OperationsResponse {
+  repeated OperationBriefDetails items = 1;
+  optional Pagination next_page_params = 2;
+}
+
+message OperationBriefDetails {
+  string operation_id = 1;
+  OperationType type = 2;
+  string timestamp = 3;
+  optional string sender = 4;
+}
+
+message OperationDetails {
+  string operation_id = 1;
+  OperationType type = 2;
+  string timestamp = 3;
+  optional string sender = 4;
+  repeated OperationStage status_history = 5;
+}
+
+message OperationRelatedTransaction {
+  string hash = 1;
+  enum BlockchainType {
+    TAC = 0;
+    TON = 1;
+    UNKNOWN = 2;
+  }
+  BlockchainType type = 2;
+}
+
+message OperationStage {
+  enum StageType {
+    COLLECTED_IN_TAC = 0;
+    INCLUDED_IN_TAC_CONSENSUS = 1;
+    EXECUTED_IN_TAC = 2;
+    COLLECTED_IN_TON = 3;
+    INCLUDED_IN_TON_CONSENSUS = 4;
+    EXECUTED_IN_TON = 5;
+  }
+  StageType type = 1;
+  bool is_exist = 2;
+  optional bool is_success = 3;
+  optional string timestamp = 4;
+  repeated OperationRelatedTransaction transactions = 5;
+  optional string note = 6;
+}
+
+message OperationsFullResponse {
+  repeated OperationDetails items = 1;
+}

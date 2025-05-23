@@ -1,6 +1,6 @@
 use crate::{
     solidity,
-    verify_new::{SolcInput, VyperInput},
+    verify::{SolcInput, VyperInput},
     vyper, OnChainCode, OnChainContract, RequestParseError,
 };
 use anyhow::Context;
@@ -53,7 +53,6 @@ impl TryFrom<VerifySolidityMultiPartRequest> for solidity::multi_part::Verificat
             request.source_files,
             request.evm_version,
             request.optimization_runs.map(|value| value as u32),
-            request.libraries,
         )?;
 
         Ok(Self {
@@ -97,7 +96,6 @@ impl TryFrom<BatchVerifySolidityMultiPartRequest>
             request.sources,
             request.evm_version,
             request.optimization_runs,
-            request.libraries,
         )?;
 
         Ok(Self {
@@ -173,7 +171,6 @@ fn build_solidity_multi_part_content(
     sources: BTreeMap<String, String>,
     evm_version: Option<String>,
     optimization_runs: Option<u32>,
-    libraries: BTreeMap<String, String>,
 ) -> Result<solidity::multi_part::Content, RequestParseError> {
     let sources: BTreeMap<PathBuf, String> = sources
         .into_iter()
@@ -192,7 +189,6 @@ fn build_solidity_multi_part_content(
         sources,
         evm_version,
         optimization_runs,
-        contract_libraries: libraries,
     })
 }
 

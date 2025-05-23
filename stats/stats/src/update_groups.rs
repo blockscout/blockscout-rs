@@ -138,6 +138,19 @@ construct_update_group!(NewBlocksGroup {
         NewBlocksWeekly,
         NewBlocksMonthly,
         NewBlocksYearly,
+        // AverageGasUsed uses new blocks + gas used growth
+        GasUsedGrowth,
+        GasUsedGrowthWeekly,
+        GasUsedGrowthMonthly,
+        GasUsedGrowthYearly,
+        AverageGasUsed,
+        AverageGasUsedWeekly,
+        AverageGasUsedMonthly,
+        AverageGasUsedYearly,
+        NetworkUtilization,
+        NetworkUtilizationWeekly,
+        NetworkUtilizationMonthly,
+        NetworkUtilizationYearly,
         // if the following are enabled, then NewTxns is updated as well
         ArbitrumNewOperationalTxns,
         ArbitrumNewOperationalTxnsWeekly,
@@ -259,6 +272,19 @@ construct_update_group!(NewUserOpsGroup {
     ],
 });
 
+construct_update_group!(NewEip7702AuthsGroup {
+    charts: [
+        NewEip7702Auths,
+        NewEip7702AuthsWeekly,
+        NewEip7702AuthsMonthly,
+        NewEip7702AuthsYearly,
+        Eip7702AuthsGrowth,
+        Eip7702AuthsGrowthWeekly,
+        Eip7702AuthsGrowthMonthly,
+        Eip7702AuthsGrowthYearly,
+    ],
+});
+
 construct_update_group!(NewVerifiedContractsGroup {
     charts: [
         NewVerifiedContracts,
@@ -294,6 +320,19 @@ construct_update_group!(NewNativeCoinTransfersGroup {
         NewNativeCoinTransfersMonthly,
         NewNativeCoinTransfersYearly,
         TotalNativeCoinTransfers,
+    ],
+});
+
+construct_update_group!(NewBuilderAccountsGroup {
+    charts: [
+        NewBuilderAccounts,
+        NewBuilderAccountsWeekly,
+        NewBuilderAccountsMonthly,
+        NewBuilderAccountsYearly,
+        BuilderAccountsGrowth,
+        BuilderAccountsGrowthWeekly,
+        BuilderAccountsGrowthMonthly,
+        BuilderAccountsGrowthYearly,
     ],
 });
 

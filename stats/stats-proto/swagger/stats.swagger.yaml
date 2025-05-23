@@ -255,12 +255,14 @@ definitions:
     enum:
       - PENDING
       - WAITING_FOR_STARTING_CONDITION
+      - QUEUED_FOR_INITIAL_UPDATE
       - RUNNING_INITIAL_UPDATE
       - COMPLETED_INITIAL_UPDATE
     default: PENDING
     title: |-
       - PENDING: No actions were taken yet for some charts
        - WAITING_FOR_STARTING_CONDITION: Some charts are waiting for starting condition
+       - QUEUED_FOR_INITIAL_UPDATE: Some charts are waiting for their turn to be updated
        - RUNNING_INITIAL_UPDATE: Some charts are still running initial update
        - COMPLETED_INITIAL_UPDATE: Initial updates were completed for all charts
   v1ContractsPageStats:

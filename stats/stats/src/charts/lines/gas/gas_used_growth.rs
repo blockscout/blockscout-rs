@@ -5,7 +5,7 @@ use crate::{
     data_source::{
         kinds::{
             data_manipulation::{
-                map::{Map, MapFunction, StripExt},
+                map::{Map, MapFunction, MapParseTo, StripExt},
                 resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
@@ -110,6 +110,7 @@ define_and_impl_resolution_properties!(
 
 pub type GasUsedGrowth = DailyCumulativeLocalDbChartSource<NewGasUsedRemote, Properties>;
 type GasUsedGrowthS = StripExt<GasUsedGrowth>;
+pub type GasUsedGrowthInt = MapParseTo<StripExt<GasUsedGrowth>, i64>;
 pub type GasUsedGrowthWeekly = DirectVecLocalDbChartSource<
     LastValueLowerResolution<GasUsedGrowthS, Week>,
     Batch30Weeks,

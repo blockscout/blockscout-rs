@@ -1,9 +1,6 @@
 use blockscout_display_bytes::ToHex;
 use serde_json::Value;
-use smart_contract_verifier::{
-    verify_new::{Error, VerificationResult},
-    Language,
-};
+use smart_contract_verifier::{Error, Language, VerificationResult};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::{
     v2 as proto,
     v2::{BatchVerifyResponse, CompilationFailure},
@@ -23,6 +20,7 @@ pub fn compilation_error(message: impl Into<String>) -> BatchVerifyResponse {
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn process_error(error: Error) -> Result<BatchVerifyResponse, Status> {
     match error {
         err @ Error::CompilerNotFound(_) => Err(Status::invalid_argument(err.to_string())),
@@ -31,10 +29,14 @@ pub fn process_error(error: Error) -> Result<BatchVerifyResponse, Status> {
             tracing::error!(err = formatted_error, "internal error");
             Err(Status::internal(formatted_error))
         }
+        err @ Error::NotConsistentBlueprintOnChainCode { .. } => {
+            Err(Status::invalid_argument(err.to_string()))
+        }
         err @ Error::Compilation(_) => Ok(compilation_error(err.to_string())),
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn process_verification_results(
     values: Vec<VerificationResult>,
 ) -> Result<BatchVerifyResponse, Status> {
@@ -52,6 +54,7 @@ pub fn process_verification_results(
     })
 }
 
+#[allow(clippy::result_large_err)]
 fn process_verification_result(
     value: VerificationResult,
 ) -> Result<proto::ContractVerificationResult, Status> {

@@ -50,6 +50,14 @@ default = true
 # prompt = "Write example service name to generating proto examples"
 # default = "TestService"
 
+[placeholders.types]
+type = "bool"
+prompt = "Generate typescript definitions for resources"
+default = true
+
+[conditional.'!types']
+ignore = ["types"]
+
 [hooks]
 pre = [
     "pre-script.rhai"

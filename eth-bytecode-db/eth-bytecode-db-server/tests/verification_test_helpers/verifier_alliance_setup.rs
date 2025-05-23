@@ -153,7 +153,10 @@ impl<'a> Setup<'a> {
     pub async fn setup_test_case(&self, test_suite_name: &str, test_case: TestCase) -> SetupData {
         let service = MockSolidityVerifierService::new();
 
-        let test_name = format!("{}_{}", self.test_prefix, test_case.test_case_name,);
+        let test_name = format!(
+            "{}_{}_{}",
+            self.test_prefix, test_suite_name, test_case.test_case_name,
+        );
 
         let db = init_db(test_suite_name, &test_name).await;
         let alliance_db = match self.alliance_db.clone() {

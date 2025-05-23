@@ -189,6 +189,11 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid compiler version"
     );
 
+    assert_eq!(
+        result_source.libraries, input.contract_libraries,
+        "Invalid contract libraries"
+    );
+
     mod compiler_settings {
         use serde::Deserialize;
 
@@ -222,13 +227,9 @@ async fn test_success(dir: &'static str, mut input: TestInput) -> VerifyResponse
         "Invalid evm version"
     );
     assert_eq!(
-        result_compiler_settings
-            .libraries
-            .into_values()
-            .next()
-            .unwrap_or_default(),
-        input.contract_libraries,
-        "Invalid contract libraries"
+        result_compiler_settings.libraries,
+        BTreeMap::new(),
+        "Invalid compiler settings libraries"
     );
     assert_eq!(
         result_compiler_settings.optimizer.enabled,
@@ -332,8 +333,8 @@ mod success_tests {
         let contract_dir = "contract_with_lib";
         let mut libraries = BTreeMap::new();
         libraries.insert(
-            "BadSafeMath".to_string(),
-            "0x9Bca1BF2810c9b68F25c82e8eBb9dC0A5301e310".to_string(),
+            "tests/contracts/contract_with_lib/source.sol:BadSafeMath".to_string(),
+            "0x9bca1bf2810c9b68f25c82e8ebb9dc0a5301e310".to_string(),
         );
         // let test_input = TestInput::new("SimpleStorage", "v0.5.11+commit.c082d0b4")
         let test_input = TestInput::new("SimpleStorage", "v0.5.11+commit.22be8592")
@@ -405,21 +406,20 @@ mod success_tests {
         test_success(contract_dir, test_input).await;
     }
 
-    // TODO: uncomment when solc <v0.4.11 support is returned back
-    // #[tokio::test]
-    // async fn solidity_0_4_10() {
-    //     let contract_dir = "solidity_0.4.10";
-    //
-    //     // For some reason v0.4.10 in default solc list for linux
-    //     // has different commit hash from macos and js versions
-    //     #[cfg(target_os = "linux")]
-    //     let compiler_version = "v0.4.10+commit.9e8cc01b";
-    //     #[cfg(not(target_os = "linux"))]
-    //     let compiler_version = "v0.4.10+commit.f0d539ae";
-    //
-    //     let test_input = TestInput::new("Main", compiler_version).has_constructor_args();
-    //     test_success(contract_dir, test_input).await;
-    // }
+    #[tokio::test]
+    async fn solidity_0_4_10() {
+        let contract_dir = "solidity_0.4.10";
+
+        // For some reason v0.4.10 in default solc list for linux
+        // has different commit hash from macos and js versions
+        #[cfg(target_os = "linux")]
+        let compiler_version = "v0.4.10+commit.9e8cc01b";
+        #[cfg(not(target_os = "linux"))]
+        let compiler_version = "v0.4.10+commit.f0d539ae";
+
+        let test_input = TestInput::new("Main", compiler_version).has_constructor_args();
+        test_success(contract_dir, test_input).await;
+    }
 }
 
 mod failure_tests {
