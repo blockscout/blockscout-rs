@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 use crate::conversion::{
     self, batch_resolve_from_inner, batch_resolve_from_logic, pagination_from_logic,
     ConversionError,
@@ -19,7 +20,7 @@ impl DomainsExtractorService {
         Self { subgraph_reader }
     }
 }
-
+#[allow(clippy::result_large_err)]
 #[async_trait]
 impl DomainsExtractor for DomainsExtractorService {
     async fn get_domain(
@@ -204,6 +205,7 @@ fn map_convertion_error(err: ConversionError) -> tonic::Status {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn from_resolved_domains_result(
     result: impl IntoIterator<Item = LookupOutput>,
     chain_id: i64,
