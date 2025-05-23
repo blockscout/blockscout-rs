@@ -13,7 +13,7 @@ use crate::{
 };
 use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity, Compilers, SolcValidator, SolidityClient, SolidityCompiler,
+    find_methods, solidity, EvmCompilersPool, SolcCompiler, SolcValidator,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     LookupMethodsRequest, LookupMethodsResponse,
@@ -23,7 +23,7 @@ use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
 pub struct SolidityVerifierService {
-    client: Arc<SolidityClient>,
+    compilers: Arc<EvmCompilersPool<SolcCompiler>>,
 }
 
 impl SolidityVerifierService {
@@ -40,17 +40,13 @@ impl SolidityVerifierService {
         )
         .await
         .context("solidity fetcher initialization")?;
-        let compilers = Compilers::new(
-            fetcher,
-            SolidityCompiler::new(),
-            compilers_threads_semaphore,
-        );
+
+        let compilers: EvmCompilersPool<SolcCompiler> =
+            EvmCompilersPool::new(fetcher, compilers_threads_semaphore);
         compilers.load_from_dir(&settings.compilers_dir).await;
 
-        let client = SolidityClient::new(compilers);
-
         Ok(Self {
-            client: Arc::new(client),
+            compilers: Arc::new(compilers),
         })
     }
 }
@@ -82,7 +78,7 @@ impl SolidityVerifier for SolidityVerifierService {
         let verification_request =
             common::process_solo_verification_request_conversion!(maybe_verification_request);
 
-        let result = solidity::multi_part::verify(self.client.clone(), verification_request).await;
+        let result = solidity::multi_part::verify(&self.compilers, verification_request).await;
 
         let verify_response = match result {
             Ok(value) => types::verification_result::process_verification_result(value)?,
@@ -123,8 +119,7 @@ impl SolidityVerifier for SolidityVerifierService {
         let verification_request =
             common::process_solo_verification_request_conversion!(maybe_verification_request);
 
-        let result =
-            solidity::standard_json::verify(self.client.clone(), verification_request).await;
+        let result = solidity::standard_json::verify(&self.compilers, verification_request).await;
 
         let verify_response = match result {
             Ok(value) => types::verification_result::process_verification_result(value)?,
@@ -152,7 +147,7 @@ impl SolidityVerifier for SolidityVerifierService {
             common::process_batch_verification_request_conversion!(maybe_verification_request);
 
         let result =
-            solidity::multi_part::batch_verify(self.client.clone(), verification_request).await;
+            solidity::multi_part::batch_verify(&self.compilers, verification_request).await;
 
         let verify_response = match result {
             Ok(value) => types::batch_verification::process_verification_results(value)?,
@@ -174,7 +169,7 @@ impl SolidityVerifier for SolidityVerifierService {
             common::process_batch_verification_request_conversion!(maybe_verification_request);
 
         let result =
-            solidity::standard_json::batch_verify(self.client.clone(), verification_request).await;
+            solidity::standard_json::batch_verify(&self.compilers, verification_request).await;
 
         let verify_response = match result {
             Ok(value) => types::batch_verification::process_verification_results(value)?,
@@ -188,9 +183,9 @@ impl SolidityVerifier for SolidityVerifierService {
         &self,
         _request: Request<ListCompilerVersionsRequest>,
     ) -> Result<Response<ListCompilerVersionsResponse>, Status> {
-        let compiler_versions = self.client.compilers().all_versions_sorted_str();
+        let compiler_versions = self.compilers.all_versions();
         Ok(Response::new(ListCompilerVersionsResponse {
-            compiler_versions,
+            compiler_versions: common::versions_to_sorted_string(compiler_versions),
         }))
     }
 

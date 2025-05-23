@@ -11,7 +11,7 @@ use tokio::sync::OnceCell;
 
 mod common_tests;
 mod stats_full;
-mod stats_no_arbitrum;
+mod stats_no_specific;
 mod stats_not_indexed;
 mod stats_not_updated;
 

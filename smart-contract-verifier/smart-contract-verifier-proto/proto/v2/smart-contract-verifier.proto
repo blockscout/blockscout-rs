@@ -86,6 +86,10 @@ message Source {
 
   /// If true, the verified contract was a ERC-5202 compatible blueprint contract
   bool is_blueprint = 13;
+
+  /// Mapping from fully qualified name to the address the library is deployed at
+  /// (includes both automatically and manually linked libraries)
+  map<string, string> libraries = 14;
 }
 
 enum BytecodeType {
@@ -102,6 +106,7 @@ message VerificationMetadata {
 }
 
 message VerifySolidityMultiPartRequest {
+  reserved 7 /* libraries */;
   /// Bytecode to compare local compilation result with
   string bytecode = 1;
   /// Either CREATION_INPUT or DEPLOYED_BYTECODE, depending on what should be verified
@@ -115,8 +120,6 @@ message VerifySolidityMultiPartRequest {
   optional int32 optimization_runs = 5;
   /// Map from a source file name to the actual source code
   map<string, string> source_files = 6;
-  /// Map from a library name to its address
-  map<string, string> libraries = 7;
 
   /// An optional field to be filled by explorers
   optional VerificationMetadata metadata = 8;
@@ -262,6 +265,7 @@ message LookupMethodsResponse {
 /*************** Batch related messages ***************/
 
 message BatchVerifySolidityMultiPartRequest {
+  reserved 6 /* libraries */;
   /// Contracts to be verified
   repeated Contract contracts = 1;
 
@@ -274,8 +278,6 @@ message BatchVerifySolidityMultiPartRequest {
   /// If present, optimizations are enabled with specified number of runs,
   /// otherwise optimizations are disabled
   optional uint32 optimization_runs = 5;
-  /// Map from a library name to its address
-  map<string, string> libraries = 6;
 }
 
 message BatchVerifySolidityStandardJsonRequest {

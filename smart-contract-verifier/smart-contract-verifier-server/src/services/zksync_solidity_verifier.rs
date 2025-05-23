@@ -113,6 +113,7 @@ impl ZkSyncSolidityVerifier for Service {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn process_verification_result(
     result: Result<zksync::VerificationResult, zksync::Error>,
 ) -> Result<VerifyResponse, Status> {

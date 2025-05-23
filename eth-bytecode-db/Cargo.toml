@@ -23,9 +23,9 @@ verifier-alliance-database = { path = "verifier-alliance-database" }
 verifier-alliance-database-tests = { path = "verifier-alliance-database-tests" }
 verifier-alliance-migration = { path = "eth-bytecode-db/verifier-alliance-migration" }
 
-actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
-actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-prost = { version = "0.1.0" }
+actix-prost-macros = { version = "0.1.0" }
+actix-prost-build = { version = "0.1.0" }
 actix-web = { version = "4" }
 alloy-json-abi = { version = "0.8.10" }
 amplify = { version = "4.7.0" }
@@ -33,7 +33,7 @@ anyhow = { version = "1" }
 async-std = { version = "^1" }
 async-trait = { version = "0.1" }
 blockscout-display-bytes = { version = "1.1.0" }
-blockscout-service-launcher = { version = "0.16.2", default-features = false, features = ["database-1_0"] }
+blockscout-service-launcher = { version = "0.19.0", default-features = false, features = ["database-1"] }
 bytes = { version = "1.2" }
 ethabi = { version = "18.0" }
 ethers = { version = "2.0.0" }
@@ -48,8 +48,8 @@ mockall = { version = "0.13.0" }
 paste = { version = "1.0.14" }
 pretty_assertions = { version = "1.3" }
 prometheus = { version = "0.13" }
-prost = { version = "0.11" }
-prost-build = { version = "0.11" }
+prost = { version = "0.13" }
+prost-build = { version = "0.13" }
 reqwest = { version = "0.12.9" }
 reqwest-middleware = { version = "0.3.3" }
 reqwest-retry = { version = "0.6.1" }
@@ -59,10 +59,10 @@ sea-orm-migration = { version = "1.1.0" }
 semver = { version = "1.0" }
 serde = { version = "1" }
 serde_json = { version = "1.0" }
-serde_with = { version = "3.11.0" }
+serde_with = { version = "3.12.0" }
 sha2 = { version = "0.10.8" }
 sha3 = { version = "0.10.8" }
-smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "7a6e9400" }
+smart-contract-verifier-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "f6e4483" }
 solidity-metadata = { version = "1.0" }
 sourcify = { git = "https://github.com/blockscout/blockscout-rs", rev = "457af68" }
 strum = { version = "0.26.3", default-features = false, features = ["derive"] }
@@ -70,9 +70,9 @@ test-log = { version = "0.2.16" }
 thiserror = { version = "1" }
 tokio = { version = "1" }
 tokio-stream = { version = "0.1" }
-tonic = { version = "0.8" }
-tonic-build = { version = "0.8" }
+tonic = { version = "0.12" }
+tonic-build = { version = "0.12" }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
 url = { version = "2" }
-verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "ca2a7ba" }
+verification-common = { git = "https://github.com/blockscout/blockscout-rs", rev = "f6e4483" }

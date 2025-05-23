@@ -1,9 +1,9 @@
 use blockscout_display_bytes::Bytes as DisplayBytes;
 use serde::{de::DeserializeOwned, Deserialize};
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::source::MatchType;
-use std::{borrow::Cow, collections::BTreeMap};
-
 pub use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::BytecodeType;
+use std::{borrow::Cow, collections::BTreeMap};
+use verification_common::solidity_libraries;
 
 const TEST_CASES_DIR: &str = "tests/test_cases_solidity";
 
@@ -190,6 +190,8 @@ pub struct StandardJson {
 
     #[serde(deserialize_with = "StandardJson::deserialize_input")]
     pub input: String,
+    #[serde(default)]
+    pub manually_linked_libraries: BTreeMap<String, String>,
 
     pub is_full_match: Option<bool>,
     pub expected_constructor_argument: Option<DisplayBytes>,
@@ -276,14 +278,16 @@ impl TestCase for StandardJson {
     }
 
     fn libraries(&self) -> BTreeMap<String, String> {
-        single_field_struct!(Settings, libraries, BTreeMap<String, BTreeMap<String, String>>);
-        single_field_struct!(Input, settings, Option<Settings>);
+        let mut linked_libraries = BTreeMap::new();
+        if let Some(compiler_settings) = self.compiler_settings() {
+            linked_libraries.extend(
+                solidity_libraries::try_parse_compiler_linked_libraries(&compiler_settings)
+                    .unwrap(),
+            )
+        }
+        linked_libraries.extend(self.manually_linked_libraries.clone());
 
-        let input: Input = serde_json::from_str(&self.input).expect("libraries parsing failed");
-        input
-            .settings
-            .map(|v| v.libraries.into_values().flatten().collect())
-            .unwrap_or_default()
+        linked_libraries
     }
 
     fn optimizer_enabled(&self) -> Option<bool> {

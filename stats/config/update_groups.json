@@ -27,7 +27,7 @@
         "average_gas_limit_group": "0 0 1,12 * * * *",
         "average_gas_price_group": "0 5 1,14 * * * *",
         "average_txn_fee_group": "0 0 6 * * * *",
-        "gas_used_growth_group": "0 0 1,13 * * * *",
+        "gas_used_growth_group": "0 0 1 * * * *",
         "native_coin_supply_group": "0 0 1,11 * * * *",
         "new_blocks_group": "0 0 8 * * * *",
         "txns_fee_group": "0 0 7 * * * *",
@@ -36,6 +36,7 @@
         "new_contracts_group": "0 20 */3 * * * *",
         "new_txns_group": "0 10 */3 * * * *",
         "new_user_ops_group": "0 5 7 * * * *",
+        "new_eip_7702_auths_group": "0 20 6 * * * *",
         "new_account_abstraction_wallets_group": "0 35 9 * * * *",
         "active_bundlers_group": "0 7 7 * * * *",
         "active_paymasters_group": "0 8 7 * * * *",
@@ -44,6 +45,7 @@
         "native_coin_holders_growth_group": "0 0 7,17,22 * * * *",
         "new_native_coin_transfers_group": "0 0 3,13 * * * *",
         "txns_stats_24h_group": "0 30 * * * * *",
+        "new_builder_accounts_group": "0 45 7 * * * *",
         "verified_contracts_page_group": "0 15,45 * * * * *"
     }
 }

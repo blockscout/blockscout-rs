@@ -4,6 +4,14 @@ use s3::{creds::Credentials, Bucket, Region};
 use smart_contract_verifier::{Fetcher, FileValidator, ListFetcher, S3Fetcher, Version};
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 
+pub fn versions_to_sorted_string<Version: Ord + ToString>(
+    mut versions: Vec<Version>,
+) -> Vec<String> {
+    // sort in descending order
+    versions.sort_by(|x, y| x.cmp(y).reverse());
+    versions.into_iter().map(|v| v.to_string()).collect()
+}
+
 pub async fn initialize_fetcher<Ver: Version>(
     fetcher_settings: FetcherSettings,
     compilers_dir: PathBuf,

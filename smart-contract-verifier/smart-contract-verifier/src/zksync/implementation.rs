@@ -1,4 +1,4 @@
-use crate::{compiler::{CompactVersion, DetailedVersion, DownloadCache, Fetcher}, decode_hex, Version, zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract}};
+use crate::{compiler::{CompactVersion, DetailedVersion, DownloadCache, Fetcher}, Version, zksync::zksolc_standard_json::{input, input::Input, output, output::contract::Contract}};
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -214,7 +214,7 @@ fn check_contract(
     };
 
     if let Some(bytecode) = contract.evm.as_ref().and_then(|evm| evm.bytecode.as_ref()) {
-        let compiled_code = decode_hex(&bytecode.object);
+        let compiled_code = blockscout_display_bytes::decode_hex(&bytecode.object);
         if let Ok(compiled_code) = compiled_code {
             let compilation_artifacts = CompilationArtifacts::from(&contract);
             let creation_code_artifacts = CreationCodeArtifacts::from(&contract);

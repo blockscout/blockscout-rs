@@ -83,11 +83,22 @@ pub use average_gas_limit::{
 pub use average_gas_price::{
     AverageGasPrice, AverageGasPriceMonthly, AverageGasPriceWeekly, AverageGasPriceYearly,
 };
+pub use average_gas_used::{
+    AverageGasUsed, AverageGasUsedMonthly, AverageGasUsedWeekly, AverageGasUsedYearly,
+};
 pub use average_txn_fee::{
     AverageTxnFee, AverageTxnFeeMonthly, AverageTxnFeeWeekly, AverageTxnFeeYearly,
 };
+pub use builder_accounts_growth::{
+    BuilderAccountsGrowth, BuilderAccountsGrowthMonthly, BuilderAccountsGrowthWeekly,
+    BuilderAccountsGrowthYearly,
+};
 pub use contracts_growth::{
     ContractsGrowth, ContractsGrowthMonthly, ContractsGrowthWeekly, ContractsGrowthYearly,
+};
+pub use eip_7702_auths_growth::{
+    Eip7702AuthsGrowth, Eip7702AuthsGrowthMonthly, Eip7702AuthsGrowthWeekly,
+    Eip7702AuthsGrowthYearly,
 };
 pub use gas_used_growth::{
     GasUsedGrowth, GasUsedGrowthMonthly, GasUsedGrowthWeekly, GasUsedGrowthYearly,
@@ -99,10 +110,21 @@ pub use native_coin_holders_growth::{
 pub use native_coin_supply::{
     NativeCoinSupply, NativeCoinSupplyMonthly, NativeCoinSupplyWeekly, NativeCoinSupplyYearly,
 };
+pub use network_utilization::{
+    NetworkUtilization, NetworkUtilizationMonthly, NetworkUtilizationWeekly,
+    NetworkUtilizationYearly,
+};
 pub use new_accounts::{NewAccounts, NewAccountsMonthly, NewAccountsWeekly, NewAccountsYearly};
 pub use new_blocks::{NewBlocks, NewBlocksMonthly, NewBlocksWeekly, NewBlocksYearly};
+pub use new_builder_accounts::{
+    NewBuilderAccounts, NewBuilderAccountsMonthly, NewBuilderAccountsWeekly,
+    NewBuilderAccountsYearly,
+};
 pub use new_contracts::{
     NewContracts, NewContractsMonthly, NewContractsWeekly, NewContractsYearly,
+};
+pub use new_eip_7702_auths::{
+    NewEip7702Auths, NewEip7702AuthsMonthly, NewEip7702AuthsWeekly, NewEip7702AuthsYearly,
 };
 pub use new_native_coin_holders::{
     NewNativeCoinHolders, NewNativeCoinHoldersMonthly, NewNativeCoinHoldersWeekly,

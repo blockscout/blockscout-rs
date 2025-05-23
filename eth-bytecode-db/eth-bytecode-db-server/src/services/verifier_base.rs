@@ -4,6 +4,7 @@ use crate::{
 };
 use eth_bytecode_db::verification::{Error, Source};
 
+#[allow(clippy::result_large_err)]
 pub fn process_verification_result(
     result: Result<Source, Error>,
 ) -> Result<tonic::Response<VerifyResponse>, tonic::Status> {
@@ -50,6 +51,7 @@ pub fn process_batch_import_error(error: Error) -> tonic::Status {
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn process_compiler_versions_result(
     result: Result<Vec<String>, anyhow::Error>,
 ) -> Result<tonic::Response<ListCompilerVersionsResponse>, tonic::Status> {

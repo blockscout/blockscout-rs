@@ -161,6 +161,8 @@ enum ChartSubsetUpdateStatus {
   PENDING = 0;
   // Some charts are waiting for starting condition
   WAITING_FOR_STARTING_CONDITION = 1;
+  // Some charts are waiting for their turn to be updated
+  QUEUED_FOR_INITIAL_UPDATE = 4;
   // Some charts are still running initial update
   RUNNING_INITIAL_UPDATE = 2;
   // Initial updates were completed for all charts

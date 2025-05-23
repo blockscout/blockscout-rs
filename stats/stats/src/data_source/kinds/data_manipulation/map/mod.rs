@@ -12,12 +12,14 @@ use crate::{
     ChartError,
 };
 
+mod divide;
 mod parse;
 mod strip_extension;
 mod to_string;
 mod unwrap_or;
 mod wrapper;
 
+pub use divide::MapDivide;
 pub use parse::MapParseTo;
 pub use strip_extension::StripExt;
 pub use to_string::MapToString;

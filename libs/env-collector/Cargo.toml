@@ -1,6 +1,6 @@
 [package]
 name = "env-collector"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
@@ -11,6 +11,8 @@ json_dotpath = "1.1.0"
 regex = "1.10.4"
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
+markdown-table-formatter = "0.3.0"
+derive_builder = "0.20.2"
 
 [dev-dependencies]
 blockscout-service-launcher = { path = "../blockscout-service-launcher", features = ["database", "database-1"] }

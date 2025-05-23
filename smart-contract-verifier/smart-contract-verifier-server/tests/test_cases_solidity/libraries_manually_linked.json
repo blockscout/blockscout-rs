@@ -50,5 +50,8 @@
         }
     },
 
-    "is_full_match": true
+    "is_full_match": true,
+    "manually_linked_libraries": {
+        "contracts/1_Storage.sol:Journal": "0x7d53f102f4d4aa014db4e10d6deec2009b3cda6b"
+    }
 }

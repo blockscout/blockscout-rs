@@ -1,0 +1,134 @@
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - 'tac-operation-lifecycle/v*'
+    paths:
+      - tac-operation-lifecycle/**
+      - .github/workflows/tac-operation-lifecycle.yml
+      - .github/workflows/_*.yml
+      - .github/actions/**
+  pull_request:
+    paths:
+      - tac-operation-lifecycle/**
+      - .github/workflows/tac-operation-lifecycle.yml
+      - .github/workflows/_*.yml
+      - .github/actions/**
+
+name: Test, lint and docker (tac-operation-lifecycle)
+
+defaults:
+  run:
+    working-directory: tac-operation-lifecycle
+
+jobs:
+  test:
+    name: Unit, doc and integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: admin
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          working-directory: tac-operation-lifecycle
+
+      - name: Unit tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+        if: success() || failure()
+
+      - name: Doc tests
+        run: cargo test --locked --workspace --all-features --doc
+        if: success() || failure()
+
+      - name: Integration tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
+        if: success() || failure()
+        env:
+          DATABASE_URL: postgres://postgres:admin@localhost:5432/
+
+  lint:
+    name: Linting
+    uses: ./.github/workflows/_linting.yml
+    with:
+      working-directory: tac-operation-lifecycle
+
+  docker:
+    name: Docker build and docker push
+    needs:
+      - test
+      - lint
+    if: |
+      always() &&
+      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+    uses: ./.github/workflows/_docker-build-push.yml
+    with:
+      service-name: tac-operation-lifecycle
+    secrets:
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
+
+  deploy_stage:
+    name: Deploy stg instance
+    needs: docker
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Get Vault credentials
+        id: retrieve-vault-secrets
+        uses: hashicorp/vault-action@v2.4.1
+        with:
+          url: https://vault.k8s.blockscout.com
+          role: ci-dev
+          path: github-jwt
+          method: jwt
+          tlsSkipVerify: false
+          exportToken: true
+          secrets: |
+            ci/data/dev/github token | WORKFLOW_TRIGGER_TOKEN ;
+      - name: Trigger deploy
+        uses: convictional/trigger-workflow-and-wait@v1.6.1
+        with:
+          owner: blockscout
+          repo: deployment-values
+          github_token: ${{ env.WORKFLOW_TRIGGER_TOKEN }}
+          workflow_file_name: deploy_services.yaml
+          ref: main
+          wait_interval: 30
+          client_payload: '{ "instance": "tac-operation-lifecycle", "globalEnv": "testing"}'
+
+  publish_types_package:
+    name: Publish types package
+    uses: './.github/workflows/npm-publisher.yml'
+    needs: docker
+    if: needs.docker.outputs.tag-value != ''
+    secrets: inherit
+    with:
+      version: ${{ needs.docker.outputs.tag-value }}
+      project_name: tac-operation-lifecycle
+
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: 'tac-operation-lifecycle'
+      swagger_path: 'tac-operation-lifecycle/tac-operation-lifecycle-proto/swagger/v1/tac-operation-lifecycle.swagger.yaml'
+    secrets:
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}
