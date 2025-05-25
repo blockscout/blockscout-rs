@@ -1261,18 +1261,18 @@ impl TacDatabase {
                 JOIN transaction t ON s.id = t.stage_id
                 WHERE t.hash = $1
             )
-            ORDER BY timestamp;
             "#,
         );
 
         let mut values: Vec<sea_orm::Value> = vec![tx_hash.into()];
 
         if let Some(pagination) = pagination_input {
-            sql.push_str(" AND timestamp < $2");
+            sql.push_str(" AND timestamp < $2 ORDER BY timestamp DESC LIMIT $3");
             values.push(Self::timestamp_to_naive(pagination.earlier_timestamp as i64).into());
+        } else {
+            sql.push_str(" ORDER BY timestamp DESC LIMIT $2");
         }
 
-        sql.push_str(" ORDER BY timestamp DESC LIMIT $3");
         values.push((PAGE_SIZE as u64 + 1).into());
 
         let mut operations = self.get_operations_with_sql(&sql, values).await?;

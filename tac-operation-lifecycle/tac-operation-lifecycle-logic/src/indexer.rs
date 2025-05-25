@@ -533,6 +533,11 @@ impl Indexer {
                                 && job.operation.timestamp.and_utc().timestamp()
                                     < forever_pending_operation_cap
                             {
+                                tracing::warn!(
+                                    op_id =? job.operation.id,
+                                    op_timestamp =? job.operation.timestamp,
+                                    "Forever pending operation has been found"
+                                );
                                 // The operations whitch remains PENDING after forever_pending_operations_age_sec
                                 // are considered to be forever pending. We shouldn't recheck them anymore
                                 StatusEnum::Completed
@@ -543,6 +548,7 @@ impl Indexer {
                             let _ = (self
                                 .database
                                 .set_operation_status(&job.operation, &new_status))
+                                .instrument(tracing::warn_span!("set_operation_status", op_id =? job.operation.id, status =? new_status))
                             .await;
 
                             processed_operations += 1;
