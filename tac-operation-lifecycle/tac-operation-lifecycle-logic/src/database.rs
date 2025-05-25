@@ -487,60 +487,6 @@ impl TacDatabase {
         }
     }
 
-    pub async fn set_operation_status(
-        &self,
-        operation_model: &operation::Model,
-        status: &StatusEnum,
-    ) -> anyhow::Result<()> {
-        let mut operation_active: operation::ActiveModel = operation_model.clone().into();
-        operation_active.status = Set(status.clone());
-
-        // Saving changes
-        operation_active
-            .update(self.db.as_ref())
-            .await
-            .map_err(|e| {
-                tracing::error!(
-                    operation_id =? operation_model.id,
-                    new_status =? status.to_value(),
-                    err =? e,
-                    "Failed to update operation status"
-                );
-                anyhow!(e)
-            })?;
-
-        tracing::debug!(
-            operation_id =? operation_model.id,
-            new_status =? status.to_value(),
-            "Successfully updated operation status"
-        );
-        Ok(())
-    }
-
-    pub async fn set_operation_status_by_id(
-        &self,
-        op_id: &String,
-        status: &StatusEnum,
-    ) -> anyhow::Result<()> {
-        // Found record by PK
-        match operation::Entity::find_by_id(op_id)
-            .one(self.db.as_ref())
-            .await?
-        {
-            Some(operation_model) => self.set_operation_status(&operation_model, status).await,
-            None => {
-                let err = anyhow!("operation not found");
-                tracing::error!(
-                    operation_id =? op_id,
-                    new_status =? status.to_value(),
-                    err =? err,
-                    "Cannot update operation status"
-                );
-                Err(err)
-            }
-        }
-    }
-
     // Helper function to build interval query with common structure
     fn build_interval_query(
         &self,
@@ -820,12 +766,11 @@ impl TacDatabase {
         &self,
         operation: &operation::Model,
         operation_data: &ApiOperationData,
+        new_status: &StatusEnum,
     ) -> anyhow::Result<()> {
-        let tx_id = Uuid::new_v4();
-        tracing::debug!(tx_id =? tx_id, "Beginning transaction for set_operation_data");
-
         let operation = operation.clone();
         let operation_data = operation_data.clone();
+        let new_status = new_status.clone();
 
         self.db
             .transaction::<_, (), DbErr>(|tx| {
@@ -838,10 +783,9 @@ impl TacDatabase {
 
                     // Update operation type, status and sender
                     let mut operation_model: operation::ActiveModel = operation.clone().into();
-                    if operation_data.operation_type.is_finalized() {
-                        operation_model.status = Set(StatusEnum::Completed);
-                    }
+                    operation_model.updated_at = Set(chrono::Utc::now().naive_utc());
                     operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
+                    operation_model.status = Set(new_status.clone());
 
                     if let Some((address, blockchain)) = operation_data
                         .meta_info
@@ -859,11 +803,17 @@ impl TacDatabase {
                         tracing::warn!(op_id =? operation.id, "Storing operation without sender")
                     }
 
+                    let new_type = operation_model.op_type.clone();
+                    let upd_at = operation_model.updated_at.clone().into_value().unwrap();
+
                     operation_model
                         .update(tx)
                         .instrument(tracing::debug_span!(
                             "updating operation",
-                            tx_id = tx_id.to_string(),
+                            op_id = operation.id,
+                            op_type =? new_type,
+                            updated_at =? upd_at,
+                            new_status =? new_status,
                         ))
                         .await?;
 
@@ -947,7 +897,16 @@ impl TacDatabase {
                                 sea_orm::sea_query::OnConflict::column(
                                     operation_meta_info::Column::OperationId,
                                 )
-                                .do_nothing()
+                                .update_columns([
+                                    operation_meta_info::Column::TacValidExecutors,
+                                    operation_meta_info::Column::TonValidExecutors,
+                                    operation_meta_info::Column::TacProtocolFee,
+                                    operation_meta_info::Column::TacExecutorFee,
+                                    operation_meta_info::Column::TacTokenFeeSymbol,
+                                    operation_meta_info::Column::TonProtocolFee,
+                                    operation_meta_info::Column::TonExecutorFee,
+                                    operation_meta_info::Column::TonTokenFeeSymbol,
+                                ])
                                 .to_owned(),
                             )
                             .exec(tx)

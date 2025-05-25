@@ -520,11 +520,6 @@ impl Indexer {
                     // Find an associated operation in the input operations vector
                     match jobs.iter().find(|j| &j.operation.id == op_id) {
                         Some(job) => {
-                            let _ = self
-                                .database
-                                .set_operation_data(&job.operation, operation_data)
-                                .await;
-
                             let new_status = if operation_data.operation_type.is_finalized() {
                                 // The case when operation has a finalized status
                                 // otherwise they will be catched by operation stream
@@ -545,11 +540,10 @@ impl Indexer {
                                 StatusEnum::Pending
                             };
 
-                            let _ = (self
+                            let _ = self
                                 .database
-                                .set_operation_status(&job.operation, &new_status))
-                                .instrument(tracing::warn_span!("set_operation_status", op_id =? job.operation.id, status =? new_status))
-                            .await;
+                                .set_operation_data(&job.operation, operation_data, &new_status)
+                                .await;
 
                             processed_operations += 1;
                             if new_status == StatusEnum::Completed {
