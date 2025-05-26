@@ -154,14 +154,20 @@ impl TryFrom<(ChainId, proto::batch_import_request::InteropMessageImport)>
             proto::batch_import_request::interop_message_import::Message::Init(init) => {
                 let InteropMessageWithTransfer(msg, transfer) = init.try_into()?;
                 if msg.init_chain_id != chain_id {
-                    return Err(ParseError::ChainIdMismatch(chain_id, msg.init_chain_id));
+                    return Err(ParseError::ChainIdMismatch {
+                        expected: chain_id,
+                        actual: msg.init_chain_id,
+                    });
                 }
                 (msg, transfer)
             }
             proto::batch_import_request::interop_message_import::Message::Relay(relay) => {
                 let msg: InteropMessage = relay.try_into()?;
                 if msg.relay_chain_id != chain_id {
-                    return Err(ParseError::ChainIdMismatch(chain_id, msg.relay_chain_id));
+                    return Err(ParseError::ChainIdMismatch {
+                        expected: chain_id,
+                        actual: msg.relay_chain_id,
+                    });
                 }
                 (msg, None)
             }
