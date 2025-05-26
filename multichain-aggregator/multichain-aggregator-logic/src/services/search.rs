@@ -29,10 +29,6 @@ use tracing::instrument;
 const MIN_QUERY_LENGTH: usize = 3;
 const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
 const QUICK_SEARCH_ENTITY_LIMIT: usize = 5;
-// TODO: for now, we just need any chain that has a primary ENS protocol.
-// Later, we will need to add a BENS handle that is chain-agnostic
-// and works directly with protocols.
-const DOMAIN_PRIMARY_CHAIN_ID: ChainId = 1;
 
 fn domain_name_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -40,18 +36,36 @@ fn domain_name_regex() -> &'static Regex {
 }
 
 pub enum AddressSearchConfig<'a> {
-    NFTSearch,
+    NFTSearch {
+        domain_primary_chain_id: ChainId,
+    },
     NonTokenSearch {
         bens_protocols: Option<&'a [String]>,
         bens_domain_lookup_limit: u32,
+        domain_primary_chain_id: ChainId,
     },
 }
 
 impl AddressSearchConfig<'_> {
     pub fn token_types(&self) -> Option<Vec<TokenType>> {
         match self {
-            AddressSearchConfig::NFTSearch => Some(vec![TokenType::Erc721, TokenType::Erc1155]),
+            AddressSearchConfig::NFTSearch { .. } => {
+                Some(vec![TokenType::Erc721, TokenType::Erc1155])
+            }
             AddressSearchConfig::NonTokenSearch { .. } => Some(vec![]),
+        }
+    }
+
+    pub fn domain_primary_chain_id(&self) -> ChainId {
+        match self {
+            AddressSearchConfig::NFTSearch {
+                domain_primary_chain_id,
+                ..
+            } => *domain_primary_chain_id,
+            AddressSearchConfig::NonTokenSearch {
+                domain_primary_chain_id,
+                ..
+            } => *domain_primary_chain_id,
         }
     }
 }
@@ -73,6 +87,7 @@ pub async fn search_addresses(
         AddressSearchConfig::NonTokenSearch {
             bens_protocols,
             bens_domain_lookup_limit,
+            domain_primary_chain_id,
         } => {
             if let Ok(address) = alloy_primitives::Address::from_str(&query) {
                 (vec![address], None)
@@ -81,6 +96,7 @@ pub async fn search_addresses(
                     bens_client,
                     query.clone(),
                     bens_protocols,
+                    domain_primary_chain_id,
                     bens_domain_lookup_limit,
                     None,
                 )
@@ -99,7 +115,7 @@ pub async fn search_addresses(
                 (vec![], Some(query.to_string()))
             }
         }
-        AddressSearchConfig::NFTSearch => {
+        AddressSearchConfig::NFTSearch { .. } => {
             if let Ok(address) = alloy_primitives::Address::from_str(&query) {
                 (vec![address], None)
             } else {
@@ -124,24 +140,26 @@ pub async fn search_addresses(
         .map(Address::try_from)
         .collect::<Result<Vec<_>, _>>()?;
 
-    let addresses = preload_domain_info(bens_client, addresses).await;
+    let domain_primary_chain_id = config.domain_primary_chain_id();
+    let addresses = preload_domain_info(bens_client, domain_primary_chain_id, addresses).await;
 
     Ok((addresses, page_token))
 }
 
 pub async fn preload_domain_info(
     bens_client: &HttpApiClient,
+    primary_chain_id: ChainId,
     addresses: impl IntoIterator<Item = Address>,
 ) -> Vec<Address> {
     let jobs = addresses.into_iter().map(|mut address| async {
         // Preload domain info only for EOA addresses and only for the primary chain instance
-        if address.is_contract || address.chain_id != DOMAIN_PRIMARY_CHAIN_ID {
+        if address.is_contract || address.chain_id != primary_chain_id {
             return address;
         }
 
         let request = bens_proto::GetAddressRequest {
             address: address.hash.to_string(),
-            chain_id: DOMAIN_PRIMARY_CHAIN_ID,
+            chain_id: primary_chain_id,
             protocol_id: None,
         };
 
@@ -317,6 +335,7 @@ pub async fn search_domains(
     bens_client: &HttpApiClient,
     query: String,
     protocols: Option<&[String]>,
+    primary_chain_id: ChainId,
     page_size: u32,
     page_token: Option<String>,
 ) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
@@ -324,7 +343,7 @@ pub async fn search_domains(
     let order = bens_proto::Order::Desc.into();
     let request = bens_proto::LookupDomainNameRequest {
         name: Some(query),
-        chain_id: DOMAIN_PRIMARY_CHAIN_ID,
+        chain_id: primary_chain_id,
         only_active: true,
         sort,
         order,
@@ -349,6 +368,7 @@ pub async fn search_domains(
     Ok((domains, next_page_token))
 }
 
+#[allow(clippy::too_many_arguments)]
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
     db: &DatabaseConnection,
@@ -358,6 +378,7 @@ pub async fn quick_search(
     query: String,
     chain_ids: &[ChainId],
     bens_protocols: Option<&[String]>,
+    domain_primary_chain_id: ChainId,
 ) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
 
@@ -369,6 +390,7 @@ pub async fn quick_search(
         bens_client,
         chain_ids,
         bens_protocols,
+        domain_primary_chain_id,
     };
 
     // Each search term produces its own `SearchResults` struct.
@@ -410,6 +432,7 @@ struct SearchContext<'a> {
     bens_client: &'a HttpApiClient,
     chain_ids: &'a [ChainId],
     bens_protocols: Option<&'a [String]>,
+    domain_primary_chain_id: ChainId,
 }
 
 impl SearchTerm {
@@ -461,7 +484,12 @@ impl SearchTerm {
                     .map(Address::try_from)
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let addresses = preload_domain_info(search_context.bens_client, addresses).await;
+                let addresses = preload_domain_info(
+                    search_context.bens_client,
+                    search_context.domain_primary_chain_id,
+                    addresses,
+                )
+                .await;
 
                 let nfts = addresses
                     .iter()
@@ -547,6 +575,7 @@ impl SearchTerm {
                     search_context.bens_client,
                     query,
                     search_context.bens_protocols,
+                    search_context.domain_primary_chain_id,
                     QUICK_SEARCH_NUM_ITEMS as u32,
                     None,
                 )
@@ -570,8 +599,12 @@ impl SearchTerm {
                         .map(Address::try_from)
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    let addresses =
-                        preload_domain_info(search_context.bens_client, addresses).await;
+                    let addresses = preload_domain_info(
+                        search_context.bens_client,
+                        search_context.domain_primary_chain_id,
+                        addresses,
+                    )
+                    .await;
 
                     results.addresses.extend(addresses);
                 }

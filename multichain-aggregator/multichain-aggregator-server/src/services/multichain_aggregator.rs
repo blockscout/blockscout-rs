@@ -23,6 +23,7 @@ pub struct MultichainAggregator {
     api_settings: ApiSettings,
     quick_search_chains: Vec<types::ChainId>,
     bens_protocols: Option<Vec<String>>,
+    domain_primary_chain_id: types::ChainId,
     marketplace_enabled_cache: chains::MarketplaceEnabledCache,
 }
 
@@ -36,6 +37,7 @@ impl MultichainAggregator {
         api_settings: ApiSettings,
         quick_search_chains: Vec<types::ChainId>,
         bens_protocols: Option<Vec<String>>,
+        domain_primary_chain_id: types::ChainId,
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
     ) -> Self {
         Self {
@@ -47,6 +49,7 @@ impl MultichainAggregator {
             api_settings,
             quick_search_chains,
             bens_protocols,
+            domain_primary_chain_id,
             marketplace_enabled_cache,
         }
     }
@@ -175,6 +178,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             &self.bens_client,
             search::AddressSearchConfig::NonTokenSearch {
                 bens_protocols: self.bens_protocols.as_deref(),
+                domain_primary_chain_id: self.domain_primary_chain_id,
                 // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
                 bens_domain_lookup_limit: 1,
             },
@@ -215,7 +219,9 @@ impl MultichainAggregatorService for MultichainAggregator {
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
             &self.bens_client,
-            search::AddressSearchConfig::NFTSearch,
+            search::AddressSearchConfig::NFTSearch {
+                domain_primary_chain_id: self.domain_primary_chain_id,
+            },
             inner.q,
             chain_ids,
             page_size as u64,
@@ -287,6 +293,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             inner.q,
             &self.quick_search_chains,
             self.bens_protocols.as_deref(),
+            self.domain_primary_chain_id,
         )
         .await
         .inspect_err(|err| {
@@ -403,6 +410,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             &self.bens_client,
             inner.q,
             self.bens_protocols.as_deref(),
+            self.domain_primary_chain_id,
             page_size,
             inner.page_token,
         )
