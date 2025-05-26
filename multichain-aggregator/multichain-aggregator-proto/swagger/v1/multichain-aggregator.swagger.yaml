@@ -21,7 +21,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: q
           in: query
@@ -53,7 +53,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: only_active
           in: query
@@ -72,7 +72,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: q
           in: query
@@ -102,7 +102,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       tags:
         - MultichainAggregatorService
   /api/v1/dapps/chains:
@@ -116,7 +116,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       tags:
         - MultichainAggregatorService
   /api/v1/domains:
@@ -130,7 +130,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: q
           in: query
@@ -158,13 +158,79 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: body
           in: body
           required: true
           schema:
             $ref: '#/definitions/v1BatchImportRequest'
+      tags:
+        - MultichainAggregatorService
+  /api/v1/interop/messages:
+    get:
+      operationId: MultichainAggregatorService_ListInteropMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListInteropMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: init_chain_id
+          in: query
+          required: false
+          type: string
+        - name: relay_chain_id
+          in: query
+          required: false
+          type: string
+        - name: nonce
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: address
+          description: Address of the sender or receiver.
+          in: query
+          required: false
+          type: string
+        - name: direction
+          description: 'Message direction: "from" or "to". Valid only when address is provided.'
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/interop/messages/count:
+    get:
+      operationId: MultichainAggregatorService_CountInteropMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CountInteropMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: chain_id
+          in: query
+          required: false
+          type: string
       tags:
         - MultichainAggregatorService
   /api/v1/nfts:
@@ -178,7 +244,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: q
           in: query
@@ -210,7 +276,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: q
           in: query
@@ -229,7 +295,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: q
           in: query
@@ -264,7 +330,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: q
           in: query
@@ -299,7 +365,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/rpcStatus'
+            $ref: '#/definitions/googlerpcStatus'
       parameters:
         - name: service
           in: query
@@ -343,6 +409,13 @@ definitions:
         type: string
       hash_type:
         $ref: '#/definitions/v1HashType'
+  BatchImportRequestInteropMessageImport:
+    type: object
+    properties:
+      init:
+        $ref: '#/definitions/InteropMessageImportInit'
+      relay:
+        $ref: '#/definitions/InteropMessageImportRelay'
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -352,6 +425,49 @@ definitions:
       - SERVICE_UNKNOWN
     default: UNKNOWN
     description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  InteropMessageImportInit:
+    type: object
+    properties:
+      sender_address_hash:
+        type: string
+      target_address_hash:
+        type: string
+      nonce:
+        type: string
+        format: int64
+      init_chain_id:
+        type: string
+      init_transaction_hash:
+        type: string
+      timestamp:
+        type: string
+        format: int64
+      relay_chain_id:
+        type: string
+      payload:
+        type: string
+      transfer_token_address_hash:
+        type: string
+      transfer_from_address_hash:
+        type: string
+      transfer_to_address_hash:
+        type: string
+      transfer_amount:
+        type: string
+  InteropMessageImportRelay:
+    type: object
+    properties:
+      nonce:
+        type: string
+        format: int64
+      init_chain_id:
+        type: string
+      relay_chain_id:
+        type: string
+      relay_transaction_hash:
+        type: string
+      failed:
+        type: boolean
   QuickSearchResponseChainBlockNumber:
     type: object
     properties:
@@ -361,6 +477,19 @@ definitions:
       block_number:
         type: string
         format: uint64
+  googlerpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
   protobufAny:
     type: object
     properties:
@@ -379,19 +508,6 @@ definitions:
       The JSON representation for `NullValue` is JSON `null`.
 
        - NULL_VALUE: Null value.
-  rpcStatus:
-    type: object
-    properties:
-      code:
-        type: integer
-        format: int32
-      message:
-        type: string
-      details:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/protobufAny'
   v1Address:
     type: object
     properties:
@@ -433,6 +549,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/BatchImportRequestHashImport'
+      interop_messages:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestInteropMessageImport'
       api_key:
         type: string
   v1BatchImportResponse:
@@ -451,6 +572,12 @@ definitions:
         type: string
       icon_url:
         type: string
+  v1CountInteropMessagesResponse:
+    type: object
+    properties:
+      count:
+        type: string
+        format: uint64
   v1Domain:
     type: object
     properties:
@@ -494,6 +621,39 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1InteropMessage:
+    type: object
+    properties:
+      sender_address_hash:
+        type: string
+      target_address_hash:
+        type: string
+      nonce:
+        type: string
+        format: int64
+      init_chain_id:
+        type: string
+      init_transaction_hash:
+        type: string
+      timestamp:
+        type: string
+      relay_chain_id:
+        type: string
+      relay_transaction_hash:
+        type: string
+      payload:
+        type: string
+      failed:
+        type: boolean
+      status:
+        $ref: '#/definitions/v1InteropMessageStatus'
+  v1InteropMessageStatus:
+    type: string
+    enum:
+      - STATUS_PENDING
+      - STATUS_FAILED
+      - STATUS_SUCCESS
+    default: STATUS_PENDING
   v1ListAddressesResponse:
     type: object
     properties:
@@ -543,6 +703,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Domain'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListInteropMessagesResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1InteropMessage'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListNftsResponse:

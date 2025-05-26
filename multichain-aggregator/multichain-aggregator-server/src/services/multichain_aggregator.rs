@@ -7,6 +7,7 @@ use blockscout_service_launcher::database::ReadWriteRepo;
 use multichain_aggregator_logic::{
     clients::dapp,
     error::{ParseError, ServiceError},
+    repository::interop_messages,
     services::{api_key_manager::ApiKeyManager, chains, import, search},
     types,
 };
@@ -414,6 +415,56 @@ impl MultichainAggregatorService for MultichainAggregator {
                 page_size,
             }),
         }))
+    }
+
+    async fn list_interop_messages(
+        &self,
+        request: Request<ListInteropMessagesRequest>,
+    ) -> Result<Response<ListInteropMessagesResponse>, Status> {
+        let inner = request.into_inner();
+
+        let init_chain_id = inner.init_chain_id.map(parse_query).transpose()?;
+        let relay_chain_id = inner.relay_chain_id.map(parse_query).transpose()?;
+        let address = inner.address.map(parse_query).transpose()?;
+        let direction = inner.direction.map(parse_query).transpose()?;
+
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+
+        let (interop_messages, next_page_token) = search::search_interop_messages(
+            self.repo.read_db(),
+            init_chain_id,
+            relay_chain_id,
+            address,
+            direction,
+            inner.nonce,
+            page_size as u64,
+            page_token,
+        )
+        .await?;
+
+        Ok(Response::new(ListInteropMessagesResponse {
+            items: interop_messages.into_iter().map(|i| i.into()).collect(),
+            next_page_params: next_page_token.map(|(t, h)| Pagination {
+                page_token: format!("{},{}", t, h),
+                page_size,
+            }),
+        }))
+    }
+
+    async fn count_interop_messages(
+        &self,
+        request: Request<CountInteropMessagesRequest>,
+    ) -> Result<Response<CountInteropMessagesResponse>, Status> {
+        let inner = request.into_inner();
+
+        let chain_id = parse_query(inner.chain_id)?;
+
+        let count = interop_messages::count(self.repo.read_db(), chain_id)
+            .await
+            .map_err(ServiceError::from)?;
+
+        Ok(Response::new(CountInteropMessagesResponse { count }))
     }
 }
 

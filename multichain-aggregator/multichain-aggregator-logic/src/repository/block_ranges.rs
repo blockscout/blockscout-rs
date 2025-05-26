@@ -63,7 +63,7 @@ pub async fn list_matching_block_ranges_paginated<C>(
 where
     C: ConnectionTrait,
 {
-    let mut c = Entity::find()
+    let c = Entity::find()
         .apply_if(chain_ids, |q, chain_ids| {
             if !chain_ids.is_empty() {
                 q.filter(Column::ChainId.is_in(chain_ids))
@@ -75,9 +75,5 @@ where
         .filter(Column::MaxBlockNumber.gte(block_number))
         .cursor_by(Column::ChainId);
 
-    if let Some(page_token) = page_token {
-        c.after(page_token);
-    }
-
-    paginate_cursor(db, c, page_size, |u| u.chain_id).await
+    paginate_cursor(db, c, page_size, page_token, |u| u.chain_id).await
 }

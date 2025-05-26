@@ -20,6 +20,10 @@ service MultichainAggregatorService {
   rpc ListDappCategories(ListDappCategoriesRequest)
       returns (ListDappCategoriesResponse) {}
   rpc ListDomains(ListDomainsRequest) returns (ListDomainsResponse) {}
+  rpc ListInteropMessages(ListInteropMessagesRequest)
+      returns (ListInteropMessagesResponse) {}
+  rpc CountInteropMessages(CountInteropMessagesRequest)
+      returns (CountInteropMessagesResponse) {}
 }
 
 enum TokenType {
@@ -95,6 +99,26 @@ message Domain {
   google.protobuf.Struct protocol = 4;
 }
 
+message InteropMessage {
+  enum Status {
+    STATUS_PENDING = 0;
+    STATUS_FAILED = 1;
+    STATUS_SUCCESS = 2;
+  }
+
+  optional string sender_address_hash = 1;
+  optional string target_address_hash = 2;
+  int64 nonce = 3;
+  string init_chain_id = 4;
+  optional string init_transaction_hash = 5;
+  optional string timestamp = 6;
+  string relay_chain_id = 7;
+  optional string relay_transaction_hash = 8;
+  optional string payload = 9;
+  optional bool failed = 10;
+  Status status = 11;
+}
+
 message BatchImportRequest {
   message AddressImport {
     string hash = 1;
@@ -117,11 +141,42 @@ message BatchImportRequest {
     uint64 max_block_number = 2;
   }
 
+  message InteropMessageImport {
+    message Init {
+      string sender_address_hash = 1;
+      string target_address_hash = 2;
+      int64 nonce = 3;
+      string init_chain_id = 4;
+      string init_transaction_hash = 5;
+      int64 timestamp = 6;
+      string relay_chain_id = 7;
+      string payload = 8;
+      optional string transfer_token_address_hash = 9;
+      optional string transfer_from_address_hash = 10;
+      optional string transfer_to_address_hash = 11;
+      optional string transfer_amount = 12;
+    }
+
+    message Relay {
+      int64 nonce = 1;
+      string init_chain_id = 2;
+      string relay_chain_id = 3;
+      string relay_transaction_hash = 4;
+      bool failed = 5;
+    }
+
+    oneof message {
+      Init init = 1;
+      Relay relay = 2;
+    }
+  }
+
   string chain_id = 1;
   repeated AddressImport addresses = 2;
   repeated BlockRangeImport block_ranges = 3;
   repeated HashImport hashes = 4;
-  string api_key = 5;
+  repeated InteropMessageImport interop_messages = 5;
+  string api_key = 6;
 }
 
 message BatchImportResponse { string status = 1; }
@@ -199,13 +254,9 @@ message Chain {
   string icon_url = 4;
 }
 
-message ListChainsRequest {
-  optional bool only_active = 1;
-}
+message ListChainsRequest { optional bool only_active = 1; }
 
-message ListChainsResponse {
-  repeated Chain items = 1;
-}
+message ListChainsResponse { repeated Chain items = 1; }
 
 message ListDappsRequest {
   optional string q = 1;
@@ -213,21 +264,15 @@ message ListDappsRequest {
   repeated string chain_ids = 3;
 }
 
-message ListDappsResponse {
-  repeated MarketplaceDapp items = 1;
-}
+message ListDappsResponse { repeated MarketplaceDapp items = 1; }
 
 message ListDappChainsRequest {}
 
-message ListDappChainsResponse {
-  repeated Chain items = 1;
-}
+message ListDappChainsResponse { repeated Chain items = 1; }
 
 message ListDappCategoriesRequest {}
 
-message ListDappCategoriesResponse {
-  repeated string items = 1;
-}
+message ListDappCategoriesResponse { repeated string items = 1; }
 
 message ListDomainsRequest {
   string q = 1;
@@ -239,3 +284,24 @@ message ListDomainsResponse {
   repeated Domain items = 1;
   Pagination next_page_params = 2;
 }
+
+message ListInteropMessagesRequest {
+  optional string init_chain_id = 1;
+  optional string relay_chain_id = 2;
+  optional int64 nonce = 3;
+  // Address of the sender or receiver.
+  optional string address = 4;
+  // Message direction: "from" or "to". Valid only when address is provided.
+  optional string direction = 5;
+  optional uint32 page_size = 6;
+  optional string page_token = 7;
+}
+
+message ListInteropMessagesResponse {
+  repeated InteropMessage items = 1;
+  Pagination next_page_params = 2;
+}
+
+message CountInteropMessagesRequest { string chain_id = 1; }
+
+message CountInteropMessagesResponse { uint64 count = 1; }
