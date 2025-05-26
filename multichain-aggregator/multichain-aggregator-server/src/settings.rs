@@ -43,6 +43,8 @@ pub struct ServiceSettings {
     pub fetch_chains: bool,
     #[serde(default = "default_bens_protocols")]
     pub bens_protocols: Option<Vec<String>>,
+    #[serde(default = "default_domain_primary_chain_id")]
+    pub domain_primary_chain_id: i64,
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     #[serde(default = "default_marketplace_enabled_cache_update_interval")]
     pub marketplace_enabled_cache_update_interval: time::Duration,
@@ -109,6 +111,7 @@ impl Settings {
                 quick_search_chains: default_quick_search_chains(),
                 fetch_chains: false,
                 bens_protocols: default_bens_protocols(),
+                domain_primary_chain_id: default_domain_primary_chain_id(),
                 marketplace_enabled_cache_update_interval:
                     default_marketplace_enabled_cache_update_interval(),
                 marketplace_enabled_cache_fetch_concurrency:
@@ -134,6 +137,10 @@ fn default_quick_search_chains() -> Vec<i64> {
 
 fn default_bens_protocols() -> Option<Vec<String>> {
     Some(vec!["ens".to_string()])
+}
+
+fn default_domain_primary_chain_id() -> i64 {
+    1
 }
 
 fn default_marketplace_enabled_cache_update_interval() -> time::Duration {
