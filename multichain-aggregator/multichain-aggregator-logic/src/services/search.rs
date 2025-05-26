@@ -69,41 +69,43 @@ pub async fn search_addresses(
         return Ok((vec![], None));
     }
 
-    let parse_address_query = |query: &str| match alloy_primitives::Address::from_str(query) {
-        Ok(address) => (vec![address], None),
-        Err(_) => (vec![], Some(query.to_string())),
-    };
-
     let (addresses, contract_name_query) = match config {
         AddressSearchConfig::NonTokenSearch {
             bens_protocols,
             bens_domain_lookup_limit,
         } => {
-            if domain_name_regex().is_match(&query) {
-                let (domains, _) = search_domains(
+            if let Ok(address) = alloy_primitives::Address::from_str(&query) {
+                (vec![address], None)
+            } else if domain_name_regex().is_match(&query) {
+                let addresses = search_domains(
                     bens_client,
                     query.clone(),
                     bens_protocols,
                     bens_domain_lookup_limit,
                     None,
                 )
-                .await?;
-                let addresses = domains
-                    .iter()
-                    .map(|d| d.address)
-                    .collect::<HashSet<_>>()
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                // Ensure that domain resolves to at least one address
-                if addresses.is_empty() {
-                    return Ok((vec![], None));
-                }
-                (addresses, None)
+                .await
+                .map(|(domains, _)| {
+                    domains
+                        .iter()
+                        .map(|d| d.address)
+                        .collect::<HashSet<_>>()
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+                (addresses, Some(query.to_string()))
             } else {
-                parse_address_query(&query)
+                (vec![], Some(query.to_string()))
             }
         }
-        AddressSearchConfig::NFTSearch => parse_address_query(&query),
+        AddressSearchConfig::NFTSearch => {
+            if let Ok(address) = alloy_primitives::Address::from_str(&query) {
+                (vec![address], None)
+            } else {
+                (vec![], Some(query.to_string()))
+            }
+        }
     };
 
     let (addresses, page_token) = addresses::list(
@@ -647,6 +649,7 @@ mod tests {
             vec![
                 SearchTerm::TokenInfo("0x00".to_string()),
                 SearchTerm::ContractName("0x00".to_string()),
+                SearchTerm::Domain("0x00".to_string()),
                 SearchTerm::Dapp("0x00".to_string()),
             ]
         );
@@ -657,6 +660,7 @@ mod tests {
                 SearchTerm::BlockNumber(1234),
                 SearchTerm::TokenInfo("1234".to_string()),
                 SearchTerm::ContractName("1234".to_string()),
+                SearchTerm::Domain("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
             ]
         );
