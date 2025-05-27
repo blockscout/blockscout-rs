@@ -30,16 +30,21 @@ const MIN_QUERY_LENGTH: usize = 3;
 const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
 const QUICK_SEARCH_ENTITY_LIMIT: usize = 5;
 
-fn domain_name_regex() -> &'static Regex {
+fn general_domain_name_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"^\b\w{3,}\b").unwrap())
+}
+
+fn domain_name_with_tld_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^\b\w{3,}\.\w+$").unwrap())
 }
 
 pub enum AddressSearchConfig<'a> {
     NFTSearch {
         domain_primary_chain_id: ChainId,
     },
-    NonTokenSearch {
+    GeneralSearch {
         bens_protocols: Option<&'a [String]>,
         bens_domain_lookup_limit: u32,
         domain_primary_chain_id: ChainId,
@@ -52,7 +57,7 @@ impl AddressSearchConfig<'_> {
             AddressSearchConfig::NFTSearch { .. } => {
                 Some(vec![TokenType::Erc721, TokenType::Erc1155])
             }
-            AddressSearchConfig::NonTokenSearch { .. } => Some(vec![]),
+            AddressSearchConfig::GeneralSearch { .. } => None,
         }
     }
 
@@ -62,7 +67,7 @@ impl AddressSearchConfig<'_> {
                 domain_primary_chain_id,
                 ..
             } => *domain_primary_chain_id,
-            AddressSearchConfig::NonTokenSearch {
+            AddressSearchConfig::GeneralSearch {
                 domain_primary_chain_id,
                 ..
             } => *domain_primary_chain_id,
@@ -70,6 +75,8 @@ impl AddressSearchConfig<'_> {
     }
 }
 
+#[allow(clippy::type_complexity)]
+#[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn search_addresses(
     db: &DatabaseConnection,
     bens_client: &HttpApiClient,
@@ -84,15 +91,21 @@ pub async fn search_addresses(
     }
 
     let (addresses, contract_name_query) = match config {
-        AddressSearchConfig::NonTokenSearch {
+        AddressSearchConfig::GeneralSearch {
             bens_protocols,
             bens_domain_lookup_limit,
             domain_primary_chain_id,
         } => {
+            // 1. If query is an address then use it directly
+            // 2. If query matches an explicit domain name with TLD (e.g. "name.eth") then
+            // lookup the domain name and return the addresses associated with it
+            // 3. Otherwise, fallback to a contract name search
+            // TODO: support joint paginated search for domain names without TLD and contract names;
+            // we need to first handle all pages for domains and then switch to contract names
             if let Ok(address) = alloy_primitives::Address::from_str(&query) {
                 (vec![address], None)
-            } else if domain_name_regex().is_match(&query) {
-                let addresses = search_domains(
+            } else if domain_name_with_tld_regex().is_match(&query) {
+                let domains = search_domains(
                     bens_client,
                     query.clone(),
                     bens_protocols,
@@ -101,16 +114,27 @@ pub async fn search_addresses(
                     None,
                 )
                 .await
-                .map(|(domains, _)| {
-                    domains
-                        .iter()
-                        .map(|d| d.address)
-                        .collect::<HashSet<_>>()
-                        .into_iter()
-                        .collect::<Vec<_>>()
+                .map(|(d, _)| d)
+                .inspect_err(|err| {
+                    tracing::error!(
+                        err = ?err,
+                        "failed to lookup domains"
+                    );
                 })
                 .unwrap_or_default();
-                (addresses, Some(query.to_string()))
+
+                let addresses = domains
+                    .iter()
+                    .map(|d| d.address)
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>();
+
+                if addresses.is_empty() {
+                    (vec![], Some(query.to_string()))
+                } else {
+                    (addresses, None)
+                }
             } else {
                 (vec![], Some(query.to_string()))
             }
@@ -501,13 +525,8 @@ impl SearchTerm {
                     })
                     .cloned()
                     .collect::<Vec<_>>();
-                let non_token_addresses = addresses
-                    .iter()
-                    .filter(|a| a.token_type.is_none())
-                    .cloned()
-                    .collect::<Vec<_>>();
 
-                results.addresses.extend(non_token_addresses);
+                results.addresses.extend(addresses);
                 results.nfts.extend(nfts);
             }
             SearchTerm::BlockNumber(block_number) => {
@@ -639,7 +658,7 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
         terms.push(SearchTerm::TokenInfo(query.to_string()));
         terms.push(SearchTerm::ContractName(query.to_string()));
 
-        if domain_name_regex().is_match(query) {
+        if general_domain_name_regex().is_match(query) {
             terms.push(SearchTerm::Domain(query.to_string()));
         }
     }
@@ -726,9 +745,14 @@ mod tests {
 
     #[test]
     fn test_domain_name_regex() {
-        assert!(domain_name_regex().is_match("test"));
-        assert!(domain_name_regex().is_match("test.eth"));
-        assert!(!domain_name_regex().is_match("te"));
-        assert!(!domain_name_regex().is_match("te.eth"));
+        assert!(general_domain_name_regex().is_match("test"));
+        assert!(general_domain_name_regex().is_match("test.eth"));
+        assert!(!general_domain_name_regex().is_match("te"));
+        assert!(!general_domain_name_regex().is_match("te.eth"));
+
+        assert!(domain_name_with_tld_regex().is_match("test.eth"));
+        assert!(!domain_name_with_tld_regex().is_match("test"));
+        assert!(!domain_name_with_tld_regex().is_match("te."));
+        assert!(!domain_name_with_tld_regex().is_match("te.eth"));
     }
 }

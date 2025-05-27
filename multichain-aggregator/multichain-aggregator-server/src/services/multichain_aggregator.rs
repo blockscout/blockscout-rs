@@ -176,7 +176,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
             &self.bens_client,
-            search::AddressSearchConfig::NonTokenSearch {
+            search::AddressSearchConfig::GeneralSearch {
                 bens_protocols: self.bens_protocols.as_deref(),
                 domain_primary_chain_id: self.domain_primary_chain_id,
                 // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
