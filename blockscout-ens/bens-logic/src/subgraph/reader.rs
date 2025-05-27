@@ -631,24 +631,24 @@ mod tests {
         };
 
         let result = reader
-        .lookup_domain_name(LookupDomainInput {
-            network_id: DEFAULT_CHAIN_ID,
-            name: Some("Vitalik".to_string()),
-            only_active: false,
-            pagination: Default::default(),
-            maybe_filter_protocols: None,
-        })
-        .await
-        .expect("failed to get vitalik domains");
-    assert_eq!(result.next_page_token, None);
-    let result = result.items;
-    assert_eq!(
-        vec![Some("vitalik.eth")],
-        result
-            .iter()
-            .map(|output| output.domain.name.as_deref())
-            .collect::<Vec<_>>(),
-    );
+            .lookup_domain_name(LookupDomainInput {
+                network_id: DEFAULT_CHAIN_ID,
+                name: Some("Vitalik".to_string()),
+                only_active: false,
+                pagination: Default::default(),
+                maybe_filter_protocols: None,
+            })
+            .await
+            .expect("failed to get vitalik domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
+        assert_eq!(
+            vec![Some("vitalik.eth")],
+            result
+                .iter()
+                .map(|output| output.domain.name.as_deref())
+                .collect::<Vec<_>>(),
+        );
 
         let result = reader
             .lookup_domain_name(LookupDomainInput {
