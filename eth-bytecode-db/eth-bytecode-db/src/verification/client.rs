@@ -1,10 +1,11 @@
+use blockscout_service_launcher::database::ReadWriteRepo;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Client {
     pub db_client: Arc<DatabaseConnection>,
-    pub alliance_db_client: Option<Arc<DatabaseConnection>>,
+    pub alliance_db_client: Option<Arc<ReadWriteRepo>>,
     pub verifier_http_client: smart_contract_verifier_proto::http_client::Client,
 }
 
@@ -46,11 +47,11 @@ impl Client {
         })
     }
 
-    pub fn with_alliance_db(self, alliance_db_client: DatabaseConnection) -> Self {
+    pub fn with_alliance_db(self, alliance_db_client: ReadWriteRepo) -> Self {
         self.with_alliance_db_arc(Arc::new(alliance_db_client))
     }
 
-    pub fn with_alliance_db_arc(mut self, alliance_db_client: Arc<DatabaseConnection>) -> Self {
+    pub fn with_alliance_db_arc(mut self, alliance_db_client: Arc<ReadWriteRepo>) -> Self {
         self.alliance_db_client = Some(alliance_db_client);
         self
     }

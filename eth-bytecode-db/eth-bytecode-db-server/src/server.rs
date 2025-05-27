@@ -14,11 +14,11 @@ use crate::{
     },
     settings::Settings,
 };
+use anyhow::Context;
 use blockscout_service_launcher::{database, launcher, launcher::LaunchSettings, tracing};
 use eth_bytecode_db::verification::Client;
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2::verifier_alliance_actix::route_verifier_alliance;
 use migration::Migrator;
-use sea_orm::ConnectOptions;
 use std::{collections::HashSet, sync::Arc};
 
 const SERVICE_NAME: &str = "eth_bytecode_db";
@@ -111,12 +111,29 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     )
     .await?;
     if settings.verifier_alliance_database.enabled {
-        let alliance_db_connection = {
-            let mut connect_options = ConnectOptions::new(settings.verifier_alliance_database.url);
-            connect_options.sqlx_logging_level(::tracing::log::LevelFilter::Debug);
-            sea_orm::Database::connect(connect_options).await?
+        let alliance_db_main_settings = database::DatabaseSettings {
+            connect: database::DatabaseConnectSettings::Url(
+                settings.verifier_alliance_database.url,
+            ),
+            connect_options: database::DatabaseConnectOptionsSettings {
+                sqlx_logging_level: ::tracing::log::LevelFilter::Debug,
+                ..Default::default()
+            },
+            // Important!!!: never try to create verifier alliance database or run migrations on it,
+            // as the database is shared between different explorers and is managed from outside.
+            create_database: false,
+            run_migrations: false,
         };
-        client = client.with_alliance_db(alliance_db_connection);
+
+        // As no migrations should actually be made, we can use noop migrator which does nothing.
+        let alliance_db_read_write_repo = database::ReadWriteRepo::new::<noop_migrator::Migrator>(
+            &alliance_db_main_settings,
+            settings.verifier_alliance_replica_database.as_ref(),
+        )
+        .await
+        .context("alliance db read-write repo initialization")?;
+
+        client = client.with_alliance_db(alliance_db_read_write_repo);
     }
 
     let sourcify_client = sourcify::ClientBuilder::default()
@@ -164,4 +181,17 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     };
 
     launcher::launch(launch_settings, http_router, grpc_router).await
+}
+
+// May be moved to `blockscout_service_launcher::database` later
+mod noop_migrator {
+    use migration::{MigrationTrait, MigratorTrait};
+
+    pub struct Migrator;
+    #[async_trait::async_trait]
+    impl MigratorTrait for Migrator {
+        fn migrations() -> Vec<Box<dyn MigrationTrait>> {
+            vec![]
+        }
+    }
 }

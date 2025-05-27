@@ -23,7 +23,7 @@ pub async fn stats(client: Client) -> Result<Option<Stats>, Error> {
             .column_as(verified_contracts::Column::Id.count(), "count")
             .group_by(verified_contracts::Column::CreatedBy)
             .into_model::<ProviderContractsCount>()
-            .all(alliance_db_client.as_ref())
+            .all(alliance_db_client.read_db())
             .await?
             .into_iter()
             .map(|value| (value.created_by, value.count as u64))
