@@ -11,13 +11,13 @@ use crate::{
 use amplify::Wrapper;
 use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
+use blockscout_service_launcher::database::ReadWriteRepo;
 use eth_bytecode_db::{
     search::{self},
     verification,
     verification::sourcify_from_etherscan,
 };
 use ethers::types::H256;
-use sea_orm::DatabaseConnection;
 use std::{str::FromStr, sync::Arc};
 use tracing::instrument;
 
@@ -342,7 +342,7 @@ impl DatabaseService {
 
     async fn search_alliance_sources_internal(
         &self,
-        alliance_db_client: Arc<DatabaseConnection>,
+        alliance_db_client: Arc<ReadWriteRepo>,
         chain_id: &str,
         contract_address: &str,
     ) -> Result<Vec<Source>, tonic::Status> {
@@ -355,7 +355,7 @@ impl DatabaseService {
             .0;
 
         let sources = search::alliance_db_find_contract(
-            alliance_db_client.as_ref(),
+            alliance_db_client.read_db(),
             chain_id,
             contract_address.to_vec(),
         )

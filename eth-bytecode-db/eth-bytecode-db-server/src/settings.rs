@@ -1,4 +1,5 @@
 use blockscout_service_launcher::{
+    database::ReplicaDatabaseSettings,
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
@@ -24,6 +25,10 @@ pub struct Settings {
     pub sourcify: SourcifySettings,
     #[serde(default)]
     pub verifier_alliance_database: VerifierAllianceDatabaseSettings,
+    // Optional verifier alliance database read-only replica.
+    // If provided, all search queries will be redirected to this database.
+    #[serde(default)]
+    pub verifier_alliance_replica_database: Option<ReplicaDatabaseSettings>,
 
     #[serde(default)]
     pub authorized_keys: HashMap<String, ApiKey>,
@@ -108,6 +113,7 @@ impl Settings {
             },
             sourcify: Default::default(),
             verifier_alliance_database: Default::default(),
+            verifier_alliance_replica_database: Default::default(),
             authorized_keys: Default::default(),
         }
     }

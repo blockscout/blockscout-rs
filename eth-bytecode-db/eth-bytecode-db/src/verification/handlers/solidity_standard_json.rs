@@ -52,7 +52,10 @@ pub async fn verify(
     );
 
     let verifier_alliance_db_action = VerifierAllianceDbAction::from_db_client_and_metadata(
-        client.alliance_db_client.as_deref(),
+        client
+            .alliance_db_client
+            .as_ref()
+            .map(|client| client.main_db()),
         verification_metadata.clone(),
         is_authorized,
     );

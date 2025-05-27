@@ -79,7 +79,7 @@ pub async fn import_solidity_standard_json(
 
     let result = super::process_batch_import_response(
         client.db_client.as_ref(),
-        client.alliance_db_client.as_ref().unwrap(),
+        client.alliance_db_client.unwrap().main_db(),
         verifier_response,
         deployment_data,
     )
@@ -150,7 +150,7 @@ pub async fn import_solidity_multi_part(
 
     let result = super::process_batch_import_response(
         client.db_client.as_ref(),
-        client.alliance_db_client.as_ref().unwrap(),
+        client.alliance_db_client.unwrap().main_db(),
         verifier_response,
         deployment_data,
     )
