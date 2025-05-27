@@ -75,6 +75,7 @@ impl AddressSearchConfig<'_> {
     }
 }
 
+#[allow(clippy::type_complexity)]
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn search_addresses(
     db: &DatabaseConnection,
