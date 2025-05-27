@@ -39,7 +39,7 @@ pub enum AddressSearchConfig<'a> {
     NFTSearch {
         domain_primary_chain_id: ChainId,
     },
-    NonTokenSearch {
+    GeneralSearch {
         bens_protocols: Option<&'a [String]>,
         bens_domain_lookup_limit: u32,
         domain_primary_chain_id: ChainId,
@@ -52,7 +52,7 @@ impl AddressSearchConfig<'_> {
             AddressSearchConfig::NFTSearch { .. } => {
                 Some(vec![TokenType::Erc721, TokenType::Erc1155])
             }
-            AddressSearchConfig::NonTokenSearch { .. } => Some(vec![]),
+            AddressSearchConfig::GeneralSearch { .. } => None,
         }
     }
 
@@ -62,7 +62,7 @@ impl AddressSearchConfig<'_> {
                 domain_primary_chain_id,
                 ..
             } => *domain_primary_chain_id,
-            AddressSearchConfig::NonTokenSearch {
+            AddressSearchConfig::GeneralSearch {
                 domain_primary_chain_id,
                 ..
             } => *domain_primary_chain_id,
@@ -84,7 +84,7 @@ pub async fn search_addresses(
     }
 
     let (addresses, contract_name_query) = match config {
-        AddressSearchConfig::NonTokenSearch {
+        AddressSearchConfig::GeneralSearch {
             bens_protocols,
             bens_domain_lookup_limit,
             domain_primary_chain_id,
@@ -501,13 +501,8 @@ impl SearchTerm {
                     })
                     .cloned()
                     .collect::<Vec<_>>();
-                let non_token_addresses = addresses
-                    .iter()
-                    .filter(|a| a.token_type.is_none())
-                    .cloned()
-                    .collect::<Vec<_>>();
 
-                results.addresses.extend(non_token_addresses);
+                results.addresses.extend(addresses);
                 results.nfts.extend(nfts);
             }
             SearchTerm::BlockNumber(block_number) => {
