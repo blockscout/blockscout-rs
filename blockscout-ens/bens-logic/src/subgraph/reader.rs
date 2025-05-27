@@ -269,7 +269,7 @@ impl SubgraphReader {
     ) -> Result<PaginatedList<LookupOutput>, SubgraphReadError> {
         let find_domains_input = if let Some(name) = input.name {
             match self.protocoler.lookup_names_options_in_network(
-                &name,
+                &name.to_lowercase(),
                 input.network_id,
                 input.maybe_filter_protocols,
             ) {
@@ -629,6 +629,26 @@ mod tests {
             page_size: 2,
             ..Default::default()
         };
+
+        let result = reader
+            .lookup_domain_name(LookupDomainInput {
+                network_id: DEFAULT_CHAIN_ID,
+                name: Some("Vitalik".to_string()),
+                only_active: false,
+                pagination: Default::default(),
+                maybe_filter_protocols: None,
+            })
+            .await
+            .expect("failed to get vitalik domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
+        assert_eq!(
+            vec![Some("vitalik.eth")],
+            result
+                .iter()
+                .map(|output| output.domain.name.as_deref())
+                .collect::<Vec<_>>(),
+        );
 
         let result = reader
             .lookup_domain_name(LookupDomainInput {
