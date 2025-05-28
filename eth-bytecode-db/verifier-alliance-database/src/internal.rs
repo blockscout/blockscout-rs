@@ -276,9 +276,7 @@ pub async fn retrieve_contract_deployment<C: ConnectionTrait>(
     });
 
     contract_deployments::Entity::find()
-        .filter(
-            contract_deployments::Column::ChainId.eq(Decimal::from(contract_deployment.chain_id)),
-        )
+        .filter(contract_deployments::Column::ChainId.eq(contract_deployment.chain_id))
         .filter(contract_deployments::Column::Address.eq(contract_deployment.address))
         .filter(contract_deployments::Column::TransactionHash.eq(transaction_hash))
         .one(database_connection)
@@ -292,7 +290,7 @@ pub async fn retrieve_contract_deployments_by_chain_id_and_address<C: Connection
     contract_address: Vec<u8>,
 ) -> Result<Vec<contract_deployments::Model>, Error> {
     contract_deployments::Entity::find()
-        .filter(contract_deployments::Column::ChainId.eq(Decimal::from(chain_id)))
+        .filter(contract_deployments::Column::ChainId.eq(chain_id))
         .filter(contract_deployments::Column::Address.eq(contract_address))
         .all(database_connection)
         .await

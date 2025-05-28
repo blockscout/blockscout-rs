@@ -254,7 +254,7 @@ impl VerifierAllianceDatabaseChecker for TestCase {
         db: &DatabaseConnection,
     ) -> Option<contract_deployments::Model> {
         contract_deployments::Entity::find()
-            .filter(contract_deployments::Column::ChainId.eq(Decimal::from(self.chain_id)))
+            .filter(contract_deployments::Column::ChainId.eq(self.chain_id))
             .filter(contract_deployments::Column::Address.eq(self.address.to_vec()))
             .filter(
                 contract_deployments::Column::TransactionHash.eq(self.transaction_hash.to_vec()),
