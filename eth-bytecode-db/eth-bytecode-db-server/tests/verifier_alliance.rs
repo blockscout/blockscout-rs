@@ -329,7 +329,7 @@
 //     let mut query = contract_deployments::Entity::find();
 //     if let Some(test_case) = test_case {
 //         query = query
-//             .filter(contract_deployments::Column::ChainId.eq(Decimal::from(test_case.chain_id)))
+//             .filter(contract_deployments::Column::ChainId.eq(test_case.chain_id))
 //             .filter(contract_deployments::Column::Address.eq(test_case.address.to_vec()))
 //             .filter(
 //                 contract_deployments::Column::TransactionHash
