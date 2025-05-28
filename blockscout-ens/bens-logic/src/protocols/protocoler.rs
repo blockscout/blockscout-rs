@@ -312,15 +312,9 @@ impl Protocoler {
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        let clean_name = name.trim_end_matches('.');
+        let clean = name.trim_end_matches('.');
 
-        if DomainName::new(clean_name, None)
-            .map(|d| d.level_gt_tld())
-            .unwrap_or(false)
-        {
-            return self.fetch_domain_options(clean_name, network_id, maybe_filter);
-        }
-        let tlds = self
+        let supported_tlds: Vec<Tld> = self
             .networks
             .get(&network_id)
             .ok_or_else(|| ProtocolError::NetworkNotFound(network_id))?
@@ -328,13 +322,19 @@ impl Protocoler {
             .iter()
             .filter_map(|proto_name| self.protocols.get(proto_name))
             .flat_map(|proto| proto.info.tld_list.iter().cloned())
-            .collect::<Vec<_>>();
+            .collect();
+
+        if let Ok(domain) = DomainName::new(clean, None) {
+            if domain.level_gt_tld() && supported_tlds.contains(&domain.tld) {
+                return self.fetch_domain_options(&domain.name, network_id, maybe_filter);
+            }
+        }
 
         let mut all = Vec::new();
-        for tld in tlds {
-            let fullname = format!("{}.{}", clean_name, tld.0);
+        for tld in &supported_tlds {
+            let fqdn = format!("{}.{}", clean, tld.0);
             let mut opts = self
-                .fetch_domain_options(&fullname, network_id, maybe_filter.clone())
+                .fetch_domain_options(&fqdn, network_id, maybe_filter.clone())
                 .unwrap_or_default();
             all.append(&mut opts);
             if all.len() >= MAX_NETWORKS_LIMIT {
@@ -344,7 +344,7 @@ impl Protocoler {
 
         if all.is_empty() {
             Err(ProtocolError::InvalidName {
-                name: clean_name.to_string(),
+                name: clean.to_string(),
                 reason: "No valid TLDs".to_string(),
             })
         } else {

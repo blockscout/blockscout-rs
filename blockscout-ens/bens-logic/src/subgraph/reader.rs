@@ -669,6 +669,106 @@ mod tests {
                 .map(|output| output.domain.name.as_deref())
                 .collect::<Vec<_>>(),
         );
+
+        let pagination_for_domain = DomainPaginationInput {
+            page_size: 2,
+            ..Default::default()
+        };
+        let result = reader
+            .lookup_domain_name(LookupDomainInput {
+                network_id: 1,
+                name: Some("00-01".to_string()),
+                only_active: false,
+                pagination: pagination_for_domain,
+                maybe_filter_protocols: None,
+            })
+            .await
+            .expect("failed to get 00-01 domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
+        println!("result: {:?}", result);
+        assert_eq!(
+            vec![Some("00-01.eth")],
+            result
+                .iter()
+                .map(|output| output.domain.name.as_deref())
+                .collect::<Vec<_>>(),
+        );
+
+        let pagination_for_domain = DomainPaginationInput {
+            page_size: 2,
+            ..Default::default()
+        };
+        let result = reader
+            .lookup_domain_name(LookupDomainInput {
+                network_id: 1,
+                name: Some("zt-c7c8172af17ab662.zkbtcnetwork".to_string()),
+                only_active: false,
+                pagination: pagination_for_domain,
+                maybe_filter_protocols: None,
+            })
+            .await
+            .expect("failed to get zt-c7c8172af17ab662.zkbtcnetwork domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
+        println!("result: {:?}", result);
+        assert_eq!(
+            vec![Some("zt-c7c8172af17ab662.zkbtcnetwork.eth")],
+            result
+                .iter()
+                .map(|output| output.domain.name.as_deref())
+                .collect::<Vec<_>>(),
+        );
+
+        let pagination_for_domain = DomainPaginationInput {
+            page_size: 2,
+            ..Default::default()
+        };
+        let result = reader
+            .lookup_domain_name(LookupDomainInput {
+                network_id: 1,
+                name: Some("⌐◨-◨".to_string()),
+                only_active: false,
+                pagination: pagination_for_domain,
+                maybe_filter_protocols: None,
+            })
+            .await
+            .expect("failed to get ⌐◨-◨ domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
+        println!("result: {:?}", result);
+        assert_eq!(
+            vec![Some("⌐◨-◨.eth")],
+            result
+                .iter()
+                .map(|output| output.domain.name.as_deref())
+                .collect::<Vec<_>>(),
+        );
+
+        let pagination_for_domain = DomainPaginationInput {
+            page_size: 2,
+            ..Default::default()
+        };
+        let result = reader
+            .lookup_domain_name(LookupDomainInput {
+                network_id: 1,
+                name: Some("😀😀😀😀😀😀".to_string()),
+                only_active: false,
+                pagination: pagination_for_domain,
+                maybe_filter_protocols: None,
+            })
+            .await
+            .expect("failed to get 😀😀😀😀😀😀 domains");
+        assert_eq!(result.next_page_token, None);
+        let result = result.items;
+        println!("result: {:?}", result);
+        assert_eq!(
+            vec![Some("😀😀😀😀😀😀.eth")],
+            result
+                .iter()
+                .map(|output| output.domain.name.as_deref())
+                .collect::<Vec<_>>(),
+        );
     }
 
     #[sqlx::test(migrations = "tests/migrations")]
