@@ -60,7 +60,7 @@ impl OperationsService {
                     operation_id: op.id.clone(),
                     r#type: op_type.to_id(),
                     timestamp: db_datetime_to_string(op.timestamp),
-                    sender: OperationsService::extract_sender(&op),
+                    sender: Self::extract_sender(&op),
                 }
             })
             .collect()
@@ -77,7 +77,7 @@ impl OperationsService {
             operation_id: op.id.clone(),
             r#type: op_type.to_id(),
             timestamp: db_datetime_to_string(op.timestamp),
-            sender: OperationsService::extract_sender(&op),
+            sender: Self::extract_sender(&op),
             status_history: stages
                 .iter()
                 .map(|(s, txs)| OperationStage {
@@ -104,6 +104,25 @@ impl OperationsService {
                 .collect(),
         }
     }
+
+    pub fn extract_input_pagination(request: &GetOperationsRequest) -> Option<LogicPagination> {
+        let mut input_pagination = None;
+        if let Some(pagination_token) = request.page_token {
+            input_pagination = Some(LogicPagination {
+                count: request.page_items.unwrap_or(0) as usize,
+                earlier_timestamp: pagination_token,
+            });
+        }
+
+        input_pagination
+    }
+
+    pub fn convert_logic_pagination(pagination: Option<LogicPagination>) -> Option<Pagination> {
+        pagination.map(|pag| Pagination {
+            page_token: pag.earlier_timestamp,
+            page_items: pag.count as u32,
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -114,13 +133,7 @@ impl TacService for OperationsService {
     ) -> std::result::Result<tonic::Response<OperationsResponse>, tonic::Status> {
         let inner = request.into_inner();
 
-        let mut input_pagination = None;
-        if let Some(pagination_token) = inner.page_token {
-            input_pagination = Some(LogicPagination {
-                count: inner.page_items.unwrap_or(0) as usize,
-                earlier_timestamp: pagination_token,
-            });
-        }
+        let input_pagination = Self::extract_input_pagination(&inner);
 
         let (operations, pagination) = match inner.q {
             Some(q) => {
@@ -139,13 +152,10 @@ impl TacService for OperationsService {
             }
         };
 
-        let next_page_params = pagination.map(|pag| Pagination {
-            page_token: pag.earlier_timestamp,
-            page_items: pag.count as u32,
-        });
+        let next_page_params = Self::convert_logic_pagination(pagination);
 
         Ok(tonic::Response::new(OperationsResponse {
-            items: OperationsService::convert_short_db_operation_into_response(operations),
+            items: Self::convert_short_db_operation_into_response(operations),
             next_page_params,
         }))
     }
@@ -158,7 +168,7 @@ impl TacService for OperationsService {
 
         match self.db.get_full_operation_by_id(&inner.operation_id).await {
             Ok(Some(full_data)) => Ok(tonic::Response::new(
-                OperationsService::convert_full_db_operation_into_response(full_data),
+                Self::convert_full_db_operation_into_response(full_data),
             )),
 
             Ok(None) => Err(tonic::Status::not_found("cannot find operation id")),
@@ -177,9 +187,7 @@ impl TacService for OperationsService {
             Ok(operations) => Ok(tonic::Response::new(OperationsFullResponse {
                 items: operations
                     .iter()
-                    .map(|op| {
-                        OperationsService::convert_full_db_operation_into_response(op.clone())
-                    })
+                    .map(|op| Self::convert_full_db_operation_into_response(op.clone()))
                     .collect(),
             })),
 
