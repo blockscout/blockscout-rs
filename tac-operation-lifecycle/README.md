@@ -65,7 +65,7 @@ The TAC Operation Lifecycle Indexer follows a process describing below:
 
 We persist and track latest saved interval (`watermark`) in the database and advance it alongside with creating new intervals.
 Apart from latest interval we also track latest `operation` so that if we get a falsely empty response we would automatically request it again.
-The inedxer follows the following practices specifically the server launches multiple future streams:
+The indexer follows the following practices specifically the server launches multiple future streams:
 * historic operation fetcher that selects `intervals` in both directions from a configurable starting timestamp
 * realtime operation fetcher that selects `intervals` in ascending order after the service has started
 * failed intervals and operations fetcher resends failed requests 
