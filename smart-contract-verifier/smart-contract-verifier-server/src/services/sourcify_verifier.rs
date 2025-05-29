@@ -98,6 +98,7 @@ impl SourcifyVerifier for SourcifyVerifierService {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn process_verification_result(
     response: Result<sc_sourcify::Success, Error>,
 ) -> Result<VerifyResponseWrapper, Status> {

@@ -17,6 +17,7 @@ pub use vyper_verifier::VyperVerifierService;
 
 const API_KEY_NAME: &str = "x-api-key";
 
+#[allow(clippy::result_large_err)]
 fn is_key_authorized(
     authorized_keys: &std::collections::HashSet<String>,
     metadata: tonic::metadata::MetadataMap,

@@ -707,7 +707,7 @@ definitions:
           type: string
         title: |-
           / Mapping from fully qualified name to the address the library is deployed at
-          (includes both automatically and manually linked libraries)
+          / (includes both automatically and manually linked libraries)
   v2SourceMatchType:
     type: string
     enum:

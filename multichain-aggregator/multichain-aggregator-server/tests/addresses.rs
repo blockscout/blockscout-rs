@@ -23,29 +23,24 @@ async fn test_list_addresses() {
     .await
     .unwrap();
 
-    let validate_address =
-        |item: &proto::Address| item.token_type() == proto::TokenType::Unspecified;
-
     let response: proto::ListAddressesResponse =
-        test_server::send_get_request(&base, "/api/v1/addresses?q=test&chain_id=1&page_size=10")
+        test_server::send_get_request(&base, "/api/v1/addresses?q=test&chain_id=1&page_size=50")
             .await;
 
-    assert_eq!(response.items.len(), 10);
-    assert!(response.items.iter().all(validate_address));
+    assert_eq!(response.items.len(), 50);
 
     let page_token = response.next_page_params.unwrap().page_token;
     let response: proto::ListAddressesResponse = test_server::send_get_request(
         &base,
         &format!(
-            "/api/v1/addresses?q=test&chain_id=1&page_size=10&page_token={}",
+            "/api/v1/addresses?q=test&chain_id=1&page_size=50&page_token={}",
             page_token
         ),
     )
     .await;
 
-    assert_eq!(response.items.len(), 8);
+    assert_eq!(response.items.len(), 17);
     assert!(response.next_page_params.is_none());
-    assert!(response.items.iter().all(validate_address));
 }
 
 #[tokio::test]

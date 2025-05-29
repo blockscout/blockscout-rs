@@ -65,6 +65,13 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
         data_file_as_json!("domains/wai_eth/detailed.json", &context)
     );
 
+    let request: Value = send_get_request(&base, "/api/v1/1/domains/abcnews.eth").await;
+
+    assert_eq!(
+        request,
+        data_file_as_json!("domains/abcnews_eth/detailed.json", &context)
+    );
+
     // get events
     let expected_events = data_file_as_json!("domains/vitalik_eth/events.json", &context);
     let expected_events = expected_events.as_array().unwrap().clone();
@@ -92,7 +99,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
         .as_array()
         .unwrap()
         .clone();
-    let page_token = "1571902007".to_string();
+    let page_token = "1747230768".to_string();
     let (actual, expected) = check_list_result(
         &base,
         "/api/v1/1/domains:lookup",
@@ -110,7 +117,7 @@ async fn eth_protocol_scenario(base: Url, settings: &Settings) {
             ("page_token".into(), page_token.to_string()),
         ]),
         expected_domains[2..4].to_vec(),
-        Some((2, Some("1499286330".into()))),
+        Some((2, Some("1640341437".into()))),
     )
     .await;
     assert_eq!(actual, expected);
@@ -289,7 +296,7 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
     .await;
     assert_eq!(actual, expected);
 
-    let page_token = "1571902007".to_string();
+    let page_token = "1747230768".to_string();
     let expected_domains = data_file_as_json!("domains/lookup_ens.json", &context)
         .as_array()
         .unwrap()
@@ -306,6 +313,53 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
     )
     .await;
     assert_eq!(actual, expected);
+
+    let expected_domains = data_file_as_json!("domains/lookup_abcnews.json", &context)
+        .as_array()
+        .unwrap()
+        .to_vec();
+
+    let (actual, expected) = check_list_result(
+        &base,
+        "/api/v1/1337/domains:lookup",
+        HashMap::from_iter([
+            ("name".into(), "abcnews".into()),
+            ("page_size".into(), "2".into()),
+        ]),
+        expected_domains[0..2].to_vec(),
+        Some((2, None)),
+    )
+    .await;
+    assert_eq!(actual, expected);
+
+    let route_trailing_dot = build_query(
+        "/api/v1/1337/domains:lookup",
+        &HashMap::from_iter([
+            ("name".into(), "abcnews.".into()),
+            ("page_size".into(), "2".into()),
+        ]),
+    );
+    let resp_trailing: Value = send_get_request(&base, &route_trailing_dot).await;
+    let items = resp_trailing
+        .get("items")
+        .and_then(|v| v.as_array())
+        .expect("No `items` in response");
+
+    let names: Vec<&str> = items
+        .iter()
+        .map(|item| item["name"].as_str().unwrap())
+        .collect();
+
+    assert!(
+        names.contains(&"abcnews.gno"),
+        "No abcnews.gno in response, names={:?}",
+        names
+    );
+    assert!(
+        names.contains(&"abcnews.eth"),
+        "No abcnews.eth in response, names={:?}",
+        names
+    );
 
     let route_with_query = build_query(
         "/api/v1/1337/domains:lookup",

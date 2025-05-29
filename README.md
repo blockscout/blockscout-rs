@@ -21,6 +21,9 @@
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/stats.yml">
    <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/stats.yml?branch=main&label=stats&logo=github&style=flat-square"><!--
 --></a>
+<a href="https://github.com/blockscout/blockscout-rs/actions/workflows/tac-operation-lifecycle.yml">
+   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/tac-operation-lifecycle.yml?branch=main&label=tac-operation-lifecycle&logo=github&style=flat-square"><!--
+--></a>
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/user-ops-indexer.yml">
    <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/user-ops-indexer.yml?branch=main&label=user-ops-indexer&logo=github&style=flat-square"><!--
 --></a>
@@ -53,9 +56,11 @@ A set of services used by [Blockscout](https://blockscout.com/) blockchain explo
 
 7. [stats](stats) - service designed to calculate and present statistical information from a Blockscout instance
 
-8. [user-ops-indexer](user-ops-indexer) - service designed to index, decode and serve user operations as per the ERC-4337 standard
+8. [tac-operation-lifecycle](tac-operation-lifecycle/) - indexing operations in TAC (Ton Application Chain)
 
-9. [visualizer](visualizer/) - service for evm visualization such as:
+9. [user-ops-indexer](user-ops-indexer) - service designed to index, decode and serve user operations as per the ERC-4337 standard
+
+10. [visualizer](visualizer/) - service for evm visualization such as:
    1. Solidity contract visualization using [sol2uml](https://www.npmjs.com/package/sol2uml)
 
 ## Running and configuring services

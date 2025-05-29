@@ -18,6 +18,7 @@ impl DomainName {
     pub fn new(name: &str, empty_label_hash: Option<B256>) -> Result<Self, ProtocolError> {
         let name = ens_normalize(name)?;
         let (label_name, _) = name.split_once(SEPARATOR).unwrap_or((&name, ""));
+
         let id_bytes = hash_ens_domain_name(&name, empty_label_hash);
         let id = hex(id_bytes);
         let tld = Tld::from_domain_name(&name).ok_or_else(|| ProtocolError::InvalidName {
@@ -168,11 +169,11 @@ mod tests {
                 ".levvv.gno",
                 Some(
                     B256::from_hex(
-                        "0x1a13b687a5ff1d8ab1a9e189e1507a6abe834a9296cc8cff937905e3dee0c4f6",
+                        "0x6cbb71e02aa156be31c9be2644cd7e3fe375b291d0786c825495af35fe98ee72",
                     )
                     .unwrap(),
                 ),
-                "0xa3504cdec527495c69c760c85d5be9996252f853b91fd0df04c5b6aa2deb3347",
+                "0x79e028f97b232b1600b2ed68cc7d9811c28595c3ab859b166d13980bcfcece9d",
                 "levvv",
                 "levvv.gno",
             ),

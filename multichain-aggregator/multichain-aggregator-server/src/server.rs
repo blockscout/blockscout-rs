@@ -88,6 +88,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.api,
         settings.service.quick_search_chains,
         settings.service.bens_protocols,
+        settings.service.domain_primary_chain_id,
         marketplace_enabled_cache,
     ));
 

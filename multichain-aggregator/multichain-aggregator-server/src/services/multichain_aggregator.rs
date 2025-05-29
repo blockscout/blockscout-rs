@@ -7,6 +7,7 @@ use blockscout_service_launcher::database::ReadWriteRepo;
 use multichain_aggregator_logic::{
     clients::dapp,
     error::{ParseError, ServiceError},
+    repository::interop_messages,
     services::{api_key_manager::ApiKeyManager, chains, import, search},
     types,
 };
@@ -22,6 +23,7 @@ pub struct MultichainAggregator {
     api_settings: ApiSettings,
     quick_search_chains: Vec<types::ChainId>,
     bens_protocols: Option<Vec<String>>,
+    domain_primary_chain_id: types::ChainId,
     marketplace_enabled_cache: chains::MarketplaceEnabledCache,
 }
 
@@ -35,6 +37,7 @@ impl MultichainAggregator {
         api_settings: ApiSettings,
         quick_search_chains: Vec<types::ChainId>,
         bens_protocols: Option<Vec<String>>,
+        domain_primary_chain_id: types::ChainId,
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
     ) -> Self {
         Self {
@@ -46,6 +49,7 @@ impl MultichainAggregator {
             api_settings,
             quick_search_chains,
             bens_protocols,
+            domain_primary_chain_id,
             marketplace_enabled_cache,
         }
     }
@@ -172,8 +176,9 @@ impl MultichainAggregatorService for MultichainAggregator {
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
             &self.bens_client,
-            search::AddressSearchConfig::NonTokenSearch {
+            search::AddressSearchConfig::GeneralSearch {
                 bens_protocols: self.bens_protocols.as_deref(),
+                domain_primary_chain_id: self.domain_primary_chain_id,
                 // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
                 bens_domain_lookup_limit: 1,
             },
@@ -214,7 +219,9 @@ impl MultichainAggregatorService for MultichainAggregator {
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
             &self.bens_client,
-            search::AddressSearchConfig::NFTSearch,
+            search::AddressSearchConfig::NFTSearch {
+                domain_primary_chain_id: self.domain_primary_chain_id,
+            },
             inner.q,
             chain_ids,
             page_size as u64,
@@ -286,6 +293,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             inner.q,
             &self.quick_search_chains,
             self.bens_protocols.as_deref(),
+            self.domain_primary_chain_id,
         )
         .await
         .inspect_err(|err| {
@@ -402,6 +410,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             &self.bens_client,
             inner.q,
             self.bens_protocols.as_deref(),
+            self.domain_primary_chain_id,
             page_size,
             inner.page_token,
         )
@@ -414,6 +423,56 @@ impl MultichainAggregatorService for MultichainAggregator {
                 page_size,
             }),
         }))
+    }
+
+    async fn list_interop_messages(
+        &self,
+        request: Request<ListInteropMessagesRequest>,
+    ) -> Result<Response<ListInteropMessagesResponse>, Status> {
+        let inner = request.into_inner();
+
+        let init_chain_id = inner.init_chain_id.map(parse_query).transpose()?;
+        let relay_chain_id = inner.relay_chain_id.map(parse_query).transpose()?;
+        let address = inner.address.map(parse_query).transpose()?;
+        let direction = inner.direction.map(parse_query).transpose()?;
+
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+
+        let (interop_messages, next_page_token) = search::search_interop_messages(
+            self.repo.read_db(),
+            init_chain_id,
+            relay_chain_id,
+            address,
+            direction,
+            inner.nonce,
+            page_size as u64,
+            page_token,
+        )
+        .await?;
+
+        Ok(Response::new(ListInteropMessagesResponse {
+            items: interop_messages.into_iter().map(|i| i.into()).collect(),
+            next_page_params: next_page_token.map(|(t, h)| Pagination {
+                page_token: format!("{},{}", t, h),
+                page_size,
+            }),
+        }))
+    }
+
+    async fn count_interop_messages(
+        &self,
+        request: Request<CountInteropMessagesRequest>,
+    ) -> Result<Response<CountInteropMessagesResponse>, Status> {
+        let inner = request.into_inner();
+
+        let chain_id = parse_query(inner.chain_id)?;
+
+        let count = interop_messages::count(self.repo.read_db(), chain_id)
+            .await
+            .map_err(ServiceError::from)?;
+
+        Ok(Response::new(CountInteropMessagesResponse { count }))
     }
 }
 

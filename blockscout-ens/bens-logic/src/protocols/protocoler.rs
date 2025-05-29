@@ -1,3 +1,4 @@
+use super::DomainName;
 use crate::{
     blockscout::BlockscoutClient,
     protocols::{DomainNameOnProtocol, ProtocolError},
@@ -9,6 +10,8 @@ use sea_query::{Alias, IntoTableRef, TableRef};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use url::Url;
+
+const MAX_NETWORKS_LIMIT: usize = 5;
 
 #[derive(Debug, Clone)]
 pub struct Protocoler {
@@ -83,7 +86,7 @@ impl ProtocolSpecific {
 
     pub fn empty_label_hash(&self) -> Option<B256> {
         match self {
-            ProtocolSpecific::EnsLike(ens) => ens.empty_label_hash,
+            ProtocolSpecific::EnsLike(ens_like) => ens_like.empty_label_hash,
             ProtocolSpecific::D3Connect(_) => None,
         }
     }
@@ -156,10 +159,6 @@ impl Tld {
             .next()
             .filter(|c| !c.is_empty())
             .map(Self::new)
-    }
-
-    pub fn reverse() -> Self {
-        Self("reverse".to_string())
     }
 }
 
@@ -283,16 +282,83 @@ impl Protocoler {
         Ok(protocols)
     }
 
+    pub fn fetch_domain_options(
+        &self,
+        name_with_tld: &str,
+        network_id: i64,
+        maybe_filter: Option<NonEmpty<String>>,
+    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+        let tld = extract_tld(name_with_tld)?;
+
+        let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
+        let domain_names: Vec<_> = protocols
+            .into_iter()
+            .filter_map(|p| DomainNameOnProtocol::from_str(name_with_tld, p).ok())
+            .collect();
+
+        if domain_names.is_empty() {
+            return Err(ProtocolError::InvalidName {
+                name: name_with_tld.to_string(),
+                reason: "No matching protocols for given TLD".to_string(),
+            });
+        }
+
+        Ok(domain_names)
+    }
+
+    pub fn lookup_names_options_in_network(
+        &self,
+        name: &str,
+        network_id: i64,
+        maybe_filter: Option<NonEmpty<String>>,
+    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+        let clean = name.trim_end_matches('.');
+
+        let supported_tlds: Vec<Tld> = self
+            .networks
+            .get(&network_id)
+            .ok_or_else(|| ProtocolError::NetworkNotFound(network_id))?
+            .use_protocols
+            .iter()
+            .filter_map(|proto_name| self.protocols.get(proto_name))
+            .flat_map(|proto| proto.info.tld_list.iter().cloned())
+            .collect();
+
+        if let Ok(domain) = DomainName::new(clean, None) {
+            if domain.level_gt_tld() && supported_tlds.contains(&domain.tld) {
+                return self.fetch_domain_options(&domain.name, network_id, maybe_filter);
+            }
+        }
+
+        let mut all = Vec::new();
+        for tld in &supported_tlds {
+            let fqdn = format!("{}.{}", clean, tld.0);
+            let mut opts = self
+                .fetch_domain_options(&fqdn, network_id, maybe_filter.clone())
+                .unwrap_or_default();
+            all.append(&mut opts);
+            if all.len() >= MAX_NETWORKS_LIMIT {
+                break;
+            }
+        }
+
+        if all.is_empty() {
+            Err(ProtocolError::InvalidName {
+                name: clean.to_string(),
+                reason: "No valid TLDs".to_string(),
+            })
+        } else {
+            Ok(all)
+        }
+    }
+
     pub fn names_options_in_network(
         &self,
         name: &str,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
-        let tld = Tld::from_domain_name(name).ok_or_else(|| ProtocolError::InvalidName {
-            name: name.to_string(),
-            reason: "no tld found".to_string(),
-        })?;
+        let tld = extract_tld(name)?;
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
         let names_with_protocols = protocols
             .into_iter()
@@ -308,8 +374,8 @@ impl Protocoler {
         maybe_filter: Option<NonEmpty<String>>,
     ) -> Result<DomainNameOnProtocol, ProtocolError> {
         let maybe_name = self
-            .names_options_in_network(name, network_id, maybe_filter)
-            .map(|mut names| names.pop())?;
+            .names_options_in_network(name, network_id, maybe_filter)?
+            .pop();
         let name = maybe_name.ok_or_else(|| ProtocolError::InvalidName {
             name: name.to_string(),
             reason: "no protocol found".to_string(),
@@ -333,6 +399,13 @@ impl Protocoler {
     }
 }
 
+fn extract_tld(domain: &str) -> Result<Tld, ProtocolError> {
+    Tld::from_domain_name(domain).ok_or_else(|| ProtocolError::InvalidName {
+        name: domain.to_string(),
+        reason: "Invalid TLD".to_string(),
+    })
+}
+
 impl Protocol {
     pub fn subgraph_table(&self, table: &str) -> TableRef {
         (Alias::new(&self.subgraph_schema), Alias::new(table)).into_table_ref()
@@ -349,5 +422,40 @@ impl Protocol {
                 protocol: self,
                 deployment_network: network,
             })
+    }
+}
+
+#[cfg(test)]
+mod tld_tests {
+    use super::Tld;
+
+    #[test]
+    fn tld_new_trims_dot() {
+        let tld = Tld::new(".eth");
+        assert_eq!(tld.0, "eth");
+    }
+
+    #[test]
+    fn tld_new_no_dot() {
+        let tld = Tld::new("eth");
+        assert_eq!(tld.0, "eth");
+    }
+
+    #[test]
+    fn from_domain_name_works() {
+        let domain = "vitalik.eth";
+        let tld = Tld::from_domain_name(domain).unwrap();
+        assert_eq!(tld.0, "eth");
+
+        let domain = "abcnews.gno";
+        let tld = Tld::from_domain_name(domain).unwrap();
+        assert_eq!(tld.0, "gno");
+    }
+
+    #[test]
+    fn from_domain_name_empty() {
+        let domain = ".";
+        let tld = Tld::from_domain_name(domain);
+        assert!(tld.is_none());
     }
 }
