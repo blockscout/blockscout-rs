@@ -780,10 +780,8 @@ impl TacDatabase {
         self.db
             .transaction::<_, (), DbErr>(|tx| {
                 Box::pin(async move {
-                    // Remove associated stages with transactions
                     Self::remove_operation_associated_stages(tx, &operation.id).await?;
 
-                    // Update operation type, status and sender
                     Self::set_operation_base_properties(
                         tx,
                         &operation,
@@ -792,10 +790,8 @@ impl TacDatabase {
                     )
                     .await?;
 
-                    // Store operation stages
                     Self::store_operation_stages(tx, &operation, &operation_data).await?;
 
-                    // Store operation metainfo
                     if let Some(meta_info) = operation_data.meta_info {
                         Self::store_operation_metainfo(tx, &operation, &meta_info).await?;
                     }
