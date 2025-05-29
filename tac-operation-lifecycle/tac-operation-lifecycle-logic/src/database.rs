@@ -1,7 +1,9 @@
 use crate::{
     client::models::{
         operations::Operations as ApiOperations,
-        profiling::{BlockchainTypeLowercase, OperationData as ApiOperationData},
+        profiling::{
+            BlockchainTypeLowercase, OperationData as ApiOperationData, OperationMetaInfo,
+        },
     },
     utils::{blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address},
 };
@@ -779,13 +781,21 @@ impl TacDatabase {
                     Self::remove_operation_associated_stages(tx, &operation.id).await?;
 
                     // Update operation type, status and sender
-                    Self::set_operation_base_properties(tx, &operation, &operation_data, &new_status).await?;
+                    Self::set_operation_base_properties(
+                        tx,
+                        &operation,
+                        &operation_data,
+                        &new_status,
+                    )
+                    .await?;
 
                     // Store operation stages
                     Self::store_operation_stages(tx, &operation, &operation_data).await?;
 
                     // Store operation metainfo
-                    Self::store_operation_metainfo(tx, &operation, &operation_data).await?;
+                    if let Some(meta_info) = operation_data.meta_info {
+                        Self::store_operation_metainfo(tx, &operation, &meta_info).await?;
+                    }
 
                     Ok(())
                 })
@@ -903,45 +913,44 @@ impl TacDatabase {
     async fn store_operation_metainfo(
         tx: &DatabaseTransaction,
         operation: &operation::Model,
-        operation_data: &ApiOperationData,
+        meta_info: &OperationMetaInfo,
     ) -> Result<(), DbErr> {
-        if let Some(meta_info) = operation_data.meta_info.clone() {
-            let get_fee = |chain: BlockchainTypeLowercase| {
-                meta_info
-                    .fee_info
-                    .get(&chain)
-                    .and_then(|fee_opt| fee_opt.as_ref())
-            };
+        let get_fee = |chain: BlockchainTypeLowercase| {
+            meta_info
+                .fee_info
+                .get(&chain)
+                .and_then(|fee_opt| fee_opt.as_ref())
+        };
 
-            let get_executors = |chain: BlockchainTypeLowercase| {
-                meta_info.valid_executors.get(&chain).cloned().flatten()
-            };
+        let get_executors = |chain: BlockchainTypeLowercase| {
+            meta_info.valid_executors.get(&chain).cloned().flatten()
+        };
 
-            let parse_decimal = |s: &str| Decimal::from_str(s).ok();
+        let parse_decimal = |s: &str| Decimal::from_str(s).ok();
 
-            let meta_model = operation_meta_info::ActiveModel {
-                operation_id: Set(operation.id.clone()),
-                tac_valid_executors: Set(get_executors(BlockchainTypeLowercase::Tac)),
-                ton_valid_executors: Set(get_executors(BlockchainTypeLowercase::Ton)),
-                tac_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
-                    .and_then(|fee| parse_decimal(&fee.protocol_fee))),
-                tac_executor_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
-                    .and_then(|fee| parse_decimal(&fee.executor_fee))),
-                tac_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Tac)
-                    .map(|fee| fee.token_fee_symbol.clone())),
-                ton_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
-                    .and_then(|fee| parse_decimal(&fee.protocol_fee))),
-                ton_executor_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
-                    .and_then(|fee| parse_decimal(&fee.executor_fee))),
-                ton_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Ton)
-                    .map(|fee| fee.token_fee_symbol.clone())),
-            };
+        let meta_model = operation_meta_info::ActiveModel {
+            operation_id: Set(operation.id.clone()),
+            tac_valid_executors: Set(get_executors(BlockchainTypeLowercase::Tac)),
+            ton_valid_executors: Set(get_executors(BlockchainTypeLowercase::Ton)),
+            tac_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+            tac_executor_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                .and_then(|fee| parse_decimal(&fee.executor_fee))),
+            tac_token_fee_symbol: Set(
+                get_fee(BlockchainTypeLowercase::Tac).map(|fee| fee.token_fee_symbol.clone())
+            ),
+            ton_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+            ton_executor_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                .and_then(|fee| parse_decimal(&fee.executor_fee))),
+            ton_token_fee_symbol: Set(
+                get_fee(BlockchainTypeLowercase::Ton).map(|fee| fee.token_fee_symbol.clone())
+            ),
+        };
 
-            operation_meta_info::Entity::insert(meta_model)
-                .on_conflict(
-                    sea_orm::sea_query::OnConflict::column(
-                        operation_meta_info::Column::OperationId,
-                    )
+        operation_meta_info::Entity::insert(meta_model)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::column(operation_meta_info::Column::OperationId)
                     .update_columns([
                         operation_meta_info::Column::TacValidExecutors,
                         operation_meta_info::Column::TonValidExecutors,
@@ -953,11 +962,10 @@ impl TacDatabase {
                         operation_meta_info::Column::TonTokenFeeSymbol,
                     ])
                     .to_owned(),
-                )
-                .exec(tx)
-                .await?;
-        }
-        
+            )
+            .exec(tx)
+            .await?;
+
         Ok(())
     }
 
