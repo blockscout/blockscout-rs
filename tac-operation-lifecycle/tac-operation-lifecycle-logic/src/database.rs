@@ -776,148 +776,188 @@ impl TacDatabase {
             .transaction::<_, (), DbErr>(|tx| {
                 Box::pin(async move {
                     // Remove associated stages with transactions
-                    operation_stage::Entity::delete_many()
-                        .filter(operation_stage::Column::OperationId.eq(&operation.id))
-                        .exec(tx)
-                        .await?;
+                    Self::remove_operation_associated_stages(tx, &operation.id).await?;
 
                     // Update operation type, status and sender
-                    let mut operation_model: operation::ActiveModel = operation.clone().into();
-                    operation_model.updated_at = Set(chrono::Utc::now().naive_utc());
-                    operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
-                    operation_model.status = Set(new_status.clone());
-
-                    if let Some((address, blockchain)) = operation_data
-                        .meta_info
-                        .as_ref()
-                        .and_then(|meta| meta.initial_caller.clone())
-                        .and_then(|caller| {
-                            blockchain_address_to_db_format(&caller.address)
-                                .ok()
-                                .map(|addr| (addr, caller.blockchain_type.to_string()))
-                        })
-                    {
-                        operation_model.sender_address = Set(Some(address));
-                        operation_model.sender_blockchain = Set(Some(blockchain));
-                    } else {
-                        tracing::warn!(op_id =? operation.id, "Storing operation without sender")
-                    }
-
-                    let new_type = operation_model.op_type.clone();
-                    let upd_at = operation_model.updated_at.clone().into_value().unwrap();
-
-                    operation_model
-                        .update(tx)
-                        .instrument(tracing::debug_span!(
-                            "updating operation",
-                            op_id = operation.id,
-                            op_type =? new_type,
-                            updated_at =? upd_at,
-                            new_status =? new_status,
-                        ))
-                        .await?;
+                    Self::set_operation_base_properties(tx, &operation, &operation_data, &new_status).await?;
 
                     // Store operation stages
-                    for (stage_type, stage_data) in operation_data.stages.iter() {
-                        if let Some(data) = &stage_data.stage_data {
-                            // prepare and inserting stage model
-                            let stage_model = operation_stage::ActiveModel {
-                                id: NotSet,
-                                operation_id: Set(operation.id.clone()),
-                                stage_type_id: Set(stage_type.to_id() as i16),
-                                success: Set(data.success),
-                                timestamp: Set(Self::timestamp_to_naive(data.timestamp as i64)),
-                                note: Set(data.note.clone()),
-                                inserted_at: Set(chrono::Utc::now().naive_utc()),
-                            };
-
-                            let inserted_stage = operation_stage::Entity::insert(stage_model)
-                                .on_conflict(
-                                    sea_orm::sea_query::OnConflict::column(operation::Column::Id)
-                                        .do_nothing()
-                                        .to_owned(),
-                                )
-                                .exec_with_returning(tx)
-                                .await?;
-
-                            // store transactions for this stage
-                            let transaction_models = data
-                                .transactions
-                                .iter()
-                                .map(|a_tx| transaction::ActiveModel {
-                                    id: NotSet,
-                                    stage_id: Set(inserted_stage.id),
-                                    hash: Set(a_tx.hash.clone()),
-                                    blockchain_type: Set(a_tx.blockchain_type.to_string()),
-                                    inserted_at: Set(chrono::Utc::now().naive_utc()),
-                                })
-                                .collect::<Vec<_>>();
-
-                            transaction::Entity::insert_many(transaction_models)
-                                .exec(tx)
-                                .await?;
-                        }
-                    }
+                    Self::store_operation_stages(tx, &operation, &operation_data).await?;
 
                     // Store operation metainfo
-                    if let Some(meta_info) = operation_data.meta_info.clone() {
-                        let get_fee = |chain: BlockchainTypeLowercase| {
-                            meta_info
-                                .fee_info
-                                .get(&chain)
-                                .and_then(|fee_opt| fee_opt.as_ref())
-                        };
-
-                        let get_executors = |chain: BlockchainTypeLowercase| {
-                            meta_info.valid_executors.get(&chain).cloned().flatten()
-                        };
-
-                        let parse_decimal = |s: &str| Decimal::from_str(s).ok();
-
-                        let meta_model = operation_meta_info::ActiveModel {
-                            operation_id: Set(operation.id.clone()),
-                            tac_valid_executors: Set(get_executors(BlockchainTypeLowercase::Tac)),
-                            ton_valid_executors: Set(get_executors(BlockchainTypeLowercase::Ton)),
-                            tac_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
-                                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
-                            tac_executor_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
-                                .and_then(|fee| parse_decimal(&fee.executor_fee))),
-                            tac_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Tac)
-                                .map(|fee| fee.token_fee_symbol.clone())),
-                            ton_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
-                                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
-                            ton_executor_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
-                                .and_then(|fee| parse_decimal(&fee.executor_fee))),
-                            ton_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Ton)
-                                .map(|fee| fee.token_fee_symbol.clone())),
-                        };
-
-                        operation_meta_info::Entity::insert(meta_model)
-                            .on_conflict(
-                                sea_orm::sea_query::OnConflict::column(
-                                    operation_meta_info::Column::OperationId,
-                                )
-                                .update_columns([
-                                    operation_meta_info::Column::TacValidExecutors,
-                                    operation_meta_info::Column::TonValidExecutors,
-                                    operation_meta_info::Column::TacProtocolFee,
-                                    operation_meta_info::Column::TacExecutorFee,
-                                    operation_meta_info::Column::TacTokenFeeSymbol,
-                                    operation_meta_info::Column::TonProtocolFee,
-                                    operation_meta_info::Column::TonExecutorFee,
-                                    operation_meta_info::Column::TonTokenFeeSymbol,
-                                ])
-                                .to_owned(),
-                            )
-                            .exec(tx)
-                            .await?;
-                    }
+                    Self::store_operation_metainfo(tx, &operation, &operation_data).await?;
 
                     Ok(())
                 })
             })
             .await?;
 
+        Ok(())
+    }
+
+    async fn remove_operation_associated_stages(
+        tx: &DatabaseTransaction,
+        operation_id: &String,
+    ) -> Result<(), DbErr> {
+        operation_stage::Entity::delete_many()
+            .filter(operation_stage::Column::OperationId.eq(operation_id))
+            .exec(tx)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn set_operation_base_properties(
+        tx: &DatabaseTransaction,
+        operation: &operation::Model,
+        operation_data: &ApiOperationData,
+        new_status: &StatusEnum,
+    ) -> Result<(), DbErr> {
+        let mut operation_model: operation::ActiveModel = operation.clone().into();
+        operation_model.updated_at = Set(chrono::Utc::now().naive_utc());
+        operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
+        operation_model.status = Set(new_status.clone());
+
+        if let Some((address, blockchain)) = operation_data
+            .meta_info
+            .as_ref()
+            .and_then(|meta| meta.initial_caller.clone())
+            .and_then(|caller| {
+                blockchain_address_to_db_format(&caller.address)
+                    .ok()
+                    .map(|addr| (addr, caller.blockchain_type.to_string()))
+            })
+        {
+            operation_model.sender_address = Set(Some(address));
+            operation_model.sender_blockchain = Set(Some(blockchain));
+        } else {
+            tracing::warn!(op_id =? operation.id, "Storing operation without sender")
+        }
+
+        let new_type = operation_model.op_type.clone();
+        let upd_at = operation_model.updated_at.clone().into_value().unwrap();
+
+        operation_model
+            .update(tx)
+            .instrument(tracing::debug_span!(
+                "updating operation",
+                op_id = operation.id,
+                op_type =? new_type,
+                updated_at =? upd_at,
+                new_status =? new_status,
+            ))
+            .await?;
+
+        Ok(())
+    }
+
+    async fn store_operation_stages(
+        tx: &DatabaseTransaction,
+        operation: &operation::Model,
+        operation_data: &ApiOperationData,
+    ) -> Result<(), DbErr> {
+        for (stage_type, stage_data) in operation_data.stages.iter() {
+            if let Some(data) = &stage_data.stage_data {
+                // prepare and inserting stage model
+                let stage_model = operation_stage::ActiveModel {
+                    id: NotSet,
+                    operation_id: Set(operation.id.clone()),
+                    stage_type_id: Set(stage_type.to_id() as i16),
+                    success: Set(data.success),
+                    timestamp: Set(Self::timestamp_to_naive(data.timestamp as i64)),
+                    note: Set(data.note.clone()),
+                    inserted_at: Set(chrono::Utc::now().naive_utc()),
+                };
+
+                let inserted_stage = operation_stage::Entity::insert(stage_model)
+                    .on_conflict(
+                        sea_orm::sea_query::OnConflict::column(operation::Column::Id)
+                            .do_nothing()
+                            .to_owned(),
+                    )
+                    .exec_with_returning(tx)
+                    .await?;
+
+                // store transactions for this stage
+                let transaction_models = data
+                    .transactions
+                    .iter()
+                    .map(|a_tx| transaction::ActiveModel {
+                        id: NotSet,
+                        stage_id: Set(inserted_stage.id),
+                        hash: Set(a_tx.hash.clone()),
+                        blockchain_type: Set(a_tx.blockchain_type.to_string()),
+                        inserted_at: Set(chrono::Utc::now().naive_utc()),
+                    })
+                    .collect::<Vec<_>>();
+
+                transaction::Entity::insert_many(transaction_models)
+                    .exec(tx)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn store_operation_metainfo(
+        tx: &DatabaseTransaction,
+        operation: &operation::Model,
+        operation_data: &ApiOperationData,
+    ) -> Result<(), DbErr> {
+        if let Some(meta_info) = operation_data.meta_info.clone() {
+            let get_fee = |chain: BlockchainTypeLowercase| {
+                meta_info
+                    .fee_info
+                    .get(&chain)
+                    .and_then(|fee_opt| fee_opt.as_ref())
+            };
+
+            let get_executors = |chain: BlockchainTypeLowercase| {
+                meta_info.valid_executors.get(&chain).cloned().flatten()
+            };
+
+            let parse_decimal = |s: &str| Decimal::from_str(s).ok();
+
+            let meta_model = operation_meta_info::ActiveModel {
+                operation_id: Set(operation.id.clone()),
+                tac_valid_executors: Set(get_executors(BlockchainTypeLowercase::Tac)),
+                ton_valid_executors: Set(get_executors(BlockchainTypeLowercase::Ton)),
+                tac_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                    .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+                tac_executor_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                    .and_then(|fee| parse_decimal(&fee.executor_fee))),
+                tac_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Tac)
+                    .map(|fee| fee.token_fee_symbol.clone())),
+                ton_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                    .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+                ton_executor_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                    .and_then(|fee| parse_decimal(&fee.executor_fee))),
+                ton_token_fee_symbol: Set(get_fee(BlockchainTypeLowercase::Ton)
+                    .map(|fee| fee.token_fee_symbol.clone())),
+            };
+
+            operation_meta_info::Entity::insert(meta_model)
+                .on_conflict(
+                    sea_orm::sea_query::OnConflict::column(
+                        operation_meta_info::Column::OperationId,
+                    )
+                    .update_columns([
+                        operation_meta_info::Column::TacValidExecutors,
+                        operation_meta_info::Column::TonValidExecutors,
+                        operation_meta_info::Column::TacProtocolFee,
+                        operation_meta_info::Column::TacExecutorFee,
+                        operation_meta_info::Column::TacTokenFeeSymbol,
+                        operation_meta_info::Column::TonProtocolFee,
+                        operation_meta_info::Column::TonExecutorFee,
+                        operation_meta_info::Column::TonTokenFeeSymbol,
+                    ])
+                    .to_owned(),
+                )
+                .exec(tx)
+                .await?;
+        }
+        
         Ok(())
     }
 
