@@ -5,7 +5,10 @@ use crate::{
             BlockchainTypeLowercase, OperationData as ApiOperationData, OperationMetaInfo,
         },
     },
-    utils::{blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address},
+    utils::{
+        blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address,
+        timestamp_to_naive,
+    },
 };
 use anyhow::anyhow;
 use sea_orm::{
@@ -15,7 +18,7 @@ use sea_orm::{
     ActiveValue::{self, NotSet},
     ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr,
     EntityTrait, FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
-    RelationTrait, Set, Statement, TransactionTrait,
+    RelationTrait, Select, Set, Statement, TransactionTrait,
 };
 use std::{cmp::min, collections::HashMap, fmt, str::FromStr, sync::Arc};
 use tac_operation_lifecycle_entity::{
@@ -127,6 +130,13 @@ pub struct LogicPagination {
 
 const PAGE_SIZE: usize = 50;
 
+impl LogicPagination {
+    pub fn add_to_query(&self, query: Select<operation::Entity>) -> Select<operation::Entity> {
+        let ts = timestamp_to_naive(self.earlier_timestamp as i64);
+        query.filter(operation::Column::Timestamp.lt(ts))
+    }
+}
+
 pub struct TacDatabase {
     db: Arc<DatabaseConnection>,
     start_timestamp: u64,
@@ -138,13 +148,6 @@ impl TacDatabase {
             db,
             start_timestamp,
         }
-    }
-
-    // Add helper function for timestamp conversion
-    fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
-        chrono::DateTime::from_timestamp(timestamp, 0)
-            .unwrap()
-            .naive_utc()
     }
 
     // Retrieves the saved watermark from the database (returns 0 if not exist)
@@ -188,7 +191,7 @@ impl TacDatabase {
             .one(tx)
             .await?;
 
-        let timestamp_naive = Self::timestamp_to_naive(timestamp as i64);
+        let timestamp_naive = timestamp_to_naive(timestamp as i64);
 
         let watermark_model = match existing_watermark {
             Some(w) => watermark::ActiveModel {
@@ -228,8 +231,8 @@ impl TacDatabase {
 
         let interval = interval::ActiveModel {
             id: ActiveValue::NotSet,
-            start: ActiveValue::Set(Self::timestamp_to_naive(from as i64)),
-            finish: ActiveValue::Set(Self::timestamp_to_naive(to as i64)),
+            start: ActiveValue::Set(timestamp_to_naive(from as i64)),
+            finish: ActiveValue::Set(timestamp_to_naive(to as i64)),
             inserted_at: ActiveValue::Set(now),
             updated_at: ActiveValue::Set(now),
             status: sea_orm::ActiveValue::Set(StatusEnum::Pending),
@@ -272,9 +275,8 @@ impl TacDatabase {
         let intervals: Vec<interval::ActiveModel> = (from..to)
             .step_by(period_secs as usize)
             .map(|timestamp| {
-                let start_naive = Self::timestamp_to_naive(timestamp as i64);
-                let finish_naive =
-                    Self::timestamp_to_naive(min(timestamp + period_secs, to) as i64);
+                let start_naive = timestamp_to_naive(timestamp as i64);
+                let finish_naive = timestamp_to_naive(min(timestamp + period_secs, to) as i64);
 
                 interval::ActiveModel {
                     id: ActiveValue::NotSet,
@@ -340,8 +342,8 @@ impl TacDatabase {
     }
 
     pub async fn add_completed_interval(&self, from: u64, to: u64) -> anyhow::Result<()> {
-        let start_naive = Self::timestamp_to_naive(from as i64);
-        let finish_naive = Self::timestamp_to_naive(to as i64);
+        let start_naive = timestamp_to_naive(from as i64);
+        let finish_naive = timestamp_to_naive(to as i64);
         let now_naive = chrono::Utc::now().naive_utc();
 
         let new_interval = interval::ActiveModel {
@@ -411,7 +413,7 @@ impl TacDatabase {
             .map(|op| operation::ActiveModel {
                 id: Set(op.id.clone()),
                 op_type: Set(None),
-                timestamp: Set(Self::timestamp_to_naive(op.timestamp as i64)),
+                timestamp: Set(timestamp_to_naive(op.timestamp as i64)),
                 sender_address: Set(None),
                 sender_blockchain: Set(None),
                 status: Set(StatusEnum::Pending),
@@ -573,11 +575,11 @@ impl TacDatabase {
             StatusEnum::Pending.to_value()
         )];
         if let Some(start) = from {
-            let start_naive = Self::timestamp_to_naive(start as i64);
+            let start_naive = timestamp_to_naive(start as i64);
             conditions.push(format!("start >= '{}'", start_naive));
         }
         if let Some(finish) = to {
-            let finish_naive = Self::timestamp_to_naive(finish as i64);
+            let finish_naive = timestamp_to_naive(finish as i64);
             conditions.push(format!(r#"finish < '{}'"#, finish_naive));
         }
 
@@ -602,7 +604,7 @@ impl TacDatabase {
             format!("next_retry IS NOT NULL"),
             format!(
                 "next_retry < '{}'",
-                Self::timestamp_to_naive(chrono::Utc::now().timestamp())
+                timestamp_to_naive(chrono::Utc::now().timestamp())
             ),
         ];
 
@@ -711,7 +713,7 @@ impl TacDatabase {
             format!("next_retry IS NOT NULL"),
             format!(
                 "next_retry < '{}'",
-                Self::timestamp_to_naive(chrono::Utc::now().timestamp())
+                timestamp_to_naive(chrono::Utc::now().timestamp())
             ),
         ];
 
@@ -875,7 +877,7 @@ impl TacDatabase {
                     operation_id: Set(operation.id.clone()),
                     stage_type_id: Set(stage_type.to_id() as i16),
                     success: Set(data.success),
-                    timestamp: Set(Self::timestamp_to_naive(data.timestamp as i64)),
+                    timestamp: Set(timestamp_to_naive(data.timestamp as i64)),
                     note: Set(data.note.clone()),
                     inserted_at: Set(chrono::Utc::now().naive_utc()),
                 };
@@ -1226,9 +1228,7 @@ impl TacDatabase {
             operation::Entity::find().filter(operation::Column::SenderAddress.eq(address_cast));
 
         if let Some(pagination) = pagination_input {
-            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(
-                pagination.earlier_timestamp as i64,
-            )));
+            query = pagination.add_to_query(query);
         }
 
         query = query.order_by_desc(Column::Timestamp);
@@ -1260,8 +1260,7 @@ impl TacDatabase {
         );
 
         if let Some(pagination) = pagination_input {
-            let ts = Self::timestamp_to_naive(pagination.earlier_timestamp as i64);
-            query = query.filter(operation::Column::Timestamp.lt(ts));
+            query = pagination.add_to_query(query);
         }
 
         query = query.order_by_desc(operation::Column::Timestamp);
@@ -1362,9 +1361,7 @@ impl TacDatabase {
         let mut query = operation::Entity::find();
 
         if let Some(pagination) = pagination_input {
-            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(
-                pagination.earlier_timestamp as i64,
-            )));
+            query = pagination.add_to_query(query);
         }
 
         query = query.order_by_desc(Column::Timestamp);

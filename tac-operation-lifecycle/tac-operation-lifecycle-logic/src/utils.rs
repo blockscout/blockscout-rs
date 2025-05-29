@@ -3,6 +3,12 @@ use std::str::FromStr;
 //use base64::prelude::*;
 use tonlib_core::TonAddress;
 
+pub fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
+    chrono::DateTime::from_timestamp(timestamp, 0)
+        .unwrap()
+        .naive_utc()
+}
+
 pub fn is_generic_hash(q: &str) -> bool {
     q.starts_with("0x") && q.len() == 66 && q[2..].chars().all(|c| c.is_ascii_hexdigit())
 }

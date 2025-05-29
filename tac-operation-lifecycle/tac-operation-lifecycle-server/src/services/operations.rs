@@ -152,11 +152,9 @@ impl TacService for OperationsService {
             }
         };
 
-        let next_page_params = Self::convert_logic_pagination(pagination);
-
         Ok(tonic::Response::new(OperationsResponse {
             items: Self::convert_short_db_operation_into_response(operations),
-            next_page_params,
+            next_page_params: Self::convert_logic_pagination(pagination),
         }))
     }
 
