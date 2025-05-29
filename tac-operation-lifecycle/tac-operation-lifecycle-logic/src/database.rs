@@ -13,8 +13,9 @@ use sea_orm::{
     sea_query::OnConflict,
     ActiveEnum, ActiveModelTrait,
     ActiveValue::{self, NotSet},
-    ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
+    ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr,
+    EntityTrait, FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+    RelationTrait, Set, Statement, TransactionTrait,
 };
 use std::{cmp::min, collections::HashMap, fmt, str::FromStr, sync::Arc};
 use tac_operation_lifecycle_entity::{
@@ -1232,24 +1233,8 @@ impl TacDatabase {
 
         query = query.order_by_desc(Column::Timestamp);
 
-        // request more records than needed to check if additional records are available.
-        let mut operations = query
-            .limit(PAGE_SIZE as u64 + 1)
-            .all(self.db.as_ref())
-            .await?;
-
-        let mut pagination_output = None;
-        let need_pagination = operations.len() > PAGE_SIZE; // the pagination criteria
-        operations.pop(); // remove the last one aux element (if exist)
-        if need_pagination {
-            // seems we should turn on the pagination
-            pagination_output = Some(TacDatabase::calculate_pagination(
-                pagination_input,
-                &operations,
-            ));
-        }
-
-        Ok((operations, pagination_output))
+        self.query_operations_with_pagination(query, pagination_input, PAGE_SIZE)
+            .await
     }
 
     pub async fn get_brief_operations_by_tx_hash(
@@ -1257,44 +1242,32 @@ impl TacDatabase {
         tx_hash: &str,
         pagination_input: Option<LogicPagination>,
     ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
-        let mut sql = String::from(
-            r#"
-            SELECT id, op_type, timestamp, status::text, sender_address, sender_blockchain, 
-                   next_retry, retry_count, inserted_at, updated_at
-            FROM operation
-            WHERE id IN (
-                SELECT s.operation_id
-                FROM operation_stage s
-                JOIN transaction t ON s.id = t.stage_id
-                WHERE t.hash = $1
-            )
-            "#,
+        // Build base query
+        let mut query = operation::Entity::find().filter(
+            Condition::all().add(
+                operation::Column::Id.in_subquery(
+                    operation_stage::Entity::find()
+                        .join(
+                            JoinType::InnerJoin,
+                            operation_stage::Relation::Transaction.def(),
+                        )
+                        .filter(transaction::Column::Hash.eq(tx_hash))
+                        .select_only()
+                        .column(operation_stage::Column::OperationId)
+                        .into_query(),
+                ),
+            ),
         );
 
-        let mut values: Vec<sea_orm::Value> = vec![tx_hash.into()];
-
         if let Some(pagination) = pagination_input {
-            sql.push_str(" AND timestamp < $2 ORDER BY timestamp DESC LIMIT $3");
-            values.push(Self::timestamp_to_naive(pagination.earlier_timestamp as i64).into());
-        } else {
-            sql.push_str(" ORDER BY timestamp DESC LIMIT $2");
+            let ts = Self::timestamp_to_naive(pagination.earlier_timestamp as i64);
+            query = query.filter(operation::Column::Timestamp.lt(ts));
         }
 
-        values.push((PAGE_SIZE as u64 + 1).into());
+        query = query.order_by_desc(operation::Column::Timestamp);
 
-        let mut operations = self.get_operations_with_sql(&sql, values).await?;
-
-        let mut pagination_output = None;
-        let need_pagination = operations.len() > PAGE_SIZE;
-        operations.truncate(PAGE_SIZE);
-        if need_pagination {
-            pagination_output = Some(TacDatabase::calculate_pagination(
-                pagination_input,
-                &operations,
-            ));
-        }
-
-        Ok((operations, pagination_output))
+        self.query_operations_with_pagination(query, pagination_input, PAGE_SIZE)
+            .await
     }
 
     async fn get_full_operations_with_sql(
@@ -1396,20 +1369,31 @@ impl TacDatabase {
 
         query = query.order_by_desc(Column::Timestamp);
 
+        self.query_operations_with_pagination(query, pagination_input, PAGE_SIZE)
+            .await
+    }
+
+    async fn query_operations_with_pagination(
+        &self,
+        query: sea_orm::Select<operation::Entity>,
+        pagination_input: Option<LogicPagination>,
+        page_size: usize,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
         // request more records than needed to check if additional records are available.
         let mut operations = query
-            .limit(PAGE_SIZE as u64 + 1)
+            .limit(page_size as u64 + 1)
             .all(self.db.as_ref())
             .await?;
 
         let mut pagination_output = None;
-        let need_pagination = operations.len() > PAGE_SIZE; // the pagination criteria
-        operations.pop(); // remove the last one aux element (if exist)
+        let need_pagination = operations.len() > page_size; // the pagination criteria
+        operations.truncate(page_size); // remove the last one aux element (if exist)
         if need_pagination {
             // seems we should turn on the pagination
-            pagination_output = Some(TacDatabase::calculate_pagination(
-                pagination_input,
+            pagination_output = Some(Self::calculate_pagination(
                 &operations,
+                pagination_input,
+                page_size,
             ));
         }
 
@@ -1417,30 +1401,18 @@ impl TacDatabase {
     }
 
     fn calculate_pagination(
-        pagination_input: Option<LogicPagination>,
         ops: &[operation::Model],
+        pagination_input: Option<LogicPagination>,
+        page_size: usize,
     ) -> LogicPagination {
         let prev_count = pagination_input.map_or(0, |p| p.count);
 
         let earlier_timestamp = ops.last().unwrap().timestamp.and_utc().timestamp() as u64;
 
         LogicPagination {
-            count: prev_count + PAGE_SIZE,
+            count: prev_count + page_size,
             earlier_timestamp,
         }
-    }
-
-    async fn get_operations_with_sql(
-        &self,
-        sql: &str,
-        values: impl IntoIterator<Item = sea_orm::Value>,
-    ) -> anyhow::Result<Vec<operation::Model>> {
-        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, values);
-        let operations = operation::Entity::find()
-            .from_raw_sql(stmt)
-            .all(self.db.as_ref())
-            .await?;
-        Ok(operations)
     }
 
     pub async fn reset_processing_intervals(&self) -> anyhow::Result<usize> {
