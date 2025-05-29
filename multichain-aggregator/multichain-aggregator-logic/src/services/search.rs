@@ -30,14 +30,9 @@ const MIN_QUERY_LENGTH: usize = 3;
 const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
 const QUICK_SEARCH_ENTITY_LIMIT: usize = 5;
 
-fn general_domain_name_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^\b\w{3,}\b").unwrap())
-}
-
 fn domain_name_with_tld_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^\b\w{3,}\.\w+$").unwrap())
+    RE.get_or_init(|| Regex::new(r"\b[\p{L}\p{N}\p{Emoji}_-]{3,63}\.eth\b").unwrap())
 }
 
 pub enum AddressSearchConfig<'a> {
@@ -637,6 +632,7 @@ impl SearchTerm {
 }
 
 pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
+    let query = query.trim();
     let mut terms = vec![];
 
     // If a term is an address or a hash, we can ignore other search types
@@ -657,10 +653,7 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
     if query.len() >= MIN_QUERY_LENGTH {
         terms.push(SearchTerm::TokenInfo(query.to_string()));
         terms.push(SearchTerm::ContractName(query.to_string()));
-
-        if general_domain_name_regex().is_match(query) {
-            terms.push(SearchTerm::Domain(query.to_string()));
-        }
+        terms.push(SearchTerm::Domain(query.to_string()));
     }
 
     terms.push(SearchTerm::Dapp(query.to_string()));
@@ -745,12 +738,7 @@ mod tests {
 
     #[test]
     fn test_domain_name_regex() {
-        assert!(general_domain_name_regex().is_match("test"));
-        assert!(general_domain_name_regex().is_match("test.eth"));
-        assert!(!general_domain_name_regex().is_match("te"));
-        assert!(!general_domain_name_regex().is_match("te.eth"));
-
-        assert!(domain_name_with_tld_regex().is_match("test.eth"));
+        assert!(domain_name_with_tld_regex().is_match("test🙂.eth"));
         assert!(!domain_name_with_tld_regex().is_match("test"));
         assert!(!domain_name_with_tld_regex().is_match("te."));
         assert!(!domain_name_with_tld_regex().is_match("te.eth"));
