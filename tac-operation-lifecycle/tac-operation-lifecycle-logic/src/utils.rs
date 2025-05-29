@@ -1,6 +1,5 @@
 use anyhow::anyhow;
 use std::str::FromStr;
-//use base64::prelude::*;
 use tonlib_core::TonAddress;
 
 pub fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
