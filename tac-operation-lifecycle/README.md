@@ -15,23 +15,29 @@ This feature addresses that by indexing TAC Operations in a way that provides a 
 ## Improvements 
 
 Indexer Logic Description
-The TAC Operation Lifecycle Indexer follows a three-stage process:
+The TAC Operation Lifecycle Indexer follows a process describing below:
 1. Timeline Dissection:
-* The indexer divides the timeline into fixed-size `intervals`
-* It maintains a `watermark` that marks the latest processed timestamp
-* The `watermark` advances as `intervals` are processed
-* For historical data, it processes `intervals` from oldest to newest
-For realtime data, it continuously creates new `intervals`
-2. Interval Processing:
+* The indexer divides the historical timeline into fixed-size `intervals`
+* The `watermark` marks the latest timestamp covered by intervals
+* The `watermark` advances as new `intervals` are added
+* For historical data, `intervals` are processed in both directions: from the oldest to the newest and vice versa.
+
+2. Historical Interval Processing:
 * For each interval, the indexer fetches a list of operations that occurred within that time window
 * Operations are stored in the database with a `pending` status
 * The interval is marked as `finalized` once operations are fetched
-* If fetching fails, the interval is scheduled for retry with exponential backoff
-3. Operation Processing:
+* If fetching fails, the interval is scheduled for retry
+
+3. Realtime Interval Processing
+* For realtime data, new `intervals` are not created in advance.
+* A separate thread fetches new operations starting from the latest known operation up to the current timestamp.
+* Once new operations are fetched, a new interval in the `finalized` state is created to match the request range — from the previously latest known operation to the current one. This approach helps avoid issues caused by the remote TAC RPC being out of sync.
+
+4. Operation Processing:
 * For each operation, the indexer fetches detailed stage information
 * Operation stages track the lifecycle of the operation across different blockchains
 * Once stages are fetched, the operation is marked as `finalized`
-* If fetching fails, the operation is scheduled for retry with exponential backoff
+* If fetching fails, the operation is scheduled for retry
 
 
 ```
@@ -59,22 +65,23 @@ For realtime data, it continuously creates new `intervals`
 
 We persist and track latest saved interval (`watermark`) in the database and advance it alongside with creating new intervals.
 Apart from latest interval we also track latest `operation` so that if we get a falsely empty response we would automatically request it again.
-This PR follows similar practices  from `da_indexer` specifically the server launches multiple future streams:
-* historic operation fetcher that selects `intervals` in ascending order from a configurable starting timestamp
+The inedxer follows the following practices specifically the server launches multiple future streams:
+* historic operation fetcher that selects `intervals` in both directions from a configurable starting timestamp
 * realtime operation fetcher that selects `intervals` in ascending order after the service has started
-* failed intervals and operations fetcher resends failed requests with exponential backoff 
+* failed intervals and operations fetcher resends failed requests 
 
 ```                                                                                       
 +----------------------------------------------------------------------------------------+
-|                                    PRIORITIZED STREAMS                                  |
+|  (high prio)         --->         PRIORITIZED STREAMS         --->         (low prio)  |
 +----------------------------------------------------------------------------------------+
                                                                                           
                                                                                           
 +-------------------+     +-------------------+     +-------------------+                  
 |                   |     |                   |     |                   |                  
-|  Realtime         |     |  Historical       |     |  Operations       |                  
-|  Stream           |     |  Intervals        |     |  Stream           |                  
-|                   |     |  Stream           |     |                   |                  
+|  Operation        |     |  Historical       |     |  Operations and   |                  
+|  Streams          |     |  Intervals        |     |  Intervals        |                  
+|  (Pending + New)  |     |  Streams          |     |  Retry Streams    |
+|                   |     |                   |     |                   |                  
 +-------------------+     +-------------------+     +-------------------+                  
         |                         |                         |                              
         |                         |                         |                              
@@ -86,7 +93,7 @@ This PR follows similar practices  from `da_indexer` specifically the server lau
 
 ## Configuration Parameters
 
-Parameters can be configured either using a `yaml`file or environment variables. See example in `tac-operation-lifecycle-server/config.yaml`
+Parameters can be configured either using a `toml` file or environment variables. See example in `tac-operation-lifecycle-server/config.toml`
 
 [anchor]: <> (anchors.envs.start.service)
 
