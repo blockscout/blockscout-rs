@@ -540,10 +540,17 @@ impl Indexer {
                                 StatusEnum::Pending
                             };
 
-                            let _ = self
+                            if let Err(e) = self
                                 .database
                                 .set_operation_data(&job.operation, operation_data, &new_status)
-                                .await;
+                                .await
+                            {
+                                tracing::error!(
+                                    operation_id =? job.operation.id,
+                                    err =? e,
+                                    "Failed to store operation data into the database"
+                                );
+                            }
 
                             processed_operations += 1;
                             if new_status == StatusEnum::Completed {
