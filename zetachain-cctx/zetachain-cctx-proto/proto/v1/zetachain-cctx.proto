@@ -1,0 +1,262 @@
+syntax = "proto3";
+
+package blockscout.zetachainCctx.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/zetachain-cctx";
+
+
+service CctxInfo {
+  rpc GetCctxInfo(GetCctxInfoRequest) returns (CrossChainTx) {}
+  rpc ListCctxs(ListCctxsRequest) returns (ListCctxsResponse) {}
+}
+
+service TokenInfo {
+  rpc GetTokenInfo(GetTokenInfoRequest) returns (TokenInfoResponse) {}
+}
+
+message GetCctxInfoRequest {
+  string cctx_id = 1;
+}
+
+message ListCctxsRequest {
+  int64 limit = 1;
+  int64 offset = 2;
+  
+  // Comma-separated values for multiple filters
+  optional string status_reduced = 3;      // "Pending,Success,Failed"
+  optional string sender_address = 4;      // "0x123,0x456,0x789"
+  optional string receiver_address = 5;    // "0xabc,0xdef,0xghi"
+  optional string asset = 6;               // "ETH,BTC,USDC"
+  optional string coin_type = 7;           // "Zeta,Gas,Erc20"
+  optional string source_chain_id = 8;     // "1,56,137"
+  optional string target_chain_id = 9;     // "1,56,137"
+  optional string token_symbol = 10;       // "ETH,BTC,USDC"
+  optional int64 start_timestamp = 11;
+  optional int64 end_timestamp = 12;
+}
+
+message ListCctxsResponse {
+  repeated CctxListItem items = 1;
+  Pagination next_page_params = 2;
+}
+
+
+message Pagination {
+  int64 page_token = 1;
+  uint32 page_items = 2;
+}
+
+
+
+enum CoinType {
+  Zeta = 0;
+  Gas = 1;         // Ether, BNB, Matic, Klay, BTC, etc
+  Erc20 = 2;       // ERC20 token
+  Cmd = 3;         // no asset, used for admin command
+  NoAssetCall = 4; // no asset, used for contract call
+}
+
+
+
+enum CctxStatus {
+  PendingInbound = 0;  // some observer sees inbound tx
+  PendingOutbound = 1; // super majority observer see inbound tx
+  OutboundMined = 3;   // the corresponding outbound tx is mined
+  PendingRevert = 4;   // outbound cannot succeed; should revert inbound
+  Reverted = 5;        // inbound reverted.
+  Aborted =
+      6; // inbound tx error or invalid paramters and cannot revert; just abort.
+         // But the amount can be refunded to zetachain using and admin proposal
+}
+
+enum CctxStatusReduced {
+  Pending = 0;
+  Success = 1;
+  Failed = 2;
+}
+
+enum TxFinalizationStatus {
+  NotFinalized = 0; // the corresponding tx is not finalized
+  Finalized = 1;    // the corresponding tx is finalized but not executed yet
+  Executed = 2;     // the corresponding tx is executed
+}
+
+enum ConfirmationMode {
+  SAFE = 0; // an inbound/outbound is confirmed using safe confirmation count
+  FAST = 1; // an inbound/outbound is confirmed using fast confirmation count
+}
+
+// InboundStatus represents the status of an observed inbound
+enum InboundStatus {
+  SUCCESS = 0;
+  // this field is specifically for Bitcoin when the deposit amount is less than
+  // depositor fee
+  INSUFFICIENT_DEPOSITOR_FEE = 1;
+  // the receiver address parsed from the inbound is invalid
+  INVALID_RECEIVER_ADDRESS = 2;
+  // parse memo is invalid
+  INVALID_MEMO = 3;
+}
+
+message InboundParams {
+  string sender = 1; // this address is the immediate contract/EOA that calls
+  // the Connector.send()
+  int64 sender_chain_id = 2;
+  string tx_origin = 3; // this address is the EOA that signs the inbound tx
+  CoinType coin_type = 4;
+  string asset =
+      5; // for ERC20 coin type, the asset is an address of the ERC20 contract
+  string amount = 6 ;
+  string observed_hash = 7;
+  uint64 observed_external_height = 8;
+  string ballot_index = 9;
+  uint64 finalized_zeta_height = 10;
+  TxFinalizationStatus tx_finalization_status = 11;
+
+  // this field describes if a smart contract call should be made for a inbound
+  // with assets only used for protocol contract version 2
+  bool is_cross_chain_call = 12;
+
+  // status of the inbound observation
+  InboundStatus status = 20;
+
+  // confirmation mode used for the inbound
+  ConfirmationMode confirmation_mode = 21;
+
+  // not used. do not edit.
+  reserved 13 to 19;
+}
+
+message ZetaAccounting {
+  // aborted_zeta_amount stores the total aborted amount for cctx of coin-type
+  // ZETA
+  string aborted_zeta_amount = 1 ;
+}
+
+message CallOptions {
+  uint64 gas_limit = 1;
+  bool is_arbitrary_call = 2;
+}
+
+message OutboundParams {
+  string receiver = 1;
+  int64 receiver_chainId = 2;
+  CoinType coin_type = 3;
+  string amount = 4 ;
+  uint64 tss_nonce = 5;
+  // Deprecated (v21), use CallOptions
+  uint64 gas_limit = 6;
+  string gas_price = 7;
+  string gas_priority_fee = 23;
+  // the above are commands for zetaclients
+  // the following fields are used when the outbound tx is mined
+  string hash = 8;
+  string ballot_index = 9;
+  uint64 observed_external_height = 10;
+  uint64 gas_used = 20;
+  string effective_gas_price = 21;
+  uint64 effective_gas_limit = 22;
+  string tss_pubkey = 11;
+  TxFinalizationStatus tx_finalization_status = 12;
+
+  CallOptions call_options = 24;
+
+  // confirmation mode used for the outbound
+  ConfirmationMode confirmation_mode = 25;
+
+  // not used. do not edit.
+  reserved 13 to 19;
+}
+
+message Status {
+  CctxStatus status = 1;
+  // status_message carries information about the status transitions:
+  // why they were triggered, old and new status.
+  string status_message = 2;
+  // error_message carries information about the error that caused the tx
+  // to be PendingRevert, Reverted or Aborted.
+  string error_message = 6;
+  int64 lastUpdate_timestamp = 3;
+  bool isAbortRefunded = 4;
+  // when the CCTX was created. only populated on new transactions.
+  int64 created_timestamp = 5;
+  // error_message_revert carries information about the revert outbound tx ,
+  // which is created if the first outbound tx fails
+  string error_message_revert = 7;
+  // error_message_abort carries information when aborting the CCTX fails
+  string error_message_abort = 8;
+}
+
+// ProtocolContractVersion represents the version of the protocol contract used
+// for cctx workflow
+enum ProtocolContractVersion {
+  V1 = 0;
+  V2 = 1;
+}
+
+// RevertOptions represents the options for reverting a cctx
+message RevertOptions {
+  string revert_address = 1;
+  bool call_on_revert = 2;
+  string abort_address = 3;
+  bytes revert_message = 4;
+  string revert_gas_limit = 5 ;
+}
+
+message CctxListItem {
+  string index = 1;
+  CctxStatus status = 2;
+  CctxStatusReduced status_reduced = 3;
+  string amount = 4;
+  string source_chain_id = 5;
+  string target_chain_id = 6;
+  int64 created_timestamp = 7;
+  int64 last_update_timestamp = 8;
+  string sender_address = 9;
+  string receiver_address = 10;
+  string asset = 11;
+  CoinType coin_type = 12;
+  optional string token_symbol = 13;
+  optional string zrc20_contract_address = 14;
+  optional int64 decimals = 15;
+}
+
+message RelatedCctx {
+  string index = 1;
+  int32 depth = 2;
+  string source_chain_id = 3;
+  CctxStatus status = 4;
+  string inbound_amount = 5;
+  CoinType inbound_coin_type = 6;
+  repeated RelatedOutboundParams outbound_params = 7;
+}
+
+message RelatedOutboundParams {
+  string amount = 1;
+  string chain_id = 2;
+  CoinType coin_type = 3;
+}
+
+message CrossChainTx {
+  string creator = 1;
+  string index = 2;
+  string zeta_fees = 5;
+  string relayed_message = 6; // Not used by protocol , just relayed across
+  Status cctx_status = 8;
+  InboundParams inbound_params = 9;
+  repeated OutboundParams outbound_params = 10;
+  ProtocolContractVersion protocol_contract_version = 11;
+  RevertOptions revert_options = 12;
+  repeated RelatedCctx related_cctxs = 13;
+}
+
+message GetTokenInfoRequest {
+  string asset = 1;
+}
+
+message TokenInfoResponse {
+  string foreign_chain_id = 1;
+  int32 decimals = 2;
+  string name = 3;
+  string symbol = 4;
+}

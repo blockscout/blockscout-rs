@@ -1,0 +1,14 @@
+[package]
+name = "zetachain-cctx-entity"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+sea-orm = { workspace = true, features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
+serde = { workspace = true }
+
+[dev-dependencies]
