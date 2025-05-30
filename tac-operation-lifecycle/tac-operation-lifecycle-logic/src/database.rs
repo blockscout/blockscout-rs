@@ -1,23 +1,30 @@
 use crate::{
     client::models::{
-        operations::Operations as ApiOperations, profiling::OperationData as ApiOperationData,
+        operations::Operations as ApiOperations,
+        profiling::{
+            BlockchainTypeLowercase, OperationData as ApiOperationData, OperationMetaInfo,
+        },
     },
-    utils::{is_generic_hash, is_tac_address, is_ton_address},
+    utils::{
+        blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address,
+        timestamp_to_naive,
+    },
 };
 use anyhow::anyhow;
 use sea_orm::{
-    prelude::DateTime,
+    prelude::{DateTime, Decimal},
     sea_query::OnConflict,
     ActiveEnum, ActiveModelTrait,
     ActiveValue::{self, NotSet},
-    ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
+    ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr,
+    EntityTrait, FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+    RelationTrait, Select, Set, Statement, TransactionTrait,
 };
-use std::{cmp::min, collections::HashMap, fmt, sync::Arc};
+use std::{cmp::min, collections::HashMap, fmt, str::FromStr, sync::Arc};
 use tac_operation_lifecycle_entity::{
     interval,
     operation::{self, Column},
-    operation_stage,
+    operation_meta_info, operation_stage,
     sea_orm_active_enums::StatusEnum,
     stage_type, transaction, watermark,
 };
@@ -98,6 +105,8 @@ struct JoinedRow {
     op_type: Option<String>,
     timestamp: DateTime,
     status: StatusEnum,
+    sender_address: Option<String>,
+    sender_blockchain: Option<String>,
 
     //operation_stage
     stage_id: Option<i32>,
@@ -113,6 +122,21 @@ struct JoinedRow {
     tx_blockchain_type: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LogicPagination {
+    pub count: usize,
+    pub earlier_timestamp: u64,
+}
+
+const PAGE_SIZE: usize = 50;
+
+impl LogicPagination {
+    pub fn add_to_query(&self, query: Select<operation::Entity>) -> Select<operation::Entity> {
+        let ts = timestamp_to_naive(self.earlier_timestamp as i64);
+        query.filter(operation::Column::Timestamp.lt(ts))
+    }
+}
+
 pub struct TacDatabase {
     db: Arc<DatabaseConnection>,
     start_timestamp: u64,
@@ -124,13 +148,6 @@ impl TacDatabase {
             db,
             start_timestamp,
         }
-    }
-
-    // Add helper function for timestamp conversion
-    fn timestamp_to_naive(timestamp: i64) -> chrono::NaiveDateTime {
-        chrono::DateTime::from_timestamp(timestamp, 0)
-            .unwrap()
-            .naive_utc()
     }
 
     // Retrieves the saved watermark from the database (returns 0 if not exist)
@@ -174,7 +191,7 @@ impl TacDatabase {
             .one(tx)
             .await?;
 
-        let timestamp_naive = Self::timestamp_to_naive(timestamp as i64);
+        let timestamp_naive = timestamp_to_naive(timestamp as i64);
 
         let watermark_model = match existing_watermark {
             Some(w) => watermark::ActiveModel {
@@ -214,8 +231,8 @@ impl TacDatabase {
 
         let interval = interval::ActiveModel {
             id: ActiveValue::NotSet,
-            start: ActiveValue::Set(Self::timestamp_to_naive(from as i64)),
-            finish: ActiveValue::Set(Self::timestamp_to_naive(to as i64)),
+            start: ActiveValue::Set(timestamp_to_naive(from as i64)),
+            finish: ActiveValue::Set(timestamp_to_naive(to as i64)),
             inserted_at: ActiveValue::Set(now),
             updated_at: ActiveValue::Set(now),
             status: sea_orm::ActiveValue::Set(StatusEnum::Pending),
@@ -258,9 +275,8 @@ impl TacDatabase {
         let intervals: Vec<interval::ActiveModel> = (from..to)
             .step_by(period_secs as usize)
             .map(|timestamp| {
-                let start_naive = Self::timestamp_to_naive(timestamp as i64);
-                let finish_naive =
-                    Self::timestamp_to_naive(min(timestamp + period_secs, to) as i64);
+                let start_naive = timestamp_to_naive(timestamp as i64);
+                let finish_naive = timestamp_to_naive(min(timestamp + period_secs, to) as i64);
 
                 interval::ActiveModel {
                     id: ActiveValue::NotSet,
@@ -326,8 +342,8 @@ impl TacDatabase {
     }
 
     pub async fn add_completed_interval(&self, from: u64, to: u64) -> anyhow::Result<()> {
-        let start_naive = Self::timestamp_to_naive(from as i64);
-        let finish_naive = Self::timestamp_to_naive(to as i64);
+        let start_naive = timestamp_to_naive(from as i64);
+        let finish_naive = timestamp_to_naive(to as i64);
         let now_naive = chrono::Utc::now().naive_utc();
 
         let new_interval = interval::ActiveModel {
@@ -385,6 +401,9 @@ impl TacDatabase {
         Ok(())
     }
 
+    // Store operations fetched from the TAC API into the database
+    // A few fields are set to None, because they are not available at this point
+    // The operation status is set to 'pending' to indicate that the operation is not yet processed
     pub async fn insert_pending_operations(
         &self,
         operations: &ApiOperations,
@@ -394,7 +413,9 @@ impl TacDatabase {
             .map(|op| operation::ActiveModel {
                 id: Set(op.id.clone()),
                 op_type: Set(None),
-                timestamp: Set(Self::timestamp_to_naive(op.timestamp as i64)),
+                timestamp: Set(timestamp_to_naive(op.timestamp as i64)),
+                sender_address: Set(None),
+                sender_blockchain: Set(None),
                 status: Set(StatusEnum::Pending),
                 next_retry: Set(None),
                 retry_count: Set(0), // Initialize retry count
@@ -471,60 +492,6 @@ impl TacDatabase {
         }
     }
 
-    pub async fn set_operation_status(
-        &self,
-        operation_model: &operation::Model,
-        status: &StatusEnum,
-    ) -> anyhow::Result<()> {
-        let mut operation_active: operation::ActiveModel = operation_model.clone().into();
-        operation_active.status = Set(status.clone());
-
-        // Saving changes
-        operation_active
-            .update(self.db.as_ref())
-            .await
-            .map_err(|e| {
-                tracing::error!(
-                    operation_id =? operation_model.id,
-                    new_status =? status.to_value(),
-                    err =? e,
-                    "Failed to update operation status"
-                );
-                anyhow!(e)
-            })?;
-
-        tracing::debug!(
-            operation_id =? operation_model.id,
-            new_status =? status.to_value(),
-            "Successfully updated operation status"
-        );
-        Ok(())
-    }
-
-    pub async fn set_operation_status_by_id(
-        &self,
-        op_id: &String,
-        status: &StatusEnum,
-    ) -> anyhow::Result<()> {
-        // Found record by PK
-        match operation::Entity::find_by_id(op_id)
-            .one(self.db.as_ref())
-            .await?
-        {
-            Some(operation_model) => self.set_operation_status(&operation_model, status).await,
-            None => {
-                let err = anyhow!("operation not found");
-                tracing::error!(
-                    operation_id =? op_id,
-                    new_status =? status.to_value(),
-                    err =? err,
-                    "Cannot update operation status"
-                );
-                Err(err)
-            }
-        }
-    }
-
     // Helper function to build interval query with common structure
     fn build_interval_query(
         &self,
@@ -586,7 +553,8 @@ impl TacDatabase {
             UPDATE operation 
             SET status = '{new_status}'::status_enum
             WHERE id IN (SELECT id FROM selected_operations)
-            RETURNING id, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
+            RETURNING id, timestamp, status::text, sender_address, sender_blockchain,
+                      next_retry, retry_count, inserted_at, updated_at
             "#,
         )
     }
@@ -607,11 +575,11 @@ impl TacDatabase {
             StatusEnum::Pending.to_value()
         )];
         if let Some(start) = from {
-            let start_naive = Self::timestamp_to_naive(start as i64);
+            let start_naive = timestamp_to_naive(start as i64);
             conditions.push(format!("start >= '{}'", start_naive));
         }
         if let Some(finish) = to {
-            let finish_naive = Self::timestamp_to_naive(finish as i64);
+            let finish_naive = timestamp_to_naive(finish as i64);
             conditions.push(format!(r#"finish < '{}'"#, finish_naive));
         }
 
@@ -636,7 +604,7 @@ impl TacDatabase {
             format!("next_retry IS NOT NULL"),
             format!(
                 "next_retry < '{}'",
-                Self::timestamp_to_naive(chrono::Utc::now().timestamp())
+                timestamp_to_naive(chrono::Utc::now().timestamp())
             ),
         ];
 
@@ -745,7 +713,7 @@ impl TacDatabase {
             format!("next_retry IS NOT NULL"),
             format!(
                 "next_retry < '{}'",
-                Self::timestamp_to_naive(chrono::Utc::now().timestamp())
+                timestamp_to_naive(chrono::Utc::now().timestamp())
             ),
         ];
 
@@ -803,82 +771,198 @@ impl TacDatabase {
         &self,
         operation: &operation::Model,
         operation_data: &ApiOperationData,
+        new_status: &StatusEnum,
     ) -> anyhow::Result<()> {
-        let tx_id = Uuid::new_v4();
-        tracing::debug!(tx_id =? tx_id, "Beginning transaction for set_operation_data");
-
         let operation = operation.clone();
         let operation_data = operation_data.clone();
+        let new_status = new_status.clone();
 
         self.db
             .transaction::<_, (), DbErr>(|tx| {
                 Box::pin(async move {
-                    // Remove associated stages with transactions
-                    operation_stage::Entity::delete_many()
-                        .filter(operation_stage::Column::OperationId.eq(&operation.id))
-                        .exec(tx)
-                        .await?;
+                    Self::remove_operation_associated_stages(tx, &operation.id).await?;
 
-                    // Update operation type and status
-                    let mut operation_model: operation::ActiveModel = operation.clone().into();
-                    if operation_data.operation_type.is_finalized() {
-                        operation_model.status = Set(StatusEnum::Completed);
-                    }
-                    operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
+                    Self::set_operation_base_properties(
+                        tx,
+                        &operation,
+                        &operation_data,
+                        &new_status,
+                    )
+                    .await?;
 
-                    operation_model
-                        .update(tx)
-                        .instrument(tracing::debug_span!(
-                            "updating operation",
-                            tx_id = tx_id.to_string(),
-                        ))
-                        .await?;
+                    Self::store_operation_stages(tx, &operation, &operation_data).await?;
 
-                    // Store operation stages
-                    for (stage_type, stage_data) in operation_data.stages.iter() {
-                        if let Some(data) = &stage_data.stage_data {
-                            // prepare and inserting stage model
-                            let stage_model = operation_stage::ActiveModel {
-                                id: NotSet,
-                                operation_id: Set(operation.id.clone()),
-                                stage_type_id: Set(stage_type.to_id() as i16),
-                                success: Set(data.success),
-                                timestamp: Set(Self::timestamp_to_naive(data.timestamp as i64)),
-                                note: Set(data.note.clone()),
-                                inserted_at: Set(chrono::Utc::now().naive_utc()),
-                            };
-
-                            let inserted_stage = operation_stage::Entity::insert(stage_model)
-                                .on_conflict(
-                                    sea_orm::sea_query::OnConflict::column(operation::Column::Id)
-                                        .do_nothing()
-                                        .to_owned(),
-                                )
-                                .exec_with_returning(tx)
-                                .await?;
-
-                            // store transactions for this stage
-                            let transaction_models = data
-                                .transactions
-                                .iter()
-                                .map(|a_tx| transaction::ActiveModel {
-                                    id: NotSet,
-                                    stage_id: Set(inserted_stage.id),
-                                    hash: Set(a_tx.hash.clone()),
-                                    blockchain_type: Set(a_tx.blockchain_type.to_string()),
-                                    inserted_at: Set(chrono::Utc::now().naive_utc()),
-                                })
-                                .collect::<Vec<_>>();
-
-                            transaction::Entity::insert_many(transaction_models)
-                                .exec(tx)
-                                .await?;
-                        }
+                    if let Some(meta_info) = operation_data.meta_info {
+                        Self::store_operation_metainfo(tx, &operation, &meta_info).await?;
                     }
 
                     Ok(())
                 })
             })
+            .await?;
+
+        Ok(())
+    }
+
+    async fn remove_operation_associated_stages(
+        tx: &DatabaseTransaction,
+        operation_id: &String,
+    ) -> Result<(), DbErr> {
+        operation_stage::Entity::delete_many()
+            .filter(operation_stage::Column::OperationId.eq(operation_id))
+            .exec(tx)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn set_operation_base_properties(
+        tx: &DatabaseTransaction,
+        operation: &operation::Model,
+        operation_data: &ApiOperationData,
+        new_status: &StatusEnum,
+    ) -> Result<(), DbErr> {
+        let mut operation_model: operation::ActiveModel = operation.clone().into();
+        operation_model.updated_at = Set(chrono::Utc::now().naive_utc());
+        operation_model.op_type = Set(Some(operation_data.operation_type.to_string()));
+        operation_model.status = Set(new_status.clone());
+
+        if let Some((address, blockchain)) = operation_data
+            .meta_info
+            .as_ref()
+            .and_then(|meta| meta.initial_caller.clone())
+            .and_then(|caller| {
+                blockchain_address_to_db_format(&caller.address)
+                    .ok()
+                    .map(|addr| (addr, caller.blockchain_type.to_string()))
+            })
+        {
+            operation_model.sender_address = Set(Some(address));
+            operation_model.sender_blockchain = Set(Some(blockchain));
+        } else {
+            tracing::warn!(op_id =? operation.id, "Storing operation without sender")
+        }
+
+        let new_type = operation_model.op_type.clone();
+        let upd_at = operation_model.updated_at.clone().into_value().unwrap();
+
+        operation_model
+            .update(tx)
+            .instrument(tracing::debug_span!(
+                "updating operation",
+                op_id = operation.id,
+                op_type =? new_type,
+                updated_at =? upd_at,
+                new_status =? new_status,
+            ))
+            .await?;
+
+        Ok(())
+    }
+
+    async fn store_operation_stages(
+        tx: &DatabaseTransaction,
+        operation: &operation::Model,
+        operation_data: &ApiOperationData,
+    ) -> Result<(), DbErr> {
+        for (stage_type, stage_data) in operation_data.stages.iter() {
+            if let Some(data) = &stage_data.stage_data {
+                // prepare and inserting stage model
+                let stage_model = operation_stage::ActiveModel {
+                    id: NotSet,
+                    operation_id: Set(operation.id.clone()),
+                    stage_type_id: Set(stage_type.to_id() as i16),
+                    success: Set(data.success),
+                    timestamp: Set(timestamp_to_naive(data.timestamp as i64)),
+                    note: Set(data.note.clone()),
+                    inserted_at: Set(chrono::Utc::now().naive_utc()),
+                };
+
+                let inserted_stage = operation_stage::Entity::insert(stage_model)
+                    .on_conflict(
+                        sea_orm::sea_query::OnConflict::column(operation::Column::Id)
+                            .do_nothing()
+                            .to_owned(),
+                    )
+                    .exec_with_returning(tx)
+                    .await?;
+
+                // store transactions for this stage
+                let transaction_models = data
+                    .transactions
+                    .iter()
+                    .map(|a_tx| transaction::ActiveModel {
+                        id: NotSet,
+                        stage_id: Set(inserted_stage.id),
+                        hash: Set(a_tx.hash.clone()),
+                        blockchain_type: Set(a_tx.blockchain_type.to_string()),
+                        inserted_at: Set(chrono::Utc::now().naive_utc()),
+                    })
+                    .collect::<Vec<_>>();
+
+                transaction::Entity::insert_many(transaction_models)
+                    .exec(tx)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn store_operation_metainfo(
+        tx: &DatabaseTransaction,
+        operation: &operation::Model,
+        meta_info: &OperationMetaInfo,
+    ) -> Result<(), DbErr> {
+        let get_fee = |chain: BlockchainTypeLowercase| {
+            meta_info
+                .fee_info
+                .get(&chain)
+                .and_then(|fee_opt| fee_opt.as_ref())
+        };
+
+        let get_executors = |chain: BlockchainTypeLowercase| {
+            meta_info.valid_executors.get(&chain).cloned().flatten()
+        };
+
+        let parse_decimal = |s: &str| Decimal::from_str(s).ok();
+
+        let meta_model = operation_meta_info::ActiveModel {
+            operation_id: Set(operation.id.clone()),
+            tac_valid_executors: Set(get_executors(BlockchainTypeLowercase::Tac)),
+            ton_valid_executors: Set(get_executors(BlockchainTypeLowercase::Ton)),
+            tac_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+            tac_executor_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
+                .and_then(|fee| parse_decimal(&fee.executor_fee))),
+            tac_token_fee_symbol: Set(
+                get_fee(BlockchainTypeLowercase::Tac).map(|fee| fee.token_fee_symbol.clone())
+            ),
+            ton_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
+            ton_executor_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
+                .and_then(|fee| parse_decimal(&fee.executor_fee))),
+            ton_token_fee_symbol: Set(
+                get_fee(BlockchainTypeLowercase::Ton).map(|fee| fee.token_fee_symbol.clone())
+            ),
+        };
+
+        operation_meta_info::Entity::insert(meta_model)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::column(operation_meta_info::Column::OperationId)
+                    .update_columns([
+                        operation_meta_info::Column::TacValidExecutors,
+                        operation_meta_info::Column::TonValidExecutors,
+                        operation_meta_info::Column::TacProtocolFee,
+                        operation_meta_info::Column::TacExecutorFee,
+                        operation_meta_info::Column::TacTokenFeeSymbol,
+                        operation_meta_info::Column::TonProtocolFee,
+                        operation_meta_info::Column::TonExecutorFee,
+                        operation_meta_info::Column::TonTokenFeeSymbol,
+                    ])
+                    .to_owned(),
+            )
+            .exec(tx)
             .await?;
 
         Ok(())
@@ -1075,7 +1159,7 @@ impl TacDatabase {
         Ok(op)
     }
 
-    pub async fn get_operation_by_id(
+    pub async fn get_full_operation_by_id(
         &self,
         id: &String,
     ) -> anyhow::Result<
@@ -1086,7 +1170,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.timestamp, o.status::text,
+                o.id as op_id, o.op_type, o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1111,7 +1195,7 @@ impl TacDatabase {
     > {
         let sql = r#"
             SELECT 
-                o.id as op_id, o.op_type, o.timestamp, o.status::text,
+                o.id as op_id, o.op_type, o.timestamp, o.status::text, o.sender_address, o.sender_blockchain,
                 s.id as stage_id, s.stage_type_id, s.success as stage_success, s.timestamp as stage_timestamp, s.note as stage_note,
                 t.id as tx_id, t.stage_id as tx_stage_id, t.hash as tx_hash, t.blockchain_type as tx_blockchain_type
             FROM operation o
@@ -1130,23 +1214,55 @@ impl TacDatabase {
             .await
     }
 
+    pub async fn get_brief_operations_by_sender(
+        &self,
+        address: &str,
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
+        let address_cast = blockchain_address_to_db_format(address)?;
+        let mut query =
+            operation::Entity::find().filter(operation::Column::SenderAddress.eq(address_cast));
+
+        if let Some(pagination) = pagination_input {
+            query = pagination.add_to_query(query);
+        }
+
+        query = query.order_by_desc(Column::Timestamp);
+
+        self.query_operations_with_pagination(query, pagination_input, PAGE_SIZE)
+            .await
+    }
+
     pub async fn get_brief_operations_by_tx_hash(
         &self,
-        tx_hash: &String,
-    ) -> anyhow::Result<Vec<operation::Model>> {
-        let sql = r#"
-            SELECT id, op_type, timestamp, status::text, next_retry, retry_count, inserted_at, updated_at
-            FROM operation
-            WHERE id IN (
-                SELECT s.operation_id
-                FROM operation_stage s
-                JOIN transaction t ON s.id = t.stage_id
-                WHERE t.hash = $1
-            )
-            ORDER BY timestamp;
-            "#;
+        tx_hash: &str,
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
+        // Build base query
+        let mut query = operation::Entity::find().filter(
+            Condition::all().add(
+                operation::Column::Id.in_subquery(
+                    operation_stage::Entity::find()
+                        .join(
+                            JoinType::InnerJoin,
+                            operation_stage::Relation::Transaction.def(),
+                        )
+                        .filter(transaction::Column::Hash.eq(tx_hash))
+                        .select_only()
+                        .column(operation_stage::Column::OperationId)
+                        .into_query(),
+                ),
+            ),
+        );
 
-        self.get_operations_with_sql(sql, [tx_hash.into()]).await
+        if let Some(pagination) = pagination_input {
+            query = pagination.add_to_query(query);
+        }
+
+        query = query.order_by_desc(operation::Column::Timestamp);
+
+        self.query_operations_with_pagination(query, pagination_input, PAGE_SIZE)
+            .await
     }
 
     async fn get_full_operations_with_sql(
@@ -1187,6 +1303,8 @@ impl TacDatabase {
                         retry_count: 0,
                         inserted_at: now,
                         updated_at: now,
+                        sender_address: row.sender_address.clone(),
+                        sender_blockchain: row.sender_blockchain.clone(),
                     },
                     HashMap::new(),
                 )
@@ -1234,37 +1352,60 @@ impl TacDatabase {
 
     pub async fn get_operations(
         &self,
-        count: usize,
-        earlier_timestamp: Option<u64>,
-        sort: OrderDirection,
-    ) -> anyhow::Result<Vec<operation::Model>> {
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
         let mut query = operation::Entity::find();
 
-        if let Some(ts) = earlier_timestamp {
-            query = query.filter(Column::Timestamp.lt(Self::timestamp_to_naive(ts as i64)));
+        if let Some(pagination) = pagination_input {
+            query = pagination.add_to_query(query);
         }
 
-        query = match sort {
-            OrderDirection::EarliestFirst => query.order_by_asc(Column::Timestamp),
-            OrderDirection::LatestFirst => query.order_by_desc(Column::Timestamp),
-        };
+        query = query.order_by_desc(Column::Timestamp);
 
-        let operations = query.limit(count as u64).all(self.db.as_ref()).await?;
-
-        Ok(operations)
+        self.query_operations_with_pagination(query, pagination_input, PAGE_SIZE)
+            .await
     }
 
-    async fn get_operations_with_sql(
+    async fn query_operations_with_pagination(
         &self,
-        sql: &str,
-        values: impl IntoIterator<Item = sea_orm::Value>,
-    ) -> anyhow::Result<Vec<operation::Model>> {
-        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, values);
-        let operations = operation::Entity::find()
-            .from_raw_sql(stmt)
+        query: sea_orm::Select<operation::Entity>,
+        pagination_input: Option<LogicPagination>,
+        page_size: usize,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
+        // request more records than needed to check if additional records are available.
+        let mut operations = query
+            .limit(page_size as u64 + 1)
             .all(self.db.as_ref())
             .await?;
-        Ok(operations)
+
+        let mut pagination_output = None;
+        let need_pagination = operations.len() > page_size; // the pagination criteria
+        operations.truncate(page_size); // remove the last one aux element (if exist)
+        if need_pagination {
+            // seems we should turn on the pagination
+            pagination_output = Some(Self::calculate_pagination(
+                &operations,
+                pagination_input,
+                page_size,
+            ));
+        }
+
+        Ok((operations, pagination_output))
+    }
+
+    fn calculate_pagination(
+        ops: &[operation::Model],
+        pagination_input: Option<LogicPagination>,
+        page_size: usize,
+    ) -> LogicPagination {
+        let prev_count = pagination_input.map_or(0, |p| p.count);
+
+        let earlier_timestamp = ops.last().unwrap().timestamp.and_utc().timestamp() as u64;
+
+        LogicPagination {
+            count: prev_count + page_size,
+            earlier_timestamp,
+        }
     }
 
     pub async fn reset_processing_intervals(&self) -> anyhow::Result<usize> {
@@ -1288,23 +1429,27 @@ impl TacDatabase {
     }
 
     // Multisearch by the following fields: operation_id, tx_hash, sender
-    pub async fn search_operations(&self, q: &String) -> anyhow::Result<Vec<operation::Model>> {
+    pub async fn search_operations(
+        &self,
+        q: &String,
+        pagination_input: Option<LogicPagination>,
+    ) -> anyhow::Result<(Vec<operation::Model>, Option<LogicPagination>)> {
         if is_generic_hash(q) {
             // operation_id or tx_hash
-            let operations = match self.get_brief_operation_by_id(q).await? {
-                Some(op) => vec![op],
-                None => self.get_brief_operations_by_tx_hash(q).await?,
-            };
-
-            Ok(operations)
+            match self.get_brief_operation_by_id(q).await? {
+                Some(op) => Ok((vec![op], None)),
+                None => Ok(self
+                    .get_brief_operations_by_tx_hash(q, pagination_input)
+                    .await?),
+            }
         } else if is_tac_address(q) || is_ton_address(q) {
             // sender (TON-TAC format)
-            // TODO: unimplemented for this version of the database.
-            // The corresponding field doesn't exist for the operation entity.
-            Ok(vec![])
+            Ok(self
+                .get_brief_operations_by_sender(q, pagination_input)
+                .await?)
         } else {
             // unknown query string -> return void array without DB interacting
-            Ok(vec![])
+            Ok((vec![], None))
         }
     }
 }

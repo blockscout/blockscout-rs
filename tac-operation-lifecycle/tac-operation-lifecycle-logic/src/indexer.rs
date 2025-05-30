@@ -1,10 +1,11 @@
 use crate::{
+    client::models::profiling::BlockchainType,
     database::{OrderDirection, TacDatabase},
     settings::IndexerSettings,
 };
 use anyhow::Error;
 use client::{
-    models::profiling::{BlockchainType, OperationType, StageType},
+    models::profiling::{OperationType, StageType},
     Client,
 };
 use futures::{
@@ -519,11 +520,6 @@ impl Indexer {
                     // Find an associated operation in the input operations vector
                     match jobs.iter().find(|j| &j.operation.id == op_id) {
                         Some(job) => {
-                            let _ = self
-                                .database
-                                .set_operation_data(&job.operation, operation_data)
-                                .await;
-
                             let new_status = if operation_data.operation_type.is_finalized() {
                                 // The case when operation has a finalized status
                                 // otherwise they will be catched by operation stream
@@ -532,6 +528,11 @@ impl Indexer {
                                 && job.operation.timestamp.and_utc().timestamp()
                                     < forever_pending_operation_cap
                             {
+                                tracing::warn!(
+                                    op_id =? job.operation.id,
+                                    op_timestamp =? job.operation.timestamp,
+                                    "Forever pending operation has been found"
+                                );
                                 // The operations whitch remains PENDING after forever_pending_operations_age_sec
                                 // are considered to be forever pending. We shouldn't recheck them anymore
                                 StatusEnum::Completed
@@ -539,10 +540,17 @@ impl Indexer {
                                 StatusEnum::Pending
                             };
 
-                            let _ = (self
+                            if let Err(e) = self
                                 .database
-                                .set_operation_status(&job.operation, &new_status))
-                            .await;
+                                .set_operation_data(&job.operation, operation_data, &new_status)
+                                .await
+                            {
+                                tracing::error!(
+                                    operation_id =? job.operation.id,
+                                    err =? e,
+                                    "Failed to store operation data into the database"
+                                );
+                            }
 
                             processed_operations += 1;
                             if new_status == StatusEnum::Completed {

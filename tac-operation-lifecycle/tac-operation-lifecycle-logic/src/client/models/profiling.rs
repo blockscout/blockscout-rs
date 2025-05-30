@@ -8,9 +8,10 @@ pub struct StageProfilingApiResponse {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OperationData {
-    #[serde(rename = "operationType")]
     pub operation_type: OperationType,
+    pub meta_info: Option<OperationMetaInfo>,
     #[serde(flatten)]
     pub stages: HashMap<StageType, Stage>,
 }
@@ -29,6 +30,22 @@ pub enum OperationType {
     Unknown,
     #[serde(other)]
     ErrorType,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationMetaInfo {
+    pub initial_caller: Option<Address>,
+    pub valid_executors: HashMap<BlockchainTypeLowercase, Option<Vec<String>>>,
+    pub fee_info: HashMap<BlockchainTypeLowercase, Option<FeeValue>>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeValue {
+    pub protocol_fee: String,
+    pub executor_fee: String,
+    pub token_fee_symbol: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash)]
@@ -58,9 +75,18 @@ pub struct StageData {
     pub note: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum BlockchainType {
+    Tac,
+    Ton,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum BlockchainTypeLowercase {
     Tac,
     Ton,
     #[serde(other)]
@@ -71,6 +97,13 @@ pub enum BlockchainType {
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: String,
+    pub blockchain_type: BlockchainType,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Address {
+    pub address: String,
     pub blockchain_type: BlockchainType,
 }
 

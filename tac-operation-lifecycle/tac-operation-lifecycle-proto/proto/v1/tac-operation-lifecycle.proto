@@ -49,24 +49,30 @@ message OperationBriefDetails {
   string operation_id = 1;
   OperationType type = 2;
   string timestamp = 3;
-  optional string sender = 4;
+  optional BlockchainAddress sender = 4;
 }
 
 message OperationDetails {
   string operation_id = 1;
   OperationType type = 2;
   string timestamp = 3;
-  optional string sender = 4;
+  optional BlockchainAddress sender = 4;
   repeated OperationStage status_history = 5;
+}
+
+enum BlockchainType {
+  TAC = 0;
+  TON = 1;
+  UNKNOWN_BLOCKCHAIN = 2;
+}
+
+message BlockchainAddress {
+  string address = 1;
+  BlockchainType blockchain = 2;
 }
 
 message OperationRelatedTransaction {
   string hash = 1;
-  enum BlockchainType {
-    TAC = 0;
-    TON = 1;
-    UNKNOWN = 2;
-  }
   BlockchainType type = 2;
 }
 

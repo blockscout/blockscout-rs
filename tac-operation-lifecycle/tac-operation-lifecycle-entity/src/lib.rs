@@ -4,6 +4,7 @@ pub mod prelude;
 
 pub mod interval;
 pub mod operation;
+pub mod operation_meta_info;
 pub mod operation_stage;
 pub mod sea_orm_active_enums;
 pub mod stage_type;

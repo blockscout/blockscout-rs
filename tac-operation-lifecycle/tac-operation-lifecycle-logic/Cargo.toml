@@ -24,6 +24,7 @@ serde_json = { workspace = true }
 serde_with = { workspace = true }
 tac-operation-lifecycle-entity = { path = "../tac-operation-lifecycle-entity" }
 tokio = { workspace = true }
+tonlib-core = { workspace = true }
 tower = { workspace = true, features = ["limit"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
