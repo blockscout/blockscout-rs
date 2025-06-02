@@ -12,7 +12,7 @@ use crate::{
     proto,
 };
 use chrono::NaiveDateTime;
-use sea_orm::prelude::Decimal;
+use sea_orm::prelude::BigDecimal;
 use std::{collections::HashMap, str::FromStr};
 
 #[derive(Debug, Clone)]
@@ -203,7 +203,7 @@ impl TryFrom<proto::batch_import_request::interop_message_import::Init>
                     transfer_token_address_hash.map(|s| s.parse()).transpose()?;
                 let from_address_hash = transfer_from_address_hash.parse()?;
                 let to_address_hash = transfer_to_address_hash.parse()?;
-                let amount = Decimal::from_str(&transfer_amount).map_err(|_| {
+                let amount = BigDecimal::from_str(&transfer_amount).map_err(|_| {
                     ParseError::Custom(format!("invalid decimal: {}", transfer_amount))
                 })?;
 
