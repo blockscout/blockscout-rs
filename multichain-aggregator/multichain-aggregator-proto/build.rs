@@ -41,7 +41,10 @@ fn compile(
         .type_attribute("ListTokensRequest", "#[serde_with::serde_as]")
         .field_attribute("ListTokensRequest.chain_id", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
         .field_attribute("ListTokensRequest.chain_id", "#[serde(default)]")
-        // Make interop messages optional
+        // Make import fields optional
+        .field_attribute("BatchImportRequest.addresses", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.block_ranges", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.hashes", "#[serde(default)]")
         .field_attribute("BatchImportRequest.interop_messages", "#[serde(default)]")
         .extern_path(".google.protobuf", "::prost-wkt-types");
     config.compile_protos(protos, includes)?;
