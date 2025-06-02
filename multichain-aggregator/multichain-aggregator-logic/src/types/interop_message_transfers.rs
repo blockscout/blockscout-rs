@@ -1,12 +1,12 @@
 use alloy_primitives::Address;
-use sea_orm::{prelude::Decimal, ActiveValue::Set};
+use sea_orm::{prelude::BigDecimal, ActiveValue::Set};
 
 #[derive(Debug, Clone)]
 pub struct InteropMessageTransfer {
     pub token_address_hash: Option<Address>,
     pub from_address_hash: Address,
     pub to_address_hash: Address,
-    pub amount: Decimal,
+    pub amount: BigDecimal,
 }
 
 impl From<InteropMessageTransfer> for entity::interop_messages_transfers::ActiveModel {

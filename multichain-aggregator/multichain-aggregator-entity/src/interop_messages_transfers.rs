@@ -14,7 +14,7 @@ pub struct Model {
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub to_address_hash: Vec<u8>,
     #[sea_orm(column_type = "Decimal(Some((78, 0)))")]
-    pub amount: Decimal,
+    pub amount: BigDecimal,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
