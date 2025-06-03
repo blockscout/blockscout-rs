@@ -23,6 +23,10 @@ serde_with = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
+trillium = { workspace = true }
+trillium-channels = { workspace = true }
+trillium-tokio = { workspace = true }
+trillium-router = { workspace = true }
 env-collector = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 

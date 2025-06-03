@@ -13,6 +13,7 @@ use multichain_aggregator_logic::{
 };
 use std::{collections::HashSet, str::FromStr};
 use tonic::{Request, Response, Status};
+use trillium_channels::ChannelBroadcaster;
 
 pub struct MultichainAggregator {
     repo: ReadWriteRepo,
@@ -25,6 +26,7 @@ pub struct MultichainAggregator {
     bens_protocols: Option<Vec<String>>,
     domain_primary_chain_id: types::ChainId,
     marketplace_enabled_cache: chains::MarketplaceEnabledCache,
+    channel_broadcaster: ChannelBroadcaster,
 }
 
 impl MultichainAggregator {
@@ -39,6 +41,7 @@ impl MultichainAggregator {
         bens_protocols: Option<Vec<String>>,
         domain_primary_chain_id: types::ChainId,
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
+        channel_broadcaster: ChannelBroadcaster,
     ) -> Self {
         Self {
             api_key_manager: ApiKeyManager::new(repo.main_db().clone()),
@@ -51,6 +54,7 @@ impl MultichainAggregator {
             bens_protocols,
             domain_primary_chain_id,
             marketplace_enabled_cache,
+            channel_broadcaster,
         }
     }
 
@@ -131,11 +135,15 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let import_request: types::batch_import_request::BatchImportRequest = inner.try_into()?;
 
-        import::batch_import(self.repo.main_db(), import_request)
-            .await
-            .inspect_err(|err| {
-                tracing::error!(error = ?err, "failed to batch import");
-            })?;
+        import::batch_import(
+            self.repo.main_db(),
+            import_request,
+            self.channel_broadcaster.clone(),
+        )
+        .await
+        .inspect_err(|err| {
+            tracing::error!(error = ?err, "failed to batch import");
+        })?;
 
         Ok(Response::new(BatchImportResponse {
             status: "ok".to_string(),

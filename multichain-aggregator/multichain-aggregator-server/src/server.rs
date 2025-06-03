@@ -14,8 +14,9 @@ use blockscout_service_launcher::{
 use migration::Migrator;
 use multichain_aggregator_logic::{
     clients::{bens, dapp, token_info},
-    services::chains::{
-        fetch_and_upsert_blockscout_chains, start_marketplace_enabled_cache_updater,
+    services::{
+        chains::{fetch_and_upsert_blockscout_chains, start_marketplace_enabled_cache_updater},
+        channel::Channel,
     },
 };
 use std::{collections::HashMap, sync::Arc};
@@ -80,6 +81,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.marketplace_enabled_cache_fetch_concurrency,
     );
 
+    let channel = trillium_channels::channel(Channel);
+
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
         repo,
         dapp_client,
@@ -90,6 +93,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.bens_protocols,
         settings.service.domain_primary_chain_id,
         marketplace_enabled_cache,
+        channel.broadcaster(),
     ));
 
     let router = Router {
@@ -106,6 +110,16 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         metrics: settings.metrics,
         graceful_shutdown: Default::default(),
     };
+
+    if settings.ws_server.enabled {
+        tokio::spawn(async move {
+            trillium_tokio::config()
+                .without_signals()
+                .with_socketaddr(settings.ws_server.addr)
+                .run_async(trillium_router::router().get("/socket/websocket", channel))
+                .await;
+        });
+    }
 
     launcher::launch(launch_settings, http_router, grpc_router).await
 }

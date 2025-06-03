@@ -32,6 +32,8 @@ tokio = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
 futures = { workspace = true }
+trillium = { workspace = true }
+trillium-channels = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }

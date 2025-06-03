@@ -1,9 +1,17 @@
-use crate::{error::ServiceError, repository, types::batch_import_request::BatchImportRequest};
+use crate::{
+    error::ServiceError,
+    proto, repository,
+    services::channel::{NEW_BLOCKS_TOPIC, NEW_INTEROP_MESSAGES_TOPIC},
+    types::{batch_import_request::BatchImportRequest, interop_messages::InteropMessage},
+};
 use sea_orm::{DatabaseConnection, TransactionTrait};
+use serde_json::json;
+use trillium_channels::ChannelBroadcaster;
 
 pub async fn batch_import(
     db: &DatabaseConnection,
     request: BatchImportRequest,
+    channel: ChannelBroadcaster,
 ) -> Result<(), ServiceError> {
     request.record_metrics();
 
@@ -13,7 +21,7 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert addresses");
         })?;
-    repository::block_ranges::upsert_many(&tx, request.block_ranges)
+    let block_ranges = repository::block_ranges::upsert_many(&tx, request.block_ranges)
         .await
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert block ranges");
@@ -23,11 +31,31 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert hashes");
         })?;
-    repository::interop_messages::upsert_many_with_transfers(&tx, request.interop_messages)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error = ?e, "failed to upsert interop messages");
-        })?;
+    let messages =
+        repository::interop_messages::upsert_many_with_transfers(&tx, request.interop_messages)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, "failed to upsert interop messages");
+            })?;
     tx.commit().await?;
+
+    let messages = messages
+        .into_iter()
+        .filter_map(|m| InteropMessage::try_from(m).ok())
+        .map(proto::InteropMessage::from)
+        .collect::<Vec<_>>();
+    channel.broadcast((NEW_INTEROP_MESSAGES_TOPIC, "new_messages", messages));
+
+    let block_ranges = block_ranges
+        .into_iter()
+        .map(|m| {
+            json!({
+                "chain_id": m.chain_id,
+                "block_number": m.max_block_number,
+            })
+        })
+        .collect::<Vec<_>>();
+    channel.broadcast((NEW_BLOCKS_TOPIC, "new_blocks", block_ranges));
+
     Ok(())
 }
