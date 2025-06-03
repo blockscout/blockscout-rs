@@ -9,7 +9,7 @@ use entity::interop_messages::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
     prelude::{DateTime, Expr},
     sea_query::OnConflict,
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, Iterable, PaginatorTrait, QueryFilter,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, PaginatorTrait, QueryFilter,
     QueryTrait, TransactionError, TransactionTrait,
 };
 
@@ -34,12 +34,36 @@ where
         .map(|(m, t)| (ActiveModel::from(m), t))
         .unzip();
 
+    macro_rules! update_if_not_null {
+        ($column:expr) => {
+            (
+                $column,
+                Expr::cust_with_exprs(
+                    "COALESCE($1, $2)",
+                    [
+                        Expr::cust(format!("EXCLUDED.{}", $column.as_str())),
+                        $column.into_expr().into(),
+                    ],
+                ),
+            )
+        };
+    }
+
     db.transaction(|tx| {
         Box::pin(async move {
             let message_ids = Entity::insert_many(interop_messages)
                 .on_conflict(
-                    OnConflict::columns([Column::InitChainId, Column::Nonce])
-                        .update_columns(non_primary_columns())
+                    OnConflict::columns([Column::Nonce, Column::InitChainId])
+                        .values([
+                            update_if_not_null!(Column::SenderAddressHash),
+                            update_if_not_null!(Column::TargetAddressHash),
+                            update_if_not_null!(Column::InitTransactionHash),
+                            update_if_not_null!(Column::Timestamp),
+                            update_if_not_null!(Column::RelayTransactionHash),
+                            update_if_not_null!(Column::Payload),
+                            update_if_not_null!(Column::Failed),
+                        ])
+                        .update_column(Column::RelayChainId)
                         .value(Column::UpdatedAt, Expr::current_timestamp())
                         .to_owned(),
                 )
@@ -132,17 +156,4 @@ where
         )
         .count(db)
         .await
-}
-
-fn non_primary_columns() -> impl Iterator<Item = Column> {
-    Column::iter().filter(|col| {
-        !matches!(
-            col,
-            Column::Id
-                | Column::InitChainId
-                | Column::Nonce
-                | Column::CreatedAt
-                | Column::UpdatedAt
-        )
-    })
 }
