@@ -44,8 +44,8 @@ pub fn extract_sponsor_type(
     paymaster: Option<Address>,
     tx_deposits: &[Address],
 ) -> SponsorType {
-    let sender_deposit = tx_deposits.iter().any(|&e| e == sender);
-    let paymaster_deposit = tx_deposits.iter().any(|&e| Some(e) == paymaster);
+    let sender_deposit = tx_deposits.contains(&sender);
+    let paymaster_deposit = tx_deposits.contains(&paymaster.unwrap());
     match (paymaster, sender_deposit, paymaster_deposit) {
         (None, false, _) => SponsorType::WalletBalance,
         (None, true, _) => SponsorType::WalletDeposit,
