@@ -20,6 +20,7 @@ tac-operation-lifecycle-proto = { path = "../tac-operation-lifecycle-proto" }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
 tonic = { workspace = true }
 tracing = { workspace = true }
+blockscout-endpoint-swagger = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = [ "test-server","test-database","database-1"] }

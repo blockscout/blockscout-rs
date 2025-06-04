@@ -4,6 +4,7 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::Deserialize;
+use std::path::PathBuf;
 use user_ops_indexer_logic::indexer::settings::IndexerSettings;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -17,6 +18,8 @@ pub struct Settings {
     pub tracing: TracingSettings,
     #[serde(default)]
     pub jaeger: JaegerSettings,
+    #[serde(default = "default_swagger_path")]
+    pub swagger_path: PathBuf,
 
     pub database: DatabaseSettings,
 
@@ -24,6 +27,10 @@ pub struct Settings {
     pub api: ApiSettings,
 
     pub indexer: IndexerSettings,
+}
+
+fn default_swagger_path() -> PathBuf {
+    blockscout_endpoint_swagger::default_swagger_path_from_service_name("user-ops-indexer")
 }
 
 impl ConfigSettings for Settings {
@@ -56,6 +63,7 @@ impl Settings {
             metrics: Default::default(),
             tracing: Default::default(),
             jaeger: Default::default(),
+            swagger_path: default_swagger_path(),
             database: DatabaseSettings {
                 connect: DatabaseConnectSettings::Url(database_url),
                 connect_options: Default::default(),

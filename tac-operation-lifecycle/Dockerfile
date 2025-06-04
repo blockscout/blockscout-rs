@@ -26,6 +26,10 @@ RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER
 
 COPY --from=build /app/target/release/tac-operation-lifecycle-server /app/tac-operation-lifecycle-server
+
+ENV TAC_OPERATION_LIFECYCLE__SWAGGER_PATH=/app/static/tac-operation-lifecycle.swagger.yaml
+COPY ./tac-operation-lifecycle-proto/swagger/v1/tac-operation-lifecycle.swagger.yaml $TAC_OPERATION_LIFECYCLE__SWAGGER_PATH
+
 # Change directory access for app user
 RUN chown -R $APP_USER:$APP_USER /app
 USER app

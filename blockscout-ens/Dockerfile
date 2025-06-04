@@ -24,4 +24,11 @@ RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER
 COPY --from=build /app/target/release/bens-server /app/bens-server
 COPY ./bens-server/config/ /app/config/
+
+ENV BENS__SWAGGER_PATH=/app/static/bens.swagger.yaml
+COPY ./bens-proto/swagger/bens.swagger.yaml $BENS__SWAGGER_PATH
+
+RUN chown -R $APP_USER:$APP_USER /app
+USER app
+
 ENTRYPOINT ["/app/bens-server"]

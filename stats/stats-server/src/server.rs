@@ -110,7 +110,7 @@ pub async fn stats(
     let http_router = HttpRouter {
         stats: read_service,
         health: health.clone(),
-        swagger_path: settings.swagger_file,
+        swagger_path: settings.swagger_path,
     };
     let launch_settings = LaunchSettings {
         service_name: SERVICE_NAME.to_string(),
@@ -148,8 +148,6 @@ impl<S: StatsService> launcher::HttpRouter for HttpRouter<S> {
                 route_swagger(
                     config,
                     self.swagger_path.clone(),
-                    // it's ok to not have this endpoint in swagger, as it is
-                    // the swagger itself
                     "/api/v1/docs/swagger.yaml",
                 )
             });
