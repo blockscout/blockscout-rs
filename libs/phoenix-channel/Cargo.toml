@@ -1,0 +1,28 @@
+[package]
+name = "phoenix-channel"
+version = "1.0.0"
+description = "Crate for managing server-side phoenix channel."
+license = "MIT"
+repository = "https://github.com/blockscout/blockscout-rs"
+edition = "2024"
+keywords = ["phoenix", "channel"]
+categories = ["network"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dashmap = "6.1.0"
+async-trait = "0.1"
+async-broadcast = "0.7.2"
+futures-lite = "2.1.0"
+actix-ws = "0.3.0"
+async-channel = "2.1.1"
+pin-project-lite = "0.2.1"
+fastrand = "2.3.0"
+futures-util = "0.3"
+actix-web = "4.10"
+tracing = "0.1"
+tokio = { version = "1" }
+
+[dev-dependencies]
+pretty_assertions = "1.2"
