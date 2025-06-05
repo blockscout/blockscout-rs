@@ -4,9 +4,9 @@ use crate::{
     services::channel::{NEW_BLOCKS_TOPIC, NEW_INTEROP_MESSAGES_TOPIC},
     types::{batch_import_request::BatchImportRequest, interop_messages::InteropMessage},
 };
+use phoenix_channel::broadcaster::ChannelBroadcaster;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use serde_json::json;
-use trillium_channels::ChannelBroadcaster;
 
 pub async fn batch_import(
     db: &DatabaseConnection,

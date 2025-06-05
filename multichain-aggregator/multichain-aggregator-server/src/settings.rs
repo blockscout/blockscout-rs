@@ -5,7 +5,7 @@ use blockscout_service_launcher::{
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{formats::CommaSeparator, serde_as, StringWithSeparator};
-use std::{net::SocketAddr, str::FromStr, time};
+use std::time;
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,25 +23,7 @@ pub struct Settings {
     // Optional database read-only replica. If provided, all search queries will be redirected to this database.
     #[serde(default)]
     pub replica_database: Option<ReplicaDatabaseSettings>,
-    #[serde(default)]
-    pub ws_server: WsServerSettings,
     pub service: ServiceSettings,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct WsServerSettings {
-    pub enabled: bool,
-    pub addr: SocketAddr,
-}
-
-impl Default for WsServerSettings {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            addr: SocketAddr::from_str("0.0.0.0:8060").unwrap(),
-        }
-    }
 }
 
 #[serde_as]
@@ -112,7 +94,6 @@ impl Settings {
                 run_migrations: Default::default(),
             },
             replica_database: Default::default(),
-            ws_server: Default::default(),
             service: ServiceSettings {
                 dapp_client: HttpApiClientSettings {
                     url: Url::parse("http://localhost:8050").unwrap(),

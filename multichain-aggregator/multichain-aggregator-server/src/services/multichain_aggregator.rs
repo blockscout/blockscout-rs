@@ -11,9 +11,9 @@ use multichain_aggregator_logic::{
     services::{api_key_manager::ApiKeyManager, chains, import, search},
     types,
 };
+use phoenix_channel::broadcaster::ChannelBroadcaster;
 use std::{collections::HashSet, str::FromStr};
 use tonic::{Request, Response, Status};
-use trillium_channels::ChannelBroadcaster;
 
 pub struct MultichainAggregator {
     repo: ReadWriteRepo,

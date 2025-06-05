@@ -8,6 +8,7 @@ multichain-aggregator-entity = { workspace = true }
 multichain-aggregator-proto = { workspace = true }
 bens-proto = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 api-client-framework = { workspace = true }
 blockscout-chains = { workspace = true }
 cached = { workspace = true, features = [
@@ -32,8 +33,7 @@ tokio = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
 futures = { workspace = true }
-trillium = { workspace = true }
-trillium-channels = { workspace = true }
+phoenix-channel = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }
