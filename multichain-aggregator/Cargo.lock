@@ -297,6 +297,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-ws"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3a1fb4f9f2794b0aadaf2ba5f14a6f034c7e86957b458c506a8cb75953f2d99"
+dependencies = [
+ "actix-codec",
+ "actix-http",
+ "actix-web",
+ "bytestring",
+ "futures-core",
+ "tokio",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -649,6 +663,18 @@ checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
 dependencies = [
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "async-broadcast"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "435a87a52755b8f27fcf321ac4f04b2802e337c8c4872923137471ec39c37532"
+dependencies = [
+ "event-listener 5.4.0",
+ "event-listener-strategy",
+ "futures-core",
+ "pin-project-lite",
 ]
 
 [[package]]
@@ -1564,6 +1590,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
 dependencies = [
  "cfg-if",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core 0.9.10",
+]
+
+[[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
  "hashbrown 0.14.5",
  "lock_api",
  "once_cell",
@@ -2991,6 +3031,7 @@ dependencies = [
  "alloy-primitives",
  "anyhow",
  "api-client-framework",
+ "async-trait",
  "bens-proto",
  "blockscout-chains",
  "blockscout-service-launcher",
@@ -3000,6 +3041,7 @@ dependencies = [
  "lazy_static",
  "multichain-aggregator-entity",
  "multichain-aggregator-proto",
+ "phoenix-channel",
  "pretty_assertions",
  "prometheus",
  "regex",
@@ -3059,6 +3101,7 @@ dependencies = [
  "multichain-aggregator-logic",
  "multichain-aggregator-migration",
  "multichain-aggregator-proto",
+ "phoenix-channel",
  "pretty_assertions",
  "reqwest",
  "sea-orm",
@@ -3313,7 +3356,7 @@ checksum = "8b3a2a91fdbfdd4d212c0dcc2ab540de2c2bcbbd90be17de7a7daf8822d010c1"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 5.5.3",
  "fnv",
  "futures-channel",
  "futures-executor",
@@ -3566,6 +3609,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0e8871b6d7ca78348c6cd29b911b94851f3429f0cd403130ca17f26c1fb91a6"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "phoenix-channel"
+version = "1.0.0"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=lok52%2Flibs-phoenix-channel#08ca37faac8e79817c6df04b53c7d31c9a448939"
+dependencies = [
+ "actix-web",
+ "actix-ws",
+ "async-broadcast",
+ "async-channel 2.3.1",
+ "async-trait",
+ "dashmap 6.1.0",
+ "fastrand",
+ "futures-lite",
+ "futures-util",
+ "pin-project-lite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

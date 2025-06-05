@@ -23,6 +23,7 @@ serde_with = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
+phoenix-channel = { workspace = true }
 env-collector = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 

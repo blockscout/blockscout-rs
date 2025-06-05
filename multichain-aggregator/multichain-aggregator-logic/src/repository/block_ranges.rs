@@ -6,10 +6,14 @@ use sea_orm::{
     EntityTrait, QueryFilter, QueryTrait,
 };
 
-pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> Result<(), DbErr>
+pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait,
 {
+    if block_ranges.is_empty() {
+        return Ok(vec![]);
+    }
+
     let block_ranges = block_ranges.into_iter().map(|block_range| {
         let model: Model = block_range.into();
         let mut active: ActiveModel = model.into();
@@ -18,7 +22,7 @@ where
         active
     });
 
-    Entity::insert_many(block_ranges)
+    let models = Entity::insert_many(block_ranges)
         .on_conflict(
             OnConflict::column(Column::ChainId)
                 .values([
@@ -46,11 +50,10 @@ where
                 ])
                 .to_owned(),
         )
-        .do_nothing()
-        .exec_without_returning(db)
+        .exec_with_returning_many(db)
         .await?;
 
-    Ok(())
+    Ok(models)
 }
 
 pub async fn list_matching_block_ranges_paginated<C>(

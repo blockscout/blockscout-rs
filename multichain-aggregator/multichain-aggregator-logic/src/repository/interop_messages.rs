@@ -16,14 +16,14 @@ use sea_orm::{
 pub async fn upsert_many_with_transfers<C>(
     db: &C,
     mut interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
-) -> Result<(), DbErr>
+) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait + TransactionTrait,
 {
     // Return early because we don't use `.do_nothing()` for messages batch insert
     // to avoid pattern matching on `TryInsertResult`
     if interop_messages.is_empty() {
-        return Ok(());
+        return Ok(vec![]);
     }
 
     interop_messages
@@ -51,7 +51,7 @@ where
 
     db.transaction(|tx| {
         Box::pin(async move {
-            let message_ids = Entity::insert_many(interop_messages)
+            let messages = Entity::insert_many(interop_messages)
                 .on_conflict(
                     OnConflict::columns([Column::Nonce, Column::InitChainId])
                         .values([
@@ -67,28 +67,27 @@ where
                         .value(Column::UpdatedAt, Expr::current_timestamp())
                         .to_owned(),
                 )
-                .exec_with_returning_keys(tx)
+                .exec_with_returning_many(tx)
                 .await?;
 
             // Set interop_message_id for each corresponding transfer after all messages are inserted
-            let transfers = message_ids
-                .into_iter()
+            let transfers = messages
+                .iter()
+                .map(|m| m.id)
                 .zip(transfers)
                 .filter_map(|(id, transfer)| transfer.map(|t| (t, id)))
                 .collect();
 
             interop_message_transfers::upsert_many(tx, transfers).await?;
 
-            Ok(())
+            Ok(messages)
         })
     })
     .await
     .map_err(|err| match err {
         TransactionError::Connection(e) => e,
         TransactionError::Transaction(e) => e,
-    })?;
-
-    Ok(())
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
