@@ -8,7 +8,10 @@ use actix_web::{Error, HttpRequest, HttpResponse, web};
 use actix_ws::{AggregatedMessage, handle};
 use futures_lite::StreamExt;
 use serde::Deserialize;
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::time::interval;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -17,6 +20,17 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
 #[derive(Deserialize)]
 pub struct ProtocolVersion {
     vsn: Option<String>,
+}
+
+pub fn configure_channel_websocket_route<T: ChannelHandler>(
+    cfg: &mut web::ServiceConfig,
+    channel: Arc<ChannelCentral<T>>,
+) {
+    cfg.app_data(web::Data::from(channel));
+    cfg.route(
+        "/socket/websocket",
+        web::get().to(phoenix_channel_handler::<T>),
+    );
 }
 
 pub async fn phoenix_channel_handler<T: ChannelHandler>(

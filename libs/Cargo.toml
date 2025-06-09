@@ -11,6 +11,7 @@ members = [
     "env-collector",
     "metrics-tools",
     "mismatch",
+    "phoenix-channel",
     "reqwest-rate-limiter",
     "solidity-metadata",
     "sourcify",
