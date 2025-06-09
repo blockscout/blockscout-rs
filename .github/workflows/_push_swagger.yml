@@ -70,9 +70,9 @@ jobs:
               version=$(echo "${GITHUB_REF}" | sed -E 's|.*/v||')
               echo "version=${version}" >> $GITHUB_ENV
 
-            # If it's the main branch
-            elif [ "${GITHUB_REF#refs/heads/}" = "main" ]; then
-              echo "version=main" >> $GITHUB_ENV
+            # If it's a branch
+            elif [[ "${GITHUB_REF}" == refs/heads/* ]]; then
+              echo "version=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
 
             # Otherwise, use the first 8 characters of the commit hash
             else
