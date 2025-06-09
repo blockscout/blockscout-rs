@@ -3614,7 +3614,7 @@ dependencies = [
 [[package]]
 name = "phoenix-channel"
 version = "1.0.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=lok52%2Flibs-phoenix-channel#08ca37faac8e79817c6df04b53c7d31c9a448939"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=lok52%2Flibs-phoenix-channel#c12cfc416a5852340d3e41af9cf25fb91919ffaa"
 dependencies = [
  "actix-web",
  "actix-ws",

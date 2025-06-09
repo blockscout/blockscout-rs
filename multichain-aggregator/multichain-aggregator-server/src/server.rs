@@ -19,7 +19,7 @@ use multichain_aggregator_logic::{
         channel::Channel,
     },
 };
-use phoenix_channel::{actix_handler::phoenix_channel_handler, channel::ChannelCentral};
+use phoenix_channel::{actix_handler::configure_channel_websocket_route, channel::ChannelCentral};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -49,11 +49,7 @@ impl launcher::HttpRouter for Router {
             route_multichain_aggregator_service(config, self.multichain_aggregator.clone())
         });
         service_config.configure(|config| {
-            config.app_data(::actix_web::web::Data::from(self.channel.clone()));
-            config.route(
-                "/socket/websocket",
-                actix_web::web::get().to(phoenix_channel_handler::<Channel>),
-            );
+            configure_channel_websocket_route(config, self.channel.clone());
         });
     }
 }
