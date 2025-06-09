@@ -84,6 +84,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-phoenix-channel"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58d7616c766f65e35f9045b51658c9c7c112c463780384739cc30a7b040455cf"
+dependencies = [
+ "actix-web",
+ "actix-ws",
+ "async-broadcast",
+ "async-channel 2.3.1",
+ "async-trait",
+ "dashmap 6.1.0",
+ "fastrand",
+ "futures-lite",
+ "futures-util",
+ "pin-project-lite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "actix-prost"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3028,6 +3050,7 @@ dependencies = [
 name = "multichain-aggregator-logic"
 version = "0.1.0"
 dependencies = [
+ "actix-phoenix-channel",
  "alloy-primitives",
  "anyhow",
  "api-client-framework",
@@ -3041,7 +3064,6 @@ dependencies = [
  "lazy_static",
  "multichain-aggregator-entity",
  "multichain-aggregator-proto",
- "phoenix-channel",
  "pretty_assertions",
  "prometheus",
  "regex",
@@ -3088,6 +3110,7 @@ dependencies = [
 name = "multichain-aggregator-server"
 version = "0.1.0"
 dependencies = [
+ "actix-phoenix-channel",
  "actix-web",
  "alloy-primitives",
  "anyhow",
@@ -3101,7 +3124,6 @@ dependencies = [
  "multichain-aggregator-logic",
  "multichain-aggregator-migration",
  "multichain-aggregator-proto",
- "phoenix-channel",
  "pretty_assertions",
  "reqwest",
  "sea-orm",
@@ -3609,27 +3631,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0e8871b6d7ca78348c6cd29b911b94851f3429f0cd403130ca17f26c1fb91a6"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "phoenix-channel"
-version = "1.0.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=lok52%2Flibs-phoenix-channel#3867b173bb06f336938c9014b4b5c3e72b866d43"
-dependencies = [
- "actix-web",
- "actix-ws",
- "async-broadcast",
- "async-channel 2.3.1",
- "async-trait",
- "dashmap 6.1.0",
- "fastrand",
- "futures-lite",
- "futures-util",
- "pin-project-lite",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
 ]
 
 [[package]]

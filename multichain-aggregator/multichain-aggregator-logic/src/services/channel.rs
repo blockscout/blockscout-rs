@@ -1,5 +1,5 @@
 use crate::types::ChainId;
-use phoenix_channel::{conn::ChannelConn, event::ChannelEvent, handler::ChannelHandler};
+use actix_phoenix_channel::{ChannelConn, ChannelEvent, ChannelHandler};
 use serde::Serialize;
 
 pub const NEW_BLOCKS_TOPIC: &str = "blocks:new_blocks";

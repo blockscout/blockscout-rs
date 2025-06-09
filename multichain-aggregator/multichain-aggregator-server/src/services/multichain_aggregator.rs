@@ -2,6 +2,7 @@ use crate::{
     proto::{multichain_aggregator_service_server::MultichainAggregatorService, *},
     settings::ApiSettings,
 };
+use actix_phoenix_channel::ChannelBroadcaster;
 use api_client_framework::HttpApiClient;
 use blockscout_service_launcher::database::ReadWriteRepo;
 use multichain_aggregator_logic::{
@@ -11,7 +12,6 @@ use multichain_aggregator_logic::{
     services::{api_key_manager::ApiKeyManager, chains, import, search},
     types,
 };
-use phoenix_channel::broadcaster::ChannelBroadcaster;
 use std::{collections::HashSet, str::FromStr};
 use tonic::{Request, Response, Status};
 

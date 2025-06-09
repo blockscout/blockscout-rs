@@ -7,6 +7,7 @@ use crate::{
     services::{HealthService, MultichainAggregator},
     settings::Settings,
 };
+use actix_phoenix_channel::{configure_channel_websocket_route, ChannelCentral};
 use blockscout_service_launcher::{
     database,
     launcher::{self, LaunchSettings},
@@ -19,7 +20,6 @@ use multichain_aggregator_logic::{
         channel::Channel,
     },
 };
-use phoenix_channel::{actix_handler::configure_channel_websocket_route, channel::ChannelCentral};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 

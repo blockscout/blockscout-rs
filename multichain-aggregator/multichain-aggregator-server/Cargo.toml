@@ -8,6 +8,7 @@ edition = "2021"
 multichain-aggregator-proto = { workspace = true }
 multichain-aggregator-logic = { workspace = true }
 multichain-aggregator-migration = { workspace = true }
+actix-phoenix-channel = { workspace = true }
 actix-web = { workspace = true }
 alloy-primitives = { workspace = true }
 anyhow = { workspace = true }
@@ -23,7 +24,6 @@ serde_with = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
-phoenix-channel = { workspace = true }
 env-collector = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 
