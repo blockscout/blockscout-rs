@@ -15,4 +15,5 @@ members = [
     "solidity-metadata",
     "sourcify",
     "api-client-framework",
+    "actix-phoenix-channel",
 ]
