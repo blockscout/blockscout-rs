@@ -84,6 +84,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-phoenix-channel"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58d7616c766f65e35f9045b51658c9c7c112c463780384739cc30a7b040455cf"
+dependencies = [
+ "actix-web",
+ "actix-ws",
+ "async-broadcast",
+ "async-channel 2.3.1",
+ "async-trait",
+ "dashmap 6.1.0",
+ "fastrand",
+ "futures-lite",
+ "futures-util",
+ "pin-project-lite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "actix-prost"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -294,6 +316,20 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "prometheus",
+]
+
+[[package]]
+name = "actix-ws"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3a1fb4f9f2794b0aadaf2ba5f14a6f034c7e86957b458c506a8cb75953f2d99"
+dependencies = [
+ "actix-codec",
+ "actix-http",
+ "actix-web",
+ "bytestring",
+ "futures-core",
+ "tokio",
 ]
 
 [[package]]
@@ -649,6 +685,18 @@ checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
 dependencies = [
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "async-broadcast"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "435a87a52755b8f27fcf321ac4f04b2802e337c8c4872923137471ec39c37532"
+dependencies = [
+ "event-listener 5.4.0",
+ "event-listener-strategy",
+ "futures-core",
+ "pin-project-lite",
 ]
 
 [[package]]
@@ -1564,6 +1612,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
 dependencies = [
  "cfg-if",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core 0.9.10",
+]
+
+[[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
  "hashbrown 0.14.5",
  "lock_api",
  "once_cell",
@@ -2988,9 +3050,11 @@ dependencies = [
 name = "multichain-aggregator-logic"
 version = "0.1.0"
 dependencies = [
+ "actix-phoenix-channel",
  "alloy-primitives",
  "anyhow",
  "api-client-framework",
+ "async-trait",
  "bens-proto",
  "blockscout-chains",
  "blockscout-service-launcher",
@@ -3046,6 +3110,7 @@ dependencies = [
 name = "multichain-aggregator-server"
 version = "0.1.0"
 dependencies = [
+ "actix-phoenix-channel",
  "actix-web",
  "alloy-primitives",
  "anyhow",
@@ -3313,7 +3378,7 @@ checksum = "8b3a2a91fdbfdd4d212c0dcc2ab540de2c2bcbbd90be17de7a7daf8822d010c1"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 5.5.3",
  "fnv",
  "futures-channel",
  "futures-executor",

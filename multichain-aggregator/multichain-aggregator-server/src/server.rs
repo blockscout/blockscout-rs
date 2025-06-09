@@ -7,6 +7,7 @@ use crate::{
     services::{HealthService, MultichainAggregator},
     settings::Settings,
 };
+use actix_phoenix_channel::{configure_channel_websocket_route, ChannelCentral};
 use blockscout_service_launcher::{
     database,
     launcher::{self, LaunchSettings},
@@ -14,8 +15,9 @@ use blockscout_service_launcher::{
 use migration::Migrator;
 use multichain_aggregator_logic::{
     clients::{bens, dapp, token_info},
-    services::chains::{
-        fetch_and_upsert_blockscout_chains, start_marketplace_enabled_cache_updater,
+    services::{
+        chains::{fetch_and_upsert_blockscout_chains, start_marketplace_enabled_cache_updater},
+        channel::Channel,
     },
 };
 use std::{collections::HashMap, sync::Arc};
@@ -27,6 +29,7 @@ const SERVICE_NAME: &str = "multichain_aggregator";
 struct Router {
     multichain_aggregator: Arc<MultichainAggregator>,
     health: Arc<HealthService>,
+    channel: Arc<ChannelCentral<Channel>>,
 }
 
 impl Router {
@@ -44,6 +47,9 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config.configure(|config| {
             route_multichain_aggregator_service(config, self.multichain_aggregator.clone())
+        });
+        service_config.configure(|config| {
+            configure_channel_websocket_route(config, self.channel.clone());
         });
     }
 }
@@ -80,6 +86,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.marketplace_enabled_cache_fetch_concurrency,
     );
 
+    let channel = Arc::new(ChannelCentral::new(Channel));
+
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
         repo,
         dapp_client,
@@ -90,11 +98,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.bens_protocols,
         settings.service.domain_primary_chain_id,
         marketplace_enabled_cache,
+        channel.channel_broadcaster(),
     ));
 
     let router = Router {
         health,
         multichain_aggregator,
+        channel,
     };
 
     let grpc_router = router.grpc_router();

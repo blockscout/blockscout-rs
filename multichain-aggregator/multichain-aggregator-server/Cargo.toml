@@ -8,6 +8,7 @@ edition = "2021"
 multichain-aggregator-proto = { workspace = true }
 multichain-aggregator-logic = { workspace = true }
 multichain-aggregator-migration = { workspace = true }
+actix-phoenix-channel = { workspace = true }
 actix-web = { workspace = true }
 alloy-primitives = { workspace = true }
 anyhow = { workspace = true }

@@ -7,7 +7,9 @@ edition = "2021"
 multichain-aggregator-entity = { workspace = true }
 multichain-aggregator-proto = { workspace = true }
 bens-proto = { workspace = true }
+actix-phoenix-channel = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 api-client-framework = { workspace = true }
 blockscout-chains = { workspace = true }
 cached = { workspace = true, features = [

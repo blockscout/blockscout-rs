@@ -16,6 +16,7 @@ multichain-aggregator-proto = { path = "./multichain-aggregator-proto" }
 bens-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "741fc40" }
 
 # web
+actix-phoenix-channel = "0.1.0"
 actix-prost = { version = "0.1.0" }
 actix-prost-build = { version = "0.1.0" }
 actix-prost-macros = { version = "0.1.0" }
