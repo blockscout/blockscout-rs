@@ -6,7 +6,7 @@ license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
 edition = "2024"
 keywords = ["phoenix", "channel", "actix-web", "websocket"]
-categories = ["network"]
+categories = ["web-programming::websocket"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
