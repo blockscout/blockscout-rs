@@ -1,4 +1,6 @@
+use crate::types::ChainId;
 use phoenix_channel::{conn::ChannelConn, event::ChannelEvent, handler::ChannelHandler};
+use serde::Serialize;
 
 pub const NEW_BLOCKS_TOPIC: &str = "blocks:new_blocks";
 pub const NEW_INTEROP_MESSAGES_TOPIC: &str = "interop_messages:new_messages";
@@ -15,4 +17,10 @@ impl ChannelHandler for Channel {
             _ => {}
         }
     }
+}
+
+#[derive(Serialize)]
+pub struct LatestBlockUpdateMessage {
+    pub chain_id: ChainId,
+    pub block_number: i32,
 }
