@@ -25,7 +25,7 @@ impl ChannelEvent {
         ChannelEvent {
             topic: self.topic.clone(),
             event: event.into(),
-            payload: match serde_json::to_value(payload).unwrap() {
+            payload: match serde_json::to_value(payload).expect("payload should be serializable") {
                 Value::Null => Value::Object(Default::default()),
                 other => other,
             },
