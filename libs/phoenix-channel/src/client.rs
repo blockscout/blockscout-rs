@@ -92,7 +92,7 @@ impl ChannelClient {
     pub fn deserialize(&self, message: AggregatedMessage) -> Option<ChannelEvent> {
         let string = match message {
             AggregatedMessage::Text(ref string) => Some(string.deref()),
-            AggregatedMessage::Binary(ref data) => str::from_utf8(data).ok(),
+            AggregatedMessage::Binary(ref data) => std::str::from_utf8(data).ok(),
             _ => None,
         }?;
         ChannelEvent::deserialize(string).ok()
