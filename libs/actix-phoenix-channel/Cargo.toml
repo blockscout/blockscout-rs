@@ -1,11 +1,11 @@
 [package]
-name = "phoenix-channel"
-version = "1.0.0"
-description = "Crate for managing server-side phoenix channel."
+name = "actix-phoenix-channel"
+version = "0.1.0"
+description = "A Rust implementation of Phoenix Channels protocol for real-time communication, specifically designed for Actix Web applications"
 license = "MIT"
 repository = "https://github.com/blockscout/blockscout-rs"
 edition = "2024"
-keywords = ["phoenix", "channel"]
+keywords = ["phoenix", "channel", "actix-web", "websocket"]
 categories = ["network"]
 
 [dependencies]

@@ -1,8 +1,7 @@
-use actix_web::{App, HttpServer};
-use phoenix_channel::{
-    actix_handler::configure_channel_websocket_route, channel::ChannelCentral, conn::ChannelConn,
-    event::ChannelEvent, handler::ChannelHandler,
+use actix_phoenix_channel::{
+    ChannelCentral, ChannelConn, ChannelEvent, ChannelHandler, configure_channel_websocket_route,
 };
+use actix_web::{App, HttpServer};
 use std::sync::Arc;
 
 pub struct Channel;
