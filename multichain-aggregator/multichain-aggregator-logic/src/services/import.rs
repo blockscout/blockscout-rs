@@ -43,7 +43,9 @@ pub async fn batch_import(
         .filter_map(|m| InteropMessage::try_from(m).ok())
         .map(proto::InteropMessage::from)
         .collect::<Vec<_>>();
-    channel.broadcast((NEW_INTEROP_MESSAGES_TOPIC, "new_messages", messages));
+    if !messages.is_empty() {
+        channel.broadcast((NEW_INTEROP_MESSAGES_TOPIC, "new_messages", messages));
+    }
 
     let block_ranges = block_ranges
         .into_iter()
@@ -52,7 +54,9 @@ pub async fn batch_import(
             block_number: m.max_block_number,
         })
         .collect::<Vec<_>>();
-    channel.broadcast((NEW_BLOCKS_TOPIC, "new_blocks", block_ranges));
+    if !block_ranges.is_empty() {
+        channel.broadcast((NEW_BLOCKS_TOPIC, "new_blocks", block_ranges));
+    }
 
     Ok(())
 }
