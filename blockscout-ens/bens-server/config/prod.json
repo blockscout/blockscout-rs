@@ -229,7 +229,7 @@
       },
       "42161": {
         "blockscout": {
-          "url": "https://arbiscan.io/"
+          "url": "https://arbitrum.blockscout.com/"
         },
         "use_protocols": [
           "arb"
@@ -611,8 +611,8 @@
         "address_resolve_technique": "reverse_registry",
         "specific": {
           "type": "ens_like",
-          "native_token_contract": "0xc492a2565f95dd20c304150b229a6cd21dddd629",
-          "empty_label_hash": "a8f7d4c6fcae674aad63ccf20c2dc72b14197ed3915639316d7e8e15139f3f5a"
+          "native_token_contract": "0x5d482D501b369F5bA034DEC5c5fb7A50d2D6Ca20",
+          "empty_label_hash": "0xa8f7d4c6fcae674aad63ccf20c2dc72b14197ed3915639316d7e8e15139f3f5a"
         },
         "meta": {
           "short_name": "SPACE ID",
