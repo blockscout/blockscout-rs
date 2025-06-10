@@ -171,12 +171,32 @@ message BatchImportRequest {
     }
   }
 
+  message CountersImport {
+    message GlobalCounters {
+      uint64 daily_transactions_number = 1;
+      uint64 total_transactions_number = 2;
+      uint64 total_addresses_number = 3;
+    }
+
+    message TokenCounters {
+      string address_hash = 1;
+      uint32 decimals = 2;
+      uint64 total_supply = 3;
+      uint64 holders_number = 4;
+      uint64 transfers_number = 5;
+    }
+
+    optional GlobalCounters global_counters = 1;
+    repeated TokenCounters token_counters = 2;
+  }
+
   string chain_id = 1;
   repeated AddressImport addresses = 2;
   repeated BlockRangeImport block_ranges = 3;
   repeated HashImport hashes = 4;
   repeated InteropMessageImport interop_messages = 5;
-  string api_key = 6;
+  optional CountersImport counters = 6;
+  string api_key = 7;
 }
 
 message BatchImportResponse { string status = 1; }

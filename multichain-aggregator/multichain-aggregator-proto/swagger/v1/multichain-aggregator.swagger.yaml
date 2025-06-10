@@ -402,6 +402,16 @@ definitions:
       max_block_number:
         type: string
         format: uint64
+  BatchImportRequestCountersImport:
+    type: object
+    properties:
+      global_counters:
+        $ref: '#/definitions/CountersImportGlobalCounters'
+      token_counters:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/CountersImportTokenCounters'
   BatchImportRequestHashImport:
     type: object
     properties:
@@ -416,6 +426,35 @@ definitions:
         $ref: '#/definitions/InteropMessageImportInit'
       relay:
         $ref: '#/definitions/InteropMessageImportRelay'
+  CountersImportGlobalCounters:
+    type: object
+    properties:
+      daily_transactions_number:
+        type: string
+        format: uint64
+      total_transactions_number:
+        type: string
+        format: uint64
+      total_addresses_number:
+        type: string
+        format: uint64
+  CountersImportTokenCounters:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      decimals:
+        type: integer
+        format: int64
+      total_supply:
+        type: string
+        format: uint64
+      holders_number:
+        type: string
+        format: uint64
+      transfers_number:
+        type: string
+        format: uint64
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -554,6 +593,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/BatchImportRequestInteropMessageImport'
+      counters:
+        $ref: '#/definitions/BatchImportRequestCountersImport'
       api_key:
         type: string
   v1BatchImportResponse:
