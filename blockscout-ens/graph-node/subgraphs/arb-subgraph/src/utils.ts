@@ -12,7 +12,7 @@ import { Account, Domain } from "../generated/schema";
 const NETWORK = "{{network}}";
 
 export let BASE_NODE_HASH =
-  "b8d5774ade4492991dce6d60a4b058ae904534abd252bc4b60bf5f7a683e2a2f"; // mainnet base node hash
+  "d924c6d6935f3bf84be3da0b40fabe48800690c760c2db576028a389f1b54f89"; // mainnet base node hash
 
 // @ts-ignore
 if (NETWORK == "arb-testnet") {
