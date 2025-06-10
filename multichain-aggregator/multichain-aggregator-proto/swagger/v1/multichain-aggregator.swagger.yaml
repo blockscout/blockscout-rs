@@ -443,9 +443,6 @@ definitions:
     properties:
       address_hash:
         type: string
-      decimals:
-        type: integer
-        format: int64
       total_supply:
         type: string
         format: uint64

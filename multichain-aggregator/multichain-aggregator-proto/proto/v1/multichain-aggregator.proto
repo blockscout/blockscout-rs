@@ -180,10 +180,9 @@ message BatchImportRequest {
 
     message TokenCounters {
       string address_hash = 1;
-      uint32 decimals = 2;
-      uint64 total_supply = 3;
-      uint64 holders_number = 4;
-      uint64 transfers_number = 5;
+      uint64 total_supply = 2;
+      uint64 holders_number = 3;
+      uint64 transfers_number = 4;
     }
 
     optional GlobalCounters global_counters = 1;
