@@ -3056,6 +3056,7 @@ dependencies = [
  "api-client-framework",
  "async-trait",
  "bens-proto",
+ "bigdecimal",
  "blockscout-chains",
  "blockscout-service-launcher",
  "cached",
