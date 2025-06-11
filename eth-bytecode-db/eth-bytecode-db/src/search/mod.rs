@@ -3,6 +3,7 @@ mod any_match;
 mod bytecodes_comparison;
 mod candidates;
 mod events;
+mod geas_predeployes;
 mod match_contract;
 mod matches;
 mod types;

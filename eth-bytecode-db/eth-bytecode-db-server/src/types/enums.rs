@@ -54,6 +54,9 @@ impl From<verification::SourceType> for SourceTypeWrapper {
             verification::SourceType::Yul => {
                 SourceTypeWrapper::from(proto::source::SourceType::Yul)
             }
+            verification::SourceType::Geas => {
+                SourceTypeWrapper::from(proto::source::SourceType::Geas)
+            }
         }
     }
 }
