@@ -1,4 +1,7 @@
 openapi: 3.0.0
+tags:
+  - name: default
+  - name: CelestiaService
 servers:
   - url: https://{server}/
     variables:
@@ -16,6 +19,76 @@ info:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
 paths:
+  /api/v1/celestia/blob:
+    get:
+      operationId: CelestiaService_GetBlob
+      responses:
+        '200':
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1CelestiaBlob'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      parameters:
+        - name: height
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uint64
+        - name: commitment
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: skipData
+          in: query
+          required: false
+          schema:
+            type: boolean
+      tags:
+        - CelestiaService
+  /api/v1/celestia/l2BatchMetadata:
+    get:
+      operationId: CelestiaService_GetL2BatchMetadata
+      responses:
+        '200':
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1CelestiaL2BatchMetadata'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      parameters:
+        - name: height
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uint64
+        - name: namespace
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: commitment
+          in: query
+          required: false
+          schema:
+            type: string
+      tags:
+        - CelestiaService
   /api/v2/search:
     get:
       parameters:
@@ -1450,142 +1523,6 @@ paths:
           description: bad input parameter
       tags:
         - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/methods-read:
-    get:
-      summary: get verified smart-contract read methods
-      operationId: get_read_methods
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-        - in: query
-          name: is_custom_abi
-          schema:
-            type: string
-            example: 'true'
-        - in: query
-          name: from
-          schema:
-            type: string
-            example: '0xF61f5c4a3664501F499A9289AaEe76a709CE536e'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/ReadMethodWithValue'
-                    - $ref: '#/components/schemas/ReadMethodWithoutValue'
-        '400':
-          description: bad input parameter
-      tags:
-        - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/methods-read-proxy:
-    get:
-      summary: get verified smart-contract read methods proxy
-      operationId: get_read_methods_proxy
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-        - in: query
-          name: is_custom_abi
-          schema:
-            type: string
-            example: 'true'
-        - in: query
-          name: from
-          schema:
-            type: string
-            example: '0xF61f5c4a3664501F499A9289AaEe76a709CE536e'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/ReadMethodWithValue'
-                    - $ref: '#/components/schemas/ReadMethodWithoutValue'
-      tags:
-        - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/methods-write:
-    get:
-      summary: get verified smart-contract write methods
-      operationId: get_write_methods
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-        - in: query
-          name: is_custom_abi
-          schema:
-            type: string
-            example: 'true'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/WriteMethod'
-        '400':
-          description: bad input parameter
-      tags:
-        - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/methods-write-proxy:
-    get:
-      summary: get verified smart-contract write methods proxy
-      operationId: get_write_methods_proxy
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-        - in: query
-          name: is_custom_abi
-          schema:
-            type: string
-            example: 'true'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/WriteMethod'
-        '400':
-          description: bad input parameter
-      tags:
-        - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/query-read-method:
-    post:
-      summary: query verified smart-contract read method
-      operationId: query_read_method
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReadMethodQueryBody'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/ReadMethodResponse'
-        '400':
-          description: bad input parameter
-      tags:
-        - smart-contracts
   /api/v2/config/json-rpc-url:
     get:
       summary: get json rpc url
@@ -1646,6 +1583,33 @@ paths:
           description: unexpected error
       tags:
         - proxy
+  /api/v2/health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        '200':
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          schema:
+            type: string
+      tags:
+        - CelestiaService
 components:
   parameters:
     addressHash:
@@ -1799,8 +1763,6 @@ components:
         - block_hash
         - from
         - log_index
-        - method
-        - timestamp
         - to
         - token
         - total
@@ -1813,8 +1775,8 @@ components:
         from:
           $ref: '#/components/schemas/AddressParam'
         log_index:
-          type: string
-          example: '243'
+          type: integer
+          example: 16
         method:
           type: string
           example: transfer
@@ -2660,21 +2622,7 @@ components:
           type: boolean
         has_beacon_chain_withdrawals:
           type: boolean
-        has_custom_methods_read:
-          type: boolean
-        has_custom_methods_write:
-          type: boolean
-        has_decompiled_code:
-          type: boolean
         has_logs:
-          type: boolean
-        has_methods_read:
-          type: boolean
-        has_methods_write:
-          type: boolean
-        has_methods_read_proxy:
-          type: boolean
-        has_methods_write_proxy:
           type: boolean
         has_token_transfers:
           type: boolean
@@ -2885,8 +2833,6 @@ components:
         token_id:
           type: string
           example: '10000'
-        token:
-          $ref: '#/components/schemas/TokenInfo'
     NFTInstance:
       required:
         - is_unique
@@ -3099,8 +3045,6 @@ components:
           type: boolean
         is_verified_via_eth_bytecode_db:
           type: boolean
-        is_vyper_contract:
-          type: boolean
         is_self_destructed:
           type: boolean
         can_be_visualized_via_sol2uml:
@@ -3176,6 +3120,9 @@ components:
         language:
           type: string
           example: solidity | vyper | yul
+        status:
+          type: string
+          example: selfdestructed | failed | success
     ExternalLibrary:
       required:
         - name
@@ -3619,7 +3566,6 @@ components:
         - has_constructor_args
         - language
         - optimization_enabled
-        - transaction_count
         - verified_at
       properties:
         address:
@@ -3796,6 +3742,99 @@ components:
           type: boolean
         past_rpc_logs_indexing_finished:
           type: boolean
+    HealthCheckResponseServingStatus:
+      type: string
+      enum:
+        - UNKNOWN
+        - SERVING
+        - NOT_SERVING
+        - SERVICE_UNKNOWN
+      default: UNKNOWN
+      description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+    protobufAny:
+      type: object
+      properties:
+        '@type':
+          type: string
+      additionalProperties: {}
+    rpcStatus:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            $ref: '#/components/schemas/protobufAny'
+    v1CelestiaBlob:
+      type: object
+      properties:
+        height:
+          type: string
+          format: uint64
+        namespace:
+          type: string
+        commitment:
+          type: string
+        timestamp:
+          type: string
+          format: uint64
+        size:
+          type: string
+          format: uint64
+        data:
+          type: string
+    v1CelestiaBlobId:
+      type: object
+      properties:
+        height:
+          type: string
+          format: uint64
+        namespace:
+          type: string
+        commitment:
+          type: string
+    v1CelestiaL2BatchMetadata:
+      type: object
+      properties:
+        l2ChainId:
+          type: integer
+          format: int64
+        l2BatchId:
+          type: string
+        l2StartBlock:
+          type: string
+          format: uint64
+        l2EndBlock:
+          type: string
+          format: uint64
+        l2BatchTxCount:
+          type: integer
+          format: int64
+        l2BlockscoutUrl:
+          type: string
+        l1TxHash:
+          type: string
+        l1TxTimestamp:
+          type: string
+          format: uint64
+        l1ChainId:
+          type: integer
+          format: int64
+        relatedBlobs:
+          type: array
+          items:
+            type: object
+            $ref: '#/components/schemas/v1CelestiaBlobId'
+    v1HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthCheckResponseServingStatus'
   examples:
     TokenTransferLarge1155Batch:
       value:

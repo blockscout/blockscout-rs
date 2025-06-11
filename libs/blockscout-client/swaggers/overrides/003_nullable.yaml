@@ -1,0 +1,72 @@
+components:
+  schemas:
+    AddressParam:
+      properties:
+        name:
+          nullable: true
+        implementation_name:
+          nullable: true
+        is_verified:
+          nullable: true
+    Block:
+      properties:
+        withdrawals_count:
+          nullable: true
+        extra_data:
+          nullable: true
+        state_root:
+          nullable: true
+    InternalTransaction:
+      properties:
+        created_contract:
+          nullable: true
+        error:
+          nullable: true
+    IndexingStatus:
+      properties:
+        indexed_blocks_ratio:
+          nullable: true
+    SmartContract:
+      properties:
+        abi:
+          nullable: true
+    SmartContractForList:
+      properties:
+        coin_balance:
+          nullable: true
+        transaction_count:
+          nullable: true
+        market_cap:
+          nullable: true
+    TokenTransfer:
+      properties:
+        method:
+          nullable: true
+        timestamp:
+          nullable: true
+    Transaction:
+      properties:
+        method:
+          nullable: true
+        to:
+          nullable: true
+        transaction_burnt_fee:
+          nullable: true
+        max_fee_per_gas:
+          nullable: true
+        priority_fee:
+          nullable: true
+        created_contract:
+          nullable: true
+        has_error_in_internal_transactions:
+          nullable: true
+        decoded_input:
+          nullable: true
+        token_transfers_overflow:
+          nullable: true
+        max_priority_fee_per_gas:
+          nullable: true
+        revert_reason:
+          nullable: true
+        transaction_tag:
+          nullable: true

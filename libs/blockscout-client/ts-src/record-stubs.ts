@@ -6,10 +6,12 @@ const baseHost = 'eth.blockscout.com';
 const baseName = baseHost.replace(/\./g, '_');
 const outputDir = './crate/tests/recorded/'
 const paths = [
-    "/api/v1/health",
+    "/api/health",
+    // v1/health is legacy, dont record it
+    // "/api/v1/health", 
     "/api/v2/blocks",
     "/api/v2/transactions",
-    "/api/v2/transactions/0xf7d09142363203b4c572bac2be3599de91260eb6131b57663832490e7eeaf213",
+    "/api/v2/transactions/0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e",
     "/api/v2/transactions/0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e/internal-transactions",
     "/api/v2/smart-contracts",
     "/api/v2/smart-contracts/0x8FD4596d4E7788a71F82dAf4119D069a84E7d3f3",
@@ -22,9 +24,6 @@ const paths = [
 
 
 async function main(): Promise<any> {
-    // const swaggerYaml = await fs.readFile(swaggerPath , 'utf8');
-    // const swaggerData = yaml.load(swaggerYaml) as Swagger.SwaggerV3;
-
     for (const path of paths) {
         const url = `https://${baseHost}${path}`;
         console.log(`Making request to ${url}`);

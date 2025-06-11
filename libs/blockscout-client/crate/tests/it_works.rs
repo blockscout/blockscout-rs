@@ -1,4 +1,4 @@
-use blockscout_client::apis::{configuration::Configuration, *};
+use blockscout_client::{Api, ApiClient, Configuration};
 use pretty_assertions::assert_eq;
 use rstest::*;
 use stubr::Stubr;
@@ -11,13 +11,15 @@ const DEFAULT_TX_HASH: &str = "0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb1
 #[rstest]
 #[tokio::test]
 async fn health(blockscout: Stubr) {
-    let config = get_config_from_stubr(&blockscout);
-    let health = health_api::health(&config)
-        .await
-        .expect("Failed to get health");
-    assert_eq!(health.healthy, Some(true));
+    let api_client = ApiClient::new(configuration(&blockscout));
+    let health_api = api_client.health_api();
+    let health = health_api.health().await.expect("Failed to get health");
+    let success = health.try_as_success().cloned().unwrap_or_else(|| {
+        panic!("failed to get health: {:?}", &health.entity);
+    });
+    assert_eq!(success.healthy, Some(true));
     assert_eq!(
-        health
+        success
             .metadata
             .expect("metadata is None")
             .latest_block
@@ -26,14 +28,15 @@ async fn health(blockscout: Stubr) {
             .expect("db is None")
             .number
             .expect("number is None"),
-        "21979873"
+        "22682906"
     );
-    let health_v1 = health_api::health_v1(&config)
-        .await
-        .expect("Failed to get health");
-    assert_eq!(health_v1.healthy, Some(true));
+    let health_v1 = health_api.health_v1().await.expect("Failed to get health");
+    let success = health_v1.try_as_success().cloned().unwrap_or_else(|| {
+        panic!("failed to get health: {:?}", &health_v1.entity);
+    });
+    assert_eq!(success.healthy, Some(true));
     assert_eq!(
-        health_v1
+        success
             .data
             .expect("data is None")
             .latest_block_number
@@ -45,43 +48,66 @@ async fn health(blockscout: Stubr) {
 #[rstest]
 #[tokio::test]
 async fn blocks(blockscout: Stubr) {
-    let config = get_config_from_stubr(&blockscout);
-    let blocks = blocks_api::get_blocks(&config, None)
+    let api_client = ApiClient::new(configuration(&blockscout));
+    let blocks_api = api_client.blocks_api();
+    let blocks = blocks_api
+        .get_blocks(blockscout_client::apis::blocks_api::GetBlocksParams::builder().build())
         .await
         .expect("Failed to get blocks");
-    assert!(!blocks.items.is_empty());
+    let success_model = blocks.try_parse_as_success_model().unwrap();
+    assert!(!success_model.items.is_empty());
 }
 
 #[rstest]
 #[tokio::test]
 async fn transactions(blockscout: Stubr) {
-    let config = get_config_from_stubr(&blockscout);
-    let transactions = transactions_api::get_txs(&config, None, None, None)
+    let api_client = ApiClient::new(configuration(&blockscout));
+    let transactions_api = api_client.transactions_api();
+    let transactions = transactions_api
+        .get_txs(blockscout_client::apis::transactions_api::GetTxsParams::builder().build())
         .await
         .expect("Failed to get transactions");
-    assert!(!transactions.items.is_empty());
+    let success_model = transactions.try_parse_as_success_model().unwrap();
+    assert!(!success_model.items.is_empty());
 }
 
 #[rstest]
 #[tokio::test]
 async fn internal_transactions(blockscout: Stubr) {
-    let config = get_config_from_stubr(&blockscout);
-    let internal_transactions =
-        transactions_api::get_transaction_internal_txs(&config, DEFAULT_TX_HASH)
-            .await
-            .expect("Failed to get transactions");
-    assert!(!internal_transactions.items.is_empty());
+    let api_client = ApiClient::new(configuration(&blockscout));
+    let transactions_api = api_client.transactions_api();
+    let internal_transactions = transactions_api
+        .get_transaction_internal_txs(
+            blockscout_client::apis::transactions_api::GetTransactionInternalTxsParams::builder()
+                .transaction_hash(DEFAULT_TX_HASH.to_owned())
+                .build(),
+        )
+        .await
+        .expect("Failed to get transactions");
+    let success_model = internal_transactions.try_parse_as_success_model().unwrap();
+    assert!(!success_model.items.is_empty());
 }
 
 #[rstest]
 #[tokio::test]
 async fn smart_contracts(blockscout: Stubr) {
-    let config = get_config_from_stubr(&blockscout);
-    let smart_contracts = smart_contracts_api::get_smart_contracts(&config, None, None)
+    let api_client = ApiClient::new(configuration(&blockscout));
+    let smart_contracts_api = api_client.smart_contracts_api();
+    let smart_contracts = smart_contracts_api
+        .get_smart_contracts(
+            blockscout_client::apis::smart_contracts_api::GetSmartContractsParams::builder()
+                .build(),
+        )
         .await
         .expect("Failed to get transactions");
-    assert!(!smart_contracts.items.is_empty());
-    let _smart_contract = smart_contracts_api::get_smart_contract(&config, DEFAULT_CONTRACT_HASH)
+    let success_model = smart_contracts.try_parse_as_success_model().unwrap();
+    assert!(!success_model.items.is_empty());
+    let _smart_contract = smart_contracts_api
+        .get_smart_contract(
+            blockscout_client::apis::smart_contracts_api::GetSmartContractParams::builder()
+                .address_hash(DEFAULT_CONTRACT_HASH.to_owned())
+                .build(),
+        )
         .await
         .expect("Failed to get transactions");
 }
@@ -89,36 +115,65 @@ async fn smart_contracts(blockscout: Stubr) {
 #[rstest]
 #[tokio::test]
 async fn tokens(blockscout: Stubr) {
-    let config = get_config_from_stubr(&blockscout);
-    let tokens = tokens_api::get_tokens_list(&config, None, None)
+    let api_client = ApiClient::new(configuration(&blockscout));
+    let tokens_api = api_client.tokens_api();
+    let tokens = tokens_api
+        .get_tokens_list(
+            blockscout_client::apis::tokens_api::GetTokensListParams::builder().build(),
+        )
         .await
         .expect("Failed to get transactions");
-    assert!(!tokens.items.is_empty());
+    let success_model = tokens.try_parse_as_success_model().unwrap();
+    assert!(!success_model.items.is_empty());
 
-    let _token = tokens_api::get_token(&config, DEFAULT_TOKEN_HASH)
+    let _token = tokens_api
+        .get_token(
+            blockscout_client::apis::tokens_api::GetTokenParams::builder()
+                .address_hash(DEFAULT_TOKEN_HASH.to_owned())
+                .build(),
+        )
+        .await
+        .expect("Failed to get transactions")
+        .try_parse_as_success_model()
+        .unwrap();
+    let token_instances = tokens_api
+        .get_nft_instances(
+            blockscout_client::apis::tokens_api::GetNftInstancesParams::builder()
+                .address_hash(DEFAULT_TOKEN_HASH.to_owned())
+                .build(),
+        )
         .await
         .expect("Failed to get transactions");
-    let token_instances = tokens_api::get_nft_instances(&config, DEFAULT_TOKEN_HASH)
-        .await
-        .expect("Failed to get transactions");
-    assert!(!token_instances.items.is_empty());
+    let success_model = token_instances.try_parse_as_success_model().unwrap();
+    assert!(!success_model.items.is_empty());
 
-    let _token_instance =
-        tokens_api::get_nft_instance(&config, DEFAULT_TOKEN_HASH, DEFAULT_TOKEN_INSTANCE_NUMBER)
-            .await
-            .expect("Failed to get transactions");
+    let params = blockscout_client::apis::tokens_api::GetNftInstanceParams::builder()
+        .address_hash(DEFAULT_TOKEN_HASH.to_owned())
+        .id(DEFAULT_TOKEN_INSTANCE_NUMBER)
+        .build();
+    let _token_instance = tokens_api
+        .get_nft_instance(params)
+        .await
+        .expect("Failed to get transactions")
+        .try_parse_as_success_model()
+        .unwrap();
 }
 
 #[rstest]
 #[tokio::test]
-async fn the_transaction(blockscout: Stubr) {
-    let config = get_config_from_stubr(&blockscout);
-    transactions_api::get_tx(
-        &config,
-        "0xf7d09142363203b4c572bac2be3599de91260eb6131b57663832490e7eeaf213",
-    )
-    .await
-    .expect("Failed to get transaction");
+async fn get_transaction(blockscout: Stubr) {
+    let api_client = ApiClient::new(configuration(&blockscout));
+    let transactions_api = api_client.transactions_api();
+    let response = transactions_api
+        .get_tx(
+            blockscout_client::apis::transactions_api::GetTxParams::builder()
+                .transaction_hash(DEFAULT_TX_HASH.to_owned())
+                .build(),
+        )
+        .await
+        .expect("Failed to get transactions");
+    let success_model = response.try_parse_as_success_model().unwrap();
+    assert_eq!(success_model.hash, DEFAULT_TX_HASH);
 }
 
 #[fixture]
@@ -126,6 +181,10 @@ fn blockscout() -> Stubr {
     Stubr::start_blocking("tests/recorded/eth_blockscout_com")
 }
 
-fn get_config_from_stubr(stubr: &Stubr) -> Configuration {
-    Configuration::new(stubr.uri().parse().unwrap()).with_client_max_retry(3)
+fn configuration(blockscout: &Stubr) -> Configuration {
+    Configuration::new()
+        .with_base_path(blockscout.uri().to_string())
+        .to_owned()
 }
+
+
