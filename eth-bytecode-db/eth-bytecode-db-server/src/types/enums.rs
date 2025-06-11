@@ -148,6 +148,7 @@ mod source_type_tests {
     )]
     #[case(verification::SourceType::Vyper, proto::source::SourceType::Vyper)]
     #[case(verification::SourceType::Yul, proto::source::SourceType::Yul)]
+    #[case(verification::SourceType::Geas, proto::source::SourceType::Geas)]
     fn from_verification_to_proto(
         #[case] verification_type: verification::SourceType,
         #[case] proto_type: proto::source::SourceType,

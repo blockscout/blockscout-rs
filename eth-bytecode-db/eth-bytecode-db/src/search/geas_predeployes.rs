@@ -85,6 +85,7 @@ impl GeasPredeployDetails {
             sources: BTreeMap::from([
                 ("src/withdrawals/main.eas".into(), include_str!("geas_predeployes/withdrawals/main.eas").into()),
                 ("src/withdrawals/ctor.eas".into(), include_str!("geas_predeployes/withdrawals/ctor.eas").into()),
+                ("src/common/fake_expo.eas".into(), include_str!("geas_predeployes/common/fake_expo.eas").into()),
             ]),
             main_file_path: "src/withdrawals/main.eas".to_string(),
             contract_name: "WithdrawalRequestPredeploy".to_string(),
@@ -100,6 +101,7 @@ impl GeasPredeployDetails {
             sources: BTreeMap::from([
                 ("src/consolidations/main.eas".into(), include_str!("geas_predeployes/consolidations/main.eas").into()),
                 ("src/consolidations/ctor.eas".into(), include_str!("geas_predeployes/consolidations/ctor.eas").into()),
+                ("src/common/fake_expo.eas".into(), include_str!("geas_predeployes/common/fake_expo.eas").into()),
             ]),
             main_file_path: "src/consolidations/main.eas".to_string(),
             contract_name: "ConsolidationRequestPredeploy".to_string(),
@@ -115,7 +117,7 @@ impl From<GeasPredeployDetails> for MatchContract {
             updated_at: DateTime::default(),
             file_name: value.main_file_path,
             contract_name: value.contract_name,
-            compiler_version: value.compiler_version.to_string(),
+            compiler_version: format!("v{}", value.compiler_version),
             compiler_settings: serde_json::json!({}),
             source_type: SourceType::Geas,
             source_files: value.sources,

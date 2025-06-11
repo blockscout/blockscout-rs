@@ -833,27 +833,7 @@ async fn search_geas_predeployed_contracts_succeeds() {
     )
     .await;
 
-    let creation_code = "0x1234";
-    let runtime_code = "0x5678";
-
     /********** Setup **********/
-
-    let mut test_data =
-        test_input_data::basic(verification::SourceType::Solidity, MatchType::Partial);
-    test_data.set_bytecode(smart_contract_verifier_v2::verify_response::ExtraData {
-        local_creation_input_parts: vec![
-            smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
-                r#type: "main".to_string(),
-                data: creation_code.to_string(),
-            },
-        ],
-        local_deployed_bytecode_parts: vec![
-            smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
-                r#type: "main".to_string(),
-                data: runtime_code.to_string(),
-            },
-        ],
-    });
 
     let db_url = db.db_url();
     // We do not verify the contracts, so can use dummy verifier address
