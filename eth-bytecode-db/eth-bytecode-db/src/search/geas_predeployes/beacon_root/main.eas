@@ -1,0 +1,134 @@
+;;    __ ___________  ____                     
+;;   / // /__  ( __ )( __ )____ __________ ___ 
+;;  / // /_ / / __  / __  / __ `/ ___/ __ `__ \
+;; /__  __// / /_/ / /_/ / /_/ (__  ) / / / / /
+;;   /_/  /_/\____/\____/\__,_/____/_/ /_/ /_/ 
+;;                                             
+;; This is an implementation of EIP-4788's predeploy contract. It implements
+;; two ring buffers to create bounded beacon root lookup. The first ring
+;; buffer is a timestamp % buflen -> timestamp mapping. This is used to ensure
+;; timestamp argument actually matches the stored root and isn't different
+;; dividend. The second ring buffer store the beacon root. It's also keyed by
+;; timestamp % buflen and the shifted right by buflen so the two don't overlap.
+;;
+;; The ring buffers can be visualized as follows:
+;;
+;;  buflen = 10
+;; |--------------|--------------|
+;; 0             10              20
+;;   timestamps     beacon roots
+;;
+;; To get the corresponding beacon root for a specific timestamp, simply add
+;; buflen to the timestamp's index in the first ring buffer. The sum will be
+;; the storage slot in the second ring buffer where it is stored.
+
+#pragma target "cancun"
+
+;; ----------------------------------------------------------------------------
+;; MACROS ---------------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+
+;; BUFLEN returns the HISTORY_BUFFER_LENGTH as defined in the EIP.
+#define BUFLEN = 8191
+
+;; SYSADDR is the address which calls the contract to submit a new root.
+#define SYSADDR = .address(0xfffffffffffffffffffffffffffffffffffffffe)
+
+;; do_revert sets up and then executes a revert(0,0) operation.
+#define %do_revert() {
+  push 0          ;; [0]
+  push 0          ;; [0, 0]
+  revert          ;; []
+}
+
+;; ----------------------------------------------------------------------------
+;; MACROS END -----------------------------------------------------------------
+;; ----------------------------------------------------------------------------
+
+  ;; Protect the submit routine by verifying the caller is equal to
+  ;; sysaddr().
+  caller           ;; [caller]
+  push SYSADDR     ;; [sysaddr, caller]
+  eq               ;; [sysaddr == caller]
+  jumpi @submit    ;; []
+
+  ;; Fallthrough if addresses don't match -- this means the caller intends
+  ;; to read a root.
+
+  ;; Check if calldata is equal to 32 bytes.
+  push 32          ;; [32]
+  calldatasize     ;; [calldatasize, 32]
+  eq               ;; [calldatasize == 32]
+
+  ;; Jump to continue if length-check passed, otherwise revert.
+  jumpi @loadtime  ;; []
+  %do_revert()     ;; []
+
+loadtime:
+  ;; Load input timestamp.
+  push 0           ;; [0]
+  calldataload     ;; [input_timestamp]
+  dup1             ;; [input_timestamp, input_timestamp]
+
+  ;; Verify input timestamp is non-zero.
+  iszero           ;; [input_timestamp == 0, input_timestamp]
+  jumpi @throw     ;; [input_timestamp]
+
+  ;; Compute the timestamp index and load from storage.
+  push BUFLEN      ;; [buflen, input_timestamp]
+  dup2             ;; [input_timestamp, buflen, input_timestamp]
+  mod              ;; [time_index, input_timestamp]
+  swap1            ;; [input_timestamp, time_index]
+  dup2             ;; [time_index, input_timestamp, time_index]
+  sload            ;; [stored_timestamp, input_timestamp, time_index]
+
+  ;; Verify stored timestamp matches input timestamp. It's possible these
+  ;; don't match if the slot has been overwritten by the ring buffer or if
+  ;; the timestamp input wasn't a valid previous timestamp.
+  eq               ;; [stored_timestamp == input_timestamp, time_index]
+  jumpi @loadroot  ;; [time_index]
+  %do_revert()     ;; []
+
+loadroot:
+  ;; Extend index to get root index.
+  push BUFLEN      ;; [buflen, time_index]
+  add              ;; [root_index]
+  sload            ;; [root]
+
+  ;; Write the retrieved root to memory so it can be returned.
+  push 0           ;; [0, root]
+  mstore           ;; []
+
+  ;; Return the root.
+  push 32          ;; [size]
+  push 0           ;; [offset, size]
+  return           ;; []
+
+throw:
+  ;; Reverts current execution with no return data.
+  %do_revert()
+
+submit:
+  ;; Calculate the index the timestamp should be stored at, e.g.
+  ;; time_index = (time % buflen).
+  push BUFLEN      ;; [buflen]
+  timestamp        ;; [time, buflen]
+  mod              ;; [time % buflen]
+
+  ;; Write timestamp into storage slot at time_index.
+  timestamp        ;; [time, time_index]
+  dup2             ;; [time_index, time, time_index]
+  sstore           ;; [time_index]
+
+  ;; Get root from calldata and write into root_index. No validation is
+  ;; done on the input root. Becuase the routine is protected by a caller
+  ;; check against sysaddr(), it's okay to assume the value is correctly
+  ;; given.
+  push 0           ;; [0, time_index]
+  calldataload     ;; [root, time_index]
+  swap1            ;; [time_index, root]
+  push BUFLEN      ;; [buflen, time_index, root]
+  add              ;; [root_index, root]
+  sstore           ;; []
+
+  stop             ;; []

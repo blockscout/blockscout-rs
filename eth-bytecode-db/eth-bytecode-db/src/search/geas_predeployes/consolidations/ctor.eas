@@ -1,0 +1,18 @@
+;; Store 0xff..ff as a temporary excess value to avoid requests being queued
+;; before the fork.
+push 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+push0
+sstore
+
+;; Copy and return code.
+push @.end - @.start
+dup1
+push @.start
+push0
+codecopy
+push0
+return
+
+.start:
+#assemble "main.eas"
+.end:

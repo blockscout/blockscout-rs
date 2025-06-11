@@ -20,7 +20,7 @@ use smart_contract_verifier_proto::{
     blockscout::smart_contract_verifier::v2 as smart_contract_verifier_v2,
     http_client::mock::MockSolidityVerifierService,
 };
-use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
+use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf, str::FromStr};
 use verification_test_helpers::{
     init_db, init_eth_bytecode_db_server, init_verifier_server, test_input_data,
     verifier_alliance_setup, verifier_alliance_types,
@@ -817,6 +817,68 @@ async fn search_alliance_contract_without_metadata_hash_returns_partial_match(
     assert_eq!(
         expected_response, verification_response,
         "Invalid response returned"
+    );
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn search_geas_predeployed_contracts_succeeds() {
+    const ROUTE: &str = "/api/v2/bytecodes/sources:search";
+
+    let db = init_db(
+        TEST_SUITE_NAME,
+        "search_geas_predeployed_contracts_succeeds",
+    )
+    .await;
+
+    /********** Setup **********/
+
+    let db_url = db.db_url();
+    // We do not verify the contracts, so can use dummy verifier address
+    let verifier_addr = SocketAddr::from_str("127.0.0.1:1234").unwrap();
+
+    let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+    /********** BeaconRootsPredeploy (creation code) **********/
+
+    let request = SearchSourcesRequest {
+        bytecode: "0x60618060095f395ff33373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500".to_string(),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    let source = verification_response
+        .sources
+        .first()
+        .expect("(BeaconRootsPredeploy) source has not been found for creation code");
+
+    assert_eq!(
+        source.contract_name, "BeaconRootsPredeploy",
+        "Invalid contract name returned for creation code"
+    );
+
+    /********** BeaconRootsPredeploy (runtime code) **********/
+
+    let request = SearchSourcesRequest {
+        bytecode: "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500".to_string(),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::DeployedBytecode.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    let source = verification_response
+        .sources
+        .first()
+        .expect("(BeaconRootsPredeploy) source has not been found for runtime code");
+
+    assert_eq!(
+        source.contract_name, "BeaconRootsPredeploy",
+        "Invalid contract name returned for runtime code"
     );
 }
 

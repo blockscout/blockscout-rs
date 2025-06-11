@@ -375,6 +375,7 @@ definitions:
       - SOLIDITY
       - VYPER
       - YUL
+      - GEAS
     default: SOURCE_TYPE_UNSPECIFIED
     description: ' - SOURCE_TYPE_UNSPECIFIED: Default value. This value is unused.'
   VerifierAllianceBatchImportResponseCompilationFailure:

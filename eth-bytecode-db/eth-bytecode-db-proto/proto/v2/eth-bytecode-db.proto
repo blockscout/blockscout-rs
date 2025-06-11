@@ -70,6 +70,7 @@ message Source {
     SOLIDITY = 1;
     VYPER = 2;
     YUL = 3;
+    GEAS = 4;
   }
   SourceType source_type = 5;
 

@@ -88,6 +88,7 @@ pub enum SourceType {
     Solidity,
     Vyper,
     Yul,
+    Geas,
 }
 
 impl From<SourceType> for sea_orm_active_enums::SourceType {
@@ -96,6 +97,7 @@ impl From<SourceType> for sea_orm_active_enums::SourceType {
             SourceType::Solidity => sea_orm_active_enums::SourceType::Solidity,
             SourceType::Vyper => sea_orm_active_enums::SourceType::Vyper,
             SourceType::Yul => sea_orm_active_enums::SourceType::Yul,
+            SourceType::Geas => unreachable!("we don't store geas contracts inside database"),
         }
     }
 }
@@ -131,6 +133,7 @@ impl From<SourceType> for smart_contract_verifier::SourceType {
             SourceType::Solidity => smart_contract_verifier::SourceType::Solidity,
             SourceType::Vyper => smart_contract_verifier::SourceType::Vyper,
             SourceType::Yul => smart_contract_verifier::SourceType::Yul,
+            SourceType::Geas => unreachable!("we don't verify geas smart contracts"),
         }
     }
 }
@@ -343,6 +346,7 @@ impl TryFrom<DatabaseReadySource> for verifier_alliance_database::CompiledContra
                 CompiledContractCompiler::Solc,
                 CompiledContractLanguage::Yul,
             ),
+            SourceType::Geas => unreachable!("we don't store geas contracts inside database"),
         };
         validate_name_part(&source.file_name, "file_name")?;
         validate_name_part(&source.contract_name, "contract_name")?;
