@@ -1,5 +1,6 @@
 use crate::types::{api_keys::ApiKeyError, ChainId};
 use alloy_primitives::hex::FromHexError;
+use bigdecimal::ParseBigDecimalError;
 use sea_orm::{sqlx::types::uuid, DbErr};
 use std::num::ParseIntError;
 use thiserror::Error;
@@ -39,6 +40,8 @@ pub enum ParseError {
     ChainIdMismatch { expected: ChainId, actual: ChainId },
     #[error("parse error: {0}")]
     Custom(String),
+    #[error("parse error: invalid decimal")]
+    ParseDecimal(#[from] ParseBigDecimalError),
 }
 
 impl From<ServiceError> for tonic::Status {

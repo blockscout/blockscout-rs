@@ -36,6 +36,16 @@ pub async fn batch_import(
             .inspect_err(|e| {
                 tracing::error!(error = ?e, "failed to upsert interop messages");
             })?;
+    repository::address_coin_balances::upsert_many(&tx, request.address_coin_balances)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error = ?e, "failed to upsert address coin balances");
+        })?;
+    repository::address_token_balances::upsert_many(&tx, request.address_token_balances)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error = ?e, "failed to upsert address token balances");
+        })?;
     tx.commit().await?;
 
     let messages = messages
