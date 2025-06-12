@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v2/stats"
+  },
+  "response": {
+    "status": 200,
+    "body": "{\"average_block_time\":12000,\"coin_image\":\"https://coin-images.coingecko.com/coins/images/279/small/ethereum.png?1696501628\",\"coin_price\":\"2763.32\",\"coin_price_change_percentage\":-1.24,\"gas_price_updated_at\":\"2025-06-12T14:41:59.234422Z\",\"gas_prices\":{\"slow\":6.38,\"average\":6.67,\"fast\":8.02},\"gas_prices_update_in\":1351,\"gas_used_today\":\"129706360693\",\"market_cap\":\"333592978708.160626028\",\"network_utilization_percentage\":50.30020072252271,\"secondary_coin_image\":null,\"secondary_coin_price\":null,\"static_gas_price\":null,\"total_addresses\":\"403584159\",\"total_blocks\":\"22688736\",\"total_gas_used\":\"0\",\"total_transactions\":\"2847466068\",\"transactions_today\":\"1450660\",\"tvl\":null}",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

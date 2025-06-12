@@ -5,7 +5,7 @@
   },
   "response": {
     "status": 200,
-    "body": "{\"error\":null,\"metadata\":{\"blocks\":{\"healthy\":true,\"latest_block\":{\"node\":{\"number\":\"22682907\"},\"cache\":{\"timestamp\":\"2025-06-11 17:47:35Z\",\"number\":\"22682906\"},\"db\":{\"timestamp\":\"2025-06-11 17:47:35Z\",\"number\":\"22682906\"}}},\"latest_block\":{\"cache\":{\"timestamp\":\"2025-06-11 17:47:35Z\",\"number\":\"22682906\"},\"db\":{\"timestamp\":\"2025-06-11 17:47:35Z\",\"number\":\"22682906\"}}},\"healthy\":true}",
+    "body": "{\"error\":null,\"metadata\":{\"blocks\":{\"healthy\":true,\"latest_block\":{\"node\":{\"number\":\"22689150\"},\"cache\":{\"timestamp\":\"2025-06-12 14:41:59Z\",\"number\":\"22689150\"},\"db\":{\"timestamp\":\"2025-06-12 14:41:59Z\",\"number\":\"22689150\"}}},\"latest_block\":{\"cache\":{\"timestamp\":\"2025-06-12 14:41:59Z\",\"number\":\"22689150\"},\"db\":{\"timestamp\":\"2025-06-12 14:41:59Z\",\"number\":\"22689150\"}}},\"healthy\":true}",
     "headers": {
       "Content-Type": "application/json"
     }

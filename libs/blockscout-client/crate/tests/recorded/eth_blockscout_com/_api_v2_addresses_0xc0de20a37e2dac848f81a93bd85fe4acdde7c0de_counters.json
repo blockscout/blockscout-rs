@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v2/addresses/0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de/counters"
+  },
+  "response": {
+    "status": 200,
+    "body": "{\"transactions_count\":\"20\",\"token_transfers_count\":\"13\",\"gas_usage_count\":\"5776632\",\"validations_count\":\"0\"}",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}
