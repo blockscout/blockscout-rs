@@ -186,5 +186,3 @@ fn configuration(blockscout: &Stubr) -> Configuration {
         .with_base_path(blockscout.uri().to_string())
         .to_owned()
 }
-
-
