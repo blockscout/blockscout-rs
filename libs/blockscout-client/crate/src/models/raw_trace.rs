@@ -19,6 +19,8 @@ use serde_aux::prelude::*;
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct RawTrace {
     pub action: models::RawTraceAction,
+    // true false false true
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub subtraces: i32,
     pub trace_address: Vec<i32>,
     pub r#type: String,

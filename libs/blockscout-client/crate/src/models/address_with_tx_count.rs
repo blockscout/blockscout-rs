@@ -36,6 +36,8 @@ pub struct AddressWithTxCount {
     #[serde(default)]
     pub implementation_address: Option<String>,
 
+    // true false false true
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub block_number_balance_updated_at: Option<i32>,
 

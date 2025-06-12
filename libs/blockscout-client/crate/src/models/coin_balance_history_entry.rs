@@ -21,6 +21,8 @@ pub struct CoinBalanceHistoryEntry {
     #[serde(default)]
     pub transaction_hash: Option<String>,
 
+    // true false false true
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub block_number: i32,
     pub block_timestamp: String,
     pub delta: String,

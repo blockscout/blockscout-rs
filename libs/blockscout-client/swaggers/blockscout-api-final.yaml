@@ -2017,8 +2017,9 @@ components:
           type: integer
           example: 8844586
         created_contract:
-          $ref: "#/components/schemas/AddressParam"
           nullable: true
+          allOf:
+            - $ref: "#/components/schemas/AddressParam"
         error:
           type: string
           example: reverted
@@ -2158,6 +2159,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TokenTransfer"
+          nullable: true
         transaction_types:
           type: array
           items:
@@ -2173,7 +2175,8 @@ components:
           example: "41309"
         created_contract:
           nullable: true
-          $ref: "#/components/schemas/AddressParam"
+          allOf:
+            - $ref: "#/components/schemas/AddressParam"
         position:
           type: integer
           example: 117
@@ -2189,8 +2192,9 @@ components:
           items:
             $ref: "#/components/schemas/TransactionAction"
         decoded_input:
-          $ref: "#/components/schemas/DecodedInput"
           nullable: true
+          allOf:
+            - $ref: "#/components/schemas/DecodedInput"
         token_transfers_overflow:
           type: boolean
           example: false
@@ -2288,6 +2292,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DecodedInputParameter"
+          nullable: true
     TokenAddressParam:
       type: object
       required:
@@ -2489,9 +2494,11 @@ components:
         type:
           type: string
           example: bytes
+          nullable: true
         value:
-          type: string
+          type: object
           example: "0x0"
+          nullable: true
     DecodedInputLog:
       type: object
       required:
@@ -3379,6 +3386,8 @@ components:
           type: string
           example: "1.0"
           nullable: true
+          allOf:
+            - $ref: "#/components/schemas/AddressParam"
         indexed_internal_transactions_ratio:
           type: string
           nullable: true

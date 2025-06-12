@@ -21,6 +21,8 @@ pub struct StatsResponse {
     pub total_blocks: String,
     pub total_addresses: String,
     pub total_transactions: String,
+    // false false true true
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub average_block_time: f64,
     pub coin_price: String,
     pub total_gas_used: String,
@@ -29,5 +31,7 @@ pub struct StatsResponse {
     pub gas_prices: serde_json::Value,
     pub static_gas_price: String,
     pub market_cap: String,
+    // false false true true
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub network_utilization_percentage: f64,
 }

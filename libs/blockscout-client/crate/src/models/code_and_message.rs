@@ -18,6 +18,8 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct CodeAndMessage {
+    // true false false true
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub code: i32,
     pub message: String,
 }

@@ -18,6 +18,8 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct V1CelestiaL2BatchMetadata {
+    // false true false true
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub l2_chain_id: Option<i64>,
 
@@ -30,6 +32,8 @@ pub struct V1CelestiaL2BatchMetadata {
     #[serde(default)]
     pub l2_end_block: Option<String>,
 
+    // false true false true
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub l2_batch_tx_count: Option<i64>,
 
@@ -42,6 +46,8 @@ pub struct V1CelestiaL2BatchMetadata {
     #[serde(default)]
     pub l1_tx_timestamp: Option<String>,
 
+    // false true false true
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub l1_chain_id: Option<i64>,
 

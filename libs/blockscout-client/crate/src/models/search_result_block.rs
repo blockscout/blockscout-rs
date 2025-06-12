@@ -19,6 +19,8 @@ use serde_aux::prelude::*;
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct SearchResultBlock {
     pub block_hash: String,
+    // true false false true
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub block_number: i32,
     pub timestamp: String,
     pub r#type: String,

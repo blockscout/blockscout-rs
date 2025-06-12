@@ -20,6 +20,9 @@ components:
       properties:
         created_contract:
           nullable: true
+          $ref: '__REMOVE__'
+          allOf:
+            - $ref: "#/components/schemas/AddressParam"
         error:
           nullable: true
     IndexingStatus:
@@ -58,9 +61,17 @@ components:
           nullable: true
         created_contract:
           nullable: true
+          $ref: '__REMOVE__'
+          allOf:
+            - $ref: "#/components/schemas/AddressParam"
         has_error_in_internal_transactions:
           nullable: true
         decoded_input:
+          $ref: '__REMOVE__'
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/DecodedInput"
+        token_transfers:
           nullable: true
         token_transfers_overflow:
           nullable: true
@@ -70,3 +81,16 @@ components:
           nullable: true
         transaction_tag:
           nullable: true
+    DecodedInput:
+      properties:
+        parameters:
+          nullable: true
+    DecodedInputParameter:
+      properties:
+        value:
+          type: object
+          nullable: true
+        type:
+          nullable: true
+
+      

@@ -23,6 +23,8 @@ pub struct Token {
     pub symbol: String,
     pub address: String,
     pub r#type: String,
+    // true false false true
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub holders: i32,
     pub exchange_rate: String,
     pub total_supply: String,

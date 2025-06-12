@@ -18,6 +18,8 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct RpcStatus {
+    // true false false true
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub code: Option<i32>,
 

@@ -6,6 +6,25 @@ import { merge } from 'lodash';
 const OVERRIDES_DIR = path.join(__dirname, '..', 'swaggers', 'overrides');
 const MAIN_SPEC_PATH = path.join(__dirname, '..', 'swaggers', 'blockscout-api-final.yaml');
 
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function removeMarkedFields(obj: JsonValue): JsonValue {
+    if (Array.isArray(obj)) {
+        return obj.map(item => removeMarkedFields(item));
+    }
+    if (obj && typeof obj === 'object') {
+        const result: { [key: string]: JsonValue } = {};
+        for (const [key, value] of Object.entries(obj)) {
+            if (value === '__REMOVE__') {
+                continue; // Skip this field
+            }
+            result[key] = removeMarkedFields(value);
+        }
+        return result;
+    }
+    return obj;
+}
+
 async function mergeOverrides() {
     try {
         // Read the main spec file
@@ -28,6 +47,9 @@ async function mergeOverrides() {
             // Deep merge the override with the main spec
             mergedSpec = merge(mergedSpec, overrideSpec);
         }
+
+        // Remove marked fields
+        mergedSpec = removeMarkedFields(mergedSpec);
 
         // Write the merged result back to the main spec file
         const mergedYaml = stringify(mergedSpec);

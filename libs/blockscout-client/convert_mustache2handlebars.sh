@@ -2,179 +2,59 @@ mustache_to_handlebars \
     ~/poa/blockscout-rs/libs/blockscout-client/rust-templates \
     -out_dir ~/poa/blockscout-rs/libs/blockscout-client/rust-templates-handlebars \
     -handlebars_if_tags="
+        # Type checks
+        isEnum isInteger isLong isString isNumber isBoolean isArray isMap isModel \
+        isByteArray isDate isDateTime isBinary isFile isUuid isPrimitiveType \
+        isAnyType isDeepObject isUnboundedInteger isShort isDouble isFloat \
+        isReadOnly isNullable isRequired isKeyInHeader isKeyInQuery isKeyInCookie \
+        isPathParam isQueryParam isHeaderParam isCookieParam isFormParam isBodyParam \
+        isResponseFile is2xx is3xx is4xx is5xx isDefault isBasic isBasicBearer \
+        isBasicBasic isAlias isOAuth isApiKey isHttpSignature isMultipart \
+        isHttpBasicMethods isBearerMethods isApiKeyMethods isOAuthMethods \
+        isHttpSignatureMethods \
+        # Feature flags
+        supportMiddleware supportAsync supportMultipleResponses supportTokenSource \
+        reqwestTrait reqwest hyper hyper0x mockall topLevelApiClient useBonBuilder \
+        useNose serdeWith withAWSV4Signature \
+        # Configuration
+        oneOf.isEmpty avoidBoxedModels vendorExtensions.x-rust-has-byte-array \
         vendorExtensions.x-group-parameters \
-        withAWSV4Signature \
-        supportMiddleware \
-        reqwestTrait \
-        vendorExtensions.x-rust-has-byte-array \
-        serdeWith \
-        reqwest \
-        mockall \
-        topLevelApiClient \
-        hyper0x \
-        oneOf.isEmpty \
-        hyper \
-        supportAsync \
-        supportMultipleResponses \
-        isDefault \
-        hasFormParams \
-        isUuid \
-        isFile \
-        supportTokenSource \
-        is2xx \
-        hasBodyParam \
-        hasUUIDs \
-        isMultipart \
-        useBonBuilder \
-        hasHeaderParams \
-        isModel \
-        isResponseFile \
-        is3xx \
-        is4xx \
-        isPrimitiveType \
-        isInteger \
-        isDeepObject \
-        is5xx \
-        hasProduces \
-        isString \
-        hasItems \
-        hasHttpSignatureMethods \
-        hasAuthMethods \
-        isBodyParam \
-        isHeaderParam \
-        isNullable \
-        isKeyInHeader \
-        isDouble \
-        hasBearerMethods \
-        isKeyInQuery \
-        isFloat \
-        isDateTime \
-        hasHttpBasicMethods \
-        hasRequiredVars \
-        isOAuth \
-        isUnboundedInteger \
-        isByteArray \
-        isCookieParam \
-        hasVars \
-        getIsNull \
-        isEnum \
-        isDate \
-        isBinary \
-        isAnyType \
-        isPathParam \
-        hasMore \
-        isFormParam \
-        hasConsumes \
-        isNumber \
-        getHasRequired \
-        isBasic \
-        hasApiKeyMethods \
-        useNose \
-        isHttpSignature \
-        hasValidation \
-        hasRequired \
-        isArray \
-        isBasicBearer \
-        isAlias \
-        isBasicBasic \
-        isShort \
-        isReadOnly \
-        isMap \
-        isLong \
-        isBoolean \
-        hasOAuthMethods \
-        isApiKey \
-        isQueryParam \
-        getHasDiscriminatorWithNonEmptyMapping \
-        isKeyInCookie \
-        indent \
-        complexType \
-        produces \
-        consumes \
-        minItems \
-        maxItems \
-        getUniqueItems \
-        minProperties \
-        pattern \
-        maxLength \
-        exclusiveMinimum \
-        maximum \
-        multipleOf \
-        returnTypeIsPrimitive \
-        minLength \
-        required \
-        additionalPropertiesIsAnyType \
-        arrayModelType \
-        recursionLimit \
-        baseType \
-        infoName \
-        asyncio \
-        tornado \
-        additionalPropertiesType \
-        infoUrl \
-        exclusiveMaximum \
-        minimum \
-        nameInSnakeCase \
-        collectionFormat \
-        bearerFormat \
-        summary \
-        vendorExtensions.x-regex \
-        maxProperties" \
+        # State checks
+        hasAuthMethods hasRequiredVars hasVars hasMore hasItems hasProduces \
+        hasConsumes hasFormParams hasHeaderParams hasBodyParam hasUUIDs \
+        hasRequired hasValidation hasDiscriminatorWithNonEmptyMapping \
+        # Properties
+        complexType produces consumes minItems maxItems notes getUniqueItems \
+        minProperties pattern maxLength exclusiveMinimum maximum multipleOf \
+        returnTypeIsPrimitive minLength required additionalPropertiesIsAnyType \
+        arrayModelType recursionLimit \
+        infoName returnType defaultValue asyncio tornado additionalPropertiesType \
+        infoUrl exclusiveMaximum minimum nameInSnakeCase \
+        collectionFormat bearerFormat summary vendorExtensions.x-regex maxProperties" \
     -handlebars_each_tags="
-        allParams \
-        responses \
-        headerParams \
-        servers \
-        scopes \
-        vendorExtensions.x-auth-id-alias \
-        getComposedSchemas \
-        enumVars \
-        optionalParams \
-        optionalVars \
-        headers \
-        imports \
-        mappedModels \
-        requiredVars \
-        vars \
-        models \
-        apis \
-        authMethods \
-        requiredParams \
-        enumValues \
-        vendorExtensions \
-        formParams \
-        x-mapped-models \
-        queryParams \
-        bodyParams \
+        # Collections
+        models apis vars requiredVars optionalVars allParams requiredParams \
+        optionalParams headerParams queryParams pathParams bodyParams formParams \
+        responses servers scopes headers imports mappedModels enumVars enumValues \
         uniqueItems \
-        pathParams" \
+        # Schema components
+        allOf oneOf anyOf composedSchemas.oneOf \
+        # Extensions
+        vendorExtensions vendorExtensions.x-auth-id-alias vendorExtensions.x-modifiers \
+        x-mapped-models \
+        # Other
+        getComposedSchemas authMethods variables operation" \
     -handlebars_with_tags="
-        appName \
-        infoEmail \
-        homePageUrl \
-        composedSchemas.oneOf \
-        lambdaVersion \
-        allParams.[0] \
-        publishRustRegistry \
-        repositoryUrl \
-        baseName \
-        lambda.lifetimeName \
-        documentationUrl \
-        items \
-        additionalProperties \
-        model \
-        apiInfo \
-        operations \
-        allowableValues \
-        appDescription \
-        appDescriptionWithNewLines \
-        licenseInfo \
+        # URLs and paths
+        homePageUrl documentationUrl repositoryUrl publishRustRegistry \
+        # Lambda specific
+        lambdaVersion lambda.lifetimeName \
+        # Schema properties
+        items additionalProperties model apiInfo operations allowableValues \
         discriminator \
-        description \
-        returnType \
-        defaultValue \
-        version \
-        httpUserAgent \
-        notes \
-        operation \
-        oneOf"
+        # Parameters
+        allParams.[0] baseName description \
+        # Variables
+        appName appDescription appDescriptionWithNewLines version infoEmail \
+        httpUserAgent licenseInfo baseType \
+        "
