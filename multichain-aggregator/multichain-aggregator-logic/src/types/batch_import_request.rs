@@ -61,6 +61,16 @@ impl BatchImportRequest {
             },
             "interop_messages"
         );
+        calculate_entity_metrics!(
+            &self.address_coin_balances,
+            |b: &AddressCoinBalance| b.chain_id,
+            "address_coin_balances"
+        );
+        calculate_entity_metrics!(
+            &self.address_token_balances,
+            |b: &AddressTokenBalance| b.chain_id,
+            "address_token_balances"
+        );
     }
 }
 
