@@ -1,0 +1,259 @@
+{{>partial_header}}
+use crate::models;
+use serde::{Deserialize, Serialize};
+use serde_aux::prelude::*;
+{{#each models}}
+{{#with model}}
+{{#unless isEnum}}{{#if vendorExtensions.x-rust-has-byte-array}}
+use serde_with::serde_as;
+{{/if}}{{/unless}}
+{{#if isEnum}}
+{{#if isInteger}}
+use serde_repr::{Serialize_repr,Deserialize_repr};
+{{/if}}
+{{/if}}
+{{#if description}}
+/// {{{classname}}} : {{{description}}}
+{{/if}}
+{{!-- for repr(int) enum schemas --}}
+{{#if isEnum}}
+{{#if isInteger}}
+/// {{{description}}}
+#[repr(i64)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize_repr, Deserialize_repr)]
+pub enum {{{classname}}} {
+{{#with allowableValues}}
+{{#each enumVars}}
+    {{{name}}} = {{{value}}},
+{{/each}}{{/with}}
+}
+
+impl std::fmt::Display for {{{classname}}} {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            {{#with allowableValues}}
+            {{#each enumVars}}
+            Self::{{{name}}} => "{{{value}}}",
+            {{/each}}
+            {{/with}}
+        })
+    }
+}
+{{/if}}
+{{/if}}
+{{!-- for enum schemas --}}
+{{#if isEnum}}
+{{#unless isInteger}}
+/// {{{description}}}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum {{{classname}}} {
+{{#with allowableValues}}
+{{#each enumVars}}
+    #[serde(rename = "{{{value}}}")]
+    {{{name}}},
+{{/each}}{{/with}}
+}
+
+impl std::fmt::Display for {{{classname}}} {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            {{#with allowableValues}}
+            {{#each enumVars}}
+            Self::{{{name}}} => write!(f, "{{{value}}}"),
+            {{/each}}
+            {{/with}}
+        }
+    }
+}
+
+{{/unless}}
+impl Default for {{{classname}}} {
+    fn default() -> {{{classname}}} {
+        {{#with allowableValues}}
+        Self::{{ enumVars.[0].name }}
+        {{/with}}
+    }
+}
+{{/if}}
+{{!-- for schemas that have a discriminator --}}
+{{#with discriminator}}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "{{{propertyBaseName}}}")]
+pub enum {{{classname}}} {
+    {{#unless oneOf}}
+    {{#each mappedModels}}
+    #[serde(rename="{{mappingName}}")]
+    {{{modelName}}} {
+    {{#each vars}}
+        {{#if description}}
+        /// {{{.}}}
+        {{/if}}
+        #[serde(rename = "{{{baseName}}}"{{#unless required}}, skip_serializing_if = "Option::is_none"{{/unless}})]
+        {{{name}}}: {{#if required}}{{#if isNullable}}Option<{{/if}}{{/if}}{{#unless required}}Option<{{/unless}}{{#if isEnum}}{{{enumName}}}{{/if}}{{#unless isEnum}}{{#if isModel}}{{#unless avoidBoxedModels}}Box<{{/unless}}{{{dataType}}}{{#unless avoidBoxedModels}}>{{/unless}}{{/if}}{{#unless isModel}}{{{dataType}}}{{/unless}}{{/unless}}{{#if required}}{{#if isNullable}}>{{/if}}{{/if}}{{#unless required}}>{{/unless}},
+    {{/each}}
+    },
+    {{/each}}
+    {{/unless}}
+    {{#unless oneOf.isEmpty}}
+    {{#with composedSchemas.oneOf}}
+    {{#if description}}
+    /// {{{.}}}
+    {{/if}}
+    {{#with baseName}}
+    #[serde(rename="{{{.}}}")]
+    {{/with}}
+    {{{name}}}({{#if isModel}}{{#unless avoidBoxedModels}}Box<{{/unless}}{{/if}}{{{dataType}}}{{#if isModel}}{{#unless avoidBoxedModels}}>{{/unless}}{{/if}}),
+    {{/with}}
+    {{/unless}}
+}
+
+impl Default for {{classname}} {
+    fn default() -> Self {
+        {{#unless oneOf}}{{#each mappedModels}}{{#if @first}}Self::{{modelName}} {
+        {{#each vars}}
+            {{{name}}}: Default::default(),
+        {{/each}}
+        }{{/if}}{{/each}}
+        {{/unless}}{{#unless oneOf.isEmpty}}{{#with composedSchemas.oneOf}}{{#if @first}}Self::{{{name}}}(Default::default()){{/if}}{{/with}}{{/unless}}
+    }
+}
+
+{{/with}}
+{{!-- for non-enum schemas --}}
+{{#unless isEnum}}
+{{#unless discriminator}}
+{{#if vendorExtensions.x-rust-has-byte-array}}#[serde_as]
+{{/if}}{{#if oneOf.isEmpty}}#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
+pub struct {{{classname}}} {
+{{#each vars}}
+    {{#if description}}
+    /// {{{.}}}
+    {{/if}}
+    // isNullable = {{isNullable}}
+    // required = {{required}}
+    {{#if isByteArray}}
+    {{#if required}}#[serde_as(as = "serde_with::base64::Base64")]{{/if}}{{#unless required}}#[serde_as(as = "Option<serde_with::base64::Base64>")]{{/unless}}
+    {{/if}}
+    {{!-- int32 --}}
+    {{#if isInteger}}
+    {{#unless required}}
+    {{#if isNullable}}
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    {{/if}}
+    {{#unless isNullable}}
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    {{/unless}}
+    {{/unless}}
+    {{#if required}}
+    {{#if isNullable}}
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    {{/if}}
+    {{#unless isNullable}}
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    {{/unless}}
+    {{/if}}
+    {{/if}}
+    {{!-- int64 --}}
+    {{#if isLong}}
+    {{#unless required}}
+    {{#if isNullable}}
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    {{/if}}
+    {{#unless isNullable}}
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    {{/unless}}
+    {{/unless}}
+    {{#if required}}
+    {{#if isNullable}}
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    {{/if}}
+    {{#unless isNullable}}
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    {{/unless}}
+    {{/if}}
+    {{/if}}
+    
+    pub {{{name}}}: 
+    {{!-- Handle Option wrapping for nullable/required combinations --}}
+    {{#if isNullable}}Option<{{/if}}{{#unless isNullable}}{{#unless required}}Option<{{/unless}}{{/unless}}
+
+    {{!-- Handle enum types --}}
+    {{#if isEnum}}
+        {{#if isArray}}
+            {{#each uniqueItems}}std::collections::HashSet<{{/each}}
+            {{#unless uniqueItems}}Vec<{{/unless}}
+        {{/if}}
+        {{{enumName}}}
+        {{#if isArray}}>{{/if}}
+    {{/if}}
+
+    {{!-- Handle non-enum types --}}
+    {{#unless isEnum}}
+        {{#if isModel}}
+            {{#unless avoidBoxedModels}}Box<{{/unless}}
+            {{{dataType}}}
+            {{#unless avoidBoxedModels}}>{{/unless}}
+        {{/if}}
+        {{#unless isModel}}
+            {{#if isByteArray}}Vec<u8>{{/if}}
+            {{#unless isByteArray}}{{{dataType}}}{{/unless}}
+        {{/unless}}
+    {{/unless}}
+
+    {{!-- Close Option wrapping --}}
+    {{#if isNullable}}>{{/if}}{{#unless isNullable}}{{#unless required}}>{{/unless}}{{/unless}},
+{{/each}}
+}
+
+
+{{/if}}
+{{#unless oneOf.isEmpty}}
+{{! TODO: add other vars that are not part of the oneOf}}
+{{#if description}}
+/// {{{.}}}
+{{/if}}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum {{classname}} {
+{{#with composedSchemas.oneOf}}
+    {{#if description}}
+    /// {{{.}}}
+    {{/if}}
+    {{{name}}}({{#if isModel}}{{#unless avoidBoxedModels}}Box<{{/unless}}{{/if}}{{{dataType}}}{{#if isModel}}{{#unless avoidBoxedModels}}>{{/unless}}{{/if}}),
+{{/with}}
+}
+
+impl Default for {{classname}} {
+    fn default() -> Self {
+        {{#with composedSchemas.oneOf}}{{#if @first}}Self::{{{name}}}(Default::default()){{/if}}{{/with}}
+    }
+}
+{{/unless}}
+{{/unless}}
+{{/unless}}
+{{!-- for properties that are of enum type --}}
+{{#each vars}}
+{{#if isEnum}}
+/// {{{description}}}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum {{{enumName}}} {
+{{#with allowableValues}}
+{{#each enumVars}}
+    #[serde(rename = "{{{value}}}")]
+    {{{name}}},
+{{/each}}
+{{/with}}
+}
+
+impl Default for {{{enumName}}} {
+    fn default() -> {{{enumName}}} {
+        {{#with allowableValues}}
+        Self::{{ enumVars.[0].name }}
+        {{/with}}
+    }
+}
+{{/if}}
+{{/each}}
+
+{{/with}}
+{{/each}}
