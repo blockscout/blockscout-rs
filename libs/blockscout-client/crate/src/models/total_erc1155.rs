@@ -19,8 +19,12 @@ use serde_aux::prelude::*;
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct TotalErc1155 {
     pub token_id: String,
-    pub decimals: String,
-    pub value: String,
+    #[serde(default)]
+    pub decimals: Option<String>,
+
+    #[serde(default)]
+    pub value: Option<String>,
+
     #[serde(default)]
     pub token_instance: Option<models::NftInstance>,
 }

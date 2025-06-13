@@ -20,7 +20,6 @@ use serde_aux::prelude::*;
 pub struct TokenTransfer {
     pub block_hash: String,
     pub from: models::AddressParam,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub log_index: i32,
     #[serde(default)]

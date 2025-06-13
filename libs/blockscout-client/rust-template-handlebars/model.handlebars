@@ -136,8 +136,7 @@ pub struct {{{classname}}} {
         {{/if}}
     {{/if}}
     {{!-- Integer handling --}}
-    {{#if (or (or isInteger isLong) isNumber)}}
-        // {{isInteger}} {{isLong}} {{isNumber}} {{or (or isInteger isLong) isNumber}}
+    {{#if (or isNumeric isInteger isLong isNumber isFloat isDouble)}}
         {{#if (or (not required) isNullable)}}#[serde(deserialize_with = "deserialize_option_number_from_string")]
         {{else}}#[serde(deserialize_with = "deserialize_number_from_string")]{{/if}}
     {{/if}}
@@ -162,8 +161,18 @@ pub struct {{{classname}}} {
             {{{dataType}}}
             {{#unless avoidBoxedModels}}>{{/unless}}
         {{else}}
-            {{#if isByteArray}}Vec<u8>{{/if}}
-            {{#unless isByteArray}}{{{dataType}}}{{/unless}}
+            {{#if isByteArray}}
+                Vec<u8>
+            {{else}}
+                {{#if isArray}} 
+                    {{#if items.isNullable}}
+                        Vec<Option<{{{items.dataType}}}>>
+                    {{else}}
+                        {{{dataType}}}
+                    {{/if}}
+                {{else}} {{{dataType}}}
+                {{/if}}
+            {{/if}}
         {{/if}}
     {{/unless}}
     {{!-- Close Option wrapping --}}

@@ -18,7 +18,6 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct GetNftInstanceTransfersCount200Response {
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub transfers_count: i32,
 }

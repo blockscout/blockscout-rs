@@ -75,3 +75,4 @@ pretty_assertions = "1.4.0"
 rstest = "0.21.0"
 stubr = { version = "0.6.2", features = ["record-reqwest", "record-standalone"] }
 tokio = { version = "1.38.0", features = ["full"] }
+lazy_static = "1.4.0"

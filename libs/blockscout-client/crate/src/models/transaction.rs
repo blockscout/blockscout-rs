@@ -20,20 +20,16 @@ use serde_aux::prelude::*;
 pub struct Transaction {
     pub timestamp: String,
     pub fee: models::Fee,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub gas_limit: i32,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub block_number: i32,
     pub status: String,
     #[serde(default)]
     pub method: Option<String>,
 
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub confirmations: i32,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub r#type: i32,
     pub exchange_rate: String,
@@ -60,10 +56,8 @@ pub struct Transaction {
     #[serde(default)]
     pub created_contract: Option<models::AddressParam>,
 
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub position: i32,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub nonce: i32,
     #[serde(default)]
@@ -82,7 +76,7 @@ pub struct Transaction {
     pub max_priority_fee_per_gas: Option<String>,
 
     #[serde(default)]
-    pub revert_reason: Option<String>,
+    pub revert_reason: Option<serde_json::Value>,
 
     pub confirmation_duration: serde_json::Value,
     #[serde(default)]

@@ -1,7 +1,0 @@
-components:
-  schemas:
-    Reward:
-      properties:
-        reward:
-          type: integer
-          format: int64

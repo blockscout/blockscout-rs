@@ -57,7 +57,6 @@ pub struct SmartContract {
     #[serde(default)]
     pub optimization_enabled: Option<bool>,
 
-    // true false false true
     #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub optimizations_runs: Option<i32>,

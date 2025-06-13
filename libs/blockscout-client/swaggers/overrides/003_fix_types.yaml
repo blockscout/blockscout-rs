@@ -78,6 +78,7 @@ components:
         max_priority_fee_per_gas:
           nullable: true
         revert_reason:
+          type: object
           nullable: true
         transaction_tag:
           nullable: true
@@ -92,5 +93,59 @@ components:
           nullable: true
         type:
           nullable: true
+    Reward:
+      properties:
+        reward:
+          type: number
+          format: int64
+
+    TokenInfoDetailed:
+      required: [address, ~,~,~,~,~,~,~,~,~]
+      properties:
+        total_supply:
+          type: string
+    TokenInfo:
+      required: [address, ~,~,~,~,~,~,~,~,~]
+      properties:
+        total_supply:
+          type: string
+
+    TotalERC20:
+      required: [~,~]
+    TotalERC1155:
+      required: [token_id, ~,~]
+    Log:
+      properties:
+        topics:
+          items:
+            nullable: true
+
+    TokenBalance:
+      required: [~,~,~]
+
+    NFTInstance:
+      required: [id,~,~,~]
+
+    StatsResponse:
+      required: [~,~,~,~,~,~,~,~,~,~,~,~]
+
+    AddressNFTInstance:
+      required: [token_type, id, ~,~,~,~]
+
+
+    Token:
+      required: [address,~,~,~,~,~,~,~]
+
+    AddressNFTInstanceCollection:
+      required: [token_type, id, ~,~,~,~,~,~,~]
+
+  parameters:
+    id:
+      schema:
+        type: string
+
+        
+
+        
 
       

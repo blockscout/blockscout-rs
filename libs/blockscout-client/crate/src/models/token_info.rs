@@ -18,14 +18,38 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct TokenInfo {
-    pub circulating_market_cap: String,
-    pub icon_url: String,
-    pub name: String,
-    pub decimals: String,
-    pub symbol: String,
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub circulating_market_cap: Option<f64>,
+
+    #[serde(default)]
+    pub icon_url: Option<String>,
+
+    #[serde(default)]
+    pub name: Option<String>,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub decimals: Option<i64>,
+
+    #[serde(default)]
+    pub symbol: Option<String>,
+
     pub address: String,
-    pub r#type: String,
-    pub holders: String,
-    pub exchange_rate: String,
-    pub total_supply: String,
+    #[serde(default)]
+    pub r#type: Option<String>,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub holders: Option<i64>,
+
+    #[serde(default)]
+    pub exchange_rate: Option<String>,
+
+    #[serde(default)]
+    pub total_supply: Option<String>,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub volume_24h: Option<f64>,
 }

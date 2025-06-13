@@ -1993,6 +1993,7 @@ components:
           type: array
           items:
             type: string
+            nullable: true
             example: "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c"
         transaction_hash:
           type: string
@@ -2212,7 +2213,7 @@ components:
           example: "49793412"
           nullable: true
         revert_reason:
-          type: string
+          type: object
           example: "Error: (Awaiting internal transactions for reason)"
           nullable: true
         confirmation_duration:
@@ -2426,61 +2427,74 @@ components:
       type: object
       required:
         - address
-        - circulating_market_cap
-        - decimals
-        - exchange_rate
-        - holders
-        - icon_url
-        - name
-        - symbol
-        - total_supply
-        - type
-        - volume_24h
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
       properties:
         address:
           type: string
           example: "0xBEEF69Ac7870777598A04B2bd4771c71212E6aBc"
           description: Token Address
         circulating_market_cap:
-          type: string
+          type: number
           example: "0.0"
           description: Token circulating market cap
+          format: double
+          nullable: true
         decimals:
-          type: string
+          type: integer
           example: "18"
           description: Token decimals
+          format: int64
+          nullable: true
         exchange_rate:
           type: string
           example: "2890.96"
           description: Token exchange rate
         holders:
-          type: string
+          type: integer
           example: "2999"
           description: Token holders amount
+          format: int64
+          nullable: true
         icon_url:
           type: string
           example: https://assets.coingecko.com/coins/images/39410/small/Steakhouse_logo-05.jpg?1722053893
           description: "Token image URL "
+          nullable: true
         name:
           type: string
           example: Steakhouse Resteaking Vault
           description: Token name
+          nullable: true
         symbol:
           type: string
           example: steakLRT
           description: Token symbol
+          nullable: true
         total_supply:
           type: string
           example: "9710057205959239302188"
           description: Token total supply
+          format: numeric
+          nullable: true
         type:
           type: string
           example: ERC-20
           description: Token type
         volume_24h:
-          type: string
+          type: number
           example: "24298.765344836862"
           description: Token trading volume for past 24h
+          format: double
+          nullable: true
     DecodedInputParameter:
       type: object
       required:
@@ -2691,7 +2705,7 @@ components:
         - type
       properties:
         reward:
-          type: integer
+          type: number
           format: int64
         type:
           type: string
@@ -2742,9 +2756,9 @@ components:
     TokenBalance:
       type: object
       required:
-        - value
-        - token
-        - token_id
+        - null
+        - null
+        - null
       properties:
         token_instance:
           $ref: "#/components/schemas/NFTInstance"
@@ -2795,13 +2809,13 @@ components:
       type: object
       required:
         - address
-        - symbol
-        - name
-        - decimals
-        - type
-        - holders
-        - exchange_rate
-        - total_supply
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
       properties:
         name:
           type: string
@@ -2829,8 +2843,8 @@ components:
           example: "10000000"
     TotalERC20:
       required:
-        - decimals
-        - value
+        - null
+        - null
       properties:
         decimals:
           type: string
@@ -2850,8 +2864,8 @@ components:
     TotalERC1155:
       required:
         - token_id
-        - decimals
-        - value
+        - null
+        - null
       properties:
         token_id:
           type: string
@@ -2880,10 +2894,10 @@ components:
           example: "10000"
     NFTInstance:
       required:
-        - is_unique
         - id
-        - token
-        - owner
+        - null
+        - null
+        - null
       properties:
         is_unique:
           type: boolean
@@ -2935,11 +2949,11 @@ components:
     AddressNFTInstance:
       required:
         - token_type
-        - value
-        - is_unique
         - id
-        - token
-        - owner
+        - null
+        - null
+        - null
+        - null
       properties:
         is_unique:
           type: boolean
@@ -2997,10 +3011,14 @@ components:
     AddressNFTInstanceCollection:
       required:
         - token_type
-        - value
-        - is_unique
         - id
-        - owner
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
       properties:
         is_unique:
           type: boolean
@@ -3195,19 +3213,20 @@ components:
       type: object
       required:
         - address
-        - circulating_market_cap
-        - icon_url
-        - symbol
-        - name
-        - decimals
-        - type
-        - holders
-        - exchange_rate
-        - total_supply
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
       properties:
         circulating_market_cap:
-          type: string
+          type: number
           example: "83606435600.3635"
+          format: double
         icon_url:
           type: string
           example: https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png
@@ -3215,8 +3234,9 @@ components:
           type: string
           example: Tether USD
         decimals:
-          type: string
+          type: integer
           example: "6"
+          format: int64
         symbol:
           type: string
           example: USDT
@@ -3227,14 +3247,19 @@ components:
           type: string
           example: ERC-20
         holders:
-          type: string
+          type: integer
           example: "837494234523"
+          format: int64
         exchange_rate:
           type: string
           example: "0.99"
         total_supply:
           type: string
           example: "10000000"
+          format: int64
+        volume_24h:
+          type: number
+          format: double
     Argument:
       properties:
         name:
@@ -3394,18 +3419,18 @@ components:
           example: "1.0"
     StatsResponse:
       required:
-        - total_blocks
-        - total_addresses
-        - total_transactions
-        - average_block_time
-        - coin_price
-        - total_gas_used
-        - transactions_today
-        - gas_used_today
-        - gas_prices
-        - static_gas_price
-        - market_cap
-        - network_utilization_percentage
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
       properties:
         total_blocks:
           type: string
@@ -3958,7 +3983,7 @@ components:
     id:
       name: id
       schema:
-        type: integer
+        type: string
       in: path
       required: true
       description: integer id

@@ -18,7 +18,6 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct InternalTransaction {
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub block_number: i32,
     #[serde(default)]
@@ -29,7 +28,6 @@ pub struct InternalTransaction {
 
     pub from: models::AddressParam,
     pub gas_limit: String,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub index: i32,
     pub success: bool,

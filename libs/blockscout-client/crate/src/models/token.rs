@@ -18,14 +18,26 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct Token {
-    pub name: String,
-    pub decimals: String,
-    pub symbol: String,
+    #[serde(default)]
+    pub name: Option<String>,
+
+    #[serde(default)]
+    pub decimals: Option<String>,
+
+    #[serde(default)]
+    pub symbol: Option<String>,
+
     pub address: String,
-    pub r#type: String,
-    // true false false true
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub holders: i32,
-    pub exchange_rate: String,
-    pub total_supply: String,
+    #[serde(default)]
+    pub r#type: Option<String>,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub holders: Option<i32>,
+
+    #[serde(default)]
+    pub exchange_rate: Option<String>,
+
+    #[serde(default)]
+    pub total_supply: Option<String>,
 }

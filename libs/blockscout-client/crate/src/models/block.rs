@@ -20,7 +20,6 @@ use serde_aux::prelude::*;
 pub struct Block {
     pub base_fee_per_gas: String,
     pub burnt_fees: String,
-    // false false true true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub burnt_fees_percentage: f64,
     pub difficulty: String,
@@ -28,15 +27,12 @@ pub struct Block {
     pub extra_data: Option<String>,
 
     pub gas_limit: String,
-    // false false true true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub gas_target_percentage: f64,
     pub gas_used: String,
-    // false false true true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub gas_used_percentage: f64,
     pub hash: String,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub height: i32,
     pub miner: models::AddressParam,
@@ -44,7 +40,6 @@ pub struct Block {
     pub parent_hash: String,
     pub priority_fee: String,
     pub rewards: Vec<models::Reward>,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub size: i32,
     #[serde(default)]
@@ -52,13 +47,11 @@ pub struct Block {
 
     pub timestamp: String,
     pub total_difficulty: String,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub transaction_count: i32,
     pub transaction_fees: String,
     pub r#type: String,
     pub uncles_hashes: Vec<String>,
-    // true false false true
     #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub withdrawals_count: Option<i32>,

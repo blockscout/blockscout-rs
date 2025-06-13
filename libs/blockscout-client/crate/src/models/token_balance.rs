@@ -21,7 +21,12 @@ pub struct TokenBalance {
     #[serde(default)]
     pub token_instance: Option<models::NftInstance>,
 
-    pub value: String,
-    pub token_id: String,
-    pub token: models::Token,
+    #[serde(default)]
+    pub value: Option<String>,
+
+    #[serde(default)]
+    pub token_id: Option<String>,
+
+    #[serde(default)]
+    pub token: Option<models::Token>,
 }

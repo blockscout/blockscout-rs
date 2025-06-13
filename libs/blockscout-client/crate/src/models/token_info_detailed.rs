@@ -21,23 +21,56 @@ pub struct TokenInfoDetailed {
     /// Token Address
     pub address: String,
     /// Token circulating market cap
-    pub circulating_market_cap: String,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub circulating_market_cap: Option<f64>,
+
     /// Token decimals
-    pub decimals: String,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub decimals: Option<i64>,
+
     /// Token exchange rate
-    pub exchange_rate: String,
+
+    #[serde(default)]
+    pub exchange_rate: Option<String>,
+
     /// Token holders amount
-    pub holders: String,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub holders: Option<i64>,
+
     /// Token image URL
-    pub icon_url: String,
+
+    #[serde(default)]
+    pub icon_url: Option<String>,
+
     /// Token name
-    pub name: String,
+
+    #[serde(default)]
+    pub name: Option<String>,
+
     /// Token symbol
-    pub symbol: String,
+
+    #[serde(default)]
+    pub symbol: Option<String>,
+
     /// Token total supply
-    pub total_supply: String,
+
+    #[serde(default)]
+    pub total_supply: Option<String>,
+
     /// Token type
-    pub r#type: String,
+
+    #[serde(default)]
+    pub r#type: Option<String>,
+
     /// Token trading volume for past 24h
-    pub volume_24h: String,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub volume_24h: Option<f64>,
 }

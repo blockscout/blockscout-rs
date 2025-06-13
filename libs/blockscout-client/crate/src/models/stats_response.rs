@@ -18,20 +18,41 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct StatsResponse {
-    pub total_blocks: String,
-    pub total_addresses: String,
-    pub total_transactions: String,
-    // false false true true
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub average_block_time: f64,
-    pub coin_price: String,
-    pub total_gas_used: String,
-    pub transactions_today: String,
-    pub gas_used_today: String,
-    pub gas_prices: serde_json::Value,
-    pub static_gas_price: String,
-    pub market_cap: String,
-    // false false true true
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub network_utilization_percentage: f64,
+    #[serde(default)]
+    pub total_blocks: Option<String>,
+
+    #[serde(default)]
+    pub total_addresses: Option<String>,
+
+    #[serde(default)]
+    pub total_transactions: Option<String>,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub average_block_time: Option<f64>,
+
+    #[serde(default)]
+    pub coin_price: Option<String>,
+
+    #[serde(default)]
+    pub total_gas_used: Option<String>,
+
+    #[serde(default)]
+    pub transactions_today: Option<String>,
+
+    #[serde(default)]
+    pub gas_used_today: Option<String>,
+
+    #[serde(default)]
+    pub gas_prices: Option<serde_json::Value>,
+
+    #[serde(default)]
+    pub static_gas_price: Option<String>,
+
+    #[serde(default)]
+    pub market_cap: Option<String>,
+
+    #[serde(deserialize_with = "deserialize_option_number_from_string")]
+    #[serde(default)]
+    pub network_utilization_percentage: Option<f64>,
 }

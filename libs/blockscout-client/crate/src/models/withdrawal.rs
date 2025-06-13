@@ -18,17 +18,14 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct Withdrawal {
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub index: i32,
     pub amount: String,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub validator_index: i32,
     #[serde(default)]
     pub receiver: Option<models::AddressParam>,
 
-    // true false false true
     #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub block_number: Option<i32>,

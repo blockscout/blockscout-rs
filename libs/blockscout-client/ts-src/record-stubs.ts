@@ -6,19 +6,6 @@ const baseHost = 'eth.blockscout.com';
 const baseName = baseHost.replace(/\./g, '_');
 const outputDir = './crate/tests/recorded/'
 const paths = [
-    "/api/health",
-    // "/api/v1/health", // v1/health is legacy, dont record it
-    "/api/v2/blocks",
-    "/api/v2/transactions",
-    "/api/v2/transactions/0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e",
-    "/api/v2/transactions/0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e/internal-transactions",
-    "/api/v2/smart-contracts",
-    "/api/v2/smart-contracts/0x8FD4596d4E7788a71F82dAf4119D069a84E7d3f3",
-    "/api/v2/tokens",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/instances",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/instances/1",
-
     // Health endpoints
     "/api/health",
     
@@ -41,26 +28,27 @@ const paths = [
     "/api/v2/tokens",
     // "/api/v2/tokens?q=token",
     // "/api/v2/tokens?type=ERC-20",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/instances",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/instances/1",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/counters",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/holders",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/transfers",
-    "/api/v2/tokens/0xB87b96868644d99Cc70a8565BA7311482eDEBF6e/instances/1/holders",
+    "/api/v2/tokens/0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401",
+    "/api/v2/tokens/0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401/instances",
+    "/api/v2/tokens/0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401/instances/25625468407840116393736812939389551247551040926951238633020744494000165263268",
+    "/api/v2/tokens/0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401/counters",
+    "/api/v2/tokens/0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401/holders",
+    "/api/v2/tokens/0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401/transfers",
+    "/api/v2/tokens/0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401/instances/25625468407840116393736812939389551247551040926951238633020744494000165263268/holders",
     
     // Token Transfers endpoints
     "/api/v2/token-transfers",
     
     // Addresses endpoints
-    "/api/v2/addresses/0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de",
-    "/api/v2/addresses/0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de/blocks-validated",
-    "/api/v2/addresses/0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de/counters",
-    "/api/v2/addresses/0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de/logs",
-    "/api/v2/addresses/0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de/nft/collections",
-    "/api/v2/addresses/0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de/token-balances",
-    "/api/v2/addresses/0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de/token-transfers",
-    "/api/v2/addresses/0xc0de20a37e2dac848f81a93bd85fe4acdde7c0de/tokens",
+    "/api/v2/addresses/0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE",
+    "/api/v2/addresses/0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE/counters",
+    "/api/v2/addresses/0x8FD4596d4E7788a71F82dAf4119D069a84E7d3f3/logs",
+    "/api/v2/addresses/0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE/nft/collections",
+    "/api/v2/addresses/0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE/token-balances",
+    "/api/v2/addresses/0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE/token-transfers",
+    "/api/v2/addresses/0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE/tokens",
+    // Blocks validated
+    "/api/v2/addresses/0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97/blocks-validated",
     
     // Search endpoints
     // "/api/v2/search?q=USDT",
@@ -68,8 +56,6 @@ const paths = [
     // Stats endpoints
     "/api/v2/stats",
     
-    // Config endpoints
-    "/api/v2/config/json-rpc-url",
     
     // // Proxy endpoints
     // "/api/v2/proxy/account-abstraction/status",

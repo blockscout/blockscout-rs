@@ -162,7 +162,7 @@ pub struct GetNftInstanceParams {
     pub address_hash: String,
 
     /// integer id
-    pub id: i32,
+    pub id: String,
 }
 
 /// struct for passing parameters to the method [`get_nft_instance_transfers`]
@@ -174,7 +174,7 @@ pub struct GetNftInstanceTransfersParams {
     pub address_hash: String,
 
     /// integer id
-    pub id: i32,
+    pub id: String,
 }
 
 /// struct for passing parameters to the method [`get_nft_instance_transfers_count`]
@@ -186,7 +186,7 @@ pub struct GetNftInstanceTransfersCountParams {
     pub address_hash: String,
 
     /// integer id
-    pub id: i32,
+    pub id: String,
 }
 
 /// struct for passing parameters to the method [`get_nft_instances`]
@@ -234,7 +234,7 @@ pub struct GetTokenInstanceHoldersParams {
     pub address_hash: String,
 
     /// integer id
-    pub id: i32,
+    pub id: String,
 }
 
 /// struct for passing parameters to the method [`get_token_token_transfers`]
@@ -265,7 +265,7 @@ pub struct RefetchTokenInstanceMetadataParams {
     pub address_hash: String,
 
     /// integer id
-    pub id: i32,
+    pub id: String,
 
     pub recaptcha_body: models::RecaptchaBody,
 }
@@ -286,7 +286,7 @@ impl TokensApi for TokensApiClient {
             "{}/api/v2/tokens/{address_hash}/instances/{id}",
             local_var_configuration.base_path,
             address_hash = crate::apis::urlencode(address_hash),
-            id = id
+            id = crate::apis::urlencode(id)
         );
         let mut local_var_req_builder =
             local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
@@ -338,7 +338,7 @@ impl TokensApi for TokensApiClient {
             "{}/api/v2/tokens/{address_hash}/instances/{id}/transfers",
             local_var_configuration.base_path,
             address_hash = crate::apis::urlencode(address_hash),
-            id = id
+            id = crate::apis::urlencode(id)
         );
         let mut local_var_req_builder =
             local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
@@ -392,7 +392,7 @@ impl TokensApi for TokensApiClient {
             "{}/api/v2/tokens/{address_hash}/instances/{id}/transfers-count",
             local_var_configuration.base_path,
             address_hash = crate::apis::urlencode(address_hash),
-            id = id
+            id = crate::apis::urlencode(id)
         );
         let mut local_var_req_builder =
             local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
@@ -644,7 +644,7 @@ impl TokensApi for TokensApiClient {
             "{}/api/v2/tokens/{address_hash}/instances/{id}/holders",
             local_var_configuration.base_path,
             address_hash = crate::apis::urlencode(address_hash),
-            id = id
+            id = crate::apis::urlencode(id)
         );
         let mut local_var_req_builder =
             local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
@@ -811,7 +811,7 @@ impl TokensApi for TokensApiClient {
             "{}/api/v2/tokens/{address_hash}/instances/{id}/refetch-metadata",
             local_var_configuration.base_path,
             address_hash = crate::apis::urlencode(address_hash),
-            id = id
+            id = crate::apis::urlencode(id)
         );
         let mut local_var_req_builder =
             local_var_client.request(reqwest::Method::PATCH, local_var_uri_str.as_str());

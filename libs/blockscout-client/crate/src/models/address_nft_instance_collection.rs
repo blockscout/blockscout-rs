@@ -18,7 +18,9 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct AddressNftInstanceCollection {
-    pub is_unique: bool,
+    #[serde(default)]
+    pub is_unique: Option<bool>,
+
     pub id: String,
     #[serde(default)]
     pub holder_address_hash: Option<String>,
@@ -35,10 +37,13 @@ pub struct AddressNftInstanceCollection {
     #[serde(default)]
     pub metadata: Option<serde_json::Value>,
 
-    pub owner: models::AddressParam,
+    #[serde(default)]
+    pub owner: Option<models::AddressParam>,
+
     #[serde(default)]
     pub token: Option<serde_json::Value>,
 
     pub token_type: String,
-    pub value: String,
+    #[serde(default)]
+    pub value: Option<String>,
 }

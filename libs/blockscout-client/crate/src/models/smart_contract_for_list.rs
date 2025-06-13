@@ -26,13 +26,11 @@ pub struct SmartContractForList {
     pub language: String,
     pub has_constructor_args: bool,
     pub optimization_enabled: bool,
-    // true false false true
     #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub transaction_count: Option<i32>,
 
     pub verified_at: String,
-    // false false true true
     #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub market_cap: Option<f64>,

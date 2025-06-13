@@ -18,6 +18,9 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct TotalErc20 {
-    pub decimals: String,
-    pub value: String,
+    #[serde(default)]
+    pub decimals: Option<String>,
+
+    #[serde(default)]
+    pub value: Option<String>,
 }

@@ -22,17 +22,15 @@ pub struct Log {
     #[serde(default)]
     pub block_hash: Option<String>,
 
-    // true false false true
     #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
     pub block_number: Option<i32>,
 
     pub data: String,
     pub decoded: models::DecodedInputLog,
-    // true false false true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub index: i32,
     pub smart_contract: models::AddressParam,
-    pub topics: Vec<String>,
+    pub topics: Vec<Option<String>>,
     pub transaction_hash: String,
 }

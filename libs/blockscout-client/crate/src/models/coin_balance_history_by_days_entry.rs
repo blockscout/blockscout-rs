@@ -19,7 +19,6 @@ use serde_aux::prelude::*;
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct CoinBalanceHistoryByDaysEntry {
     pub date: String,
-    // false false true true
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub value: f64,
 }
