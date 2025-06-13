@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}
-
     ///
     ///
 
@@ -37,7 +36,6 @@ pub trait AddressesApi: Send + Sync {
     ) -> Result<ResponseContent<GetAddressSuccess>, Error<GetAddressError>>;
 
     /// GET /api/v2/addresses/{address_hash}/blocks-validated
-
     ///
     ///
 
@@ -50,7 +48,6 @@ pub trait AddressesApi: Send + Sync {
     >;
 
     /// GET /api/v2/addresses/{address_hash}/coin-balance-history
-
     ///
     ///
 
@@ -63,7 +60,6 @@ pub trait AddressesApi: Send + Sync {
     >;
 
     /// GET /api/v2/addresses/{address_hash}/coin-balance-history-by-day
-
     ///
     ///
 
@@ -76,7 +72,6 @@ pub trait AddressesApi: Send + Sync {
     >;
 
     /// GET /api/v2/addresses/{address_hash}/counters
-
     ///
     ///
 
@@ -86,7 +81,6 @@ pub trait AddressesApi: Send + Sync {
     ) -> Result<ResponseContent<GetAddressCountersSuccess>, Error<GetAddressCountersError>>;
 
     /// GET /api/v2/addresses/{address_hash}/internal-transactions
-
     ///
     ///
 
@@ -96,7 +90,6 @@ pub trait AddressesApi: Send + Sync {
     ) -> Result<ResponseContent<GetAddressInternalTxsSuccess>, Error<GetAddressInternalTxsError>>;
 
     /// GET /api/v2/addresses/{address_hash}/logs
-
     ///
     ///
 
@@ -106,7 +99,6 @@ pub trait AddressesApi: Send + Sync {
     ) -> Result<ResponseContent<GetAddressLogsSuccess>, Error<GetAddressLogsError>>;
 
     /// GET /api/v2/addresses/{address_hash}/nft
-
     ///
     ///
 
@@ -116,7 +108,6 @@ pub trait AddressesApi: Send + Sync {
     ) -> Result<ResponseContent<GetAddressNftSuccess>, Error<GetAddressNftError>>;
 
     /// GET /api/v2/addresses/{address_hash}/nft/collections
-
     ///
     ///
 
@@ -129,7 +120,6 @@ pub trait AddressesApi: Send + Sync {
     >;
 
     /// GET /api/v2/addresses/{address_hash}/token-balances
-
     ///
     ///
 
@@ -139,7 +129,6 @@ pub trait AddressesApi: Send + Sync {
     ) -> Result<ResponseContent<GetAddressTokenBalancesSuccess>, Error<GetAddressTokenBalancesError>>;
 
     /// GET /api/v2/addresses/{address_hash}/token-transfers
-
     ///
     ///
 
@@ -152,7 +141,6 @@ pub trait AddressesApi: Send + Sync {
     >;
 
     /// GET /api/v2/addresses/{address_hash}/tokens
-
     ///
     ///
 
@@ -162,7 +150,6 @@ pub trait AddressesApi: Send + Sync {
     ) -> Result<ResponseContent<GetAddressTokensSuccess>, Error<GetAddressTokensError>>;
 
     /// GET /api/v2/addresses/{address_hash}/transactions
-
     ///
     ///
 
@@ -172,7 +159,6 @@ pub trait AddressesApi: Send + Sync {
     ) -> Result<ResponseContent<GetAddressTxsSuccess>, Error<GetAddressTxsError>>;
 
     /// GET /api/v2/addresses/{address_hash}/withdrawals
-
     ///
     ///
 
@@ -182,7 +168,6 @@ pub trait AddressesApi: Send + Sync {
     ) -> Result<ResponseContent<GetAddressWithdrawalsSuccess>, Error<GetAddressWithdrawalsError>>;
 
     /// GET /api/v2/addresses
-
     ///
     ///
 
@@ -1171,7 +1156,7 @@ impl AddressesApi for AddressesApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressSuccess {
-    Status200(models::Address),
+    Status200(Box<models::Address>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1196,7 +1181,7 @@ impl ResponseContent<GetAddressSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressBlocksValidatedSuccess {
-    Status200(models::GetAddressBlocksValidated200Response),
+    Status200(Box<models::GetAddressBlocksValidated200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1221,7 +1206,7 @@ impl ResponseContent<GetAddressBlocksValidatedSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressCoinBalanceHistorySuccess {
-    Status200(models::GetAddressCoinBalanceHistory200Response),
+    Status200(Box<models::GetAddressCoinBalanceHistory200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1247,7 +1232,7 @@ impl ResponseContent<GetAddressCoinBalanceHistorySuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressCoinBalanceHistoryByDaySuccess {
-    Status200(Vec<models::CoinBalanceHistoryByDaysEntry>),
+    Status200(Box<Vec<models::CoinBalanceHistoryByDaysEntry>>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1272,7 +1257,7 @@ impl ResponseContent<GetAddressCoinBalanceHistoryByDaySuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressCountersSuccess {
-    Status200(models::AddressCounters),
+    Status200(Box<models::AddressCounters>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1297,7 +1282,7 @@ impl ResponseContent<GetAddressCountersSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressInternalTxsSuccess {
-    Status200(models::GetAddressInternalTxs200Response),
+    Status200(Box<models::GetAddressInternalTxs200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1322,7 +1307,7 @@ impl ResponseContent<GetAddressInternalTxsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressLogsSuccess {
-    Status200(models::GetAddressLogs200Response),
+    Status200(Box<models::GetAddressLogs200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1347,7 +1332,7 @@ impl ResponseContent<GetAddressLogsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressNftSuccess {
-    Status200(models::GetAddressNft200Response),
+    Status200(Box<models::GetAddressNft200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1372,7 +1357,7 @@ impl ResponseContent<GetAddressNftSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressNftCollectionsSuccess {
-    Status200(models::GetAddressNftCollections200Response),
+    Status200(Box<models::GetAddressNftCollections200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1397,7 +1382,7 @@ impl ResponseContent<GetAddressNftCollectionsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressTokenBalancesSuccess {
-    Status200(Vec<models::TokenBalance>),
+    Status200(Box<Vec<models::TokenBalance>>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1422,7 +1407,7 @@ impl ResponseContent<GetAddressTokenBalancesSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressTokenTransfersSuccess {
-    Status200(models::GetAddressTokenTransfers200Response),
+    Status200(Box<models::GetAddressTokenTransfers200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1447,7 +1432,7 @@ impl ResponseContent<GetAddressTokenTransfersSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressTokensSuccess {
-    Status200(models::GetAddressTokens200Response),
+    Status200(Box<models::GetAddressTokens200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1472,7 +1457,7 @@ impl ResponseContent<GetAddressTokensSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressTxsSuccess {
-    Status200(models::GetBlockTxs200Response),
+    Status200(Box<models::GetBlockTxs200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1497,7 +1482,7 @@ impl ResponseContent<GetAddressTxsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressWithdrawalsSuccess {
-    Status200(models::GetBlockWithdrawals200Response),
+    Status200(Box<models::GetBlockWithdrawals200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1522,7 +1507,7 @@ impl ResponseContent<GetAddressWithdrawalsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAddressesSuccess {
-    Status200(models::GetAddresses200Response),
+    Status200(Box<models::GetAddresses200Response>),
 
     UnknownValue(serde_json::Value),
 }

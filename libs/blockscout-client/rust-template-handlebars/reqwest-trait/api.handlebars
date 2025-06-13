@@ -20,10 +20,10 @@ pub trait {{{classname}}}: Send + Sync {
 {{#each operation}}
 
     /// {{{httpMethod}}} {{{path}}}
-    {{#unless notes.empty}}
+    {{~#unless notes.empty}}
     ///
     /// {{{notes}}}
-    {{/unless}}
+    {{~/unless}}
 {{#if vendorExtensions.x-group-parameters}}
     async fn {{{operationId}}}(&self, {{#each allParams}}{{#if @first}} params: {{{operationIdCamelCase}}}Params {{/if}}{{/each}}) -> Result<{{#if supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/if}}{{#unless supportMultipleResponses}}{{#unless returnType}}(){{/unless}}{{{returnType}}}{{/unless}}, Error<{{{operationIdCamelCase}}}Error>>;
 {{/if}}
@@ -57,9 +57,9 @@ impl {{classname}}Client {
 {{/if}}
 pub struct {{{operationIdCamelCase}}}Params {
 {{/if}}
-    {{#with description}}
-    /// {{{.}}}
-    {{/with}}
+    {{~#if description}}
+    /// {{{description}}}
+    {{~/if}}
     pub {{{paramName}}}: {{#unless required}}Option<{{/unless}}{{#if required}}{{#if isNullable}}Option<{{/if}}{{/if}}{{#unless isUuid}}{{#if isString}}{{#if isArray}}Vec<{{/if}}String{{#if isArray}}>{{/if}}{{/if}}{{/unless}}{{#if isUuid}}{{#if isArray}}Vec<{{/if}}String{{#if isArray}}>{{/if}}{{/if}}{{#unless isString}}{{#unless isUuid}}{{#unless isPrimitiveType}}{{#unless isContainer}}models::{{/unless}}{{/unless}}{{{dataType}}}{{/unless}}{{/unless}}{{#unless required}}>{{/unless}}{{#if required}}{{#if isNullable}}>{{/if}}{{/if}}{{#unless @last}},{{/unless}}
 {{#if @last}}
 }
@@ -372,10 +372,10 @@ impl {{classname}} for {{classname}}Client {
 pub enum {{{operationIdCamelCase}}}Success {
     {{#each responses}}
     {{#if is2xx}}
-    Status{{code}}({{#if isEnum}}{{{enumName}}}{{/if}}{{#unless isEnum}}{{{dataType}}}{{/unless}}),
+    Status{{code}}(Box<{{#if isEnum}}{{{enumName}}}{{/if}}{{#unless isEnum}}{{{dataType}}}{{/unless}}>),
     {{/if}}
     {{#if is3xx}}
-    Status{{code}}({{#if isEnum}}{{{enumName}}}{{/if}}{{#unless isEnum}}{{{dataType}}}{{/unless}}),
+    Status{{code}}(Box<{{#if isEnum}}{{{enumName}}}{{/if}}{{#unless isEnum}}{{{dataType}}}{{/unless}}>),
     {{/if}}
     {{/each}}
     UnknownValue(serde_json::Value),

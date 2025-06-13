@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait ProxyApi: Send + Sync {
     /// GET /api/v2/proxy/account-abstraction/status
-
     ///
     ///
 
@@ -105,7 +104,7 @@ impl ProxyApi for ProxyApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetAccountAbstractionStatusSuccess {
-    Status200(models::V1IndexerStatus),
+    Status200(Box<models::V1IndexerStatus>),
 
     UnknownValue(serde_json::Value),
 }

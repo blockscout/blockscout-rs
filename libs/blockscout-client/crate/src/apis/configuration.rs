@@ -14,7 +14,8 @@
 
 use bon::Builder;
 
-#[derive(Debug, Clone, Builder)]
+#[derive(Debug, Clone)]
+#[derive(Builder)]
 
 pub struct Configuration {
     #[builder(into)]

@@ -13,12 +13,9 @@ use serde_with::serde_as;
 use serde_repr::{Serialize_repr,Deserialize_repr};
 {{/if}}
 {{/if}}
-{{#with description}}
-/// {{{classname}}} : {{{description}}}
-{{/with}}
 {{!-- for repr(int) enum schemas --}}
-{{#if isEnum}}
-{{#if isInteger}}
+{{~#if isEnum}}
+{{~#if isInteger}}
 /// {{{description}}}
 #[repr(i64)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize_repr, Deserialize_repr)]

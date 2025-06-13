@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait ConfigApi: Send + Sync {
     /// GET /api/v2/config/json-rpc-url
-
     ///
     ///
 
@@ -99,7 +98,7 @@ impl ConfigApi for ConfigApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetJsonRpcUrlSuccess {
-    Status200(models::GetJsonRpcUrl200Response),
+    Status200(Box<models::GetJsonRpcUrl200Response>),
 
     UnknownValue(serde_json::Value),
 }

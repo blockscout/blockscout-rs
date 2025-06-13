@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait SearchApi: Send + Sync {
     /// GET /api/v2/search
-
     ///
     ///
 
@@ -37,7 +36,6 @@ pub trait SearchApi: Send + Sync {
     ) -> Result<ResponseContent<SearchSuccess>, Error<SearchError>>;
 
     /// GET /api/v2/search/check-redirect
-
     ///
     ///
 
@@ -185,7 +183,7 @@ impl SearchApi for SearchApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SearchSuccess {
-    Status200(models::Search200Response),
+    Status200(Box<models::Search200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -210,7 +208,7 @@ impl ResponseContent<SearchSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SearchRedirectSuccess {
-    Status200(models::SearchResultRedirect),
+    Status200(Box<models::SearchResultRedirect>),
 
     UnknownValue(serde_json::Value),
 }

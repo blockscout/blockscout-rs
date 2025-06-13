@@ -395,6 +395,13 @@ impl MockApiClient {
 }
 
 #[cfg(feature = "mockall")]
+impl Default for MockApiClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "mockall")]
 impl Api for MockApiClient {
     fn addresses_api(&self) -> &dyn addresses_api::AddressesApi {
         &self.addresses_api_mock

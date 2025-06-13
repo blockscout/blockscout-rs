@@ -27,14 +27,12 @@ use std::sync::Arc;
 #[async_trait]
 pub trait HealthApi: Send + Sync {
     /// GET /api/health
-
     ///
     ///
 
     async fn health(&self) -> Result<ResponseContent<HealthSuccess>, Error<HealthError>>;
 
     /// GET /api/v1/health
-
     ///
     ///
 
@@ -140,7 +138,7 @@ impl HealthApi for HealthApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum HealthSuccess {
-    Status200(models::HealthCheckResponse),
+    Status200(Box<models::HealthCheckResponse>),
 
     UnknownValue(serde_json::Value),
 }
@@ -165,7 +163,7 @@ impl ResponseContent<HealthSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum HealthV1Success {
-    Status200(models::V1HealthCheckResponse),
+    Status200(Box<models::V1HealthCheckResponse>),
 
     UnknownValue(serde_json::Value),
 }

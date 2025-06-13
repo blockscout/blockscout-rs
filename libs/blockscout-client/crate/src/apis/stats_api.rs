@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait StatsApi: Send + Sync {
     /// GET /api/v2/stats/charts/market
-
     ///
     ///
 
@@ -36,14 +35,12 @@ pub trait StatsApi: Send + Sync {
     ) -> Result<ResponseContent<GetMarketChartSuccess>, Error<GetMarketChartError>>;
 
     /// GET /api/v2/stats
-
     ///
     ///
 
     async fn get_stats(&self) -> Result<ResponseContent<GetStatsSuccess>, Error<GetStatsError>>;
 
     /// GET /api/v2/stats/charts/transactions
-
     ///
     ///
 
@@ -202,7 +199,7 @@ impl StatsApi for StatsApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetMarketChartSuccess {
-    Status200(models::GetMarketChart200Response),
+    Status200(Box<models::GetMarketChart200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -227,7 +224,7 @@ impl ResponseContent<GetMarketChartSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetStatsSuccess {
-    Status200(models::StatsResponse),
+    Status200(Box<models::StatsResponse>),
 
     UnknownValue(serde_json::Value),
 }
@@ -252,7 +249,7 @@ impl ResponseContent<GetStatsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTxsChartSuccess {
-    Status200(models::GetTxsChart200Response),
+    Status200(Box<models::GetTxsChart200Response>),
 
     UnknownValue(serde_json::Value),
 }

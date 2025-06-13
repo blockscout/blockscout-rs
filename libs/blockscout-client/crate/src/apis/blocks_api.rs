@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait BlocksApi: Send + Sync {
     /// GET /api/v2/blocks/{block_number_or_hash}
-
     ///
     ///
 
@@ -37,7 +36,6 @@ pub trait BlocksApi: Send + Sync {
     ) -> Result<ResponseContent<GetBlockSuccess>, Error<GetBlockError>>;
 
     /// GET /api/v2/blocks/{block_number_or_hash}/transactions
-
     ///
     ///
 
@@ -47,7 +45,6 @@ pub trait BlocksApi: Send + Sync {
     ) -> Result<ResponseContent<GetBlockTxsSuccess>, Error<GetBlockTxsError>>;
 
     /// GET /api/v2/blocks/{block_number_or_hash}/withdrawals
-
     ///
     ///
 
@@ -57,7 +54,6 @@ pub trait BlocksApi: Send + Sync {
     ) -> Result<ResponseContent<GetBlockWithdrawalsSuccess>, Error<GetBlockWithdrawalsError>>;
 
     /// GET /api/v2/blocks
-
     ///
     ///
 
@@ -326,7 +322,7 @@ impl BlocksApi for BlocksApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetBlockSuccess {
-    Status200(models::Block),
+    Status200(Box<models::Block>),
 
     UnknownValue(serde_json::Value),
 }
@@ -351,7 +347,7 @@ impl ResponseContent<GetBlockSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetBlockTxsSuccess {
-    Status200(models::GetBlockTxs200Response),
+    Status200(Box<models::GetBlockTxs200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -376,7 +372,7 @@ impl ResponseContent<GetBlockTxsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetBlockWithdrawalsSuccess {
-    Status200(models::GetBlockWithdrawals200Response),
+    Status200(Box<models::GetBlockWithdrawals200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -401,7 +397,7 @@ impl ResponseContent<GetBlockWithdrawalsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetBlocksSuccess {
-    Status200(models::GetBlocks200Response),
+    Status200(Box<models::GetBlocks200Response>),
 
     UnknownValue(serde_json::Value),
 }

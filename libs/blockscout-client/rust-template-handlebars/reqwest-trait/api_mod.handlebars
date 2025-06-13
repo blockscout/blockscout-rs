@@ -206,6 +206,13 @@ impl MockApiClient {
 }
 
 #[cfg(feature = "mockall")]
+impl Default for MockApiClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "mockall")]
 impl Api for MockApiClient {
     {{#with apiInfo}}
     {{#each apis}}

@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait TransactionsApi: Send + Sync {
     /// GET /api/v2/transactions/{transaction_hash}/internal-transactions
-
     ///
     ///
 
@@ -40,7 +39,6 @@ pub trait TransactionsApi: Send + Sync {
     >;
 
     /// GET /api/v2/transactions/{transaction_hash}/logs
-
     ///
     ///
 
@@ -50,7 +48,6 @@ pub trait TransactionsApi: Send + Sync {
     ) -> Result<ResponseContent<GetTransactionLogsSuccess>, Error<GetTransactionLogsError>>;
 
     /// GET /api/v2/transactions/{transaction_hash}/raw-trace
-
     ///
     ///
 
@@ -60,7 +57,6 @@ pub trait TransactionsApi: Send + Sync {
     ) -> Result<ResponseContent<GetTransactionRawTraceSuccess>, Error<GetTransactionRawTraceError>>;
 
     /// GET /api/v2/transactions/{transaction_hash}/state-changes
-
     ///
     ///
 
@@ -73,7 +69,6 @@ pub trait TransactionsApi: Send + Sync {
     >;
 
     /// GET /api/v2/transactions/{transaction_hash}/summary
-
     ///
     ///
 
@@ -83,7 +78,6 @@ pub trait TransactionsApi: Send + Sync {
     ) -> Result<ResponseContent<GetTransactionSummarySuccess>, Error<GetTransactionSummaryError>>;
 
     /// GET /api/v2/transactions/{transaction_hash}/token-transfers
-
     ///
     ///
 
@@ -96,7 +90,6 @@ pub trait TransactionsApi: Send + Sync {
     >;
 
     /// GET /api/v2/transactions/{transaction_hash}
-
     ///
     ///
 
@@ -106,7 +99,6 @@ pub trait TransactionsApi: Send + Sync {
     ) -> Result<ResponseContent<GetTxSuccess>, Error<GetTxError>>;
 
     /// GET /api/v2/transactions
-
     ///
     ///
 
@@ -645,7 +637,7 @@ impl TransactionsApi for TransactionsApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTransactionInternalTxsSuccess {
-    Status200(models::GetTransactionInternalTxs200Response),
+    Status200(Box<models::GetTransactionInternalTxs200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -670,7 +662,7 @@ impl ResponseContent<GetTransactionInternalTxsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTransactionLogsSuccess {
-    Status200(models::GetTransactionLogs200Response),
+    Status200(Box<models::GetTransactionLogs200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -695,7 +687,7 @@ impl ResponseContent<GetTransactionLogsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTransactionRawTraceSuccess {
-    Status200(Vec<models::RawTrace>),
+    Status200(Box<Vec<models::RawTrace>>),
 
     UnknownValue(serde_json::Value),
 }
@@ -720,7 +712,7 @@ impl ResponseContent<GetTransactionRawTraceSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTransactionStateChangesSuccess {
-    Status200(models::GetTransactionStateChanges200Response),
+    Status200(Box<models::GetTransactionStateChanges200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -746,7 +738,7 @@ impl ResponseContent<GetTransactionStateChangesSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTransactionSummarySuccess {
-    Status200(models::TransactionSummary),
+    Status200(Box<models::TransactionSummary>),
 
     UnknownValue(serde_json::Value),
 }
@@ -771,7 +763,7 @@ impl ResponseContent<GetTransactionSummarySuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTransactionTokenTransfersSuccess {
-    Status200(models::GetTransactionTokenTransfers200Response),
+    Status200(Box<models::GetTransactionTokenTransfers200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -797,7 +789,7 @@ impl ResponseContent<GetTransactionTokenTransfersSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTxSuccess {
-    Status200(models::Transaction),
+    Status200(Box<models::Transaction>),
 
     UnknownValue(serde_json::Value),
 }
@@ -822,7 +814,7 @@ impl ResponseContent<GetTxSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTxsSuccess {
-    Status200(models::GetTxs200Response),
+    Status200(Box<models::GetTxs200Response>),
 
     UnknownValue(serde_json::Value),
 }

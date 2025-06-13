@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait SmartContractsApi: Send + Sync {
     /// GET /api/v2/smart-contracts/{address_hash}
-
     ///
     ///
 
@@ -37,7 +36,6 @@ pub trait SmartContractsApi: Send + Sync {
     ) -> Result<ResponseContent<GetSmartContractSuccess>, Error<GetSmartContractError>>;
 
     /// GET /api/v2/smart-contracts
-
     ///
     ///
 
@@ -47,7 +45,6 @@ pub trait SmartContractsApi: Send + Sync {
     ) -> Result<ResponseContent<GetSmartContractsSuccess>, Error<GetSmartContractsError>>;
 
     /// GET /api/v2/smart-contracts/counters
-
     ///
     ///
 
@@ -253,7 +250,7 @@ impl SmartContractsApi for SmartContractsApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetSmartContractSuccess {
-    Status200(models::SmartContract),
+    Status200(Box<models::SmartContract>),
 
     UnknownValue(serde_json::Value),
 }
@@ -278,7 +275,7 @@ impl ResponseContent<GetSmartContractSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetSmartContractsSuccess {
-    Status200(models::GetSmartContracts200Response),
+    Status200(Box<models::GetSmartContracts200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -303,7 +300,7 @@ impl ResponseContent<GetSmartContractsSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetSmartContractsCountersSuccess {
-    Status200(models::GetSmartContractsCounters200Response),
+    Status200(Box<models::GetSmartContractsCounters200Response>),
 
     UnknownValue(serde_json::Value),
 }

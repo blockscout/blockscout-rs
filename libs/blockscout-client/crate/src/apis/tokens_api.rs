@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}/instances/{id}
-
     ///
     ///
 
@@ -37,7 +36,6 @@ pub trait TokensApi: Send + Sync {
     ) -> Result<ResponseContent<GetNftInstanceSuccess>, Error<GetNftInstanceError>>;
 
     /// GET /api/v2/tokens/{address_hash}/instances/{id}/transfers
-
     ///
     ///
 
@@ -47,7 +45,6 @@ pub trait TokensApi: Send + Sync {
     ) -> Result<ResponseContent<GetNftInstanceTransfersSuccess>, Error<GetNftInstanceTransfersError>>;
 
     /// GET /api/v2/tokens/{address_hash}/instances/{id}/transfers-count
-
     ///
     ///
 
@@ -60,7 +57,6 @@ pub trait TokensApi: Send + Sync {
     >;
 
     /// GET /api/v2/tokens/{address_hash}/instances
-
     ///
     ///
 
@@ -70,7 +66,6 @@ pub trait TokensApi: Send + Sync {
     ) -> Result<ResponseContent<GetNftInstancesSuccess>, Error<GetNftInstancesError>>;
 
     /// GET /api/v2/tokens/{address_hash}
-
     ///
     ///
 
@@ -80,7 +75,6 @@ pub trait TokensApi: Send + Sync {
     ) -> Result<ResponseContent<GetTokenSuccess>, Error<GetTokenError>>;
 
     /// GET /api/v2/tokens/{address_hash}/counters
-
     ///
     ///
 
@@ -90,7 +84,6 @@ pub trait TokensApi: Send + Sync {
     ) -> Result<ResponseContent<GetTokenCountersSuccess>, Error<GetTokenCountersError>>;
 
     /// GET /api/v2/tokens/{address_hash}/holders
-
     ///
     ///
 
@@ -100,7 +93,6 @@ pub trait TokensApi: Send + Sync {
     ) -> Result<ResponseContent<GetTokenHoldersSuccess>, Error<GetTokenHoldersError>>;
 
     /// GET /api/v2/tokens/{address_hash}/instances/{id}/holders
-
     ///
     ///
 
@@ -110,7 +102,6 @@ pub trait TokensApi: Send + Sync {
     ) -> Result<ResponseContent<GetTokenInstanceHoldersSuccess>, Error<GetTokenInstanceHoldersError>>;
 
     /// GET /api/v2/tokens/{address_hash}/transfers
-
     ///
     ///
 
@@ -120,7 +111,6 @@ pub trait TokensApi: Send + Sync {
     ) -> Result<ResponseContent<GetTokenTokenTransfersSuccess>, Error<GetTokenTokenTransfersError>>;
 
     /// GET /api/v2/tokens
-
     ///
     ///
 
@@ -130,7 +120,6 @@ pub trait TokensApi: Send + Sync {
     ) -> Result<ResponseContent<GetTokensListSuccess>, Error<GetTokensListError>>;
 
     /// PATCH /api/v2/tokens/{address_hash}/instances/{id}/refetch-metadata
-
     ///
     ///
 
@@ -853,7 +842,7 @@ impl TokensApi for TokensApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetNftInstanceSuccess {
-    Status200(models::NftInstance),
+    Status200(Box<models::NftInstance>),
 
     UnknownValue(serde_json::Value),
 }
@@ -878,7 +867,7 @@ impl ResponseContent<GetNftInstanceSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetNftInstanceTransfersSuccess {
-    Status200(models::GetNftInstanceTransfers200Response),
+    Status200(Box<models::GetNftInstanceTransfers200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -903,7 +892,7 @@ impl ResponseContent<GetNftInstanceTransfersSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetNftInstanceTransfersCountSuccess {
-    Status200(models::GetNftInstanceTransfersCount200Response),
+    Status200(Box<models::GetNftInstanceTransfersCount200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -929,7 +918,7 @@ impl ResponseContent<GetNftInstanceTransfersCountSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetNftInstancesSuccess {
-    Status200(models::GetNftInstances200Response),
+    Status200(Box<models::GetNftInstances200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -954,7 +943,7 @@ impl ResponseContent<GetNftInstancesSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTokenSuccess {
-    Status200(models::TokenInfo),
+    Status200(Box<models::TokenInfo>),
 
     UnknownValue(serde_json::Value),
 }
@@ -979,7 +968,7 @@ impl ResponseContent<GetTokenSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTokenCountersSuccess {
-    Status200(models::TokenCounters),
+    Status200(Box<models::TokenCounters>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1004,7 +993,7 @@ impl ResponseContent<GetTokenCountersSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTokenHoldersSuccess {
-    Status200(models::GetTokenHolders200Response),
+    Status200(Box<models::GetTokenHolders200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1029,7 +1018,7 @@ impl ResponseContent<GetTokenHoldersSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTokenInstanceHoldersSuccess {
-    Status200(models::GetTokenInstanceHolders200Response),
+    Status200(Box<models::GetTokenInstanceHolders200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1054,7 +1043,7 @@ impl ResponseContent<GetTokenInstanceHoldersSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTokenTokenTransfersSuccess {
-    Status200(models::GetTokenTokenTransfers200Response),
+    Status200(Box<models::GetTokenTokenTransfers200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1079,7 +1068,7 @@ impl ResponseContent<GetTokenTokenTransfersSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTokensListSuccess {
-    Status200(models::GetTokensList200Response),
+    Status200(Box<models::GetTokensList200Response>),
 
     UnknownValue(serde_json::Value),
 }
@@ -1104,7 +1093,7 @@ impl ResponseContent<GetTokensListSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RefetchTokenInstanceMetadataSuccess {
-    Status200(models::RefetchTokenInstanceMetadata200Response),
+    Status200(Box<models::RefetchTokenInstanceMetadata200Response>),
 
     UnknownValue(serde_json::Value),
 }

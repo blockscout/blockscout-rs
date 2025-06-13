@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait CelestiaServiceApi: Send + Sync {
     /// GET /api/v1/celestia/blob
-
     ///
     ///
 
@@ -37,7 +36,6 @@ pub trait CelestiaServiceApi: Send + Sync {
     ) -> Result<ResponseContent<CelestiaServiceGetBlobSuccess>, Error<CelestiaServiceGetBlobError>>;
 
     /// GET /api/v1/celestia/l2BatchMetadata
-
     ///
     ///
 
@@ -50,7 +48,6 @@ pub trait CelestiaServiceApi: Send + Sync {
     >;
 
     /// GET /api/v2/health
-
     ///
     ///
 
@@ -298,7 +295,7 @@ impl CelestiaServiceApi for CelestiaServiceApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CelestiaServiceGetBlobSuccess {
-    Status200(models::V1CelestiaBlob),
+    Status200(Box<models::V1CelestiaBlob>),
 
     UnknownValue(serde_json::Value),
 }
@@ -323,7 +320,7 @@ impl ResponseContent<CelestiaServiceGetBlobSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CelestiaServiceGetL2BatchMetadataSuccess {
-    Status200(models::V1CelestiaL2BatchMetadata),
+    Status200(Box<models::V1CelestiaL2BatchMetadata>),
 
     UnknownValue(serde_json::Value),
 }
@@ -348,7 +345,7 @@ impl ResponseContent<CelestiaServiceGetL2BatchMetadataSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum HealthCheckSuccess {
-    Status200(models::V1HealthCheckResponse),
+    Status200(Box<models::V1HealthCheckResponse>),
 
     UnknownValue(serde_json::Value),
 }

@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait MainPageApi: Send + Sync {
     /// GET /api/v2/main-page/indexing-status
-
     ///
     ///
 
@@ -36,7 +35,6 @@ pub trait MainPageApi: Send + Sync {
     ) -> Result<ResponseContent<GetIndexingStatusSuccess>, Error<GetIndexingStatusError>>;
 
     /// GET /api/v2/main-page/blocks
-
     ///
     ///
 
@@ -45,7 +43,6 @@ pub trait MainPageApi: Send + Sync {
     ) -> Result<ResponseContent<GetMainPageTokensSuccess>, Error<GetMainPageTokensError>>;
 
     /// GET /api/v2/main-page/transactions
-
     ///
     ///
 
@@ -209,7 +206,7 @@ impl MainPageApi for MainPageApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetIndexingStatusSuccess {
-    Status200(models::IndexingStatus),
+    Status200(Box<models::IndexingStatus>),
 
     UnknownValue(serde_json::Value),
 }
@@ -234,7 +231,7 @@ impl ResponseContent<GetIndexingStatusSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetMainPageTokensSuccess {
-    Status200(Vec<models::Block>),
+    Status200(Box<Vec<models::Block>>),
 
     UnknownValue(serde_json::Value),
 }
@@ -259,7 +256,7 @@ impl ResponseContent<GetMainPageTokensSuccess> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetMainPageTxsSuccess {
-    Status200(Vec<models::Transaction>),
+    Status200(Box<Vec<models::Transaction>>),
 
     UnknownValue(serde_json::Value),
 }

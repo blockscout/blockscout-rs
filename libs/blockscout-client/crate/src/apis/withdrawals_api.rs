@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait WithdrawalsApi: Send + Sync {
     /// GET /api/v2/withdrawals
-
     ///
     ///
 
@@ -96,7 +95,7 @@ impl WithdrawalsApi for WithdrawalsApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetWithdrawalsSuccess {
-    Status200(models::GetBlockWithdrawals200Response),
+    Status200(Box<models::GetBlockWithdrawals200Response>),
 
     UnknownValue(serde_json::Value),
 }

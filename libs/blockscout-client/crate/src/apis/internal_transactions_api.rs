@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait InternalTransactionsApi: Send + Sync {
     /// GET /api/v2/internal-transactions
-
     ///
     ///
 
@@ -100,7 +99,7 @@ impl InternalTransactionsApi for InternalTransactionsApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetInternalTransactionsSuccess {
-    Status200(models::GetInternalTransactions200Response),
+    Status200(Box<models::GetInternalTransactions200Response>),
 
     UnknownValue(serde_json::Value),
 }

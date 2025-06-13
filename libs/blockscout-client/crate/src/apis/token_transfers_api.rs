@@ -27,7 +27,6 @@ use std::sync::Arc;
 #[async_trait]
 pub trait TokenTransfersApi: Send + Sync {
     /// GET /api/v2/token-transfers
-
     ///
     ///
 
@@ -99,7 +98,7 @@ impl TokenTransfersApi for TokenTransfersApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetTokenTransfersSuccess {
-    Status200(models::GetTokenTransfers200Response),
+    Status200(Box<models::GetTokenTransfers200Response>),
 
     UnknownValue(serde_json::Value),
 }

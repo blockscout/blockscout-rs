@@ -17,8 +17,6 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
-/// HealthCheckResponseServingStatus :
-
 ///  - SERVICE_UNKNOWN: Used only by the Watch method.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum HealthCheckResponseServingStatus {
