@@ -5,7 +5,7 @@
   },
   "response": {
     "status": 200,
-    "body": "{\"token_holders_count\":\"429954\",\"transfers_count\":\"685898\"}",
+    "body": "{\"token_holders_count\":\"429954\",\"transfers_count\":\"686016\"}",
     "headers": {
       "Content-Type": "application/json"
     }

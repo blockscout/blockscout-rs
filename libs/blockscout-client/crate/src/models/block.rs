@@ -13,46 +13,78 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct Block {
-    pub base_fee_per_gas: String,
-    pub burnt_fees: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub burnt_fees_percentage: f64,
-    pub difficulty: String,
+    #[serde(default)]
+    pub base_fee_per_gas: Option<String>,
+
+    #[serde(default)]
+    pub burnt_fees: Option<String>,
+
+    #[serde(default)]
+    pub burnt_fees_percentage: Option<Decimal>,
+
+    #[serde(default)]
+    pub difficulty: Option<String>,
+
     #[serde(default)]
     pub extra_data: Option<String>,
 
-    pub gas_limit: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub gas_target_percentage: f64,
-    pub gas_used: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub gas_used_percentage: f64,
+    #[serde(default)]
+    pub gas_limit: Option<String>,
+
+    #[serde(default)]
+    pub gas_target_percentage: Option<Decimal>,
+
+    #[serde(default)]
+    pub gas_used: Option<String>,
+
+    #[serde(default)]
+    pub gas_used_percentage: Option<Decimal>,
+
     pub hash: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub height: i32,
-    pub miner: models::AddressParam,
-    pub nonce: String,
+    pub height: Decimal,
+    #[serde(default)]
+    pub miner: Option<models::AddressParam>,
+
+    #[serde(default)]
+    pub nonce: Option<String>,
+
     pub parent_hash: String,
-    pub priority_fee: String,
-    pub rewards: Vec<models::Reward>,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub size: i32,
+    #[serde(default)]
+    pub priority_fee: Option<Decimal>,
+
+    #[serde(default)]
+    pub rewards: Option<Vec<models::Reward>>,
+
+    #[serde(default)]
+    pub size: Option<Decimal>,
+
     #[serde(default)]
     pub state_root: Option<String>,
 
-    pub timestamp: String,
-    pub total_difficulty: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub transaction_count: i32,
-    pub transaction_fees: String,
-    pub r#type: String,
-    pub uncles_hashes: Vec<String>,
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub withdrawals_count: Option<i32>,
+    pub timestamp: Option<String>,
+
+    #[serde(default)]
+    pub total_difficulty: Option<String>,
+
+    #[serde(default)]
+    pub transaction_count: Option<Decimal>,
+
+    #[serde(default)]
+    pub transaction_fees: Option<String>,
+
+    #[serde(default)]
+    pub r#type: Option<String>,
+
+    #[serde(default)]
+    pub uncles_hashes: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub withdrawals_count: Option<Decimal>,
 }

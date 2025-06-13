@@ -797,9 +797,7 @@ impl TokensApi for TokensApiClient {
     > {
         let RefetchTokenInstanceMetadataParams {
             address_hash,
-
             id,
-
             recaptcha_body,
         } = params;
 

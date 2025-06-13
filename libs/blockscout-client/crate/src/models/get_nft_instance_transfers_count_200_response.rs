@@ -13,11 +13,11 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct GetNftInstanceTransfersCount200Response {
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub transfers_count: i32,
+    pub transfers_count: Decimal,
 }

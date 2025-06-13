@@ -6,6 +6,9 @@ use aws_sigv4::http_request::{sign, SigningSettings, SigningParams, SignableRequ
 use http;
 use secrecy::{SecretString, ExposeSecret};
 {{/if}}
+{{# if useBonBuilder}}
+use bon::Builder;
+{{/if}}
 {{#if supportTokenSource}}
 use std::sync::Arc;
 use google_cloud_token::TokenSource;
@@ -13,13 +16,31 @@ use async_trait::async_trait;
 {{/if}}
 
 #[derive(Debug, Clone)]
+{{# if useBonBuilder }}
+#[derive(Builder)]
+{{/if}}
 pub struct Configuration {
+    {{#if useBonBuilder }}
+    #[builder(into)]
+    {{/if}}
     pub base_path: String,
+    {{#if useBonBuilder }}
+    #[builder(into)]
+    {{/if}}
     pub user_agent: Option<String>,
+    {{# if useBonBuilder }}
+    #[builder(default)]
+    {{/if}}
     pub client: {{#if supportMiddleware}}reqwest_middleware::ClientWithMiddleware{{/if}}{{#unless supportMiddleware}}reqwest::Client{{/unless}},
     {{#unless supportTokenSource}}
     pub basic_auth: Option<BasicAuth>,
+    {{#if useBonBuilder }}
+    #[builder(into)]
+    {{/if}}
     pub oauth_access_token: Option<String>,
+    {{#if useBonBuilder }}
+    #[builder(into)]
+    {{/if}}
     pub bearer_access_token: Option<String>,
     pub api_key: Option<ApiKey>,
     {{/unless}}
@@ -84,74 +105,6 @@ impl Configuration {
     pub fn new() -> Configuration {
         Configuration::default()
     }
-
-    // changed
-    pub fn with_base_path(&mut self, base_path: impl Into<String>) -> &mut Self {
-        self.base_path = base_path.into();
-        self
-    }
-
-    // changed
-    pub fn with_user_agent(&mut self, user_agent: impl Into<String>) -> &mut Self {
-        self.user_agent = Some(user_agent.into());
-        self
-    }
-
-    // changed
-    pub fn with_client(&mut self, client: {{#if supportMiddleware}}reqwest_middleware::ClientWithMiddleware{{/if}}{{#unless supportMiddleware}}reqwest::Client{{/unless}}) -> &mut Self {
-        self.client = client;
-        self
-    }
-
-    // changed
-    {{#unless supportTokenSource}}
-    pub fn with_basic_auth(&mut self, username: impl Into<String>, password: Option<impl Into<String>>) -> &mut Self {
-        self.basic_auth = Some((username.into(), password.map(|p| p.into())));
-        self
-    }
-
-    // changed
-    pub fn with_oauth_access_token(&mut self, oauth_access_token: impl Into<String>) -> &mut Self {
-        self.oauth_access_token = Some(oauth_access_token.into());
-        self
-    }
-
-    // changed
-    pub fn with_bearer_access_token(&mut self, bearer_access_token: impl Into<String>) -> &mut Self {
-        self.bearer_access_token = Some(bearer_access_token.into());
-        self
-    }
-
-    // changed
-    pub fn with_api_key(&mut self, prefix: Option<String>, key: impl Into<String>) -> &mut Self {
-        self.api_key = Some(ApiKey {
-            prefix,
-            key: key.into(),
-        });
-        self
-    }
-    {{/unless}}
-
-    {{#if withAWSV4Signature}}
-    // changed
-    pub fn with_aws_v4_key(&mut self, access_key: impl Into<String>, secret_key: impl Into<String>, region: impl Into<String>, service: impl Into<String>) -> &mut Self {
-        self.aws_v4_key = Some(AWSv4Key {
-            access_key: access_key.into(),
-            secret_key: SecretString::new(secret_key.into()),
-            region: region.into(),
-            service: service.into(),
-        });
-        self
-    }
-    {{/if}}
-
-    {{#if supportTokenSource}}
-    // changed
-    pub fn with_token_source(&mut self, token_source: Arc<dyn TokenSource>) -> &mut Self {
-        self.token_source = token_source;
-        self
-    }
-    {{/if}}
 }
 
 impl Default for Configuration {

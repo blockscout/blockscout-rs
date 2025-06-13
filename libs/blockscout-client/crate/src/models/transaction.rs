@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -20,18 +21,14 @@ use serde_aux::prelude::*;
 pub struct Transaction {
     pub timestamp: String,
     pub fee: models::Fee,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub gas_limit: i32,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub block_number: i32,
+    pub gas_limit: Decimal,
+    pub block_number: Decimal,
     pub status: String,
     #[serde(default)]
     pub method: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub confirmations: i32,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub r#type: i32,
+    pub confirmations: Decimal,
+    pub r#type: Decimal,
     pub exchange_rate: String,
     pub to: models::AddressParam,
     #[serde(default)]
@@ -44,7 +41,7 @@ pub struct Transaction {
     pub hash: String,
     pub gas_price: String,
     #[serde(default)]
-    pub priority_fee: Option<String>,
+    pub priority_fee: Option<Decimal>,
 
     pub base_fee_per_gas: String,
     pub from: models::AddressParam,
@@ -56,10 +53,8 @@ pub struct Transaction {
     #[serde(default)]
     pub created_contract: Option<models::AddressParam>,
 
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub position: i32,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub nonce: i32,
+    pub position: Decimal,
+    pub nonce: Decimal,
     #[serde(default)]
     pub has_error_in_internal_transactions: Option<bool>,
 

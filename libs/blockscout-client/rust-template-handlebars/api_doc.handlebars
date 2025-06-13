@@ -14,10 +14,10 @@ Method | HTTP request | Description
 
 ## {{{operationId}}}
 
-> {{#if returnType}}{{{.}}} {{/if}}{{{operationId}}}({{#each allParams}}{{{paramName}}}{{#unless @last}}, {{/unless}}{{/each}})
-{{{summary}}}{{#if notes}}
+> {{#with returnType}}{{{.}}} {{/with}}{{{operationId}}}({{#each allParams}}{{{paramName}}}{{#unless @last}}, {{/unless}}{{/each}})
+{{{summary}}}{{#with notes}}
 
-{{{.}}}{{/if}}
+{{{.}}}{{/with}}
 
 ### Parameters
 

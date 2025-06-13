@@ -40,7 +40,7 @@ impl<C: Connect>{{{classname}}} for {{{classname}}}Client<C>
  {{#with operations}}
  {{#each operation}}
     #[allow(unused_mut)]
-    fn {{{operationId}}}(&self, {{#each allParams}}{{{paramName}}}: {{#unless required}}Option<{{/unless}}{{#if required}}{{#if isNullable}}Option<{{/if}}{{/if}}{{#if isString}}{{#unless isUuid}}&str{{/unless}}{{/if}}{{#if isUuid}}&str{{/if}}{{#unless isString}}{{#unless isUuid}}{{#unless isPrimitiveType}}{{#unless isContainer}}models::{{/unless}}{{/unless}}{{{dataType}}}{{/unless}}{{/unless}}{{#unless required}}>{{/unless}}{{#if required}}{{#if isNullable}}>{{/if}}{{/if}}{{#unless @last}}, {{/unless}}{{/each}}) -> Pin<Box<dyn Future<Output = Result<{{#unless returnType}}(){{/unless}}{{#if returnType}}{{{.}}}{{/if}}, Error>> + Send>> {
+    fn {{{operationId}}}(&self, {{#each allParams}}{{{paramName}}}: {{#unless required}}Option<{{/unless}}{{#if required}}{{#if isNullable}}Option<{{/if}}{{/if}}{{#if isString}}{{#unless isUuid}}&str{{/unless}}{{/if}}{{#if isUuid}}&str{{/if}}{{#unless isString}}{{#unless isUuid}}{{#unless isPrimitiveType}}{{#unless isContainer}}models::{{/unless}}{{/unless}}{{{dataType}}}{{/unless}}{{/unless}}{{#unless required}}>{{/unless}}{{#if required}}{{#if isNullable}}>{{/if}}{{/if}}{{#unless @last}}, {{/unless}}{{/each}}) -> Pin<Box<dyn Future<Output = Result<{{#unless returnType}}(){{/unless}}{{#if returnType}}{{{returnType}}}{{/if}}, Error>> + Send>> {
         let mut req = __internal_request::Request::new(hyper::Method::{{{httpMethod.toUpperCase}}}, "{{{path}}}".to_string())
         {{#if hasAuthMethods}}
         {{#each authMethods}}

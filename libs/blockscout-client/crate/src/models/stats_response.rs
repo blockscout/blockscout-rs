@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -27,9 +28,8 @@ pub struct StatsResponse {
     #[serde(default)]
     pub total_transactions: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub average_block_time: Option<f64>,
+    pub average_block_time: Option<Decimal>,
 
     #[serde(default)]
     pub coin_price: Option<String>,
@@ -52,7 +52,6 @@ pub struct StatsResponse {
     #[serde(default)]
     pub market_cap: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub network_utilization_percentage: Option<f64>,
+    pub network_utilization_percentage: Option<Decimal>,
 }

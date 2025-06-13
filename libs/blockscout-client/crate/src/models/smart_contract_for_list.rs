@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -26,12 +27,10 @@ pub struct SmartContractForList {
     pub language: String,
     pub has_constructor_args: bool,
     pub optimization_enabled: bool,
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub transaction_count: Option<i32>,
+    pub transaction_count: Option<Decimal>,
 
     pub verified_at: String,
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub market_cap: Option<f64>,
+    pub market_cap: Option<Decimal>,
 }

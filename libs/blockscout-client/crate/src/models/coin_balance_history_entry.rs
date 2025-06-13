@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -21,8 +22,7 @@ pub struct CoinBalanceHistoryEntry {
     #[serde(default)]
     pub transaction_hash: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub block_number: i32,
+    pub block_number: Decimal,
     pub block_timestamp: String,
     pub delta: String,
     pub value: String,

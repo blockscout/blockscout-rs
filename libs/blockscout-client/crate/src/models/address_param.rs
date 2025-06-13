@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -31,7 +32,9 @@ pub struct AddressParam {
     #[serde(default)]
     pub metadata: Option<serde_json::Value>,
 
-    pub is_contract: bool,
+    #[serde(default)]
+    pub is_contract: Option<bool>,
+
     pub private_tags: Vec<models::AddressTag>,
     pub watchlist_names: Vec<models::WatchlistName>,
     pub public_tags: Vec<models::AddressTag>,

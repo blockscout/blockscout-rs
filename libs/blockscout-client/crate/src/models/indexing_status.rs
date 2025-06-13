@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -21,7 +22,7 @@ pub struct IndexingStatus {
     pub finished_indexing: bool,
     pub finished_indexing_blocks: bool,
     #[serde(default)]
-    pub indexed_blocks_ratio: Option<models::AddressParam>,
+    pub indexed_blocks_ratio: Option<String>,
 
     #[serde(default)]
     pub indexed_internal_transactions_ratio: Option<String>,

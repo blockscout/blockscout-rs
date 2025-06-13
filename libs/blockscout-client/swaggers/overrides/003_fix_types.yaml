@@ -1,21 +1,12 @@
 components:
   schemas:
     AddressParam:
-      properties:
-        name:
-          nullable: true
-        implementation_name:
-          nullable: true
-        is_verified:
-          nullable: true
+      required: [hash, private_tags, public_tags, watchlist_names, ~,~,~,~,~]
     Block:
+      required: [hash, parent_hash, height,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~]
       properties:
-        withdrawals_count:
-          nullable: true
-        extra_data:
-          nullable: true
-        state_root:
-          nullable: true
+        priority_fee:
+          type: number
     InternalTransaction:
       properties:
         created_contract:
@@ -58,6 +49,7 @@ components:
         max_fee_per_gas:
           nullable: true
         priority_fee:
+          type: number
           nullable: true
         created_contract:
           nullable: true
@@ -138,6 +130,16 @@ components:
 
     AddressNFTInstanceCollection:
       required: [token_type, id, ~,~,~,~,~,~,~]
+
+    SearchResultToken:
+      required: [address,address_url,~,~,~,~,~,~,~]
+    SearchResultAddressOrContract:
+      required: [address,url]
+    SearchResultBlock:
+      required: [block_hash,timestamp,url,~,~]
+    SearchResultTransaction:
+      required: [timestamp,transaction_hash,url,~,~]
+    
 
   parameters:
     id:

@@ -611,7 +611,6 @@ impl AddressesApi for AddressesApiClient {
     {
         let GetAddressInternalTxsParams {
             address_hash,
-
             filter,
         } = params;
 
@@ -720,7 +719,6 @@ impl AddressesApi for AddressesApiClient {
     ) -> Result<ResponseContent<GetAddressNftSuccess>, Error<GetAddressNftError>> {
         let GetAddressNftParams {
             address_hash,
-
             r#type,
         } = params;
 
@@ -782,7 +780,6 @@ impl AddressesApi for AddressesApiClient {
     > {
         let GetAddressNftCollectionsParams {
             address_hash,
-
             r#type,
         } = params;
 
@@ -895,11 +892,8 @@ impl AddressesApi for AddressesApiClient {
     > {
         let GetAddressTokenTransfersParams {
             address_hash,
-
             r#type,
-
             filter,
-
             token,
         } = params;
 
@@ -968,7 +962,6 @@ impl AddressesApi for AddressesApiClient {
     ) -> Result<ResponseContent<GetAddressTokensSuccess>, Error<GetAddressTokensError>> {
         let GetAddressTokensParams {
             address_hash,
-
             r#type,
         } = params;
 
@@ -1027,7 +1020,6 @@ impl AddressesApi for AddressesApiClient {
     ) -> Result<ResponseContent<GetAddressTxsSuccess>, Error<GetAddressTxsError>> {
         let GetAddressTxsParams {
             address_hash,
-
             filter,
         } = params;
 

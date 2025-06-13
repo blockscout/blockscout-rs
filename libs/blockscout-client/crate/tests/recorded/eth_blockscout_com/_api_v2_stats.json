@@ -5,7 +5,7 @@
   },
   "response": {
     "status": 200,
-    "body": "{\"average_block_time\":12000,\"coin_image\":\"https://coin-images.coingecko.com/coins/images/279/small/ethereum.png?1696501628\",\"coin_price\":\"2754.57\",\"coin_price_change_percentage\":-1.55,\"gas_price_updated_at\":\"2025-06-12T15:41:32.938511Z\",\"gas_prices\":{\"slow\":4.76,\"average\":5.12,\"fast\":6.53},\"gas_prices_update_in\":9667,\"gas_used_today\":\"129706360693\",\"market_cap\":\"332536662912.778113153\",\"network_utilization_percentage\":47.39426565895259,\"secondary_coin_image\":null,\"secondary_coin_price\":null,\"static_gas_price\":null,\"total_addresses\":\"403614501\",\"total_blocks\":\"22689340\",\"total_gas_used\":\"0\",\"total_transactions\":\"2847472549\",\"transactions_today\":\"1450660\",\"tvl\":null}",
+    "body": "{\"average_block_time\":12121,\"coin_image\":\"https://coin-images.coingecko.com/coins/images/279/small/ethereum.png?1696501628\",\"coin_price\":\"2518.69\",\"coin_price_change_percentage\":-9.25,\"gas_price_updated_at\":\"2025-06-13T09:24:22.957191Z\",\"gas_prices\":{\"slow\":1.88,\"average\":2.3,\"fast\":4.06},\"gas_prices_update_in\":17931,\"gas_used_today\":\"130137675264\",\"market_cap\":\"304059889042.75008698\",\"network_utilization_percentage\":52.0611376254507,\"secondary_coin_image\":null,\"secondary_coin_price\":null,\"static_gas_price\":null,\"total_addresses\":\"404086669\",\"total_blocks\":\"22694620\",\"total_gas_used\":\"0\",\"total_transactions\":\"2848690122\",\"transactions_today\":\"1452531\",\"tvl\":null}",
     "headers": {
       "Content-Type": "application/json"
     }

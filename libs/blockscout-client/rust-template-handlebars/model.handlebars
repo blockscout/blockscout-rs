@@ -2,6 +2,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
+use rust_decimal::Decimal;
 {{#each models}}
 {{#with model}}
 {{#unless isEnum}}{{#if vendorExtensions.x-rust-has-byte-array}}
@@ -135,11 +136,11 @@ pub struct {{{classname}}} {
         {{else}}#[serde_as(as = "Option<serde_with::base64::Base64>")]
         {{/if}}
     {{/if}}
-    {{!-- Integer handling --}}
+    {{!-- Integer handling
     {{#if (or isNumeric isInteger isLong isNumber isFloat isDouble)}}
         {{#if (or (not required) isNullable)}}#[serde(deserialize_with = "deserialize_option_number_from_string")]
         {{else}}#[serde(deserialize_with = "deserialize_number_from_string")]{{/if}}
-    {{/if}}
+    {{/if}} --}}
     {{!-- Handle Option wrapping --}}
     {{#if (or isNullable (not required))}}
         #[serde(default)]
@@ -170,7 +171,12 @@ pub struct {{{classname}}} {
                     {{else}}
                         {{{dataType}}}
                     {{/if}}
-                {{else}} {{{dataType}}}
+                {{else}}
+                    {{#if (or isNumeric isInteger isLong isNumber isFloat isDouble)}}
+                        Decimal
+                    {{else}}
+                        {{{dataType}}}
+                    {{/if}}
                 {{/if}}
             {{/if}}
         {{/if}}

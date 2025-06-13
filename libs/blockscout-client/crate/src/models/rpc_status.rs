@@ -13,14 +13,14 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct RpcStatus {
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub code: Option<i32>,
+    pub code: Option<Decimal>,
 
     #[serde(default)]
     pub message: Option<String>,

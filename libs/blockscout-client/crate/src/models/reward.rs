@@ -13,12 +13,12 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct Reward {
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub reward: f64,
+    pub reward: Decimal,
     pub r#type: String,
 }

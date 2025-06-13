@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -31,9 +32,8 @@ pub struct Token {
     #[serde(default)]
     pub r#type: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub holders: Option<i32>,
+    pub holders: Option<Decimal>,
 
     #[serde(default)]
     pub exchange_rate: Option<String>,

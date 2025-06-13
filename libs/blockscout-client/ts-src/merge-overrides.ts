@@ -4,7 +4,8 @@ import { parse, stringify } from 'yaml';
 import { merge } from 'lodash';
 
 const OVERRIDES_DIR = path.join(__dirname, '..', 'swaggers', 'overrides');
-const MAIN_SPEC_PATH = path.join(__dirname, '..', 'swaggers', 'blockscout-api-final.yaml');
+const MAIN_SPEC_PATH = path.join(__dirname, '..', 'swaggers', 'blockscout-api-v2.yaml');
+const OUTPUT_PATH = path.join(__dirname, '..', 'swaggers', 'blockscout-api-final.yaml');
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -53,9 +54,9 @@ async function mergeOverrides() {
 
         // Write the merged result back to the main spec file
         const mergedYaml = stringify(mergedSpec);
-        fs.writeFileSync(MAIN_SPEC_PATH, mergedYaml);
+        fs.writeFileSync(OUTPUT_PATH, mergedYaml);
 
-        console.log(`Successfully merged all overrides into ${MAIN_SPEC_PATH}`);
+        console.log(`Successfully merged all overrides into ${OUTPUT_PATH}`);
     } catch (error) {
         console.error('Error merging overrides:', error);
         process.exit(1);

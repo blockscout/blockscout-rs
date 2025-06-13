@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -22,14 +23,12 @@ pub struct Log {
     #[serde(default)]
     pub block_hash: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub block_number: Option<i32>,
+    pub block_number: Option<Decimal>,
 
     pub data: String,
     pub decoded: models::DecodedInputLog,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub index: i32,
+    pub index: Decimal,
     pub smart_contract: models::AddressParam,
     pub topics: Vec<Option<String>>,
     pub transaction_hash: String,

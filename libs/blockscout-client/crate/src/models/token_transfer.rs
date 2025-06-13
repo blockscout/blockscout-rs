@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -20,8 +21,7 @@ use serde_aux::prelude::*;
 pub struct TokenTransfer {
     pub block_hash: String,
     pub from: models::AddressParam,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub log_index: i32,
+    pub log_index: Decimal,
     #[serde(default)]
     pub method: Option<String>,
 

@@ -13,13 +13,16 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct SearchResultAddressOrContract {
     pub address: String,
-    pub is_smart_contract_verified: bool,
+    #[serde(default)]
+    pub is_smart_contract_verified: Option<bool>,
+
     pub name: String,
     pub r#type: String,
     pub url: String,

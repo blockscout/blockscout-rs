@@ -13,14 +13,14 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct V1CelestiaL2BatchMetadata {
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub l2_chain_id: Option<i64>,
+    pub l2_chain_id: Option<Decimal>,
 
     #[serde(default)]
     pub l2_batch_id: Option<String>,
@@ -31,9 +31,8 @@ pub struct V1CelestiaL2BatchMetadata {
     #[serde(default)]
     pub l2_end_block: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub l2_batch_tx_count: Option<i64>,
+    pub l2_batch_tx_count: Option<Decimal>,
 
     #[serde(default)]
     pub l2_blockscout_url: Option<String>,
@@ -44,9 +43,8 @@ pub struct V1CelestiaL2BatchMetadata {
     #[serde(default)]
     pub l1_tx_timestamp: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub l1_chain_id: Option<i64>,
+    pub l1_chain_id: Option<Decimal>,
 
     #[serde(default)]
     pub related_blobs: Option<Vec<models::V1CelestiaBlobId>>,

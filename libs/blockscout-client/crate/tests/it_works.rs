@@ -15,6 +15,7 @@ const DEFAULT_TOKEN_INSTANCE_NUMBER: &str =
 const DEFAULT_TX_HASH: &str = "0x4dd7e3f4522fcf2483ae422fd007492380051d87de6fdb17be71c7134e26857e";
 const DEFAULT_ADDRESS_HASH: &str = "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE";
 const BLOCK_VALIDATOR_ADDRESS_HASH: &str = "0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97";
+const DEFAULT_SEARCH_QUERY: &str = "USDT";
 
 lazy_static! {
     static ref STUBR_SERVER: Arc<Mutex<Option<Stubr>>> = Arc::new(Mutex::new(None));
@@ -39,13 +40,11 @@ async fn api_client() -> ApiClient {
 
     let server = STUBR_SERVER.lock().unwrap();
     let server = server.as_ref().expect("Server not initialized");
-    ApiClient::new(configuration(server))
+    api_client_from_uri(server.uri().as_str())
 }
 
-fn configuration(blockscout: &Stubr) -> Configuration {
-    Configuration::new()
-        .with_base_path(blockscout.uri().to_string())
-        .to_owned()
+fn api_client_from_uri(uri: &str) -> ApiClient {
+    ApiClient::new(Configuration::builder().base_path(uri).build())
 }
 
 #[rstest]
@@ -441,3 +440,37 @@ async fn stats(#[future] api_client: ApiClient) {
 //     let success_model = response.try_parse_as_success_model().unwrap();
 //     assert!(!success_model.json_rpc_url.is_empty());
 // }
+
+#[rstest]
+#[tokio::test]
+async fn search(#[future] api_client: ApiClient) {
+    let api_client = api_client.await;
+    let search_api = api_client.search_api();
+    let params = blockscout_client::apis::search_api::SearchParams::builder()
+        .q(DEFAULT_SEARCH_QUERY.to_owned())
+        .build();
+    let response = search_api
+        .search(params)
+        .await
+        .expect("Failed to get search");
+    let success_model = response.try_parse_as_success_model().unwrap();
+    assert!(!success_model.items.is_empty());
+}
+
+use serde::{Deserialize, Serialize};
+
+#[rstest]
+#[tokio::test]
+async fn deserialize_decimal() {
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Message {
+        maybe_number: Option<rust_decimal::Decimal>,
+        number: rust_decimal::Decimal,
+        numbers: Vec<rust_decimal::Decimal>,
+    }
+
+    let _: Message = serde_json::from_str(
+        r#"{"maybe_number": 0, "number": "1.23", "numbers": ["1.23", "4.56", "0"]}"#,
+    )
+    .unwrap();
+}

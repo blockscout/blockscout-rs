@@ -77,16 +77,16 @@ impl {{classname}} for {{classname}}Client {
     {{#with description}}
     /// {{{.}}}
     {{/with}}
-    {{#if notes}}
+    {{~#with notes}}
     /// {{{.}}}
-    {{/if}}
-    {{#if vendorExtensions.x-group-parameters}}
+    {{~/with}}
+    {{~#if vendorExtensions.x-group-parameters}}
     async fn {{{operationId}}}(&self, {{#each allParams}}{{#if @first}} params: {{{operationIdCamelCase}}}Params {{/if}}{{/each}}) -> Result<{{#if supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/if}}{{#unless supportMultipleResponses}}{{#unless returnType}}(){{/unless}}{{{returnType}}}{{/unless}}, Error<{{{operationIdCamelCase}}}Error>> {
         {{#each allParams}}{{#if @first}}
         let {{{operationIdCamelCase}}}Params {
-            {{#each allParams}}
+            {{~#each allParams}}
             {{{paramName}}},
-            {{/each}}
+            {{~/each}}
         } = params;
         {{/if}}{{/each}}
 

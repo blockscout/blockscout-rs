@@ -51,7 +51,7 @@ const paths = [
     "/api/v2/addresses/0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97/blocks-validated",
     
     // Search endpoints
-    // "/api/v2/search?q=USDT",
+    "/api/v2/search?q=USDT",
     
     // Stats endpoints
     "/api/v2/stats",
@@ -69,7 +69,21 @@ const paths = [
 
 async function main(): Promise<any> {
     for (const path of paths) {
-        const url = `https://${baseHost}${path}`;
+        const url = new URL(`https://${baseHost}${path}`);
+        const queryParams = Object.fromEntries(url.searchParams);
+        const urlPath = url.pathname;
+        const requestObj: any = {
+            method: 'GET',
+            urlPath
+        };
+        if (Object.keys(queryParams).length > 0) {
+            requestObj['queryParameters'] = {};
+            for (const [key, value] of Object.entries(queryParams)) {
+                requestObj['queryParameters'][key] = {
+                    equalTo: value
+                };
+            }
+        }
         console.log(`Making request to ${url}`);
 
         const response = await fetch(url);
@@ -77,10 +91,7 @@ async function main(): Promise<any> {
         // write wiremock stubs
         const responseJson = await response.json();
         const stubs = {
-            request: {
-                method: 'GET',
-                urlPath: path
-            },
+            request: requestObj,
             response: {
                 status: 200,
                 body: JSON.stringify(responseJson),

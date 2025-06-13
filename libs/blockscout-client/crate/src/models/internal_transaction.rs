@@ -13,13 +13,13 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct InternalTransaction {
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub block_number: i32,
+    pub block_number: Decimal,
     #[serde(default)]
     pub created_contract: Option<models::AddressParam>,
 
@@ -28,8 +28,7 @@ pub struct InternalTransaction {
 
     pub from: models::AddressParam,
     pub gas_limit: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub index: i32,
+    pub index: Decimal,
     pub success: bool,
     pub timestamp: String,
     pub to: models::AddressParam,

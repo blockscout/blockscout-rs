@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -20,13 +21,27 @@ use serde_aux::prelude::*;
 pub struct SearchResultToken {
     pub address: String,
     pub address_url: String,
-    pub exchange_rate: String,
-    pub icon_url: String,
-    pub is_smart_contract_verified: bool,
-    pub name: String,
-    pub symbol: String,
-    pub token_type: String,
-    pub token_url: String,
+    #[serde(default)]
+    pub exchange_rate: Option<String>,
+
+    #[serde(default)]
+    pub icon_url: Option<String>,
+
+    #[serde(default)]
+    pub is_smart_contract_verified: Option<bool>,
+
+    #[serde(default)]
+    pub name: Option<String>,
+
+    #[serde(default)]
+    pub symbol: Option<String>,
+
+    #[serde(default)]
+    pub token_type: Option<String>,
+
+    #[serde(default)]
+    pub token_url: Option<String>,
+
     pub total_supply: String,
     pub r#type: String,
 }

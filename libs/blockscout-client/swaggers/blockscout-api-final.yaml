@@ -1,4 +1,14 @@
-openapi: 3.0.3
+openapi: 3.0.0
+tags:
+  - name: default
+  - name: CelestiaService
+servers:
+  - url: https://{server}/
+    variables:
+      server:
+        default: eth.blockscout.com
+  - description: SwaggerHub API Auto Mocking
+    url: https://virtserver.swaggerhub.com/NIKITOSING4/CoreBlockScoutAPI/1.0.0
 info:
   description: API for BlockScout web app
   version: 1.0.0
@@ -8,16 +18,6 @@ info:
   license:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
-servers:
-  - url: https://{server}/
-    variables:
-      server:
-        default: eth.blockscout.com
-  - description: SwaggerHub API Auto Mocking
-    url: https://virtserver.swaggerhub.com/NIKITOSING4/CoreBlockScoutAPI/1.0.0
-tags:
-  - name: ADJAKSJDK
-  - name: CelestiaService
 paths:
   /api/v1/celestia/blob:
     get:
@@ -1632,35 +1632,76 @@ paths:
               schema:
                 $ref: "#/components/schemas/v1HealthCheckResponse"
 components:
+  parameters:
+    addressHash:
+      name: address_hash
+      in: path
+      description: Address hash
+      required: true
+      schema:
+        type: string
+        pattern: ^0x([A-Fa-f0-9]{40})$
+    addressName:
+      name: address_name
+      in: query
+      description: the name of address in watchlist
+      required: true
+      schema:
+        type: string
+        maxLength: 256
+    transactionHash:
+      name: transaction_hash
+      in: path
+      description: Transaction hash
+      required: true
+      schema:
+        type: string
+        pattern: ^0x([A-Fa-f0-9]{64})$
+    blockNumberOrHash:
+      name: block_number_or_hash
+      schema:
+        type: string
+      in: path
+      required: true
+      description: Block number or hash
+    id:
+      name: id
+      schema:
+        type: string
+      in: path
+      required: true
+      description: integer id
   schemas:
     Block:
       type: object
       required:
-        - base_fee_per_gas
-        - burnt_fees
-        - burnt_fees_percentage
-        - difficulty
-        - extra_data
-        - gas_limit
-        - gas_target_percentage
-        - gas_used
-        - gas_used_percentage
         - hash
-        - height
-        - miner
-        - nonce
         - parent_hash
-        - priority_fee
-        - rewards
-        - size
-        - state_root
-        - timestamp
-        - total_difficulty
-        - transaction_count
-        - transaction_fees
-        - type
-        - uncles_hashes
-        - withdrawals_count
+        - height
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
       properties:
         base_fee_per_gas:
           type: string
@@ -1677,7 +1718,6 @@ components:
         extra_data:
           type: string
           example: TODO
-          nullable: true
         gas_limit:
           type: string
           example: "30000000"
@@ -1705,7 +1745,7 @@ components:
           type: string
           example: "0xd464e02d81e2bdf6bc5fa9b8e33f0b564c464a82d821a3e56531f8636dc00dfa"
         priority_fee:
-          type: string
+          type: number
           example: "45418705646601378"
         rewards:
           type: array
@@ -1717,7 +1757,6 @@ components:
         state_root:
           type: string
           example: TODO
-          nullable: true
         timestamp:
           type: string
           example: 2023-07-03T20:09:59.000000Z
@@ -1741,7 +1780,6 @@ components:
         withdrawals_count:
           type: integer
           example: 16
-          nullable: true
     TokenTransfer:
       type: object
       required:
@@ -1993,8 +2031,8 @@ components:
           type: array
           items:
             type: string
-            nullable: true
             example: "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c"
+            nullable: true
         transaction_hash:
           type: string
           example: "0x08ea4d75ad0abe327a7fd368733eaeac43077989e635d800530d7906ebf3bd54"
@@ -2148,7 +2186,7 @@ components:
           type: string
           example: "26668595172"
         priority_fee:
-          type: string
+          type: number
           example: "2056916056308"
           nullable: true
         base_fee_per_gas:
@@ -2436,65 +2474,52 @@ components:
         - null
         - null
         - null
-        - null
+        - volume_24h
       properties:
         address:
           type: string
           example: "0xBEEF69Ac7870777598A04B2bd4771c71212E6aBc"
           description: Token Address
         circulating_market_cap:
-          type: number
+          type: string
           example: "0.0"
           description: Token circulating market cap
-          format: double
-          nullable: true
         decimals:
-          type: integer
+          type: string
           example: "18"
           description: Token decimals
-          format: int64
-          nullable: true
         exchange_rate:
           type: string
           example: "2890.96"
           description: Token exchange rate
         holders:
-          type: integer
+          type: string
           example: "2999"
           description: Token holders amount
-          format: int64
-          nullable: true
         icon_url:
           type: string
           example: https://assets.coingecko.com/coins/images/39410/small/Steakhouse_logo-05.jpg?1722053893
           description: "Token image URL "
-          nullable: true
         name:
           type: string
           example: Steakhouse Resteaking Vault
           description: Token name
-          nullable: true
         symbol:
           type: string
           example: steakLRT
           description: Token symbol
-          nullable: true
         total_supply:
           type: string
           example: "9710057205959239302188"
           description: Token total supply
-          format: numeric
-          nullable: true
         type:
           type: string
           example: ERC-20
           description: Token type
         volume_24h:
-          type: number
+          type: string
           example: "24298.765344836862"
           description: Token trading volume for past 24h
-          format: double
-          nullable: true
     DecodedInputParameter:
       type: object
       required:
@@ -2553,13 +2578,14 @@ components:
       type: object
       required:
         - hash
-        - implementation_name
-        - is_contract
-        - is_verified
-        - name
         - private_tags
         - public_tags
         - watchlist_names
+        - null
+        - null
+        - null
+        - null
+        - null
       properties:
         hash:
           type: string
@@ -2567,11 +2593,9 @@ components:
         implementation_name:
           type: string
           example: implementationName
-          nullable: true
         name:
           type: string
           example: contractName
-          nullable: true
         ens_domain_name:
           type: string
           example: domain.eth
@@ -2599,7 +2623,6 @@ components:
             $ref: "#/components/schemas/AddressTag"
         is_verified:
           type: boolean
-          nullable: true
     AddressTag:
       type: object
       required:
@@ -3224,9 +3247,8 @@ components:
         - null
       properties:
         circulating_market_cap:
-          type: number
+          type: string
           example: "83606435600.3635"
-          format: double
         icon_url:
           type: string
           example: https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png
@@ -3234,9 +3256,8 @@ components:
           type: string
           example: Tether USD
         decimals:
-          type: integer
+          type: string
           example: "6"
-          format: int64
         symbol:
           type: string
           example: USDT
@@ -3247,19 +3268,14 @@ components:
           type: string
           example: ERC-20
         holders:
-          type: integer
+          type: string
           example: "837494234523"
-          format: int64
         exchange_rate:
           type: string
           example: "0.99"
         total_supply:
           type: string
           example: "10000000"
-          format: int64
-        volume_24h:
-          type: number
-          format: double
     Argument:
       properties:
         name:
@@ -3288,13 +3304,13 @@ components:
       required:
         - address
         - address_url
-        - exchange_rate
-        - icon_url
-        - is_smart_contract_verified
-        - name
-        - symbol
-        - token_type
-        - token_url
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
+        - null
         - total_supply
         - type
       properties:
@@ -3334,7 +3350,7 @@ components:
     SearchResultAddressOrContract:
       required:
         - address
-        - is_smart_contract_verified
+        - url
         - name
         - type
         - url
@@ -3357,10 +3373,10 @@ components:
     SearchResultBlock:
       required:
         - block_hash
-        - block_number
         - timestamp
-        - type
         - url
+        - null
+        - null
       properties:
         block_hash:
           type: string
@@ -3381,8 +3397,9 @@ components:
       required:
         - timestamp
         - transaction_hash
-        - type
         - url
+        - null
+        - null
       properties:
         timestamp:
           type: string
@@ -3411,8 +3428,6 @@ components:
           type: string
           example: "1.0"
           nullable: true
-          allOf:
-            - $ref: "#/components/schemas/AddressParam"
         indexed_internal_transactions_ratio:
           type: string
           nullable: true
@@ -3948,45 +3963,6 @@ components:
           type: string
         latest_block_number:
           type: string
-  parameters:
-    addressHash:
-      name: address_hash
-      in: path
-      description: Address hash
-      required: true
-      schema:
-        type: string
-        pattern: ^0x([A-Fa-f0-9]{40})$
-    addressName:
-      name: address_name
-      in: query
-      description: the name of address in watchlist
-      required: true
-      schema:
-        type: string
-        maxLength: 256
-    transactionHash:
-      name: transaction_hash
-      in: path
-      description: Transaction hash
-      required: true
-      schema:
-        type: string
-        pattern: ^0x([A-Fa-f0-9]{64})$
-    blockNumberOrHash:
-      name: block_number_or_hash
-      schema:
-        type: string
-      in: path
-      required: true
-      description: Block number or hash
-    id:
-      name: id
-      schema:
-        type: string
-      in: path
-      required: true
-      description: integer id
   examples:
     TokenTransferLarge1155Batch:
       value:

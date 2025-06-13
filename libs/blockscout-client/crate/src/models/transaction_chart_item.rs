@@ -13,12 +13,12 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct TransactionChartItem {
     pub date: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub transaction_count: i32,
+    pub transaction_count: Decimal,
 }

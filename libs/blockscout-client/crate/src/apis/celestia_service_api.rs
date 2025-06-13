@@ -111,9 +111,7 @@ impl CelestiaServiceApi for CelestiaServiceApiClient {
     {
         let CelestiaServiceGetBlobParams {
             height,
-
             commitment,
-
             skip_data,
         } = params;
 
@@ -182,9 +180,7 @@ impl CelestiaServiceApi for CelestiaServiceApiClient {
     > {
         let CelestiaServiceGetL2BatchMetadataParams {
             height,
-
             namespace,
-
             commitment,
         } = params;
 

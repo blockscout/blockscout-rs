@@ -13,14 +13,14 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct TokenInfo {
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub circulating_market_cap: Option<f64>,
+    pub circulating_market_cap: Option<String>,
 
     #[serde(default)]
     pub icon_url: Option<String>,
@@ -28,9 +28,8 @@ pub struct TokenInfo {
     #[serde(default)]
     pub name: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub decimals: Option<i64>,
+    pub decimals: Option<String>,
 
     #[serde(default)]
     pub symbol: Option<String>,
@@ -39,17 +38,12 @@ pub struct TokenInfo {
     #[serde(default)]
     pub r#type: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub holders: Option<i64>,
+    pub holders: Option<String>,
 
     #[serde(default)]
     pub exchange_rate: Option<String>,
 
     #[serde(default)]
     pub total_supply: Option<String>,
-
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
-    #[serde(default)]
-    pub volume_24h: Option<f64>,
 }

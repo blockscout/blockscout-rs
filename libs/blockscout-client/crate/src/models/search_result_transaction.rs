@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -20,6 +21,8 @@ use serde_aux::prelude::*;
 pub struct SearchResultTransaction {
     pub timestamp: String,
     pub transaction_hash: String,
-    pub r#type: String,
+    #[serde(default)]
+    pub r#type: Option<String>,
+
     pub url: String,
 }

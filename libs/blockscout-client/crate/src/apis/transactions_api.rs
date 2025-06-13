@@ -472,7 +472,6 @@ impl TransactionsApi for TransactionsApiClient {
     > {
         let GetTransactionTokenTransfersParams {
             transaction_hash,
-
             r#type,
         } = params;
 
@@ -581,9 +580,7 @@ impl TransactionsApi for TransactionsApiClient {
     ) -> Result<ResponseContent<GetTxsSuccess>, Error<GetTxsError>> {
         let GetTxsParams {
             filter,
-
             r#type,
-
             method,
         } = params;
 

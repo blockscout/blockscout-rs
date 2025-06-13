@@ -13,12 +13,12 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct CoinBalanceHistoryByDaysEntry {
     pub date: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub value: f64,
+    pub value: Decimal,
 }

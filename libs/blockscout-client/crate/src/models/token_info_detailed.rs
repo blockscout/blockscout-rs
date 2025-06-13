@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -22,15 +23,13 @@ pub struct TokenInfoDetailed {
     pub address: String,
     /// Token circulating market cap
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub circulating_market_cap: Option<f64>,
+    pub circulating_market_cap: Option<String>,
 
     /// Token decimals
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub decimals: Option<i64>,
+    pub decimals: Option<String>,
 
     /// Token exchange rate
 
@@ -39,9 +38,8 @@ pub struct TokenInfoDetailed {
 
     /// Token holders amount
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub holders: Option<i64>,
+    pub holders: Option<String>,
 
     /// Token image URL
 
@@ -69,8 +67,5 @@ pub struct TokenInfoDetailed {
     pub r#type: Option<String>,
 
     /// Token trading volume for past 24h
-
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
-    #[serde(default)]
-    pub volume_24h: Option<f64>,
+    pub volume_24h: String,
 }

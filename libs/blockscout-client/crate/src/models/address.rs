@@ -13,6 +13,7 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
@@ -36,9 +37,8 @@ pub struct Address {
     #[serde(default)]
     pub implementation_address: Option<String>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub block_number_balance_updated_at: Option<i32>,
+    pub block_number_balance_updated_at: Option<Decimal>,
 
     pub hash: String,
     #[serde(default)]

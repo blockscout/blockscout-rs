@@ -13,22 +13,20 @@
 */
 
 use crate::models;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct Withdrawal {
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub index: i32,
+    pub index: Decimal,
     pub amount: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub validator_index: i32,
+    pub validator_index: Decimal,
     #[serde(default)]
     pub receiver: Option<models::AddressParam>,
 
-    #[serde(deserialize_with = "deserialize_option_number_from_string")]
     #[serde(default)]
-    pub block_number: Option<i32>,
+    pub block_number: Option<Decimal>,
 
     #[serde(default)]
     pub timestamp: Option<String>,
