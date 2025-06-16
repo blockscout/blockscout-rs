@@ -351,15 +351,32 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<ListDappsResponse>, Status> {
         let inner = request.into_inner();
 
-        let chain_ids = inner
-            .chain_ids
+        let chain_ids = if inner.chain_ids.is_empty() {
+            chains::list_active_chains_cached(
+                self.repo.read_db(),
+                &[chains::ChainSource::Dapp {
+                    dapp_client: &self.dapp_client,
+                }],
+            )
+            .await?
             .into_iter()
-            .map(parse_query)
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|c| c.id)
+            .collect()
+        } else {
+            inner
+                .chain_ids
+                .into_iter()
+                .map(parse_query)
+                .collect::<Result<Vec<_>, _>>()?
+        };
 
         let chain_ids = self
             .filter_marketplace_enabled_chains(chain_ids, |id| *id)
             .await;
+
+        if chain_ids.is_empty() {
+            return Ok(Response::new(ListDappsResponse { items: vec![] }));
+        }
 
         let dapps =
             search::search_dapps(&self.dapp_client, inner.q, inner.categories, chain_ids).await?;
