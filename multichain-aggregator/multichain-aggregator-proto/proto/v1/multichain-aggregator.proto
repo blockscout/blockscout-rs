@@ -99,15 +99,26 @@ message Domain {
   google.protobuf.Struct protocol = 4;
 }
 
+message AddressHash {
+  string hash = 1;
+}
+
+message InteropMessageTransfer {
+  optional AddressHash token = 1;
+  AddressHash from = 2;
+  AddressHash to = 3;
+  string amount = 4;
+}
+
 message InteropMessage {
   enum Status {
-    STATUS_PENDING = 0;
-    STATUS_FAILED = 1;
-    STATUS_SUCCESS = 2;
+    PENDING = 0;
+    FAILED = 1;
+    SUCCESS = 2;
   }
 
-  optional string sender_address_hash = 1;
-  optional string target_address_hash = 2;
+  optional AddressHash sender = 1;
+  optional AddressHash target = 2;
   int64 nonce = 3;
   string init_chain_id = 4;
   optional string init_transaction_hash = 5;
@@ -115,8 +126,9 @@ message InteropMessage {
   string relay_chain_id = 7;
   optional string relay_transaction_hash = 8;
   optional string payload = 9;
-  optional bool failed = 10;
-  Status status = 11;
+  Status status = 10;
+  optional InteropMessageTransfer transfer = 11;
+  string message_type = 12;
 }
 
 message BatchImportRequest {

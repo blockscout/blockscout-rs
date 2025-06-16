@@ -529,6 +529,11 @@ definitions:
         type: boolean
       chain_id:
         type: string
+  v1AddressHash:
+    type: object
+    properties:
+      hash:
+        type: string
   v1BatchImportRequest:
     type: object
     properties:
@@ -624,10 +629,10 @@ definitions:
   v1InteropMessage:
     type: object
     properties:
-      sender_address_hash:
-        type: string
-      target_address_hash:
-        type: string
+      sender:
+        $ref: '#/definitions/v1AddressHash'
+      target:
+        $ref: '#/definitions/v1AddressHash'
       nonce:
         type: string
         format: int64
@@ -643,17 +648,30 @@ definitions:
         type: string
       payload:
         type: string
-      failed:
-        type: boolean
       status:
         $ref: '#/definitions/v1InteropMessageStatus'
+      transfer:
+        $ref: '#/definitions/v1InteropMessageTransfer'
+      message_type:
+        type: string
   v1InteropMessageStatus:
     type: string
     enum:
-      - STATUS_PENDING
-      - STATUS_FAILED
-      - STATUS_SUCCESS
-    default: STATUS_PENDING
+      - PENDING
+      - FAILED
+      - SUCCESS
+    default: PENDING
+  v1InteropMessageTransfer:
+    type: object
+    properties:
+      token:
+        $ref: '#/definitions/v1AddressHash'
+      from:
+        $ref: '#/definitions/v1AddressHash'
+      to:
+        $ref: '#/definitions/v1AddressHash'
+      amount:
+        type: string
   v1ListAddressesResponse:
     type: object
     properties:

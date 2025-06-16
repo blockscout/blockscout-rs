@@ -1,7 +1,14 @@
 use super::ChainId;
-use crate::{error::ParseError, proto};
+use crate::{
+    error::ParseError,
+    proto,
+    types::{interop_message_transfers::InteropMessageTransfer, proto_address_hash_from_alloy},
+};
 use alloy_primitives::{Address, Bytes, TxHash};
-use entity::interop_messages::{ActiveModel, Model};
+use entity::{
+    interop_messages::{ActiveModel, Model},
+    interop_messages_transfers,
+};
 use sea_orm::{prelude::DateTime, ActiveValue::Set};
 use std::str::FromStr;
 
@@ -17,6 +24,7 @@ pub struct InteropMessage {
     pub relay_transaction_hash: Option<TxHash>,
     pub payload: Option<Bytes>,
     pub failed: Option<bool>,
+    pub transfer: Option<InteropMessageTransfer>,
 }
 
 pub enum Status {
@@ -35,6 +43,22 @@ impl From<Status> for proto::interop_message::Status {
     }
 }
 
+pub enum MessageType {
+    RelayMessage,
+    SendERC20,
+    SendETH,
+}
+
+impl From<MessageType> for String {
+    fn from(v: MessageType) -> Self {
+        match v {
+            MessageType::RelayMessage => "relayMessage",
+            MessageType::SendERC20 => "sendERC20",
+            MessageType::SendETH => "sendETH",
+        }
+        .to_string()
+    }
+}
 impl InteropMessage {
     pub fn base(nonce: i64, init_chain_id: ChainId, relay_chain_id: ChainId) -> Self {
         Self {
@@ -49,6 +73,7 @@ impl InteropMessage {
             relay_transaction_hash: None,
             payload: None,
             failed: None,
+            transfer: None,
         }
     }
 
@@ -57,6 +82,20 @@ impl InteropMessage {
             (None, _) => Status::Pending,
             (_, Some(true)) => Status::Failed,
             _ => Status::Success,
+        }
+    }
+
+    pub fn message_type(&self) -> MessageType {
+        match self.transfer {
+            Some(InteropMessageTransfer {
+                token_address_hash: Some(_),
+                ..
+            }) => MessageType::SendERC20,
+            Some(InteropMessageTransfer {
+                token_address_hash: None,
+                ..
+            }) => MessageType::SendETH,
+            _ => MessageType::RelayMessage,
         }
     }
 }
@@ -79,10 +118,12 @@ impl From<InteropMessage> for ActiveModel {
     }
 }
 
-impl TryFrom<Model> for InteropMessage {
+impl TryFrom<(Model, Option<interop_messages_transfers::Model>)> for InteropMessage {
     type Error = ParseError;
 
-    fn try_from(v: Model) -> Result<Self, Self::Error> {
+    fn try_from(
+        (v, transfer): (Model, Option<interop_messages_transfers::Model>),
+    ) -> Result<Self, Self::Error> {
         Ok(Self {
             sender_address_hash: v
                 .sender_address_hash
@@ -106,6 +147,7 @@ impl TryFrom<Model> for InteropMessage {
                 .transpose()?,
             payload: v.payload.map(Bytes::from),
             failed: v.failed,
+            transfer: transfer.map(InteropMessageTransfer::try_from).transpose()?,
         })
     }
 }
@@ -113,9 +155,14 @@ impl TryFrom<Model> for InteropMessage {
 impl From<InteropMessage> for proto::InteropMessage {
     fn from(v: InteropMessage) -> Self {
         let status = proto::interop_message::Status::from(v.status()).into();
+        let message_type = v.message_type().into();
         Self {
-            sender_address_hash: v.sender_address_hash.map(|a| a.to_string()),
-            target_address_hash: v.target_address_hash.map(|a| a.to_string()),
+            sender: v
+                .sender_address_hash
+                .map(|a| proto_address_hash_from_alloy(&a)),
+            target: v
+                .target_address_hash
+                .map(|a| proto_address_hash_from_alloy(&a)),
             nonce: v.nonce,
             init_chain_id: v.init_chain_id.to_string(),
             init_transaction_hash: v.init_transaction_hash.map(|h| h.to_string()),
@@ -126,8 +173,9 @@ impl From<InteropMessage> for proto::InteropMessage {
             relay_chain_id: v.relay_chain_id.to_string(),
             relay_transaction_hash: v.relay_transaction_hash.map(|h| h.to_string()),
             payload: v.payload.map(|p| p.to_string()),
-            failed: v.failed,
             status,
+            transfer: v.transfer.map(proto::InteropMessageTransfer::from),
+            message_type,
         }
     }
 }
