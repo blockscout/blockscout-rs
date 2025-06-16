@@ -90,6 +90,10 @@ pub async fn uniform_chain_search<C>(
 where
     C: ConnectionTrait,
 {
+    if limit == 0 {
+        return Ok(vec![]);
+    }
+
     let ts_rank_ordering = Expr::cust_with_expr(
         "ts_rank(to_tsvector('english', contract_name), to_tsquery($1))",
         prepare_ts_query(&contract_name_query),
