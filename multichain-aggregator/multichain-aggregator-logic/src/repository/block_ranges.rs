@@ -59,7 +59,7 @@ where
 pub async fn list_matching_block_ranges_paginated<C>(
     db: &C,
     block_number: u64,
-    chain_ids: Option<Vec<ChainId>>,
+    chain_ids: Vec<ChainId>,
     page_size: u64,
     page_token: Option<ChainId>,
 ) -> Result<(Vec<Model>, Option<ChainId>), DbErr>
@@ -67,13 +67,10 @@ where
     C: ConnectionTrait,
 {
     let c = Entity::find()
-        .apply_if(chain_ids, |q, chain_ids| {
-            if !chain_ids.is_empty() {
-                q.filter(Column::ChainId.is_in(chain_ids))
-            } else {
-                q
-            }
-        })
+        .apply_if(
+            (!chain_ids.is_empty()).then_some(chain_ids),
+            |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
+        )
         .filter(Column::MinBlockNumber.lte(block_number))
         .filter(Column::MaxBlockNumber.gte(block_number))
         .cursor_by(Column::ChainId);

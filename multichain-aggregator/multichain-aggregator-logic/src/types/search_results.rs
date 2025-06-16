@@ -32,11 +32,11 @@ impl QuickSearchResult {
         self.domains.extend(other.domains);
     }
 
-    pub fn filter_and_sort_entities_by_priority(mut self, chain_ids: &[ChainId]) -> Self {
+    pub fn filter_and_sort_entities_by_priority(mut self, priority_chain_ids: &[ChainId]) -> Self {
         macro_rules! filter_and_sort_by_priority {
             ($search_result: ident, [$($field: ident),*]) => {
                 $(
-                    $search_result.$field = Self::filter_and_sort_array_by_priority($search_result.$field, |e| e.chain_id, chain_ids);
+                    $search_result.$field = Self::filter_and_sort_array_by_priority($search_result.$field, |e| e.chain_id, priority_chain_ids);
                 )*
             };
         }
@@ -60,7 +60,7 @@ impl QuickSearchResult {
     fn filter_and_sort_array_by_priority<T>(
         items: impl IntoIterator<Item = T>,
         get_chain_id: impl Fn(&T) -> ChainId,
-        chain_ids: &[ChainId],
+        priority_chain_ids: &[ChainId],
     ) -> Vec<T> {
         // Filter to keep only one item per chain_id,
         // assuming they are already presented in a relevant order.
@@ -69,19 +69,25 @@ impl QuickSearchResult {
             .into_iter()
             .filter(|item| {
                 let chain_id = get_chain_id(item);
-                chain_ids.contains(&chain_id) && seen_chain_ids.insert(chain_id)
+                seen_chain_ids.insert(chain_id)
             })
             .collect::<Vec<_>>();
 
-        let chain_id_priority = chain_ids
+        let chain_id_priority = priority_chain_ids
             .iter()
             .enumerate()
             .map(|(idx, &chain_id)| (chain_id, idx))
             .collect::<HashMap<_, _>>();
-        filtered_items.sort_by_key(|item| {
+        let num_priority_chains = priority_chain_ids.len();
+        let get_chain_id_score = |chain_id: ChainId| {
             chain_id_priority
-                .get(&get_chain_id(item))
-                .unwrap_or(&usize::MAX)
+                .get(&chain_id)
+                .copied()
+                .unwrap_or(num_priority_chains + chain_id as usize)
+        };
+        filtered_items.sort_by_key(|item| {
+            let chain_id = get_chain_id(item);
+            get_chain_id_score(chain_id)
         });
 
         filtered_items
