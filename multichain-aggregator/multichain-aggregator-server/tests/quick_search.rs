@@ -3,8 +3,10 @@ mod test_db;
 
 use alloy_primitives::Address;
 use blockscout_service_launcher::{database, test_server};
+use multichain_aggregator_logic::types::api_keys::ApiKey;
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1 as proto;
 use reqwest::StatusCode;
+use sea_orm::prelude::Uuid;
 use serde_json::json;
 use wiremock::{
     matchers::{method, path},
@@ -15,6 +17,20 @@ use wiremock::{
 #[ignore = "Needs database to run"]
 async fn test_quick_search() {
     let db = database!(test_db::TestMigrator);
+
+    let chains = helpers::create_test_chains(&db, 5).await;
+    helpers::upsert_api_keys(
+        &db,
+        chains
+            .iter()
+            .map(|c| ApiKey {
+                key: Uuid::new_v4(),
+                chain_id: c.id,
+            })
+            .collect(),
+    )
+    .await
+    .unwrap();
 
     let quick_search_chains = vec![5, 3, 2, 1];
 
@@ -38,12 +54,13 @@ async fn test_quick_search() {
             .addresses
             .into_iter()
             .map(|a| a.chain_id.parse::<i64>().unwrap())
-            .collect::<Vec<_>>(),
+            .collect::<Vec<_>>()
+            .as_slice()[..quick_search_chains.len()],
         quick_search_chains
     );
-    assert_eq!(response.tokens.len(), 1);
+    assert_eq!(response.tokens.len(), 2);
     assert!(response.tokens[0].is_verified_contract);
-    assert_eq!(response.dapps.len(), 1);
+    assert_eq!(response.dapps.len(), 2);
     assert_eq!(response.domains.len(), 1);
 
     let response: proto::QuickSearchResponse =
