@@ -103,18 +103,26 @@ message AddressHash {
   string hash = 1;
 }
 
-message InteropMessageTransfer {
-  optional AddressHash token = 1;
-  AddressHash from = 2;
-  AddressHash to = 3;
-  string amount = 4;
-}
-
 message InteropMessage {
   enum Status {
     PENDING = 0;
     FAILED = 1;
     SUCCESS = 2;
+  }
+
+  message TokenDetails {
+    string address_hash = 1;
+  }
+
+  message TransferTotal {
+    string value = 1;
+  }
+
+  message InteropMessageTransfer {
+    optional TokenDetails token = 1;
+    AddressHash from = 2;
+    AddressHash to = 3;
+    TransferTotal total = 4;
   }
 
   optional AddressHash sender = 1;
@@ -129,6 +137,7 @@ message InteropMessage {
   Status status = 10;
   optional InteropMessageTransfer transfer = 11;
   string message_type = 12;
+  string method = 13;
 }
 
 message BatchImportRequest {

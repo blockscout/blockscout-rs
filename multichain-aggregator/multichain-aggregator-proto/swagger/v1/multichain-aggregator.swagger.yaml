@@ -468,6 +468,27 @@ definitions:
         type: string
       failed:
         type: boolean
+  InteropMessageInteropMessageTransfer:
+    type: object
+    properties:
+      token:
+        $ref: '#/definitions/InteropMessageTokenDetails'
+      from:
+        $ref: '#/definitions/v1AddressHash'
+      to:
+        $ref: '#/definitions/v1AddressHash'
+      total:
+        $ref: '#/definitions/InteropMessageTransferTotal'
+  InteropMessageTokenDetails:
+    type: object
+    properties:
+      address_hash:
+        type: string
+  InteropMessageTransferTotal:
+    type: object
+    properties:
+      value:
+        type: string
   QuickSearchResponseChainBlockNumber:
     type: object
     properties:
@@ -651,8 +672,10 @@ definitions:
       status:
         $ref: '#/definitions/v1InteropMessageStatus'
       transfer:
-        $ref: '#/definitions/v1InteropMessageTransfer'
+        $ref: '#/definitions/InteropMessageInteropMessageTransfer'
       message_type:
+        type: string
+      method:
         type: string
   v1InteropMessageStatus:
     type: string
@@ -661,17 +684,6 @@ definitions:
       - FAILED
       - SUCCESS
     default: PENDING
-  v1InteropMessageTransfer:
-    type: object
-    properties:
-      token:
-        $ref: '#/definitions/v1AddressHash'
-      from:
-        $ref: '#/definitions/v1AddressHash'
-      to:
-        $ref: '#/definitions/v1AddressHash'
-      amount:
-        type: string
   v1ListAddressesResponse:
     type: object
     properties:

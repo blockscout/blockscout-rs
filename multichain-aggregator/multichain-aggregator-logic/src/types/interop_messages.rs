@@ -43,22 +43,6 @@ impl From<Status> for proto::interop_message::Status {
     }
 }
 
-pub enum MessageType {
-    RelayMessage,
-    SendERC20,
-    SendETH,
-}
-
-impl From<MessageType> for String {
-    fn from(v: MessageType) -> Self {
-        match v {
-            MessageType::RelayMessage => "relayMessage",
-            MessageType::SendERC20 => "sendERC20",
-            MessageType::SendETH => "sendETH",
-        }
-        .to_string()
-    }
-}
 impl InteropMessage {
     pub fn base(nonce: i64, init_chain_id: ChainId, relay_chain_id: ChainId) -> Self {
         Self {
@@ -85,18 +69,22 @@ impl InteropMessage {
         }
     }
 
-    pub fn message_type(&self) -> MessageType {
+    pub fn method(&self) -> Method {
         match self.transfer {
             Some(InteropMessageTransfer {
                 token_address_hash: Some(_),
                 ..
-            }) => MessageType::SendERC20,
+            }) => Method::SendERC20,
             Some(InteropMessageTransfer {
                 token_address_hash: None,
                 ..
-            }) => MessageType::SendETH,
-            _ => MessageType::RelayMessage,
+            }) => Method::SendETH,
+            _ => Method::SendMessage,
         }
+    }
+
+    pub fn message_type(&self) -> MessageType {
+        self.method().into()
     }
 }
 
@@ -156,6 +144,7 @@ impl From<InteropMessage> for proto::InteropMessage {
     fn from(v: InteropMessage) -> Self {
         let status = proto::interop_message::Status::from(v.status()).into();
         let message_type = v.message_type().into();
+        let method = v.method().into();
         Self {
             sender: v
                 .sender_address_hash
@@ -174,8 +163,11 @@ impl From<InteropMessage> for proto::InteropMessage {
             relay_transaction_hash: v.relay_transaction_hash.map(|h| h.to_string()),
             payload: v.payload.map(|p| p.to_string()),
             status,
-            transfer: v.transfer.map(proto::InteropMessageTransfer::from),
+            transfer: v
+                .transfer
+                .map(proto::interop_message::InteropMessageTransfer::from),
             message_type,
+            method,
         }
     }
 }
@@ -197,5 +189,51 @@ impl FromStr for MessageDirection {
                 s
             ))),
         }
+    }
+}
+
+pub enum Method {
+    SendMessage,
+    SendERC20,
+    SendETH,
+}
+
+impl From<Method> for String {
+    fn from(v: Method) -> Self {
+        match v {
+            Method::SendMessage => "sendMessage",
+            Method::SendERC20 => "sendERC20",
+            Method::SendETH => "sendETH",
+        }
+        .to_string()
+    }
+}
+
+// Frontend-compatible message types as defined in
+// https://github.com/blockscout/frontend/blob/main/ui/txs/TxType.tsx
+pub enum MessageType {
+    CoinTransfer,
+    TokenTransfer,
+    ContractCall,
+}
+
+impl From<Method> for MessageType {
+    fn from(v: Method) -> Self {
+        match v {
+            Method::SendMessage => MessageType::ContractCall,
+            Method::SendERC20 => MessageType::TokenTransfer,
+            Method::SendETH => MessageType::CoinTransfer,
+        }
+    }
+}
+
+impl From<MessageType> for String {
+    fn from(v: MessageType) -> Self {
+        match v {
+            MessageType::CoinTransfer => "coin_transfer",
+            MessageType::TokenTransfer => "token_transfer",
+            MessageType::ContractCall => "contract_call",
+        }
+        .to_string()
     }
 }

@@ -38,15 +38,19 @@ impl From<InteropMessageTransfer> for entity::interop_messages_transfers::Active
     }
 }
 
-impl From<InteropMessageTransfer> for proto::InteropMessageTransfer {
+impl From<InteropMessageTransfer> for proto::interop_message::InteropMessageTransfer {
     fn from(v: InteropMessageTransfer) -> Self {
         Self {
             token: v
                 .token_address_hash
-                .map(|a| proto_address_hash_from_alloy(&a)),
+                .map(|a| proto::interop_message::TokenDetails {
+                    address_hash: a.to_checksum(None),
+                }),
             from: Some(proto_address_hash_from_alloy(&v.from_address_hash)),
             to: Some(proto_address_hash_from_alloy(&v.to_address_hash)),
-            amount: v.amount.to_string(),
+            total: Some(proto::interop_message::TransferTotal {
+                value: v.amount.to_string(),
+            }),
         }
     }
 }
