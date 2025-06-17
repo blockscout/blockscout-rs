@@ -36,6 +36,8 @@ pub struct ServiceSettings {
     #[serde(default)]
     pub api: ApiSettings,
     // Chains that will be used for quick search (ordered by priority).
+    // NOTE: entities from other chains may still appear in the final result,
+    // but only if we can't find enough entries from the chains in the list.
     #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
     #[serde(default = "default_quick_search_chains")]
     pub quick_search_chains: Vec<i64>,

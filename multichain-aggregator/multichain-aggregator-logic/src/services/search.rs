@@ -6,6 +6,7 @@ use crate::{
     },
     error::{ParseError, ServiceError},
     repository::{addresses, block_ranges, hashes, interop_messages},
+    services::chains::list_repo_chains_cached,
     types::{
         addresses::{Address, DomainInfo, TokenType},
         block_ranges::ChainBlockNumber,
@@ -395,7 +396,7 @@ pub async fn quick_search(
     token_info_client: &HttpApiClient,
     bens_client: &HttpApiClient,
     query: String,
-    chain_ids: &[ChainId],
+    priority_chain_ids: &[ChainId],
     bens_protocols: Option<&[String]>,
     domain_primary_chain_id: ChainId,
 ) -> Result<QuickSearchResult, ServiceError> {
@@ -407,7 +408,6 @@ pub async fn quick_search(
         dapp_client,
         token_info_client,
         bens_client,
-        chain_ids,
         bens_protocols,
         domain_primary_chain_id,
     };
@@ -426,7 +426,7 @@ pub async fn quick_search(
             }
             acc
         })
-        .filter_and_sort_entities_by_priority(chain_ids);
+        .filter_and_sort_entities_by_priority(priority_chain_ids);
 
     results.balance_entities(QUICK_SEARCH_NUM_ITEMS as usize, QUICK_SEARCH_ENTITY_LIMIT);
 
@@ -449,7 +449,6 @@ struct SearchContext<'a> {
     dapp_client: &'a HttpApiClient,
     token_info_client: &'a HttpApiClient,
     bens_client: &'a HttpApiClient,
-    chain_ids: &'a [ChainId],
     bens_protocols: Option<&'a [String]>,
     domain_primary_chain_id: ChainId,
 }
@@ -464,17 +463,12 @@ impl SearchTerm {
 
         let db = search_context.db;
 
+        let num_active_chains = list_repo_chains_cached(db, true).await?.len() as u64;
+
         match self {
             SearchTerm::Hash(hash) => {
-                let (hashes, _) = hashes::list(
-                    db,
-                    hash,
-                    None,
-                    search_context.chain_ids.to_vec(),
-                    QUICK_SEARCH_NUM_ITEMS,
-                    None,
-                )
-                .await?;
+                let (hashes, _) =
+                    hashes::list(db, hash, None, vec![], num_active_chains, None).await?;
                 let hashes = hashes
                     .into_iter()
                     .map(Hash::try_from)
@@ -492,9 +486,9 @@ impl SearchTerm {
                     db,
                     vec![address],
                     None,
-                    search_context.chain_ids.to_vec(),
+                    vec![],
                     None,
-                    QUICK_SEARCH_NUM_ITEMS,
+                    num_active_chains,
                     None,
                 )
                 .await?;
@@ -528,8 +522,8 @@ impl SearchTerm {
                 let (block_ranges, _) = block_ranges::list_matching_block_ranges_paginated(
                     db,
                     block_number,
-                    Some(search_context.chain_ids.to_vec()),
-                    QUICK_SEARCH_NUM_ITEMS,
+                    vec![],
+                    num_active_chains,
                     None,
                 )
                 .await?;
@@ -544,13 +538,8 @@ impl SearchTerm {
                 results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
-                let dapps = search_dapps(
-                    search_context.dapp_client,
-                    Some(query),
-                    None,
-                    search_context.chain_ids.to_vec(),
-                )
-                .await?;
+                let dapps =
+                    search_dapps(search_context.dapp_client, Some(query), None, vec![]).await?;
 
                 results.dapps.extend(dapps);
             }
@@ -559,7 +548,7 @@ impl SearchTerm {
                     search_context.db,
                     search_context.token_info_client,
                     query,
-                    search_context.chain_ids.to_vec(),
+                    vec![],
                     // TODO: temporary increase number of tokens to improve search quality
                     // until we have a dedicated endpoint for quick search which returns
                     // only one token per chain_id.
@@ -571,16 +560,12 @@ impl SearchTerm {
                 results.tokens.extend(tokens);
             }
             SearchTerm::ContractName(query) => {
-                let addresses = addresses::uniform_chain_search(
-                    db,
-                    query,
-                    Some(vec![]),
-                    search_context.chain_ids.to_vec(),
-                )
-                .await?
-                .into_iter()
-                .map(Address::try_from)
-                .collect::<Result<Vec<_>, _>>()?;
+                let addresses =
+                    addresses::uniform_chain_search(db, query, Some(vec![]), num_active_chains)
+                        .await?
+                        .into_iter()
+                        .map(Address::try_from)
+                        .collect::<Result<Vec<_>, _>>()?;
 
                 results.addresses.extend(addresses);
             }
@@ -602,7 +587,7 @@ impl SearchTerm {
                         db,
                         addresses,
                         None,
-                        search_context.chain_ids.to_vec(),
+                        vec![],
                         Some(vec![]),
                         QUICK_SEARCH_NUM_ITEMS,
                         None,

@@ -85,12 +85,12 @@ pub async fn uniform_chain_search<C>(
     db: &C,
     contract_name_query: String,
     token_types: Option<Vec<db_enum::TokenType>>,
-    chain_ids: Vec<ChainId>,
+    limit: u64,
 ) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait,
 {
-    if chain_ids.is_empty() {
+    if limit == 0 {
         return Ok(vec![]);
     }
 
@@ -118,7 +118,6 @@ where
                     Alias::new("rn"),
                 )
                 .from(addresses_cte_iden.clone())
-                .and_where(Column::ChainId.is_in(chain_ids.clone()))
                 .apply_if(token_types, |q, token_types| {
                     if !token_types.is_empty() {
                         q.and_where(Column::TokenType.is_in(token_types));
@@ -131,18 +130,10 @@ where
         .table_name(ranked_addresses_iden.clone())
         .to_owned();
 
-    let limit = chain_ids.len() as u64;
     let base_select = Query::select()
         .column(ColumnRef::Asterisk)
         .from(ranked_addresses_iden)
         .and_where(Expr::col(Alias::new("rn")).eq(1))
-        .order_by_expr(
-            Expr::cust_with_exprs(
-                "array_position($1, $2)",
-                [chain_ids.into(), Expr::col(Column::ChainId).into()],
-            ),
-            Order::Asc,
-        )
         .limit(limit)
         .to_owned();
 
