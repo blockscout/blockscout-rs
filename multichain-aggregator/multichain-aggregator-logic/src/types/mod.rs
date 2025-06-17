@@ -12,3 +12,11 @@ pub mod search_results;
 pub mod token_info;
 
 pub type ChainId = i64;
+
+pub fn proto_address_hash_from_alloy(
+    address: &alloy_primitives::Address,
+) -> crate::proto::AddressHash {
+    crate::proto::AddressHash {
+        hash: address.to_checksum(None),
+    }
+}

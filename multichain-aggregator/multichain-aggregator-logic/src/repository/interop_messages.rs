@@ -5,18 +5,22 @@ use crate::types::{
     ChainId,
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
-use entity::interop_messages::{ActiveModel, Column, Entity, Model};
+use entity::{
+    interop_messages::{ActiveModel, Column, Entity, Model},
+    interop_messages_transfers,
+};
 use sea_orm::{
     prelude::{DateTime, Expr},
     sea_query::OnConflict,
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, PaginatorTrait, QueryFilter,
     QueryTrait, TransactionError, TransactionTrait,
 };
+use std::collections::HashMap;
 
 pub async fn upsert_many_with_transfers<C>(
     db: &C,
     mut interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
-) -> Result<Vec<Model>, DbErr>
+) -> Result<Vec<(Model, Option<interop_messages_transfers::Model>)>, DbErr>
 where
     C: ConnectionTrait + TransactionTrait,
 {
@@ -73,14 +77,24 @@ where
             // Set interop_message_id for each corresponding transfer after all messages are inserted
             let transfers = messages
                 .iter()
-                .map(|m| m.id)
                 .zip(transfers)
-                .filter_map(|(id, transfer)| transfer.map(|t| (t, id)))
+                .filter_map(|(m, t)| t.map(|t| (t, m.id)))
                 .collect();
 
-            interop_message_transfers::upsert_many(tx, transfers).await?;
+            let transfers = interop_message_transfers::upsert_many(tx, transfers).await?;
 
-            Ok(messages)
+            let mut id_to_transfer = transfers
+                .into_iter()
+                .map(|t| (t.interop_message_id, t))
+                .collect::<HashMap<_, _>>();
+
+            Ok(messages
+                .into_iter()
+                .map(|m| {
+                    let t = id_to_transfer.remove(&m.id);
+                    (m, t)
+                })
+                .collect())
         })
     })
     .await
@@ -100,7 +114,13 @@ pub async fn list<C>(
     nonce: Option<i64>,
     page_size: u64,
     page_token: Option<(DateTime, TxHash)>,
-) -> Result<(Vec<Model>, Option<(DateTime, TxHash)>), DbErr>
+) -> Result<
+    (
+        Vec<(Model, Option<interop_messages_transfers::Model>)>,
+        Option<(DateTime, TxHash)>,
+    ),
+    DbErr,
+>
 where
     C: ConnectionTrait,
 {
@@ -123,12 +143,13 @@ where
             }
         })
         .apply_if(nonce, |q, nonce| q.filter(Column::Nonce.eq(nonce)))
+        .find_also_related(interop_messages_transfers::Entity)
         .cursor_by((Column::Timestamp, Column::InitTransactionHash));
     c.desc();
 
     let page_token = page_token.map(|(t, h)| (t, h.to_vec()));
 
-    paginate_cursor(db, c, page_size, page_token, |u| {
+    paginate_cursor(db, c, page_size, page_token, |(u, _)| {
         let init_transaction_hash = u
             .init_transaction_hash
             .as_ref()

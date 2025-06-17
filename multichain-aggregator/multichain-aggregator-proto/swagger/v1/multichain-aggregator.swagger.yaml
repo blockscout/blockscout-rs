@@ -468,6 +468,27 @@ definitions:
         type: string
       failed:
         type: boolean
+  InteropMessageInteropMessageTransfer:
+    type: object
+    properties:
+      token:
+        $ref: '#/definitions/InteropMessageTokenDetails'
+      from:
+        $ref: '#/definitions/v1AddressHash'
+      to:
+        $ref: '#/definitions/v1AddressHash'
+      total:
+        $ref: '#/definitions/InteropMessageTransferTotal'
+  InteropMessageTokenDetails:
+    type: object
+    properties:
+      address_hash:
+        type: string
+  InteropMessageTransferTotal:
+    type: object
+    properties:
+      value:
+        type: string
   QuickSearchResponseChainBlockNumber:
     type: object
     properties:
@@ -528,6 +549,11 @@ definitions:
       is_token:
         type: boolean
       chain_id:
+        type: string
+  v1AddressHash:
+    type: object
+    properties:
+      hash:
         type: string
   v1BatchImportRequest:
     type: object
@@ -624,10 +650,10 @@ definitions:
   v1InteropMessage:
     type: object
     properties:
-      sender_address_hash:
-        type: string
-      target_address_hash:
-        type: string
+      sender:
+        $ref: '#/definitions/v1AddressHash'
+      target:
+        $ref: '#/definitions/v1AddressHash'
       nonce:
         type: string
         format: int64
@@ -643,17 +669,21 @@ definitions:
         type: string
       payload:
         type: string
-      failed:
-        type: boolean
       status:
         $ref: '#/definitions/v1InteropMessageStatus'
+      transfer:
+        $ref: '#/definitions/InteropMessageInteropMessageTransfer'
+      message_type:
+        type: string
+      method:
+        type: string
   v1InteropMessageStatus:
     type: string
     enum:
-      - STATUS_PENDING
-      - STATUS_FAILED
-      - STATUS_SUCCESS
-    default: STATUS_PENDING
+      - PENDING
+      - FAILED
+      - SUCCESS
+    default: PENDING
   v1ListAddressesResponse:
     type: object
     properties:
