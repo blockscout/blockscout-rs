@@ -121,7 +121,7 @@ pub async fn search_addresses(
 
                 let addresses = domains
                     .iter()
-                    .map(|d| d.address)
+                    .filter_map(|d| d.address)
                     .collect::<HashSet<_>>()
                     .into_iter()
                     .collect::<Vec<_>>();
@@ -580,7 +580,7 @@ impl SearchTerm {
                 )
                 .await?;
 
-                let addresses = domains.iter().map(|d| d.address).collect::<Vec<_>>();
+                let addresses = domains.iter().filter_map(|d| d.address).collect::<Vec<_>>();
                 if !addresses.is_empty() {
                     // Lookup only non-token addresses
                     let (addresses, _) = addresses::list(
