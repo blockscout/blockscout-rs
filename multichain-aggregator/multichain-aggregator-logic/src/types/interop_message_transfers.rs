@@ -49,7 +49,7 @@ impl From<InteropMessageTransfer> for proto::interop_message::InteropMessageTran
             from: Some(proto_address_hash_from_alloy(&v.from_address_hash)),
             to: Some(proto_address_hash_from_alloy(&v.to_address_hash)),
             total: Some(proto::interop_message::TransferTotal {
-                value: v.amount.to_string(),
+                value: v.amount.to_plain_string(),
             }),
         }
     }

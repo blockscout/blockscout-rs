@@ -93,7 +93,7 @@ message Token {
 }
 
 message Domain {
-  string address = 1;
+  optional string address = 1;
   string name = 2;
   optional string expiry_date = 3;
   google.protobuf.Struct protocol = 4;
