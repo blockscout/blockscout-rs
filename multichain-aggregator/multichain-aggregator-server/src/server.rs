@@ -16,12 +16,11 @@ use migration::Migrator;
 use multichain_aggregator_logic::{
     clients::{bens, dapp, token_info},
     services::{
-        chains::{fetch_and_upsert_blockscout_chains, start_marketplace_enabled_cache_updater},
+        chains::{fetch_and_upsert_blockscout_chains, MarketplaceEnabledCache},
         channel::Channel,
     },
 };
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::RwLock;
+use std::sync::Arc;
 
 const SERVICE_NAME: &str = "multichain_aggregator";
 
@@ -77,11 +76,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let token_info_client = token_info::new_client(settings.service.token_info_client.url)?;
     let bens_client = bens::new_client(settings.service.bens_client.url)?;
 
-    let marketplace_enabled_cache = Arc::new(RwLock::new(HashMap::new()));
-    start_marketplace_enabled_cache_updater(
+    let marketplace_enabled_cache = MarketplaceEnabledCache::new();
+    marketplace_enabled_cache.clone().start_updater(
         repo.read_db().clone(),
         dapp_client.clone(),
-        marketplace_enabled_cache.clone(),
         settings.service.marketplace_enabled_cache_update_interval,
         settings.service.marketplace_enabled_cache_fetch_concurrency,
     );
