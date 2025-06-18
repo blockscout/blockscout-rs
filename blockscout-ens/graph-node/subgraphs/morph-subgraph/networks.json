@@ -1,0 +1,38 @@
+{
+  "morph-mainnet": {
+    "Registry": {
+      "address": "0x5dc881dda4e4a8d312be3544ad13118d1a04cb17",
+      "startBlock": 1147851
+    },
+    "Resolver": {
+      "startBlock": 1147851
+    },
+    "RegistrarController": {
+      "address": "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7",
+      "startBlock": 1147851
+    },
+    "Base": {
+      "address": "0xe3b46508112af26f72b0d2d5f62d811ba20bcab0",
+      "startBlock": 1147851
+    },
+    "": ""
+  },
+  "morph-faucet": {
+    "Registry": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Resolver": {
+      "startBlock": 0
+    },
+    "RegistrarController": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Base": {
+      "address": "",
+      "startBlock": 0
+    },
+    "": ""
+  }
+}
