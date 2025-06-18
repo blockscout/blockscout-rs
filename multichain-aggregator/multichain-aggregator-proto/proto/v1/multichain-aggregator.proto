@@ -173,9 +173,9 @@ message BatchImportRequest {
 
   message CountersImport {
     message GlobalCounters {
-      uint64 daily_transactions_number = 1;
-      uint64 total_transactions_number = 2;
-      uint64 total_addresses_number = 3;
+      optional uint64 daily_transactions_number = 1;
+      optional uint64 total_transactions_number = 2;
+      optional uint64 total_addresses_number = 3;
     }
 
     message TokenCounters {
