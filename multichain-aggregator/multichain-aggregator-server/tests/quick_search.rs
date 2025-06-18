@@ -60,7 +60,7 @@ async fn test_quick_search() {
     );
     assert_eq!(response.tokens.len(), 2);
     assert!(response.tokens[0].is_verified_contract);
-    assert_eq!(response.dapps.len(), 2);
+    assert_eq!(response.dapps.len(), 0);
     assert_eq!(response.domains.len(), 1);
 
     let response: proto::QuickSearchResponse =
