@@ -235,6 +235,14 @@
           "ens"
         ]
       },
+      "239": {
+        "blockscout": {
+          "url": "https://tac.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
       "2818": {
         "blockscout": {
           "url": "https://explorer.morphl2.io/"
