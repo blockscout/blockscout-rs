@@ -154,7 +154,10 @@ export function handleTransfer(event: TransferEvent): void {
   account.save();
 
   // Update the domain owner
-  let domain = getDomain(node)!;
+  let domain = getDomain(node);
+  if (domain == null) {
+    return;
+  }
 
   domain.owner = event.params.owner.toHexString();
   saveDomain(domain);
@@ -183,7 +186,10 @@ export function handleNewResolver(event: NewResolverEvent): void {
   }
 
   let node = event.params.node.toHexString();
-  let domain = getDomain(node)!;
+  let domain = getDomain(node);
+  if (domain == null) {
+    return;
+  }
   domain.resolver = id;
 
   if (id) {

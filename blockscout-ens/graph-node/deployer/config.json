@@ -119,6 +119,11 @@
       "subgraph_path": "../subgraphs/arb-subgraph",
       "subgraph_name": "arb-subgraph",
       "network": "arb-mainnet"
+    },
+    "taiko": {
+      "subgraph_path": "../subgraphs/taiko-subgraph",
+      "subgraph_name": "taiko-subgraph",
+      "network": "taiko-mainnet"
     }
   }
 }

@@ -38,7 +38,13 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
 
   let label = uint256ToByteArray(event.params.id);
   let registration = new Registration(label.toHex());
-  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
+
+  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let domain = Domain.load(domainId);
+
+  if (domain == null) {
+    return;
+  }
 
   registration.domain = domain.id;
   registration.registrationDate = event.block.timestamp;
@@ -68,8 +74,12 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
 
 export function handleNameRenewed(event: NameRenewedEvent): void {
   let label = uint256ToByteArray(event.params.id);
-  let registration = Registration.load(label.toHex())!;
-  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
+  let registration = Registration.load(label.toHex());
+  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex());
+
+  if (registration == null || domain == null) {
+    return;
+  } 
 
   registration.expiryDate = event.params.expires;
   domain.expiryDate = event.params.expires.plus(GRACE_PERIOD_SECONDS);
