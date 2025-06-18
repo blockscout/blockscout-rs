@@ -103,7 +103,10 @@ export function handleNameTransferred(event: TransferEvent): void {
   let registration = Registration.load(label.toHex());
   if (registration == null) return;
 
-  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
+  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex());
+  if (domain == null) {
+    return
+  }
 
   registration.registrant = account.id;
   domain.registrant = account.id;

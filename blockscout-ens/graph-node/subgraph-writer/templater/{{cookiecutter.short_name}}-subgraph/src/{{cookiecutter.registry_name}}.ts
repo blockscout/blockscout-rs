@@ -13,7 +13,7 @@ import { EMPTY_ADDRESS, EMPTY_ADDRESS_BYTEARRAY, ROOT_NODE, concat, createEventI
 
 const BIG_INT_ZERO = BigInt.fromI32(0);
 
-function createDomain(node: string, timestamp: BigInt): Domain {
+export function createDomain(node: string, timestamp: BigInt): Domain {
   let domain = new Domain(node);
   domain.owner = EMPTY_ADDRESS;
   domain.isMigrated = true;
