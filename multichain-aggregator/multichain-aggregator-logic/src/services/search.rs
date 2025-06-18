@@ -6,7 +6,7 @@ use crate::{
     },
     error::{ParseError, ServiceError},
     repository::{addresses, block_ranges, hashes, interop_messages},
-    services::chains::list_repo_chains_cached,
+    services::chains,
     types::{
         addresses::{Address, DomainInfo, TokenType},
         block_ranges::ChainBlockNumber,
@@ -399,6 +399,7 @@ pub async fn quick_search(
     priority_chain_ids: &[ChainId],
     bens_protocols: Option<&[String]>,
     domain_primary_chain_id: ChainId,
+    marketplace_enabled_cache: &chains::MarketplaceEnabledCache,
 ) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
 
@@ -410,6 +411,7 @@ pub async fn quick_search(
         bens_client,
         bens_protocols,
         domain_primary_chain_id,
+        marketplace_enabled_cache,
     };
 
     // Each search term produces its own `SearchResults` struct.
@@ -451,6 +453,7 @@ struct SearchContext<'a> {
     bens_client: &'a HttpApiClient,
     bens_protocols: Option<&'a [String]>,
     domain_primary_chain_id: ChainId,
+    marketplace_enabled_cache: &'a chains::MarketplaceEnabledCache,
 }
 
 impl SearchTerm {
@@ -463,7 +466,7 @@ impl SearchTerm {
 
         let db = search_context.db;
 
-        let num_active_chains = list_repo_chains_cached(db, true).await?.len() as u64;
+        let num_active_chains = chains::list_repo_chains_cached(db, true).await?.len() as u64;
 
         match self {
             SearchTerm::Hash(hash) => {
@@ -538,10 +541,29 @@ impl SearchTerm {
                 results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
-                let dapps =
-                    search_dapps(search_context.dapp_client, Some(query), None, vec![]).await?;
+                let dapp_chains = chains::list_active_chains_cached(
+                    search_context.db,
+                    &[chains::ChainSource::Dapp {
+                        dapp_client: search_context.dapp_client,
+                    }],
+                )
+                .await?
+                .into_iter()
+                .map(|c| c.id)
+                .collect::<Vec<_>>();
 
-                results.dapps.extend(dapps);
+                let chain_ids = search_context
+                    .marketplace_enabled_cache
+                    .filter_marketplace_enabled_chains(dapp_chains, |id| *id)
+                    .await;
+
+                if !chain_ids.is_empty() {
+                    let dapps =
+                        search_dapps(search_context.dapp_client, Some(query), None, chain_ids)
+                            .await?;
+
+                    results.dapps.extend(dapps);
+                }
             }
             SearchTerm::TokenInfo(query) => {
                 let (tokens, _) = search_tokens(
