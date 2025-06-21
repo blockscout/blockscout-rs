@@ -374,6 +374,13 @@ paths:
       tags:
         - Health
 definitions:
+  BatchImportRequestAddressCoinBalanceImport:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      value:
+        type: string
   BatchImportRequestAddressImport:
     type: object
     properties:
@@ -393,6 +400,17 @@ definitions:
         type: boolean
       is_token:
         type: boolean
+  BatchImportRequestAddressTokenBalanceImport:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      token_address_hash:
+        type: string
+      token_id:
+        type: string
+      value:
+        type: string
   BatchImportRequestBlockRangeImport:
     type: object
     properties:
@@ -580,6 +598,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/BatchImportRequestInteropMessageImport'
+      address_coin_balances:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestAddressCoinBalanceImport'
+      address_token_balances:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestAddressTokenBalanceImport'
       api_key:
         type: string
   v1BatchImportResponse:

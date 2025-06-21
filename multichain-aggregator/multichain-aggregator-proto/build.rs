@@ -46,6 +46,8 @@ fn compile(
         .field_attribute("BatchImportRequest.block_ranges", "#[serde(default)]")
         .field_attribute("BatchImportRequest.hashes", "#[serde(default)]")
         .field_attribute("BatchImportRequest.interop_messages", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.address_coin_balances", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.address_token_balances", "#[serde(default)]")
         .extern_path(".google.protobuf", "::prost-wkt-types");
     config.compile_protos(protos, includes)?;
 
