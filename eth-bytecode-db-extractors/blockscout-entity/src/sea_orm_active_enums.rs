@@ -12,15 +12,3 @@ pub enum Language {
     #[sea_orm(string_value = "yul")]
     Yul,
 }
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "status")]
-pub enum Status {
-    #[sea_orm(string_value = "error")]
-    Error,
-    #[sea_orm(string_value = "in_process")]
-    InProcess,
-    #[sea_orm(string_value = "success")]
-    Success,
-    #[sea_orm(string_value = "waiting")]
-    Waiting,
-}
