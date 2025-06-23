@@ -61,7 +61,7 @@ blockscout-chains = { git = "https://github.com/blockscout/blockscout-rs", versi
 cached = { version = "0.55", default-features = false }
 config = "0.13"
 chrono = "0.4.38"
-env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.2.0" }
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.2.1" }
 regex = "1.10"
 reqwest = "0.12"
 thiserror = "1.0"

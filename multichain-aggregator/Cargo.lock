@@ -1069,7 +1069,7 @@ dependencies = [
 [[package]]
 name = "blockscout-chains"
 version = "0.3.0"
-source = "git+https://github.com/blockscout/blockscout-rs#e1b33244c17ad599f63152de8d66fc0add56b5d7"
+source = "git+https://github.com/blockscout/blockscout-rs#7b585d73347c721e6255173fcbb652772b8ed0d2"
 dependencies = [
  "reqwest",
  "reqwest-middleware 0.3.3",
@@ -1940,8 +1940,8 @@ checksum = "b5320ae4c3782150d900b79807611a59a99fc9a1d61d686faafc24b93fc8d7ca"
 
 [[package]]
 name = "env-collector"
-version = "0.2.0"
-source = "git+https://github.com/blockscout/blockscout-rs#e1b33244c17ad599f63152de8d66fc0add56b5d7"
+version = "0.2.1"
+source = "git+https://github.com/blockscout/blockscout-rs#7b585d73347c721e6255173fcbb652772b8ed0d2"
 dependencies = [
  "anyhow",
  "config 0.14.1",

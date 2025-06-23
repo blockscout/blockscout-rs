@@ -5,15 +5,15 @@ use crate::{
     types::{interop_message_transfers::InteropMessageTransfer, proto_address_hash_from_alloy},
 };
 use alloy_primitives::{Address, Bytes, TxHash};
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use entity::{
     interop_messages::{ActiveModel, Model},
     interop_messages_transfers,
 };
 use sea_orm::{prelude::DateTime, ActiveValue::Set};
-use std::{str::FromStr, time::Duration};
+use std::str::FromStr;
 
-const SEVEN_DAYS: Duration = Duration::from_secs(60 * 60 * 24 * 7);
+const SEVEN_DAYS: Duration = Duration::days(7);
 
 #[derive(Debug, Clone)]
 pub struct InteropMessage {
