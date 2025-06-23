@@ -483,6 +483,11 @@ fn json_value_to_env_value(json: &Value) -> String {
         Value::Number(n) => n.to_string(),
         Value::Bool(b) => b.to_string(),
         Value::Null => "null".to_string(),
+        Value::Array(v) => v
+            .iter()
+            .map(json_value_to_env_value)
+            .collect::<Vec<String>>()
+            .join(","),
         _ => panic!("unsupported value type: {:?}", json),
     }
 }
