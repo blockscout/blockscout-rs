@@ -150,3 +150,11 @@ function labelFromName(name: string): string {
 function keccakFromStr(s: string): ByteArray {
   return crypto.keccak256(Bytes.fromUTF8(s));
 }
+
+export function safeAddress(address: Bytes): string {
+  if (address.length === 20) {
+    return address.toHexString();
+  } else {
+    return EMPTY_ADDRESS;
+  }
+}

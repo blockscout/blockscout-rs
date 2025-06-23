@@ -28,7 +28,7 @@ import {
   Domain,
   MulticoinAddrChanged
 } from "../generated/schema"
-import { createEventID, maybeSaveDomainName } from "./utils";
+import { createEventID, maybeSaveDomainName, safeAddress } from "./utils";
 
 export function handleAddrChanged(event: AddrChangedEvent): void {
   let account = new Account(event.params.a.toHexString());
@@ -44,7 +44,7 @@ export function handleAddrChanged(event: AddrChangedEvent): void {
 
   let domain = Domain.load(event.params.node.toHexString());
   if (domain && domain.resolver == resolver.id) {
-    domain.resolvedAddress = event.params.a.toHexString();
+    domain.resolvedAddress = safeAddress(event.params.a);
     domain.save();
   }
 

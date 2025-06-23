@@ -30,6 +30,7 @@ import {
   COIN_TYPE_SEPOLIA,
   createEventID,
   maybeSaveDomainName,
+  safeAddress,
 } from "./utils";
 
 export function handleAddrChanged(event: AddrChangedEvent): void {
@@ -46,7 +47,7 @@ export function handleAddrChanged(event: AddrChangedEvent): void {
 
   let domain = Domain.load(event.params.node.toHexString());
   if (domain && domain.resolver == resolver.id) {
-    domain.resolvedAddress = event.params.a.toHexString();
+    domain.resolvedAddress = safeAddress(event.params.a);
     domain.save();
   }
 
@@ -74,7 +75,7 @@ export function handleMulticoinAddrChanged(event: AddressChangedEvent): void {
 
     let domain = Domain.load(event.params.node.toHexString());
     if (domain && domain.resolver == resolver.id) {
-      domain.resolvedAddress = event.params.newAddress.toHexString();
+      domain.resolvedAddress = safeAddress(event.params.newAddress);
       domain.save();
     }
 
