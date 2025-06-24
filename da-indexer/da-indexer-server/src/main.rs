@@ -17,17 +17,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let db_connection = match settings.database.clone() {
         Some(database_settings) => {
-            let database_url = &database_settings.connect.url();
-            let mut connect_options = sea_orm::ConnectOptions::new(database_url);
-            connect_options.sqlx_logging_level(tracing::log::LevelFilter::Debug);
-            Some(
-                database::initialize_postgres::<Migrator>(
-                    connect_options,
-                    database_settings.create_database,
-                    database_settings.run_migrations,
-                )
-                .await?,
-            )
+            Some(database::initialize_postgres::<Migrator>(&database_settings).await?)
         }
         None => None,
     };
@@ -43,14 +33,11 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 
     let db_connection = match settings.database.clone() {
-        Some(database_settings) => Some(
-            database::initialize_postgres::<Migrator>(
-                &database_settings.connect.url(),
-                false,
-                false,
-            )
-            .await?,
-        ),
+        Some(mut database_settings) => {
+            database_settings.create_database = false;
+            database_settings.run_migrations = false;
+            Some(database::initialize_postgres::<Migrator>(&database_settings).await?)
+        }
         None => None,
     };
 
