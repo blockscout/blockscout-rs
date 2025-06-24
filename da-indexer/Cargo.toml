@@ -1,11 +1,54 @@
 [workspace]
 resolver = "2"
 members = [
-    "da-indexer-logic",
     "da-indexer-entity",
+    "da-indexer-logic",
+    "da-indexer-migration",
     "da-indexer-proto",
     "da-indexer-server",
 ]
 
 [workspace.dependencies]
-blockscout-service-launcher = "0.10.0"
+da-indexer-entity = { path = "da-indexer-entity" }
+da-indexer-logic = { path = "da-indexer-logic" }
+da-indexer-migration = { path = "da-indexer-migration" }
+da-indexer-proto = { path = "da-indexer-proto" }
+
+actix-prost = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
+actix-prost-macros = { git = "https://github.com/blockscout/actix-prost" }
+actix-web = "4"
+anyhow = { version = "1.0" }
+async-std = { version = "1" }
+async-trait = { version = "0.1" }
+base64 = { version = "0.22.0" }
+blockscout-display-bytes = { version = "1.0" }
+blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "4a755c5" }
+blockscout-service-launcher = { version = "0.10.0", features = ["database-0_12"] }
+celestia-rpc = { version = "0.7.0" }
+celestia-types = { version = "0.7.0" }
+chrono = { version = "0.4" }
+ethabi = { version = "18.0" }
+ethers = { version = "2.0.11", features = ["ws"] }
+futures = { version = "0.3" }
+hex = { version = "0.4.3" }
+http = { version = "1.1.0" }
+jsonrpsee = { version = "0.24.7", features = ["client-core", "macros"] }
+lazy_static = { version = "1.4.0" }
+prost = { version = "0.11" }
+prost-build = "0.11"
+reqwest = { version = "0.12.5", features = ["json"] }
+reqwest-middleware = { version = "0.3.3" }
+reqwest-retry = { version = "0.6.1" }
+sea-orm = { version = "0.12.2", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "postgres-array"] }
+sea-orm-migration = { version = "0.12.2", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+serde = { version = "1.0" }
+serde_json = { version = "1.0.96" }
+serde_with = { version = "3.6.1" }
+sha3 = { version = "0.10.8" }
+tokio = { version = "1", features = ["full"] }
+toml = { version = "0.8.14" }
+tonic = { version = "0.8", features = ["tls", "tls-roots"] }
+tonic-build = { version = "0.8" }
+tracing = { version = "0.1" }
+wiremock = { version = "0.6" }
