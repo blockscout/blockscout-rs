@@ -1,20 +1,23 @@
+use super::bytes_from_hex_or_base64;
 use crate::proto::eigen_da_service_server::EigenDaService as EigenDa;
 use base64::prelude::*;
-use da_indexer_logic::eigenda::repository::blobs;
+use da_indexer_logic::{eigenda::repository::blobs, s3_storage::S3Storage};
 use da_indexer_proto::blockscout::da_indexer::v1::{EigenDaBlob, GetEigenDaBlobRequest};
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
 
-use super::bytes_from_hex_or_base64;
-
 #[derive(Default)]
 pub struct EigenDaService {
     db: Option<DatabaseConnection>,
+    _s3_storage: Option<S3Storage>,
 }
 
 impl EigenDaService {
-    pub fn new(db: Option<DatabaseConnection>) -> Self {
-        Self { db }
+    pub fn new(db: Option<DatabaseConnection>, s3_storage: Option<S3Storage>) -> Self {
+        Self {
+            db,
+            _s3_storage: s3_storage,
+        }
     }
 }
 

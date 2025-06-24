@@ -54,7 +54,8 @@ pub async fn upsert_many<C: ConnectionTrait>(
             height: height as i64,
             namespace: blob.namespace.as_bytes().to_vec(),
             commitment: blob.commitment.0.to_vec(),
-            data: blob.data,
+            data: Some(blob.data),
+            data_s3_object_key: None,
         };
         let active: ActiveModel = model.into();
         active

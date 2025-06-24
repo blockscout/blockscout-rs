@@ -1,23 +1,34 @@
+use super::bytes_from_hex_or_base64;
 use crate::proto::celestia_service_server::CelestiaService as Celestia;
 use base64::prelude::*;
-use da_indexer_logic::celestia::{l2_router::L2Router, repository::blobs};
+use da_indexer_logic::{
+    celestia::{l2_router::L2Router, repository::blobs},
+    s3_storage::S3Storage,
+};
 use da_indexer_proto::blockscout::da_indexer::v1::{
     CelestiaBlob, CelestiaBlobId, CelestiaL2BatchMetadata, GetCelestiaBlobRequest,
 };
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
 
-use super::bytes_from_hex_or_base64;
-
 #[derive(Default)]
 pub struct CelestiaService {
     db: Option<DatabaseConnection>,
+    _s3_storage: Option<S3Storage>,
     l2_router: Option<L2Router>,
 }
 
 impl CelestiaService {
-    pub fn new(db: Option<DatabaseConnection>, l2_router: Option<L2Router>) -> Self {
-        Self { db, l2_router }
+    pub fn new(
+        db: Option<DatabaseConnection>,
+        s3_storage: Option<S3Storage>,
+        l2_router: Option<L2Router>,
+    ) -> Self {
+        Self {
+            db,
+            _s3_storage: s3_storage,
+            l2_router,
+        }
     }
 }
 

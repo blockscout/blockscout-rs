@@ -12,6 +12,7 @@ use tracing::instrument;
 
 use crate::{
     celestia, eigenda,
+    s3_storage::S3Storage,
     settings::{DASettings, IndexerSettings},
 };
 
@@ -36,7 +37,11 @@ pub struct Indexer {
 }
 
 impl Indexer {
-    pub async fn new(db: Arc<DatabaseConnection>, settings: IndexerSettings) -> Result<Self> {
+    pub async fn new(
+        db: Arc<DatabaseConnection>,
+        _s3_storage: Option<S3Storage>,
+        settings: IndexerSettings,
+    ) -> Result<Self> {
         let da: Box<dyn DA + Send + Sync> = match settings.da.clone() {
             DASettings::Celestia(settings) => {
                 Box::new(celestia::da::CelestiaDA::new(db.clone(), settings).await?)

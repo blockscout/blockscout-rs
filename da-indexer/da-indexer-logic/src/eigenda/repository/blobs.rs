@@ -59,7 +59,8 @@ pub async fn upsert_many<C: ConnectionTrait>(
             id: compute_id(batch_header_hash, blob_index),
             batch_header_hash: batch_header_hash.to_vec(),
             blob_index,
-            data,
+            data: Some(data),
+            data_s3_object_key: None,
         };
         let active: ActiveModel = model.into();
         active
