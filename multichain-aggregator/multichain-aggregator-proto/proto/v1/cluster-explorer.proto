@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package blockscout.clusterExplorer.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
+
+import "v1/multichain-aggregator.proto";
+
+service ClusterExplorerService {
+  rpc ListInteropMessages(ListInteropMessagesRequest)
+      returns (ListInteropMessagesResponse) {}
+  rpc CountInteropMessages(CountInteropMessagesRequest)
+      returns (CountInteropMessagesResponse) {}
+}
+
+message AddressHash {
+  string hash = 1;
+}
+
+message InteropMessage {
+  enum Status {
+    PENDING = 0;
+    FAILED = 1;
+    SUCCESS = 2;
+  }
+
+  message TokenDetails {
+    string address_hash = 1;
+  }
+
+  message TransferTotal {
+    string value = 1;
+  }
+
+  message InteropMessageTransfer {
+    optional TokenDetails token = 1;
+    AddressHash from = 2;
+    AddressHash to = 3;
+    TransferTotal total = 4;
+  }
+
+  optional AddressHash sender = 1;
+  optional AddressHash target = 2;
+  int64 nonce = 3;
+  string init_chain_id = 4;
+  optional string init_transaction_hash = 5;
+  optional string timestamp = 6;
+  string relay_chain_id = 7;
+  optional string relay_transaction_hash = 8;
+  optional string payload = 9;
+  Status status = 10;
+  optional InteropMessageTransfer transfer = 11;
+  string message_type = 12;
+  string method = 13;
+}
+
+message ListInteropMessagesRequest {
+  string cluster_id = 1;
+  optional string init_chain_id = 2;
+  optional string relay_chain_id = 3;
+  optional int64 nonce = 4;
+  // Address of the sender or receiver.
+  optional string address = 5;
+  // Message direction: "from" or "to". Valid only when address is provided.
+  optional string direction = 6;
+  optional uint32 page_size = 7;
+  optional string page_token = 8;
+}
+
+message ListInteropMessagesResponse {
+  repeated InteropMessage items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message CountInteropMessagesRequest {
+  string cluster_id = 1;
+  string chain_id = 2;
+}
+
+message CountInteropMessagesResponse { uint64 count = 1; }

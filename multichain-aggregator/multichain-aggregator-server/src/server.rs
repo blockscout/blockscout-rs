@@ -1,10 +1,12 @@
 use crate::{
     proto::{
-        health_actix::route_health, health_server::HealthServer,
+        cluster_explorer_service_actix::route_cluster_explorer_service,
+        cluster_explorer_service_server::ClusterExplorerServiceServer, health_actix::route_health,
+        health_server::HealthServer,
         multichain_aggregator_service_actix::route_multichain_aggregator_service,
         multichain_aggregator_service_server::MultichainAggregatorServiceServer,
     },
-    services::{HealthService, MultichainAggregator},
+    services::{ClusterExplorer, HealthService, MultichainAggregator},
     settings::Settings,
 };
 use actix_phoenix_channel::{configure_channel_websocket_route, ChannelCentral};
@@ -18,15 +20,17 @@ use multichain_aggregator_logic::{
     services::{
         chains::{fetch_and_upsert_blockscout_chains, MarketplaceEnabledCache},
         channel::Channel,
+        cluster::Cluster,
     },
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 const SERVICE_NAME: &str = "multichain_aggregator";
 
 #[derive(Clone)]
 struct Router {
     multichain_aggregator: Arc<MultichainAggregator>,
+    cluster_explorer: Arc<ClusterExplorer>,
     health: Arc<HealthService>,
     channel: Arc<ChannelCentral<Channel>>,
 }
@@ -38,6 +42,9 @@ impl Router {
             .add_service(MultichainAggregatorServiceServer::from_arc(
                 self.multichain_aggregator.clone(),
             ))
+            .add_service(ClusterExplorerServiceServer::from_arc(
+                self.cluster_explorer.clone(),
+            ))
     }
 }
 
@@ -46,6 +53,9 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config.configure(|config| {
             route_multichain_aggregator_service(config, self.multichain_aggregator.clone())
+        });
+        service_config.configure(|config| {
+            route_cluster_explorer_service(config, self.cluster_explorer.clone())
         });
         service_config.configure(|config| {
             configure_channel_websocket_route(config, self.channel.clone());
@@ -86,6 +96,24 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let channel = Arc::new(ChannelCentral::new(Channel));
 
+    let clusters = settings
+        .cluster_explorer
+        .clusters
+        .into_iter()
+        .map(|(name, cluster)| {
+            let chain_ids = cluster.chain_ids.into_iter().collect::<HashSet<_>>();
+            if chain_ids.is_empty() {
+                panic!("cluster {} has no chain_ids", name);
+            }
+            (name.clone(), Cluster::new(name, chain_ids))
+        })
+        .collect();
+    let cluster_explorer = Arc::new(ClusterExplorer::new(
+        repo.read_db().clone(),
+        clusters,
+        settings.service.api.clone(),
+    ));
+
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
         repo,
         dapp_client,
@@ -102,6 +130,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let router = Router {
         health,
         multichain_aggregator,
+        cluster_explorer,
         channel,
     };
 

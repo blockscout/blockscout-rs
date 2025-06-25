@@ -19,6 +19,8 @@ pub enum ServiceError {
     Db(#[from] DbErr),
     #[error("not found: {0}")]
     NotFound(String),
+    #[error("invalid cluster chain id: {0}")]
+    InvalidClusterChainId(ChainId),
 }
 
 #[derive(Error, Debug)]
@@ -48,6 +50,7 @@ impl From<ServiceError> for tonic::Status {
             ServiceError::Convert(_) => Code::InvalidArgument,
             ServiceError::Internal(_) => Code::Internal,
             ServiceError::NotFound(_) => Code::NotFound,
+            ServiceError::InvalidClusterChainId(_) => Code::InvalidArgument,
             ServiceError::Db(_) => Code::Internal,
             ServiceError::ExternalApi(_) => Code::Internal,
         };
