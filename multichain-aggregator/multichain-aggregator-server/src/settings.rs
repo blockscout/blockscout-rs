@@ -5,7 +5,7 @@ use blockscout_service_launcher::{
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{formats::CommaSeparator, serde_as, StringWithSeparator};
-use std::time;
+use std::{collections::HashMap, time};
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,6 +24,8 @@ pub struct Settings {
     #[serde(default)]
     pub replica_database: Option<ReplicaDatabaseSettings>,
     pub service: ServiceSettings,
+    #[serde(default)]
+    pub cluster_explorer: ClusterExplorerSettings,
 }
 
 #[serde_as]
@@ -52,6 +54,16 @@ pub struct ServiceSettings {
     pub marketplace_enabled_cache_update_interval: time::Duration,
     #[serde(default = "default_marketplace_enabled_cache_fetch_concurrency")]
     pub marketplace_enabled_cache_fetch_concurrency: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ClusterExplorerSettings {
+    pub clusters: HashMap<String, ClusterSettings>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ClusterSettings {
+    pub chain_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -119,6 +131,7 @@ impl Settings {
                 marketplace_enabled_cache_fetch_concurrency:
                     default_marketplace_enabled_cache_fetch_concurrency(),
             },
+            cluster_explorer: Default::default(),
         }
     }
 }
