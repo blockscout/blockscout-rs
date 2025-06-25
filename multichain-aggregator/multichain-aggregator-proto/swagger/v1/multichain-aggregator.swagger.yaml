@@ -683,6 +683,7 @@ definitions:
       - PENDING
       - FAILED
       - SUCCESS
+      - EXPIRED
     default: PENDING
   v1ListAddressesResponse:
     type: object

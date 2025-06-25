@@ -108,6 +108,7 @@ message InteropMessage {
     PENDING = 0;
     FAILED = 1;
     SUCCESS = 2;
+    EXPIRED = 3;
   }
 
   message TokenDetails {

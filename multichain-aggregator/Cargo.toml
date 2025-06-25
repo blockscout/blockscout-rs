@@ -17,9 +17,9 @@ bens-proto = { git = "https://github.com/blockscout/blockscout-rs", rev = "741fc
 
 # web
 actix-phoenix-channel = "0.1.0"
-actix-prost = { version = "0.1.0" }
-actix-prost-build = { version = "0.1.0" }
-actix-prost-macros = { version = "0.1.0" }
+actix-prost = { version = "0.2.0" }
+actix-prost-build = { version = "0.2.0" }
+actix-prost-macros = { version = "0.2.0" }
 actix-web = "4.2"
 blockscout-service-launcher = { version = "0.20.0", features = ["database-1"] }
 prost = "0.13"
@@ -57,11 +57,11 @@ anyhow = "1.0"
 api-client-framework = { git = "https://github.com/blockscout/blockscout-rs", rev = "d60c1d8" }
 async-std = { version = "1", features = ["attributes", "tokio1"] }
 async-trait = "0.1"
-blockscout-chains = { git = "https://github.com/blockscout/blockscout-rs", version = "0.2.0" }
+blockscout-chains = { git = "https://github.com/blockscout/blockscout-rs", version = "0.3.0" }
 cached = { version = "0.55", default-features = false }
 config = "0.13"
 chrono = "0.4.38"
-env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.1.1" }
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.2.1" }
 regex = "1.10"
 reqwest = "0.12"
 thiserror = "1.0"
