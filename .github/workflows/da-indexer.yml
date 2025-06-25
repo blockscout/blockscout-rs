@@ -48,20 +48,24 @@ jobs:
         with:
           working-directory: da-indexer
 
+      - name: Build
+        id: build
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
+
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
-        if: success() || failure()
+        if: steps.build.outcome == 'success'
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
 
       - name: Doc tests
-        run: cargo test --locked --workspace --all-features --doc
-        if: success() || failure()
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --doc
+        if: steps.build.outcome == 'success'
 
       # TODO: Uncomment when integration test added
       # - name: Integration tests
       #   run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
-      #   if: success() || failure()
+      #   if: steps.build.outcome == 'success'
       #   env:
       #     DATABASE_URL: postgres://postgres:admin@localhost:5432/
 

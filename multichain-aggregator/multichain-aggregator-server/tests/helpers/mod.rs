@@ -1,5 +1,8 @@
 use blockscout_service_launcher::test_server;
-use multichain_aggregator_logic::types::api_keys::ApiKey;
+use multichain_aggregator_logic::{
+    repository::chains,
+    types::{api_keys::ApiKey, chains::Chain},
+};
 use multichain_aggregator_server::Settings;
 use reqwest::Url;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, DbErr, EntityTrait};
@@ -36,4 +39,20 @@ pub async fn upsert_api_keys(db: &DatabaseConnection, api_keys: Vec<ApiKey>) -> 
         .await?;
 
     Ok(())
+}
+
+#[allow(dead_code)]
+pub async fn create_test_chains(db: &DatabaseConnection, n: usize) -> Vec<Chain> {
+    let chains: Vec<Chain> = (1..=n)
+        .map(|i| Chain {
+            id: i as i64,
+            name: Some(format!("Chain {}", i)),
+            explorer_url: Some(format!("https://test{}", i)),
+            icon_url: Some(format!("https://test{}", i)),
+        })
+        .collect();
+
+    chains::upsert_many(db, chains.clone()).await.unwrap();
+
+    chains
 }

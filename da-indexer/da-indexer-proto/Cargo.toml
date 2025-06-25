@@ -4,15 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actix-web = "4"
-actix-prost = { git = "https://github.com/blockscout/actix-prost" }
-actix-prost-macros = { git = "https://github.com/blockscout/actix-prost" }
-prost = "0.11"
-serde = { version = "1" }
-serde_with = { version = "2.0" }
-tonic = "0.8"
+actix-web = { workspace = true }
+actix-prost = { workspace = true }
+actix-prost-macros = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true }
+serde_with = { workspace = true }
+tonic = { workspace = true }
 
 [build-dependencies]
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost" }
-prost-build = "0.11"
-tonic-build = "0.8"
+actix-prost-build = { workspace = true }
+prost-build = { workspace = true }
+tonic-build = { workspace = true }

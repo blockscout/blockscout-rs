@@ -29,13 +29,22 @@ Service-specific environment variables. Common environment variables are listed 
 
 [anchor]: <> (anchors.envs.start)
 
-| Variable                                                 | Req&#x200B;uir&#x200B;ed | Description                         | Default value |
-| -------------------------------------------------------- | ------------------------ | ----------------------------------- | ------------- |
-| `MULTICHAIN_AGGREGATOR__DATABASE__CONNECT__URL`          | true                     | Postgres connect URL to service DB  |               |
-| `MULTICHAIN_AGGREGATOR__DATABASE__CREATE_DATABASE`       |                          | Create database if doesn't exist    | `false`       |
-| `MULTICHAIN_AGGREGATOR__DATABASE__RUN_MIGRATIONS`        |                          | Run database migrations             | `false`       |
-| `MULTICHAIN_AGGREGATOR__SERVICE__DAPP_CLIENT__URL`       | true                     | e.g. `http://localhost:8080/api/v1` |               |
-| `MULTICHAIN_AGGREGATOR__SERVICE__API__DEFAULT_PAGE_SIZE` |                          |                                     | `50`          |
-| `MULTICHAIN_AGGREGATOR__SERVICE__API__MAX_PAGE_SIZE`     |                          |                                     | `100`         |
+| Variable                                                                      | Req&#x200B;uir&#x200B;ed | Description                                                 | Default value                                          |
+| ----------------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------- | ------------------------------------------------------ |
+| `MULTICHAIN_AGGREGATOR__DATABASE__CONNECT__URL`                               | true                     | e.g. `postgres://postgres:postgres@localhost:5432/postgres` |                                                        |
+| `MULTICHAIN_AGGREGATOR__SERVICE__BENS_CLIENT__URL`                            | true                     | e.g. `http://localhost:8080/`                               |                                                        |
+| `MULTICHAIN_AGGREGATOR__SERVICE__DAPP_CLIENT__URL`                            | true                     | e.g. `http://localhost:8080/`                               |                                                        |
+| `MULTICHAIN_AGGREGATOR__SERVICE__TOKEN_INFO_CLIENT__URL`                      | true                     | e.g. `http://localhost:8080/`                               |                                                        |
+| `MULTICHAIN_AGGREGATOR__DATABASE__CREATE_DATABASE`                            |                          |                                                             | `false`                                                |
+| `MULTICHAIN_AGGREGATOR__DATABASE__RUN_MIGRATIONS`                             |                          |                                                             | `false`                                                |
+| `MULTICHAIN_AGGREGATOR__REPLICA_DATABASE`                                     |                          |                                                             | `null`                                                 |
+| `MULTICHAIN_AGGREGATOR__SERVICE__API__DEFAULT_PAGE_SIZE`                      |                          |                                                             | `50`                                                   |
+| `MULTICHAIN_AGGREGATOR__SERVICE__API__MAX_PAGE_SIZE`                          |                          |                                                             | `100`                                                  |
+| `MULTICHAIN_AGGREGATOR__SERVICE__BENS_PROTOCOLS`                              |                          |                                                             | `ens`                                                  |
+| `MULTICHAIN_AGGREGATOR__SERVICE__DOMAIN_PRIMARY_CHAIN_ID`                     |                          |                                                             | `1`                                                    |
+| `MULTICHAIN_AGGREGATOR__SERVICE__FETCH_CHAINS`                                |                          |                                                             | `false`                                                |
+| `MULTICHAIN_AGGREGATOR__SERVICE__MARKETPLACE_ENABLED_CACHE_FETCH_CONCURRENCY` |                          |                                                             | `10`                                                   |
+| `MULTICHAIN_AGGREGATOR__SERVICE__MARKETPLACE_ENABLED_CACHE_UPDATE_INTERVAL`   |                          |                                                             | `21600`                                                |
+| `MULTICHAIN_AGGREGATOR__SERVICE__QUICK_SEARCH_CHAINS`                         |                          |                                                             | `1,8453,57073,698,109,7777777,100,10,42161,690,534352` |
 
 [anchor]: <> (anchors.envs.end)

@@ -30,7 +30,7 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert hashes");
         })?;
-    let messages =
+    let messages_with_transfers =
         repository::interop_messages::upsert_many_with_transfers(&tx, request.interop_messages)
             .await
             .inspect_err(|e| {
@@ -48,13 +48,14 @@ pub async fn batch_import(
         })?;
     tx.commit().await?;
 
-    let messages = messages
+    let interop_messages = messages_with_transfers
         .into_iter()
+        .filter(|(m, _)| m.init_transaction_hash.is_some())
         .filter_map(|m| InteropMessage::try_from(m).ok())
         .map(proto::InteropMessage::from)
         .collect::<Vec<_>>();
-    if !messages.is_empty() {
-        channel.broadcast((NEW_INTEROP_MESSAGES_TOPIC, "new_messages", messages));
+    if !interop_messages.is_empty() {
+        channel.broadcast((NEW_INTEROP_MESSAGES_TOPIC, "new_messages", interop_messages));
     }
 
     let block_ranges = block_ranges

@@ -1,0 +1,42 @@
+;; push calldata words onto stack
+;;;;
+
+;; get word count for input
+push1 32      ;; [32]
+calldatasize  ;; [size, 32]
+div           ;; [words]
+push1 1       ;; [1, words]
+swap1         ;; [words, 1]
+sub           ;; [words-1]
+
+;; run loop
+loop:
+
+;; bound check - wait until overflow to quit
+dup1          ;; [i, i]
+push32 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+eq            ;; [i == 2**256, i]
+jumpi @end    ;; [i]
+
+;; perform load
+dup1          ;; [i, i]
+push1 32      ;; [32, i, i]
+mul           ;; [i*32, i]
+calldataload  ;; [x_i, i]
+swap1         ;; [i, x_i]
+push1 1       ;; [1, i, x_i]
+swap1         ;; [i, 1, x_i]
+sub           ;; [i--, words, x_i]
+jump @loop
+
+end:
+pop           ;; []
+
+#include "fake_expo.eas"
+
+;; write result to memory and return it
+push0         ;; [0, expo]
+mstore        ;; []
+push1 32      ;; [32]
+push0         ;; [0, 32]
+return

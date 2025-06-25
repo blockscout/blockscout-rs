@@ -93,21 +93,41 @@ message Token {
 }
 
 message Domain {
-  string address = 1;
+  optional string address = 1;
   string name = 2;
   optional string expiry_date = 3;
   google.protobuf.Struct protocol = 4;
 }
 
+message AddressHash {
+  string hash = 1;
+}
+
 message InteropMessage {
   enum Status {
-    STATUS_PENDING = 0;
-    STATUS_FAILED = 1;
-    STATUS_SUCCESS = 2;
+    PENDING = 0;
+    FAILED = 1;
+    SUCCESS = 2;
+    EXPIRED = 3;
   }
 
-  optional string sender_address_hash = 1;
-  optional string target_address_hash = 2;
+  message TokenDetails {
+    string address_hash = 1;
+  }
+
+  message TransferTotal {
+    string value = 1;
+  }
+
+  message InteropMessageTransfer {
+    optional TokenDetails token = 1;
+    AddressHash from = 2;
+    AddressHash to = 3;
+    TransferTotal total = 4;
+  }
+
+  optional AddressHash sender = 1;
+  optional AddressHash target = 2;
   int64 nonce = 3;
   string init_chain_id = 4;
   optional string init_transaction_hash = 5;
@@ -115,8 +135,10 @@ message InteropMessage {
   string relay_chain_id = 7;
   optional string relay_transaction_hash = 8;
   optional string payload = 9;
-  optional bool failed = 10;
-  Status status = 11;
+  Status status = 10;
+  optional InteropMessageTransfer transfer = 11;
+  string message_type = 12;
+  string method = 13;
 }
 
 message BatchImportRequest {
