@@ -7,6 +7,8 @@ option go_package = "github.com/blockscout/blockscout-rs/multichain-aggregator";
 import "v1/multichain-aggregator.proto";
 
 service ClusterExplorerService {
+  rpc ListClusterChains(ListClusterChainsRequest)
+      returns (ListClusterChainsResponse) {}
   rpc ListInteropMessages(ListInteropMessagesRequest)
       returns (ListInteropMessagesResponse) {}
   rpc CountInteropMessages(CountInteropMessagesRequest)
@@ -52,6 +54,14 @@ message InteropMessage {
   optional InteropMessageTransfer transfer = 11;
   string message_type = 12;
   string method = 13;
+}
+
+message ListClusterChainsRequest {
+  string cluster_id = 1;
+}
+
+message ListClusterChainsResponse {
+  repeated blockscout.multichainAggregator.v1.Chain items = 1;
 }
 
 message ListInteropMessagesRequest {

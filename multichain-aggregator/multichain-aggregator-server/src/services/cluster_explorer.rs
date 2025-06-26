@@ -43,6 +43,23 @@ impl ClusterExplorer {
 
 #[async_trait::async_trait]
 impl ClusterExplorerService for ClusterExplorer {
+    async fn list_cluster_chains(
+        &self,
+        request: Request<ListClusterChainsRequest>,
+    ) -> Result<Response<ListClusterChainsResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let chains = cluster.list_chains(&self.db).await?;
+
+        let items = chains
+            .into_iter()
+            .filter_map(|c| c.try_into().ok())
+            .collect();
+
+        Ok(Response::new(ListClusterChainsResponse { items }))
+    }
+
     async fn list_interop_messages(
         &self,
         request: Request<ListInteropMessagesRequest>,

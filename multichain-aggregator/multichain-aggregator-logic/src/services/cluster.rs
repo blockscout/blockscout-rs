@@ -1,7 +1,8 @@
 use crate::{
     error::ServiceError,
-    repository::interop_messages,
+    repository::{chains, interop_messages},
     types::{
+        chains::Chain,
         interop_messages::{InteropMessage, MessageDirection},
         ChainId,
     },
@@ -12,13 +13,12 @@ use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct Cluster {
-    pub name: String,
-    pub chain_ids: HashSet<ChainId>,
+    chain_ids: HashSet<ChainId>,
 }
 
 impl Cluster {
-    pub fn new(name: String, chain_ids: HashSet<ChainId>) -> Self {
-        Self { name, chain_ids }
+    pub fn new(chain_ids: HashSet<ChainId>) -> Self {
+        Self { chain_ids }
     }
 
     pub fn validate_chain_id(&self, chain_id: ChainId) -> Result<(), ServiceError> {
@@ -26,6 +26,15 @@ impl Cluster {
             return Err(ServiceError::InvalidClusterChainId(chain_id));
         }
         Ok(())
+    }
+
+    pub fn chain_ids(&self) -> Vec<ChainId> {
+        self.chain_ids.iter().cloned().collect()
+    }
+
+    pub async fn list_chains(&self, db: &DatabaseConnection) -> Result<Vec<Chain>, ServiceError> {
+        let chains = chains::list_by_ids(db, self.chain_ids()).await?;
+        Ok(chains.into_iter().map(|c| c.into()).collect())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -47,7 +56,7 @@ impl Cluster {
             self.validate_chain_id(relay_chain_id)?;
         }
 
-        let cluster_chain_ids = self.chain_ids.iter().cloned().collect();
+        let cluster_chain_ids = self.chain_ids();
         let (interop_messages, next_page_token) = interop_messages::list(
             db,
             init_chain_id,
@@ -77,7 +86,7 @@ impl Cluster {
     ) -> Result<u64, ServiceError> {
         self.validate_chain_id(chain_id)?;
 
-        let cluster_chain_ids = self.chain_ids.iter().cloned().collect();
+        let cluster_chain_ids = self.chain_ids();
         let count = interop_messages::count(db, chain_id, Some(cluster_chain_ids)).await?;
         Ok(count)
     }

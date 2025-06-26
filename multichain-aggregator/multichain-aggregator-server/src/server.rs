@@ -105,7 +105,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             if chain_ids.is_empty() {
                 panic!("cluster {} has no chain_ids", name);
             }
-            (name.clone(), Cluster::new(name, chain_ids))
+            (name.clone(), Cluster::new(chain_ids))
         })
         .collect();
     let cluster_explorer = Arc::new(ClusterExplorer::new(
