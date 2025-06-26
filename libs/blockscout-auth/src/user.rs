@@ -13,20 +13,15 @@ pub struct UserInfo {
     pub nickname: String,
 }
 
-/// Извлекает JWT из метаданных, делает GET /api/account/v2/user/info?api_key=...,
-/// возвращает распарсенный UserInfo.
 pub async fn get_user_info_from_metadata(
     metadata: &MetadataMap,
     blockscout_host: &Url,
     blockscout_api_key: Option<&str>,
 ) -> Result<UserInfo, AuthError> {
-    // 1) вытащить JWT
     let jwt = extract_jwt(metadata)?;
 
-    // 2) собрать хедеры (без CSRF, метод GET безопасный)
     let headers = build_http_headers(&jwt, None)?;
 
-    // 3) сформировать URL с опциональным api_key
     let mut url = blockscout_host
         .join("/api/account/v2/user/info")
         .expect("invalid base URL");
@@ -34,7 +29,6 @@ pub async fn get_user_info_from_metadata(
         url.set_query(Some(&format!("api_key={}", key)));
     }
 
-    // 4) выполнить запрос
     let client = reqwest::Client::new();
     let resp = client
         .get(url)
@@ -43,7 +37,6 @@ pub async fn get_user_info_from_metadata(
         .await
         .map_err(|e| AuthError::HeaderError(e.to_string()))?;
 
-    // 5) проверить статус и десериализовать
     match resp.status() {
         StatusCode::OK => {
             let info = resp.json::<UserInfo>().await.map_err(|e| {

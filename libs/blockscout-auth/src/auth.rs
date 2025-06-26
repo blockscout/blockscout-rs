@@ -183,7 +183,7 @@ mod tests {
         let req = build_request("jwt1", Some("csrf1"), P { name: "x".into() });
         let ok = auth_from_metadata(req.metadata(), false, &host, api_key).await.unwrap();
         assert_eq!(ok.id, 1);
-
+        
         // POST без CSRF — ошибка
         let req = build_request("jwt1", None, P { name: "x".into() });
         auth_from_metadata(req.metadata(), false, &host, api_key)
