@@ -2,7 +2,7 @@ use anyhow::Context;
 use config::{Config, File};
 use itertools::{Either, Itertools};
 use json_dotpath::DotPaths;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
@@ -12,7 +12,6 @@ use std::{
 
 const ANCHOR_START: &str = "anchors.envs.start";
 const ANCHOR_END: &str = "anchors.envs.end";
-const VALIDATE_ONLY_ENV: &str = "VALIDATE_ONLY";
 
 mod types;
 pub use types::*;
@@ -45,22 +44,19 @@ pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(settings: EnvColle
         settings.anchor_postfix,
         settings.format_markdown,
     );
-    let validate_only = std::env::var(VALIDATE_ONLY_ENV)
-        .unwrap_or_default()
-        .to_lowercase()
-        .eq("true");
-    let missing = collector
-        .find_missing()
-        .expect("Failed to find missing variables");
-    if missing.is_empty() {
-        println!("All variables are documented");
+    let options = EnvCollectorOptions::from_env().expect("Failed to parse env options");
+    let incorrect = collector
+        .verify_markdown(&options)
+        .expect("Failed to find incorrect variables");
+    if incorrect.is_empty() {
+        println!("All variables are documented correctly");
     } else {
-        println!("Found missing variables:");
-        for env in missing {
-            println!("  {}", env.key);
+        println!("Found incorrect variables:");
+        for env in incorrect {
+            println!("({})\t{}", env.tag(), env.inner().key);
         }
 
-        if validate_only {
+        if options.validate_only {
             std::process::exit(1);
         } else {
             println!(
@@ -70,9 +66,29 @@ pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(settings: EnvColle
             println!("Press any key to continue...");
             std::io::stdin().read_line(&mut String::new()).unwrap();
             collector
-                .update_markdown()
+                .update_markdown(&options)
                 .expect("Failed to update markdown");
         }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct EnvCollectorOptions {
+    #[serde(default)]
+    validate_only: bool,
+    #[serde(default)]
+    consider_defaults: bool,
+    #[serde(default)]
+    remove_unused_envs: bool,
+}
+
+impl EnvCollectorOptions {
+    pub fn from_env() -> Result<Self, anyhow::Error> {
+        let options: Self = Config::builder()
+            .add_source(config::Environment::default())
+            .build()?
+            .try_deserialize()?;
+        Ok(options)
     }
 }
 
@@ -111,17 +127,22 @@ where
         }
     }
 
-    pub fn find_missing(&self) -> Result<Vec<EnvVariable>, anyhow::Error> {
-        find_missing_variables_in_markdown::<S>(
+    pub fn verify_markdown(
+        &self,
+        options: &EnvCollectorOptions,
+    ) -> Result<Vec<ReportedVariable>, anyhow::Error> {
+        find_mistakes_in_markdown::<S>(
             &self.service_name,
             self.markdown_path.as_path(),
             self.config_path.as_path(),
             self.vars_filter.clone(),
             self.anchor_postfix.clone(),
+            options.consider_defaults,
+            options.remove_unused_envs,
         )
     }
 
-    pub fn update_markdown(&self) -> Result<(), anyhow::Error> {
+    pub fn update_markdown(&self, options: &EnvCollectorOptions) -> Result<(), anyhow::Error> {
         update_markdown_file::<S>(
             &self.service_name,
             self.markdown_path.as_path(),
@@ -129,7 +150,40 @@ where
             self.vars_filter.clone(),
             self.anchor_postfix.clone(),
             self.format_markdown,
+            options.consider_defaults,
+            options.remove_unused_envs,
         )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReportedVariable {
+    /// The variable is missing or some of its fields are incorrect
+    Incorrect(EnvVariable),
+    /// The variable is present in the markdown, but not in the config
+    Unused(EnvVariable),
+}
+
+impl ReportedVariable {
+    pub fn inner(&self) -> &EnvVariable {
+        match self {
+            ReportedVariable::Incorrect(var) => var,
+            ReportedVariable::Unused(var) => var,
+        }
+    }
+
+    pub fn into_inner(self) -> EnvVariable {
+        match self {
+            ReportedVariable::Incorrect(var) => var,
+            ReportedVariable::Unused(var) => var,
+        }
+    }
+
+    pub fn tag(&self) -> &'static str {
+        match self {
+            ReportedVariable::Incorrect(_) => "incorrect",
+            ReportedVariable::Unused(_) => "unused",
+        }
     }
 }
 
@@ -151,8 +205,15 @@ impl EnvVariable {
         filter_non_ascii(lhs) == filter_non_ascii(rhs)
     }
 
-    pub fn eq_with_ignores(&self, other: &Self) -> bool {
-        Self::strings_equal_in_ascii(&self.key, &other.key) && self.required == other.required
+    pub fn eq_with_ignores(&self, other: &Self, consider_defaults: bool) -> bool {
+        let is_default_equal = if consider_defaults {
+            self.default_value == other.default_value
+        } else {
+            true
+        };
+        Self::strings_equal_in_ascii(&self.key, &other.key)
+            && self.required == other.required
+            && is_default_equal
     }
 }
 
@@ -257,10 +318,17 @@ impl Envs {
         Ok(result)
     }
 
-    pub fn update_no_override(&mut self, other: Envs) {
+    pub fn update_no_override(&mut self, other: Envs, override_defaults: bool) {
         for (id, value) in other.vars {
-            self.vars.entry(id).or_insert(value);
+            let entry = self.vars.entry(id).or_insert(value.clone());
+            if override_defaults {
+                entry.default_value = value.default_value;
+            }
         }
+    }
+
+    pub fn remove_unused_envs(&mut self, used: &Envs) {
+        self.vars.retain(|id, _| used.vars.contains_key(id));
     }
 
     /// Preserve order of variables with `table_index`, sort others alphabetically
@@ -291,13 +359,15 @@ impl Envs {
     }
 }
 
-fn find_missing_variables_in_markdown<S>(
+fn find_mistakes_in_markdown<S>(
     service_name: &str,
     markdown_path: &Path,
     config_path: &Path,
     vars_filter: PrefixFilter,
     anchor_postfix: Option<String>,
-) -> Result<Vec<EnvVariable>, anyhow::Error>
+    consider_defaults: bool,
+    report_unused_envs: bool,
+) -> Result<Vec<ReportedVariable>, anyhow::Error>
 where
     S: Serialize + DeserializeOwned,
 {
@@ -315,19 +385,27 @@ where
         anchor_postfix,
     )?;
 
-    let missing = example
+    let mut incorrect: Vec<_> = example
         .vars
         .iter()
         .filter(|(id, value)| {
             let maybe_markdown_var = markdown.vars.get(*id);
             maybe_markdown_var
-                .map(|var| !var.eq_with_ignores(value))
+                .map(|var| !var.eq_with_ignores(value, consider_defaults))
                 .unwrap_or(true)
         })
-        .map(|(_, value)| value.clone())
+        .map(|(_, value)| ReportedVariable::Incorrect(value.clone()))
         .collect();
 
-    Ok(missing)
+    if report_unused_envs {
+        let unused = markdown
+            .vars
+            .iter()
+            .filter(|(id, _)| !example.vars.contains_key(id.as_str()));
+        incorrect.extend(unused.map(|(_, value)| ReportedVariable::Unused(value.clone())));
+    }
+
+    Ok(incorrect)
 }
 
 fn update_markdown_file<S>(
@@ -337,6 +415,8 @@ fn update_markdown_file<S>(
     vars_filter: PrefixFilter,
     anchor_postfix: Option<String>,
     format_markdown: bool,
+    consider_defaults: bool,
+    remove_unused_envs: bool,
 ) -> Result<(), anyhow::Error>
 where
     S: Serialize + DeserializeOwned,
@@ -354,7 +434,10 @@ where
             .as_str(),
         anchor_postfix.clone(),
     )?;
-    markdown_config.update_no_override(from_config);
+    if remove_unused_envs {
+        markdown_config.remove_unused_envs(&from_config);
+    }
+    markdown_config.update_no_override(from_config, consider_defaults);
     let table = serialize_env_vars_to_md_table(markdown_config, format_markdown);
 
     let content = std::fs::read_to_string(markdown_path).context("failed to read markdown file")?;
@@ -518,7 +601,7 @@ mod tests {
     use blockscout_service_launcher::database::DatabaseSettings;
     use pretty_assertions::assert_eq;
     use serde::Deserialize;
-    use std::io::Write;
+    use std::{collections::HashSet, io::Write};
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
     struct TestSettings {
@@ -798,10 +881,17 @@ mod tests {
             None,
             true,
         );
+        let options = EnvCollectorOptions::default();
 
-        let missing = collector.find_missing().unwrap();
+        let incorrect = collector
+            .verify_markdown(&options)
+            .unwrap()
+            .into_iter()
+            .map(|v| v.into_inner())
+            .collect::<Vec<_>>();
+
         assert_eq!(
-            missing,
+            incorrect,
             default_envs()
                 .vars
                 .values()
@@ -810,9 +900,9 @@ mod tests {
                 .collect::<Vec<EnvVariable>>()
         );
 
-        collector.update_markdown().unwrap();
-        let missing = collector.find_missing().unwrap();
-        assert_eq!(missing, vec![]);
+        collector.update_markdown(&options).unwrap();
+        let incorrect = collector.verify_markdown(&options).unwrap();
+        assert_eq!(incorrect, vec![]);
 
         let markdown_content = std::fs::read_to_string(markdown.path()).unwrap();
         assert_eq!(
@@ -844,6 +934,161 @@ mod tests {
 | `TEST_SERVICE__TEST2`                                                             |                          | e.g. `123`                                                                                           | `1000`           |
 | `TEST_SERVICE__TEST3_SET`                                                         |                          | e.g. `false`                                                                                         | `null`           |
 | `TEST_SERVICE__TEST4_NOT_SET`                                                     |                          |                                                                                                      | `null`           |
+
+[anchor]: <> (anchors.envs.end)
+"#
+        );
+    }
+
+    #[test]
+    fn override_defaults_works() {
+        let mut markdown = tempfile::NamedTempFile::new().unwrap();
+        writeln!(
+            markdown,
+            r#"
+[anchor]: <> (anchors.envs.start)
+| `TEST_SERVICE__TEST5_WITH_UNICODE`  |                          | aboba         | `false`          |
+| `TEST_SERVICE__TEST`                | true                     | e.g. `value`  |                  |
+| `TEST_SERVICE__STRING_WITH_DEFAULT` |                          |               | `old_default`    |
+[anchor]: <> (anchors.envs.end)
+"#
+        )
+        .unwrap();
+
+        let config = default_config_example_file_toml();
+
+        let collector = EnvCollector::<TestSettings>::new(
+            "TEST_SERVICE".to_string(),
+            markdown.path().to_path_buf(),
+            config.path().to_path_buf(),
+            PrefixFilter::blacklist(&["TEST_SERVICE__DATABASE"]),
+            None,
+            true,
+        );
+        let options = EnvCollectorOptions {
+            consider_defaults: true,
+            ..Default::default()
+        };
+
+        let incorrect = collector
+            .verify_markdown(&options)
+            .unwrap()
+            .into_iter()
+            .map(|v| v.into_inner())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            incorrect,
+            default_envs()
+                .vars
+                .values()
+                .filter(|var| var.key != "TEST_SERVICE__TEST"
+                    && var.key != "TEST_SERVICE__TEST5_WITH_UNICODE"
+                    // `STRING_WITH_DEFAULT` has wrong default, so it's reported as incorrect
+                    && !var.key.starts_with("TEST_SERVICE__DATABASE"))
+                .map(Clone::clone)
+                .collect::<Vec<EnvVariable>>()
+        );
+
+        collector.update_markdown(&options).unwrap();
+        let incorrect = collector.verify_markdown(&options).unwrap();
+        assert_eq!(incorrect, vec![]);
+
+        let markdown_content = std::fs::read_to_string(markdown.path()).unwrap();
+        // check that default for `TEST_SERVICE__STRING_WITH_DEFAULT` is updated, as requested
+        assert_eq!(
+            markdown_content,
+            r#"
+[anchor]: <> (anchors.envs.start)
+
+| Variable                            | Req&#x200B;uir&#x200B;ed | Description  | Default value |
+| ----------------------------------- | ------------------------ | ------------ | ------------- |
+| `TEST_SERVICE__TEST5_WITH_UNICODE`  |                          | aboba        | `false`       |
+| `TEST_SERVICE__TEST`                | true                     | e.g. `value` |               |
+| `TEST_SERVICE__STRING_WITH_DEFAULT` |                          |              | `kekek`       |
+| `TEST_SERVICE__TEST2`               |                          | e.g. `123`   | `1000`        |
+| `TEST_SERVICE__TEST3_SET`           |                          | e.g. `false` | `null`        |
+| `TEST_SERVICE__TEST4_NOT_SET`       |                          |              | `null`        |
+
+[anchor]: <> (anchors.envs.end)
+"#
+        );
+    }
+
+    #[test]
+    fn remove_unused_works() {
+        let mut markdown = tempfile::NamedTempFile::new().unwrap();
+        writeln!(
+            markdown,
+            r#"
+[anchor]: <> (anchors.envs.start)
+| `SOME_EXTRA_VARS`                   |      | comment should be saved. `kek` | `example_value`  |
+| `SOME_EXTRA_VARS2`                  | true |                                | `example_value2` |
+| `TEST_SERVICE__TEST5_WITH_UNICODE`  |      | aboba                          | `false`          |
+| `TEST_SERVICE__TEST`                | true | e.g. `value`                   |                  |
+| `TEST_SERVICE__STRING_WITH_DEFAULT` |      |                                | `kekek`          |
+| `TEST_SERVICE__TEST2`               |      | e.g. `123`                     | `1000`           |
+| `TEST_SERVICE__TEST3_SET`           |      | e.g. `false`                   | `null`           |
+| `TEST_SERVICE__TEST4_NOT_SET`       |      |                                | `null`           |
+[anchor]: <> (anchors.envs.end)
+"#
+        )
+        .unwrap();
+
+        let config = default_config_example_file_toml();
+
+        let collector = EnvCollector::<TestSettings>::new(
+            "TEST_SERVICE".to_string(),
+            markdown.path().to_path_buf(),
+            config.path().to_path_buf(),
+            PrefixFilter::blacklist(&["TEST_SERVICE__DATABASE"]),
+            None,
+            true,
+        );
+        let options = EnvCollectorOptions {
+            remove_unused_envs: true,
+            ..Default::default()
+        };
+
+        let incorrect = collector.verify_markdown(&options).unwrap();
+        let mut expected_unused_keys = HashSet::from(["SOME_EXTRA_VARS", "SOME_EXTRA_VARS2"]);
+        for reported in incorrect {
+            match reported {
+                ReportedVariable::Incorrect(env_variable) => {
+                    panic!("must not have incorrect variables, got: {:?}", env_variable)
+                }
+                ReportedVariable::Unused(env_variable) => {
+                    assert!(
+                        expected_unused_keys.remove(env_variable.key.as_str()),
+                        "reported unused variable that was not expected: {:?}",
+                        env_variable
+                    );
+                }
+            }
+        }
+        assert!(
+            expected_unused_keys.is_empty(),
+            "did not report these unused variables: {:?}",
+            expected_unused_keys
+        );
+
+        collector.update_markdown(&options).unwrap();
+        let incorrect = collector.verify_markdown(&options).unwrap();
+        assert_eq!(incorrect, vec![]);
+
+        let markdown_content = std::fs::read_to_string(markdown.path()).unwrap();
+        assert_eq!(
+            markdown_content,
+            r#"
+[anchor]: <> (anchors.envs.start)
+
+| Variable                            | Req&#x200B;uir&#x200B;ed | Description  | Default value |
+| ----------------------------------- | ------------------------ | ------------ | ------------- |
+| `TEST_SERVICE__TEST5_WITH_UNICODE`  |                          | aboba        | `false`       |
+| `TEST_SERVICE__TEST`                | true                     | e.g. `value` |               |
+| `TEST_SERVICE__STRING_WITH_DEFAULT` |                          |              | `kekek`       |
+| `TEST_SERVICE__TEST2`               |                          | e.g. `123`   | `1000`        |
+| `TEST_SERVICE__TEST3_SET`           |                          | e.g. `false` | `null`        |
+| `TEST_SERVICE__TEST4_NOT_SET`       |                          |              | `null`        |
 
 [anchor]: <> (anchors.envs.end)
 "#
