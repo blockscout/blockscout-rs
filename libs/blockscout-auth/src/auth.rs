@@ -19,6 +19,14 @@ pub struct AuthSuccess {
     pub watchlist_id: i64,
     pub email_verified: bool,
 }
+#[derive(Debug, Clone, Deserialize)]
+pub struct UserInfo {
+    pub address_hash: String,
+    pub avatar: String,
+    pub email: Option<String>,
+    pub name: String,
+    pub nickname: String,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 struct AuthFailed {
