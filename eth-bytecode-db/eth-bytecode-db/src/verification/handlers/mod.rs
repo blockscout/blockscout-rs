@@ -12,10 +12,11 @@ pub mod vyper_standard_json;
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 use super::{
-    AllianceBatchImportResult, AllianceContractImportResult, db,
+    db,
     errors::Error,
     smart_contract_verifier,
     types::{BytecodeType, DatabaseReadySource, Source, VerificationMetadata, VerificationType},
+    AllianceBatchImportResult, AllianceContractImportResult,
 };
 use crate::verification::types::AllianceContract;
 use anyhow::Context;
