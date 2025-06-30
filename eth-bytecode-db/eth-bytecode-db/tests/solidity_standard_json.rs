@@ -3,8 +3,8 @@ mod verification_test_helpers;
 use async_trait::async_trait;
 use entity::sea_orm_active_enums;
 use eth_bytecode_db::verification::{
-    Client, Error, Source, SourceType, VerificationMetadata, VerificationRequest,
-    solidity_standard_json, solidity_standard_json::StandardJson,
+    solidity_standard_json, solidity_standard_json::StandardJson, Client, Error, Source,
+    SourceType, VerificationMetadata, VerificationRequest,
 };
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::{
@@ -12,7 +12,7 @@ use smart_contract_verifier_proto::{
     http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
 };
 use tonic::Response;
-use verification_test_helpers::{VerifierService, generate_verification_request};
+use verification_test_helpers::{generate_verification_request, VerifierService};
 
 const DB_PREFIX: &str = "solidity_standard_json";
 

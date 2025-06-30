@@ -1,13 +1,13 @@
 use super::{
-    MatchContract,
-    candidates::{BytecodeCandidate, get_matches_by_candidates},
+    candidates::{get_matches_by_candidates, BytecodeCandidate},
     types::BytecodeRemote,
+    MatchContract,
 };
 use crate::metrics;
 use entity::{bytecode_parts, bytecodes, parts, sea_orm_active_enums};
 use sea_orm::{
-    ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Statement, TransactionTrait,
-    entity::prelude::*,
+    entity::prelude::*, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Statement,
+    TransactionTrait,
 };
 
 pub async fn find_match_contracts<C>(

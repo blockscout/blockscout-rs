@@ -1,5 +1,5 @@
 use super::MatchContract;
-use crate::{ToHex, verification::MatchType};
+use crate::{verification::MatchType, ToHex};
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
 use std::collections::BTreeMap;

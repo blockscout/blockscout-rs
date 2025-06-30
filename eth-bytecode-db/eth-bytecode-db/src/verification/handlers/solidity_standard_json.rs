@@ -5,7 +5,7 @@ use super::{
         smart_contract_verifier::{BytecodeType, VerifySolidityStandardJsonRequest},
         types::{Source, VerificationRequest, VerificationType},
     },
-    EthBytecodeDbAction, VerifierAllianceDbAction, process_verify_response,
+    process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier_proto::http_client::solidity_verifier_client;

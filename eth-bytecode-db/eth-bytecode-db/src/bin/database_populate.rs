@@ -1,5 +1,5 @@
 use entity::sources;
-use eth_bytecode_db::tests::verifier_mock::{ContractInfo, ContractType, generate_and_insert};
+use eth_bytecode_db::tests::verifier_mock::{generate_and_insert, ContractInfo, ContractType};
 use sea_orm::{Database, DatabaseConnection, EntityTrait, PaginatorTrait};
 use std::sync::Arc;
 use tokio::sync::Semaphore;

@@ -2,8 +2,8 @@ mod verification_test_helpers;
 
 use async_trait::async_trait;
 use eth_bytecode_db::verification::{
-    Client, Error, Source, SourceType, VerificationMetadata, sourcify,
-    sourcify::VerificationRequest,
+    sourcify, sourcify::VerificationRequest, Client, Error, Source, SourceType,
+    VerificationMetadata,
 };
 use rstest::{fixture, rstest};
 use smart_contract_verifier_proto::{

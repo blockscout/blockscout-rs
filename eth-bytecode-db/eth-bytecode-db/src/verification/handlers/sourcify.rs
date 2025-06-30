@@ -1,9 +1,9 @@
 use super::{
     super::{
-        VerificationMetadata, client::Client, errors::Error,
-        smart_contract_verifier::VerifySourcifyRequest, types::Source,
+        client::Client, errors::Error, smart_contract_verifier::VerifySourcifyRequest,
+        types::Source, VerificationMetadata,
     },
-    EthBytecodeDbAction, VerifierAllianceDbAction, process_verify_response,
+    process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier_proto::http_client::sourcify_verifier_client;

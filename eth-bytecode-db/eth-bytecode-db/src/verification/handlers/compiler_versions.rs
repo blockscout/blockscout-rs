@@ -1,4 +1,4 @@
-use super::super::{Client, smart_contract_verifier::ListCompilerVersionsRequest};
+use super::super::{smart_contract_verifier::ListCompilerVersionsRequest, Client};
 use anyhow::Error;
 use smart_contract_verifier_proto::http_client::{solidity_verifier_client, vyper_verifier_client};
 

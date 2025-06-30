@@ -1,7 +1,7 @@
 use anyhow::Context;
 use sea_orm::{
-    ActiveModelBehavior, ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, EntityTrait,
-    IntoActiveModel, ModelTrait, PrimaryKeyToColumn, QueryFilter, sea_query::OnConflict,
+    sea_query::OnConflict, ActiveModelBehavior, ActiveModelTrait, ColumnTrait, ConnectionTrait,
+    DbErr, EntityTrait, IntoActiveModel, ModelTrait, PrimaryKeyToColumn, QueryFilter,
 };
 
 pub async fn insert_then_select<C, Entity, ActiveModel>(

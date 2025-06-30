@@ -1,5 +1,5 @@
 use stylus_verifier_proto::grpc::health::v1::{
-    HealthCheckRequest, HealthCheckResponse, health_check_response, health_server::Health,
+    health_check_response, health_server::Health, HealthCheckRequest, HealthCheckResponse,
 };
 
 #[derive(Default)]

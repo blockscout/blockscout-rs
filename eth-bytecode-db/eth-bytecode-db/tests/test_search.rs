@@ -5,7 +5,7 @@ use entity::{sea_orm_active_enums::BytecodeType, sources};
 use eth_bytecode_db::{
     search::eth_bytecode_db_find_contract,
     tests::verifier_mock::{
-        BytecodePart, ContractInfo, ContractType, PartTy, VerificationResult, generate_and_insert,
+        generate_and_insert, BytecodePart, ContractInfo, ContractType, PartTy, VerificationResult,
     },
     verification::MatchType,
 };

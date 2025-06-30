@@ -1,11 +1,11 @@
 use anyhow::Context;
 use bollard::{
-    Docker,
     container::{
         self, AttachContainerOptions, CreateContainerOptions, LogOutput, UploadToContainerOptions,
     },
     image::{BuildImageOptions, BuilderVersion},
     models::HostConfig,
+    Docker,
 };
 use futures_util::stream::StreamExt;
 use semver::Version;

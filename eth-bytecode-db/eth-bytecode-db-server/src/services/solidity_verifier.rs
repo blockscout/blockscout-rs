@@ -1,16 +1,15 @@
 use super::verifier_base;
 use crate::{
     proto::{
-        ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyResponse,
-        VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
-        solidity_verifier_server,
+        solidity_verifier_server, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
+        VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     },
     types::{BytecodeTypeWrapper, VerificationMetadataWrapper},
 };
 use amplify::Wrapper;
 use async_trait::async_trait;
 use eth_bytecode_db::verification::{
-    Client, VerificationRequest, compiler_versions, solidity_multi_part, solidity_standard_json,
+    compiler_versions, solidity_multi_part, solidity_standard_json, Client, VerificationRequest,
 };
 use std::collections::HashSet;
 use tracing::instrument;

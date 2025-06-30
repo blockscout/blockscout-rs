@@ -1,10 +1,10 @@
 use super::verifier_base;
 use crate::proto::{
-    VerifyFromEtherscanSourcifyRequest, VerifyResponse, VerifySourcifyRequest,
-    sourcify_verifier_server,
+    sourcify_verifier_server, VerifyFromEtherscanSourcifyRequest, VerifyResponse,
+    VerifySourcifyRequest,
 };
 use async_trait::async_trait;
-use eth_bytecode_db::verification::{Client, sourcify, sourcify_from_etherscan};
+use eth_bytecode_db::verification::{sourcify, sourcify_from_etherscan, Client};
 use tracing::instrument;
 
 pub struct SourcifyVerifierService {

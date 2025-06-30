@@ -2,9 +2,9 @@ use crate::settings::DockerApiSettings;
 use async_trait::async_trait;
 use stylus_verifier_logic::stylus_sdk_rs;
 use stylus_verifier_proto::blockscout::stylus_verifier::v1::{
-    CargoStylusVersion, CargoStylusVersions, ListCargoStylusVersionsRequest, VerificationFailure,
+    stylus_sdk_rs_verifier_server::StylusSdkRsVerifier, verify_response, CargoStylusVersion,
+    CargoStylusVersions, ListCargoStylusVersionsRequest, VerificationFailure,
     VerifyGithubRepositoryRequest, VerifyResponse,
-    stylus_sdk_rs_verifier_server::StylusSdkRsVerifier, verify_response,
 };
 use tonic::{Request, Response, Status};
 

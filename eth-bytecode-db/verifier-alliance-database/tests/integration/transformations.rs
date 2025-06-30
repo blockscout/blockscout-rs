@@ -1,5 +1,5 @@
 use verifier_alliance_database::{insert_contract_deployment, insert_verified_contract};
-use verifier_alliance_database_tests::{TestDbGuard, build_all_tests};
+use verifier_alliance_database_tests::{build_all_tests, TestDbGuard};
 
 async fn initialization(
     database_connection: TestDbGuard,

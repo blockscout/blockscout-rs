@@ -1,6 +1,6 @@
 use blockscout_service_launcher::test_database::TestDbGuard;
 use eth_bytecode_db_proto::http_client;
-use verifier_alliance_database_tests::{TestCase, build_all_tests};
+use verifier_alliance_database_tests::{build_all_tests, TestCase};
 
 async fn initialize(database: TestDbGuard, test_case: TestCase) {
     let setup_result = crate::setup(&test_case.test_case_name, database).await;

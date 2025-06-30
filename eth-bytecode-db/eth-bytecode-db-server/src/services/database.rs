@@ -1,10 +1,10 @@
 use crate::{
     proto::{
-        AllianceStats, BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
-        BytecodeType, GetAllianceStatsRequest, SearchAllSourcesRequest, SearchAllSourcesResponse,
-        SearchAllianceSourcesRequest, SearchEventDescriptionsRequest,
-        SearchEventDescriptionsResponse, SearchSourcesRequest, SearchSourcesResponse,
-        SearchSourcifySourcesRequest, Source, VerifyResponse, database_server::Database,
+        database_server::Database, AllianceStats, BatchSearchEventDescriptionsRequest,
+        BatchSearchEventDescriptionsResponse, BytecodeType, GetAllianceStatsRequest,
+        SearchAllSourcesRequest, SearchAllSourcesResponse, SearchAllianceSourcesRequest,
+        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesRequest,
+        SearchSourcesResponse, SearchSourcifySourcesRequest, Source, VerifyResponse,
     },
     types::{BytecodeTypeWrapper, EventDescriptionWrapper, SourceWrapper, VerifyResponseWrapper},
 };

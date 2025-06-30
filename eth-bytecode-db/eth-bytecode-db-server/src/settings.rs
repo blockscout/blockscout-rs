@@ -4,7 +4,7 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::Deserialize;
-use serde_with::{DisplayFromStr, serde_as};
+use serde_with::{serde_as, DisplayFromStr};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]

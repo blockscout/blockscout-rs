@@ -1,15 +1,15 @@
 use super::verifier_base;
 use crate::{
     proto::{
-        ListCompilerVersionsRequest, ListCompilerVersionsResponse, VerifyResponse,
-        VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest, vyper_verifier_server,
+        vyper_verifier_server, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
+        VerifyResponse, VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
     },
     types::{BytecodeTypeWrapper, VerificationMetadataWrapper},
 };
 use amplify::Wrapper;
 use async_trait::async_trait;
 use eth_bytecode_db::verification::{
-    Client, VerificationRequest, compiler_versions, vyper_multi_part, vyper_standard_json,
+    compiler_versions, vyper_multi_part, vyper_standard_json, Client, VerificationRequest,
 };
 use std::collections::HashSet;
 use tracing::instrument;

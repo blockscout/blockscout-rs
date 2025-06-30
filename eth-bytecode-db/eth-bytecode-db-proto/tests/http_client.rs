@@ -1,8 +1,8 @@
 use eth_bytecode_db_proto::{
     blockscout::eth_bytecode_db::v2 as proto,
     http_client::{
-        Client, Config, database_client, mock, solidity_verifier_client, sourcify_verifier_client,
-        verifier_alliance_client, vyper_verifier_client,
+        database_client, mock, solidity_verifier_client, sourcify_verifier_client,
+        verifier_alliance_client, vyper_verifier_client, Client, Config,
     },
 };
 use tonic::Response;
@@ -75,43 +75,36 @@ async fn database_service() {
             .await
             .is_ok()
     );
-    assert!(
-        database_client::search_sourcify_sources(
-            &client,
-            proto::SearchSourcifySourcesRequest::default()
-        )
-        .await
-        .is_ok()
-    );
-    assert!(
-        database_client::search_alliance_sources(
-            &client,
-            proto::SearchAllianceSourcesRequest::default()
-        )
-        .await
-        .is_ok()
-    );
-    assert!(
-        database_client::search_all_sources(&client, proto::SearchAllSourcesRequest::default())
-            .await
-            .is_ok()
-    );
-    assert!(
-        database_client::search_event_descriptions(
-            &client,
-            proto::SearchEventDescriptionsRequest::default()
-        )
-        .await
-        .is_ok()
-    );
-    assert!(
-        database_client::batch_search_event_descriptions(
-            &client,
-            proto::BatchSearchEventDescriptionsRequest::default()
-        )
-        .await
-        .is_ok()
-    );
+    assert!(database_client::search_sourcify_sources(
+        &client,
+        proto::SearchSourcifySourcesRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(database_client::search_alliance_sources(
+        &client,
+        proto::SearchAllianceSourcesRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(database_client::search_all_sources(
+        &client,
+        proto::SearchAllSourcesRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(database_client::search_event_descriptions(
+        &client,
+        proto::SearchEventDescriptionsRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(database_client::batch_search_event_descriptions(
+        &client,
+        proto::BatchSearchEventDescriptionsRequest::default()
+    )
+    .await
+    .is_ok());
 }
 
 #[tokio::test]
@@ -143,30 +136,24 @@ async fn solidity_verifier_service() {
     let client =
         build_client(mock::EthBytecodeDbServer::new().solidity_service(mock_service)).await;
 
-    assert!(
-        solidity_verifier_client::verify_multi_part(
-            &client,
-            proto::VerifySolidityMultiPartRequest::default()
-        )
-        .await
-        .is_ok()
-    );
-    assert!(
-        solidity_verifier_client::verify_standard_json(
-            &client,
-            proto::VerifySolidityStandardJsonRequest::default()
-        )
-        .await
-        .is_ok()
-    );
-    assert!(
-        solidity_verifier_client::list_compiler_versions(
-            &client,
-            proto::ListCompilerVersionsRequest::default()
-        )
-        .await
-        .is_ok()
-    );
+    assert!(solidity_verifier_client::verify_multi_part(
+        &client,
+        proto::VerifySolidityMultiPartRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(solidity_verifier_client::verify_standard_json(
+        &client,
+        proto::VerifySolidityStandardJsonRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(solidity_verifier_client::list_compiler_versions(
+        &client,
+        proto::ListCompilerVersionsRequest::default()
+    )
+    .await
+    .is_ok());
 }
 
 #[tokio::test]
@@ -197,30 +184,24 @@ async fn vyper_verifier_service() {
 
     let client = build_client(mock::EthBytecodeDbServer::new().vyper_service(mock_service)).await;
 
-    assert!(
-        vyper_verifier_client::verify_multi_part(
-            &client,
-            proto::VerifyVyperMultiPartRequest::default()
-        )
-        .await
-        .is_ok()
-    );
-    assert!(
-        vyper_verifier_client::verify_standard_json(
-            &client,
-            proto::VerifyVyperStandardJsonRequest::default()
-        )
-        .await
-        .is_ok()
-    );
-    assert!(
-        vyper_verifier_client::list_compiler_versions(
-            &client,
-            proto::ListCompilerVersionsRequest::default()
-        )
-        .await
-        .is_ok()
-    );
+    assert!(vyper_verifier_client::verify_multi_part(
+        &client,
+        proto::VerifyVyperMultiPartRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(vyper_verifier_client::verify_standard_json(
+        &client,
+        proto::VerifyVyperStandardJsonRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(vyper_verifier_client::list_compiler_versions(
+        &client,
+        proto::ListCompilerVersionsRequest::default()
+    )
+    .await
+    .is_ok());
 }
 
 #[tokio::test]
@@ -252,14 +233,12 @@ async fn sourcify_verifier_service() {
             .await
             .is_ok()
     );
-    assert!(
-        sourcify_verifier_client::verify_from_etherscan(
-            &client,
-            proto::VerifyFromEtherscanSourcifyRequest::default()
-        )
-        .await
-        .is_ok()
-    );
+    assert!(sourcify_verifier_client::verify_from_etherscan(
+        &client,
+        proto::VerifyFromEtherscanSourcifyRequest::default()
+    )
+    .await
+    .is_ok());
 }
 
 #[tokio::test]
@@ -286,14 +265,12 @@ async fn verifier_alliance_service() {
         build_client(mock::EthBytecodeDbServer::new().verifier_alliance_service(mock_service))
             .await;
 
-    assert!(
-        verifier_alliance_client::batch_import_solidity_multi_part(
-            &client,
-            proto::VerifierAllianceBatchImportSolidityMultiPartRequest::default()
-        )
-        .await
-        .is_ok(),
-    );
+    assert!(verifier_alliance_client::batch_import_solidity_multi_part(
+        &client,
+        proto::VerifierAllianceBatchImportSolidityMultiPartRequest::default()
+    )
+    .await
+    .is_ok(),);
     assert!(
         verifier_alliance_client::batch_import_solidity_standard_json(
             &client,

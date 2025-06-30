@@ -5,7 +5,7 @@ use super::{
         smart_contract_verifier::{BytecodeType, VerifyVyperMultiPartRequest},
         types::{Source, VerificationRequest, VerificationType},
     },
-    EthBytecodeDbAction, VerifierAllianceDbAction, process_verify_response,
+    process_verify_response, EthBytecodeDbAction, VerifierAllianceDbAction,
 };
 use serde::{Deserialize, Serialize};
 use smart_contract_verifier_proto::http_client::vyper_verifier_client;

@@ -1,9 +1,10 @@
 use crate::{
-    ToHex,
     verification::{
-        Client, Error, smart_contract_verifier,
+        smart_contract_verifier,
         types::{AllianceBatchImportResult, AllianceContract, AllianceImportRequest},
+        Client, Error,
     },
+    ToHex,
 };
 use eth_bytecode_db_proto::blockscout::eth_bytecode_db::v2 as eth_bytecode_db_v2;
 use serde::{Deserialize, Serialize};

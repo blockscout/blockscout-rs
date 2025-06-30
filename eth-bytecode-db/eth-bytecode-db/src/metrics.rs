@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use prometheus::{HistogramVec, register_histogram_vec};
+use prometheus::{register_histogram_vec, HistogramVec};
 
 lazy_static! {
     pub static ref ALL_MATCHES_COUNT: HistogramVec = register_histogram_vec!(

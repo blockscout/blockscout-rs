@@ -1,5 +1,5 @@
 use reqwest_middleware::Middleware;
-use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use std::{str::FromStr, sync::Arc};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;

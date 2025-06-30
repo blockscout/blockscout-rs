@@ -222,13 +222,11 @@ async fn search_all_sources(
     let expected_response = SearchAllSourcesResponse {
         eth_bytecode_db_sources: vec![test_data.eth_bytecode_db_response.source.unwrap()],
         sourcify_sources: expected_sourcify_sources,
-        alliance_sources: vec![
-            test_case
-                .to_test_input_data()
-                .eth_bytecode_db_response
-                .source
-                .unwrap(),
-        ],
+        alliance_sources: vec![test_case
+            .to_test_input_data()
+            .eth_bytecode_db_response
+            .source
+            .unwrap()],
     };
 
     assert_eq!(
@@ -261,14 +259,12 @@ async fn search_alliance_sources(
         test_server::send_post_request(&setup_data.eth_bytecode_db_base, ROUTE, &request).await;
 
     let expected_response = SearchSourcesResponse {
-        sources: vec![
-            setup_data
-                .test_case
-                .to_test_input_data()
-                .eth_bytecode_db_response
-                .source
-                .unwrap(),
-        ],
+        sources: vec![setup_data
+            .test_case
+            .to_test_input_data()
+            .eth_bytecode_db_response
+            .source
+            .unwrap()],
     };
 
     assert_eq!(
@@ -810,14 +806,12 @@ async fn search_alliance_contract_without_metadata_hash_returns_partial_match(
         test_server::send_post_request(&setup_data.eth_bytecode_db_base, ROUTE, &request).await;
 
     let expected_response = SearchSourcesResponse {
-        sources: vec![
-            setup_data
-                .test_case
-                .to_test_input_data()
-                .eth_bytecode_db_response
-                .source
-                .unwrap(),
-        ],
+        sources: vec![setup_data
+            .test_case
+            .to_test_input_data()
+            .eth_bytecode_db_response
+            .source
+            .unwrap()],
     };
 
     assert_eq!(

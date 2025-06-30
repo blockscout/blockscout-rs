@@ -1,7 +1,7 @@
 use super::{
-    MatchContract,
     matches::find_match_contracts,
     types::{BytecodeRemote, BytecodeType},
+    MatchContract,
 };
 use crate::{
     metrics,
