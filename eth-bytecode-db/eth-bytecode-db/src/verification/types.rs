@@ -500,7 +500,7 @@ pub struct VerificationMetadata {
 
 impl From<VerificationMetadata> for smart_contract_verifier::VerificationMetadata {
     fn from(value: VerificationMetadata) -> Self {
-        let chain_id = value.chain_id.map(|id| format!("{}", id));
+        let chain_id = value.chain_id.map(|id| format!("{id}"));
         let contract_address = value
             .contract_address
             .map(|address| blockscout_display_bytes::Bytes::from(address).to_string());
