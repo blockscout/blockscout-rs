@@ -9,11 +9,17 @@ impl MigrationTrait for Migration {
         let sql = r#"
             ALTER TABLE "celestia_blobs"
                 ALTER COLUMN "data" DROP NOT NULL,
-                ADD COLUMN "data_s3_object_key" varchar;
+                ADD COLUMN "data_s3_object_key" varchar,
+                ADD CONSTRAINT "data_integrity"
+                    CHECK ("data" IS NOT NULL AND "data_s3_object_key" IS NULL 
+                        OR "data" IS NULL AND "data_s3_object_key" IS NOT NULL);
 
             ALTER TABLE "eigenda_blobs"
                 ALTER COLUMN "data" DROP NOT NULL,
-                ADD COLUMN "data_s3_object_key" varchar;
+                ADD COLUMN "data_s3_object_key" varchar,
+                ADD CONSTRAINT "data_integrity"
+                    CHECK ("data" IS NOT NULL AND "data_s3_object_key" IS NULL 
+                        OR "data" IS NULL AND "data_s3_object_key" IS NOT NULL);
         "#;
         crate::from_sql(manager, sql).await
     }
