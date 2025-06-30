@@ -1,11 +1,11 @@
 use anyhow::Context;
 use bollard::{
+    Docker,
     container::{
         self, AttachContainerOptions, CreateContainerOptions, LogOutput, UploadToContainerOptions,
     },
     image::{BuildImageOptions, BuilderVersion},
     models::HostConfig,
-    Docker,
 };
 use futures_util::stream::StreamExt;
 use semver::Version;
@@ -161,7 +161,9 @@ RUN rustup component add rust-src --toolchain {toolchain}-x86_64-unknown-linux-g
                     error = err.to_string(),
                     "unknown error while building an image"
                 );
-                anyhow::bail!("unknown error while building an image; image_name={image_name}, output={output}, error={err}");
+                anyhow::bail!(
+                    "unknown error while building an image; image_name={image_name}, output={output}, error={err}"
+                );
             }
         }
     }

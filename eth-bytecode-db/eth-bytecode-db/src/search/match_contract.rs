@@ -8,8 +8,8 @@ use bytes::Bytes;
 use entity::{files, sources};
 use ethabi::Constructor;
 use sea_orm::{
-    prelude::{DateTime, DbErr},
     ConnectionTrait, EntityTrait,
+    prelude::{DateTime, DbErr},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

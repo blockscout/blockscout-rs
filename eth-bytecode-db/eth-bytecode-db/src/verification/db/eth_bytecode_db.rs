@@ -1,5 +1,5 @@
 use super::{
-    super::{types, BytecodeType},
+    super::{BytecodeType, types},
     insert_then_select,
 };
 use crate::verification::VerificationMetadata;
@@ -9,9 +9,9 @@ use entity::{
     verified_contracts,
 };
 use sea_orm::{
-    entity::prelude::ColumnTrait, prelude::Uuid, sea_query::OnConflict, ActiveModelTrait,
-    ActiveValue::Set, ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction,
-    DbErr, EntityTrait, QueryFilter, Statement, TransactionTrait,
+    ActiveModelTrait, ActiveValue::Set, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    DatabaseTransaction, DbErr, EntityTrait, QueryFilter, Statement, TransactionTrait,
+    entity::prelude::ColumnTrait, prelude::Uuid, sea_query::OnConflict,
 };
 use std::collections::{BTreeMap, BTreeSet};
 

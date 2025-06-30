@@ -1,10 +1,10 @@
 use crate::helpers;
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use blockscout_display_bytes::ToHex;
 use sea_orm::{
-    prelude::{Decimal, Uuid},
     ActiveValue::Set,
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
+    prelude::{Decimal, Uuid},
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};

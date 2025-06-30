@@ -1,9 +1,4 @@
 use crate::blockscout::eth_bytecode_db::v2::{
-    database_actix::route_database, database_server::Database,
-    solidity_verifier_actix::route_solidity_verifier, solidity_verifier_server::SolidityVerifier,
-    sourcify_verifier_actix::route_sourcify_verifier, sourcify_verifier_server::SourcifyVerifier,
-    verifier_alliance_actix::route_verifier_alliance, verifier_alliance_server::VerifierAlliance,
-    vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifier,
     AllianceStats, BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
     GetAllianceStatsRequest, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
     SearchAllSourcesRequest, SearchAllSourcesResponse, SearchAllianceSourcesRequest,
@@ -13,6 +8,11 @@ use crate::blockscout::eth_bytecode_db::v2::{
     VerifierAllianceBatchImportSolidityStandardJsonRequest, VerifyFromEtherscanSourcifyRequest,
     VerifyResponse, VerifySolidityMultiPartRequest, VerifySolidityStandardJsonRequest,
     VerifySourcifyRequest, VerifyVyperMultiPartRequest, VerifyVyperStandardJsonRequest,
+    database_actix::route_database, database_server::Database,
+    solidity_verifier_actix::route_solidity_verifier, solidity_verifier_server::SolidityVerifier,
+    sourcify_verifier_actix::route_sourcify_verifier, sourcify_verifier_server::SourcifyVerifier,
+    verifier_alliance_actix::route_verifier_alliance, verifier_alliance_server::VerifierAlliance,
+    vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifier,
 };
 use mockall::mock;
 use std::{net::SocketAddr, sync::Arc};

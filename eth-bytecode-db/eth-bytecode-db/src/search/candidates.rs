@@ -1,6 +1,6 @@
-use super::{types::BytecodeRemote, MatchContract};
+use super::{MatchContract, types::BytecodeRemote};
 use crate::{
-    search::bytecodes_comparison::{compare, CompareError, LocalBytecode},
+    search::bytecodes_comparison::{CompareError, LocalBytecode, compare},
     verification::MatchType,
 };
 use bytes::Bytes;

@@ -1,13 +1,12 @@
 use crate::{
     proto::{
-        verifier_alliance_server, VerifierAllianceBatchImportResponse,
-        VerifierAllianceBatchImportSolidityMultiPartRequest,
-        VerifierAllianceBatchImportSolidityStandardJsonRequest,
+        VerifierAllianceBatchImportResponse, VerifierAllianceBatchImportSolidityMultiPartRequest,
+        VerifierAllianceBatchImportSolidityStandardJsonRequest, verifier_alliance_server,
     },
     services::verifier_base,
 };
 use async_trait::async_trait;
-use eth_bytecode_db::verification::{verifier_alliance_handler, Client};
+use eth_bytecode_db::verification::{Client, verifier_alliance_handler};
 use std::collections::HashSet;
 use tonic::{Request, Response, Status};
 

@@ -1,6 +1,6 @@
 use crate::verification_test_helpers::{
-    init_alliance_db, init_db, init_eth_bytecode_db_server_with_settings_setup,
-    init_verifier_server, verifier_alliance_types::TestCase, VerifierService,
+    VerifierService, init_alliance_db, init_db, init_eth_bytecode_db_server_with_settings_setup,
+    init_verifier_server, verifier_alliance_types::TestCase,
 };
 use async_trait::async_trait;
 use blockscout_service_launcher::test_database::TestDbGuard;

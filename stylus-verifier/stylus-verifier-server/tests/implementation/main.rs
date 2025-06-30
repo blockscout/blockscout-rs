@@ -66,7 +66,9 @@ async fn expect_annotated_request(
     let status = response.status();
     if status != expected_status {
         let message = response.text().await.expect("Read body as text");
-        panic!("({annotation})Invalid status code ({expected_status} expected). Status: {status}. Message: {message}")
+        panic!(
+            "({annotation})Invalid status code ({expected_status} expected). Status: {status}. Message: {message}"
+        )
     }
 
     response

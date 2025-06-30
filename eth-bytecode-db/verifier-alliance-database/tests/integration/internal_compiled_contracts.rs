@@ -5,7 +5,7 @@ use verification_common::verifier_alliance::{
     CompilationArtifacts, CreationCodeArtifacts, RuntimeCodeArtifacts,
 };
 use verifier_alliance_database::{
-    internal, CompiledContract, CompiledContractCompiler, CompiledContractLanguage,
+    CompiledContract, CompiledContractCompiler, CompiledContractLanguage, internal,
 };
 use verifier_alliance_migration::Migrator;
 

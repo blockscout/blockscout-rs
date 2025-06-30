@@ -1,7 +1,7 @@
 use super::{
+    MatchContract,
     matches::find_match_contracts,
     types::{BytecodeRemote, BytecodeType},
-    MatchContract,
 };
 use crate::{
     metrics,
@@ -101,12 +101,12 @@ fn is_geas_predeploy(
         let details = GeasPredeployDetails::from(predeploy);
         match code_type {
             sea_orm_active_enums::BytecodeType::CreationInput if code == details.creation_code => {
-                return Some(details)
+                return Some(details);
             }
             sea_orm_active_enums::BytecodeType::DeployedBytecode
                 if code == details.runtime_code =>
             {
-                return Some(details)
+                return Some(details);
             }
             _ => {}
         }

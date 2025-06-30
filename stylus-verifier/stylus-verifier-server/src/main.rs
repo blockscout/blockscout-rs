@@ -1,5 +1,5 @@
 use blockscout_service_launcher::launcher::ConfigSettings;
-use stylus_verifier_server::{run, Settings};
+use stylus_verifier_server::{Settings, run};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

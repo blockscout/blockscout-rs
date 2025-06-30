@@ -5,8 +5,8 @@ mod config;
 pub mod mock;
 
 pub use client::{
-    database_client, health_client, solidity_verifier_client, sourcify_verifier_client,
-    verifier_alliance_client, vyper_verifier_client, Client,
+    Client, database_client, health_client, solidity_verifier_client, sourcify_verifier_client,
+    verifier_alliance_client, vyper_verifier_client,
 };
 pub use config::Config;
 

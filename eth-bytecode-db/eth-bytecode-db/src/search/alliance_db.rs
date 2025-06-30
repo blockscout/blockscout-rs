@@ -1,5 +1,5 @@
 use super::MatchContract;
-use crate::{verification::MatchType, ToHex};
+use crate::{ToHex, verification::MatchType};
 use anyhow::Context;
 use sea_orm::DatabaseConnection;
 use std::collections::BTreeMap;
@@ -79,9 +79,9 @@ fn extract_file_name(fully_qualified_name: &str) -> Result<String, anyhow::Error
     let file_name_parts = fully_qualified_name.split(':').collect::<Vec<_>>();
     if file_name_parts.len() < 2 {
         anyhow::bail!(
-                "the contract has invalid fully_qualified_name: at least one ':' symbol should exist: {}",
-                fully_qualified_name
-            )
+            "the contract has invalid fully_qualified_name: at least one ':' symbol should exist: {}",
+            fully_qualified_name
+        )
     }
     // We discard the last element, as it should be a contract name
     Ok(file_name_parts[..file_name_parts.len() - 1].join(":"))

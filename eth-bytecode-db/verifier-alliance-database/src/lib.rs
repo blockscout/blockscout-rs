@@ -17,7 +17,7 @@ pub use types::{
 
 /************************ Public methods **************************/
 
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
 pub async fn insert_contract_deployment(

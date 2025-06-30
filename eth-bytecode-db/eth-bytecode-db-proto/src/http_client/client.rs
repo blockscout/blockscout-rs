@@ -1,4 +1,4 @@
-use super::{config, Error, Result};
+use super::{Error, Result, config};
 use crate::blockscout::eth_bytecode_db::v2 as proto;
 
 const API_KEY_NAME: &str = "x-api-key";
@@ -131,7 +131,7 @@ impl Client {
 }
 
 pub mod database_client {
-    use super::{proto, Client, Result};
+    use super::{Client, Result, proto};
 
     pub async fn search_sources(
         client: &Client,
@@ -178,7 +178,7 @@ pub mod database_client {
 }
 
 pub mod solidity_verifier_client {
-    use super::{proto, Client, Result};
+    use super::{Client, Result, proto};
 
     pub async fn verify_multi_part(
         client: &Client,
@@ -210,7 +210,7 @@ pub mod solidity_verifier_client {
 }
 
 pub mod vyper_verifier_client {
-    use super::{proto, Client, Result};
+    use super::{Client, Result, proto};
 
     pub async fn verify_multi_part(
         client: &Client,
@@ -242,7 +242,7 @@ pub mod vyper_verifier_client {
 }
 
 pub mod sourcify_verifier_client {
-    use super::{proto, Client, Result};
+    use super::{Client, Result, proto};
 
     pub async fn verify(
         client: &Client,
@@ -266,7 +266,7 @@ pub mod sourcify_verifier_client {
 }
 
 pub mod verifier_alliance_client {
-    use super::{proto, Client, Result};
+    use super::{Client, Result, proto};
 
     pub async fn batch_import_solidity_multi_part(
         client: &Client,
@@ -290,7 +290,7 @@ pub mod verifier_alliance_client {
 }
 
 pub mod health_client {
-    use super::{proto, Client, Result};
+    use super::{Client, Result, proto};
 
     pub async fn health(
         client: &Client,

@@ -4,7 +4,7 @@ use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use std::{collections::BTreeMap, fs, path::PathBuf};
 use stylus_verifier_proto::blockscout::stylus_verifier::v1::{
-    verify_response, VerificationSuccess, VerifyGithubRepositoryRequest, VerifyResponse,
+    VerificationSuccess, VerifyGithubRepositoryRequest, VerifyResponse, verify_response,
 };
 use url::Url;
 

@@ -17,9 +17,9 @@ async fn test_versions<Service>(
     verifier_response: smart_contract_verifier_v2::ListCompilerVersionsResponse,
 ) where
     Service: VerifierService<
-        eth_bytecode_db_v2::ListCompilerVersionsRequest,
-        smart_contract_verifier_v2::ListCompilerVersionsResponse,
-    >,
+            eth_bytecode_db_v2::ListCompilerVersionsRequest,
+            smart_contract_verifier_v2::ListCompilerVersionsResponse,
+        >,
 {
     let db = verification_test_helpers::init_db(TEST_SUITE_NAME, test_name).await;
     let verifier_addr =

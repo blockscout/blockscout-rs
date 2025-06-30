@@ -84,7 +84,6 @@ where
                     current_l_res,
                     LowerRes::from_smaller(h_res.clone()),
                     "must've returned only data within current lower res timespan ({current_l_res:?}); got {h_res:?}",
-                    
                 );
                 match values {
                     EitherOrBoth::Both(avg, weight) => {

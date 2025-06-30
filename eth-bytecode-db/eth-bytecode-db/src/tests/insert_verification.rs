@@ -8,10 +8,10 @@ use entity::{
     source_files, sources,
 };
 use sea_orm::{
-    entity::prelude::*,
-    sea_query::{Alias, Expr},
     ActiveValue::Set,
     DatabaseTransaction, TransactionTrait,
+    entity::prelude::*,
+    sea_query::{Alias, Expr},
 };
 
 pub async fn insert_verification_result(
