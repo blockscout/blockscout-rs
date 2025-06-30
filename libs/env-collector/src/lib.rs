@@ -1,8 +1,9 @@
 use anyhow::Context;
+use clap::Parser;
 use config::{Config, File};
 use itertools::{Either, Itertools};
 use json_dotpath::DotPaths;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
@@ -44,7 +45,7 @@ pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(settings: EnvColle
         settings.anchor_postfix,
         settings.format_markdown,
     );
-    let options = EnvCollectorOptions::from_env().expect("Failed to parse env options");
+    let options = EnvCollectorOptions::parse();
     let incorrect = collector
         .verify_markdown(&options)
         .expect("Failed to find incorrect variables");
@@ -72,24 +73,18 @@ pub fn run_env_collector_cli<S: Serialize + DeserializeOwned>(settings: EnvColle
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Parser, Debug, Default)]
+#[command(version, about, long_about = None)]
 pub struct EnvCollectorOptions {
-    #[serde(default)]
+    /// Only validate the markdown file, do not update it
+    #[arg(long)]
     validate_only: bool,
-    #[serde(default)]
-    consider_defaults: bool,
-    #[serde(default)]
-    remove_unused_envs: bool,
-}
-
-impl EnvCollectorOptions {
-    pub fn from_env() -> Result<Self, anyhow::Error> {
-        let options: Self = Config::builder()
-            .add_source(config::Environment::default())
-            .build()?
-            .try_deserialize()?;
-        Ok(options)
-    }
+    /// Skip default values when validating and updating markdown
+    #[arg(long)]
+    ignore_defaults: bool,
+    /// Do not remove variables from the markdown file absent in the config
+    #[arg(long)]
+    keep_unused: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -137,8 +132,8 @@ where
             self.config_path.as_path(),
             self.vars_filter.clone(),
             self.anchor_postfix.clone(),
-            options.consider_defaults,
-            options.remove_unused_envs,
+            !options.ignore_defaults,
+            !options.keep_unused,
         )
     }
 
@@ -150,8 +145,8 @@ where
             self.vars_filter.clone(),
             self.anchor_postfix.clone(),
             self.format_markdown,
-            options.consider_defaults,
-            options.remove_unused_envs,
+            !options.ignore_defaults,
+            !options.keep_unused,
         )
     }
 }
@@ -881,7 +876,10 @@ mod tests {
             None,
             true,
         );
-        let options = EnvCollectorOptions::default();
+        let options = EnvCollectorOptions {
+            keep_unused: true,
+            ..Default::default()
+        };
 
         let incorrect = collector
             .verify_markdown(&options)
@@ -965,10 +963,7 @@ mod tests {
             None,
             true,
         );
-        let options = EnvCollectorOptions {
-            consider_defaults: true,
-            ..Default::default()
-        };
+        let options = EnvCollectorOptions::default();
 
         let incorrect = collector
             .verify_markdown(&options)
@@ -1044,10 +1039,7 @@ mod tests {
             None,
             true,
         );
-        let options = EnvCollectorOptions {
-            remove_unused_envs: true,
-            ..Default::default()
-        };
+        let options = EnvCollectorOptions::default();
 
         let incorrect = collector.verify_markdown(&options).unwrap();
         let mut expected_unused_keys = HashSet::from(["SOME_EXTRA_VARS", "SOME_EXTRA_VARS2"]);
