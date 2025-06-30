@@ -1,12 +1,12 @@
 [package]
 name = "stylus-verifier-logic"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 alloy-json-abi = { workspace = true }
 anyhow = { workspace = true }
-blockscout-display-bytes = { workspace = true } # conversion related
+blockscout-display-bytes = { workspace = true }      # conversion related
 bollard = { workspace = true }
 bytes = { workspace = true }
 flate2 = { workspace = true }

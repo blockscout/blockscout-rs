@@ -1,6 +1,6 @@
 use crate::docker;
 use alloy_json_abi::JsonAbi;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use blockscout_display_bytes::ToHex;
 use bytes::Bytes;
 use git2::Repository;
@@ -169,7 +169,7 @@ async fn github_repository_clone_and_checkout(
     let commit_object = match repo.revparse_single(commit) {
         Ok(commit_object) => commit_object,
         Err(err) if err.code() == git2::ErrorCode::NotFound => {
-            return Err(Error::CommitNotFound(commit.to_string()))
+            return Err(Error::CommitNotFound(commit.to_string()));
         }
         Err(err) => return Err(err).context("failed to parse commit hash")?,
     };
@@ -286,13 +286,12 @@ async fn retrieve_source_files(root_dir: &Path) -> Result<BTreeMap<String, Strin
                     continue; // Skip "target" and ".git" directories
                 }
                 directories.push(path);
-            } else if path.file_name().map_or(false, |f| {
-                // By default include `rust-toolchain.toml`, `Cargo.toml`, `Cargo.lock`, and `.rs` files.
-                f == "rust-toolchain.toml"
+            } else if let Some(f) = path.file_name()
+                && (f == "rust-toolchain.toml"
                     || f == "Cargo.toml"
                     || f == "Cargo.lock"
-                    || f.to_string_lossy().ends_with(".rs")
-            }) {
+                    || f.to_string_lossy().ends_with(".rs"))
+            {
                 let file_path = path
                     .strip_prefix(root_dir)
                     .expect("path got as a result of 'root_dir' iterating")
@@ -321,7 +320,7 @@ fn process_export_abi_output(output: &str) -> Result<Option<(String, serde_json:
 
     contract_names
         .drain(..)
-        .last()
+        .next_back()
         .map(|name| {
             let json_abi = JsonAbi::parse(signatures).context("failed to parse json abi")?;
             let value = serde_json::to_value(json_abi).context("failed to serialize json abi")?;

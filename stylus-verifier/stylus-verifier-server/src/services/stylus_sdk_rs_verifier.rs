@@ -2,9 +2,9 @@ use crate::settings::DockerApiSettings;
 use async_trait::async_trait;
 use stylus_verifier_logic::stylus_sdk_rs;
 use stylus_verifier_proto::blockscout::stylus_verifier::v1::{
-    stylus_sdk_rs_verifier_server::StylusSdkRsVerifier, verify_response, CargoStylusVersion,
-    CargoStylusVersions, ListCargoStylusVersionsRequest, VerificationFailure,
+    CargoStylusVersion, CargoStylusVersions, ListCargoStylusVersionsRequest, VerificationFailure,
     VerifyGithubRepositoryRequest, VerifyResponse,
+    stylus_sdk_rs_verifier_server::StylusSdkRsVerifier, verify_response,
 };
 use tonic::{Request, Response, Status};
 
@@ -74,6 +74,8 @@ impl StylusSdkRsVerifier for StylusSdkRsVerifierService {
     }
 }
 
+// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
+#[allow(clippy::result_large_err)]
 fn process_verify_result(
     result: Result<stylus_sdk_rs::Success, stylus_sdk_rs::Error>,
 ) -> Result<Response<VerifyResponse>, Status> {
@@ -90,6 +92,8 @@ fn process_verify_result(
     }
 }
 
+// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
+#[allow(clippy::result_large_err)]
 fn process_error(error: stylus_sdk_rs::Error) -> Result<Response<VerifyResponse>, Status> {
     let verify_response = match error {
         stylus_sdk_rs::Error::VerificationFailed(_)
@@ -103,7 +107,7 @@ fn process_error(error: stylus_sdk_rs::Error) -> Result<Response<VerifyResponse>
             })
         }
         stylus_sdk_rs::Error::BadRequest(_) => {
-            return Err(Status::invalid_argument(error.to_string()))
+            return Err(Status::invalid_argument(error.to_string()));
         }
         stylus_sdk_rs::Error::Internal(_) => return Err(Status::internal(error.to_string())),
     };

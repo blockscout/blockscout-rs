@@ -75,10 +75,7 @@ pub async fn run_reproducible(
 }
 
 fn version_to_image_name(cargo_stylus_version: &Version, toolchain: &Version) -> String {
-    format!(
-        "blockscout/cargo-stylus:{}-rust-{}",
-        cargo_stylus_version, toolchain
-    )
+    format!("blockscout/cargo-stylus:{cargo_stylus_version}-rust-{toolchain}",)
 }
 
 async fn image_exists(docker: &Docker, name: &str) -> Result<bool, anyhow::Error> {
