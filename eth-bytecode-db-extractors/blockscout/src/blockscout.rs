@@ -324,8 +324,10 @@ mod smart_contracts {
 
     #[derive(Debug, Deserialize)]
     pub struct Response {
+        #[allow(unused)]
         pub verified_at: chrono::DateTime<chrono::FixedOffset>,
 
+        #[allow(unused)]
         pub compiler_version: String,
         pub source_code: String,
         pub file_path: Option<String>,

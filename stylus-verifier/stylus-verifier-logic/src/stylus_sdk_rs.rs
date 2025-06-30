@@ -169,7 +169,7 @@ async fn github_repository_clone_and_checkout(
     let commit_object = match repo.revparse_single(commit) {
         Ok(commit_object) => commit_object,
         Err(err) if err.code() == git2::ErrorCode::NotFound => {
-            return Err(Error::CommitNotFound(commit.to_string()))
+            return Err(Error::CommitNotFound(commit.to_string()));
         }
         Err(err) => return Err(err).context("failed to parse commit hash")?,
     };
@@ -286,8 +286,7 @@ async fn retrieve_source_files(root_dir: &Path) -> Result<BTreeMap<String, Strin
                     continue; // Skip "target" and ".git" directories
                 }
                 directories.push(path);
-            } else if path.file_name().map_or(false, |f| {
-                // By default include `rust-toolchain.toml`, `Cargo.toml`, `Cargo.lock`, and `.rs` files.
+            } else if path.file_name().is_some_and(|f| {
                 f == "rust-toolchain.toml"
                     || f == "Cargo.toml"
                     || f == "Cargo.lock"
@@ -319,15 +318,16 @@ fn process_export_abi_output(output: &str) -> Result<Option<(String, serde_json:
         signatures.extend(items);
     }
 
-    contract_names
+    let out = contract_names
         .drain(..)
-        .last()
+        .next_back()
         .map(|name| {
             let json_abi = JsonAbi::parse(signatures).context("failed to parse json abi")?;
             let value = serde_json::to_value(json_abi).context("failed to serialize json abi")?;
             Ok((name, value))
         })
-        .transpose()
+        .transpose();
+    out
 }
 
 fn skip_till_next_interface(lines: &mut Lines) -> Option<String> {

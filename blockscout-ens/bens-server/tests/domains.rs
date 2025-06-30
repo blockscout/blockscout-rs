@@ -352,13 +352,11 @@ async fn different_protocols_scenario(base: Url, settings: &Settings) {
 
     assert!(
         names.contains(&"abcnews.gno"),
-        "No abcnews.gno in response, names={:?}",
-        names
+        "No abcnews.gno in response, names={names:?}"
     );
     assert!(
         names.contains(&"abcnews.eth"),
-        "No abcnews.eth in response, names={:?}",
-        names
+        "No abcnews.eth in response, names={names:?}"
     );
 
     let route_with_query = build_query(

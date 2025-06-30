@@ -636,7 +636,7 @@ mod tests {
 
     fn tempfile_with_content(content: &str, format: &str) -> tempfile::NamedTempFile {
         let mut file = tempfile::Builder::new().suffix(format).tempfile().unwrap();
-        writeln!(file, "{}", content).unwrap();
+        writeln!(file, "{content}").unwrap();
         file
     }
 
@@ -1042,21 +1042,19 @@ mod tests {
         for reported in incorrect {
             match reported {
                 ReportedVariable::Incorrect(env_variable) => {
-                    panic!("must not have incorrect variables, got: {:?}", env_variable)
+                    panic!("must not have incorrect variables, got: {env_variable:?}")
                 }
                 ReportedVariable::Unused(env_variable) => {
                     assert!(
                         expected_unused_keys.remove(env_variable.key.as_str()),
-                        "reported unused variable that was not expected: {:?}",
-                        env_variable
+                        "reported unused variable that was not expected: {env_variable:?}"
                     );
                 }
             }
         }
         assert!(
             expected_unused_keys.is_empty(),
-            "did not report these unused variables: {:?}",
-            expected_unused_keys
+            "did not report these unused variables: {expected_unused_keys:?}"
         );
 
         collector.update_markdown(&options).unwrap();

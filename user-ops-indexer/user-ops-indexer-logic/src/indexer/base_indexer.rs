@@ -475,7 +475,7 @@ mod tests {
     use std::fs;
 
     fn load_test_responses(test_name: &str) -> Vec<serde_json::Value> {
-        let path = format!("src/indexer/tests/fixtures/{}.json", test_name);
+        let path = format!("src/indexer/tests/fixtures/{test_name}.json",);
         let data = fs::read_to_string(path).expect("Unable to read test fixture file");
         serde_json::from_str(&data).expect("Unable to parse test fixture JSON")
     }

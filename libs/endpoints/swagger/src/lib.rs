@@ -22,20 +22,16 @@ pub fn route_swagger(
 pub fn default_swagger_path_from_service_name(service_name: &str) -> PathBuf {
     let options = [
         PathBuf::from(format!(
-            "./{}-proto/swagger/{}.swagger.yaml",
-            service_name, service_name
+            "./{service_name}-proto/swagger/{service_name}.swagger.yaml",
         )),
         PathBuf::from(format!(
-            "./{}-proto/swagger/v1/{}.swagger.yaml",
-            service_name, service_name
+            "./{service_name}-proto/swagger/v1/{service_name}.swagger.yaml",
         )),
         PathBuf::from(format!(
-            "../{}-proto/swagger/{}.swagger.yaml",
-            service_name, service_name
+            "../{service_name}-proto/swagger/{service_name}.swagger.yaml",
         )),
         PathBuf::from(format!(
-            "../{}-proto/swagger/v1/{}.swagger.yaml",
-            service_name, service_name
+            "../{service_name}-proto/swagger/v1/{service_name}.swagger.yaml",
         )),
     ];
 

@@ -203,9 +203,9 @@ pub async fn run_consolidated_tests(mut tests: JoinSet<()>, log_prefix: &str) {
     let passed = total - failed;
     let msg = format!("[{log_prefix}]: {passed}/{total} consolidated tests passed");
     if failed > 0 {
-        panic!("{}", msg)
+        panic!("{msg}")
     } else {
-        println!("{}", msg)
+        println!("{msg}")
     }
 }
 

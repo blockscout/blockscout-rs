@@ -72,7 +72,7 @@ impl fmt::Display for EntityStatus {
             EntityStatus::Processing => "Processing",
             EntityStatus::Finalized => "Finalized",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -576,11 +576,11 @@ impl TacDatabase {
         )];
         if let Some(start) = from {
             let start_naive = timestamp_to_naive(start as i64);
-            conditions.push(format!("start >= '{}'", start_naive));
+            conditions.push(format!("start >= '{start_naive}'"));
         }
         if let Some(finish) = to {
             let finish_naive = timestamp_to_naive(finish as i64);
-            conditions.push(format!(r#"finish < '{}'"#, finish_naive));
+            conditions.push(format!(r#"finish < '{finish_naive}'"#));
         }
 
         let sql = self.build_interval_query(

@@ -18,7 +18,7 @@ pub fn bytes_from_hex_or_base64(s: &str, name: &str) -> Result<Vec<u8>, Status> 
         .map(|b| b.to_vec())
         .or_else(|_| BASE64_STANDARD.decode(s))
         .map_err(|err| {
-            tracing::error!(error = ?err, "failed to decode {}", name);
-            Status::invalid_argument(format!("failed to decode {}", name))
+            tracing::error!(error = ?err, "failed to decode {name}");
+            Status::invalid_argument(format!("failed to decode {name}"))
         })
 }

@@ -346,8 +346,7 @@ fn parse_timestamp_secs(timestamp: i64) -> Result<NaiveDateTime, ParseError> {
     match chrono::DateTime::from_timestamp(timestamp, 0) {
         Some(dt) => Ok(dt.naive_utc()),
         None => Err(ParseError::Custom(format!(
-            "invalid timestamp: {}",
-            timestamp
+            "invalid timestamp: {timestamp}",
         ))),
     }
 }

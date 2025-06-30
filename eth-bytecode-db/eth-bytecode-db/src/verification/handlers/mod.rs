@@ -257,13 +257,13 @@ async fn from_response_to_source(
         (smart_contract_verifier::Status::Failure, _, _) => {
             return Err(Error::VerificationFailed {
                 message: response.message,
-            })
+            });
         }
         _ => {
             return Err(Error::Internal(
                 anyhow::anyhow!("invalid status: {}", response.status)
                     .context("verifier service connection"),
-            ))
+            ));
         }
     };
 

@@ -108,7 +108,7 @@ async fn test_lookup_methods(#[files("tests/test_cases_lookup_methods/*")] test_
         .filter(|e| e.severity == Severity::Error)
         .collect::<Vec<_>>();
     if !errors.is_empty() {
-        panic!("errors during compilation: {:?}", errors);
+        panic!("errors during compilation: {errors:?}");
     }
 
     let (request, methods) = process_compiler_output(&output, &test_case.contract_name).unwrap();

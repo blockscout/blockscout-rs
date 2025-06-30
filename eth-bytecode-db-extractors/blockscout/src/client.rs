@@ -370,8 +370,7 @@ impl Client {
         .update(self.db_client.as_ref())
         .await
         .context(format!(
-            "saving success details failed for the contract {}",
-            contract_address,
+            "saving success details failed for the contract {contract_address}",
         ))?;
 
         Ok(())

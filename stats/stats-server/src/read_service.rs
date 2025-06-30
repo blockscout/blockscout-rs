@@ -329,9 +329,10 @@ impl ReadService {
         points_limit: Option<RequestedPointsLimit>,
         query_time: DateTime<Utc>,
     ) -> Result<proto_v1::LineChart, Status> {
-        let chart_entry = self.charts.charts_info.get(&name).ok_or_else(|| {
-            Status::not_found(format!("chart with name '{}' was not found", name))
-        })?;
+        let chart_entry =
+            self.charts.charts_info.get(&name).ok_or_else(|| {
+                Status::not_found(format!("chart with name '{name}' was not found"))
+            })?;
         let query_handle =
             get_line_chart_query_handle(chart_entry, resolution).ok_or_else(|| {
                 Status::not_found(format!(
@@ -631,15 +632,14 @@ impl StatsService for ReadService {
             .from
             .map(|s| NaiveDate::from_str(&s))
             .transpose()
-            .map_err(|e| Status::invalid_argument(format!("`from` should be a valid date: {}", e)))?
+            .map_err(|e| Status::invalid_argument(format!("`from` should be a valid date: {e}")))?
             .map(|update_from| {
                 let current_date = Utc::now().date_naive();
                 if update_from <= current_date {
                     Ok(update_from)
                 } else {
                     Err(Status::invalid_argument(format!(
-                        "`from` should not be from a future; current date: {}",
-                        current_date
+                        "`from` should not be from a future; current date: {current_date}"
                     )))
                 }
             })
