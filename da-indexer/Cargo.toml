@@ -35,12 +35,13 @@ hex = { version = "0.4.3" }
 http = { version = "1.1.0" }
 jsonrpsee = { version = "0.24.7", features = ["client-core", "macros"] }
 lazy_static = { version = "1.4.0" }
+md5 = { version = "0.8.0" }
+minio = { version = "0.3.0" }
 prost = { version = "0.13" }
 prost-build = "0.13"
 reqwest = { version = "0.12.5", features = ["json"] }
 reqwest-middleware = { version = "0.3.3" }
 reqwest-retry = { version = "0.6.1" }
-rust-s3 = { version = "0.35.1"}
 sea-orm = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "postgres-array"] }
 sea-orm-migration = { version = "1.1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 serde = { version = "1.0" }

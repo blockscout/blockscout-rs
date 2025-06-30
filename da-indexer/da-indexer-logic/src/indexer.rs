@@ -39,15 +39,15 @@ pub struct Indexer {
 impl Indexer {
     pub async fn new(
         db: Arc<DatabaseConnection>,
-        _s3_storage: Option<S3Storage>,
+        s3_storage: Option<S3Storage>,
         settings: IndexerSettings,
     ) -> Result<Self> {
         let da: Box<dyn DA + Send + Sync> = match settings.da.clone() {
-            DASettings::Celestia(settings) => {
-                Box::new(celestia::da::CelestiaDA::new(db.clone(), settings).await?)
-            }
+            DASettings::Celestia(settings) => Box::new(
+                celestia::da::CelestiaDA::new(db.clone(), s3_storage.clone(), settings).await?,
+            ),
             DASettings::EigenDA(settings) => {
-                Box::new(eigenda::da::EigenDA::new(db.clone(), settings).await?)
+                Box::new(eigenda::da::EigenDA::new(db.clone(), s3_storage.clone(), settings).await?)
             }
         };
         Ok(Self {

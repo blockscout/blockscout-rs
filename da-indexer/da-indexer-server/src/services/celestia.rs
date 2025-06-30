@@ -14,7 +14,7 @@ use tonic::{Request, Response, Status};
 #[derive(Default)]
 pub struct CelestiaService {
     db: Option<DatabaseConnection>,
-    _s3_storage: Option<S3Storage>,
+    s3_storage: Option<S3Storage>,
     l2_router: Option<L2Router>,
 }
 
@@ -26,7 +26,7 @@ impl CelestiaService {
     ) -> Self {
         Self {
             db,
-            _s3_storage: s3_storage,
+            s3_storage,
             l2_router,
         }
     }
@@ -47,13 +47,14 @@ impl Celestia for CelestiaService {
         let height = inner.height;
         let commitment = bytes_from_hex_or_base64(&inner.commitment, "commitment")?;
 
-        let blob = blobs::find_by_height_and_commitment(db, height, &commitment)
-            .await
-            .map_err(|err| {
-                tracing::error!(error = ?err, "failed to query blob");
-                Status::internal("failed to query blob")
-            })?
-            .ok_or(Status::not_found("blob not found"))?;
+        let blob =
+            blobs::find_by_height_and_commitment(db, self.s3_storage.as_ref(), height, &commitment)
+                .await
+                .map_err(|err| {
+                    tracing::error!(error = ?err, "failed to query blob");
+                    Status::internal("failed to query blob")
+                })?
+                .ok_or(Status::not_found("blob not found"))?;
 
         let data =
             (!inner.skip_data.unwrap_or_default()).then_some(BASE64_STANDARD.encode(&blob.data));
