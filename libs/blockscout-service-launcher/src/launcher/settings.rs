@@ -128,15 +128,11 @@ impl TryFrom<String> for BasePath {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if !value.starts_with("/") {
-            return Err(format!(
-                "Invalid base path '{}': must start with '/'",
-                value
-            ));
+            return Err(format!("Invalid base path '{value}': must start with '/'",));
         };
         if value.ends_with("/") {
             return Err(format!(
-                "Invalid base path '{}': must not end with '/'",
-                value
+                "Invalid base path '{value}': must not end with '/'",
             ));
         };
         Ok(Self(value))
