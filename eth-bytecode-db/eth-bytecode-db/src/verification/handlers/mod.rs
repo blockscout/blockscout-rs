@@ -12,11 +12,10 @@ pub mod vyper_standard_json;
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 use super::{
-    db,
+    AllianceBatchImportResult, AllianceContractImportResult, db,
     errors::Error,
     smart_contract_verifier,
     types::{BytecodeType, DatabaseReadySource, Source, VerificationMetadata, VerificationType},
-    AllianceBatchImportResult, AllianceContractImportResult,
 };
 use crate::verification::types::AllianceContract;
 use anyhow::Context;
@@ -257,13 +256,13 @@ async fn from_response_to_source(
         (smart_contract_verifier::Status::Failure, _, _) => {
             return Err(Error::VerificationFailed {
                 message: response.message,
-            })
+            });
         }
         _ => {
             return Err(Error::Internal(
                 anyhow::anyhow!("invalid status: {}", response.status)
                     .context("verifier service connection"),
-            ))
+            ));
         }
     };
 
