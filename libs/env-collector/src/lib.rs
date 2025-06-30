@@ -132,8 +132,7 @@ where
             self.config_path.as_path(),
             self.vars_filter.clone(),
             self.anchor_postfix.clone(),
-            options.ignore_defaults,
-            options.ignore_unused,
+            options,
         )
     }
 
@@ -145,8 +144,7 @@ where
             self.vars_filter.clone(),
             self.anchor_postfix.clone(),
             self.format_markdown,
-            options.ignore_defaults,
-            options.ignore_unused,
+            options,
         )
     }
 }
@@ -360,8 +358,7 @@ fn find_mistakes_in_markdown<S>(
     config_path: &Path,
     vars_filter: PrefixFilter,
     anchor_postfix: Option<String>,
-    ignore_defaults: bool,
-    ignore_unused: bool,
+    options: &EnvCollectorOptions,
 ) -> Result<Vec<ReportedVariable>, anyhow::Error>
 where
     S: Serialize + DeserializeOwned,
@@ -386,13 +383,13 @@ where
         .filter(|(id, value)| {
             let maybe_markdown_var = markdown.vars.get(*id);
             maybe_markdown_var
-                .map(|var| !var.eq_with_ignores(value, ignore_defaults))
+                .map(|var| !var.eq_with_ignores(value, options.ignore_defaults))
                 .unwrap_or(true)
         })
         .map(|(_, value)| ReportedVariable::Incorrect(value.clone()))
         .collect();
 
-    if !ignore_unused {
+    if !options.ignore_unused {
         let unused = markdown
             .vars
             .iter()
@@ -410,8 +407,7 @@ fn update_markdown_file<S>(
     vars_filter: PrefixFilter,
     anchor_postfix: Option<String>,
     format_markdown: bool,
-    ignore_defaults: bool,
-    ignore_unused: bool,
+    options: &EnvCollectorOptions,
 ) -> Result<(), anyhow::Error>
 where
     S: Serialize + DeserializeOwned,
@@ -429,10 +425,10 @@ where
             .as_str(),
         anchor_postfix.clone(),
     )?;
-    if !ignore_unused {
+    if !options.ignore_unused {
         markdown_config.remove_unused_envs(&from_config);
     }
-    markdown_config.update_no_override(from_config, ignore_defaults);
+    markdown_config.update_no_override(from_config, options.ignore_defaults);
     let table = serialize_env_vars_to_md_table(markdown_config, format_markdown);
 
     let content = std::fs::read_to_string(markdown_path).context("failed to read markdown file")?;
