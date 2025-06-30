@@ -483,7 +483,7 @@ fn try_get_description(_key: &str, value: &str, default: &Option<serde_json::Val
         return Default::default();
     }
 
-    format!("e.g. `{}`", value)
+    format!("e.g. `{value}`")
 }
 
 fn from_key_to_json_path(key: &str, service_prefix: &str) -> String {
@@ -562,7 +562,7 @@ fn json_value_to_env_value(json: &Value) -> String {
             .map(json_value_to_env_value)
             .collect::<Vec<String>>()
             .join(","),
-        _ => panic!("unsupported value type: {:?}", json),
+        _ => panic!("unsupported value type: {json:?}"),
     }
 }
 
@@ -573,7 +573,7 @@ fn _flat_json(json: &Value, prefix: &str, env_vars: &mut BTreeMap<String, String
                 let new_prefix = if prefix.is_empty() {
                     key.to_string()
                 } else {
-                    format!("{}__{}", prefix, key)
+                    format!("{prefix}__{key}")
                 };
                 _flat_json(value, &new_prefix, env_vars);
             }
