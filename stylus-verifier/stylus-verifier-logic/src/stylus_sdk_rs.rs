@@ -1,6 +1,6 @@
 use crate::docker;
 use alloy_json_abi::JsonAbi;
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use blockscout_display_bytes::ToHex;
 use bytes::Bytes;
 use git2::Repository;
@@ -286,12 +286,12 @@ async fn retrieve_source_files(root_dir: &Path) -> Result<BTreeMap<String, Strin
                     continue; // Skip "target" and ".git" directories
                 }
                 directories.push(path);
-            } else if let Some(f) = path.file_name()
-                && (f == "rust-toolchain.toml"
+            } else if path.file_name().is_some_and(|f| {
+                f == "rust-toolchain.toml"
                     || f == "Cargo.toml"
                     || f == "Cargo.lock"
-                    || f.to_string_lossy().ends_with(".rs"))
-            {
+                    || f.to_string_lossy().ends_with(".rs")
+            }) {
                 let file_path = path
                     .strip_prefix(root_dir)
                     .expect("path got as a result of 'root_dir' iterating")
@@ -318,7 +318,7 @@ fn process_export_abi_output(output: &str) -> Result<Option<(String, serde_json:
         signatures.extend(items);
     }
 
-    contract_names
+    let out = contract_names
         .drain(..)
         .next_back()
         .map(|name| {
@@ -326,7 +326,8 @@ fn process_export_abi_output(output: &str) -> Result<Option<(String, serde_json:
             let value = serde_json::to_value(json_abi).context("failed to serialize json abi")?;
             Ok((name, value))
         })
-        .transpose()
+        .transpose();
+    out
 }
 
 fn skip_till_next_interface(lines: &mut Lines) -> Option<String> {
