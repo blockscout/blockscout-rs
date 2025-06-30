@@ -35,6 +35,8 @@ impl SignatureService for Service {
     }
 }
 
+// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
+#[allow(clippy::result_large_err)]
 fn decode(str: &str) -> Result<Vec<u8>, tonic::Status> {
     hex::decode(str.strip_prefix("0x").unwrap_or(str))
         .map_err(|e| tonic::Status::invalid_argument(e.to_string()))
@@ -105,6 +107,8 @@ impl AbiService for Service {
     }
 }
 
+// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
+#[allow(clippy::result_large_err)]
 fn parse_topics(topics: String) -> Result<Vec<H256>, tonic::Status> {
     topics
         .split(',')
