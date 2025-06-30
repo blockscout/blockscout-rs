@@ -46,9 +46,9 @@ pub async fn create_test_chains(db: &DatabaseConnection, n: usize) -> Vec<Chain>
     let chains: Vec<Chain> = (1..=n)
         .map(|i| Chain {
             id: i as i64,
-            name: Some(format!("Chain {}", i)),
-            explorer_url: Some(format!("https://test{}", i)),
-            icon_url: Some(format!("https://test{}", i)),
+            name: Some(format!("Chain {i}")),
+            explorer_url: Some(format!("https://test{i}")),
+            icon_url: Some(format!("https://test{i}")),
         })
         .collect();
 

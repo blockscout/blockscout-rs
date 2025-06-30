@@ -262,7 +262,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         Ok(Response::new(ListTransactionsResponse {
             items: transactions.into_iter().map(|t| t.into()).collect(),
             next_page_params: next_page_token.map(|c| Pagination {
-                page_token: format!("{}", c),
+                page_token: c.to_string(),
                 page_size,
             }),
         }))
@@ -463,7 +463,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         Ok(Response::new(ListInteropMessagesResponse {
             items: interop_messages.into_iter().map(|i| i.into()).collect(),
             next_page_params: next_page_token.map(|(t, h)| Pagination {
-                page_token: format!("{},{}", t, h),
+                page_token: format!("{t},{h}"),
                 page_size,
             }),
         }))
@@ -491,8 +491,7 @@ fn parse_query<T: FromStr>(input: String) -> Result<T, Status>
 where
     <T as FromStr>::Err: std::fmt::Display,
 {
-    T::from_str(&input)
-        .map_err(|e| Status::invalid_argument(format!("invalid value {}: {e}", input)))
+    T::from_str(&input).map_err(|e| Status::invalid_argument(format!("invalid value {input}: {e}")))
 }
 
 #[allow(clippy::result_large_err)]

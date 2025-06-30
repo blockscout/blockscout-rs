@@ -203,8 +203,7 @@ impl FromStr for MessageDirection {
             "from" => Ok(MessageDirection::From),
             "to" => Ok(MessageDirection::To),
             _ => Err(ParseError::Custom(format!(
-                "invalid message direction: {}",
-                s
+                "invalid message direction: {s}",
             ))),
         }
     }
