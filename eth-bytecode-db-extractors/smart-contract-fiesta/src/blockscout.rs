@@ -192,7 +192,7 @@ impl Client {
                                                     "missed href for the transaction element"
                                                 )
                                             })?;
-                                            let tx_hash = href.split('/').last().ok_or_else(
+                                            let tx_hash = href.split('/').next_back().ok_or_else(
                                                 || anyhow::anyhow!("missed transaction hash in the transaction href element")
                                             )?;
                                             return Bytes::from_str(tx_hash).context(
