@@ -81,11 +81,11 @@ impl Indexer {
         while let Err(err) = &self.da.process_job(job.clone()).await {
             match backoff.next() {
                 Some(delay) => {
-                    tracing::warn!(error = ?err, job = ?job, ?delay, "failed to process job, retrying");
+                    tracing::warn!(error = %err, job = ?job, ?delay, "failed to process job, retrying");
                     sleep(delay).await;
                 }
                 None => {
-                    tracing::error!(error = ?err, job = ?job, "failed to process job, skipping for now, will retry later");
+                    tracing::error!(error = %err, job = ?job, "failed to process job, skipping for now, will retry later");
                     self.failed_jobs.lock().await.insert(job.clone());
                     break;
                 }
@@ -101,7 +101,7 @@ impl Indexer {
         .filter_map(|fut| async {
             fut.await
                 .map_err(
-                    |err: Error| tracing::error!(error = ?err, "failed to retrieve unprocessed jobs"),
+                    |err: Error| tracing::error!(error = %err, "failed to retrieve unprocessed jobs"),
                 )
                 .ok()
         })
@@ -117,7 +117,7 @@ impl Indexer {
         })
         .filter_map(|fut| async {
             fut.await
-                .map_err(|err: Error| tracing::error!(error = ?err, "failed to poll for new jobs"))
+                .map_err(|err: Error| tracing::error!(error = %err, "failed to poll for new jobs"))
                 .ok()
         })
         .flat_map(stream::iter)
@@ -135,7 +135,7 @@ impl Indexer {
         })
         .filter_map(|fut| async {
             fut.await
-                .map_err(|err: Error| tracing::error!(error = ?err, "failed to retry failed jobs"))
+                .map_err(|err: Error| tracing::error!(error = %err, "failed to retry failed jobs"))
                 .ok()
         })
         .flat_map(stream::iter)
