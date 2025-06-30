@@ -46,6 +46,7 @@ impl Settings {
             swagger_path: default_swagger_path(),
             database: Some(DatabaseSettings {
                 connect: DatabaseConnectSettings::Url(database_url),
+                connect_options: Default::default(),
                 create_database: Default::default(),
                 run_migrations: Default::default(),
             }),
