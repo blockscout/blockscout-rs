@@ -19,6 +19,8 @@ pub struct S3StorageSettings {
     pub secret_access_key: String,
     pub save_concurrency_limit: Option<usize>,
     #[serde(default)]
+    pub create_bucket: bool,
+    #[serde(default)]
     pub validate_on_initialization: bool,
 }
 
@@ -53,6 +55,12 @@ impl S3Storage {
             None,
         )
         .context("s3 client initialization failed")?;
+
+        if settings.create_bucket {
+            Self::create_bucket_if_not_exists(&client, &settings.bucket)
+                .await
+                .context("bucket initialization failed")?;
+        }
 
         if settings.validate_on_initialization {
             let bucket_exists_response = client
@@ -129,5 +137,21 @@ impl S3Storage {
                 Ok(())
             })
             .await
+    }
+
+    async fn create_bucket_if_not_exists(
+        s3_client: &s3::Client,
+        bucket_name: &str,
+    ) -> Result<(), anyhow::Error> {
+        let result = s3_client.create_bucket(bucket_name).send().await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(s3::error::Error::S3Error(error))
+                if error.code == s3::error::ErrorCode::BucketAlreadyOwnedByYou =>
+            {
+                Ok(())
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 }

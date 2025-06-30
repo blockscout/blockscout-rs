@@ -38,6 +38,7 @@ mod s3_storage {
             access_key_id: client_with_details.access_key_id,
             secret_access_key: client_with_details.secret_access_key,
             save_concurrency_limit: None,
+            create_bucket: false,
             validate_on_initialization: true,
         })
         .await
