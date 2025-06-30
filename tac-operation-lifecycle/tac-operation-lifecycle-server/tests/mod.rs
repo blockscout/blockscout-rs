@@ -86,19 +86,17 @@ mod tests {
         tasks_number: u64,
         current_epoch: u64,
     ) {
-        let db_name = format!(
-            "save_intervals_{}_{}_{}",
-            catchup_interval_secs, tasks_number, current_epoch
-        );
+        let db_name =
+            format!("save_intervals_{catchup_interval_secs}_{tasks_number}_{current_epoch}");
         let db = init_db(&db_name).await;
         let conn_with_db = Database::connect(&db.db_url()).await.unwrap();
 
         let lag = tasks_number * catchup_interval_secs;
         let start_timestamp = current_epoch - lag;
-        println!("start_timestamp: {}", start_timestamp);
-        println!("catchup_interval: {}", catchup_interval_secs);
-        println!("tasks_number: {}", tasks_number);
-        println!("current_epoch: {}", current_epoch);
+        println!("start_timestamp: {start_timestamp}");
+        println!("catchup_interval: {catchup_interval_secs}");
+        println!("tasks_number: {tasks_number}");
+        println!("current_epoch: {current_epoch}");
 
         // Initialize mock server and associated client
         use wiremock::MockServer;
@@ -225,23 +223,23 @@ mod tests {
                     match job {
                         IndexerJob::Interval(interval_job) => {
                             let thread_id = std::thread::current().id();
-                            println!("Thread {:?} Received interval job: {:?}", thread_id, interval_job);
+                            println!("Thread {thread_id:?} Received interval job: {interval_job:?}");
                             // Ensure we haven't seen this interval before
                             let interval_key = (interval_job.interval.start, interval_job.interval.finish);
                             let (start, end) = interval_key;
-                            assert!(!seen_intervals.contains(&interval_key), "Received duplicate interval: {:?}", interval_key);
+                            assert!(!seen_intervals.contains(&interval_key), "Received duplicate interval: {interval_key:?}", );
                             seen_intervals.insert(interval_key);
 
                             // Verify job timestamps are within expected range
                             assert!(
                                 start.with_nanosecond(0).unwrap() >=
                                 start_timestamp.with_nanosecond(0).unwrap(),
-                                "Job start time {} is before start_timestamp {}", start, start_timestamp
+                                "Job start time {start} is before start_timestamp {start_timestamp}"
                             );
                             assert!(
                                 end.with_nanosecond(0).unwrap() <=
                                 current_epoch.with_nanosecond(0).unwrap(),
-                                "Job end time {} is after current_epoch {}", end, current_epoch
+                                "Job end time {end} is after current_epoch {current_epoch}"
                             );
                             // Verify job interval matches catchup_interval
                             assert_eq!((end - start).num_seconds() as u64, catchup_interval.as_secs(),
@@ -257,10 +255,10 @@ mod tests {
 
                             if let Some(interval) = intervals {
                                 assert_eq!(interval.status, StatusEnum::Processing,
-                                    "Interval with start={}, end={} not marked as in-progress",
-                                    start, end);
+                                    "Interval with start={start}, end={end} not marked as in-progress"
+                                );
                             } else {
-                                panic!("Could not find interval for job {:?}", interval_job);
+                                panic!("Could not find interval for job {interval_job:?}");
                             }
 
                             received_jobs.push(interval_job);
@@ -285,7 +283,7 @@ mod tests {
 
         println!("--------------------------------");
         println!("Received {} jobs", received_jobs.len());
-        println!("all_jobs_received: {}", all_jobs_received);
+        println!("all_jobs_received: {all_jobs_received}");
         println!("--------------------------------");
 
         // Verify we received all expected jobs
@@ -441,7 +439,7 @@ mod tests {
                     match job {
                         IndexerJob::Interval(interval_job) => {
                             // Process the interval job
-                            println!("Processing interval job: {:?}", interval_job);
+                            println!("Processing interval job: {interval_job:?}");
                             let start = interval_job.interval.start.and_utc().timestamp();
                             let end = interval_job.interval.finish.and_utc().timestamp();
                             if let Err(e) = indexer.fetch_historical_operations(&interval_job).instrument(tracing::info_span!(
@@ -450,7 +448,7 @@ mod tests {
                                 start = start,
                                 end = end,
                             )).await {
-                                panic!("Failed to fetch operations: {} ", e);
+                                panic!("Failed to fetch operations: {e} ");
                             }
 
                             // Verify interval contains our target timestamp
