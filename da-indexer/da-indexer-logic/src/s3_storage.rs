@@ -52,6 +52,12 @@ impl S3Storage {
                 .context("bucket initialization failed")?;
         }
 
+        if settings.create_bucket {
+            Self::create_bucket_if_not_exists(&client, &settings.bucket)
+                .await
+                .context("bucket initialization failed")?;
+        }
+
         if settings.validate_on_initialization {
             Self::validate_bucket(&client, &settings.bucket)
                 .await
@@ -193,5 +199,21 @@ impl S3Storage {
             }
         }
         Ok(())
+    }
+
+    async fn create_bucket_if_not_exists(
+        s3_client: &s3::Client,
+        bucket_name: &str,
+    ) -> Result<(), anyhow::Error> {
+        let result = s3_client.create_bucket(bucket_name).send().await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(s3::error::Error::S3Error(error))
+                if error.code == s3::error::ErrorCode::BucketAlreadyOwnedByYou =>
+            {
+                Ok(())
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 }
