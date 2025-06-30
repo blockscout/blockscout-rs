@@ -84,7 +84,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             .max_lifetime(settings.database.connect_options.max_lifetime)
             .after_connect(|conn, _meta| {
                 Box::pin(async move {
-                    conn.execute(format!("SET application_name = '{}';", SERVICE_NAME).as_str())
+                    conn.execute(format!("SET application_name = '{SERVICE_NAME}';").as_str())
                         .await?;
                     conn.execute("SET statement_timeout = '60s';").await?;
                     Ok(())

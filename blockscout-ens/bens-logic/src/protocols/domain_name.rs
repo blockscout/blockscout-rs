@@ -36,8 +36,8 @@ impl DomainName {
     }
 
     pub fn addr_reverse(addr: &Address) -> Self {
-        let label_name = format!("{:x}", addr);
-        let name = format!("{}.addr.reverse", label_name);
+        let label_name = format!("{addr:x}");
+        let name = format!("{label_name}.addr.reverse");
         Self::new(&name, None).expect("addr.reverse is always valid")
     }
 
