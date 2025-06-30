@@ -84,7 +84,7 @@ pub struct EnvCollectorOptions {
     ignore_defaults: bool,
     /// Do not remove variables from the markdown file absent in the config
     #[arg(long)]
-    keep_unused: bool,
+    ignore_unused: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -132,8 +132,8 @@ where
             self.config_path.as_path(),
             self.vars_filter.clone(),
             self.anchor_postfix.clone(),
-            !options.ignore_defaults,
-            !options.keep_unused,
+            options.ignore_defaults,
+            options.ignore_unused,
         )
     }
 
@@ -145,8 +145,8 @@ where
             self.vars_filter.clone(),
             self.anchor_postfix.clone(),
             self.format_markdown,
-            !options.ignore_defaults,
-            !options.keep_unused,
+            options.ignore_defaults,
+            options.ignore_unused,
         )
     }
 }
@@ -200,15 +200,15 @@ impl EnvVariable {
         filter_non_ascii(lhs) == filter_non_ascii(rhs)
     }
 
-    pub fn eq_with_ignores(&self, other: &Self, consider_defaults: bool) -> bool {
-        let is_default_equal = if consider_defaults {
-            self.default_value == other.default_value
-        } else {
+    pub fn eq_with_ignores(&self, other: &Self, ignore_defaults: bool) -> bool {
+        let are_defaults_equal = if ignore_defaults {
             true
+        } else {
+            self.default_value == other.default_value
         };
         Self::strings_equal_in_ascii(&self.key, &other.key)
             && self.required == other.required
-            && is_default_equal
+            && are_defaults_equal
     }
 }
 
@@ -313,10 +313,10 @@ impl Envs {
         Ok(result)
     }
 
-    pub fn update_no_override(&mut self, other: Envs, override_defaults: bool) {
+    pub fn update_no_override(&mut self, other: Envs, ignore_defaults: bool) {
         for (id, value) in other.vars {
             let entry = self.vars.entry(id).or_insert(value.clone());
-            if override_defaults {
+            if !ignore_defaults {
                 entry.default_value = value.default_value;
             }
         }
@@ -360,8 +360,8 @@ fn find_mistakes_in_markdown<S>(
     config_path: &Path,
     vars_filter: PrefixFilter,
     anchor_postfix: Option<String>,
-    consider_defaults: bool,
-    report_unused_envs: bool,
+    ignore_defaults: bool,
+    ignore_unused: bool,
 ) -> Result<Vec<ReportedVariable>, anyhow::Error>
 where
     S: Serialize + DeserializeOwned,
@@ -386,13 +386,13 @@ where
         .filter(|(id, value)| {
             let maybe_markdown_var = markdown.vars.get(*id);
             maybe_markdown_var
-                .map(|var| !var.eq_with_ignores(value, consider_defaults))
+                .map(|var| !var.eq_with_ignores(value, ignore_defaults))
                 .unwrap_or(true)
         })
         .map(|(_, value)| ReportedVariable::Incorrect(value.clone()))
         .collect();
 
-    if report_unused_envs {
+    if !ignore_unused {
         let unused = markdown
             .vars
             .iter()
@@ -410,8 +410,8 @@ fn update_markdown_file<S>(
     vars_filter: PrefixFilter,
     anchor_postfix: Option<String>,
     format_markdown: bool,
-    consider_defaults: bool,
-    remove_unused_envs: bool,
+    ignore_defaults: bool,
+    ignore_unused: bool,
 ) -> Result<(), anyhow::Error>
 where
     S: Serialize + DeserializeOwned,
@@ -429,10 +429,10 @@ where
             .as_str(),
         anchor_postfix.clone(),
     )?;
-    if remove_unused_envs {
+    if !ignore_unused {
         markdown_config.remove_unused_envs(&from_config);
     }
-    markdown_config.update_no_override(from_config, consider_defaults);
+    markdown_config.update_no_override(from_config, ignore_defaults);
     let table = serialize_env_vars_to_md_table(markdown_config, format_markdown);
 
     let content = std::fs::read_to_string(markdown_path).context("failed to read markdown file")?;
@@ -877,7 +877,7 @@ mod tests {
             true,
         );
         let options = EnvCollectorOptions {
-            keep_unused: true,
+            ignore_unused: true,
             ..Default::default()
         };
 
