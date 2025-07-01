@@ -1,3 +1,4 @@
+use crate::metrics;
 use anyhow::Context;
 use aws_credential_types::Credentials;
 use aws_sdk_s3::{self as s3, config::Region};
@@ -102,31 +103,37 @@ impl S3Storage {
     }
 
     pub async fn insert_many(&self, objects: Vec<S3Object>) -> Result<(), anyhow::Error> {
-        futures::stream::iter(objects)
-            .map(Ok)
-            .try_for_each_concurrent(self.save_concurrency_limit, |object| async move {
-                let content_md5 = Self::calculate_content_md5(&object.content);
+        metrics::S3_BULK_UPLOAD_TOTAL.inc();
+        {
+            let _timer = metrics::S3_BULK_UPLOAD_TIME.start_timer();
+            futures::stream::iter(objects)
+                .map(Ok::<_, anyhow::Error>)
+                .try_for_each_concurrent(self.save_concurrency_limit, |object| async move {
+                    let content_md5 = Self::calculate_content_md5(&object.content);
 
-                let body = s3::primitives::ByteStream::from(object.content);
-                let response = self
-                    .client
-                    .put_object()
-                    .bucket(&self.bucket)
-                    .key(&object.key)
-                    .body(body)
-                    .content_md5(BASE64_STANDARD.encode(content_md5))
-                    .send()
-                    .await
-                    .context(format!("put object {} into s3 storage failed", object.key))?;
+                    let body = s3::primitives::ByteStream::from(object.content);
+                    let response = self
+                        .client
+                        .put_object()
+                        .bucket(&self.bucket)
+                        .key(&object.key)
+                        .body(body)
+                        .content_md5(BASE64_STANDARD.encode(content_md5))
+                        .send()
+                        .await
+                        .context(format!("put object {} into s3 storage failed", object.key))?;
 
-                // Have to always be false, as the integrity should already be validated
-                // by S3 storage as we provided 'Content-MD5' header. But added additional
-                // check here just in case the header is not supported by the given storage.
-                Self::validate_object_e_tag(&object.key, response.e_tag(), content_md5)?;
+                    // Have to always be false, as the integrity should already be validated
+                    // by S3 storage as we provided 'Content-MD5' header. But added additional
+                    // check here just in case the header is not supported by the given storage.
+                    Self::validate_object_e_tag(&object.key, response.e_tag(), content_md5)?;
 
-                Ok(())
-            })
-            .await
+                    Ok(())
+                })
+                .await?;
+        }
+        metrics::S3_BULK_UPLOAD_SUCCESSES.inc();
+        Ok(())
     }
 
     async fn create_bucket_if_not_exists(

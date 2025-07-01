@@ -23,6 +23,7 @@ http = { workspace = true }
 jsonrpsee = { workspace = true }
 lazy_static = { workspace = true }
 md5 = { workspace = true }
+prometheus = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
