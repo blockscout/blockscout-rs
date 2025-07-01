@@ -18,7 +18,7 @@ async fn celestia_blobs_smoke_test_without_s3_storage() {
     smoke_test(db, None).await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn smoke_test_with_s3_storage() {
     let test_name = "celestia_blobs_smoke_test_with_s3_storage";
     let db = init_db(test_name).await;

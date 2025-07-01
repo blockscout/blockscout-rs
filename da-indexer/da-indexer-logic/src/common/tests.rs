@@ -7,14 +7,8 @@ pub async fn init_db(test_name: &str) -> TestDbGuard {
 pub use s3_storage::{initialize_s3_storage, is_s3_storage_empty};
 mod s3_storage {
     use crate::s3_storage::{S3Storage, S3StorageSettings};
-    use futures::StreamExt;
-    use minio::s3::{
-        self,
-        builders::ObjectToDelete,
-        creds::StaticProvider,
-        response::ListObjectsResponse,
-        types::{S3Api, ToStream},
-    };
+    use aws_credential_types::Credentials;
+    use aws_sdk_s3::{self as s3, config::Region};
 
     struct ClientWithDetails {
         endpoint: String,
@@ -65,14 +59,16 @@ mod s3_storage {
         // Bucket names can consist only of lowercase letters, numbers, periods (.), and hyphens (-)
         let bucket_name = test_name.replace("_", "-");
 
-        let credentials = StaticProvider::new(&access_key_id, &secret_access_key, None);
-        let client = s3::Client::new(
-            endpoint.parse().expect("cannot parse endpoint as url"),
-            Some(Box::new(credentials)),
-            None,
-            None,
-        )
-        .expect("cannot initialize s3 client");
+        let credentials = Credentials::from_keys(&access_key_id, &secret_access_key, None);
+        let region = Region::new("custom-region");
+        let config = s3::Config::builder()
+            .endpoint_url(&endpoint)
+            .credentials_provider(credentials)
+            .region(Some(region))
+            .force_path_style(true)
+            .build();
+
+        let client = s3::Client::from_conf(config);
 
         ClientWithDetails {
             endpoint,
@@ -86,56 +82,68 @@ mod s3_storage {
     async fn initialize_bucket(client: &s3::Client, bucket_name: &str) {
         delete_bucket_if_exists(client, bucket_name).await;
         client
-            .create_bucket(bucket_name)
+            .create_bucket()
+            .bucket(bucket_name)
             .send()
             .await
             .expect("failed to create bucket");
     }
 
     async fn delete_bucket_if_exists(client: &s3::Client, bucket_name: &str) {
-        let bucket_exists = client
-            .bucket_exists(bucket_name)
-            .send()
-            .await
-            .expect("failed to check if bucket exists");
-        if !bucket_exists.exists {
+        if !does_bucket_exist(client, bucket_name).await {
             return;
         }
-
-        delete_bucket_objects(client, bucket_name).await;
+        clear_bucket(client, bucket_name).await;
         client
-            .delete_bucket(bucket_name)
+            .delete_bucket()
+            .bucket(bucket_name)
             .send()
             .await
             .expect("failed to delete existing bucket");
     }
 
-    async fn delete_bucket_objects(client: &s3::Client, bucket_name: &str) {
-        let mut list_objects_stream = client
-            .list_objects(bucket_name)
-            .recursive(true)
-            .to_stream()
-            .await
-            .map(|object| object);
+    async fn clear_bucket(client: &s3::Client, bucket_name: &str) {
+        let mut objects = client
+            .list_objects_v2()
+            .bucket(bucket_name)
+            .into_paginator()
+            .send();
 
-        while let Some(result) = list_objects_stream.next().await {
-            let list_objects: ListObjectsResponse =
-                result.expect("failed to obtain next object to delete");
-            let objects_to_delete: Vec<ObjectToDelete> =
-                list_objects.contents.into_iter().map(Into::into).collect();
-            if !objects_to_delete.is_empty() {
+        while let Some(Ok(page)) = objects.next().await {
+            let keys_to_delete = page
+                .contents
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|object| object.key);
+            for key in keys_to_delete {
                 client
-                    .delete_objects::<_, ObjectToDelete>(bucket_name, objects_to_delete)
+                    .delete_object()
+                    .bucket(bucket_name)
+                    .key(&key)
                     .send()
                     .await
-                    .expect("failed to delete objects");
+                    .expect("failed to delete object");
             }
         }
     }
 
+    async fn does_bucket_exist(client: &s3::Client, bucket_name: &str) -> bool {
+        client
+            .get_bucket_acl()
+            .bucket(bucket_name)
+            .send()
+            .await
+            .is_ok()
+    }
+
     async fn is_bucket_empty(client: &s3::Client, bucket_name: &str) -> bool {
-        let objects = client.list_objects(bucket_name).to_stream().await;
-        let bucket_size = objects.count().await;
-        bucket_size == 0
+        let page = client
+            .list_objects_v2()
+            .bucket(bucket_name)
+            .max_keys(1)
+            .send()
+            .await
+            .expect("failed to list objects");
+        page.key_count.unwrap() == 0
     }
 }

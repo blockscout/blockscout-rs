@@ -1,13 +1,8 @@
 use anyhow::Context;
+use aws_credential_types::Credentials;
+use aws_sdk_s3::{self as s3, config::Region};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use futures::{stream::TryStreamExt, StreamExt};
-use minio::{
-    s3,
-    s3::{
-        multimap::{Multimap, MultimapExt},
-        types::S3Api,
-    },
-};
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -40,21 +35,15 @@ pub struct S3Object {
 
 impl S3Storage {
     pub async fn new(settings: S3StorageSettings) -> anyhow::Result<Self> {
-        let credentials = s3::creds::StaticProvider::new(
-            &settings.access_key_id,
-            &settings.secret_access_key,
-            None,
-        );
-        let client = s3::Client::new(
-            settings
-                .endpoint
-                .parse()
-                .context("parsing endpoint into url failed")?,
-            Some(Box::new(credentials)),
-            None,
-            None,
-        )
-        .context("s3 client initialization failed")?;
+        let credentials =
+            Credentials::from_keys(&settings.access_key_id, &settings.secret_access_key, None);
+        let config = s3::Config::builder()
+            .endpoint_url(&settings.endpoint)
+            .credentials_provider(credentials)
+            .region(Region::new(""))
+            .force_path_style(true) // required to use minio as underlying s3 storage provider
+            .build();
+        let client = s3::Client::from_conf(config);
 
         if settings.create_bucket {
             Self::create_bucket_if_not_exists(&client, &settings.bucket)
@@ -63,14 +52,9 @@ impl S3Storage {
         }
 
         if settings.validate_on_initialization {
-            let bucket_exists_response = client
-                .bucket_exists(&settings.bucket)
-                .send()
+            Self::validate_bucket(&client, &settings.bucket)
                 .await
                 .context("bucket validation failed")?;
-            if !bucket_exists_response.exists {
-                anyhow::bail!("bucket ({}) is not available", settings.bucket);
-            }
         }
 
         Ok(S3Storage {
@@ -81,26 +65,39 @@ impl S3Storage {
     }
 
     pub async fn find_object_by_key(&self, key: &str) -> Result<Option<S3Object>, anyhow::Error> {
-        let result = self.client.get_object(&self.bucket, key).send().await;
+        let result = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await;
         match result {
             Ok(object_response) => {
                 let content = object_response
-                    .content
-                    .to_segmented_bytes()
+                    .body
+                    .collect()
                     .await
-                    .context("download object content")?;
+                    .context("download object content failed")?
+                    .to_vec();
+
+                let e_tag = object_response.e_tag.clone();
+                let content_md5 = Self::calculate_content_md5(&content);
+                Self::validate_object_e_tag(key, e_tag.as_deref(), content_md5)?;
 
                 Ok(Some(S3Object {
                     key: key.to_string(),
-                    content: content.to_bytes().to_vec(),
+                    content,
                 }))
             }
-            Err(s3::error::Error::S3Error(error))
-                if error.code == s3::error::ErrorCode::NoSuchKey =>
-            {
-                Ok(None)
+            Err(error) => {
+                if let Some(error) = error.as_service_error() {
+                    if error.is_no_such_key() {
+                        return Ok(None);
+                    }
+                }
+                Err(error).context("get object by key failed")
             }
-            Err(error) => Err(error).context("get object by key"),
         }
     }
 
@@ -108,18 +105,16 @@ impl S3Storage {
         futures::stream::iter(objects)
             .map(Ok)
             .try_for_each_concurrent(self.save_concurrency_limit, |object| async move {
-                let content_md5 = md5::compute(&object.content);
+                let content_md5 = Self::calculate_content_md5(&object.content);
 
-                let mut content = s3::segmented_bytes::SegmentedBytes::new();
-                content.append(object.content.into());
-
-                let mut extra_headers = Multimap::new();
-                extra_headers.add("Content-MD5", BASE64_STANDARD.encode(content_md5.0));
-
+                let body = s3::primitives::ByteStream::from(object.content);
                 let response = self
                     .client
-                    .put_object(&self.bucket, &object.key, content)
-                    .extra_headers(Some(extra_headers))
+                    .put_object()
+                    .bucket(&self.bucket)
+                    .key(&object.key)
+                    .body(body)
+                    .content_md5(BASE64_STANDARD.encode(content_md5))
                     .send()
                     .await
                     .context(format!("put object {} into s3 storage failed", object.key))?;
@@ -127,12 +122,7 @@ impl S3Storage {
                 // Have to always be false, as the integrity should already be validated
                 // by S3 storage as we provided 'Content-MD5' header. But added additional
                 // check here just in case the header is not supported by the given storage.
-                if response.etag != hex::encode(content_md5.0) {
-                    anyhow::bail!(
-                        "({}) object MD5 checksum does not match returned ETag value",
-                        object.key
-                    )
-                }
+                Self::validate_object_e_tag(&object.key, response.e_tag(), content_md5)?;
 
                 Ok(())
             })
@@ -143,15 +133,58 @@ impl S3Storage {
         s3_client: &s3::Client,
         bucket_name: &str,
     ) -> Result<(), anyhow::Error> {
-        let result = s3_client.create_bucket(bucket_name).send().await;
+        let result = s3_client.create_bucket().bucket(bucket_name).send().await;
         match result {
             Ok(_) => Ok(()),
-            Err(s3::error::Error::S3Error(error))
-                if error.code == s3::error::ErrorCode::BucketAlreadyOwnedByYou =>
-            {
-                Ok(())
+            Err(error) => {
+                if let Some(error) = error.as_service_error() {
+                    if error.is_bucket_already_exists() || error.is_bucket_already_owned_by_you() {
+                        tracing::info!(
+                            bucket = bucket_name,
+                            "trying to create a new bucket; bucket already exists"
+                        );
+                        return Ok(());
+                    }
+                }
+                Err(error.into())
             }
-            Err(error) => Err(error.into()),
         }
+    }
+
+    async fn validate_bucket(
+        s3_client: &s3::Client,
+        bucket_name: &str,
+    ) -> Result<(), anyhow::Error> {
+        // Here we assume that the bucket exists and we have an access to it
+        // if we can list the bucket objects.
+        let _list_object_output = s3_client
+            .list_objects()
+            .bucket(bucket_name)
+            .max_keys(1)
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    fn calculate_content_md5(content: &[u8]) -> [u8; 16] {
+        md5::compute(content).0
+    }
+
+    fn validate_object_e_tag(
+        object_key: &str,
+        e_tag: Option<&str>,
+        content_md5: [u8; 16],
+    ) -> Result<(), anyhow::Error> {
+        if let Some(e_tag) = e_tag {
+            // For some reason, aws-sdk-s3 returns e-tag as a string wrapped in '"' ("\"123...\"")
+            let e_tag = e_tag.trim_start_matches('"').trim_end_matches('"');
+            if e_tag != hex::encode(content_md5) {
+                anyhow::bail!(
+                    "({}) object MD5 checksum does not match returned ETag value",
+                    object_key
+                )
+            }
+        }
+        Ok(())
     }
 }
