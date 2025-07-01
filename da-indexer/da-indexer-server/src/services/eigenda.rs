@@ -1,20 +1,20 @@
+use super::bytes_from_hex_or_base64;
 use crate::proto::eigen_da_service_server::EigenDaService as EigenDa;
 use base64::prelude::*;
-use da_indexer_logic::eigenda::repository::blobs;
+use da_indexer_logic::{eigenda::repository::blobs, s3_storage::S3Storage};
 use da_indexer_proto::blockscout::da_indexer::v1::{EigenDaBlob, GetEigenDaBlobRequest};
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
 
-use super::bytes_from_hex_or_base64;
-
 #[derive(Default)]
 pub struct EigenDaService {
     db: Option<DatabaseConnection>,
+    s3_storage: Option<S3Storage>,
 }
 
 impl EigenDaService {
-    pub fn new(db: Option<DatabaseConnection>) -> Self {
-        Self { db }
+    pub fn new(db: Option<DatabaseConnection>, s3_storage: Option<S3Storage>) -> Self {
+        Self { db, s3_storage }
     }
 }
 
@@ -34,13 +34,18 @@ impl EigenDa for EigenDaService {
         let batch_header_hash =
             bytes_from_hex_or_base64(&inner.batch_header_hash, "batch header hash")?;
 
-        let blob = blobs::find(db, &batch_header_hash, blob_index as i32)
-            .await
-            .map_err(|err| {
-                tracing::error!(error = ?err, "failed to query blob");
-                Status::internal("failed to query blob")
-            })?
-            .ok_or(Status::not_found("blob not found"))?;
+        let blob = blobs::find(
+            db,
+            self.s3_storage.as_ref(),
+            &batch_header_hash,
+            blob_index as i32,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error = ?err, "failed to query blob");
+            Status::internal("failed to query blob")
+        })?
+        .ok_or(Status::not_found("blob not found"))?;
 
         let data =
             (!inner.skip_data.unwrap_or_default()).then_some(BASE64_STANDARD.encode(&blob.data));

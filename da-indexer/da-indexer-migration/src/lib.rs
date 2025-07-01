@@ -3,6 +3,7 @@ use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
 
 mod m20220101_000001_create_table;
 mod m20240523_095338_eigenda_tables;
+mod m20250623_122642_alter_blob_tables_add_data_s3_object_key_column;
 
 pub struct Migrator;
 
@@ -12,6 +13,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20220101_000001_create_table::Migration),
             Box::new(m20240523_095338_eigenda_tables::Migration),
+            Box::new(m20250623_122642_alter_blob_tables_add_data_s3_object_key_column::Migration),
         ]
     }
 }

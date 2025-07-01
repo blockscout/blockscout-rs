@@ -1,6 +1,6 @@
 use sea_orm::DatabaseConnection;
 
-use crate::eigenda::{repository::batches, tests::init_db};
+use crate::{common::tests::init_db, eigenda::repository::batches};
 
 #[tokio::test]
 async fn find_gaps() {

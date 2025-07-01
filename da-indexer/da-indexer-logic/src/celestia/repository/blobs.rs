@@ -1,3 +1,5 @@
+use crate::{common, s3_storage::S3Storage};
+use celestia_types::Blob as CelestiaBlob;
 use da_indexer_entity::{
     celestia_blobs::{ActiveModel, Column, Entity, Model},
     celestia_blocks,
@@ -8,26 +10,28 @@ use sea_orm::{
 };
 use sha3::{Digest, Sha3_256};
 
-use celestia_types::Blob as CelestiaBlob;
-
 #[derive(FromQueryResult)]
 pub struct Blob {
     pub height: i64,
     pub namespace: Vec<u8>,
     pub commitment: Vec<u8>,
+    #[sea_orm(skip)]
     pub data: Vec<u8>,
     pub timestamp: i64,
+    #[sea_orm(nested)]
+    db_data: common::repository::DbData,
 }
 
 pub async fn find_by_height_and_commitment(
     db: &DatabaseConnection,
+    s3_storage: Option<&S3Storage>,
     height: u64,
     commitment: &[u8],
 ) -> Result<Option<Blob>, anyhow::Error> {
     let id = compute_id(height, commitment);
 
-    let blob = Blob::find_by_statement(
-        Entity::find_by_id(id)
+    let mut blob = Blob::find_by_statement(
+        Entity::find_by_id(id.clone())
             .join_rev(
                 JoinType::LeftJoin,
                 celestia_blocks::Entity::belongs_to(Entity)
@@ -40,21 +44,43 @@ pub async fn find_by_height_and_commitment(
     )
     .one(db)
     .await?;
+
+    if let Some(blob) = &mut blob {
+        blob.data = common::repository::extract_blob_data(
+            s3_storage,
+            &id,
+            std::mem::take(&mut blob.db_data),
+        )
+        .await?;
+    }
+
     Ok(blob)
 }
 
 pub async fn upsert_many<C: ConnectionTrait>(
     db: &C,
+    s3_storage: Option<&S3Storage>,
     height: u64,
     blobs: Vec<CelestiaBlob>,
 ) -> Result<(), anyhow::Error> {
+    let mut data_s3_objects = vec![];
     let blobs = blobs.into_iter().map(|blob| {
+        let id = compute_id(height, &blob.commitment.0);
+
+        let (db_data, s3_object) = common::repository::convert_blob_data_to_db_data_and_s3_object(
+            s3_storage, "celestia", &id, blob.data,
+        );
+        if let Some(s3_object) = s3_object {
+            data_s3_objects.push(s3_object);
+        }
+
         let model = Model {
-            id: compute_id(height, &blob.commitment.0),
+            id,
             height: height as i64,
             namespace: blob.namespace.as_bytes().to_vec(),
             commitment: blob.commitment.0.to_vec(),
-            data: blob.data,
+            data: db_data.data,
+            data_s3_object_key: db_data.data_s3_object_key,
         };
         let active: ActiveModel = model.into();
         active
@@ -67,6 +93,11 @@ pub async fn upsert_many<C: ConnectionTrait>(
         .on_empty_do_nothing()
         .exec(db)
         .await?;
+
+    if let Some(s3_storage) = s3_storage {
+        s3_storage.insert_many(data_s3_objects).await?;
+    }
+
     Ok(())
 }
 
