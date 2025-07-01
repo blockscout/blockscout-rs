@@ -1,10 +1,40 @@
-use crate::s3_storage::S3Storage;
+use crate::s3_storage::{S3Object, S3Storage};
 use sea_orm::FromQueryResult;
 
 #[derive(FromQueryResult, Default, Debug)]
 pub struct DbData {
     pub data: Option<Vec<u8>>,
     pub data_s3_object_key: Option<String>,
+}
+
+pub fn convert_blob_data_to_db_data_and_s3_object(
+    maybe_s3_storage: Option<&S3Storage>,
+    da_prefix: &str,
+    blob_id: &[u8],
+    data: Vec<u8>,
+) -> (DbData, Option<S3Object>) {
+    if maybe_s3_storage.is_none() {
+        (
+            DbData {
+                data: Some(data),
+                data_s3_object_key: None,
+            },
+            None,
+        )
+    } else {
+        let object_key = format!("{da_prefix}_{}", hex::encode(blob_id));
+        let s3_object = S3Object {
+            key: object_key.clone(),
+            content: data,
+        };
+        (
+            DbData {
+                data: None,
+                data_s3_object_key: Some(object_key),
+            },
+            Some(s3_object),
+        )
+    }
 }
 
 pub async fn extract_blob_data(

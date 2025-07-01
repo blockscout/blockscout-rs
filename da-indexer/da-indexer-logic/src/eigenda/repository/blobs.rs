@@ -1,7 +1,4 @@
-use crate::{
-    common,
-    s3_storage::{S3Object, S3Storage},
-};
+use crate::{common, s3_storage::S3Storage};
 use da_indexer_entity::{
     eigenda_batches,
     eigenda_blobs::{ActiveModel, Column, Entity, Model},
@@ -77,25 +74,19 @@ pub async fn upsert_many<C: ConnectionTrait>(
 
         let id = compute_id(batch_header_hash, blob_index);
 
-        let mut data = None;
-        let mut data_s3_object_key = None;
-        if s3_storage.is_none() {
-            data = Some(blob_data);
-        } else {
-            let object_key = hex::encode(&id);
-            data_s3_object_key = Some(object_key.clone());
-            data_s3_objects.push(S3Object {
-                key: object_key,
-                content: blob_data,
-            });
+        let (db_data, s3_object) = common::repository::convert_blob_data_to_db_data_and_s3_object(
+            s3_storage, "eigenda", &id, blob_data,
+        );
+        if let Some(s3_object) = s3_object {
+            data_s3_objects.push(s3_object);
         }
 
         let model = Model {
             id: compute_id(batch_header_hash, blob_index),
             batch_header_hash: batch_header_hash.to_vec(),
             blob_index,
-            data,
-            data_s3_object_key,
+            data: db_data.data,
+            data_s3_object_key: db_data.data_s3_object_key,
         };
         let active: ActiveModel = model.into();
         active
