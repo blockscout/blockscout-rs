@@ -17,6 +17,7 @@ pub enum AuthError {
     HeaderError(String),
 }
 
+pub type CommonError = AuthError;
 
 pub fn extract_jwt(metadata: &MetadataMap) -> Result<String, AuthError> {
     let cookies = get_cookies(metadata)?;
