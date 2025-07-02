@@ -1,13 +1,13 @@
 [package]
 name = "blockscout-auth"
 version = "0.1.0"
-edition = "2025"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 cookie = { version = "0.18", features = [ "percent-encode" ] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = "0.12"
 serde = { version = "1.0", features = [ "derive" ] }
 serde_json = "1"
 thiserror = "2"
