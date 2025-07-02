@@ -60,7 +60,10 @@ pub async fn get_user_info_from_metadata(
         .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
     let status = resp.status();
-    let body = resp.text().await.map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
     match status {
         StatusCode::OK => {

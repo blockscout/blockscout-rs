@@ -51,7 +51,13 @@ pub async fn auth_from_metadata(
     } else {
         Some(extract_csrf_token(metadata)?)
     };
-    auth_from_tokens(&jwt, csrf_opt.as_deref(), blockscout_host, blockscout_api_key).await
+    auth_from_tokens(
+        &jwt,
+        csrf_opt.as_deref(),
+        blockscout_host,
+        blockscout_api_key,
+    )
+    .await
 }
 
 pub async fn auth_from_tokens(
@@ -82,7 +88,10 @@ pub async fn auth_from_tokens(
     .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
     let status = resp.status();
-    let body = resp.text().await.map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
     match status {
         StatusCode::OK => {
