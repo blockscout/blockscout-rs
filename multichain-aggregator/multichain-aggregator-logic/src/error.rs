@@ -1,6 +1,7 @@
 use crate::types::{api_keys::ApiKeyError, ChainId};
 use alloy_primitives::hex::FromHexError;
 use bigdecimal::ParseBigDecimalError;
+use recache::{handler::CacheRequestError, stores::redis::RedisStoreError};
 use sea_orm::{sqlx::types::uuid, DbErr};
 use std::num::ParseIntError;
 use thiserror::Error;
@@ -20,6 +21,8 @@ pub enum ServiceError {
     Db(#[from] DbErr),
     #[error("not found: {0}")]
     NotFound(String),
+    #[error("cache error: {0}")]
+    Cache(#[from] CacheRequestError<RedisStoreError>),
 }
 
 #[derive(Error, Debug)]
@@ -53,6 +56,7 @@ impl From<ServiceError> for tonic::Status {
             ServiceError::NotFound(_) => Code::NotFound,
             ServiceError::Db(_) => Code::Internal,
             ServiceError::ExternalApi(_) => Code::Internal,
+            ServiceError::Cache(_) => Code::Internal,
         };
         tonic::Status::new(code, err.to_string())
     }
