@@ -4,14 +4,14 @@ use super::{
     hashes::{proto_hash_type_to_db_hash_type, Hash},
     interop_message_transfers::InteropMessageTransfer,
     interop_messages::InteropMessage,
-    ChainId,
+    ChainId, counters::{Counters, ChainCounters, TokenCounters as TokenCountersLogic},
 };
 use crate::{
     error::{ParseError, ServiceError},
     metrics::IMPORT_ENTITIES_COUNT,
     proto,
 };
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use sea_orm::prelude::BigDecimal;
 use std::{collections::HashMap, str::FromStr};
 
@@ -21,6 +21,7 @@ pub struct BatchImportRequest {
     pub hashes: Vec<Hash>,
     pub addresses: Vec<Address>,
     pub interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
+    pub counters: Option<Counters>
 }
 
 impl BatchImportRequest {
@@ -86,6 +87,10 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
                 .into_iter()
                 .map(|m| InteropMessageWithTransfer::try_from((chain_id, m)).map(|a| (a.0, a.1)))
                 .collect::<Result<Vec<_>, _>>()?,
+            counters: value
+                .counters
+                .map(|c| Counters::try_from((chain_id, c)))
+                .transpose()?
         })
     }
 }
@@ -281,5 +286,41 @@ fn parse_timestamp_secs(timestamp: i64) -> Result<NaiveDateTime, ParseError> {
             "invalid timestamp: {}",
             timestamp
         ))),
+    }
+}
+
+impl TryFrom<(ChainId, proto::batch_import_request::CountersImport)> for Counters {
+    type Error = ParseError;
+
+    fn try_from((chain_id, proto): (ChainId, proto::batch_import_request::CountersImport)) -> Result<Self, Self::Error> {
+        let global = {
+            let g: Option<&proto::batch_import_request::counters_import::GlobalCounters> = proto.global_counters.as_ref();
+
+            g.map(|g| {
+                ChainCounters {
+                    chain_id,
+                    timestamp: Utc::now().naive_utc(),
+                    daily_transactions_number: g.daily_transactions_number,
+                    total_transactions_number: g.total_transactions_number,
+                    total_addresses_number: g.total_addresses_number,
+                }
+            })
+        };
+
+        let token: Vec<TokenCountersLogic> = proto.token_counters
+            .into_iter()
+            .map(|t| {
+                Ok(TokenCountersLogic {
+                    chain_id,
+                    address: alloy_primitives::Address::from_str(&t.address_hash)?,
+                    total_supply: t.total_supply,
+                    holders_number: t.holders_number,
+                    transfers_number: t.transfers_number,
+                })
+            })
+            .collect::<Result<_, ParseError>>()?;
+
+
+        Ok(Self { global, token })
     }
 }

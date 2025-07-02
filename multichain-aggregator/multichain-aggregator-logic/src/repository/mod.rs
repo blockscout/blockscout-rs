@@ -2,6 +2,7 @@ pub mod addresses;
 pub mod api_keys;
 pub mod block_ranges;
 pub mod chains;
+pub mod counters;
 pub mod hashes;
 pub mod interop_message_transfers;
 pub mod interop_messages;
