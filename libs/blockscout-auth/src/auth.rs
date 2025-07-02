@@ -105,105 +105,166 @@ pub async fn auth_from_tokens(
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use crate::{init_mocked_blockscout_auth_service, MockUser};
-    use reqwest::header::{HeaderMap, HeaderName};
+    use reqwest::header::HeaderName;
     use serde::Serialize;
     use tonic::{codegen::http::header::CONTENT_TYPE, Extensions, Request};
-    use url::Url;
 
-    fn build_headers(jwt: &str, csrf: Option<&str>, in_cookie: bool) -> HeaderMap {
+    fn build_headers(jwt: &str, csrf_token: Option<&str>, in_cookie: bool) -> HeaderMap {
         let mut headers = HeaderMap::new();
         if in_cookie {
-            let c = format!("_explorer_key={jwt}");
-            headers.insert("cookie", c.parse().unwrap());
+            let cookies = format!(
+                "intercom-id-gsgyurk3=2380c963-677d-4899-b130-01b29609f8ca; \
+                intercom-session-gsgyurk3=; intercom-device-id-gsgyurk3=2fa296b4-a133-4922-b754-e3a5e446bb8e; \
+                chakra-ui-color-mode=light; __cuid=0a2ad6cf04a343c0812f65aff55f0f56; \
+                amp_fef1e8=3f4a1e5a-ca9c-4092-9b66-0705e0e44a21R...1gqhd6tvp.1gqhd6tvq.4.1.5; \
+                adblock_detected=true; indexing_alert=false; _explorer_key={jwt}"
+            );
+            headers.insert(COOKIE, cookies.parse().unwrap());
         } else {
-            headers.insert("authorization", jwt.parse().unwrap());
-        }
+            headers.insert(HEADER_JWT_TOKEN_NAME, jwt.parse().unwrap());
+        };
         headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
-        if let Some(csrf) = csrf {
+        if let Some(csrf_token) = csrf_token {
             headers.insert(
                 HeaderName::from_lowercase(b"x-csrf-token").unwrap(),
-                csrf.parse().unwrap(),
+                csrf_token.parse().unwrap(),
             );
-        }
+        };
         headers
     }
 
-    fn build_request<T: Serialize>(jwt: &str, csrf: Option<&str>, data: T) -> Request<T> {
-        let meta = MetadataMap::from_headers(build_headers(jwt, csrf, false));
+    fn build_request<T: Serialize>(jwt: &str, csrf_token: Option<&str>, data: T) -> Request<T> {
+        let meta =
+            tonic::metadata::MetadataMap::from_headers(build_headers(jwt, csrf_token, false));
         Request::from_parts(meta, Extensions::default(), data)
     }
 
     #[test]
-    fn extract_jwt_both() {
-        let jwt = "TOKEN";
-        let meta = MetadataMap::from_headers(build_headers(jwt, None, true));
-        assert_eq!(extract_jwt(&meta).unwrap(), jwt);
-        let meta = MetadataMap::from_headers(build_headers(jwt, None, false));
-        assert_eq!(extract_jwt(&meta).unwrap(), jwt);
+    fn extract_jwt_works() {
+        let jwt = "VALID_JWT_TOKEN";
+        let meta = tonic::metadata::MetadataMap::from_headers(build_headers(jwt, None, true));
+
+        let cookie_token = extract_jwt(&meta).expect("failed to extract token from cookie");
+        assert_eq!(cookie_token, jwt);
+
+        let meta = tonic::metadata::MetadataMap::from_headers(build_headers(jwt, None, false));
+
+        let header_token = extract_jwt(&meta).expect("failed to extract token from header");
+        assert_eq!(header_token, jwt);
     }
 
     #[test]
-    fn extract_csrf() {
-        let csrf = "CSRF";
-        let meta = MetadataMap::from_headers(build_headers("", Some(csrf), true));
-        assert_eq!(extract_csrf_token(&meta).unwrap(), csrf);
+    fn extract_csrf_token_works() {
+        let csrf_token = "VALID_CSRF_TOKEN";
+        let meta =
+            tonic::metadata::MetadataMap::from_headers(build_headers("", Some(csrf_token), true));
+
+        let token = extract_csrf_token(&meta).expect("failed to extract metadata");
+        assert_eq!(token, csrf_token);
     }
 
-    #[derive(Serialize)]
-    struct G;
+    #[derive(Debug, Serialize)]
+    struct GetBody {}
 
-    #[derive(Serialize)]
-    struct P { name: String }
+    #[derive(Debug, Serialize)]
+    struct PostBody {
+        name: String,
+    }
 
     #[tokio::test]
-    async fn full_auth_flow() {
+    async fn auth_works() {
         let users = [MockUser {
             id: 1,
-            email: "a@b".into(),
+            email: "user@gmail.com".into(),
             chain_id: 1,
             jwt: "jwt1".into(),
             csrf_token: "csrf1".into(),
         }];
-        let api_key = Some("KEY");
-        let mock = init_mocked_blockscout_auth_service(api_key, &users).await;
-        let host = Url::parse(&mock.uri()).unwrap();
+        let blockscout_api_key = Some("somekey");
+        let blockscout = init_mocked_blockscout_auth_service(blockscout_api_key, &users).await;
+        let blockscout_host = Url::from_str(&blockscout.uri()).unwrap();
 
-        // GET
-        let req = build_request("jwt1", None, G);
-        let ok = auth_from_metadata(req.metadata(), true, &host, api_key).await.unwrap();
-        assert_eq!(ok.id, 1);
+        let request = build_request("jwt1", None, GetBody {});
+        let success = auth_from_metadata(
+            request.metadata(),
+            true,
+            &blockscout_host,
+            blockscout_api_key,
+        )
+        .await
+        .expect("failed to auth get request");
+        assert_eq!(success.id, 1);
 
-        // POST
-        let req = build_request("jwt1", Some("csrf1"), P { name: "x".into() });
-        let ok = auth_from_metadata(req.metadata(), false, &host, api_key).await.unwrap();
-        assert_eq!(ok.id, 1);
-        
-        let req = build_request("jwt1", None, P { name: "x".into() });
-        auth_from_metadata(req.metadata(), false, &host, api_key)
-            .await
-            .expect_err("should fail");
+        let request = build_request(
+            "jwt1",
+            Some("csrf1"),
+            PostBody {
+                name: "lev".to_string(),
+            },
+        );
+        let success = auth_from_metadata(
+            request.metadata(),
+            false,
+            &blockscout_host,
+            blockscout_api_key,
+        )
+        .await
+        .expect("failed to auth post request");
+        assert_eq!(success.id, 1);
 
-        let req = Request::new(G);
-        auth_from_metadata(req.metadata(), true, &host, api_key)
-            .await
-            .expect_err("should fail");
+        let request = build_request(
+            "jwt1",
+            None,
+            PostBody {
+                name: "lev".to_string(),
+            },
+        );
+        auth_from_metadata(
+            request.metadata(),
+            false,
+            &blockscout_host,
+            blockscout_api_key,
+        )
+        .await
+        .expect_err("success response from request without csrf_token");
+
+        let request = Request::new(GetBody {});
+        auth_from_metadata(
+            request.metadata(),
+            true,
+            &blockscout_host,
+            blockscout_api_key,
+        )
+        .await
+        .expect_err("success response for empty request");
     }
 
     #[tokio::test]
-    async fn auth_no_api_key() {
+    async fn auth_works_no_api_key() {
         let users = [MockUser {
-            id: 2,
-            email: "c@d".into(),
+            id: 1,
+            email: "user@gmail.com".into(),
             chain_id: 1,
-            jwt: "jwt2".into(),
-            csrf_token: "csrf2".into(),
+            jwt: "jwt1".into(),
+            csrf_token: "csrf1".into(),
         }];
-        let mock = init_mocked_blockscout_auth_service(None, &users).await;
-        let host = Url::parse(&mock.uri()).unwrap();
-        let req = build_request("jwt2", None, G);
-        let ok = auth_from_metadata(req.metadata(), true, &host, None).await.unwrap();
-        assert_eq!(ok.id, 2);
+        let blockscout_api_key = None;
+        let blockscout = init_mocked_blockscout_auth_service(blockscout_api_key, &users).await;
+        let blockscout_host = Url::from_str(&blockscout.uri()).unwrap();
+
+        let request = build_request("jwt1", None, GetBody {});
+        let success = auth_from_metadata(
+            request.metadata(),
+            true,
+            &blockscout_host,
+            blockscout_api_key,
+        )
+        .await
+        .expect("failed to auth get request without api_key");
+        assert_eq!(success.id, 1);
     }
 }
