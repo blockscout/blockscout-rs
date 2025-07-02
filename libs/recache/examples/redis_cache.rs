@@ -35,7 +35,7 @@ async fn call(cache: &RedisCacheHandler<A>) {
         })
         .await
         .unwrap();
-    println!("{:?}", res);
+    println!("{res:?}");
 }
 
 #[tokio::main]
@@ -50,7 +50,7 @@ pub async fn main() {
     let cache = CacheHandler::builder(Arc::new(cache))
         .on_refresh_computed(Arc::new(move |v| {
             REFRESH_HOOK_COUNTER.fetch_add(1, Ordering::Relaxed);
-            println!("refreshed: {:?}", v)
+            println!("refreshed: {v:?}")
         }))
         .default_ttl(Duration::from_secs(10))
         .maybe_default_refresh_ahead(Some(Duration::from_secs(5)))

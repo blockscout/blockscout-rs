@@ -10,6 +10,9 @@ use thiserror::Error;
 
 type SharedFuture<V, E> = Shared<BoxFuture<'static, Result<V, E>>>;
 type EventHandler<V> = Arc<dyn Fn(&V) + Send + Sync>;
+type InflightRequest<K, V, C> =
+    SharedFuture<V, CacheRequestError<<C as AsyncCacheStore<K, V>>::Error>>;
+type InflightMap<K, V, C> = DashMap<K, InflightRequest<K, V, C>>;
 
 #[derive(Builder)]
 pub struct CacheHandler<C, K, V>
@@ -20,7 +23,7 @@ where
     #[builder(start_fn)]
     cache: Arc<C>,
     #[builder(default)]
-    inflight: Arc<DashMap<K, SharedFuture<V, CacheRequestError<C::Error>>>>,
+    inflight: Arc<InflightMap<K, V, C>>,
     on_hit: Option<EventHandler<V>>,
     on_computed: Option<EventHandler<V>>,
     on_refresh_computed: Option<EventHandler<V>>,
@@ -71,7 +74,7 @@ where
     #[builder(start_fn)]
     cache: Arc<C>,
     #[builder(start_fn)]
-    inflight: Arc<DashMap<K, SharedFuture<V, CacheRequestError<C::Error>>>>,
+    inflight: Arc<InflightMap<K, V, C>>,
     #[builder(start_fn)]
     on_hit: Option<EventHandler<V>>,
     #[builder(start_fn)]
