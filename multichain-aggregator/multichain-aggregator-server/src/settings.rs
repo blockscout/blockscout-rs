@@ -24,6 +24,31 @@ pub struct Settings {
     #[serde(default)]
     pub replica_database: Option<ReplicaDatabaseSettings>,
     pub service: ServiceSettings,
+    pub cache: Option<CacheSettings>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CacheSettings {
+    pub redis: RedisSettings,
+    #[serde(default = "default_uniform_chain_search_cache")]
+    pub uniform_chain_search_cache: CacheEntrySettings,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CacheEntrySettings {
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    pub ttl: time::Duration,
+    #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
+    pub refresh_ahead: Option<time::Duration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RedisSettings {
+    pub url: Url,
 }
 
 #[serde_as]
@@ -119,6 +144,15 @@ impl Settings {
                 marketplace_enabled_cache_fetch_concurrency:
                     default_marketplace_enabled_cache_fetch_concurrency(),
             },
+            cache: Some(CacheSettings {
+                redis: RedisSettings {
+                    url: Url::parse("redis://127.0.0.1:6379").unwrap(),
+                },
+                uniform_chain_search_cache: CacheEntrySettings {
+                    ttl: time::Duration::from_secs(30),
+                    refresh_ahead: None,
+                },
+            }),
         }
     }
 }
@@ -151,4 +185,14 @@ fn default_marketplace_enabled_cache_update_interval() -> time::Duration {
 
 fn default_marketplace_enabled_cache_fetch_concurrency() -> usize {
     10
+}
+
+fn default_uniform_chain_search_cache() -> CacheEntrySettings {
+    let hour = 60 * 60;
+    let ttl = time::Duration::from_secs(hour);
+    let refresh_ahead = ttl / 5; // 20% of ttl
+    CacheEntrySettings {
+        ttl,
+        refresh_ahead: Some(refresh_ahead),
+    }
 }

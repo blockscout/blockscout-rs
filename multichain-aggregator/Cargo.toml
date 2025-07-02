@@ -62,7 +62,7 @@ blockscout-chains = { git = "https://github.com/blockscout/blockscout-rs", versi
 cached = { version = "0.55", default-features = false }
 config = "0.13"
 chrono = "0.4.38"
-env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.2.1" }
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.3.0" }
 regex = "1.10"
 reqwest = "0.12"
 thiserror = "1.0"
@@ -70,6 +70,7 @@ url = "2.4"
 futures = "0.3"
 lazy_static = { version = "1.4" }
 prometheus = { version = "0.13" }
+recache = { git = "https://github.com/blockscout/blockscout-rs", branch = "lok52/libs-add-recache" }
 
 # tests
 pretty_assertions = "1.3"
