@@ -1,4 +1,3 @@
-
 use crate::common::{build_http_headers, extract_csrf_token, extract_jwt, CommonError};
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
@@ -19,14 +18,6 @@ pub struct AuthSuccess {
     pub watchlist_id: i64,
     pub email_verified: bool,
 }
-#[derive(Debug, Clone, Deserialize)]
-pub struct UserInfo {
-    pub address_hash: String,
-    pub avatar: String,
-    pub email: Option<String>,
-    pub name: String,
-    pub nickname: String,
-}
 
 #[derive(Debug, Clone, Deserialize)]
 struct AuthFailed {
@@ -37,18 +28,15 @@ struct AuthFailed {
 pub enum Error {
     #[error(transparent)]
     Common(#[from] CommonError),
+
     #[error("blockscout API error: {0}")]
     BlockscoutApi(String),
+
     #[error("unauthorized: {0}")]
     Unauthorized(String),
+
     #[error("forbidden: {0}")]
     Forbidden(String),
-}
-
-impl From<CommonError> for Error {
-    fn from(e: CommonError) -> Self {
-        Error::Common(e)
-    }
 }
 
 pub async fn auth_from_metadata(
@@ -192,7 +180,6 @@ mod tests {
         let ok = auth_from_metadata(req.metadata(), false, &host, api_key).await.unwrap();
         assert_eq!(ok.id, 1);
         
-        // POST без CSRF — ошибка
         let req = build_request("jwt1", None, P { name: "x".into() });
         auth_from_metadata(req.metadata(), false, &host, api_key)
             .await

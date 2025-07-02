@@ -7,7 +7,7 @@ use url::Url;
 
 const API_KEY_NAME: &str = "api_key";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct UserInfo {
     pub address_hash: String,
     pub avatar: String,
@@ -16,7 +16,7 @@ pub struct UserInfo {
     pub nickname: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ErrorBody {
     message: String,
 }
@@ -36,19 +36,12 @@ pub enum Error {
     Forbidden(String),
 }
 
-impl From<CommonError> for Error {
-    fn from(e: CommonError) -> Self {
-        Error::Common(e)
-    }
-}
-
 pub async fn get_user_info_from_metadata(
     metadata: &MetadataMap,
     blockscout_host: &Url,
     blockscout_api_key: Option<&str>,
 ) -> Result<UserInfo, Error> {
     let jwt = extract_jwt(metadata)?;
-
     let headers = build_http_headers(&jwt, None)?;
 
     let mut url = blockscout_host
@@ -67,10 +60,7 @@ pub async fn get_user_info_from_metadata(
         .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
     let status = resp.status();
-    let body = resp
-        .text()
-        .await
-        .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+    let body = resp.text().await.map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
     match status {
         StatusCode::OK => {
@@ -87,8 +77,6 @@ pub async fn get_user_info_from_metadata(
                 Err(Error::Forbidden(err.message))
             }
         }
-        _ => Err(Error::BlockscoutApi(format!(
-            "unexpected status {status}"
-        ))),
+        _ => Err(Error::BlockscoutApi(format!("unexpected status {status}"))),
     }
 }
