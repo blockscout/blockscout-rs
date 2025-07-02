@@ -144,15 +144,7 @@ impl Settings {
                 marketplace_enabled_cache_fetch_concurrency:
                     default_marketplace_enabled_cache_fetch_concurrency(),
             },
-            cache: Some(CacheSettings {
-                redis: RedisSettings {
-                    url: Url::parse("redis://127.0.0.1:6379").unwrap(),
-                },
-                uniform_chain_search_cache: CacheEntrySettings {
-                    ttl: time::Duration::from_secs(30),
-                    refresh_ahead: None,
-                },
-            }),
+            cache: None,
         }
     }
 }
