@@ -10,7 +10,6 @@ const COOKIE_JWT_TOKEN_NAME: &str = "_explorer_key";
 const CSRF_TOKEN_NAME: &str = "x-csrf-token";
 const API_KEY_NAME: &str = "api_key";
 
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct AuthSuccess {
     pub avatar: String,
