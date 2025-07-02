@@ -5,7 +5,11 @@ use thiserror::Error;
 use tonic::metadata::MetadataMap;
 use url::Url;
 
+const HEADER_JWT_TOKEN_NAME: &str = "authorization";
+const COOKIE_JWT_TOKEN_NAME: &str = "_explorer_key";
+const CSRF_TOKEN_NAME: &str = "x-csrf-token";
 const API_KEY_NAME: &str = "api_key";
+
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AuthSuccess {
