@@ -5,6 +5,7 @@ members = [
     "da-indexer-logic",
     "da-indexer-migration",
     "da-indexer-proto",
+    "da-indexer-scripts",
     "da-indexer-server",
 ]
 
