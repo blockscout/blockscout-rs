@@ -1,10 +1,10 @@
-FROM ghcr.io/blockscout/services-base:latest as chef
+FROM ghcr.io/blockscout/services-base:latest AS chef
 
 FROM chef AS plan
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json --bin data_s3_migrator
 
-FROM chef as cache
+FROM chef AS cache
 COPY --from=plan /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
@@ -15,7 +15,7 @@ COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release
 
-FROM ubuntu:22.04 as run
+FROM ubuntu:22.04 AS run
 RUN apt-get update && apt-get upgrade -y && apt-get install -y libssl3 libssl-dev ca-certificates
 
 WORKDIR /app
