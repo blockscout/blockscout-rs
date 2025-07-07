@@ -269,7 +269,7 @@
       },
       "167000": {
         "blockscout": {
-          "url": "https://taikoscan.io"
+          "url": "https://blockscout.mainnet.taiko.xyz"
         },
         "use_protocols": [
           "taiko"
