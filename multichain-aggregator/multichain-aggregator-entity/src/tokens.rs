@@ -4,26 +4,30 @@ use super::sea_orm_active_enums::TokenType;
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "addresses")]
+#[sea_orm(table_name = "tokens")]
 pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub chain_id: i64,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub name: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub symbol: Option<String>,
+    pub decimals: Option<i16>,
+    pub token_type: TokenType,
     #[sea_orm(
         primary_key,
         auto_increment = false,
         column_type = "VarBinary(StringLen::None)"
     )]
-    pub hash: Vec<u8>,
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub chain_id: i64,
+    pub address_hash: Vec<u8>,
     #[sea_orm(column_type = "Text", nullable)]
-    pub ens_name: Option<String>,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub contract_name: Option<String>,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub token_name: Option<String>,
-    pub token_type: Option<TokenType>,
-    pub is_contract: bool,
-    pub is_verified_contract: bool,
-    pub is_token: bool,
+    pub icon_url: Option<String>,
+    pub fiat_value: Option<Decimal>,
+    pub circulating_market_cap: Option<Decimal>,
+    #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
+    pub total_supply: Option<Decimal>,
+    pub holders_count: Option<i64>,
+    pub transfers_count: Option<i64>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

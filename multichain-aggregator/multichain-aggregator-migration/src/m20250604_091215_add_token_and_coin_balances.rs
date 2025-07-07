@@ -9,7 +9,7 @@ impl MigrationTrait for Migration {
         let sql = r#"
             CREATE TABLE address_coin_balances (
                 address_hash bytea NOT NULL,
-                value NUMERIC(78, 0) NOT NULL,
+                value numeric(78, 0) NOT NULL,
                 chain_id bigint NOT NULL REFERENCES chains (id),
 
                 created_at timestamp NOT NULL DEFAULT (now()),
@@ -22,8 +22,8 @@ impl MigrationTrait for Migration {
                 id bigserial NOT NULL,
                 address_hash bytea NOT NULL,
                 token_address_hash bytea NOT NULL,
-                token_id numeric(78),
-                value NUMERIC(78, 0) NOT NULL,
+                token_id numeric(78, 0),
+                value numeric(78) NOT NULL,
                 chain_id bigint NOT NULL REFERENCES chains (id),
 
                 created_at timestamp NOT NULL DEFAULT (now()),

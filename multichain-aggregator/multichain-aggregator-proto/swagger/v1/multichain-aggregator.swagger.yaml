@@ -891,4 +891,5 @@ definitions:
       - TOKEN_TYPE_ERC_721
       - TOKEN_TYPE_ERC_1155
       - TOKEN_TYPE_ERC_404
+      - TOKEN_TYPE_ERC_7802
     default: TOKEN_TYPE_UNSPECIFIED
