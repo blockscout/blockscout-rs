@@ -1,29 +1,28 @@
 import { BigInt, ByteArray, Bytes, crypto, ens } from "@graphprotocol/graph-ts";
 
 import {
-    NameRegistered as ControllerNameRegisteredEvent,
-    NameRenewed as ControllerNameRenewedEvent,
-  } from "../generated/{{ cookiecutter.controller_name }}/{{ cookiecutter.controller_name }}";
-  
-  import {
-    checkValidLabel,
-    concat,
-    byteArrayFromHex,
-    BASE_NODE_HASH,
-    BASE_NODE,
-  } from "./utils";
+  NameRegistered as ControllerNameRegisteredEvent,
+  NameRenewed as ControllerNameRenewedEvent,
+} from "../generated/RegistrarController/RegistrarController";
 
-  // Import entity types generated from the GraphQL schema
 import {
-    Account,
-    Domain,
-    NameRegistered,
-    NameRenewed,
-    NameTransferred,
-    Registration,
-  } from "../generated/schema";
-import { createDomain } from "./{{ cookiecutter.registry_name }}";
+  checkValidLabel,
+  concat,
+  byteArrayFromHex,
+  BASE_NODE_HASH,
+  BASE_NODE,
+} from "./utils";
 
+// Import entity types generated from the GraphQL schema
+import {
+  Account,
+  Domain,
+  NameRegistered,
+  NameRenewed,
+  NameTransferred,
+  Registration,
+} from "../generated/schema";
+import { createDomain } from "./Registry";
 
 var rootNode: ByteArray = byteArrayFromHex(BASE_NODE_HASH);
 
