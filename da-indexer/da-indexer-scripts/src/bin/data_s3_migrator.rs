@@ -82,6 +82,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let da_layer = settings.da;
     let mut iteration = 0;
+    let mut processed = 0;
     loop {
         iteration += 1;
         let blobs_to_migrate = call_retriable!(
@@ -89,6 +90,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 .await
                 .context("retrieve blobs to migrate")?
         );
+        let currently_processing = blobs_to_migrate.len();
 
         if blobs_to_migrate.is_empty() {
             tracing::info!("finished on iteration {iteration}");
@@ -119,6 +121,11 @@ async fn main() -> Result<(), anyhow::Error> {
                 .await
                 .context("update database entries")?
         );
+
+        processed += currently_processing;
+        if iteration % 100 == 0 {
+            tracing::info!(iteration = iteration, processed = processed, "progress")
+        }
     }
 
     Ok(())
