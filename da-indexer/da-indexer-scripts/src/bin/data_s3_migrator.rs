@@ -2,10 +2,9 @@ use anyhow::Context;
 use blockscout_service_launcher::{
     database, database::DatabaseSettings, launcher::ConfigSettings, tracing::TracingSettings,
 };
-use da_indexer_entity::{celestia_blobs, eigenda_blobs};
 use da_indexer_logic::s3_storage::{S3Object, S3Storage, S3StorageSettings};
-use migration::sea_orm::{EntityTrait, FromQueryResult};
-use sea_orm::{ConnectionTrait, DatabaseConnection, Set, Statement, sea_query::OnConflict};
+use migration::sea_orm::FromQueryResult;
+use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -157,58 +156,39 @@ async fn update_database_entries(
     da_layer: DaLayer,
     blob_ids: Vec<Vec<u8>>,
 ) -> Result<(), anyhow::Error> {
-    match da_layer {
-        DaLayer::Celestia => {
-            let active_models = blob_ids
-                .into_iter()
-                .map(|id| {
-                    let object_key = blob_id_to_object_key(da_layer, &id);
-                    celestia_blobs::ActiveModel {
-                        id: Set(id),
-                        data: Set(None),
-                        data_s3_object_key: Set(Some(object_key)),
-                        ..Default::default()
-                    }
-                })
-                .collect::<Vec<_>>();
-            celestia_blobs::Entity::insert_many(active_models)
-                .on_conflict(
-                    OnConflict::column(celestia_blobs::Column::Id)
-                        .update_columns([
-                            celestia_blobs::Column::Data,
-                            celestia_blobs::Column::DataS3ObjectKey,
-                        ])
-                        .to_owned(),
-                )
-                .exec(database)
-                .await?;
+    let mut sql_values = String::new();
+    let mut bind_values = vec![];
+
+    for (i, blob_id) in blob_ids.into_iter().enumerate() {
+        if i > 0 {
+            sql_values.push_str(", ");
         }
-        DaLayer::Eigenda => {
-            let active_models = blob_ids
-                .into_iter()
-                .map(|id| {
-                    let object_key = blob_id_to_object_key(da_layer, &id);
-                    eigenda_blobs::ActiveModel {
-                        id: Set(id),
-                        data: Set(None),
-                        data_s3_object_key: Set(Some(object_key)),
-                        ..Default::default()
-                    }
-                })
-                .collect::<Vec<_>>();
-            eigenda_blobs::Entity::insert_many(active_models)
-                .on_conflict(
-                    OnConflict::column(eigenda_blobs::Column::Id)
-                        .update_columns([
-                            eigenda_blobs::Column::Data,
-                            eigenda_blobs::Column::DataS3ObjectKey,
-                        ])
-                        .to_owned(),
-                )
-                .exec(database)
-                .await?;
-        }
+        sql_values.push_str(&format!("(${}, ${})", 2 * i + 1, 2 * i + 2));
+        let object_key = blob_id_to_object_key(da_layer, &blob_id);
+        bind_values.push(blob_id.into());
+        bind_values.push(object_key.into());
     }
+
+    let query = format!(
+        r#"
+        UPDATE {} as t SET
+            data = NULL,
+            data_s3_object_key = v.data_s3_object_key
+        FROM (values {}) as v(id, data_s3_object_key)
+        WHERE v.id = t.id;
+    "#,
+        da_layer.table_name(),
+        sql_values
+    );
+
+    database
+        .execute(Statement::from_sql_and_values(
+            database.get_database_backend(),
+            query,
+            bind_values,
+        ))
+        .await?;
+
     Ok(())
 }
 
