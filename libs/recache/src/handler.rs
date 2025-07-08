@@ -156,11 +156,13 @@ where
 
                 let inflight = Arc::clone(&self.inflight);
                 async move {
-                    let val = fut_shared.await?;
-                    self.cache.set(&self.key, &val, self.ttl).await?;
+                    let res = fut_shared.await;
+                    if let Ok(val) = res.as_ref() {
+                        let _ = self.cache.set(&self.key, val, self.ttl).await;
+                        (self.on_computed)(&self.key, val);
+                    }
                     inflight.remove(&self.key);
-                    (self.on_computed)(&self.key, &val);
-                    Ok(val)
+                    res
                 }
                 .boxed()
             }
@@ -197,9 +199,9 @@ where
             let inflight = Arc::clone(&self.inflight);
             tokio::spawn(async move {
                 let res = fut_shared.await;
-                if let Ok(val) = res {
-                    let _ = self.cache.set(&self.key, &val, self.ttl).await;
-                    (self.on_refresh_computed)(&self.key, &val);
+                if let Ok(val) = res.as_ref() {
+                    let _ = self.cache.set(&self.key, val, self.ttl).await;
+                    (self.on_refresh_computed)(&self.key, val);
                 }
                 inflight.remove(&self.key);
             });
