@@ -9,7 +9,7 @@ use std::{cmp::Eq, fmt::Display, hash::Hash, sync::Arc, time::Duration};
 use thiserror::Error;
 
 type SharedFuture<V, E> = Shared<BoxFuture<'static, Result<V, E>>>;
-type EventHandler<V> = Arc<dyn Fn(&V) + Send + Sync>;
+type EventHandler<K, V> = Arc<dyn Fn(&K, &V) + Send + Sync>;
 type InflightRequest<K, V, C> =
     SharedFuture<V, CacheRequestError<<C as AsyncCacheStore<K, V>>::Error>>;
 type InflightMap<K, V, C> = DashMap<K, InflightRequest<K, V, C>>;
@@ -24,11 +24,19 @@ where
     cache: Arc<C>,
     #[builder(default)]
     inflight: Arc<InflightMap<K, V, C>>,
-    on_hit: Option<EventHandler<V>>,
-    on_computed: Option<EventHandler<V>>,
-    on_refresh_computed: Option<EventHandler<V>>,
+    #[builder(default = noop_event_handler())]
+    on_hit: EventHandler<K, V>,
+    #[builder(default = noop_event_handler())]
+    on_computed: EventHandler<K, V>,
+    #[builder(default = noop_event_handler())]
+    on_refresh_computed: EventHandler<K, V>,
     pub default_ttl: Duration,
     pub default_refresh_ahead: Option<Duration>,
+}
+
+#[inline]
+fn noop_event_handler<K, V>() -> EventHandler<K, V> {
+    Arc::new(|_: &K, _: &V| {})
 }
 
 impl<C, K, V> CacheHandler<C, K, V>
@@ -76,11 +84,11 @@ where
     #[builder(start_fn)]
     inflight: Arc<InflightMap<K, V, C>>,
     #[builder(start_fn)]
-    on_hit: Option<EventHandler<V>>,
+    on_hit: EventHandler<K, V>,
     #[builder(start_fn)]
-    on_computed: Option<EventHandler<V>>,
+    on_computed: EventHandler<K, V>,
     #[builder(start_fn)]
-    on_refresh_computed: Option<EventHandler<V>>,
+    on_refresh_computed: EventHandler<K, V>,
     #[builder(into)]
     key: K,
     ttl: Option<Duration>,
@@ -109,9 +117,7 @@ where
         E: Display,
     {
         if let Some((val, maybe_ttl)) = self.cache.get_with_ttl(&self.key).await? {
-            if let Some(on_hit) = &self.on_hit {
-                on_hit(&val);
-            }
+            (self.on_hit)(&self.key, &val);
 
             if let Some(value_ttl) = maybe_ttl {
                 self.handle_refresh(compute, value_ttl);
@@ -134,9 +140,7 @@ where
                 .await
                 .map_err(|e| CacheRequestError::ComputeError(e.to_string()))?;
             cache.set(&key, &val, ttl).await?;
-            if let Some(on_computed) = self.on_computed {
-                on_computed(&val);
-            }
+            (self.on_computed)(&key, &val);
             Ok(val)
         }
         .boxed()
@@ -177,9 +181,7 @@ where
                     .await
                     .map_err(|e| CacheRequestError::ComputeError(e.to_string()))?;
                 cache.set(&key, &val, self.ttl).await?;
-                if let Some(on_refresh_computed) = self.on_refresh_computed {
-                    on_refresh_computed(&val);
-                }
+                (self.on_refresh_computed)(&key, &val);
                 Ok(val)
             }
             .boxed()
