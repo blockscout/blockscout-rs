@@ -28,6 +28,16 @@ impl RedisStore {
     fn format_key(&self, key: &str) -> String {
         format!("{}:{}", self.prefix, key)
     }
+
+    fn try_deserialize<V>(&self, value: &str) -> Result<V, RedisStoreError>
+    where
+        V: for<'de> Deserialize<'de>,
+    {
+        serde_json::from_str(value).map_err(|e| RedisStoreError::CacheDeserializationError {
+            cached_value: value.to_string(),
+            error: Arc::new(e),
+        })
+    }
 }
 
 #[derive(Error, Debug, Clone)]
@@ -53,18 +63,8 @@ where
     async fn get(&self, key: &String) -> Result<Option<V>, Self::Error> {
         let mut conn = self.connection.clone();
         let val: Option<String> = conn.get(self.format_key(key)).await.map_err(Arc::new)?;
-        match val {
-            Some(s) => {
-                let val = serde_json::from_str(&s).map_err(|e| {
-                    RedisStoreError::CacheDeserializationError {
-                        cached_value: s,
-                        error: Arc::new(e),
-                    }
-                })?;
-                Ok(Some(val))
-            }
-            None => Ok(None),
-        }
+
+        val.map(|v| self.try_deserialize(&v)).transpose()
     }
 
     async fn get_with_ttl(
@@ -81,23 +81,16 @@ where
             .await
             .map_err(Arc::new)?;
 
-        match val {
-            Some(json) => {
-                let value = serde_json::from_str(&json).map_err(|e| {
-                    RedisStoreError::CacheDeserializationError {
-                        cached_value: json,
-                        error: Arc::new(e),
-                    }
-                })?;
-                let ttl_duration = if ttl >= 0 {
-                    Some(Duration::from_millis(ttl as u64))
-                } else {
-                    None
-                };
-                Ok(Some((value, ttl_duration)))
-            }
-            None => Ok(None),
-        }
+        let val = val.map(|v| self.try_deserialize(&v)).transpose()?.map(|v| {
+            let ttl_duration = if ttl >= 0 {
+                Some(Duration::from_millis(ttl as u64))
+            } else {
+                None
+            };
+            (v, ttl_duration)
+        });
+
+        Ok(val)
     }
 
     async fn set(&self, key: &String, value: &V, ttl: Option<Duration>) -> Result<(), Self::Error> {
