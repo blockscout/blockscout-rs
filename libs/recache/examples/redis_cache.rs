@@ -50,13 +50,26 @@ pub async fn main() {
             REFRESH_HOOK_COUNTER.fetch_add(1, Ordering::Relaxed);
             println!("refreshed: {k:?} {v:?}")
         }))
+        .on_inflight_computed(Arc::new(move |k, v| {
+            println!("got result from inflight request: {k:?} {v:?}")
+        }))
         .default_ttl(Duration::from_secs(10))
         .maybe_default_refresh_ahead(Some(Duration::from_secs(5)))
         .build();
 
+    let now = std::time::Instant::now();
+
+    // Initializes the cache
     call(&cache).await;
+    println!("time: {:?}", now.elapsed());
     tokio::time::sleep(Duration::from_secs(6)).await;
+    println!("time: {:?}", now.elapsed());
+    // Triggers background refresh-ahead
     call(&cache).await;
+    println!("time: {:?}", now.elapsed());
     tokio::time::sleep(Duration::from_secs(6)).await;
+    println!("time: {:?}", now.elapsed());
+    // Awaits already running background refresh-ahead
     call(&cache).await;
+    println!("time: {:?}", now.elapsed());
 }

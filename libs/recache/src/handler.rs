@@ -29,6 +29,8 @@ where
     #[builder(default = noop_event_handler())]
     on_computed: EventHandler<K, V>,
     #[builder(default = noop_event_handler())]
+    on_inflight_computed: EventHandler<K, V>,
+    #[builder(default = noop_event_handler())]
     on_refresh_computed: EventHandler<K, V>,
     pub default_ttl: Duration,
     pub default_refresh_ahead: Option<Duration>,
@@ -53,6 +55,7 @@ where
             self.inflight.clone(),
             self.on_hit.clone(),
             self.on_computed.clone(),
+            self.on_inflight_computed.clone(),
             self.on_refresh_computed.clone(),
         )
     }
@@ -97,6 +100,8 @@ where
     #[builder(start_fn)]
     on_computed: EventHandler<K, V>,
     #[builder(start_fn)]
+    on_inflight_computed: EventHandler<K, V>,
+    #[builder(start_fn)]
     on_refresh_computed: EventHandler<K, V>,
     #[builder(into)]
     key: K,
@@ -134,31 +139,34 @@ where
             return Ok(val);
         }
 
-        if let Some(fut) = self.inflight.get(&self.key) {
-            let res = fut.clone().await;
-            return res;
-        }
+        let fut = match self.inflight.entry(self.key.clone()) {
+            dashmap::Entry::Occupied(entry) => {
+                let fut_shared = entry.get().clone();
+                async move {
+                    let val = fut_shared.await?;
+                    (self.on_inflight_computed)(&self.key, &val);
+                    Ok(val)
+                }
+                .boxed()
+            }
+            dashmap::Entry::Vacant(entry) => {
+                let fut_shared = Self::build_shared_future(compute());
 
-        let key = self.key.clone();
-        let cache = self.cache;
-        let ttl = self.ttl;
+                entry.insert(fut_shared.clone());
 
-        let fut = compute();
-        let fut_shared: SharedFuture<V, CacheRequestError<C::Error>> = async move {
-            let val = fut
-                .await
-                .map_err(|e| CacheRequestError::ComputeError(e.to_string()))?;
-            cache.set(&key, &val, ttl).await?;
-            (self.on_computed)(&key, &val);
-            Ok(val)
-        }
-        .boxed()
-        .shared();
+                let inflight = Arc::clone(&self.inflight);
+                async move {
+                    let val = fut_shared.await?;
+                    self.cache.set(&self.key, &val, self.ttl).await?;
+                    inflight.remove(&self.key);
+                    (self.on_computed)(&self.key, &val);
+                    Ok(val)
+                }
+                .boxed()
+            }
+        };
 
-        self.inflight.insert(self.key.clone(), fut_shared.clone());
-        let result = fut_shared.await;
-        self.inflight.remove(&self.key);
-        result
+        fut.await
     }
 
     pub fn handle_refresh<F, Fut, E>(self, compute: F, value_ttl: Duration)
@@ -182,29 +190,33 @@ where
 
         let entry = self.inflight.entry(self.key.clone());
         if let dashmap::Entry::Vacant(entry) = entry {
-            let cache = Arc::clone(&self.cache);
-            let key = self.key.clone();
-            let fut = compute();
-            let fut_shared: SharedFuture<V, CacheRequestError<C::Error>> = async move {
-                let val = fut
-                    .await
-                    .map_err(|e| CacheRequestError::ComputeError(e.to_string()))?;
-                cache.set(&key, &val, self.ttl).await?;
-                (self.on_refresh_computed)(&key, &val);
-                Ok(val)
-            }
-            .boxed()
-            .shared();
+            let fut_shared = Self::build_shared_future(compute());
 
             entry.insert(fut_shared.clone());
 
-            let inflight = self.inflight.clone();
-            let key = self.key.clone();
+            let inflight = Arc::clone(&self.inflight);
             tokio::spawn(async move {
-                let _ = fut_shared.await;
-                inflight.remove(&key);
+                let res = fut_shared.await;
+                if let Ok(val) = res {
+                    let _ = self.cache.set(&self.key, &val, self.ttl).await;
+                    (self.on_refresh_computed)(&self.key, &val);
+                }
+                inflight.remove(&self.key);
             });
         }
+    }
+
+    fn build_shared_future<Fut, E>(fut: Fut) -> SharedFuture<V, CacheRequestError<C::Error>>
+    where
+        Fut: Future<Output = Result<V, E>> + Send + 'static,
+        E: Display,
+    {
+        async move {
+            fut.await
+                .map_err(|e| CacheRequestError::ComputeError(e.to_string()))
+        }
+        .boxed()
+        .shared()
     }
 }
 
