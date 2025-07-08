@@ -1,4 +1,4 @@
-use crate::stores::AsyncCacheStore;
+use crate::{handler::cache_request_builder::*, stores::AsyncCacheStore};
 use bon::Builder;
 use dashmap::DashMap;
 use futures::{
@@ -55,6 +55,15 @@ where
             self.on_computed.clone(),
             self.on_refresh_computed.clone(),
         )
+    }
+
+    pub fn default_request(&self) -> CacheRequestBuilder<C, K, V, SetRefreshAhead<SetTtl>>
+    where
+        Self: Sized,
+    {
+        self.request()
+            .ttl(self.default_ttl)
+            .maybe_refresh_ahead(self.default_refresh_ahead)
     }
 }
 

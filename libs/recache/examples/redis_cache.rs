@@ -25,10 +25,8 @@ static REFRESH_HOOK_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 async fn call(cache: &RedisCacheHandler<A>) {
     let res = cache
-        .request()
+        .default_request()
         .key("test")
-        .ttl(cache.default_ttl)
-        .maybe_refresh_ahead(cache.default_refresh_ahead)
         .execute(|| async {
             tokio::time::sleep(Duration::from_secs(10)).await;
             Ok::<A, String>(A::new(1, "2".to_string()))
