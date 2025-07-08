@@ -123,7 +123,7 @@ impl S3Storage {
                         .await
                         .context(format!("put object {} into s3 storage failed", object.key))?;
 
-                    // Have to always be false, as the integrity should already be validated
+                    // Have to always be valid, as the integrity should already be validated
                     // by S3 storage as we provided 'Content-MD5' header. But added additional
                     // check here just in case the header is not supported by the given storage.
                     Self::validate_object_e_tag(&object.key, response.e_tag(), content_md5)?;
