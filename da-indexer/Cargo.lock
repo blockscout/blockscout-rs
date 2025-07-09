@@ -2325,7 +2325,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "blockscout-service-launcher",
- "da-indexer-entity",
  "da-indexer-logic",
  "da-indexer-migration",
  "hex",

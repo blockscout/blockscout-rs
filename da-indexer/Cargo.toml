@@ -45,7 +45,6 @@ prost-build = "0.13"
 reqwest = { version = "0.12.5", features = ["json"] }
 reqwest-middleware = { version = "0.3.3" }
 reqwest-retry = { version = "0.6.1" }
-rust-s3 = { version = "0.35.1"}
 sea-orm = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "postgres-array"] }
 sea-orm-migration = { version = "1.1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 serde = { version = "1.0" }
