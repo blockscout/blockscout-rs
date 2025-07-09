@@ -42,6 +42,21 @@ fn domain_name_with_tld_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"\b[\p{L}\p{N}\p{Emoji}_-]{3,63}\.eth\b").unwrap())
 }
 
+macro_rules! maybe_cache_lookup {
+    ($cache:expr, $key:expr, $get:expr) => {
+        if let Some(cache) = $cache {
+            cache
+                .default_request()
+                .key($key)
+                .execute($get)
+                .await
+                .map_err(|err| err.into())
+        } else {
+            $get().await
+        }
+    };
+}
+
 pub enum AddressSearchConfig<'a> {
     NFTSearch {
         domain_primary_chain_id: ChainId,
@@ -426,17 +441,6 @@ pub async fn quick_search(
     Ok(results)
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum SearchTerm {
-    Hash(alloy_primitives::B256),
-    AddressHash(alloy_primitives::Address),
-    BlockNumber(alloy_primitives::BlockNumber),
-    Dapp(String),
-    TokenInfo(String),
-    ContractName(String),
-    Domain(String),
-}
-
 pub type UniformChainSearchCache = CacheHandler<RedisStore, String, Vec<Address>>;
 
 pub struct SearchContext<'a> {
@@ -448,6 +452,17 @@ pub struct SearchContext<'a> {
     pub domain_primary_chain_id: ChainId,
     pub marketplace_enabled_cache: &'a chains::MarketplaceEnabledCache,
     pub uniform_chain_search_cache: Option<&'a UniformChainSearchCache>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum SearchTerm {
+    Hash(alloy_primitives::B256),
+    AddressHash(alloy_primitives::Address),
+    BlockNumber(alloy_primitives::BlockNumber),
+    Dapp(String),
+    TokenInfo(String),
+    ContractName(String),
+    Domain(String),
 }
 
 impl SearchTerm {
@@ -597,18 +612,11 @@ impl SearchTerm {
                     }
                 };
 
-                let addresses = if let Some(cache) = search_context.uniform_chain_search_cache {
-                    let res = cache
-                        .request()
-                        .key(query.clone())
-                        .ttl(cache.default_ttl)
-                        .maybe_refresh_ahead(cache.default_refresh_ahead)
-                        .execute(get_address)
-                        .await;
-                    res?
-                } else {
-                    get_address().await?
-                };
+                let addresses = maybe_cache_lookup!(
+                    search_context.uniform_chain_search_cache,
+                    query.clone(),
+                    get_address
+                )?;
 
                 results.addresses.extend(addresses);
             }
