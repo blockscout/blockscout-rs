@@ -1,4 +1,5 @@
 use crate::{common, s3_storage::S3Storage};
+use anyhow::Context;
 use da_indexer_entity::{
     eigenda_batches,
     eigenda_blobs::{ActiveModel, Column, Entity, Model},
@@ -69,38 +70,52 @@ pub async fn upsert_many<C: ConnectionTrait>(
     blobs: Vec<Vec<u8>>,
 ) -> Result<(), anyhow::Error> {
     let mut data_s3_objects = vec![];
-    let blobs = blobs.into_iter().enumerate().map(|(i, blob_data)| {
-        let blob_index = start_index + i as i32;
+    let blobs: Vec<_> = blobs
+        .into_iter()
+        .enumerate()
+        .map(|(i, blob_data)| {
+            let blob_index = start_index + i as i32;
 
-        let id = compute_id(batch_header_hash, blob_index);
+            let id = compute_id(batch_header_hash, blob_index);
 
-        let (db_data, s3_object) = common::repository::convert_blob_data_to_db_data_and_s3_object(
-            s3_storage, "eigenda", &id, blob_data,
-        );
-        if let Some(s3_object) = s3_object {
-            data_s3_objects.push(s3_object);
+            let (db_data, s3_object) =
+                common::repository::convert_blob_data_to_db_data_and_s3_object(
+                    s3_storage, "eigenda", &id, blob_data,
+                );
+            if let Some(s3_object) = s3_object {
+                data_s3_objects.push(s3_object);
+            }
+
+            let model = Model {
+                id: compute_id(batch_header_hash, blob_index),
+                batch_header_hash: batch_header_hash.to_vec(),
+                blob_index,
+                data: db_data.data,
+                data_s3_object_key: db_data.data_s3_object_key,
+            };
+            let active: ActiveModel = model.into();
+            active
+        })
+        .collect();
+
+    let database_insert_future = async move {
+        Entity::insert_many(blobs)
+            .on_conflict(OnConflict::column(Column::Id).do_nothing().to_owned())
+            .on_empty_do_nothing()
+            .exec(db)
+            .await
+            .context("database insertion")
+    };
+    let s3_storage_insert_future = async move {
+        match s3_storage {
+            None => Ok(()),
+            Some(s3_storage) => s3_storage
+                .insert_many(data_s3_objects)
+                .await
+                .context("s3 storage insertion"),
         }
-
-        let model = Model {
-            id: compute_id(batch_header_hash, blob_index),
-            batch_header_hash: batch_header_hash.to_vec(),
-            blob_index,
-            data: db_data.data,
-            data_s3_object_key: db_data.data_s3_object_key,
-        };
-        let active: ActiveModel = model.into();
-        active
-    });
-
-    Entity::insert_many(blobs)
-        .on_conflict(OnConflict::column(Column::Id).do_nothing().to_owned())
-        .on_empty_do_nothing()
-        .exec(db)
-        .await?;
-
-    if let Some(s3_storage) = s3_storage {
-        s3_storage.insert_many(data_s3_objects).await?;
-    }
+    };
+    futures::future::try_join(database_insert_future, s3_storage_insert_future).await?;
 
     Ok(())
 }

@@ -1,4 +1,5 @@
 use crate::{common, s3_storage::S3Storage};
+use anyhow::Context;
 use celestia_types::Blob as CelestiaBlob;
 use da_indexer_entity::{
     celestia_blobs::{ActiveModel, Column, Entity, Model},
@@ -64,39 +65,52 @@ pub async fn upsert_many<C: ConnectionTrait>(
     blobs: Vec<CelestiaBlob>,
 ) -> Result<(), anyhow::Error> {
     let mut data_s3_objects = vec![];
-    let blobs = blobs.into_iter().map(|blob| {
-        let id = compute_id(height, &blob.commitment.0);
+    let blobs: Vec<_> = blobs
+        .into_iter()
+        .map(|blob| {
+            let id = compute_id(height, &blob.commitment.0);
 
-        let (db_data, s3_object) = common::repository::convert_blob_data_to_db_data_and_s3_object(
-            s3_storage, "celestia", &id, blob.data,
-        );
-        if let Some(s3_object) = s3_object {
-            data_s3_objects.push(s3_object);
-        }
+            let (db_data, s3_object) =
+                common::repository::convert_blob_data_to_db_data_and_s3_object(
+                    s3_storage, "celestia", &id, blob.data,
+                );
+            if let Some(s3_object) = s3_object {
+                data_s3_objects.push(s3_object);
+            }
 
-        let model = Model {
-            id,
-            height: height as i64,
-            namespace: blob.namespace.as_bytes().to_vec(),
-            commitment: blob.commitment.0.to_vec(),
-            data: db_data.data,
-            data_s3_object_key: db_data.data_s3_object_key,
-        };
-        let active: ActiveModel = model.into();
-        active
-    });
+            let model = Model {
+                id,
+                height: height as i64,
+                namespace: blob.namespace.as_bytes().to_vec(),
+                commitment: blob.commitment.0.to_vec(),
+                data: db_data.data,
+                data_s3_object_key: db_data.data_s3_object_key,
+            };
+            let active: ActiveModel = model.into();
+            active
+        })
+        .collect();
 
     // id is the hash of height, namespace and data
     // so if we have a conflict, we can assume that the blob is the same
-    Entity::insert_many(blobs)
-        .on_conflict(OnConflict::column(Column::Id).do_nothing().to_owned())
-        .on_empty_do_nothing()
-        .exec(db)
-        .await?;
-
-    if let Some(s3_storage) = s3_storage {
-        s3_storage.insert_many(data_s3_objects).await?;
-    }
+    let database_insert_future = async move {
+        Entity::insert_many(blobs)
+            .on_conflict(OnConflict::column(Column::Id).do_nothing().to_owned())
+            .on_empty_do_nothing()
+            .exec(db)
+            .await
+            .context("database insertion")
+    };
+    let s3_storage_insert_future = async move {
+        match s3_storage {
+            None => Ok(()),
+            Some(s3_storage) => s3_storage
+                .insert_many(data_s3_objects)
+                .await
+                .context("s3 storage insertion"),
+        }
+    };
+    futures::future::try_join(database_insert_future, s3_storage_insert_future).await?;
 
     Ok(())
 }
