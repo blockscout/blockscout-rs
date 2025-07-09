@@ -15,6 +15,7 @@ macro_rules! call_retriable {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Settings {
     pub da: DaLayer,
     pub database: DatabaseSettings,
