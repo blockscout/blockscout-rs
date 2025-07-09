@@ -93,7 +93,7 @@ mod s3_storage {
         if !does_bucket_exist(client, bucket_name).await {
             return;
         }
-        clear_bucket(client, bucket_name).await;
+        empty_bucket(client, bucket_name).await;
         client
             .delete_bucket()
             .bucket(bucket_name)
@@ -102,7 +102,7 @@ mod s3_storage {
             .expect("failed to delete existing bucket");
     }
 
-    async fn clear_bucket(client: &s3::Client, bucket_name: &str) {
+    async fn empty_bucket(client: &s3::Client, bucket_name: &str) {
         let mut objects = client
             .list_objects_v2()
             .bucket(bucket_name)
