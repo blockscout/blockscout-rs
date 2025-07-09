@@ -2320,6 +2320,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "da-indexer-scripts"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blockscout-service-launcher",
+ "da-indexer-logic",
+ "da-indexer-migration",
+ "hex",
+ "sea-orm",
+ "serde",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "da-indexer-server"
 version = "0.1.0"
 dependencies = [
