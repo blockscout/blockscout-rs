@@ -7,8 +7,7 @@ pub fn parse_query<T: FromStr>(input: String) -> Result<T, Status>
 where
     <T as FromStr>::Err: std::fmt::Display,
 {
-    T::from_str(&input)
-        .map_err(|e| Status::invalid_argument(format!("invalid value {}: {e}", input)))
+    T::from_str(&input).map_err(|e| Status::invalid_argument(format!("invalid value {input}: {e}")))
 }
 
 #[allow(clippy::result_large_err)]

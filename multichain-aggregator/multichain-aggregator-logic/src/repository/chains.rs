@@ -5,7 +5,7 @@ use entity::{
 };
 use sea_orm::{
     prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait,
+    EntityTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
 pub async fn upsert_many<C>(db: &C, chains: Vec<Chain>) -> Result<(), DbErr>

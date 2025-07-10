@@ -103,7 +103,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .map(|(name, cluster)| {
             let chain_ids = cluster.chain_ids.into_iter().collect::<HashSet<_>>();
             if chain_ids.is_empty() {
-                panic!("cluster {} has no chain_ids", name);
+                panic!("cluster {name} has no chain_ids");
             }
             (name.clone(), Cluster::new(chain_ids))
         })

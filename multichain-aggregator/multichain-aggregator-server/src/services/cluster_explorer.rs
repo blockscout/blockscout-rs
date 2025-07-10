@@ -32,7 +32,7 @@ impl ClusterExplorer {
     fn try_get_cluster(&self, name: &str) -> Result<&Cluster, Status> {
         self.clusters
             .get(name)
-            .ok_or(Status::not_found(format!("cluster not found: {}", name)))
+            .ok_or(Status::not_found(format!("cluster not found: {name}")))
     }
 
     fn normalize_page_size(&self, size: Option<u32>) -> u32 {
@@ -91,7 +91,7 @@ impl ClusterExplorerService for ClusterExplorer {
         Ok(Response::new(ListInteropMessagesResponse {
             items: interop_messages.into_iter().map(|i| i.into()).collect(),
             next_page_params: next_page_token.map(|(t, h)| Pagination {
-                page_token: format!("{},{}", t, h),
+                page_token: format!("{t},{h}"),
                 page_size,
             }),
         }))
