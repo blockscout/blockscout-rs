@@ -71,6 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     compile(
         &[
             "proto/v1/multichain-aggregator.proto",
+            "proto/v1/cluster-explorer.proto",
             "proto/v1/health.proto",
         ],
         &["proto"],
