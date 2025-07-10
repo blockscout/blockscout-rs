@@ -225,10 +225,7 @@ fn validate_verification_response<T: TestCase>(
             .compilation_artifacts
             .map(|value| {
                 serde_json::from_str::<serde_json::Value>(&value).unwrap_or_else(|err| {
-                    panic!(
-                        "Compilation artifacts deserialization failed: {}; err: {}",
-                        value, err
-                    )
+                    panic!("Compilation artifacts deserialization failed: {value}; err: {err}")
                 })
             })
             .expect("Compilation artifacts are missing");
@@ -242,10 +239,7 @@ fn validate_verification_response<T: TestCase>(
             .creation_input_artifacts
             .map(|value| {
                 serde_json::from_str::<serde_json::Value>(&value).unwrap_or_else(|err| {
-                    panic!(
-                        "Creation input artifacts deserialization failed: {}; err: {}",
-                        value, err
-                    )
+                    panic!("Creation input artifacts deserialization failed: {value}; err: {err}")
                 })
             })
             .expect("Creation input artifacts are missing");
@@ -260,8 +254,7 @@ fn validate_verification_response<T: TestCase>(
             .map(|value| {
                 serde_json::from_str::<serde_json::Value>(&value).unwrap_or_else(|err| {
                     panic!(
-                        "Deployed bytecode artifacts deserialization failed: {}; err: {}",
-                        value, err
+                        "Deployed bytecode artifacts deserialization failed: {value}; err: {err}"
                     )
                 })
             })

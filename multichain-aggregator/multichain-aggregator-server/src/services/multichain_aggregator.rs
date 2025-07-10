@@ -262,7 +262,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         Ok(Response::new(ListTransactionsResponse {
             items: transactions.into_iter().map(|t| t.into()).collect(),
             next_page_params: next_page_token.map(|c| Pagination {
-                page_token: format!("{}", c),
+                page_token: c.to_string(),
                 page_size,
             }),
         }))

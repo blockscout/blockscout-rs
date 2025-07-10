@@ -29,7 +29,7 @@ prost-build = { workspace = true }
 tonic-build = { workspace = true }
 
 [dev-dependencies]
-eth-bytecode-db-proto = { workspace = true, features = [ "http-client", "mock" ] }
+eth-bytecode-db-proto = { workspace = true, features = ["http-client", "mock"] }
 
 [features]
 http-client = [

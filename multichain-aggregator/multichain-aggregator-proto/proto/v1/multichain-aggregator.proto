@@ -147,12 +147,26 @@ message BatchImportRequest {
     }
   }
 
+  message AddressCoinBalanceImport {
+    string address_hash = 1;
+    string value = 2;
+  }
+
+  message AddressTokenBalanceImport {
+    string address_hash = 1;
+    string token_address_hash = 2;
+    optional string token_id = 3;
+    string value = 4;
+  }
+
   string chain_id = 1;
   repeated AddressImport addresses = 2;
   repeated BlockRangeImport block_ranges = 3;
   repeated HashImport hashes = 4;
   repeated InteropMessageImport interop_messages = 5;
-  string api_key = 6;
+  repeated AddressCoinBalanceImport address_coin_balances = 6;
+  repeated AddressTokenBalanceImport address_token_balances = 7;
+  string api_key = 8;
 }
 
 message BatchImportResponse { string status = 1; }

@@ -213,7 +213,7 @@ mod tests {
 
     fn validate_custom_error(error: minicbor::decode::Error, expected: ParseError) {
         if !error.is_custom() {
-            panic!("expected custom error, got {:?}", error)
+            panic!("expected custom error, got {error:?}")
         }
 
         let source = error.source().unwrap();

@@ -1,6 +1,6 @@
 use sea_orm::DatabaseConnection;
 
-use crate::celestia::{repository::blocks, tests::init_db};
+use crate::{celestia::repository::blocks, common::tests::init_db};
 
 #[tokio::test]
 async fn upsert_test() {

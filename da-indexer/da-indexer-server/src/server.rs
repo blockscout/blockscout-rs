@@ -13,6 +13,7 @@ use da_indexer_proto::blockscout::da_indexer::v1::{
 };
 use sea_orm::DatabaseConnection;
 
+use da_indexer_logic::s3_storage::S3Storage;
 use std::{path::PathBuf, sync::Arc};
 
 const SERVICE_NAME: &str = "da_indexer";
@@ -52,11 +53,16 @@ impl launcher::HttpRouter for Router {
 pub async fn run(
     settings: Settings,
     database_connection: Option<DatabaseConnection>,
+    s3_storage: Option<S3Storage>,
     l2_router: Option<L2Router>,
 ) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
-    let celestia = Arc::new(CelestiaService::new(database_connection.clone(), l2_router));
-    let eigenda = Arc::new(EigenDaService::new(database_connection.clone()));
+    let celestia = Arc::new(CelestiaService::new(
+        database_connection.clone(),
+        s3_storage.clone(),
+        l2_router,
+    ));
+    let eigenda = Arc::new(EigenDaService::new(database_connection.clone(), s3_storage));
 
     let router = Router {
         health,
@@ -72,7 +78,8 @@ pub async fn run(
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: Default::default(),
     };
 
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(launch_settings, http_router, grpc_router).await
 }

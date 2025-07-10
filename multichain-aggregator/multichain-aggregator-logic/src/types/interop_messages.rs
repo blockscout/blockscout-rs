@@ -5,12 +5,15 @@ use crate::{
     types::{interop_message_transfers::InteropMessageTransfer, proto_address_hash_from_alloy},
 };
 use alloy_primitives::{Address, Bytes, TxHash};
+use chrono::{Duration, Utc};
 use entity::{
     interop_messages::{ActiveModel, Model},
     interop_messages_transfers,
 };
 use sea_orm::{prelude::DateTime, ActiveValue::Set};
 use std::str::FromStr;
+
+const SEVEN_DAYS: Duration = Duration::days(7);
 
 #[derive(Debug, Clone)]
 pub struct InteropMessage {
@@ -27,10 +30,12 @@ pub struct InteropMessage {
     pub transfer: Option<InteropMessageTransfer>,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Status {
     Pending,
     Failed,
     Success,
+    Expired,
 }
 
 impl From<Status> for proto::interop_message::Status {
@@ -39,6 +44,7 @@ impl From<Status> for proto::interop_message::Status {
             Status::Pending => proto::interop_message::Status::Pending,
             Status::Failed => proto::interop_message::Status::Failed,
             Status::Success => proto::interop_message::Status::Success,
+            Status::Expired => proto::interop_message::Status::Expired,
         }
     }
 }
@@ -63,7 +69,19 @@ impl InteropMessage {
 
     pub fn status(&self) -> Status {
         match (self.relay_transaction_hash, self.failed) {
-            (None, _) => Status::Pending,
+            (None, _) => {
+                let now = Utc::now().naive_utc();
+                let is_expired = self
+                    .timestamp
+                    .map(|t| t + SEVEN_DAYS < now)
+                    .unwrap_or(false);
+
+                if is_expired {
+                    Status::Expired
+                } else {
+                    Status::Pending
+                }
+            }
             (_, Some(true)) => Status::Failed,
             _ => Status::Success,
         }
@@ -185,8 +203,7 @@ impl FromStr for MessageDirection {
             "from" => Ok(MessageDirection::From),
             "to" => Ok(MessageDirection::To),
             _ => Err(ParseError::Custom(format!(
-                "invalid message direction: {}",
-                s
+                "invalid message direction: {s}",
             ))),
         }
     }
@@ -235,5 +252,31 @@ impl From<MessageType> for String {
             MessageType::ContractCall => "contract_call",
         }
         .to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_interop_message_status() {
+        let mut message = InteropMessage::base(
+            1,
+            ChainId::from_str("1").unwrap(),
+            ChainId::from_str("2").unwrap(),
+        );
+
+        message.timestamp = Some(Utc::now().naive_utc() - SEVEN_DAYS);
+        assert_eq!(message.status(), Status::Expired);
+
+        message.timestamp = Some(Utc::now().naive_utc());
+        assert_eq!(message.status(), Status::Pending);
+
+        message.relay_transaction_hash = Some(TxHash::repeat_byte(0));
+        assert_eq!(message.status(), Status::Success);
+
+        message.failed = Some(true);
+        assert_eq!(message.status(), Status::Failed);
     }
 }
