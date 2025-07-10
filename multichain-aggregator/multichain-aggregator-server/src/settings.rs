@@ -61,8 +61,10 @@ pub struct ClusterExplorerSettings {
     pub clusters: HashMap<String, ClusterSettings>,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ClusterSettings {
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
     pub chain_ids: Vec<i64>,
 }
 
