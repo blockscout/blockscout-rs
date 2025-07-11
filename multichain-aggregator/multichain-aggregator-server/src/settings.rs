@@ -24,8 +24,33 @@ pub struct Settings {
     #[serde(default)]
     pub replica_database: Option<ReplicaDatabaseSettings>,
     pub service: ServiceSettings,
+    pub cache: Option<CacheSettings>,
     #[serde(default)]
     pub cluster_explorer: ClusterExplorerSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CacheSettings {
+    pub redis: RedisSettings,
+    #[serde(default = "default_uniform_chain_search_cache")]
+    pub uniform_chain_search_cache: CacheEntrySettings,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CacheEntrySettings {
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    pub ttl: time::Duration,
+    #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
+    pub refresh_ahead: Option<time::Duration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RedisSettings {
+    pub url: Url,
 }
 
 #[serde_as]
@@ -133,6 +158,7 @@ impl Settings {
                 marketplace_enabled_cache_fetch_concurrency:
                     default_marketplace_enabled_cache_fetch_concurrency(),
             },
+            cache: None,
             cluster_explorer: Default::default(),
         }
     }
@@ -166,4 +192,14 @@ fn default_marketplace_enabled_cache_update_interval() -> time::Duration {
 
 fn default_marketplace_enabled_cache_fetch_concurrency() -> usize {
     10
+}
+
+fn default_uniform_chain_search_cache() -> CacheEntrySettings {
+    let hour = 60 * 60;
+    let ttl = time::Duration::from_secs(hour);
+    let refresh_ahead = ttl / 5; // 20% of ttl
+    CacheEntrySettings {
+        ttl,
+        refresh_ahead: Some(refresh_ahead),
+    }
 }

@@ -1,10 +1,11 @@
 use super::ChainId;
 use crate::{error::ParseError, proto};
 use entity::addresses::Model;
+use serde::{Deserialize, Serialize};
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DomainInfo {
     pub address: String,
     pub name: String,
@@ -12,7 +13,7 @@ pub struct DomainInfo {
     pub names_count: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Address {
     pub chain_id: ChainId,
     pub hash: alloy_primitives::Address,
