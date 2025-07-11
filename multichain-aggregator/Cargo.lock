@@ -4356,7 +4356,7 @@ dependencies = [
 [[package]]
 name = "recache"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?branch=lok52%2Flibs-add-recache#0c61cc158946251b76eb462995ff7affec54ff0c"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=2530a94#2530a94581e5990fa1e85a8177a2fcbe722c5082"
 dependencies = [
  "async-trait",
  "bon",
