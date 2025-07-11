@@ -100,9 +100,9 @@ impl Indexer {
         })
         .filter_map(|fut| async {
             fut.await
-                .map_err(
-                    |err: Error| tracing::error!(error = %err, "failed to retrieve unprocessed jobs"),
-                )
+                .map_err(|err: Error| {
+                    tracing::error!("failed to retrieve unprocessed jobs: {err:#?}")
+                })
                 .ok()
         })
         .take_while(|jobs| future::ready(!jobs.is_empty()))
