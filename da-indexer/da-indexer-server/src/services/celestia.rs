@@ -1,23 +1,34 @@
+use super::bytes_from_hex_or_base64;
 use crate::proto::celestia_service_server::CelestiaService as Celestia;
 use base64::prelude::*;
-use da_indexer_logic::celestia::{l2_router::L2Router, repository::blobs};
+use da_indexer_logic::{
+    celestia::{l2_router::L2Router, repository::blobs},
+    s3_storage::S3Storage,
+};
 use da_indexer_proto::blockscout::da_indexer::v1::{
     CelestiaBlob, CelestiaBlobId, CelestiaL2BatchMetadata, GetCelestiaBlobRequest,
 };
 use sea_orm::DatabaseConnection;
 use tonic::{Request, Response, Status};
 
-use super::bytes_from_hex_or_base64;
-
 #[derive(Default)]
 pub struct CelestiaService {
     db: Option<DatabaseConnection>,
+    s3_storage: Option<S3Storage>,
     l2_router: Option<L2Router>,
 }
 
 impl CelestiaService {
-    pub fn new(db: Option<DatabaseConnection>, l2_router: Option<L2Router>) -> Self {
-        Self { db, l2_router }
+    pub fn new(
+        db: Option<DatabaseConnection>,
+        s3_storage: Option<S3Storage>,
+        l2_router: Option<L2Router>,
+    ) -> Self {
+        Self {
+            db,
+            s3_storage,
+            l2_router,
+        }
     }
 }
 
@@ -36,13 +47,14 @@ impl Celestia for CelestiaService {
         let height = inner.height;
         let commitment = bytes_from_hex_or_base64(&inner.commitment, "commitment")?;
 
-        let blob = blobs::find_by_height_and_commitment(db, height, &commitment)
-            .await
-            .map_err(|err| {
-                tracing::error!(error = ?err, "failed to query blob");
-                Status::internal("failed to query blob")
-            })?
-            .ok_or(Status::not_found("blob not found"))?;
+        let blob =
+            blobs::find_by_height_and_commitment(db, self.s3_storage.as_ref(), height, &commitment)
+                .await
+                .map_err(|err| {
+                    tracing::error!(error = ?err, "failed to query blob");
+                    Status::internal("failed to query blob")
+                })?
+                .ok_or(Status::not_found("blob not found"))?;
 
         let data =
             (!inner.skip_data.unwrap_or_default()).then_some(BASE64_STANDARD.encode(&blob.data));

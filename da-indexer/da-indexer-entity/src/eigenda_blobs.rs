@@ -14,8 +14,9 @@ pub struct Model {
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub batch_header_hash: Vec<u8>,
     pub blob_index: i32,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub data: Vec<u8>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub data: Option<Vec<u8>>,
+    pub data_s3_object_key: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

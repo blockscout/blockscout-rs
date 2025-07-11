@@ -174,6 +174,14 @@ Response:
 }
 ```
 
+## Tests
+In order to run tests you have to connect to s3 storage. We suggest to run [minio](https://github.com/minio/minio).
+The easiest option is to use a docker image:
+```commandline
+docker run -p 9000:9000 quay.io/minio/minio server /data
+```
+You can specify connection settings via `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY` envs.
+
 ## Dev
 
 + Install [just](https://github.com/casey/just) cli. Just is like make but better.

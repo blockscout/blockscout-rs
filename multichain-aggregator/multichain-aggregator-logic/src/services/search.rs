@@ -5,7 +5,7 @@ use crate::{
         token_info::search_token_infos,
     },
     error::{ParseError, ServiceError},
-    repository::{addresses, block_ranges, hashes, interop_messages},
+    repository::{addresses, block_ranges, hashes},
     services::chains,
     types::{
         addresses::{Address, DomainInfo, TokenType},
@@ -13,19 +13,18 @@ use crate::{
         dapp::MarketplaceDapp,
         domains::Domain,
         hashes::{Hash, HashType},
-        interop_messages::{InteropMessage, MessageDirection},
         search_results::QuickSearchResult,
         token_info::Token,
         ChainId,
     },
 };
-use alloy_primitives::{Address as AddressAlloy, TxHash};
+use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use blockscout_service_launcher::database::ReadWriteRepo;
 use recache::{handler::CacheHandler, stores::redis::RedisStore};
 use regex::Regex;
-use sea_orm::{prelude::DateTime, DatabaseConnection};
+use sea_orm::DatabaseConnection;
 use std::{
     collections::HashSet,
     str::FromStr,
@@ -263,38 +262,6 @@ pub async fn search_hashes(
             .map(Hash::try_from)
             .collect::<Result<Vec<_>, _>>()?,
         page_token,
-    ))
-}
-
-#[allow(clippy::too_many_arguments)]
-pub async fn search_interop_messages(
-    db: &DatabaseConnection,
-    init_chain_id: Option<ChainId>,
-    relay_chain_id: Option<ChainId>,
-    address: Option<AddressAlloy>,
-    direction: Option<MessageDirection>,
-    nonce: Option<i64>,
-    page_size: u64,
-    page_token: Option<(DateTime, TxHash)>,
-) -> Result<(Vec<InteropMessage>, Option<(DateTime, TxHash)>), ServiceError> {
-    let (interop_messages, next_page_token) = interop_messages::list(
-        db,
-        init_chain_id,
-        relay_chain_id,
-        address,
-        direction,
-        nonce,
-        page_size,
-        page_token,
-    )
-    .await?;
-
-    Ok((
-        interop_messages
-            .into_iter()
-            .map(InteropMessage::try_from)
-            .collect::<Result<Vec<_>, _>>()?,
-        next_page_token,
     ))
 }
 
