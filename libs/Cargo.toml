@@ -16,4 +16,5 @@ members = [
     "sourcify",
     "api-client-framework",
     "actix-phoenix-channel",
+    "recache",
 ]
