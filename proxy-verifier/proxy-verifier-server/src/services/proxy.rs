@@ -90,6 +90,7 @@ async fn list_chains(proxy: &ProxyService) -> Vec<Chain> {
                 id: id.clone(),
                 name: settings.name,
                 icon_url,
+                is_testnet: settings.is_testnet,
             }
         })
         .collect()
