@@ -1,0 +1,422 @@
+swagger: "2.0"
+info:
+  title: v1/zetachain-cctx.proto
+  version: version not set
+tags:
+  - name: CctxInfoService
+  - name: Health
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/CctxInfoService:get:
+    get:
+      operationId: CctxInfoService_GetCctxInfo
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CrossChainTx'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cctx_id
+          in: query
+          required: false
+          type: string
+      tags:
+        - CctxInfoService
+  /api/v1/CctxInfoService:list:
+    get:
+      operationId: CctxInfoService_ListCctxs
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListCctxsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: offset
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: status
+          in: query
+          required: false
+          type: string
+      tags:
+        - CctxInfoService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  googlerpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  v1CallOptions:
+    type: object
+    properties:
+      gas_limit:
+        type: string
+        format: uint64
+      is_arbitrary_call:
+        type: boolean
+  v1CctxListItem:
+    type: object
+    properties:
+      index:
+        type: string
+      status:
+        $ref: '#/definitions/v1CctxStatus'
+      amount:
+        type: string
+      source_chain_id:
+        type: string
+      target_chain_id:
+        type: string
+      last_update_timestamp:
+        type: string
+        format: int64
+  v1CctxStatus:
+    type: string
+    enum:
+      - PendingInbound
+      - PendingOutbound
+      - OutboundMined
+      - PendingRevert
+      - Reverted
+      - Aborted
+    default: PendingInbound
+    description: |2-
+       - PendingInbound: some observer sees inbound tx
+       - PendingOutbound: super majority observer see inbound tx
+       - OutboundMined: the corresponding outbound tx is mined
+       - PendingRevert: outbound cannot succeed; should revert inbound
+       - Reverted: inbound reverted.
+       - Aborted: inbound tx error or invalid paramters and cannot revert; just abort.
+  v1CoinType:
+    type: string
+    enum:
+      - Zeta
+      - Gas
+      - Erc20
+      - Cmd
+      - NoAssetCall
+    default: Zeta
+    title: |-
+      - Gas: Ether, BNB, Matic, Klay, BTC, etc
+       - Erc20: ERC20 token
+       - Cmd: no asset, used for admin command
+       - NoAssetCall: no asset, used for contract call
+  v1ConfirmationMode:
+    type: string
+    enum:
+      - SAFE
+      - FAST
+    default: SAFE
+    title: |-
+      - SAFE: an inbound/outbound is confirmed using safe confirmation count
+       - FAST: an inbound/outbound is confirmed using fast confirmation count
+  v1CrossChainTx:
+    type: object
+    properties:
+      creator:
+        type: string
+      index:
+        type: string
+      zeta_fees:
+        type: string
+      relayed_message:
+        type: string
+        title: Not used by protocol , just relayed across
+      cctx_status:
+        $ref: '#/definitions/zetachainCctxv1Status'
+      inbound_params:
+        $ref: '#/definitions/v1InboundParams'
+      outbound_params:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1OutboundParams'
+      protocol_contract_version:
+        $ref: '#/definitions/v1ProtocolContractVersion'
+      revert_options:
+        $ref: '#/definitions/v1RevertOptions'
+      related_cctxs:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RelatedCctx'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1InboundParams:
+    type: object
+    properties:
+      sender:
+        type: string
+        title: this address is the immediate contract/EOA that calls
+      sender_chain_id:
+        type: string
+        format: int64
+        title: the Connector.send()
+      tx_origin:
+        type: string
+        title: this address is the EOA that signs the inbound tx
+      coin_type:
+        $ref: '#/definitions/v1CoinType'
+      asset:
+        type: string
+        title: for ERC20 coin type, the asset is an address of the ERC20 contract
+      amount:
+        type: string
+      observed_hash:
+        type: string
+      observed_external_height:
+        type: string
+        format: uint64
+      ballot_index:
+        type: string
+      finalized_zeta_height:
+        type: string
+        format: uint64
+      tx_finalization_status:
+        $ref: '#/definitions/v1TxFinalizationStatus'
+      is_cross_chain_call:
+        type: boolean
+        title: |-
+          this field describes if a smart contract call should be made for a inbound
+          with assets only used for protocol contract version 2
+      status:
+        $ref: '#/definitions/v1InboundStatus'
+        title: status of the inbound observation
+      confirmation_mode:
+        $ref: '#/definitions/v1ConfirmationMode'
+        title: confirmation mode used for the inbound
+  v1InboundStatus:
+    type: string
+    enum:
+      - SUCCESS
+      - INSUFFICIENT_DEPOSITOR_FEE
+      - INVALID_RECEIVER_ADDRESS
+      - INVALID_MEMO
+    default: SUCCESS
+    description: |-
+      - INSUFFICIENT_DEPOSITOR_FEE: this field is specifically for Bitcoin when the deposit amount is less than
+      depositor fee
+       - INVALID_RECEIVER_ADDRESS: the receiver address parsed from the inbound is invalid
+       - INVALID_MEMO: parse memo is invalid
+    title: InboundStatus represents the status of an observed inbound
+  v1ListCctxsResponse:
+    type: object
+    properties:
+      cctxs:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1CctxListItem'
+  v1OutboundParams:
+    type: object
+    properties:
+      receiver:
+        type: string
+      receiver_chainId:
+        type: string
+        format: int64
+      coin_type:
+        $ref: '#/definitions/v1CoinType'
+      amount:
+        type: string
+      tss_nonce:
+        type: string
+        format: uint64
+      gas_limit:
+        type: string
+        format: uint64
+        title: Deprecated (v21), use CallOptions
+      gas_price:
+        type: string
+      gas_priority_fee:
+        type: string
+      hash:
+        type: string
+        title: |-
+          the above are commands for zetaclients
+          the following fields are used when the outbound tx is mined
+      ballot_index:
+        type: string
+      observed_external_height:
+        type: string
+        format: uint64
+      gas_used:
+        type: string
+        format: uint64
+      effective_gas_price:
+        type: string
+      effective_gas_limit:
+        type: string
+        format: uint64
+      tss_pubkey:
+        type: string
+      tx_finalization_status:
+        $ref: '#/definitions/v1TxFinalizationStatus'
+      call_options:
+        $ref: '#/definitions/v1CallOptions'
+      confirmation_mode:
+        $ref: '#/definitions/v1ConfirmationMode'
+        title: confirmation mode used for the outbound
+  v1ProtocolContractVersion:
+    type: string
+    enum:
+      - V1
+      - V2
+    default: V1
+    title: |-
+      ProtocolContractVersion represents the version of the protocol contract used
+      for cctx workflow
+  v1RelatedCctx:
+    type: object
+    properties:
+      index:
+        type: string
+      depth:
+        type: integer
+        format: int32
+      source_chain_id:
+        type: string
+      status:
+        $ref: '#/definitions/v1CctxStatus'
+      inbound_amount:
+        type: string
+      inbound_coin_type:
+        $ref: '#/definitions/v1CoinType'
+      outbound_params:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RelatedOutboundParams'
+  v1RelatedOutboundParams:
+    type: object
+    properties:
+      amount:
+        type: string
+      chain_id:
+        type: string
+      coin_type:
+        $ref: '#/definitions/v1CoinType'
+  v1RevertOptions:
+    type: object
+    properties:
+      revert_address:
+        type: string
+      call_on_revert:
+        type: boolean
+      abort_address:
+        type: string
+      revert_message:
+        type: string
+        format: byte
+      revert_gas_limit:
+        type: string
+    title: RevertOptions represents the options for reverting a cctx
+  v1TxFinalizationStatus:
+    type: string
+    enum:
+      - NotFinalized
+      - Finalized
+      - Executed
+    default: NotFinalized
+    title: |-
+      - NotFinalized: the corresponding tx is not finalized
+       - Finalized: the corresponding tx is finalized but not executed yet
+       - Executed: the corresponding tx is executed
+  zetachainCctxv1Status:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/v1CctxStatus'
+      status_message:
+        type: string
+        description: |-
+          status_message carries information about the status transitions:
+          why they were triggered, old and new status.
+      error_message:
+        type: string
+        description: |-
+          error_message carries information about the error that caused the tx
+          to be PendingRevert, Reverted or Aborted.
+      lastUpdate_timestamp:
+        type: string
+        format: int64
+      isAbortRefunded:
+        type: boolean
+      created_timestamp:
+        type: string
+        format: int64
+        description: when the CCTX was created. only populated on new transactions.
+      error_message_revert:
+        type: string
+        title: |-
+          error_message_revert carries information about the revert outbound tx ,
+          which is created if the first outbound tx fails
+      error_message_abort:
+        type: string
+        title: error_message_abort carries information when aborting the CCTX fails

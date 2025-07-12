@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package blockscout.zetachainCctx.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/zetachain-cctx";
+
+
+service StatsService {
+  rpc GetHistoricSyncProgress(GetHistoricSyncProgressRequest) returns (GetHistoricSyncProgressResponse) {}
+  rpc GetPendingCCTXAmount(GetPendingCCTXAmountRequest) returns (GetPendingCCTXAmountResponse) {}
+  rpc GetRealTimeGaps(GetRealTimeGapsRequest) returns (GetRealTimeGapsResponse) {}
+}
