@@ -405,13 +405,11 @@ definitions:
   BatchImportRequestCountersImport:
     type: object
     properties:
+      timestamp:
+        type: string
+        format: int64
       global_counters:
         $ref: '#/definitions/CountersImportGlobalCounters'
-      token_counters:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/CountersImportTokenCounters'
   BatchImportRequestHashImport:
     type: object
     properties:
@@ -436,20 +434,6 @@ definitions:
         type: string
         format: uint64
       total_addresses_number:
-        type: string
-        format: uint64
-  CountersImportTokenCounters:
-    type: object
-    properties:
-      address_hash:
-        type: string
-      total_supply:
-        type: string
-        format: uint64
-      holders_number:
-        type: string
-        format: uint64
-      transfers_number:
         type: string
         format: uint64
   HealthCheckResponseServingStatus:

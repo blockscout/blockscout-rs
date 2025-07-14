@@ -18,20 +18,6 @@ impl MigrationTrait for Migration {
                 PRIMARY KEY (id)
             );
 
-            CREATE TABLE counters_token_imported (
-                chain_id bigint NOT NULL REFERENCES chains (id),
-                token_address bytea NOT NULL,
-                total_supply bigint DEFAULT NULL,
-                holders_number bigint DEFAULT NULL,
-                transfers_number bigint DEFAULT NULL,
-                created_at timestamp NOT NULL DEFAULT (now()),
-                updated_at timestamp NOT NULL DEFAULT (now()),
-                PRIMARY KEY (chain_id, token_address)
-            );
-
-            ALTER TABLE addresses ADD COLUMN counter_interop_messages bigint;
-            ALTER TABLE addresses ADD COLUMN counter_interop_transfers bigint;
-
             CREATE INDEX interop_messages_sender_address_hash_index ON interop_messages (sender_address_hash);
             CREATE INDEX interop_messages_target_address_hash_index ON interop_messages (target_address_hash);
             CREATE INDEX interop_messages_transfers_from_address_hash_index ON interop_messages_transfers (from_address_hash);

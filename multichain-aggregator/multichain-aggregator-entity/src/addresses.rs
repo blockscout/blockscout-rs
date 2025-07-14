@@ -26,8 +26,6 @@ pub struct Model {
     pub is_token: bool,
     pub created_at: DateTime,
     pub updated_at: DateTime,
-    pub counter_interop_messages: Option<i64>,
-    pub counter_interop_transfers: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

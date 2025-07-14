@@ -39,8 +39,6 @@ impl From<Address> for Model {
             is_token: v.is_token,
             created_at: Default::default(),
             updated_at: Default::default(),
-            counter_interop_messages: Default::default(),
-            counter_interop_transfers: Default::default(),
         }
     }
 }

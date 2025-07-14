@@ -4,14 +4,14 @@ use super::{
     hashes::{proto_hash_type_to_db_hash_type, Hash},
     interop_message_transfers::InteropMessageTransfer,
     interop_messages::InteropMessage,
-    ChainId, counters::{Counters, ChainCounters, TokenCounters as TokenCountersLogic},
+    ChainId, counters::{Counters, ChainCounters},
 };
 use crate::{
     error::{ParseError, ServiceError},
     metrics::IMPORT_ENTITIES_COUNT,
     proto,
 };
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use sea_orm::prelude::BigDecimal;
 use std::{collections::HashMap, str::FromStr};
 
@@ -295,11 +295,12 @@ impl TryFrom<(ChainId, proto::batch_import_request::CountersImport)> for Counter
     fn try_from((chain_id, proto): (ChainId, proto::batch_import_request::CountersImport)) -> Result<Self, Self::Error> {
         let global = {
             let g: Option<&proto::batch_import_request::counters_import::GlobalCounters> = proto.global_counters.as_ref();
+            let t = proto.timestamp;
 
             g.map(|g| {
                 ChainCounters {
                     chain_id,
-                    timestamp: Utc::now().naive_utc(),
+                    timestamp: parse_timestamp_secs(t).unwrap(),
                     daily_transactions_number: g.daily_transactions_number,
                     total_transactions_number: g.total_transactions_number,
                     total_addresses_number: g.total_addresses_number,
@@ -307,20 +308,6 @@ impl TryFrom<(ChainId, proto::batch_import_request::CountersImport)> for Counter
             })
         };
 
-        let token: Vec<TokenCountersLogic> = proto.token_counters
-            .into_iter()
-            .map(|t| {
-                Ok(TokenCountersLogic {
-                    chain_id,
-                    address: alloy_primitives::Address::from_str(&t.address_hash)?,
-                    total_supply: t.total_supply,
-                    holders_number: t.holders_number,
-                    transfers_number: t.transfers_number,
-                })
-            })
-            .collect::<Result<_, ParseError>>()?;
-
-
-        Ok(Self { global, token })
+        Ok(Self { global })
     }
 }

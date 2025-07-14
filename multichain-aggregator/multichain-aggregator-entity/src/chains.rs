@@ -25,8 +25,6 @@ pub enum Relation {
     BlockRanges,
     #[sea_orm(has_many = "super::counters_global_imported::Entity")]
     CountersGlobalImported,
-    #[sea_orm(has_many = "super::counters_token_imported::Entity")]
-    CountersTokenImported,
     #[sea_orm(has_many = "super::dapps::Entity")]
     Dapps,
     #[sea_orm(has_many = "super::hashes::Entity")]
@@ -54,12 +52,6 @@ impl Related<super::block_ranges::Entity> for Entity {
 impl Related<super::counters_global_imported::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::CountersGlobalImported.def()
-    }
-}
-
-impl Related<super::counters_token_imported::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::CountersTokenImported.def()
     }
 }
 

@@ -5,7 +5,6 @@ pub use super::api_keys::Entity as ApiKeys;
 pub use super::block_ranges::Entity as BlockRanges;
 pub use super::chains::Entity as Chains;
 pub use super::counters_global_imported::Entity as CountersGlobalImported;
-pub use super::counters_token_imported::Entity as CountersTokenImported;
 pub use super::dapps::Entity as Dapps;
 pub use super::hashes::Entity as Hashes;
 pub use super::interop_messages::Entity as InteropMessages;
