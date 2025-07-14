@@ -1,8 +1,6 @@
 import { Address, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import {
-  AuthorisationChanged as AuthorisationChangedEvent,
   TextChanged as TextChangedEvent,
-  TextChanged1 as TextChanged1Event,
   PubkeyChanged as PubkeyChangedEvent,
   NameChanged as NameChangedEvent,
   InterfaceChanged as InterfaceChangedEvent,
@@ -10,8 +8,7 @@ import {
   AddrChanged as AddrChangedEvent,
   AddressChanged as AddressChangedEvent,
   ABIChanged as ABIChangedEvent,
-  VersionChanged as VersionChangedEvent
-} from "../generated/{{ cookiecutter.resolver_name }}/{{ cookiecutter.resolver_name }}"
+} from "../generated/Resolver/Resolver";
 
 import {
   AuthorisationChanged,
@@ -26,9 +23,15 @@ import {
   Account,
   Resolver,
   Domain,
-  MulticoinAddrChanged
-} from "../generated/schema"
-import { createEventID, maybeSaveDomainName, safeAddress } from "./utils";
+  MulticoinAddrChanged,
+} from "../generated/schema";
+import {
+  COIN_TYPE,
+  COIN_TYPE_SEPOLIA,
+  createEventID,
+  maybeSaveDomainName,
+  safeAddress,
+} from "./utils";
 
 export function handleAddrChanged(event: AddrChangedEvent): void {
   let account = new Account(event.params.a.toHexString());
@@ -57,13 +60,39 @@ export function handleAddrChanged(event: AddrChangedEvent): void {
 }
 
 export function handleMulticoinAddrChanged(event: AddressChangedEvent): void {
-  let resolver = getOrCreateResolver(event.params.node, event.address);
-
-
-  // TODO: if protocol doesn't emit AddrChanged event you can check that
-  // coin_type is equal to native coin type and update resolved_address of domain manually
   let coinType = event.params.coinType;
-  
+  if (coinType.toI64() == COIN_TYPE || coinType.toI64() == COIN_TYPE_SEPOLIA) {
+    let account = new Account(event.params.newAddress.toHexString());
+    account.save();
+
+    let resolver = new Resolver(
+      createResolverID(event.params.node, event.address)
+    );
+    resolver.domain = event.params.node.toHexString();
+    resolver.address = event.address;
+    resolver.addr = event.params.newAddress.toHexString();
+    resolver.save();
+
+    let domain = Domain.load(event.params.node.toHexString());
+    if (domain && domain.resolver == resolver.id) {
+      domain.resolvedAddress = safeAddress(event.params.newAddress);
+      domain.save();
+    }
+
+    let resolverEvent = new AddrChanged(createEventID(event));
+    resolverEvent.resolver = resolver.id;
+    resolverEvent.blockNumber = event.block.number.toI32();
+    resolverEvent.transactionID = event.transaction.hash;
+    resolverEvent.addr = event.params.newAddress.toHexString();
+    resolverEvent.save();
+  } else {
+    _handleMulticoinAddrChanged(event);
+  }
+}
+function _handleMulticoinAddrChanged(event: AddressChangedEvent): void {
+  let resolver = getOrCreateResolver(event.params.node, event.address);
+  let coinType = event.params.coinType;
+
   if (resolver.coinTypes == null) {
     resolver.coinTypes = [coinType];
     resolver.save();
@@ -164,41 +193,6 @@ export function handleInterfaceChanged(event: InterfaceChangedEvent): void {
   resolverEvent.save();
 }
 
-export function handleAuthorisationChanged(
-  event: AuthorisationChangedEvent
-): void {
-  let resolverEvent = new AuthorisationChanged(createEventID(event));
-  resolverEvent.blockNumber = event.block.number.toI32();
-  resolverEvent.transactionID = event.transaction.hash;
-  resolverEvent.resolver = createResolverID(event.params.node, event.address);
-  resolverEvent.owner = event.params.owner;
-  resolverEvent.target = event.params.target;
-  resolverEvent.isAuthorized = event.params.isAuthorised;
-  resolverEvent.save(); 
-}
-
-export function handleVersionChanged(event: VersionChangedEvent): void {
-  let resolverEvent = new VersionChanged(createEventID(event));
-  resolverEvent.blockNumber = event.block.number.toI32();
-  resolverEvent.transactionID = event.transaction.hash;
-  resolverEvent.resolver = createResolverID(event.params.node, event.address);
-  resolverEvent.version = event.params.newVersion;
-  resolverEvent.save();
-
-  let domain = Domain.load(event.params.node.toHexString());
-  if (domain && domain.resolver === resolverEvent.resolver) {
-    domain.resolvedAddress = null;
-    domain.save();
-  }
-
-  let resolver = getOrCreateResolver(event.params.node, event.address);
-  resolver.addr = null;
-  resolver.contentHash = null;
-  resolver.texts = null;
-  resolver.coinTypes = null;
-  resolver.save();
-}
-
 function getOrCreateResolver(node: Bytes, address: Address): Resolver {
   let id = createResolverID(node, address);
   let resolver = Resolver.load(id);
@@ -211,8 +205,5 @@ function getOrCreateResolver(node: Bytes, address: Address): Resolver {
 }
 
 function createResolverID(node: Bytes, resolver: Address): string {
-  return resolver
-    .toHexString()
-    .concat("-")
-    .concat(node.toHexString());
+  return resolver.toHexString().concat("-").concat(node.toHexString());
 }

@@ -16,7 +16,7 @@ import {
   NameRegistered as NameRegisteredEvent,
   NameRenewed as NameRenewedEvent,
   Transfer as TransferEvent,
-} from "../generated/{{ cookiecutter.base_name }}/{{ cookiecutter.base_name }}";
+} from "../generated/Base/Base";
 
 // Import entity types generated from the GraphQL schema
 import {
@@ -79,7 +79,7 @@ export function handleNameRenewed(event: NameRenewedEvent): void {
 
   if (registration == null || domain == null) {
     return;
-  }
+  } 
 
   registration.expiryDate = event.params.expires;
   domain.expiryDate = event.params.expires.plus(GRACE_PERIOD_SECONDS);

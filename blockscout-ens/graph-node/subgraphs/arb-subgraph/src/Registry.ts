@@ -4,12 +4,24 @@ import {
   NewOwner as NewOwnerEvent,
   Transfer as TransferEvent,
   NewResolver as NewResolverEvent,
-  NewTTL as NewTTLEvent
-} from "../generated/{{ cookiecutter.registry_name }}/{{ cookiecutter.registry_name }}"
-import { NewOwner, Transfer, NewResolver, NewTTL, Domain, Account, Resolver } from "../generated/schema"
-import { EMPTY_ADDRESS, EMPTY_ADDRESS_BYTEARRAY, ROOT_NODE, concat, createEventID } from "./utils";
-
-
+  NewTTL as NewTTLEvent,
+} from "../generated/Registry/Registry";
+import {
+  NewOwner,
+  Transfer,
+  NewResolver,
+  NewTTL,
+  Domain,
+  Account,
+  Resolver,
+} from "../generated/schema";
+import {
+  EMPTY_ADDRESS,
+  EMPTY_ADDRESS_BYTEARRAY,
+  ROOT_NODE,
+  concat,
+  createEventID,
+} from "./utils";
 
 const BIG_INT_ZERO = BigInt.fromI32(0);
 
