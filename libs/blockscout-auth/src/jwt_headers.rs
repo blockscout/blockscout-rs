@@ -6,6 +6,7 @@ use tonic::metadata::MetadataMap;
 pub const HEADER_JWT_TOKEN_NAME: &str = "authorization";
 pub const COOKIE_JWT_TOKEN_NAME: &str = "_explorer_key";
 pub const CSRF_TOKEN_NAME: &str = "x-csrf-token";
+pub const HEADER_COOKIE_NAME: &str = "cookie";
 
 #[derive(Error, Debug)]
 pub enum AuthError {
@@ -45,7 +46,7 @@ fn get_cookies(
     metadata: &MetadataMap,
 ) -> Result<std::collections::HashMap<String, Cookie>, AuthError> {
     let raw = metadata
-        .get("cookie")
+        .get(HEADER_COOKIE_NAME)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     Cookie::split_parse_encoded(raw.to_string())

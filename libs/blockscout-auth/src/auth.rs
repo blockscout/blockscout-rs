@@ -1,13 +1,10 @@
-use crate::common::{build_http_headers, extract_csrf_token, extract_jwt, CommonError};
+use crate::jwt_headers::{build_http_headers, extract_csrf_token, extract_jwt, CommonError};
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use thiserror::Error;
 use tonic::metadata::MetadataMap;
 use url::Url;
 
-const HEADER_JWT_TOKEN_NAME: &str = "authorization";
-const COOKIE_JWT_TOKEN_NAME: &str = "_explorer_key";
-const CSRF_TOKEN_NAME: &str = "x-csrf-token";
 const API_KEY_NAME: &str = "api_key";
 
 #[derive(Debug, Clone, Deserialize)]
@@ -74,13 +71,13 @@ pub async fn auth_from_tokens(
         .expect("invalid base url");
     url.set_query(
         blockscout_api_key
-            .map(|k| format!("{API_KEY_NAME}={k}"))
+            .map(|api_key| format!("{API_KEY_NAME}={api_key}"))
             .as_deref(),
     );
 
     let headers = build_http_headers(jwt, csrf_token)?;
     let client = Client::new();
-    let resp = if csrf_token.is_some() {
+    let response = if csrf_token.is_some() {
         client.post(url)
     } else {
         client.get(url)
@@ -90,21 +87,27 @@ pub async fn auth_from_tokens(
     .await
     .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
-    let status = resp.status();
-    let body = resp
+    let status = response.status();
+    let response_raw = response
         .text()
         .await
         .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
     match status {
         StatusCode::OK => {
-            let success: AuthSuccess =
-                serde_json::from_str(&body).map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+            let success: AuthSuccess = serde_json::from_str(&response_raw).map_err(|error| {
+                tracing::warn!(
+                    error = ?error,
+                    body = ?response_raw,
+                    "failed to parse blockscout response body"
+                );
+                Error::BlockscoutApi(format!("invalid body: {error}"))
+            })?;
             Ok(success)
         }
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-            let failed: AuthFailed =
-                serde_json::from_str(&body).map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+            let failed: AuthFailed = serde_json::from_str(&response_raw)
+                .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
             if status == StatusCode::UNAUTHORIZED {
                 Err(Error::Unauthorized(failed.message))
             } else {
@@ -121,11 +124,12 @@ mod tests {
 
     use super::*;
     use crate::{init_mocked_blockscout_auth_service, MockUser};
-    use reqwest::header::HeaderName;
+    use reqwest::header::{HeaderMap, HeaderName};
     use serde::Serialize;
     use tonic::{codegen::http::header::CONTENT_TYPE, Extensions, Request};
 
     fn build_headers(jwt: &str, csrf_token: Option<&str>, in_cookie: bool) -> HeaderMap {
+        use tonic::codegen::http::header::COOKIE;
         let mut headers = HeaderMap::new();
         if in_cookie {
             let cookies = format!(
@@ -137,6 +141,7 @@ mod tests {
             );
             headers.insert(COOKIE, cookies.parse().unwrap());
         } else {
+            const HEADER_JWT_TOKEN_NAME: &str = "authorization";
             headers.insert(HEADER_JWT_TOKEN_NAME, jwt.parse().unwrap());
         };
         headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
