@@ -1,5 +1,7 @@
-use crate::auth::Error;
-use crate::jwt_headers::{build_http_headers, extract_jwt};
+use crate::{
+    auth::Error,
+    jwt_headers::{build_http_headers, extract_jwt},
+};
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use tonic::metadata::MetadataMap;
