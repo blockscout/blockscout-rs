@@ -54,12 +54,12 @@ pub async fn get_user_info_from_metadata(
     match status {
         StatusCode::OK => {
             let info: UserInfo = serde_json::from_str(&body)
-                .map_err(|e| Error::BlockscoutApi(format!("parse error: {}", e)))?;
+                .map_err(|e| Error::BlockscoutApi(format!("parse error: {e}")))?;
             Ok(info)
         }
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
             let err: ErrorBody = serde_json::from_str(&body)
-                .map_err(|e| Error::BlockscoutApi(format!("parse error: {}", e)))?;
+                .map_err(|e| Error::BlockscoutApi(format!("parse error: {e}")))?;
             if status == StatusCode::UNAUTHORIZED {
                 Err(Error::Unauthorized(err.message))
             } else {

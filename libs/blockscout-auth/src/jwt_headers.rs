@@ -59,7 +59,7 @@ pub fn build_http_headers(jwt: &str, csrf_token: Option<&str>) -> Result<HeaderM
     let mut headers = HeaderMap::new();
     headers.insert(
         "cookie",
-        HeaderValue::from_str(&format!("{}={}", COOKIE_JWT_TOKEN_NAME, jwt))
+        HeaderValue::from_str(&format!("{COOKIE_JWT_TOKEN_NAME}={jwt}"))
             .map_err(|e| AuthError::HeaderError(e.to_string()))?,
     );
     if let Some(csrf) = csrf_token {
