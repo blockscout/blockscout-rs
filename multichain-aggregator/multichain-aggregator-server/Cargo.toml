@@ -26,6 +26,7 @@ tonic = { workspace = true }
 tracing = { workspace = true }
 env-collector = { workspace = true }
 url = { workspace = true, features = ["serde"] }
+recache ={ workspace = true }
 
 [dev-dependencies]
 multichain-aggregator-entity = { workspace = true }

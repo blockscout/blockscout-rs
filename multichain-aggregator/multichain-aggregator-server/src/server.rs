@@ -17,12 +17,15 @@ use blockscout_service_launcher::{
 use migration::Migrator;
 use multichain_aggregator_logic::{
     clients::{bens, dapp, token_info},
+    metrics,
     services::{
         chains::{fetch_and_upsert_blockscout_chains, MarketplaceEnabledCache},
         channel::Channel,
         cluster::Cluster,
+        search::UniformChainSearchCache,
     },
 };
+use recache::stores::redis::RedisStore;
 use std::{collections::HashSet, sync::Arc};
 
 const SERVICE_NAME: &str = "multichain_aggregator";
@@ -96,6 +99,41 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let channel = Arc::new(ChannelCentral::new(Channel));
 
+    let uniform_chain_search_cache = if let Some(cache_settings) = settings.cache {
+        let cache_name = "uniform_chain_search";
+        let redis_cache = RedisStore::builder()
+            .connection_string(cache_settings.redis.url.to_string())
+            .prefix(format!("multichain_aggregator:{cache_name}"))
+            .build()
+            .await?;
+
+        let cache_handler = UniformChainSearchCache::builder(Arc::new(redis_cache))
+            .default_ttl(cache_settings.uniform_chain_search_cache.ttl)
+            .maybe_default_refresh_ahead(cache_settings.uniform_chain_search_cache.refresh_ahead)
+            .on_hit(Arc::new(|_, _| {
+                metrics::CACHE_HIT_TOTAL
+                    .with_label_values(&[cache_name])
+                    .inc();
+            }))
+            .on_computed(Arc::new(|_, _| {
+                // `on_computed` is triggered when the cache entry is computed and not found in the cache.
+                // In this case, we consider it a cache miss.
+                metrics::CACHE_MISS_TOTAL
+                    .with_label_values(&[cache_name])
+                    .inc();
+            }))
+            .on_refresh_computed(Arc::new(|_, _| {
+                metrics::CACHE_REFRESH_AHEAD_TOTAL
+                    .with_label_values(&[cache_name])
+                    .inc();
+            }))
+            .build();
+
+        Some(cache_handler)
+    } else {
+        None
+    };
+
     let clusters = settings
         .cluster_explorer
         .clusters
@@ -115,7 +153,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     ));
 
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
-        repo,
+        Arc::new(repo),
         dapp_client,
         token_info_client,
         bens_client,
@@ -125,6 +163,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.domain_primary_chain_id,
         marketplace_enabled_cache,
         channel.channel_broadcaster(),
+        uniform_chain_search_cache,
     ));
 
     let router = Router {

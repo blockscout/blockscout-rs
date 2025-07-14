@@ -9,14 +9,18 @@ use blockscout_service_launcher::database::ReadWriteRepo;
 use multichain_aggregator_logic::{
     clients::dapp,
     error::{ParseError, ServiceError},
-    services::{api_key_manager::ApiKeyManager, chains, import, search},
+    services::{
+        api_key_manager::ApiKeyManager,
+        chains, import,
+        search::{self, SearchContext, UniformChainSearchCache},
+    },
     types,
 };
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 use tonic::{Request, Response, Status};
 
 pub struct MultichainAggregator {
-    repo: ReadWriteRepo,
+    repo: Arc<ReadWriteRepo>,
     api_key_manager: ApiKeyManager,
     dapp_client: HttpApiClient,
     token_info_client: HttpApiClient,
@@ -27,12 +31,13 @@ pub struct MultichainAggregator {
     domain_primary_chain_id: types::ChainId,
     marketplace_enabled_cache: chains::MarketplaceEnabledCache,
     channel_broadcaster: ChannelBroadcaster,
+    uniform_chain_search_cache: Option<UniformChainSearchCache>,
 }
 
 impl MultichainAggregator {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        repo: ReadWriteRepo,
+        repo: Arc<ReadWriteRepo>,
         dapp_client: HttpApiClient,
         token_info_client: HttpApiClient,
         bens_client: HttpApiClient,
@@ -42,6 +47,7 @@ impl MultichainAggregator {
         domain_primary_chain_id: types::ChainId,
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
         channel_broadcaster: ChannelBroadcaster,
+        uniform_chain_search_cache: Option<UniformChainSearchCache>,
     ) -> Self {
         Self {
             api_key_manager: ApiKeyManager::new(repo.main_db().clone()),
@@ -55,6 +61,7 @@ impl MultichainAggregator {
             domain_primary_chain_id,
             marketplace_enabled_cache,
             channel_broadcaster,
+            uniform_chain_search_cache,
         }
     }
 
@@ -274,21 +281,22 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<QuickSearchResponse>, Status> {
         let inner = request.into_inner();
 
-        let results = search::quick_search(
-            self.repo.read_db(),
-            &self.dapp_client,
-            &self.token_info_client,
-            &self.bens_client,
-            inner.q,
-            &self.quick_search_chains,
-            self.bens_protocols.as_deref(),
-            self.domain_primary_chain_id,
-            &self.marketplace_enabled_cache,
-        )
-        .await
-        .inspect_err(|err| {
-            tracing::error!(error = ?err, "failed to quick search");
-        })?;
+        let context = SearchContext {
+            db: Arc::clone(&self.repo),
+            dapp_client: &self.dapp_client,
+            token_info_client: &self.token_info_client,
+            bens_client: &self.bens_client,
+            bens_protocols: self.bens_protocols.as_deref(),
+            domain_primary_chain_id: self.domain_primary_chain_id,
+            marketplace_enabled_cache: &self.marketplace_enabled_cache,
+            uniform_chain_search_cache: self.uniform_chain_search_cache.as_ref(),
+        };
+
+        let results = search::quick_search(inner.q, &self.quick_search_chains, &context)
+            .await
+            .inspect_err(|err| {
+                tracing::error!(error = ?err, "failed to quick search");
+            })?;
 
         Ok(Response::new(results.into()))
     }
