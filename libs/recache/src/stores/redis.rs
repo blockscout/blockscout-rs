@@ -16,9 +16,28 @@ impl RedisStore {
     pub async fn new(
         connection_string: impl Into<String>,
         prefix: impl Into<String>,
+        reconnect_retry_factor: Option<u64>,
+        reconnect_max_delay: Option<Duration>,
+        response_timeout: Option<Duration>,
+        connection_timeout: Option<Duration>,
     ) -> Result<Self, RedisError> {
         let client = redis::Client::open(connection_string.into())?;
-        let connection = redis::aio::ConnectionManager::new(client).await?;
+
+        let mut config = redis::aio::ConnectionManagerConfig::new();
+        if let Some(reconnect_retry_factor) = reconnect_retry_factor {
+            config = config.set_factor(reconnect_retry_factor);
+        }
+        if let Some(reconnect_max_delay) = reconnect_max_delay {
+            config = config.set_max_delay(reconnect_max_delay.as_millis() as u64);
+        }
+        if let Some(response_timeout) = response_timeout {
+            config = config.set_response_timeout(response_timeout);
+        }
+        if let Some(connection_timeout) = connection_timeout {
+            config = config.set_connection_timeout(connection_timeout);
+        }
+
+        let connection = redis::aio::ConnectionManager::new_with_config(client, config).await?;
 
         let prefix = prefix.into();
 
