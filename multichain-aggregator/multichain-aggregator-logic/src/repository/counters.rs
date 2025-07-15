@@ -49,7 +49,7 @@ where
                 active.total_addresses_number = Set(Some(val as i64));
             }
 
-            active.updated_at = Set(Utc::now().naive_utc());
+            active.updated_at = Set(timestamp);
             active.update(db).await?;
         }
         None => {
