@@ -5,13 +5,10 @@ use crate::{
 use entity::tokens::{Column, Entity};
 use sea_orm::{
     prelude::Expr,
-    sea_query::{
-        Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, PostgresQueryBuilder, Query,
-        ValueTuple,
-    },
+    sea_query::{Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, ValueTuple},
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DbErr, EntityName, EntityTrait,
-    IdenStatic, IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, QueryTrait,
-    TransactionError, TransactionTrait,
+    IdenStatic, IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, TransactionError,
+    TransactionTrait,
 };
 
 pub async fn upsert_many<C>(db: &C, tokens: Vec<TokenUpdate>) -> Result<(), DbErr>
@@ -85,10 +82,11 @@ where
         ))
         .to_owned();
     let active_models = updates.into_iter().map(|m| m.into_active_model());
-    let a = Entity::insert_many(active_models).on_conflict(on_conflict);
-    let res = a.as_query().build(PostgresQueryBuilder);
-    dbg!(&res);
-    a.do_nothing().exec_without_returning(db).await?;
+    Entity::insert_many(active_models)
+        .on_conflict(on_conflict)
+        .do_nothing()
+        .exec_without_returning(db)
+        .await?;
 
     Ok(())
 }
@@ -101,10 +99,10 @@ where
     C: ConnectionTrait + TransactionTrait,
 {
     updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
-    let models = updates.into_iter().map(|m| m.into_active_model());
+    let active_models = updates.into_iter().map(|m| m.into_active_model());
     batch_update(
         db,
-        models,
+        active_models,
         vec![Column::FiatValue, Column::CirculatingMarketCap],
     )
     .await?;
@@ -120,10 +118,10 @@ where
     C: ConnectionTrait + TransactionTrait,
 {
     updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
-    let models = updates.into_iter().map(|m| m.into_active_model());
+    let active_models = updates.into_iter().map(|m| m.into_active_model());
     batch_update(
         db,
-        models,
+        active_models,
         vec![Column::TransfersCount, Column::HoldersCount],
     )
     .await?;
