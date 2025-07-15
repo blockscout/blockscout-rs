@@ -3,10 +3,11 @@ use super::{
     address_token_balances::AddressTokenBalance,
     addresses::{proto_token_type_to_db_token_type, Address},
     block_ranges::BlockRange,
+    counters::{ChainCounters, Counters},
     hashes::{proto_hash_type_to_db_hash_type, Hash},
     interop_message_transfers::InteropMessageTransfer,
     interop_messages::InteropMessage,
-    ChainId, counters::{Counters, ChainCounters},
+    ChainId,
 };
 use crate::{
     error::{ParseError, ServiceError},
@@ -359,19 +360,20 @@ fn parse_timestamp_secs(timestamp: i64) -> Result<NaiveDateTime, ParseError> {
 impl TryFrom<(ChainId, proto::batch_import_request::CountersImport)> for Counters {
     type Error = ParseError;
 
-    fn try_from((chain_id, proto): (ChainId, proto::batch_import_request::CountersImport)) -> Result<Self, Self::Error> {
+    fn try_from(
+        (chain_id, proto): (ChainId, proto::batch_import_request::CountersImport),
+    ) -> Result<Self, Self::Error> {
         let global = {
-            let g: Option<&proto::batch_import_request::counters_import::GlobalCounters> = proto.global_counters.as_ref();
+            let g: Option<&proto::batch_import_request::counters_import::GlobalCounters> =
+                proto.global_counters.as_ref();
             let t = proto.timestamp;
 
-            g.map(|g| {
-                ChainCounters {
-                    chain_id,
-                    timestamp: parse_timestamp_secs(t).unwrap(),
-                    daily_transactions_number: g.daily_transactions_number,
-                    total_transactions_number: g.total_transactions_number,
-                    total_addresses_number: g.total_addresses_number,
-                }
+            g.map(|g| ChainCounters {
+                chain_id,
+                timestamp: parse_timestamp_secs(t).unwrap(),
+                daily_transactions_number: g.daily_transactions_number,
+                total_transactions_number: g.total_transactions_number,
+                total_addresses_number: g.total_addresses_number,
             })
         };
 

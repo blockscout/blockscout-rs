@@ -55,7 +55,7 @@ pub async fn batch_import(
                 })?;
         }
     }
-    
+
     tx.commit().await?;
 
     let interop_messages = messages_with_transfers

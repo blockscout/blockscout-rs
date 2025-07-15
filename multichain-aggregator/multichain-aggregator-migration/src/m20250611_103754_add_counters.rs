@@ -30,10 +30,6 @@ impl MigrationTrait for Migration {
         // Replace the sample below with your own migration scripts
         let sql = r#"
             DROP TABLE IF EXISTS counters_global_imported;
-            DROP TABLE IF EXISTS counters_token_imported;
-
-            ALTER TABLE addresses DROP COLUMN counter_interop_messages;
-            ALTER TABLE addresses DROP COLUMN counter_interop_transfers;
 
             DROP INDEX IF EXISTS interop_messages_sender_address_hash_index;
             DROP INDEX IF EXISTS interop_messages_target_address_hash_index;

@@ -44,4 +44,3 @@ impl TryFrom<GlobalCountersModel> for ChainCounters {
 pub struct Counters {
     pub global: Option<ChainCounters>,
 }
-

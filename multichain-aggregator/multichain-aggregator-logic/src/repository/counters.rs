@@ -1,16 +1,14 @@
-use crate::types::counters::{ChainCounters};
+use crate::types::counters::ChainCounters;
+use chrono::{NaiveDateTime, NaiveTime, Utc};
 use entity::counters_global_imported::{
-    ActiveModel as GlobalCountersActiveModel,
-    Column as GlobalCountersColumn,
+    ActiveModel as GlobalCountersActiveModel, Column as GlobalCountersColumn,
     Entity as GlobalCountersEntity,
 };
 use sea_orm::{
+    ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait,
-    QueryFilter, ActiveModelTrait,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder,
 };
-use sea_orm::QueryOrder;
-use chrono::{NaiveDateTime, NaiveTime, Utc};
 
 pub async fn upsert_chain_counters<C>(db: &C, data: ChainCounters) -> Result<(), DbErr>
 where
