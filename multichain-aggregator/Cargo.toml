@@ -70,7 +70,7 @@ url = "2.4"
 futures = "0.3"
 lazy_static = { version = "1.4" }
 prometheus = { version = "0.13" }
-recache = { git = "https://github.com/blockscout/blockscout-rs", rev = "2530a94" }
+recache = { git = "https://github.com/blockscout/blockscout-rs", rev = "54b19d5" }
 
 # tests
 pretty_assertions = "1.3"

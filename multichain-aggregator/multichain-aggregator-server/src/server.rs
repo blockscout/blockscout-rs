@@ -26,7 +26,7 @@ use multichain_aggregator_logic::{
     },
 };
 use recache::stores::redis::RedisStore;
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 const SERVICE_NAME: &str = "multichain_aggregator";
 
@@ -103,6 +103,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         let cache_name = "uniform_chain_search";
         let redis_cache = RedisStore::builder()
             .connection_string(cache_settings.redis.url.to_string())
+            .reconnect_retry_factor(2)
+            .reconnect_max_delay(Duration::from_secs(30))
             .prefix(format!("multichain_aggregator:{cache_name}"))
             .build()
             .await?;
