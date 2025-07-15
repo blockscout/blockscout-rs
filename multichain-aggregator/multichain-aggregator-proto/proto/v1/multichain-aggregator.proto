@@ -206,6 +206,35 @@ message BatchImportRequest {
     string value = 4;
   }
 
+  message TokenImport {
+    message Metadata {
+      optional string name = 1;
+      optional string symbol = 2;
+      optional int32 decimals = 3;
+      TokenType token_type = 4;
+      optional string icon_url = 5;
+      optional string total_supply = 6;
+    }
+
+    message Counters {
+      optional string holders_count = 1;
+      optional string transfers_count = 2;
+    }
+
+    message PriceData {
+      optional string fiat_value = 1;
+      optional string circulating_market_cap = 2;
+    }
+
+    string address_hash = 1;
+
+    oneof payload {
+      Metadata metadata = 2;
+      PriceData price_data = 3;
+      Counters counters = 4;
+    }
+  }
+
   string chain_id = 1;
   repeated AddressImport addresses = 2;
   repeated BlockRangeImport block_ranges = 3;
@@ -213,7 +242,8 @@ message BatchImportRequest {
   repeated InteropMessageImport interop_messages = 5;
   repeated AddressCoinBalanceImport address_coin_balances = 6;
   repeated AddressTokenBalanceImport address_token_balances = 7;
-  string api_key = 8;
+  repeated TokenImport tokens = 8;
+  string api_key = 9;
 }
 
 message BatchImportResponse { string status = 1; }

@@ -3208,6 +3208,7 @@ dependencies = [
  "prometheus",
  "regex",
  "reqwest",
+ "rust_decimal",
  "sea-orm",
  "serde",
  "serde_json",

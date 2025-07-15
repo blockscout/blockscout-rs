@@ -434,6 +434,17 @@ definitions:
         $ref: '#/definitions/InteropMessageImportInit'
       relay:
         $ref: '#/definitions/InteropMessageImportRelay'
+  BatchImportRequestTokenImport:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      metadata:
+        $ref: '#/definitions/TokenImportMetadata'
+      price_data:
+        $ref: '#/definitions/TokenImportPriceData'
+      counters:
+        $ref: '#/definitions/TokenImportCounters'
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -516,6 +527,36 @@ definitions:
       block_number:
         type: string
         format: uint64
+  TokenImportCounters:
+    type: object
+    properties:
+      holders_count:
+        type: string
+      transfers_count:
+        type: string
+  TokenImportMetadata:
+    type: object
+    properties:
+      name:
+        type: string
+      symbol:
+        type: string
+      decimals:
+        type: integer
+        format: int32
+      token_type:
+        $ref: '#/definitions/v1TokenType'
+      icon_url:
+        type: string
+      total_supply:
+        type: string
+  TokenImportPriceData:
+    type: object
+    properties:
+      fiat_value:
+        type: string
+      circulating_market_cap:
+        type: string
   googlerpcStatus:
     type: object
     properties:
@@ -608,6 +649,11 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/BatchImportRequestAddressTokenBalanceImport'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestTokenImport'
       api_key:
         type: string
   v1BatchImportResponse:

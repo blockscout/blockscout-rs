@@ -38,8 +38,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-            DROP TABLE address_token_balances;
-            DROP TABLE address_coin_balances;
+            DROP TABLE tokens;
         "#;
         crate::from_sql(manager, sql).await
     }

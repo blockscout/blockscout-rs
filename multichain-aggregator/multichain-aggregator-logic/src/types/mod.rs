@@ -12,6 +12,7 @@ pub mod interop_message_transfers;
 pub mod interop_messages;
 pub mod search_results;
 pub mod token_info;
+pub mod tokens;
 
 pub type ChainId = i64;
 

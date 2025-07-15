@@ -65,6 +65,7 @@ chrono = "0.4.38"
 env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.2.1" }
 regex = "1.10"
 reqwest = "0.12"
+rust_decimal = "1.37"
 thiserror = "1.0"
 url = "2.4"
 futures = "0.3"

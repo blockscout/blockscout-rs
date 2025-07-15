@@ -1,4 +1,4 @@
-use super::{interop_message_transfers, paginate_cursor};
+use super::{interop_message_transfers, macros::update_if_not_null, paginate_cursor};
 use crate::types::{
     interop_message_transfers::InteropMessageTransfer,
     interop_messages::{InteropMessage, MessageDirection},
@@ -37,21 +37,6 @@ where
         .into_iter()
         .map(|(m, t)| (ActiveModel::from(m), t))
         .unzip();
-
-    macro_rules! update_if_not_null {
-        ($column:expr) => {
-            (
-                $column,
-                Expr::cust_with_exprs(
-                    "COALESCE($1, $2)",
-                    [
-                        Expr::cust(format!("EXCLUDED.{}", $column.as_str())),
-                        $column.into_expr().into(),
-                    ],
-                ),
-            )
-        };
-    }
 
     db.transaction(|tx| {
         Box::pin(async move {

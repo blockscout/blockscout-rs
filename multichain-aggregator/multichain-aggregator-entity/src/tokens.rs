@@ -25,7 +25,7 @@ pub struct Model {
     pub fiat_value: Option<Decimal>,
     pub circulating_market_cap: Option<Decimal>,
     #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
-    pub total_supply: Option<Decimal>,
+    pub total_supply: Option<BigDecimal>,
     pub holders_count: Option<i64>,
     pub transfers_count: Option<i64>,
     pub created_at: DateTime,
