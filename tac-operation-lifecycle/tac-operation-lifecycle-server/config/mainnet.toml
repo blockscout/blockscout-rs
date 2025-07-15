@@ -1,0 +1,32 @@
+[database.connect]
+url = "postgres://postgres:postgres@database:5433/blockscout"
+
+[database.connect_options]
+min_connections = 10
+max_connections = 20
+connect_timeout = 10
+acquire_timeout = 10
+
+[database]
+create_database = true
+run_migrations = true
+
+[indexer]
+concurrency = 2
+start_timestamp = 1749638944
+polling_interval = 2
+retry_interval = 120
+catchup_interval = 600
+intervals_query_batch = 10
+intervals_retry_batch = 10
+intervals_loop_delay_ms = 100
+operations_query_batch = 10
+operations_retry_batch = 10
+operations_loop_delay_ms = 200
+forever_pending_operations_age_sec = 604800
+
+[rpc]
+url = "https://data.tac.build/"
+request_per_second = 100
+num_of_retries = 10
+retry_delay_ms = 1000
