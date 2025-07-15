@@ -13,7 +13,6 @@ import {
     BASE_NODE,
   } from "./utils";
 
-
   // Import entity types generated from the GraphQL schema
 import {
     Account,
@@ -23,32 +22,34 @@ import {
     NameTransferred,
     Registration,
   } from "../generated/schema";
+import { createDomain } from "./{{ cookiecutter.registry_name }}";
 
 
 var rootNode: ByteArray = byteArrayFromHex(BASE_NODE_HASH);
 
 export function handleNameRegisteredByController(
-    event: ControllerNameRegisteredEvent
-  ): void {
-    setNamePreimage(
-      event.params.name,
-      event.params.label,
-      event.params.baseCost.plus(event.params.premium)
-    );
-  }
-  
+  event: ControllerNameRegisteredEvent
+): void {
+  setNamePreimage(event.params.name, event.params.label, event.params.baseCost, event.block.timestamp);
+}
+
 export function handleNameRenewedByController(
   event: ControllerNameRenewedEvent
 ): void {
-  setNamePreimage(event.params.name, event.params.label, event.params.cost);
+  setNamePreimage(event.params.name, event.params.label, event.params.cost, event.block.timestamp);
 }
 
-function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
+function setNamePreimage(name: string, label: Bytes, cost: BigInt, timestamp: BigInt): void {
   if (!checkValidLabel(name)) {
     return;
   }
 
-  let domain = Domain.load(crypto.keccak256(concat(rootNode, label)).toHex())!;
+  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let domain = Domain.load(domainId);
+  if (domain == null) {
+    domain = createDomain(domainId, timestamp);
+  }
+
   if (domain.labelName !== name) {
     domain.labelName = name;
     domain.name = name + BASE_NODE;

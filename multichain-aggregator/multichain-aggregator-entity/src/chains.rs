@@ -17,6 +17,10 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::address_coin_balances::Entity")]
+    AddressCoinBalances,
+    #[sea_orm(has_many = "super::address_token_balances::Entity")]
+    AddressTokenBalances,
     #[sea_orm(has_many = "super::addresses::Entity")]
     Addresses,
     #[sea_orm(has_many = "super::api_keys::Entity")]
@@ -29,6 +33,18 @@ pub enum Relation {
     Dapps,
     #[sea_orm(has_many = "super::hashes::Entity")]
     Hashes,
+}
+
+impl Related<super::address_coin_balances::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AddressCoinBalances.def()
+    }
+}
+
+impl Related<super::address_token_balances::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AddressTokenBalances.def()
+    }
 }
 
 impl Related<super::addresses::Entity> for Entity {

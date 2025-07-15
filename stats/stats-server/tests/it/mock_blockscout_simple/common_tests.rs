@@ -241,7 +241,7 @@ pub async fn test_main_page_ok(base: Url, expect_chain_specific: bool, blockscou
     }
     for (name, counter) in counters {
         let counter =
-            counter.unwrap_or_else(|| panic!("main page counter {} must be available", name));
+            counter.unwrap_or_else(|| panic!("main page counter {name} must be available"));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
@@ -254,8 +254,7 @@ pub async fn test_main_page_ok(base: Url, expect_chain_specific: bool, blockscou
         ]));
     }
     for (name, window_chart) in window_line_charts {
-        let window_chart =
-            window_chart.unwrap_or_else(|| panic!("{} chart must be available", name));
+        let window_chart = window_chart.unwrap_or_else(|| panic!("{name} chart must be available"));
         let transactions_info = window_chart.info.unwrap();
         assert!(!transactions_info.id.is_empty());
         assert_eq!(transactions_info.resolutions, vec!["DAY"]);
@@ -286,8 +285,8 @@ pub async fn test_transactions_page_ok(base: Url, expect_chain_specific: bool) {
         ]));
     }
     for (name, counter) in counters {
-        let counter = counter
-            .unwrap_or_else(|| panic!("transactions page counter {} must be available", name));
+        let counter =
+            counter.unwrap_or_else(|| panic!("transactions page counter {name} must be available"));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }
@@ -308,7 +307,7 @@ pub async fn test_contracts_page_ok(base: Url) {
     ]);
     for (name, counter) in counters {
         let counter =
-            counter.unwrap_or_else(|| panic!("contracts page counter {} must be available", name));
+            counter.unwrap_or_else(|| panic!("contracts page counter {name} must be available"));
         assert!(!counter.description.is_empty());
         assert!(!counter.title.is_empty());
     }

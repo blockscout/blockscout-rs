@@ -5,18 +5,22 @@ use crate::types::{
     ChainId,
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
-use entity::interop_messages::{ActiveModel, Column, Entity, Model};
+use entity::{
+    interop_messages::{ActiveModel, Column, Entity, Model},
+    interop_messages_transfers,
+};
 use sea_orm::{
     prelude::{DateTime, Expr},
     sea_query::OnConflict,
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, PaginatorTrait, QueryFilter,
     QueryTrait, TransactionError, TransactionTrait,
 };
+use std::collections::HashMap;
 
 pub async fn upsert_many_with_transfers<C>(
     db: &C,
     mut interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
-) -> Result<Vec<Model>, DbErr>
+) -> Result<Vec<(Model, Option<interop_messages_transfers::Model>)>, DbErr>
 where
     C: ConnectionTrait + TransactionTrait,
 {
@@ -73,14 +77,24 @@ where
             // Set interop_message_id for each corresponding transfer after all messages are inserted
             let transfers = messages
                 .iter()
-                .map(|m| m.id)
                 .zip(transfers)
-                .filter_map(|(id, transfer)| transfer.map(|t| (t, id)))
+                .filter_map(|(m, t)| t.map(|t| (t, m.id)))
                 .collect();
 
-            interop_message_transfers::upsert_many(tx, transfers).await?;
+            let transfers = interop_message_transfers::upsert_many(tx, transfers).await?;
 
-            Ok(messages)
+            let mut id_to_transfer = transfers
+                .into_iter()
+                .map(|t| (t.interop_message_id, t))
+                .collect::<HashMap<_, _>>();
+
+            Ok(messages
+                .into_iter()
+                .map(|m| {
+                    let t = id_to_transfer.remove(&m.id);
+                    (m, t)
+                })
+                .collect())
         })
     })
     .await
@@ -98,14 +112,28 @@ pub async fn list<C>(
     address: Option<AddressAlloy>,
     direction: Option<MessageDirection>,
     nonce: Option<i64>,
+    cluster_chain_ids: Option<Vec<ChainId>>,
     page_size: u64,
     page_token: Option<(DateTime, TxHash)>,
-) -> Result<(Vec<Model>, Option<(DateTime, TxHash)>), DbErr>
+) -> Result<
+    (
+        Vec<(Model, Option<interop_messages_transfers::Model>)>,
+        Option<(DateTime, TxHash)>,
+    ),
+    DbErr,
+>
 where
     C: ConnectionTrait,
 {
     let mut c = Entity::find()
         .filter(Column::InitTransactionHash.is_not_null())
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(
+                Column::InitChainId
+                    .is_in(cluster_chain_ids.clone())
+                    .and(Column::RelayChainId.is_in(cluster_chain_ids)),
+            )
+        })
         .apply_if(init_chain_id, |q, init_chain_id| {
             q.filter(Column::InitChainId.eq(init_chain_id))
         })
@@ -123,12 +151,13 @@ where
             }
         })
         .apply_if(nonce, |q, nonce| q.filter(Column::Nonce.eq(nonce)))
+        .find_also_related(interop_messages_transfers::Entity)
         .cursor_by((Column::Timestamp, Column::InitTransactionHash));
     c.desc();
 
     let page_token = page_token.map(|(t, h)| (t, h.to_vec()));
 
-    paginate_cursor(db, c, page_size, page_token, |u| {
+    paginate_cursor(db, c, page_size, page_token, |(u, _)| {
         let init_transaction_hash = u
             .init_transaction_hash
             .as_ref()
@@ -142,12 +171,23 @@ where
     .await
 }
 
-pub async fn count<C>(db: &C, chain_id: ChainId) -> Result<u64, DbErr>
+pub async fn count<C>(
+    db: &C,
+    chain_id: ChainId,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+) -> Result<u64, DbErr>
 where
     C: ConnectionTrait,
 {
     Entity::find()
         .filter(Column::InitTransactionHash.is_not_null())
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(
+                Column::InitChainId
+                    .is_in(cluster_chain_ids.clone())
+                    .and(Column::RelayChainId.is_in(cluster_chain_ids)),
+            )
+        })
         .filter(
             Column::InitChainId
                 .eq(chain_id)

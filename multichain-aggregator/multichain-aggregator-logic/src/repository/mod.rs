@@ -1,3 +1,5 @@
+pub mod address_coin_balances;
+pub mod address_token_balances;
 pub mod addresses;
 pub mod api_keys;
 pub mod block_ranges;

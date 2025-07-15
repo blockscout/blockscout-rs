@@ -42,7 +42,7 @@ pub trait CachedView {
         )))
         .await
         .context("creating materialized view")?;
-        let index_name = format!("{}_unique_{}", view_table_name, unique_field);
+        let index_name = format!("{view_table_name}_unique_{unique_field}");
         tx.execute(sqlx::query(&format!(
             r#"
             CREATE UNIQUE INDEX IF NOT EXISTS

@@ -134,8 +134,8 @@ impl<'a> VerifierAllianceDbAction<'a> {
                 }),
             ) => {
                 // Contract deployment must have runtime code to exist (it may be empty, though)
-                if is_authorized && runtime_code.is_some() {
-                    Self::SaveWithDeploymentData {
+                match runtime_code {
+                    Some(runtime_code) if is_authorized => Self::SaveWithDeploymentData {
                         db_client,
                         deployment_data: AllianceContract {
                             chain_id: format!("{chain_id}"),
@@ -145,17 +145,16 @@ impl<'a> VerifierAllianceDbAction<'a> {
                             transaction_index,
                             deployer,
                             creation_code,
-                            runtime_code: runtime_code.unwrap(),
+                            runtime_code,
                         },
-                    }
-                } else {
-                    Self::SaveIfDeploymentExists {
+                    },
+                    _ => Self::SaveIfDeploymentExists {
                         db_client,
                         chain_id,
                         contract_address,
                         transaction_hash,
                         runtime_code,
-                    }
+                    },
                 }
             }
             _ => Self::IgnoreDb,
@@ -258,13 +257,13 @@ async fn from_response_to_source(
         (smart_contract_verifier::Status::Failure, _, _) => {
             return Err(Error::VerificationFailed {
                 message: response.message,
-            })
+            });
         }
         _ => {
             return Err(Error::Internal(
                 anyhow::anyhow!("invalid status: {}", response.status)
                     .context("verifier service connection"),
-            ))
+            ));
         }
     };
 

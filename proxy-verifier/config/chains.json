@@ -8,5 +8,11 @@
     "name": "Base Mainnet",
     "api_url": "https://base.blockscout.com/api/",
     "sensitive_api_key": null
+  },
+  "11155111": {
+    "name": "Ethereum Sepolia",
+    "api_url": "https://eth-sepolia.blockscout.com/api/",
+    "sensitive_api_key": null,
+    "is_testnet": true
   }
 }

@@ -42,7 +42,7 @@ pub fn process_batch_import_error(error: Error) -> tonic::Status {
         }
         Error::Verifier(message) => {
             tracing::error!(details=%message, "Internal verifier error");
-            tonic::Status::internal(format!("Verifier error: {}", message))
+            tonic::Status::internal(format!("Verifier error: {message}"))
         }
         err => {
             tracing::error!("Unexpected error");

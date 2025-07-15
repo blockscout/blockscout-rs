@@ -12,6 +12,7 @@ use tracing::instrument;
 
 use crate::{
     celestia, eigenda,
+    s3_storage::S3Storage,
     settings::{DASettings, IndexerSettings},
 };
 
@@ -36,13 +37,17 @@ pub struct Indexer {
 }
 
 impl Indexer {
-    pub async fn new(db: Arc<DatabaseConnection>, settings: IndexerSettings) -> Result<Self> {
+    pub async fn new(
+        db: Arc<DatabaseConnection>,
+        s3_storage: Option<S3Storage>,
+        settings: IndexerSettings,
+    ) -> Result<Self> {
         let da: Box<dyn DA + Send + Sync> = match settings.da.clone() {
-            DASettings::Celestia(settings) => {
-                Box::new(celestia::da::CelestiaDA::new(db.clone(), settings).await?)
-            }
+            DASettings::Celestia(settings) => Box::new(
+                celestia::da::CelestiaDA::new(db.clone(), s3_storage.clone(), settings).await?,
+            ),
             DASettings::EigenDA(settings) => {
-                Box::new(eigenda::da::EigenDA::new(db.clone(), settings).await?)
+                Box::new(eigenda::da::EigenDA::new(db.clone(), s3_storage.clone(), settings).await?)
             }
         };
         Ok(Self {
@@ -76,11 +81,11 @@ impl Indexer {
         while let Err(err) = &self.da.process_job(job.clone()).await {
             match backoff.next() {
                 Some(delay) => {
-                    tracing::warn!(error = ?err, job = ?job, ?delay, "failed to process job, retrying");
+                    tracing::warn!(error = %err, job = ?job, ?delay, "failed to process job, retrying");
                     sleep(delay).await;
                 }
                 None => {
-                    tracing::error!(error = ?err, job = ?job, "failed to process job, skipping for now, will retry later");
+                    tracing::error!(error = %err, job = ?job, "failed to process job, skipping for now, will retry later");
                     self.failed_jobs.lock().await.insert(job.clone());
                     break;
                 }
@@ -95,9 +100,9 @@ impl Indexer {
         })
         .filter_map(|fut| async {
             fut.await
-                .map_err(
-                    |err: Error| tracing::error!(error = ?err, "failed to retrieve unprocessed jobs"),
-                )
+                .map_err(|err: Error| {
+                    tracing::error!("failed to retrieve unprocessed jobs: {err:#?}")
+                })
                 .ok()
         })
         .take_while(|jobs| future::ready(!jobs.is_empty()))
@@ -112,7 +117,7 @@ impl Indexer {
         })
         .filter_map(|fut| async {
             fut.await
-                .map_err(|err: Error| tracing::error!(error = ?err, "failed to poll for new jobs"))
+                .map_err(|err: Error| tracing::error!(error = %err, "failed to poll for new jobs"))
                 .ok()
         })
         .flat_map(stream::iter)
@@ -130,7 +135,7 @@ impl Indexer {
         })
         .filter_map(|fut| async {
             fut.await
-                .map_err(|err: Error| tracing::error!(error = ?err, "failed to retry failed jobs"))
+                .map_err(|err: Error| tracing::error!(error = %err, "failed to retry failed jobs"))
                 .ok()
         })
         .flat_map(stream::iter)

@@ -1,5 +1,6 @@
 use crate::{
     proto::{multichain_aggregator_service_server::MultichainAggregatorService, *},
+    services::utils::{parse_query, parse_query_2},
     settings::ApiSettings,
 };
 use actix_phoenix_channel::ChannelBroadcaster;
@@ -8,15 +9,18 @@ use blockscout_service_launcher::database::ReadWriteRepo;
 use multichain_aggregator_logic::{
     clients::dapp,
     error::{ParseError, ServiceError},
-    repository::interop_messages,
-    services::{api_key_manager::ApiKeyManager, chains, import, search},
+    services::{
+        api_key_manager::ApiKeyManager,
+        chains, import,
+        search::{self, SearchContext, UniformChainSearchCache},
+    },
     types,
 };
-use std::{collections::HashSet, str::FromStr};
+use std::{collections::HashSet, sync::Arc};
 use tonic::{Request, Response, Status};
 
 pub struct MultichainAggregator {
-    repo: ReadWriteRepo,
+    repo: Arc<ReadWriteRepo>,
     api_key_manager: ApiKeyManager,
     dapp_client: HttpApiClient,
     token_info_client: HttpApiClient,
@@ -27,12 +31,13 @@ pub struct MultichainAggregator {
     domain_primary_chain_id: types::ChainId,
     marketplace_enabled_cache: chains::MarketplaceEnabledCache,
     channel_broadcaster: ChannelBroadcaster,
+    uniform_chain_search_cache: Option<UniformChainSearchCache>,
 }
 
 impl MultichainAggregator {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        repo: ReadWriteRepo,
+        repo: Arc<ReadWriteRepo>,
         dapp_client: HttpApiClient,
         token_info_client: HttpApiClient,
         bens_client: HttpApiClient,
@@ -42,6 +47,7 @@ impl MultichainAggregator {
         domain_primary_chain_id: types::ChainId,
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
         channel_broadcaster: ChannelBroadcaster,
+        uniform_chain_search_cache: Option<UniformChainSearchCache>,
     ) -> Self {
         Self {
             api_key_manager: ApiKeyManager::new(repo.main_db().clone()),
@@ -55,6 +61,7 @@ impl MultichainAggregator {
             domain_primary_chain_id,
             marketplace_enabled_cache,
             channel_broadcaster,
+            uniform_chain_search_cache,
         }
     }
 
@@ -97,25 +104,6 @@ impl MultichainAggregator {
         };
 
         Ok(chain_ids)
-    }
-
-    async fn filter_marketplace_enabled_chains<T>(
-        &self,
-        items: impl IntoIterator<Item = T>,
-        get_chain_id: impl Fn(&T) -> types::ChainId,
-    ) -> Vec<T> {
-        let cache = self.marketplace_enabled_cache.read().await;
-        items
-            .into_iter()
-            .filter_map(|c| {
-                let is_enabled = *cache.get(&get_chain_id(&c)).unwrap_or(&false);
-                if is_enabled {
-                    Some(c)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
     }
 }
 
@@ -281,7 +269,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         Ok(Response::new(ListTransactionsResponse {
             items: transactions.into_iter().map(|t| t.into()).collect(),
             next_page_params: next_page_token.map(|c| Pagination {
-                page_token: format!("{}", c),
+                page_token: c.to_string(),
                 page_size,
             }),
         }))
@@ -293,20 +281,22 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<QuickSearchResponse>, Status> {
         let inner = request.into_inner();
 
-        let results = search::quick_search(
-            self.repo.read_db(),
-            &self.dapp_client,
-            &self.token_info_client,
-            &self.bens_client,
-            inner.q,
-            &self.quick_search_chains,
-            self.bens_protocols.as_deref(),
-            self.domain_primary_chain_id,
-        )
-        .await
-        .inspect_err(|err| {
-            tracing::error!(error = ?err, "failed to quick search");
-        })?;
+        let context = SearchContext {
+            db: Arc::clone(&self.repo),
+            dapp_client: &self.dapp_client,
+            token_info_client: &self.token_info_client,
+            bens_client: &self.bens_client,
+            bens_protocols: self.bens_protocols.as_deref(),
+            domain_primary_chain_id: self.domain_primary_chain_id,
+            marketplace_enabled_cache: &self.marketplace_enabled_cache,
+            uniform_chain_search_cache: self.uniform_chain_search_cache.as_ref(),
+        };
+
+        let results = search::quick_search(inner.q, &self.quick_search_chains, &context)
+            .await
+            .inspect_err(|err| {
+                tracing::error!(error = ?err, "failed to quick search");
+            })?;
 
         Ok(Response::new(results.into()))
     }
@@ -351,15 +341,33 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<ListDappsResponse>, Status> {
         let inner = request.into_inner();
 
-        let chain_ids = inner
-            .chain_ids
+        let chain_ids = if inner.chain_ids.is_empty() {
+            chains::list_active_chains_cached(
+                self.repo.read_db(),
+                &[chains::ChainSource::Dapp {
+                    dapp_client: &self.dapp_client,
+                }],
+            )
+            .await?
             .into_iter()
-            .map(parse_query)
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|c| c.id)
+            .collect()
+        } else {
+            inner
+                .chain_ids
+                .into_iter()
+                .map(parse_query)
+                .collect::<Result<Vec<_>, _>>()?
+        };
 
         let chain_ids = self
+            .marketplace_enabled_cache
             .filter_marketplace_enabled_chains(chain_ids, |id| *id)
             .await;
+
+        if chain_ids.is_empty() {
+            return Ok(Response::new(ListDappsResponse { items: vec![] }));
+        }
 
         let dapps =
             search::search_dapps(&self.dapp_client, inner.q, inner.categories, chain_ids).await?;
@@ -382,6 +390,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         .await?;
 
         let items = self
+            .marketplace_enabled_cache
             .filter_marketplace_enabled_chains(items, |c| c.id)
             .await
             .into_iter()
@@ -431,81 +440,5 @@ impl MultichainAggregatorService for MultichainAggregator {
                 page_size,
             }),
         }))
-    }
-
-    async fn list_interop_messages(
-        &self,
-        request: Request<ListInteropMessagesRequest>,
-    ) -> Result<Response<ListInteropMessagesResponse>, Status> {
-        let inner = request.into_inner();
-
-        let init_chain_id = inner.init_chain_id.map(parse_query).transpose()?;
-        let relay_chain_id = inner.relay_chain_id.map(parse_query).transpose()?;
-        let address = inner.address.map(parse_query).transpose()?;
-        let direction = inner.direction.map(parse_query).transpose()?;
-
-        let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query_2).transpose()?;
-
-        let (interop_messages, next_page_token) = search::search_interop_messages(
-            self.repo.read_db(),
-            init_chain_id,
-            relay_chain_id,
-            address,
-            direction,
-            inner.nonce,
-            page_size as u64,
-            page_token,
-        )
-        .await?;
-
-        Ok(Response::new(ListInteropMessagesResponse {
-            items: interop_messages.into_iter().map(|i| i.into()).collect(),
-            next_page_params: next_page_token.map(|(t, h)| Pagination {
-                page_token: format!("{},{}", t, h),
-                page_size,
-            }),
-        }))
-    }
-
-    async fn count_interop_messages(
-        &self,
-        request: Request<CountInteropMessagesRequest>,
-    ) -> Result<Response<CountInteropMessagesResponse>, Status> {
-        let inner = request.into_inner();
-
-        let chain_id = parse_query(inner.chain_id)?;
-
-        let count = interop_messages::count(self.repo.read_db(), chain_id)
-            .await
-            .map_err(ServiceError::from)?;
-
-        Ok(Response::new(CountInteropMessagesResponse { count }))
-    }
-}
-
-#[allow(clippy::result_large_err)]
-#[inline]
-fn parse_query<T: FromStr>(input: String) -> Result<T, Status>
-where
-    <T as FromStr>::Err: std::fmt::Display,
-{
-    T::from_str(&input)
-        .map_err(|e| Status::invalid_argument(format!("invalid value {}: {e}", input)))
-}
-
-#[allow(clippy::result_large_err)]
-#[inline]
-fn parse_query_2<T1: FromStr, T2: FromStr>(input: String) -> Result<(T1, T2), Status>
-where
-    <T1 as FromStr>::Err: std::fmt::Display,
-    <T2 as FromStr>::Err: std::fmt::Display,
-{
-    match input.split(',').collect::<Vec<&str>>().as_slice() {
-        [v1, v2] => Ok((
-            parse_query::<T1>(v1.to_string())?,
-            parse_query::<T2>(v2.to_string())?,
-        )),
-        _ => Err(Status::invalid_argument("invalid page_token format")),
     }
 }

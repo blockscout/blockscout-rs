@@ -4,7 +4,8 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use da_indexer_logic::{
-    celestia::l2_router::settings::L2RouterSettings, settings::IndexerSettings,
+    celestia::l2_router::settings::L2RouterSettings, s3_storage::S3StorageSettings,
+    settings::IndexerSettings,
 };
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -24,6 +25,7 @@ pub struct Settings {
     pub swagger_path: PathBuf,
 
     pub database: Option<DatabaseSettings>,
+    pub s3_storage: Option<S3StorageSettings>,
     pub indexer: Option<IndexerSettings>,
     pub l2_router: Option<L2RouterSettings>,
 }
@@ -46,9 +48,11 @@ impl Settings {
             swagger_path: default_swagger_path(),
             database: Some(DatabaseSettings {
                 connect: DatabaseConnectSettings::Url(database_url),
+                connect_options: Default::default(),
                 create_database: Default::default(),
                 run_migrations: Default::default(),
             }),
+            s3_storage: None,
             indexer: Some(Default::default()),
             l2_router: None,
         }

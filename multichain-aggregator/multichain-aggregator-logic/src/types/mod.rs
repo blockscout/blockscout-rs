@@ -1,3 +1,5 @@
+pub mod address_coin_balances;
+pub mod address_token_balances;
 pub mod addresses;
 pub mod api_keys;
 pub mod batch_import_request;
@@ -13,3 +15,11 @@ pub mod search_results;
 pub mod token_info;
 
 pub type ChainId = i64;
+
+pub fn proto_address_hash_from_alloy(
+    address: &alloy_primitives::Address,
+) -> crate::proto::AddressHash {
+    crate::proto::AddressHash {
+        hash: address.to_checksum(None),
+    }
+}

@@ -8,4 +8,4 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-sea-orm = { version = "0.12.2", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
+sea-orm = { workspace = true }

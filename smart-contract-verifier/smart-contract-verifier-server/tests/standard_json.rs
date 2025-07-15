@@ -246,8 +246,7 @@ async fn test_failure(dir: &str, mut input: TestInput, expected_message: &str) {
     assert_eq!(
         verification_response.status().as_str_name(),
         "FAILURE", // failure
-        "Invalid verification status. Response: {:?}",
-        verification_response
+        "Invalid verification status. Response: {verification_response:?}"
     );
 
     assert!(
@@ -282,8 +281,7 @@ async fn test_error(
 
     assert_eq!(
         status, expected_status,
-        "Invalid status code. Message: {}",
-        message
+        "Invalid status code. Message: {message}"
     );
 
     if let Some(expected_message) = expected_message {

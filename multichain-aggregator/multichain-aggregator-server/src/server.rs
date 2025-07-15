@@ -1,10 +1,12 @@
 use crate::{
     proto::{
-        health_actix::route_health, health_server::HealthServer,
+        cluster_explorer_service_actix::route_cluster_explorer_service,
+        cluster_explorer_service_server::ClusterExplorerServiceServer, health_actix::route_health,
+        health_server::HealthServer,
         multichain_aggregator_service_actix::route_multichain_aggregator_service,
         multichain_aggregator_service_server::MultichainAggregatorServiceServer,
     },
-    services::{HealthService, MultichainAggregator},
+    services::{ClusterExplorer, HealthService, MultichainAggregator},
     settings::Settings,
 };
 use actix_phoenix_channel::{configure_channel_websocket_route, ChannelCentral};
@@ -15,19 +17,23 @@ use blockscout_service_launcher::{
 use migration::Migrator;
 use multichain_aggregator_logic::{
     clients::{bens, dapp, token_info},
+    metrics,
     services::{
-        chains::{fetch_and_upsert_blockscout_chains, start_marketplace_enabled_cache_updater},
+        chains::{fetch_and_upsert_blockscout_chains, MarketplaceEnabledCache},
         channel::Channel,
+        cluster::Cluster,
+        search::UniformChainSearchCache,
     },
 };
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::RwLock;
+use recache::stores::redis::RedisStore;
+use std::{collections::HashSet, sync::Arc};
 
 const SERVICE_NAME: &str = "multichain_aggregator";
 
 #[derive(Clone)]
 struct Router {
     multichain_aggregator: Arc<MultichainAggregator>,
+    cluster_explorer: Arc<ClusterExplorer>,
     health: Arc<HealthService>,
     channel: Arc<ChannelCentral<Channel>>,
 }
@@ -39,6 +45,9 @@ impl Router {
             .add_service(MultichainAggregatorServiceServer::from_arc(
                 self.multichain_aggregator.clone(),
             ))
+            .add_service(ClusterExplorerServiceServer::from_arc(
+                self.cluster_explorer.clone(),
+            ))
     }
 }
 
@@ -47,6 +56,9 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config.configure(|config| {
             route_multichain_aggregator_service(config, self.multichain_aggregator.clone())
+        });
+        service_config.configure(|config| {
+            route_cluster_explorer_service(config, self.cluster_explorer.clone())
         });
         service_config.configure(|config| {
             configure_channel_websocket_route(config, self.channel.clone());
@@ -77,19 +89,71 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let token_info_client = token_info::new_client(settings.service.token_info_client.url)?;
     let bens_client = bens::new_client(settings.service.bens_client.url)?;
 
-    let marketplace_enabled_cache = Arc::new(RwLock::new(HashMap::new()));
-    start_marketplace_enabled_cache_updater(
+    let marketplace_enabled_cache = MarketplaceEnabledCache::new();
+    marketplace_enabled_cache.clone().start_updater(
         repo.read_db().clone(),
         dapp_client.clone(),
-        marketplace_enabled_cache.clone(),
         settings.service.marketplace_enabled_cache_update_interval,
         settings.service.marketplace_enabled_cache_fetch_concurrency,
     );
 
     let channel = Arc::new(ChannelCentral::new(Channel));
 
+    let uniform_chain_search_cache = if let Some(cache_settings) = settings.cache {
+        let cache_name = "uniform_chain_search";
+        let redis_cache = RedisStore::builder()
+            .connection_string(cache_settings.redis.url.to_string())
+            .prefix(format!("multichain_aggregator:{cache_name}"))
+            .build()
+            .await?;
+
+        let cache_handler = UniformChainSearchCache::builder(Arc::new(redis_cache))
+            .default_ttl(cache_settings.uniform_chain_search_cache.ttl)
+            .maybe_default_refresh_ahead(cache_settings.uniform_chain_search_cache.refresh_ahead)
+            .on_hit(Arc::new(|_, _| {
+                metrics::CACHE_HIT_TOTAL
+                    .with_label_values(&[cache_name])
+                    .inc();
+            }))
+            .on_computed(Arc::new(|_, _| {
+                // `on_computed` is triggered when the cache entry is computed and not found in the cache.
+                // In this case, we consider it a cache miss.
+                metrics::CACHE_MISS_TOTAL
+                    .with_label_values(&[cache_name])
+                    .inc();
+            }))
+            .on_refresh_computed(Arc::new(|_, _| {
+                metrics::CACHE_REFRESH_AHEAD_TOTAL
+                    .with_label_values(&[cache_name])
+                    .inc();
+            }))
+            .build();
+
+        Some(cache_handler)
+    } else {
+        None
+    };
+
+    let clusters = settings
+        .cluster_explorer
+        .clusters
+        .into_iter()
+        .map(|(name, cluster)| {
+            let chain_ids = cluster.chain_ids.into_iter().collect::<HashSet<_>>();
+            if chain_ids.is_empty() {
+                panic!("cluster {name} has no chain_ids");
+            }
+            (name.clone(), Cluster::new(chain_ids))
+        })
+        .collect();
+    let cluster_explorer = Arc::new(ClusterExplorer::new(
+        repo.read_db().clone(),
+        clusters,
+        settings.service.api.clone(),
+    ));
+
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
-        repo,
+        Arc::new(repo),
         dapp_client,
         token_info_client,
         bens_client,
@@ -99,11 +163,13 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.domain_primary_chain_id,
         marketplace_enabled_cache,
         channel.channel_broadcaster(),
+        uniform_chain_search_cache,
     ));
 
     let router = Router {
         health,
         multichain_aggregator,
+        cluster_explorer,
         channel,
     };
 

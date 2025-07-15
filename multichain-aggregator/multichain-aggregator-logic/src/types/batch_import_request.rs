@@ -1,4 +1,6 @@
 use super::{
+    address_coin_balances::AddressCoinBalance,
+    address_token_balances::AddressTokenBalance,
     addresses::{proto_token_type_to_db_token_type, Address},
     block_ranges::BlockRange,
     hashes::{proto_hash_type_to_db_hash_type, Hash},
@@ -21,7 +23,9 @@ pub struct BatchImportRequest {
     pub hashes: Vec<Hash>,
     pub addresses: Vec<Address>,
     pub interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
-    pub counters: Option<Counters>
+    pub address_coin_balances: Vec<AddressCoinBalance>,
+    pub address_token_balances: Vec<AddressTokenBalance>,
+    pub counters: Option<Counters>,
 }
 
 impl BatchImportRequest {
@@ -58,6 +62,16 @@ impl BatchImportRequest {
             },
             "interop_messages"
         );
+        calculate_entity_metrics!(
+            &self.address_coin_balances,
+            |b: &AddressCoinBalance| b.chain_id,
+            "address_coin_balances"
+        );
+        calculate_entity_metrics!(
+            &self.address_token_balances,
+            |b: &AddressTokenBalance| b.chain_id,
+            "address_token_balances"
+        );
     }
 }
 
@@ -87,10 +101,66 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
                 .into_iter()
                 .map(|m| InteropMessageWithTransfer::try_from((chain_id, m)).map(|a| (a.0, a.1)))
                 .collect::<Result<Vec<_>, _>>()?,
+            address_coin_balances: value
+                .address_coin_balances
+                .into_iter()
+                .map(|cb| (chain_id, cb).try_into())
+                .collect::<Result<Vec<_>, _>>()?,
+            address_token_balances: value
+                .address_token_balances
+                .into_iter()
+                .map(|atb| (chain_id, atb).try_into())
+                .collect::<Result<Vec<_>, _>>()?,
             counters: value
                 .counters
                 .map(|c| Counters::try_from((chain_id, c)))
-                .transpose()?
+                .transpose()?,
+        })
+    }
+}
+
+impl
+    TryFrom<(
+        ChainId,
+        proto::batch_import_request::AddressCoinBalanceImport,
+    )> for AddressCoinBalance
+{
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, acb): (
+            ChainId,
+            proto::batch_import_request::AddressCoinBalanceImport,
+        ),
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id,
+            address_hash: acb.address_hash.parse()?,
+            value: acb.value.parse()?,
+        })
+    }
+}
+
+impl
+    TryFrom<(
+        ChainId,
+        proto::batch_import_request::AddressTokenBalanceImport,
+    )> for AddressTokenBalance
+{
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, atb): (
+            ChainId,
+            proto::batch_import_request::AddressTokenBalanceImport,
+        ),
+    ) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id,
+            address_hash: atb.address_hash.parse()?,
+            token_address_hash: atb.token_address_hash.parse()?,
+            value: atb.value.parse()?,
+            token_id: atb.token_id.map(|s| s.parse()).transpose()?,
         })
     }
 }
@@ -208,9 +278,7 @@ impl TryFrom<proto::batch_import_request::interop_message_import::Init>
                     transfer_token_address_hash.map(|s| s.parse()).transpose()?;
                 let from_address_hash = transfer_from_address_hash.parse()?;
                 let to_address_hash = transfer_to_address_hash.parse()?;
-                let amount = BigDecimal::from_str(&transfer_amount).map_err(|_| {
-                    ParseError::Custom(format!("invalid decimal: {}", transfer_amount))
-                })?;
+                let amount = BigDecimal::from_str(&transfer_amount)?;
 
                 Some(InteropMessageTransfer {
                     token_address_hash,
@@ -283,8 +351,7 @@ fn parse_timestamp_secs(timestamp: i64) -> Result<NaiveDateTime, ParseError> {
     match chrono::DateTime::from_timestamp(timestamp, 0) {
         Some(dt) => Ok(dt.naive_utc()),
         None => Err(ParseError::Custom(format!(
-            "invalid timestamp: {}",
-            timestamp
+            "invalid timestamp: {timestamp}",
         ))),
     }
 }

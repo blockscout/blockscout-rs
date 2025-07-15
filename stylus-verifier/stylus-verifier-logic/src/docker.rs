@@ -75,10 +75,7 @@ pub async fn run_reproducible(
 }
 
 fn version_to_image_name(cargo_stylus_version: &Version, toolchain: &Version) -> String {
-    format!(
-        "blockscout/cargo-stylus:{}-rust-{}",
-        cargo_stylus_version, toolchain
-    )
+    format!("blockscout/cargo-stylus:{cargo_stylus_version}-rust-{toolchain}",)
 }
 
 async fn image_exists(docker: &Docker, name: &str) -> Result<bool, anyhow::Error> {
@@ -164,7 +161,9 @@ RUN rustup component add rust-src --toolchain {toolchain}-x86_64-unknown-linux-g
                     error = err.to_string(),
                     "unknown error while building an image"
                 );
-                anyhow::bail!("unknown error while building an image; image_name={image_name}, output={output}, error={err}");
+                anyhow::bail!(
+                    "unknown error while building an image; image_name={image_name}, output={output}, error={err}"
+                );
             }
         }
     }

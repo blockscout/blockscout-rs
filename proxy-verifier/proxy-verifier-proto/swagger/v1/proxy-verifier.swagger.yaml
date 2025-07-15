@@ -260,6 +260,8 @@ definitions:
         type: string
       iconUrl:
         type: string
+      isTestnet:
+        type: boolean
   v1Compiler:
     type: object
     properties:

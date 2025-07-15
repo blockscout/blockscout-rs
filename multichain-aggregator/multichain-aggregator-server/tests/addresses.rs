@@ -32,10 +32,7 @@ async fn test_list_addresses() {
     let page_token = response.next_page_params.unwrap().page_token;
     let response: proto::ListAddressesResponse = test_server::send_get_request(
         &base,
-        &format!(
-            "/api/v1/addresses?q=test&chain_id=1&page_size=50&page_token={}",
-            page_token
-        ),
+        &format!("/api/v1/addresses?q=test&chain_id=1&page_size=50&page_token={page_token}"),
     )
     .await;
 
@@ -76,10 +73,7 @@ async fn test_list_nfts() {
     let page_token = response.next_page_params.unwrap().page_token;
     let response: proto::ListNftsResponse = test_server::send_get_request(
         &base,
-        &format!(
-            "/api/v1/nfts?q=test&chain_id=1&page_size=20&page_token={}",
-            page_token
-        ),
+        &format!("/api/v1/nfts?q=test&chain_id=1&page_size=20&page_token={page_token}"),
     )
     .await;
 

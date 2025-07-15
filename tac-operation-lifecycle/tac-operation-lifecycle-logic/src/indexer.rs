@@ -71,7 +71,7 @@ impl fmt::Display for OperationType {
             .trim_matches('"')
             .to_string();
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -79,7 +79,7 @@ impl FromStr for OperationType {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(serde_json::from_str(&format!("\"{}\"", s)).unwrap_or(OperationType::ErrorType))
+        Ok(serde_json::from_str(&format!("\"{s}\"")).unwrap_or(OperationType::ErrorType))
     }
 }
 
@@ -98,13 +98,13 @@ impl StageType {
 
 impl fmt::Display for StageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 impl fmt::Display for BlockchainType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
