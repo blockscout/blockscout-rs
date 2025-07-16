@@ -8,6 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     pub chain_id: i64,
+    pub date: Date,
     pub daily_transactions_number: Option<i64>,
     pub total_transactions_number: Option<i64>,
     pub total_addresses_number: Option<i64>,

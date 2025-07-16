@@ -10,18 +10,17 @@ impl MigrationTrait for Migration {
             CREATE TABLE counters_global_imported (
                 id bigserial NOT NULL,
                 chain_id bigint NOT NULL REFERENCES chains (id),
+                date date NOT NULL,
                 daily_transactions_number bigint DEFAULT NULL,
                 total_transactions_number bigint DEFAULT NULL,
                 total_addresses_number bigint DEFAULT NULL,
                 created_at timestamp NOT NULL DEFAULT (now()),
                 updated_at timestamp NOT NULL DEFAULT (now()),
-                PRIMARY KEY (id)
+                PRIMARY KEY (id),
+                UNIQUE (chain_id, date)
             );
 
-            CREATE INDEX interop_messages_sender_address_hash_index ON interop_messages (sender_address_hash);
-            CREATE INDEX interop_messages_target_address_hash_index ON interop_messages (target_address_hash);
-            CREATE INDEX interop_messages_transfers_from_address_hash_index ON interop_messages_transfers (from_address_hash);
-            CREATE INDEX interop_messages_transfers_to_address_hash_index ON interop_messages_transfers (to_address_hash);
+            CREATE INDEX counters_global_imported_chain_id_date_index ON counters_global_imported (chain_id, date);
         "#;
         crate::from_sql(manager, sql).await
     }
@@ -31,10 +30,7 @@ impl MigrationTrait for Migration {
         let sql = r#"
             DROP TABLE IF EXISTS counters_global_imported;
 
-            DROP INDEX IF EXISTS interop_messages_sender_address_hash_index;
-            DROP INDEX IF EXISTS interop_messages_target_address_hash_index;
-            DROP INDEX IF EXISTS interop_messages_transfers_from_address_hash_index;
-            DROP INDEX IF EXISTS interop_messages_transfers_to_address_hash_index;
+            DROP INDEX IF EXISTS counters_global_imported_chain_id_date_index;
         "#;
         crate::from_sql(manager, sql).await
     }

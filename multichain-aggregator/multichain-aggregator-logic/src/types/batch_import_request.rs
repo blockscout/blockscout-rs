@@ -366,11 +366,11 @@ impl TryFrom<(ChainId, proto::batch_import_request::CountersImport)> for Counter
         let global = {
             let g: Option<&proto::batch_import_request::counters_import::GlobalCounters> =
                 proto.global_counters.as_ref();
-            let t = proto.timestamp;
+            let timestamp = parse_timestamp_secs(proto.timestamp)?;
 
             g.map(|g| ChainCounters {
                 chain_id,
-                timestamp: parse_timestamp_secs(t).unwrap(),
+                timestamp,
                 daily_transactions_number: g.daily_transactions_number,
                 total_transactions_number: g.total_transactions_number,
                 total_addresses_number: g.total_addresses_number,

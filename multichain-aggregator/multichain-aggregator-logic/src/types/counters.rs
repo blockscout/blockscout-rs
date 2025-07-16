@@ -1,5 +1,4 @@
 use super::ChainId;
-use crate::error::ParseError;
 use chrono::NaiveDateTime;
 use entity::counters_global_imported::Model as GlobalCountersModel;
 
@@ -17,26 +16,17 @@ impl From<ChainCounters> for GlobalCountersModel {
         Self {
             id: Default::default(),
             chain_id: v.chain_id,
-            daily_transactions_number: v.daily_transactions_number.map(|n| n as i64),
-            total_transactions_number: v.total_transactions_number.map(|n| n as i64),
-            total_addresses_number: v.total_addresses_number.map(|n| n as i64),
+            date: v.timestamp.date(),
+            daily_transactions_number: v
+                .daily_transactions_number
+                .and_then(|n| i64::try_from(n).ok()),
+            total_transactions_number: v
+                .total_transactions_number
+                .and_then(|n| i64::try_from(n).ok()),
+            total_addresses_number: v.total_addresses_number.and_then(|n| i64::try_from(n).ok()),
             created_at: Default::default(),
-            updated_at: v.timestamp,
+            updated_at: Default::default(),
         }
-    }
-}
-
-impl TryFrom<GlobalCountersModel> for ChainCounters {
-    type Error = ParseError;
-
-    fn try_from(v: GlobalCountersModel) -> Result<Self, Self::Error> {
-        Ok(Self {
-            chain_id: v.chain_id,
-            timestamp: v.updated_at,
-            daily_transactions_number: v.daily_transactions_number.map(|n| n as u64),
-            total_transactions_number: v.total_transactions_number.map(|n| n as u64),
-            total_addresses_number: v.total_addresses_number.map(|n| n as u64),
-        })
     }
 }
 

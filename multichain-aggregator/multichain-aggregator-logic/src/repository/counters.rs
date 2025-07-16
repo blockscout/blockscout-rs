@@ -1,68 +1,49 @@
 use crate::types::counters::ChainCounters;
-use chrono::{NaiveDateTime, NaiveTime, Utc};
 use entity::counters_global_imported::{
     ActiveModel as GlobalCountersActiveModel, Column as GlobalCountersColumn,
-    Entity as GlobalCountersEntity,
+    Entity as GlobalCountersEntity, Model as GlobalCountersModel,
 };
 use sea_orm::{
-    ActiveModelTrait,
-    ActiveValue::{NotSet, Set},
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder,
+    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
 };
 
 pub async fn upsert_chain_counters<C>(db: &C, data: ChainCounters) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {
-    let ChainCounters {
-        chain_id,
-        timestamp,
-        daily_transactions_number,
-        total_transactions_number,
-        total_addresses_number,
-    } = data;
+    let model: GlobalCountersModel = data.into();
+    let affected_columns = get_affected_columns(&model);
 
-    let day_start = NaiveDateTime::new(timestamp.date(), NaiveTime::from_hms_opt(0, 0, 0).unwrap());
-    let day_end = day_start + chrono::Duration::days(1);
+    let mut active_model: GlobalCountersActiveModel = model.into();
+    active_model.id = NotSet;
+    active_model.created_at = NotSet;
+    active_model.updated_at = NotSet;
 
-    let existing = GlobalCountersEntity::find()
-        .filter(GlobalCountersColumn::ChainId.eq(chain_id))
-        .filter(GlobalCountersColumn::UpdatedAt.gte(day_start))
-        .filter(GlobalCountersColumn::UpdatedAt.lt(day_end))
-        .order_by_desc(GlobalCountersColumn::UpdatedAt)
-        .one(db)
+    GlobalCountersEntity::insert(active_model)
+        .on_conflict(
+            OnConflict::columns([GlobalCountersColumn::ChainId, GlobalCountersColumn::Date])
+                .update_columns(affected_columns)
+                .value(GlobalCountersColumn::UpdatedAt, Expr::current_timestamp())
+                .to_owned(),
+        )
+        .do_nothing()
+        .exec_without_returning(db)
         .await?;
 
-    match existing {
-        Some(model) => {
-            let mut active: GlobalCountersActiveModel = model.into();
+    Ok(())
+}
 
-            if let Some(val) = daily_transactions_number {
-                active.daily_transactions_number = Set(Some(val as i64));
-            }
-            if let Some(val) = total_transactions_number {
-                active.total_transactions_number = Set(Some(val as i64));
-            }
-            if let Some(val) = total_addresses_number {
-                active.total_addresses_number = Set(Some(val as i64));
-            }
-
-            active.updated_at = Set(timestamp);
-            active.update(db).await?;
-        }
-        None => {
-            let new = GlobalCountersActiveModel {
-                id: NotSet,
-                chain_id: Set(chain_id),
-                daily_transactions_number: Set(daily_transactions_number.map(|v| v as i64)),
-                total_transactions_number: Set(total_transactions_number.map(|v| v as i64)),
-                total_addresses_number: Set(total_addresses_number.map(|v| v as i64)),
-                created_at: Set(Utc::now().naive_utc()),
-                updated_at: Set(timestamp),
-            };
-            new.insert(db).await?;
-        }
+fn get_affected_columns(model: &GlobalCountersModel) -> Vec<GlobalCountersColumn> {
+    let mut columns = Vec::new();
+    if model.daily_transactions_number.is_some() {
+        columns.push(GlobalCountersColumn::DailyTransactionsNumber);
+    }
+    if model.total_transactions_number.is_some() {
+        columns.push(GlobalCountersColumn::TotalTransactionsNumber);
+    }
+    if model.total_addresses_number.is_some() {
+        columns.push(GlobalCountersColumn::TotalAddressesNumber);
     }
 
-    Ok(())
+    columns
 }
