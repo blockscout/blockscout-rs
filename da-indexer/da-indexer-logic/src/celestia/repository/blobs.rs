@@ -68,7 +68,7 @@ pub async fn upsert_many<C: ConnectionTrait>(
     let blobs: Vec<_> = blobs
         .into_iter()
         .map(|blob| {
-            let id = compute_id(height, &blob.commitment.0);
+            let id = compute_id(height, blob.commitment.hash());
 
             let (db_data, s3_object) =
                 common::repository::convert_blob_data_to_db_data_and_s3_object(
@@ -82,7 +82,7 @@ pub async fn upsert_many<C: ConnectionTrait>(
                 id,
                 height: height as i64,
                 namespace: blob.namespace.as_bytes().to_vec(),
-                commitment: blob.commitment.0.to_vec(),
+                commitment: blob.commitment.hash().to_vec(),
                 data: db_data.data,
                 data_s3_object_key: db_data.data_s3_object_key,
             };
