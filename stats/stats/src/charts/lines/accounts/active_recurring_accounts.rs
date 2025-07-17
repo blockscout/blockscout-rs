@@ -3,6 +3,7 @@
 use std::{marker::PhantomData, ops::Range};
 
 use crate::{
+    ChartProperties, Named,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -11,10 +12,10 @@ use crate::{
                 map::{MapParseTo, MapToString},
             },
             local_db::{
+                DirectVecLocalDbChartSource,
                 parameters::update::batching::parameters::{
                     Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
                 },
-                DirectVecLocalDbChartSource,
             },
             remote_db::{PullEachWith, RemoteDatabaseSource, StatementFromTimespan},
         },
@@ -23,7 +24,6 @@ use crate::{
     define_and_impl_resolution_properties, gettable_const,
     types::timespans::{Month, Week, Year},
     utils::produce_filter_and_values,
-    ChartProperties, Named,
 };
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};

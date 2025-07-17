@@ -1,23 +1,23 @@
 use crate::{
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::{
+        UpdateContext,
         kinds::{
             data_manipulation::map::{Map, MapParseTo},
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{query::query_yesterday_data, RemoteDatabaseSource, RemoteQueryBehaviour},
+            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, query::query_yesterday_data},
         },
-        UpdateContext,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     lines::NewBlocksStatement,
     range::UniversalRange,
     types::TimespanValue,
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 
-use super::{yesterday_txns::YesterdayTxnsInt, CalculateOperationalTxns};
+use super::{CalculateOperationalTxns, yesterday_txns::YesterdayTxnsInt};
 
 pub struct YesterdayBlocksQuery;
 

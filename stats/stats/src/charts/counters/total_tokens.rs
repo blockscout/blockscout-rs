@@ -1,4 +1,5 @@
 use crate::{
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
@@ -8,7 +9,6 @@ use crate::{
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::TimespanValue,
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;

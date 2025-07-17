@@ -10,11 +10,11 @@ use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
 use hex_literal::hex;
 use itertools::Itertools;
 use rand::{Rng, SeedableRng};
-use sea_orm::{prelude::Decimal, ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
+use sea_orm::{ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set, prelude::Decimal};
 use std::str::FromStr;
 use wiremock::{
-    matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
 };
 
 use crate::lines::{ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH};

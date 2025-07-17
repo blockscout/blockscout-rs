@@ -2,8 +2,8 @@ use std::ops::Range;
 
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    sea_query::{Expr, SimpleExpr},
     ColumnTrait, QueryFilter,
+    sea_query::{Expr, SimpleExpr},
 };
 
 pub fn interval_24h_filter(

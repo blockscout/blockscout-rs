@@ -1,11 +1,11 @@
 use crate::{
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::kinds::{
         data_manipulation::map::{Map, MapParseTo},
         local_db::DirectPointLocalDbChartSource,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::new_txns::ExtractAllTxns,
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;

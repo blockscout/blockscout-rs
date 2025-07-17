@@ -1,6 +1,7 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
+    ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -9,10 +10,10 @@ use crate::{
                 resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
+                DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
                 parameters::update::batching::parameters::{
                     Batch30Weeks, Batch30Years, Batch36Months,
                 },
-                DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
@@ -21,7 +22,6 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};

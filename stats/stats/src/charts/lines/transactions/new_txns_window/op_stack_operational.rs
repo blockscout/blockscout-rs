@@ -4,18 +4,18 @@
 //! Basically a [super::NewTxnsWindow] but for op stack operational txns
 
 use crate::{
+    ChartProperties, IndexingStatus, Named,
     data_source::kinds::{
         data_manipulation::map::Map,
         local_db::{
-            parameters::{
-                update::clear_and_query_all::ClearAllAndPassVec, DefaultCreate, DefaultQueryVec,
-            },
             LocalDbChartSource,
+            parameters::{
+                DefaultCreate, DefaultQueryVec, update::clear_and_query_all::ClearAllAndPassVec,
+            },
         },
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::new_txns::ExtractOpStackTxns,
-    ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::NaiveDate;

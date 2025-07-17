@@ -2,9 +2,9 @@
 use std::{fmt::Debug, ops::RangeInclusive};
 
 use crate::{
+    MissingDatePolicy, ReadError,
     charts::db_interaction::read::{ApproxUnsignedDiff, RequestedPointsLimit},
     types::{Timespan, TimespanValue, ZeroTimespanValue},
-    MissingDatePolicy, ReadError,
 };
 use chrono::NaiveDate;
 

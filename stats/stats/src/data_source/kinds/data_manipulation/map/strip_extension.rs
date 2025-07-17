@@ -1,6 +1,6 @@
 use crate::{
-    types::{ExtendedTimespanValue, TimespanValue},
     ChartError,
+    types::{ExtendedTimespanValue, TimespanValue},
 };
 
 use super::{Map, MapFunction};

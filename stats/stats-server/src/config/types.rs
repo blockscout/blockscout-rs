@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use stats::ResolutionKind;
 use stats_proto::blockscout::stats::v1 as proto_v1;
 
@@ -39,11 +39,7 @@ impl ResolutionsSettings {
     ) -> Result<bool, ResolutionKind> {
         let is_available = available_resolutions.contains(&kind);
         if let Some(setting) = setting {
-            if is_available {
-                Ok(setting)
-            } else {
-                Err(kind)
-            }
+            if is_available { Ok(setting) } else { Err(kind) }
         } else {
             Ok(is_available)
         }

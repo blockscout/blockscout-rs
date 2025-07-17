@@ -1,17 +1,17 @@
 use chrono::{DateTime, Utc};
 
 use crate::{
+    ChartError,
     data_source::{
-        kinds::remote_db::{
-            query::{calculate_yesterday, query_yesterday_data_cached},
-            RemoteDatabaseSource, RemoteQueryBehaviour,
-        },
         UpdateContext,
+        kinds::remote_db::{
+            RemoteDatabaseSource, RemoteQueryBehaviour,
+            query::{calculate_yesterday, query_yesterday_data_cached},
+        },
     },
     lines::NewTxnsCombinedStatement,
     range::UniversalRange,
-    types::{new_txns::NewTxnsCombinedPoint, ZeroTimespanValue},
-    ChartError,
+    types::{ZeroTimespanValue, new_txns::NewTxnsCombinedPoint},
 };
 
 pub mod all_yesterday_txns;

@@ -2,16 +2,16 @@
 
 use super::new_accounts::NewAccountsInt;
 use crate::{
+    ChartProperties, MissingDatePolicy, Named,
     data_source::kinds::{
         data_manipulation::{map::StripExt, resolutions::last_value::LastValueLowerResolution},
         local_db::{
-            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
         },
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
-    ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;

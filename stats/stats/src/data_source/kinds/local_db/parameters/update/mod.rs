@@ -6,9 +6,9 @@ pub use point::PassPoint;
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
+    ChartError,
     charts::db_interaction::write::insert_data_many,
     types::{Timespan, TimespanValue},
-    ChartError,
 };
 
 pub(crate) async fn pass_vec<Resolution, C>(

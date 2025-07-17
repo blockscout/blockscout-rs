@@ -1,6 +1,6 @@
 use chrono::{DateTime, Offset, TimeZone};
 use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
-use sea_orm::{prelude::*, sea_query, Set, Unchanged};
+use sea_orm::{Set, Unchanged, prelude::*, sea_query};
 
 use crate::charts::ChartKey;
 

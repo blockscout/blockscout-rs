@@ -1,10 +1,10 @@
 use crate::{
+    ChartProperties, MissingDatePolicy, Named,
     data_source::kinds::{
         data_manipulation::{last_point::LastPoint, map::StripExt},
         local_db::DirectPointLocalDbChartSource,
     },
     lines::NativeCoinHoldersGrowth,
-    ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;

@@ -1,14 +1,15 @@
 use crate::{
+    ChartProperties, Named,
     data_source::kinds::{
         data_manipulation::{
             map::{Map, MapParseTo, MapToString, StripExt},
             resolutions::sum::SumLowerResolution,
         },
         local_db::{
+            DirectVecLocalDbChartSource,
             parameters::update::batching::parameters::{
                 Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
             },
-            DirectVecLocalDbChartSource,
         },
     },
     define_and_impl_resolution_properties,
@@ -16,7 +17,6 @@ use crate::{
         new_txns::ExtractOpStackTxns,
         timespans::{Month, Week, Year},
     },
-    ChartProperties, Named,
 };
 
 use chrono::NaiveDate;

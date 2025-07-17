@@ -1,6 +1,7 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
+    ChartKey, ChartProperties, Named,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -9,10 +10,10 @@ use crate::{
                 resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
+                DirectVecLocalDbChartSource,
                 parameters::update::batching::parameters::{
                     Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
                 },
-                DirectVecLocalDbChartSource,
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
@@ -20,7 +21,6 @@ use crate::{
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
-    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};

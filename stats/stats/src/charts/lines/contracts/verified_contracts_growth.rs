@@ -1,16 +1,16 @@
 use crate::{
+    MissingDatePolicy, Named,
     charts::chart::ChartProperties,
     data_source::kinds::{
         data_manipulation::{map::StripExt, resolutions::last_value::LastValueLowerResolution},
         local_db::{
-            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
             DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
+            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
         },
     },
     define_and_impl_resolution_properties,
     lines::new_verified_contracts::NewVerifiedContractsInt,
     types::timespans::{Month, Week, Year},
-    MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;

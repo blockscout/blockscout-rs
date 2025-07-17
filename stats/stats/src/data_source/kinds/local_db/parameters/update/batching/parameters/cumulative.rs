@@ -7,9 +7,9 @@ use rust_decimal::prelude::Zero;
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
+    ChartError, ChartProperties,
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
     types::{Timespan, TimespanValue},
-    ChartError, ChartProperties,
 };
 
 use super::PassVecStep;

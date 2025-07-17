@@ -1,10 +1,10 @@
 use crate::{
+    ChartProperties, Named,
     data_source::kinds::{
         data_manipulation::{last_point::LastPoint, map::StripExt},
         local_db::DirectPointLocalDbChartSource,
     },
     lines::NewContracts,
-    ChartProperties, Named,
 };
 
 use chrono::NaiveDate;

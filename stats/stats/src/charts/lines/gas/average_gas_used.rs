@@ -1,4 +1,5 @@
 use crate::{
+    ChartProperties, Named,
     data_source::kinds::{
         data_manipulation::{
             delta::Delta,
@@ -6,16 +7,15 @@ use crate::{
             resolutions::average::AverageLowerResolution,
         },
         local_db::{
+            DirectVecLocalDbChartSource,
             parameters::update::batching::parameters::{
                 Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
             },
-            DirectVecLocalDbChartSource,
         },
     },
     define_and_impl_resolution_properties,
     lines::blocks::new_blocks::NewBlocksInt,
     types::timespans::{Month, Week, Year},
-    ChartProperties, Named,
 };
 
 use chrono::NaiveDate;

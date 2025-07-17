@@ -1,6 +1,7 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
+    ChartKey, ChartProperties, Named,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -9,20 +10,19 @@ use crate::{
                 resolutions::average::AverageLowerResolution,
             },
             local_db::{
+                DirectVecLocalDbChartSource,
                 parameters::update::batching::parameters::{
                     Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
                 },
-                DirectVecLocalDbChartSource,
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
         types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
-    lines::{new_txns::NewTxnsMonthlyInt, NewTxnsInt},
+    lines::{NewTxnsInt, new_txns::NewTxnsMonthlyInt},
     types::timespans::{Month, Week, Year},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};

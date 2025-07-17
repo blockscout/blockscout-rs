@@ -4,9 +4,8 @@ use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use rust_decimal::Decimal;
 
 use crate::{
-    impl_into_string_timespan_value,
+    ResolutionKind, impl_into_string_timespan_value,
     types::{ConsistsOf, Timespan, TimespanDuration},
-    ResolutionKind,
 };
 
 use super::Month;
