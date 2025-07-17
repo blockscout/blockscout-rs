@@ -1,33 +1,33 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
+    ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
     charts::{
-        db_interaction::read::{find_all_points, QueryAllBlockTimestampRange},
+        db_interaction::read::{QueryAllBlockTimestampRange, find_all_points},
         types::timespans::DateValue,
     },
     data_source::{
+        UpdateContext,
         kinds::{
             data_manipulation::{
                 map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
+                DirectVecLocalDbChartSource,
                 parameters::update::batching::parameters::{
                     Batch30Weeks, Batch30Years, Batch36Months, BatchMaxDays,
                 },
-                DirectVecLocalDbChartSource,
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
         types::BlockscoutMigrations,
-        UpdateContext,
     },
     define_and_impl_resolution_properties,
     indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus},
     missing_date::trim_out_of_range_sorted,
-    range::{data_source_query_range_to_db_statement_range, UniversalRange},
+    range::{UniversalRange, data_source_query_range_to_db_statement_range},
     types::timespans::{Month, Week, Year},
-    ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -46,7 +46,9 @@ impl StatementFromRange for NewBuilderAccountsStatement {
             // the query is very complex + the chart is disabled by default
             // + it is expected to be used in 1-2 networks, therefore
             // won't bother to support pre-migration (that was done long before)
-            tracing::error!("builder accounts charts are not supported without denormalized database; the chart will show zeroes");
+            tracing::error!(
+                "builder accounts charts are not supported without denormalized database; the chart will show zeroes"
+            );
 
             return Statement::from_sql_and_values(
                 DbBackend::Postgres,
@@ -131,7 +133,7 @@ impl RemoteQueryBehaviour for NewBuilderAccountsQueryBehaviour {
                 .await?;
         let statement = NewBuilderAccountsStatement::get_statement(
             statement_range.clone(),
-            &cx.blockscout_applied_migrations,
+            &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
         let mut data = find_all_points::<DateValue<String>>(cx, statement).await?;

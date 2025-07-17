@@ -6,18 +6,18 @@
 //! Does not include last day, even as incomplete day.
 
 use crate::{
+    ChartProperties, IndexingStatus, Named,
     data_source::kinds::{
         data_manipulation::map::{Map, MapParseTo, StripExt},
         local_db::{
-            parameters::{
-                update::clear_and_query_all::ClearAllAndPassVec, DefaultCreate, DefaultQueryVec,
-            },
             LocalDbChartSource,
+            parameters::{
+                DefaultCreate, DefaultQueryVec, update::clear_and_query_all::ClearAllAndPassVec,
+            },
         },
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::new_txns::ExtractAllTxns,
-    ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::NaiveDate;
@@ -65,7 +65,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
+        data_source::{DataSource, UpdateContext, UpdateParameters, types::BlockscoutMigrations},
         query_dispatch::QuerySerialized,
         range::UniversalRange,
         tests::{
@@ -88,10 +88,10 @@ mod tests {
         let current_time = dt("2022-12-01T00:00:00").and_utc();
 
         let mut parameters = UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: NewTxnsWindow::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,

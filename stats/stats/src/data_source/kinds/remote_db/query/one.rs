@@ -42,7 +42,7 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Value, ChartError> {
-        let statement = S::get_statement(&cx.blockscout_applied_migrations);
+        let statement = S::get_statement(&cx.indexer_applied_migrations);
         let data = find_one_value::<Value>(cx, statement)
             .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
@@ -76,7 +76,7 @@ where
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
-        let statement = S::get_statement(cx.time, &cx.blockscout_applied_migrations);
+        let statement = S::get_statement(cx.time, &cx.indexer_applied_migrations);
         let timespan = Resolution::from_date(cx.time.date_naive());
         let value = find_one_value::<WrappedValue<Value>>(cx, statement)
             .await?
@@ -110,7 +110,7 @@ where
             .unwrap_or(DateTime::<Utc>::MIN_UTC)..=update_time;
         let query = S::get_statement(
             Some(inclusive_range_to_exclusive(range_24h)),
-            &cx.blockscout_applied_migrations,
+            &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
 

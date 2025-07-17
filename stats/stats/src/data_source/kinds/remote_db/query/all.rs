@@ -110,7 +110,7 @@ where
         data_source_query_range_to_db_statement_range::<AllRangeSource>(cx, range).await?;
     Ok(S::get_statement(
         query_range,
-        &cx.blockscout_applied_migrations,
+        &cx.indexer_applied_migrations,
         &cx.enabled_update_charts_recursive,
     ))
 }

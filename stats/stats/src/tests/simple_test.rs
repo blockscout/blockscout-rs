@@ -3,6 +3,7 @@ use super::{
     mock_blockscout::fill_mock_blockscout_data,
 };
 use crate::{
+    ChartProperties,
     data_source::{
         source::DataSource,
         types::{BlockscoutMigrations, UpdateContext, UpdateParameters},
@@ -10,8 +11,7 @@ use crate::{
     query_dispatch::QuerySerialized,
     range::UniversalRange,
     tests::mock_multichain::fill_mock_multichain_data,
-    types::{timespans::DateValue, Timespan},
-    ChartProperties,
+    types::{Timespan, timespans::DateValue},
 };
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -84,10 +84,10 @@ where
     fill_mock_blockscout_data(&blockscout, current_date).await;
 
     let mut parameters = UpdateParameters {
-        db: &db,
+        stats_db: &db,
         is_multichain_mode: false,
-        blockscout: &blockscout,
-        blockscout_applied_migrations: migrations,
+        indexer_db: &blockscout,
+        indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -136,10 +136,10 @@ pub async fn dirty_force_update_and_check<C>(
         update_time_override.unwrap_or(DateTime::from_str("2023-03-01T12:00:01Z").unwrap());
 
     let parameters = UpdateParameters {
-        db,
+        stats_db: db,
         is_multichain_mode: false,
-        blockscout,
-        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        indexer_db: blockscout,
+        indexer_applied_migrations: BlockscoutMigrations::latest(),
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -237,10 +237,10 @@ async fn ranged_test_chart_inner<C>(
     fill_mock_blockscout_data(&blockscout, max_date).await;
 
     let mut parameters = UpdateParameters {
-        db: &db,
+        stats_db: &db,
         is_multichain_mode: false,
-        blockscout: &blockscout,
-        blockscout_applied_migrations: migrations,
+        indexer_db: &blockscout,
+        indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -347,10 +347,10 @@ async fn simple_test_counter_inner<C>(
     };
 
     let mut parameters = UpdateParameters {
-        db: &db,
+        stats_db: &db,
         is_multichain_mode: multichain_mode,
-        blockscout: &indexer,
-        blockscout_applied_migrations: migrations,
+        indexer_db: &indexer,
+        indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -388,10 +388,10 @@ where
         .unwrap();
 
     let parameters = UpdateParameters {
-        db: &db,
+        stats_db: &db,
         is_multichain_mode: false,
-        blockscout: &blockscout,
-        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        indexer_db: &blockscout,
+        indexer_applied_migrations: BlockscoutMigrations::latest(),
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: false,

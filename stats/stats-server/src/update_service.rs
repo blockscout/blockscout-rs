@@ -21,7 +21,7 @@ use std::{collections::HashSet, sync::Arc};
 
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
-    blockscout_db: Arc<DatabaseConnection>,
+    indexer_db: Arc<DatabaseConnection>,
     is_multichain_mode: bool,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
@@ -53,7 +53,7 @@ fn group_update_schedule<'a>(
 impl UpdateService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
-        blockscout_db: Arc<DatabaseConnection>,
+        indexer_db: Arc<DatabaseConnection>,
         charts: Arc<RuntimeSetup>,
         status_listener: Option<IndexingStatusListener>,
         is_multichain_mode: bool,
@@ -62,7 +62,7 @@ impl UpdateService {
         let init_update_tracker = Self::initialize_update_tracker(&charts);
         Ok(Self {
             db,
-            blockscout_db,
+            indexer_db,
             is_multichain_mode,
             charts,
             status_listener,
@@ -403,24 +403,21 @@ impl UpdateService {
             force_update = force_full,
             "updating group of charts"
         );
-        let active_migrations = if self.is_multichain_mode {
-            BlockscoutMigrations::empty()
-        } else {
-            let Ok(m) = BlockscoutMigrations::query_from_db(&self.blockscout_db)
+        let Ok(active_migrations) =
+            BlockscoutMigrations::query_from_db(self.is_multichain_mode, &self.indexer_db)
                 .await
                 .inspect_err(|err| {
                     tracing::error!("error during blockscout migrations detection: {:?}", err)
                 })
-            else {
-                return;
-            };
-            m
+        else {
+            return;
         };
+
         let update_parameters = UpdateParameters {
-            db: &self.db,
+            stats_db: &self.db,
             is_multichain_mode: self.is_multichain_mode,
-            blockscout: &self.blockscout_db,
-            blockscout_applied_migrations: active_migrations,
+            indexer_db: &self.indexer_db,
+            indexer_applied_migrations: active_migrations,
             enabled_update_charts_recursive: group_entry
                 .group
                 .enabled_members_with_deps(enabled_charts),

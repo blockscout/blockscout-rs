@@ -1,9 +1,10 @@
 use crate::{
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     charts::db_interaction::read::query_estimated_table_rows,
     data_source::{
         kinds::{
             data_manipulation::map::MapParseTo,
-            local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
+            local_db::{DirectPointLocalDbChartSourceWithEstimate, parameters::ValueEstimation},
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         types::UpdateContext,
@@ -11,13 +12,12 @@ use crate::{
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::blocks;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, sea_query::Expr, FromQueryResult, QuerySelect};
+use sea_orm::{FromQueryResult, QuerySelect, prelude::*, sea_query::Expr};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -40,9 +40,9 @@ impl RemoteQueryBehaviour for TotalBlocksQueryBehaviour {
             .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
             .filter(blocks::Column::Consensus.eq(true))
             .into_model::<TotalBlocksData>()
-            .one(cx.blockscout)
+            .one(cx.indexer_db)
             .await
-            .map_err(ChartError::BlockscoutDB)?
+            .map_err(ChartError::IndexerDB)?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
 
         let data = DateValue::<String> {
@@ -89,7 +89,7 @@ impl ValueEstimation for TotalBlocksEstimation {
         let now = Utc::now();
         let value = query_estimated_table_rows(blockscout, blocks::Entity.table_name())
             .await
-            .map_err(ChartError::BlockscoutDB)?
+            .map_err(ChartError::IndexerDB)?
             .map(|b| {
                 let b = b as f64 * 0.9;
                 b as i64
@@ -110,7 +110,7 @@ pub type TotalBlocksInt = MapParseTo<TotalBlocks, i64>;
 mod tests {
     use super::*;
     use crate::{
-        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
+        data_source::{DataSource, UpdateContext, UpdateParameters, types::BlockscoutMigrations},
         tests::{
             init_db::init_db_all,
             mock_blockscout::fill_mock_blockscout_data,
@@ -148,10 +148,10 @@ mod tests {
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let parameters = UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
@@ -177,10 +177,10 @@ mod tests {
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let parameters = UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
@@ -216,10 +216,10 @@ mod tests {
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let parameters = UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,

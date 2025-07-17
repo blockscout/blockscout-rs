@@ -10,16 +10,16 @@ use chrono::{DateTime, Utc};
 use parameter_traits::BatchStepBehaviour;
 
 use crate::{
+    ChartError, ChartProperties,
     charts::db_interaction::read::get_min_date_blockscout,
     data_source::{
-        kinds::local_db::{parameter_traits::QueryBehaviour, UpdateBehaviour},
+        UpdateContext,
+        kinds::local_db::{UpdateBehaviour, parameter_traits::QueryBehaviour},
         source::DataSource,
         types::Get,
-        UpdateContext,
     },
     range::UniversalRange,
     types::{ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue},
-    ChartError, ChartProperties,
 };
 
 pub mod parameter_traits;
@@ -69,10 +69,10 @@ where
         let update_range_start = match update_from {
             Some(d) => d,
             None => ChartProps::Resolution::from_date(
-                get_min_date_blockscout(cx.blockscout)
+                get_min_date_blockscout(cx.indexer_db)
                     .await
                     .map(|time| time.date())
-                    .map_err(ChartError::BlockscoutDB)?,
+                    .map_err(ChartError::IndexerDB)?,
             ),
         };
 
@@ -107,7 +107,7 @@ where
             )
             .await?;
             // for query in `get_previous_step_last_point` to work correctly
-            Self::update_metadata(cx.db, chart_id, range.into_date_time_range().end).await?;
+            Self::update_metadata(cx.stats_db, chart_id, range.into_date_time_range().end).await?;
             let elapsed: std::time::Duration = now.elapsed();
             tracing::info!(
                 found =? found,
@@ -179,7 +179,7 @@ where
     let resolution_data =
         ResolutionDep::query_data(cx, query_range, dependency_data_fetch_timer).await?;
     let found = BatchStep::batch_update_values_step_with(
-        cx.db,
+        cx.stats_db,
         chart_id,
         cx.time,
         min_indexer_block,
@@ -385,15 +385,16 @@ mod tests {
         use tokio::sync::Mutex;
 
         use crate::{
+            ChartProperties, MissingDatePolicy, Named,
             data_source::{
                 kinds::{
                     data_manipulation::map::StripExt,
                     local_db::{
-                        parameters::{
-                            update::batching::{parameters::mock::RecordingPassStep, BatchUpdate},
-                            DefaultCreate, DefaultQueryVec,
-                        },
                         LocalDbChartSource,
+                        parameters::{
+                            DefaultCreate, DefaultQueryVec,
+                            update::batching::{BatchUpdate, parameters::mock::RecordingPassStep},
+                        },
                     },
                 },
                 types::Get,
@@ -408,10 +409,9 @@ mod tests {
                 },
             },
             types::timespans::DateValue,
-            ChartProperties, MissingDatePolicy, Named,
         };
 
-        use super::{parameters::mock::StepInput, TimespanDuration};
+        use super::{TimespanDuration, parameters::mock::StepInput};
 
         type VecStringStepInput = StepInput<Vec<DateValue<String>>, ()>;
         type SharedInputsStorage = Arc<Mutex<Vec<VecStringStepInput>>>;

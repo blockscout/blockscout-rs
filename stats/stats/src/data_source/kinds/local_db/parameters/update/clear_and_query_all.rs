@@ -46,7 +46,7 @@ where
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), ChartError> {
         let now = Instant::now();
-        let db = cx.db.begin().await.map_err(ChartError::StatsDB)?;
+        let db = cx.stats_db.begin().await.map_err(ChartError::StatsDB)?;
         tracing::info!(
             chart =% ChartProps::key(),
             "clearing all data and querying from scratch"

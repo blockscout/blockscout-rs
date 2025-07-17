@@ -1,14 +1,14 @@
 /// Methods intended for interacting with local db
 use crate::{
-    charts::{chart::ChartMetadata, ChartKey},
+    ChartError, ChartProperties, MissingDatePolicy,
+    charts::{ChartKey, chart::ChartMetadata},
     data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
     range::exclusive_range_to_inclusive,
     types::{
-        timespans::{DateValue, Month, Week, Year},
         ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
+        timespans::{DateValue, Month, Week, Year},
     },
-    ChartError, ChartProperties, MissingDatePolicy,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -18,8 +18,8 @@ use entity::{
 };
 use itertools::Itertools;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
+    ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, QuerySelect, Statement, sea_query::Expr,
 };
 use std::fmt::Debug;
 use tracing::instrument;
@@ -580,11 +580,12 @@ impl RequestedPointsLimit {
 mod tests {
     use super::*;
     use crate::{
+        Named,
         charts::ResolutionKind,
         counters::TotalBlocks,
         data_source::{
-            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations, DataSource,
-            UpdateContext, UpdateParameters,
+            DataSource, UpdateContext, UpdateParameters,
+            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations,
         },
         lines::{AccountsGrowth, ActiveAccounts, NewTxns, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
@@ -593,7 +594,6 @@ mod tests {
             simple_test::get_counter,
         },
         types::timespans::Month,
-        Named,
     };
     use chrono::DateTime;
     use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
@@ -835,11 +835,11 @@ mod tests {
         let current_time = dt("2022-11-12T08:08:08").and_utc();
         let date = current_time.date_naive();
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
             // shouldn't use this because mock data contains total blocks value
-            blockscout: &db,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &db,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,

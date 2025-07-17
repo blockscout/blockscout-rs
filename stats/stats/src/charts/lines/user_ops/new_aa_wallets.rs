@@ -89,7 +89,7 @@ impl RemoteQueryBehaviour for NewAccountAbstractionWalletsQueryBehaviour {
                 .await?;
         let statement = NewAccountAbstractionWalletsStatement::get_statement(
             statement_range.clone(),
-            &cx.blockscout_applied_migrations,
+            &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
         let mut data = find_all_points::<DateValue<String>>(cx, statement).await?;

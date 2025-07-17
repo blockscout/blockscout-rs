@@ -42,7 +42,8 @@ pub struct Settings {
     pub db_url: String,
     pub create_database: bool,
     pub run_migrations: bool,
-    pub blockscout_db_url: String,
+    pub blockscout_db_url: Option<String>,
+    pub indexer_db_url: Option<String>,
     /// Blockscout API url.
     ///
     /// Required. To launch without it api use [`Settings::ignore_blockscout_api_absence`].
@@ -133,6 +134,7 @@ impl Default for Settings {
             ),
             swagger_path: default_swagger_path(),
             blockscout_db_url: Default::default(),
+            indexer_db_url: Default::default(),
             blockscout_api_url: None,
             ignore_blockscout_api_absence: false,
             disable_internal_transactions: false,

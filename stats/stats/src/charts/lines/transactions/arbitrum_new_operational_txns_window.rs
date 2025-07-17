@@ -67,7 +67,7 @@ impl RemoteQueryBehaviour for NewBlocksWindowQuery {
         let update_day = cx.time.date_naive();
         let statement = new_blocks_window_statement(
             update_day,
-            &cx.blockscout_applied_migrations,
+            &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
         find_all_points::<DateValue<String>>(cx, statement).await
@@ -147,10 +147,10 @@ mod tests {
         let current_time = dt("2022-12-01T00:00:00").and_utc();
 
         let mut parameters = UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive:
                 ArbitrumNewOperationalTxnsWindow::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),

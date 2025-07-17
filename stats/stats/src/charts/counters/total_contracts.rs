@@ -1,21 +1,21 @@
 use crate::{
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::{
+        UpdateContext,
         kinds::{
             local_db::DirectPointLocalDbChartSource,
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
-        UpdateContext,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::addresses;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{prelude::*, QuerySelect};
+use sea_orm::{QuerySelect, prelude::*};
 
 pub struct TotalContractsQueryBehaviour;
 
@@ -31,9 +31,9 @@ impl RemoteQueryBehaviour for TotalContractsQueryBehaviour {
             .filter(addresses::Column::ContractCode.is_not_null())
             // seems to not introduce a significant performance penalty
             .filter(addresses::Column::InsertedAt.lte(cx.time))
-            .count(cx.blockscout)
+            .count(cx.indexer_db)
             .await
-            .map_err(ChartError::BlockscoutDB)?;
+            .map_err(ChartError::IndexerDB)?;
         let timespan = cx.time.date_naive();
         Ok(DateValue::<String> {
             timespan,
