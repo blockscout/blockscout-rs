@@ -2,12 +2,12 @@ use super::paginate_cursor;
 use crate::types::{hashes::Hash, ChainId};
 use alloy_primitives::BlockHash;
 use entity::{
-    hashes::{ActiveModel, Column, Entity, Model},
+    hashes::{Column, Entity, Model},
     sea_orm_active_enums as db_enum,
 };
 use sea_orm::{
     sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr, EntityTrait,
-    QueryFilter, QueryTrait,
+    IntoActiveModel, QueryFilter, QueryTrait,
 };
 
 pub async fn upsert_many<C>(db: &C, hashes: Vec<Hash>) -> Result<(), DbErr>
@@ -16,7 +16,7 @@ where
 {
     let hashes = hashes.into_iter().map(|hash| {
         let model: Model = hash.into();
-        let mut active: ActiveModel = model.into();
+        let mut active = model.into_active_model();
         active.created_at = NotSet;
         active
     });

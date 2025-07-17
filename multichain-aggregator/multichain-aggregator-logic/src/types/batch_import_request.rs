@@ -12,6 +12,7 @@ use crate::{
     error::{ParseError, ServiceError},
     metrics::IMPORT_ENTITIES_COUNT,
     proto,
+    types::tokens::{TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData},
 };
 use chrono::NaiveDateTime;
 use sea_orm::prelude::BigDecimal;
@@ -25,6 +26,13 @@ pub struct BatchImportRequest {
     pub interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
     pub address_coin_balances: Vec<AddressCoinBalance>,
     pub address_token_balances: Vec<AddressTokenBalance>,
+    pub tokens: Vec<TokenUpdate>,
+}
+
+macro_rules! opt_parse {
+    ($v: expr) => {
+        $v.map(|v| v.parse()).transpose()?
+    };
 }
 
 impl BatchImportRequest {
@@ -110,6 +118,11 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
                 .into_iter()
                 .map(|atb| (chain_id, atb).try_into())
                 .collect::<Result<Vec<_>, _>>()?,
+            tokens: value
+                .tokens
+                .into_iter()
+                .map(|t| (chain_id, t).try_into())
+                .collect::<Result<Vec<_>, _>>()?,
         })
     }
 }
@@ -155,7 +168,7 @@ impl
             address_hash: atb.address_hash.parse()?,
             token_address_hash: atb.token_address_hash.parse()?,
             value: atb.value.parse()?,
-            token_id: atb.token_id.map(|s| s.parse()).transpose()?,
+            token_id: opt_parse!(atb.token_id),
         })
     }
 }
@@ -269,8 +282,7 @@ impl TryFrom<proto::batch_import_request::interop_message_import::Init>
                 transfer_amount: Some(transfer_amount),
                 ..
             } => {
-                let token_address_hash =
-                    transfer_token_address_hash.map(|s| s.parse()).transpose()?;
+                let token_address_hash = opt_parse!(transfer_token_address_hash);
                 let from_address_hash = transfer_from_address_hash.parse()?;
                 let to_address_hash = transfer_to_address_hash.parse()?;
                 let amount = BigDecimal::from_str(&transfer_amount)?;
@@ -339,6 +351,61 @@ impl TryFrom<proto::batch_import_request::interop_message_import::Relay> for Int
             failed,
             ..base_msg
         })
+    }
+}
+
+impl TryFrom<(ChainId, proto::batch_import_request::TokenImport)> for TokenUpdate {
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, t): (ChainId, proto::batch_import_request::TokenImport),
+    ) -> Result<Self, Self::Error> {
+        let payload = t
+            .payload
+            .ok_or_else(|| ParseError::Custom("token payload is missing".to_string()))?;
+
+        let address_hash = t
+            .address_hash
+            .parse::<alloy_primitives::Address>()?
+            .to_vec();
+
+        let token_update = match payload {
+            proto::batch_import_request::token_import::Payload::Metadata(m) => {
+                let token_type = proto_token_type_to_db_token_type(m.token_type())
+                    .ok_or_else(|| ParseError::Custom("invalid token type".to_string()))?;
+                let metadata = UpdateTokenMetadata {
+                    address_hash,
+                    chain_id,
+                    name: m.name,
+                    symbol: m.symbol,
+                    decimals: m.decimals.map(i16::try_from).transpose()?,
+                    token_type,
+                    icon_url: m.icon_url,
+                    total_supply: opt_parse!(m.total_supply),
+                };
+                TokenUpdate::Metadata(metadata)
+            }
+            proto::batch_import_request::token_import::Payload::PriceData(m) => {
+                let price_data = UpdateTokenPriceData {
+                    address_hash,
+                    chain_id,
+                    fiat_value: opt_parse!(m.fiat_value),
+                    circulating_market_cap: opt_parse!(m.circulating_market_cap),
+                };
+                TokenUpdate::PriceData(price_data)
+            }
+            proto::batch_import_request::token_import::Payload::Counters(m) => {
+                let counters = UpdateTokenCounters {
+                    address_hash,
+                    chain_id,
+                    holders_count: opt_parse!(m.holders_count),
+                    transfers_count: opt_parse!(m.transfers_count),
+                };
+                TokenUpdate::Counters(counters)
+            }
+        };
+
+        Ok(token_update)
     }
 }
 

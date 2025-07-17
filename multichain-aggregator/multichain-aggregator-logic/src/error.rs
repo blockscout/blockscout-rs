@@ -3,7 +3,7 @@ use alloy_primitives::hex::FromHexError;
 use bigdecimal::ParseBigDecimalError;
 use recache::{handler::CacheRequestError, stores::redis::RedisStoreError};
 use sea_orm::{sqlx::types::uuid, DbErr};
-use std::num::ParseIntError;
+use std::num::{ParseIntError, TryFromIntError};
 use thiserror::Error;
 use tonic::Code;
 
@@ -37,6 +37,8 @@ pub enum ParseError {
     ParseUuid(#[from] uuid::Error),
     #[error("parse error: invalid slice")]
     TryFromSlice(#[from] core::array::TryFromSliceError),
+    #[error("parse error: invalid integer")]
+    TryFromInt(#[from] TryFromIntError),
     #[error("parse error: invalid url")]
     ParseUrl(#[from] url::ParseError),
     #[error("parse error: invalid json")]
@@ -46,7 +48,9 @@ pub enum ParseError {
     #[error("parse error: {0}")]
     Custom(String),
     #[error("parse error: invalid decimal")]
-    ParseDecimal(#[from] ParseBigDecimalError),
+    ParseBigDecimal(#[from] ParseBigDecimalError),
+    #[error("parse error: invalid decimal")]
+    ParseDecimal(#[from] rust_decimal::Error),
 }
 
 impl From<ServiceError> for tonic::Status {

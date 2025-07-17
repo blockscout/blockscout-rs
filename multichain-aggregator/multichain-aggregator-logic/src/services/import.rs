@@ -46,6 +46,11 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert address token balances");
         })?;
+    repository::tokens::upsert_many(&tx, request.tokens)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error = ?e, "failed to upsert tokens");
+        })?;
     tx.commit().await?;
 
     let interop_messages = messages_with_transfers
