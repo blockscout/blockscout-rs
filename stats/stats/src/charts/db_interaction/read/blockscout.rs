@@ -46,6 +46,9 @@ struct MinBlock {
     min_block: i64,
 }
 
+/// Min block is used as a clue to detect if some older data
+/// got reindexed. It works but it is far from reliable, as there could
+/// be gaps in blocks later than min block.
 pub async fn get_min_block_blockscout(blockscout: &DatabaseConnection) -> Result<i64, DbErr> {
     let min_block = blocks::Entity::find()
         .select_only()

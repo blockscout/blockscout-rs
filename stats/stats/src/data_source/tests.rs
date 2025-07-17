@@ -214,7 +214,7 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
         _db: &C,
         _chart_id: i32,
         _update_time: DateTime<Utc>,
-        _min_blockscout_block: i64,
+        _min_indexer_block: i64,
         _last_accurate_point: DateValue<String>,
         _main_data: Vec<DateValue<String>>,
         _resolution_data: (),
@@ -230,7 +230,7 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
             _db,
             _chart_id,
             _update_time,
-            _min_blockscout_block,
+            _min_indexer_block,
             _last_accurate_point,
             _main_data,
             _resolution_data,
@@ -297,6 +297,7 @@ async fn update_examples() {
 
     let parameters = UpdateParameters {
         db: &db,
+        is_multichain_mode: false,
         blockscout: &blockscout,
         blockscout_applied_migrations: BlockscoutMigrations::latest(),
         enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),

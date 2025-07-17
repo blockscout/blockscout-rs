@@ -21,7 +21,7 @@ where
         db: &C,
         chart_id: i32,
         update_time: DateTime<Utc>,
-        min_blockscout_block: i64,
+        min_indexer_block: i64,
         last_accurate_point: TimespanValue<Resolution, String>,
         main_data: MainInput,
         resolution_data: ResolutionInput,

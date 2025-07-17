@@ -151,6 +151,7 @@ mod tests {
 
         let parameters = UpdateParameters::query_parameters(
             &db,
+            false,
             &blockscout,
             BlockscoutMigrations::latest(),
             Some(current_time),

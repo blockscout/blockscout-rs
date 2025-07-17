@@ -186,6 +186,7 @@ mod tests {
         let output: Vec<WeekValue<f64>> = <TestedAverageSource as DataSource>::query_data(
             &UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &db,
+                false,
                 &db,
                 BlockscoutMigrations::latest(),
                 Some(dt("2024-07-15T09:00:00").and_utc()),
@@ -234,6 +235,7 @@ mod tests {
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &empty_db,
+                false,
                 &empty_db,
                 BlockscoutMigrations::latest(),
                 Some(dt("2024-07-30T09:00:00").and_utc()),
@@ -284,6 +286,7 @@ mod tests {
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &empty_db,
+                false,
                 &empty_db,
                 BlockscoutMigrations::latest(),
                 Some(dt("2023-03-30T09:00:00").and_utc()),
@@ -330,6 +333,7 @@ mod tests {
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &empty_db,
+                false,
                 &empty_db,
                 BlockscoutMigrations::latest(),
                 Some(dt("2023-03-30T09:00:00").and_utc()),

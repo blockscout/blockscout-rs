@@ -117,6 +117,7 @@ pub fn get_test_stats_settings(
     settings.enable_all_arbitrum = true;
     settings.enable_all_op_stack = true;
     settings.enable_all_eip_7702 = true;
+    settings.multichain_mode = false;
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;
     // initialized separately to prevent errors (with `try_init`)

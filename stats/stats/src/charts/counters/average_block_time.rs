@@ -200,6 +200,7 @@ mod tests {
         fill_many_blocks(&blockscout, current_time.naive_utc(), &block_times).await;
         let mut parameters = UpdateParameters {
             db: &db,
+            is_multichain_mode: false,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: AverageBlockTime::all_dependencies_chart_keys(),

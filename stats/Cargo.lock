@@ -2669,6 +2669,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "multichain-aggregator-entity"
+version = "0.0.0"
+source = "git+https://github.com/blockscout/blockscout-rs/?tag=multichain-aggregator%2Fv1.5.1#e1b33244c17ad599f63152de8d66fc0add56b5d7"
+dependencies = [
+ "sea-orm",
+]
+
+[[package]]
+name = "multichain-aggregator-migration"
+version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs/?tag=multichain-aggregator%2Fv1.5.1#e1b33244c17ad599f63152de8d66fc0add56b5d7"
+dependencies = [
+ "async-std",
+ "sea-orm-migration",
+]
+
+[[package]]
 name = "multimap"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4596,6 +4613,8 @@ dependencies = [
  "itertools 0.13.0",
  "lazy_static",
  "migration",
+ "multichain-aggregator-entity",
+ "multichain-aggregator-migration",
  "num-traits",
  "paste",
  "portrait",

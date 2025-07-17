@@ -94,14 +94,14 @@ impl UpdateBehaviour<(), (), NaiveDate> for Update {
         cx: &UpdateContext<'_>,
         chart_id: i32,
         last_accurate_point: Option<DateValue<String>>,
-        min_blockscout_block: i64,
+        min_indexer_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), ChartError> {
         update_sequentially_with_support_table(
             cx,
             chart_id,
             last_accurate_point,
-            min_blockscout_block,
+            min_indexer_block,
             dependency_data_fetch_timer,
         )
         .await
@@ -113,7 +113,7 @@ pub async fn update_sequentially_with_support_table(
     cx: &UpdateContext<'_>,
     chart_id: i32,
     last_accurate_point: Option<DateValue<String>>,
-    min_blockscout_block: i64,
+    min_indexer_block: i64,
     remote_fetch_timer: &mut AggregateTimer,
 ) -> Result<(), ChartError> {
     tracing::info!(chart =% Properties::key(), "start sequential update");
@@ -150,7 +150,7 @@ pub async fn update_sequentially_with_support_table(
                 .await
                 .map_err(|e| ChartError::Internal(e.to_string()))?
                 .into_iter()
-                .map(|result| result.active_model(chart_id, Some(min_blockscout_block)))
+                .map(|result| result.active_model(chart_id, Some(min_indexer_block)))
                 .collect();
         insert_data_many(&db_tx, data)
             .await

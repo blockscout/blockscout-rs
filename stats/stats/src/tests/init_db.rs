@@ -6,10 +6,23 @@ pub async fn init_db_all(name: &str) -> (TestDbGuard, TestDbGuard) {
     (db, blockscout)
 }
 
+pub async fn init_db_all_multichain(name: &str) -> (TestDbGuard, TestDbGuard) {
+    let db = init_db(name).await;
+    let multichain = init_db_multichain(name).await;
+    (db, multichain)
+}
+
 pub async fn init_db(name: &str) -> TestDbGuard {
     TestDbGuard::new::<migration::Migrator>(name).await
 }
 
 pub async fn init_db_blockscout(name: &str) -> TestDbGuard {
     TestDbGuard::new::<blockscout_db::migration::Migrator>(&(name.to_owned() + "_blockscout")).await
+}
+
+pub async fn init_db_multichain(name: &str) -> TestDbGuard {
+    TestDbGuard::new::<multichain_aggregator_migration::Migrator>(
+        &(name.to_owned() + "_multichain"),
+    )
+    .await
 }

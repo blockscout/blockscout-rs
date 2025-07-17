@@ -26,6 +26,8 @@ mod total_verified_contracts;
 mod txns_stats_24h;
 mod yesterday_txns;
 
+pub mod multichain;
+
 pub use arbitrum_new_operational_txns_24h::ArbitrumNewOperationalTxns24h;
 pub use arbitrum_total_operational_txns::ArbitrumTotalOperationalTxns;
 pub use arbitrum_yesterday_operational_txns::ArbitrumYesterdayOperationalTxns;
@@ -53,13 +55,13 @@ pub use txns_stats_24h::{
     op_stack_new_operational_txns_24h::OpStackNewOperationalTxns24h, txns_fee_24h::TxnsFee24h,
 };
 pub use yesterday_txns::{
-    op_stack_yesterday_operational_txns::OpStackYesterdayOperationalTxns, YesterdayTxns,
+    YesterdayTxns, op_stack_yesterday_operational_txns::OpStackYesterdayOperationalTxns,
 };
 
 pub(crate) use arbitrum_total_operational_txns::CalculateOperationalTxns;
 pub(crate) use total_blocks::TotalBlocksInt;
 pub(crate) use total_txns::TotalTxnsInt;
-pub(crate) use txns_stats_24h::{new_txns_24h::NewTxns24hInt, TxnsStatsValue};
+pub(crate) use txns_stats_24h::{TxnsStatsValue, new_txns_24h::NewTxns24hInt};
 
 #[cfg(test)]
 pub use mock::MockCounter;

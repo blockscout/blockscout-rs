@@ -1,20 +1,20 @@
 use chrono::{NaiveDate, Utc};
 use cron::Schedule;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use itertools::Itertools;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use thiserror::Error;
-use tokio::sync::{mpsc, Mutex, Semaphore};
+use tokio::sync::{Mutex, Semaphore, mpsc};
 
 use crate::{
+    InitialUpdateTracker,
     blockscout_waiter::IndexingStatusListener,
     runtime_setup::{RuntimeSetup, UpdateGroupEntry},
-    InitialUpdateTracker,
 };
 use stats::{
-    data_source::types::{BlockscoutMigrations, UpdateParameters},
     ChartKey,
+    data_source::types::{BlockscoutMigrations, UpdateParameters},
 };
 
 use std::{collections::HashSet, sync::Arc};
@@ -22,6 +22,7 @@ use std::{collections::HashSet, sync::Arc};
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     blockscout_db: Arc<DatabaseConnection>,
+    is_multichain_mode: bool,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
     init_update_tracker: InitialUpdateTracker,
@@ -55,12 +56,14 @@ impl UpdateService {
         blockscout_db: Arc<DatabaseConnection>,
         charts: Arc<RuntimeSetup>,
         status_listener: Option<IndexingStatusListener>,
+        is_multichain_mode: bool,
     ) -> Result<Self, DbErr> {
         let on_demand = mpsc::channel(128);
         let init_update_tracker = Self::initialize_update_tracker(&charts);
         Ok(Self {
             db,
             blockscout_db,
+            is_multichain_mode,
             charts,
             status_listener,
             init_update_tracker,
@@ -157,6 +160,10 @@ impl UpdateService {
         init_update_tracker: &InitialUpdateTracker,
     ) {
         {
+            // to not produce unnecessary logs
+            if group_entry.should_skip_update() {
+                return;
+            }
             init_update_tracker
                 .mark_queued_for_initial_update(&group_entry.enabled_members)
                 .await;
@@ -222,7 +229,9 @@ impl UpdateService {
                     )
                     .await;
                 if updated.is_empty() {
-                    tracing::warn!("on-demand update list was incorrectly filtered and prepared. this is likely a bug");
+                    tracing::warn!(
+                        "on-demand update list was incorrectly filtered and prepared. this is likely a bug"
+                    );
                     break;
                 }
                 let mut any_removed = false;
@@ -233,7 +242,9 @@ impl UpdateService {
                 if !any_removed {
                     // should always have something to remove but placed it just in case
                     // to prevent infinite loop
-                    tracing::warn!("on-demand updated list does not intersect with enabled charts list. this is likely a bug");
+                    tracing::warn!(
+                        "on-demand updated list does not intersect with enabled charts list. this is likely a bug"
+                    );
                 }
 
                 tracing::info!(
@@ -382,23 +393,32 @@ impl UpdateService {
         force_full: bool,
         enabled_charts_overwrite: Option<&HashSet<ChartKey>>,
     ) {
+        let enabled_charts = enabled_charts_overwrite.unwrap_or(&group_entry.enabled_members);
+        if group_entry.should_skip_update() {
+            return;
+        }
         tracing::info!(
             // instrumentation is inside `update_charts_with_mutexes`
             update_group = group_entry.group.name(),
             force_update = force_full,
             "updating group of charts"
         );
-        let Ok(active_migrations) = BlockscoutMigrations::query_from_db(&self.blockscout_db)
-            .await
-            .inspect_err(|err| {
-                tracing::error!("error during blockscout migrations detection: {:?}", err)
-            })
-        else {
-            return;
+        let active_migrations = if self.is_multichain_mode {
+            BlockscoutMigrations::empty()
+        } else {
+            let Ok(m) = BlockscoutMigrations::query_from_db(&self.blockscout_db)
+                .await
+                .inspect_err(|err| {
+                    tracing::error!("error during blockscout migrations detection: {:?}", err)
+                })
+            else {
+                return;
+            };
+            m
         };
-        let enabled_charts = enabled_charts_overwrite.unwrap_or(&group_entry.enabled_members);
         let update_parameters = UpdateParameters {
             db: &self.db,
+            is_multichain_mode: self.is_multichain_mode,
             blockscout: &self.blockscout_db,
             blockscout_applied_migrations: active_migrations,
             enabled_update_charts_recursive: group_entry
