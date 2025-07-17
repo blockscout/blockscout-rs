@@ -16,7 +16,7 @@ pub async fn fill_mock_multichain_data(multichain: &DatabaseConnection, max_date
 }
 
 fn mock_addresses() -> Vec<addresses::ActiveModel> {
-    (0..3).into_iter().map(mock_address).collect()
+    (0..3).map(mock_address).collect()
 }
 
 fn mock_address(seed: i64) -> addresses::ActiveModel {

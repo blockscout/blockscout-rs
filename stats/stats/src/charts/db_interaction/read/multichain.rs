@@ -26,7 +26,7 @@ pub async fn get_min_block_multichain(multichain: &DatabaseConnection) -> Result
             min_block: Some(not_found_value),
         }));
 
-    match min_block.map(|r| r.min_block).flatten() {
+    match min_block.and_then(|r| r.min_block) {
         Some(min_block) => Ok(min_block as i64),
         None => {
             tracing::warn!("no block ranges found in multichain database");
