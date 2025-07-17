@@ -2,7 +2,7 @@ use super::ChainId;
 use entity::tokens::ActiveModel;
 use sea_orm::{
     prelude::{BigDecimal, Decimal},
-    ActiveValue::Set,
+    ActiveValue::{Set, Unchanged},
     DeriveIntoActiveModel, IntoActiveModel, IntoActiveValue,
 };
 
@@ -13,6 +13,7 @@ pub enum TokenUpdate {
     Metadata(UpdateTokenMetadata),
     PriceData(UpdateTokenPriceData),
     Counters(UpdateTokenCounters),
+    Type(UpdateTokenType),
 }
 
 #[derive(Debug, Clone)]
@@ -59,4 +60,24 @@ pub struct UpdateTokenCounters {
     pub address_hash: Vec<u8>,
     pub holders_count: Option<i64>,
     pub transfers_count: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateTokenType {
+    pub chain_id: ChainId,
+    pub address_hash: Vec<u8>,
+    pub token_type: TokenType,
+}
+
+// Manually implement IntoActiveModel because IntoActiveValue is not implemented
+// for TokenType enum
+impl IntoActiveModel<ActiveModel> for UpdateTokenType {
+    fn into_active_model(self) -> ActiveModel {
+        ActiveModel {
+            chain_id: Unchanged(self.chain_id),
+            address_hash: Unchanged(self.address_hash),
+            token_type: Set(self.token_type),
+            ..Default::default()
+        }
+    }
 }

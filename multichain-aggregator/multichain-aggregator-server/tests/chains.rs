@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod helpers;
 
 use blockscout_service_launcher::{database, test_server};
@@ -26,7 +27,7 @@ async fn test_fetch_chains() {
     .await
     .unwrap();
 
-    let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
+    let base = helpers::init_server(db.db_url()).await;
 
     let response: proto::ListChainsResponse =
         test_server::send_get_request(&base, "/api/v1/chains?only_active=true").await;

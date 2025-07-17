@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod helpers;
 mod test_db;
 
@@ -37,7 +38,7 @@ async fn test_quick_search() {
     let token_info_server = mock_token_info_server().await;
     let dapp_server = mock_dapp_server().await;
     let bens_server = mock_bens_server().await;
-    let base = helpers::init_multichain_aggregator_server(db.db_url(), |mut x| {
+    let base = helpers::init_server_with_setup(db.db_url(), |mut x| {
         x.service.dapp_client.url = dapp_server.uri().parse().unwrap();
         x.service.token_info_client.url = token_info_server.uri().parse().unwrap();
         x.service.bens_client.url = bens_server.uri().parse().unwrap();

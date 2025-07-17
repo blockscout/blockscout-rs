@@ -7,7 +7,7 @@ use multichain_aggregator_server::Settings;
 use reqwest::Url;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, DbErr, EntityTrait};
 
-pub async fn init_multichain_aggregator_server<F>(db_url: String, settings_setup: F) -> Url
+pub async fn init_server_with_setup<F>(db_url: String, settings_setup: F) -> Url
 where
     F: Fn(Settings) -> Settings,
 {
@@ -24,6 +24,10 @@ where
 
     test_server::init_server(|| multichain_aggregator_server::run(settings), &base).await;
     base
+}
+
+pub async fn init_server(db_url: String) -> Url {
+    init_server_with_setup(db_url, |x| x).await
 }
 
 #[allow(dead_code)]
