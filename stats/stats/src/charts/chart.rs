@@ -20,6 +20,7 @@ use super::{
 
 #[derive(Error, Debug)]
 pub enum ChartError {
+    // todo: rename
     #[error("blockscout database error: {0}")]
     BlockscoutDB(DbErr),
     #[error("stats database error: {0}")]

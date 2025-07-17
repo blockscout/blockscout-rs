@@ -241,6 +241,7 @@ impl ReadService {
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &self.db,
+                false,
                 &self.blockscout,
                 migrations,
                 Some(query_time),

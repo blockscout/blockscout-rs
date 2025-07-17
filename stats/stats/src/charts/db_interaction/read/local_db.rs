@@ -418,16 +418,16 @@ impl ApproxUnsignedDiff for Year {
 
 #[derive(Debug, FromQueryResult)]
 struct SyncInfo {
-    pub min_blockscout_block: Option<i64>,
+    pub min_indexer_block: Option<i64>,
 }
 
 /// Get last 'finalized' row (for which no recomputations needed).
 ///
 /// In case of inconsistencies or set `force_full`, returns `None`.
-#[instrument(level="info", skip_all, fields(min_blockscout_block = min_blockscout_block, chart =? ChartProps::key()))]
+#[instrument(level="info", skip_all, fields(min_indexer_block = min_indexer_block, chart =? ChartProps::key()))]
 pub async fn last_accurate_point<ChartProps, Query>(
     chart_id: i32,
-    min_blockscout_block: i64,
+    min_indexer_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
     approximate_trailing_points: u64,
@@ -442,7 +442,7 @@ where
         tracing::info!("running full update due to force override");
         None
     } else {
-        let recorded_min_blockscout_block: Option<SyncInfo> = chart_data::Entity::find()
+        let recorded_min_indexer_block: Option<SyncInfo> = chart_data::Entity::find()
             .column(chart_data::Column::MinBlockscoutBlock)
             .filter(chart_data::Column::ChartId.eq(chart_id))
             .order_by_desc(chart_data::Column::Date)
@@ -451,10 +451,10 @@ where
             .await
             .map_err(ChartError::StatsDB)?;
 
-        match recorded_min_blockscout_block {
+        match recorded_min_indexer_block {
             Some(SyncInfo {
-                min_blockscout_block: Some(recorded_min_blockscout_block),
-            }) if recorded_min_blockscout_block == min_blockscout_block => {
+                min_indexer_block: Some(recorded_min_indexer_block),
+            }) if recorded_min_indexer_block == min_indexer_block => {
                 let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
                 let Some(last_updated_at) = metadata.last_updated_at else {
                     // data is present, but `last_updated_at` is not set
@@ -511,7 +511,7 @@ where
                         };
 
                         tracing::info!(
-                            min_chart_block = recorded_min_blockscout_block,
+                            min_chart_block = recorded_min_indexer_block,
                             last_accurate_point = ?last_accurate_point,
                             "running partial update"
                         );
@@ -519,9 +519,9 @@ where
                     }
                 }
             }
-            // != min_blockscout_block
+            // != min_indexer_block
             Some(SyncInfo {
-                min_blockscout_block: Some(block),
+                min_indexer_block: Some(block),
             }) => {
                 tracing::info!(
                     min_chart_block = block,
@@ -530,7 +530,7 @@ where
                 None
             }
             Some(SyncInfo {
-                min_blockscout_block: None,
+                min_indexer_block: None,
             }) => {
                 tracing::info!("running full update due to lack of saved min block");
                 None
@@ -836,6 +836,7 @@ mod tests {
         let date = current_time.date_naive();
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
+            is_multichain_mode: false,
             // shouldn't use this because mock data contains total blocks value
             blockscout: &db,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),

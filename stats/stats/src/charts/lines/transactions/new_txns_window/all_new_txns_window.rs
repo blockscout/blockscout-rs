@@ -89,6 +89,7 @@ mod tests {
 
         let mut parameters = UpdateParameters {
             db: &db,
+            is_multichain_mode: false,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: NewTxnsWindow::all_dependencies_chart_keys(),

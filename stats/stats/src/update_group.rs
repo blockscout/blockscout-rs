@@ -43,10 +43,10 @@ use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::{
-    charts::{chart_properties_portrait::imports::ChartKey, ChartObject},
+    ChartError,
+    charts::{ChartObject, chart_properties_portrait::imports::ChartKey},
     data_source::UpdateParameters,
     indexing_status::IndexingStatus,
-    ChartError,
 };
 
 #[derive(Error, Debug, PartialEq)]
@@ -515,7 +515,7 @@ impl SyncUpdateGroup {
         for id in charts {
             let Some(dependencies_ids) = self.inner.dependency_mutex_ids_of(id) else {
                 tracing::warn!(
-                    update_group=self.name(),
+                    update_group = self.name(),
                     "`dependency_mutex_ids_of` of member chart '{id}' returned `None`. Expected `Some(..)`"
                 );
                 continue;
@@ -661,7 +661,7 @@ impl SyncUpdateGroup {
         for id in enabled_charts {
             let Some(dependencies_ids) = self.inner.dependency_keys_of(id) else {
                 tracing::warn!(
-                    update_group=self.name(),
+                    update_group = self.name(),
                     "`dependency_mutex_ids_of` of member chart '{id}' returned `None`. Expected `Some(..)`"
                 );
                 continue;

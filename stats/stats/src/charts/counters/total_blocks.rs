@@ -149,6 +149,7 @@ mod tests {
 
         let parameters = UpdateParameters {
             db: &db,
+            is_multichain_mode: false,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
@@ -177,6 +178,7 @@ mod tests {
 
         let parameters = UpdateParameters {
             db: &db,
+            is_multichain_mode: false,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
@@ -215,6 +217,7 @@ mod tests {
 
         let parameters = UpdateParameters {
             db: &db,
+            is_multichain_mode: false,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),

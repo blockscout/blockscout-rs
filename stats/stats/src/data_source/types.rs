@@ -16,6 +16,9 @@ use crate::{counters::TxnsStatsValue, types::new_txns::NewTxnsCombinedPoint, Cha
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
     pub db: &'a DatabaseConnection,
+    /// `true` - the connection is to multichain indexer DB;
+    /// `false` - the connection is to usual (per-instance) blockscout DB.
+    pub is_multichain_mode: bool,
     /// Blockscout database
     pub blockscout: &'a DatabaseConnection,
     pub blockscout_applied_migrations: BlockscoutMigrations,
@@ -33,12 +36,14 @@ impl<'a> UpdateParameters<'a> {
     /// Parameter builder for just querying data (if no updates are expected)
     pub fn query_parameters(
         db: &'a DatabaseConnection,
+        is_multichain_mode: bool,
         blockscout: &'a DatabaseConnection,
         blockscout_applied_migrations: BlockscoutMigrations,
         query_time_override: Option<chrono::DateTime<Utc>>,
     ) -> Self {
         Self {
             db,
+            is_multichain_mode,
             blockscout,
             blockscout_applied_migrations,
             update_time_override: query_time_override,
@@ -55,8 +60,12 @@ impl<'a> UpdateParameters<'a> {
 
 #[derive(Clone)]
 pub struct UpdateContext<'a> {
+    // todo: rename
     pub db: &'a DatabaseConnection,
+    pub is_multichain_mode: bool,
+    // todo: rename
     pub blockscout: &'a DatabaseConnection,
+    // todo: rename
     pub blockscout_applied_migrations: BlockscoutMigrations,
     pub cache: UpdateCache,
     /// Charts engaged in the current (group) update.
@@ -71,6 +80,7 @@ impl<'a> UpdateContext<'a> {
     pub fn from_params_now_or_override(value: UpdateParameters<'a>) -> Self {
         Self {
             db: value.db,
+            is_multichain_mode: value.is_multichain_mode,
             blockscout: value.blockscout,
             blockscout_applied_migrations: value.blockscout_applied_migrations,
             cache: UpdateCache::new(),

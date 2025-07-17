@@ -13,22 +13,22 @@
 //!
 
 use crate::{
+    ReadService,
     config::{
         self,
         types::{AllChartSettings, EnabledChartSettings, LineChartCategory},
     },
-    ReadService,
 };
 use cron::Schedule;
 use itertools::Itertools;
 use stats::{
+    ChartKey, ChartObject, IndexingStatus, ResolutionKind,
     entity::sea_orm_active_enums::ChartType,
     query_dispatch::ChartTypeSpecifics,
     update_group::{ArcUpdateGroup, SyncUpdateGroup},
-    ChartKey, ChartObject, IndexingStatus, ResolutionKind,
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet, btree_map::Entry},
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -101,6 +101,19 @@ pub struct UpdateGroupEntry {
     pub group: SyncUpdateGroup,
     /// Members that are enabled in the charts config
     pub enabled_members: HashSet<ChartKey>,
+}
+
+impl UpdateGroupEntry {
+    pub fn should_skip_update(&self) -> bool {
+        let should = self.enabled_members.is_empty();
+        if should {
+            tracing::info!(
+                "update group {} does not have enabled members; should skip update",
+                self.group.name()
+            );
+        }
+        should
+    }
 }
 
 pub struct RuntimeSetup {
@@ -303,7 +316,7 @@ impl RuntimeSetup {
     }
 
     fn all_update_groups() -> Vec<ArcUpdateGroup> {
-        use stats::update_groups::*;
+        use stats::{update_groups::*, update_groups_multichain::*};
 
         vec![
             // actual singletons
@@ -356,6 +369,8 @@ impl RuntimeSetup {
             Arc::new(TxnsStats24hGroup),
             Arc::new(NewBuilderAccountsGroup),
             Arc::new(VerifiedContractsPageGroup),
+            // multichain
+            Arc::new(TotalInteropMessagesGroup),
         ]
     }
 
@@ -425,6 +440,17 @@ impl RuntimeSetup {
             // compute, therefore this solution is ok (to not introduce
             // more update groups if not necessary)
             ("NewBlocksGroup", vec!["newTxns_DAY"]),
+            // They have their own group + doesn't make sense to update
+            // the dependency if `networkUtilization` is disabled
+            (
+                "NewBlocksGroup",
+                vec![
+                    "averageGasLimit_DAY",
+                    "averageGasLimit_WEEK",
+                    "averageGasLimit_MONTH",
+                    "averageGasLimit_YEAR",
+                ],
+            ),
             // Same logic as above
             ("TotalBlocksGroup", vec!["totalTxns_DAY"]),
         ]
@@ -461,7 +487,8 @@ impl RuntimeSetup {
                     update_group = name,
                     "Group has dependencies that are not members. In most scenarios it makes sense to include all dependencies, \
                     because all deps are updated with the group in any case. Turning off their 'parents' may lead to these members \
-                    getting stalled: {:?}", missing_members
+                    getting stalled: {:?}",
+                    missing_members
                 )
             }
         }

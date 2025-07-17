@@ -59,7 +59,7 @@ where
         cx: &UpdateContext<'_>,
         chart_id: i32,
         last_accurate_point: Option<TimespanValue<ChartProps::Resolution, String>>,
-        min_blockscout_block: i64,
+        min_indexer_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), ChartError> {
         let now = cx.time;
@@ -100,7 +100,7 @@ where
             >(
                 cx,
                 chart_id,
-                min_blockscout_block,
+                min_indexer_block,
                 previous_step_last_point,
                 range.clone(),
                 dependency_data_fetch_timer,
@@ -162,7 +162,7 @@ where
 async fn batch_update_values_step<MainDep, ResolutionDep, BatchStep, Resolution>(
     cx: &UpdateContext<'_>,
     chart_id: i32,
-    min_blockscout_block: i64,
+    min_indexer_block: i64,
     last_accurate_point: TimespanValue<Resolution, String>,
     range: BatchRange<Resolution>,
     dependency_data_fetch_timer: &mut AggregateTimer,
@@ -182,7 +182,7 @@ where
         cx.db,
         chart_id,
         cx.time,
-        min_blockscout_block,
+        min_indexer_block,
         last_accurate_point,
         main_data,
         resolution_data,
@@ -490,7 +490,7 @@ mod tests {
             for input in storage.lock().await.deref() {
                 assert_eq!(input.chart_id, 3);
                 assert_eq!(input.update_time, expected_update_time);
-                assert_eq!(input.min_blockscout_block, 0);
+                assert_eq!(input.min_indexer_block, 0);
                 // batch step = 1 day
                 assert_eq!(input.main_data.len(), 1);
                 if let Some(prev_input) = prev_input {

@@ -2,26 +2,27 @@ use std::{collections::HashMap, future::Future, path::PathBuf, sync::Arc, time::
 
 use crate::{
     auth::{ApiKey, AuthorizationProvider},
-    blockscout_waiter::{self, init_blockscout_api_client, IndexingStatusListener},
+    blockscout_waiter::{self, IndexingStatusListener, init_blockscout_api_client},
     config::{self, read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
     settings::{
+        Settings, apply_multichain_mode_settings, disable_all_non_multichain_charts,
         handle_disable_internal_transactions, handle_enable_all_arbitrum,
-        handle_enable_all_eip_7702, handle_enable_all_op_stack, Settings,
+        handle_enable_all_eip_7702, handle_enable_all_op_stack,
     },
     update_service::UpdateService,
 };
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{
     database::{DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings},
     launcher::{self, GracefulShutdownHandler, LaunchSettings},
 };
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-use stats::{data_source::types::BlockscoutMigrations, lines::NewBuilderAccounts, metrics, Named};
+use stats::{Named, data_source::types::BlockscoutMigrations, lines::NewBuilderAccounts, metrics};
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
     health_server::HealthServer,
@@ -42,9 +43,9 @@ pub async fn stats(
         &settings.tracing,
         &settings.jaeger,
     )?;
-    let mut charts_config = read_charts_config(&settings.charts_config)?;
-    let layout_config = read_layout_config(&settings.layout_config)?;
-    let update_groups_config = read_update_groups_config(&settings.update_groups_config)?;
+    let mut charts_config = read_charts_config(&settings.charts_config_paths())?;
+    let layout_config = read_layout_config(&settings.layout_config_paths())?;
+    let update_groups_config = read_update_groups_config(&settings.update_groups_config_paths())?;
     handle_enable_all_arbitrum(settings.enable_all_arbitrum, &mut charts_config);
     handle_enable_all_op_stack(settings.enable_all_op_stack, &mut charts_config);
     handle_enable_all_eip_7702(settings.enable_all_eip_7702, &mut charts_config);
@@ -53,6 +54,10 @@ pub async fn stats(
         &mut settings.conditional_start,
         &mut charts_config,
     );
+    if settings.multichain_mode {
+        disable_all_non_multichain_charts(&mut charts_config);
+        apply_multichain_mode_settings(&mut settings);
+    }
 
     let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
     let db = init_stats_db(&settings).await?;
@@ -79,6 +84,7 @@ pub async fn stats(
             blockscout.clone(),
             charts.clone(),
             status_listener,
+            settings.multichain_mode,
         )
         .await?,
     );
@@ -260,7 +266,7 @@ async fn create_charts_if_needed(
 fn init_waiter(
     settings: &Settings,
 ) -> anyhow::Result<(
-    Option<impl Future<Output = anyhow::Result<()>>>,
+    Option<impl Future<Output = anyhow::Result<()>> + use<>>,
     Option<IndexingStatusListener>,
 )> {
     let blockscout_api_config = init_blockscout_api_client(settings)?;
@@ -281,7 +287,9 @@ fn init_waiter(
 
 fn init_authorization(api_keys: HashMap<String, String>) -> Arc<AuthorizationProvider> {
     if api_keys.is_empty() {
-        tracing::warn!("No api keys found in settings, provide them to make use of authorization-protected endpoints")
+        tracing::warn!(
+            "No api keys found in settings, provide them to make use of authorization-protected endpoints"
+        )
     }
     let api_keys = api_keys
         .into_iter()

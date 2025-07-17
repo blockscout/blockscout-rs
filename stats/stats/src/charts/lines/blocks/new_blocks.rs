@@ -172,6 +172,7 @@ mod tests {
         // wrong value is kept
         let mut cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
+            is_multichain_mode: false,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
@@ -249,6 +250,7 @@ mod tests {
 
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
+            is_multichain_mode: false,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
@@ -345,6 +347,7 @@ mod tests {
 
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
             db: &db,
+            is_multichain_mode: false,
             blockscout: &blockscout,
             blockscout_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
