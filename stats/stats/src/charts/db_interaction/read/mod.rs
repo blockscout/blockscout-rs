@@ -5,9 +5,9 @@ use sea_orm::DbErr;
 use thiserror::Error;
 
 use crate::{
-    data_source::{kinds::remote_db::RemoteQueryBehaviour, UpdateContext},
-    range::UniversalRange,
     ChartError, ChartKey,
+    data_source::{UpdateContext, kinds::remote_db::RemoteQueryBehaviour},
+    range::UniversalRange,
 };
 
 mod blockscout;
@@ -37,9 +37,9 @@ impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, ChartError> {
-        let start_timestamp = get_min_date_blockscout(cx.blockscout)
+        let start_timestamp = get_min_date_blockscout(cx.indexer_db)
             .await
-            .map_err(ChartError::BlockscoutDB)?
+            .map_err(ChartError::IndexerDB)?
             .and_utc();
         Ok(start_timestamp..cx.time)
     }

@@ -4,16 +4,16 @@ use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::Statement;
 
 use crate::{
+    ChartError, ChartKey,
     charts::db_interaction::read::cached::find_all_cached,
     data_source::{
+        UpdateContext,
         kinds::remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         types::BlockscoutMigrations,
-        UpdateContext,
     },
     range::UniversalRange,
-    types::{new_txns::NewTxnsCombinedPoint, Timespan, TimespanDuration},
+    types::{Timespan, TimespanDuration, new_txns::NewTxnsCombinedPoint},
     utils::day_start,
-    ChartError, ChartKey,
 };
 
 pub mod all_new_txns_window;
@@ -54,7 +54,7 @@ impl RemoteQueryBehaviour for NewTxnsWindowCombinedQuery {
         let update_day = cx.time.date_naive();
         let query = new_txns_window_combined_statement(
             update_day,
-            &cx.blockscout_applied_migrations,
+            &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
         let data = find_all_cached::<NewTxnsCombinedPoint>(cx, query).await?;

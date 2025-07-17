@@ -76,7 +76,7 @@ impl ValueEstimation for TotalAddressesEstimation {
         let now = Utc::now();
         let value = query_estimated_table_rows(blockscout, addresses::Entity.table_name())
             .await
-            .map_err(ChartError::BlockscoutDB)?
+            .map_err(ChartError::IndexerDB)?
             .map(|n| u64::try_from(n).unwrap_or(0))
             .unwrap_or(0);
         Ok(DateValue {

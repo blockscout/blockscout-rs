@@ -1,26 +1,26 @@
 use std::cmp::Reverse;
 
 use crate::{
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::{
+        UpdateContext,
         kinds::{
             data_manipulation::map::MapToString,
             local_db::DirectPointLocalDbChartSource,
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
-        UpdateContext,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     range::UniversalRange,
     types::TimespanValue,
     utils::NANOS_PER_SEC,
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::blocks;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
-use sea_orm::{prelude::*, DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement};
+use sea_orm::{DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement, prelude::*};
 
 pub const LIMIT_BLOCKS: u64 = 100;
 pub const OFFSET_BLOCKS: u64 = 100;
@@ -56,9 +56,9 @@ async fn query_average_block_time(
 ) -> Result<Option<TimespanValue<NaiveDate, f64>>, ChartError> {
     let query = average_block_time_statement(offset);
     let block_timestamps = BlockTimestamp::find_by_statement(query)
-        .all(cx.blockscout)
+        .all(cx.indexer_db)
         .await
-        .map_err(ChartError::BlockscoutDB)?;
+        .map_err(ChartError::IndexerDB)?;
     Ok(calculate_average_block_time(block_timestamps))
 }
 
@@ -149,7 +149,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{types::BlockscoutMigrations, DataSource, UpdateParameters},
+        data_source::{DataSource, UpdateParameters, types::BlockscoutMigrations},
         tests::{
             mock_blockscout::fill_many_blocks,
             simple_test::{get_counter, prepare_chart_test, simple_test_counter},
@@ -199,10 +199,10 @@ mod tests {
         };
         fill_many_blocks(&blockscout, current_time.naive_utc(), &block_times).await;
         let mut parameters = UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: AverageBlockTime::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,

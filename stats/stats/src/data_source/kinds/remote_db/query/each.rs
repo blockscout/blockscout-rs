@@ -63,7 +63,7 @@ where
         let mut collected_data = Vec::with_capacity(points.len());
         for point_range in points {
             let statement =
-                S::get_statement(point_range.clone(), &cx.blockscout_applied_migrations);
+                S::get_statement(point_range.clone(), &cx.indexer_applied_migrations);
             let point_value = find_one_value::<ValueWrapper<Value>>(cx, statement).await?;
             if let Some(ValueWrapper { value }) = point_value {
                 let timespan = resolution_from_range(point_range);

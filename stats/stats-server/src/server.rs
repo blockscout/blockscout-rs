@@ -61,9 +61,9 @@ pub async fn stats(
 
     let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
     let db = init_stats_db(&settings).await?;
-    let blockscout = connect_to_blockscout_db(&settings).await?;
+    let indexer = connect_to_indexer_db(&settings).await?;
 
-    check_if_unsupported_charts_are_enabled(&charts, &blockscout).await?;
+    check_if_unsupported_charts_are_enabled(settings.multichain_mode, &charts, &indexer).await?;
     create_charts_if_needed(&db, &charts).await?;
 
     if settings.metrics.enabled {
@@ -81,7 +81,7 @@ pub async fn stats(
     let update_service = Arc::new(
         UpdateService::new(
             db.clone(),
-            blockscout.clone(),
+            indexer.clone(),
             charts.clone(),
             status_listener,
             settings.multichain_mode,
@@ -103,7 +103,8 @@ pub async fn stats(
     let read_service = Arc::new(
         ReadService::new(
             db.clone(),
-            blockscout.clone(),
+            indexer.clone(),
+            settings.multichain_mode,
             charts,
             update_service,
             authorization,
@@ -134,7 +135,7 @@ pub async fn stats(
     });
 
     let res = futures.join_next().await;
-    on_termination(&db, &blockscout, &shutdown, &mut futures).await;
+    on_termination(&db, &indexer, &shutdown, &mut futures).await;
     res.expect("task set is not empty")?
 }
 
@@ -203,8 +204,13 @@ async fn init_stats_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnec
     Ok(db)
 }
 
-async fn connect_to_blockscout_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnection>> {
-    let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
+async fn connect_to_indexer_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnection>> {
+    let url = settings
+        .indexer_db_url
+        .clone()
+        .or_else(|| settings.blockscout_db_url.clone())
+        .ok_or(anyhow!("Indexer DB URL is not set"))?;
+    let mut opt = ConnectOptions::new(url);
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     // we'd like to have each batch to resolve in under 1 hour
     // as it seems to be the middleground between too many steps & occupying DB for too long
@@ -212,7 +218,7 @@ async fn connect_to_blockscout_db(settings: &Settings) -> anyhow::Result<Arc<Dat
         tracing::log::LevelFilter::Warn,
         Duration::from_secs(3600),
     );
-    let conn = Arc::new(Database::connect(opt).await.context("blockscout DB")?);
+    let conn = Arc::new(Database::connect(opt).await.context("indexer DB")?);
     Ok(conn)
 }
 
@@ -226,10 +232,11 @@ fn init_runtime_setup(
 }
 
 async fn check_if_unsupported_charts_are_enabled(
+    is_multichain: bool,
     setup: &RuntimeSetup,
-    blockscout_db: &DatabaseConnection,
+    indexer_db: &DatabaseConnection,
 ) -> anyhow::Result<()> {
-    let migrations = BlockscoutMigrations::query_from_db(blockscout_db).await?;
+    let migrations = BlockscoutMigrations::query_from_db(is_multichain, indexer_db).await?;
     if !migrations.denormalization {
         let charts_without_normalization = &[NewBuilderAccounts::name()];
         let mut all_enabled_charts_with_deps = setup.update_groups.values().flat_map(|g| {
@@ -300,15 +307,15 @@ fn init_authorization(api_keys: HashMap<String, String>) -> Arc<AuthorizationPro
 
 async fn on_termination(
     db: &DatabaseConnection,
-    blockscout: &DatabaseConnection,
+    indexer: &DatabaseConnection,
     shutdown: &GracefulShutdownHandler,
     futures: &mut JoinSet<anyhow::Result<()>>,
 ) {
     if let Err(e) = db.close_by_ref().await {
         tracing::error!("Failed to close stats db connection upon termination: {e:?}");
     }
-    if let Err(e) = blockscout.close_by_ref().await {
-        tracing::error!("Failed to close blockscout db connection upon termination: {e:?}");
+    if let Err(e) = indexer.close_by_ref().await {
+        tracing::error!("Failed to close indexer db connection upon termination: {e:?}");
     }
     shutdown.shutdown_token.cancel();
     futures.abort_all();

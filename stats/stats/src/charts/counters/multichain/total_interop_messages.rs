@@ -26,14 +26,14 @@ impl RemoteQueryBehaviour for TotalInteropMessagesQueryBehaviour {
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, ChartError> {
-        let db = cx.blockscout;
+        let db = cx.indexer_db;
         let timespan = cx.time;
 
         let value = interop_messages::Entity::find()
             .select_only()
             .count(db)
             .await
-            .map_err(ChartError::BlockscoutDB)?;
+            .map_err(ChartError::IndexerDB)?;
 
         let data = DateValue::<String> {
             timespan: timespan.date_naive(),

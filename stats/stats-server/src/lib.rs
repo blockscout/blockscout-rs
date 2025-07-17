@@ -4,7 +4,6 @@ mod config;
 mod health;
 mod read_service;
 mod runtime_setup;
-mod serializers;
 mod server;
 mod settings;
 mod update_service;

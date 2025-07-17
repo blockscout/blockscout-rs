@@ -6,6 +6,7 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
+    ChartKey, ChartProperties, Named,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -14,7 +15,7 @@ use crate::{
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
-                parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+                DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days,
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
@@ -23,7 +24,6 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -101,7 +101,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
+        data_source::{DataSource, UpdateContext, UpdateParameters, types::BlockscoutMigrations},
         range::UniversalRange,
         tests::{
             init_db::init_db_all,
@@ -150,10 +150,10 @@ mod tests {
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
         let parameters = UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: NewBlockRewardsMonthlyInt::all_dependencies_chart_keys(
             ),
             update_time_override: Some(current_time),

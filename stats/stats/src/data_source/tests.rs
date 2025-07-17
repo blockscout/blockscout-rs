@@ -12,21 +12,22 @@ use super::{
             resolutions::last_value::LastValueLowerResolution,
         },
         local_db::{
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource, LocalDbChartSource,
             parameters::{
+                DefaultCreate, DefaultQueryVec,
                 update::batching::{
+                    BatchUpdate,
                     parameter_traits::BatchStepBehaviour,
                     parameters::{Batch30Days, Batch30Weeks, Batch30Years, Batch36Months},
-                    BatchUpdate,
                 },
-                DefaultCreate, DefaultQueryVec,
             },
-            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource, LocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     types::UpdateParameters,
 };
 use crate::{
+    ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     construct_update_group,
     data_source::{
@@ -38,7 +39,6 @@ use crate::{
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
 };
 
 pub struct NewContractsQuery;
@@ -296,10 +296,10 @@ async fn update_examples() {
     group.create_charts_sync(&db, None, &enabled).await.unwrap();
 
     let parameters = UpdateParameters {
-        db: &db,
+        stats_db: &db,
         is_multichain_mode: false,
-        blockscout: &blockscout,
-        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        indexer_db: &blockscout,
+        indexer_applied_migrations: BlockscoutMigrations::latest(),
         enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
         update_time_override: None,
         force_full: true,

@@ -31,7 +31,7 @@ impl RemoteQueryBehaviour for TotalTxnsQueryBehaviour {
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, ChartError> {
-        let blockscout = cx.blockscout;
+        let blockscout = cx.indexer_db;
         let timespan: NaiveDateTime = blocks::Entity::find()
             .select_only()
             .column_as(Expr::col(blocks::Column::Timestamp).max(), "timestamp")
@@ -39,14 +39,14 @@ impl RemoteQueryBehaviour for TotalTxnsQueryBehaviour {
             .into_tuple()
             .one(blockscout)
             .await
-            .map_err(ChartError::BlockscoutDB)?
+            .map_err(ChartError::IndexerDB)?
             .ok_or_else(|| ChartError::Internal("no block timestamps in database".into()))?;
 
         let value = transactions::Entity::find()
             .select_only()
             .count(blockscout)
             .await
-            .map_err(ChartError::BlockscoutDB)?;
+            .map_err(ChartError::IndexerDB)?;
 
         let data = DateValue::<String> {
             timespan: timespan.date(),
@@ -92,7 +92,7 @@ impl ValueEstimation for TotalTxnsEstimation {
         let now = Utc::now();
         let value = query_estimated_table_rows(blockscout, transactions::Entity.table_name())
             .await
-            .map_err(ChartError::BlockscoutDB)?
+            .map_err(ChartError::IndexerDB)?
             .map(|n| u64::try_from(n).unwrap_or(0))
             .unwrap_or(0);
         Ok(DateValue {

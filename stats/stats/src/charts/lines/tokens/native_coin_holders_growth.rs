@@ -1,27 +1,27 @@
 use std::collections::{BTreeMap, HashSet};
 
 use crate::{
+    ChartError, ChartProperties, MissingDatePolicy, Named,
     charts::db_interaction::write::{create_chart, insert_data_many},
     data_source::{
+        UpdateContext,
         kinds::{
             data_manipulation::{
                 map::{MapParseTo, StripExt},
                 resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
+                DirectVecLocalDbChartSource, LocalDbChartSource,
                 parameter_traits::{CreateBehaviour, UpdateBehaviour},
                 parameters::{
-                    update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
                     DefaultQueryVec,
+                    update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
                 },
-                DirectVecLocalDbChartSource, LocalDbChartSource,
             },
         },
-        UpdateContext,
     },
     define_and_impl_resolution_properties,
     types::timespans::{DateValue, Month, Week, Year},
-    ChartError, ChartProperties, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::address_coin_balances_daily;
@@ -31,8 +31,8 @@ use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
 use migration::OnConflict;
 use sea_orm::{
-    prelude::*, ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Set, Statement,
-    TransactionTrait,
+    ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
+    prelude::*,
 };
 mod db_address_balances {
     use sea_orm::prelude::*;
@@ -119,17 +119,17 @@ pub async fn update_sequentially_with_support_table(
     tracing::info!(chart =% Properties::key(), "start sequential update");
     let all_days = match last_accurate_point {
         Some(last_row) => {
-            get_unique_ordered_days(cx.blockscout, Some(last_row.timespan), remote_fetch_timer)
+            get_unique_ordered_days(cx.indexer_db, Some(last_row.timespan), remote_fetch_timer)
                 .await
-                .map_err(ChartError::BlockscoutDB)?
+                .map_err(ChartError::IndexerDB)?
         }
         None => {
-            clear_support_table(cx.db)
+            clear_support_table(cx.stats_db)
                 .await
-                .map_err(ChartError::BlockscoutDB)?;
-            get_unique_ordered_days(cx.blockscout, None, remote_fetch_timer)
+                .map_err(ChartError::IndexerDB)?;
+            get_unique_ordered_days(cx.indexer_db, None, remote_fetch_timer)
                 .await
-                .map_err(ChartError::BlockscoutDB)?
+                .map_err(ChartError::IndexerDB)?
         }
     };
 
@@ -144,9 +144,9 @@ pub async fn update_sequentially_with_support_table(
         );
         // NOTE: we update support table and chart data in one transaction
         // to support invariant that support table has information about last day in chart data
-        let db_tx = cx.db.begin().await.map_err(ChartError::StatsDB)?;
+        let db_tx = cx.stats_db.begin().await.map_err(ChartError::StatsDB)?;
         let data: Vec<entity::chart_data::ActiveModel> =
-            calculate_days_using_support_table(&db_tx, cx.blockscout, days.iter().copied())
+            calculate_days_using_support_table(&db_tx, cx.indexer_db, days.iter().copied())
                 .await
                 .map_err(|e| ChartError::Internal(e.to_string()))?
                 .into_iter()

@@ -1,6 +1,7 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
+    ChartKey, ChartProperties, Named,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -9,10 +10,10 @@ use crate::{
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
+                DirectVecLocalDbChartSource,
                 parameters::update::batching::parameters::{
                     Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
                 },
-                DirectVecLocalDbChartSource,
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
@@ -21,7 +22,6 @@ use crate::{
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -108,8 +108,8 @@ mod tests {
     use super::*;
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
-        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
-        query_dispatch::{serialize_line_points, QuerySerialized},
+        data_source::{DataSource, UpdateContext, UpdateParameters, types::BlockscoutMigrations},
+        query_dispatch::{QuerySerialized, serialize_line_points},
         range::UniversalRange,
         tests::{
             init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data,
@@ -171,10 +171,10 @@ mod tests {
         // Note that update is not full, therefore there is no entry with date `2022-11-09` and
         // wrong value is kept
         let mut cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             update_time_override: Some(current_time),
             enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             force_full: false,
@@ -249,10 +249,10 @@ mod tests {
             .unwrap();
 
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
@@ -346,10 +346,10 @@ mod tests {
         .unwrap();
 
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &db,
+            stats_db: &db,
             is_multichain_mode: false,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &blockscout,
+            indexer_applied_migrations: BlockscoutMigrations::latest(),
             enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
