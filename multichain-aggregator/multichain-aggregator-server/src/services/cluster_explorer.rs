@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-
 use crate::{
     proto::{cluster_explorer_service_server::ClusterExplorerService, *},
     services::utils::{parse_query, parse_query_2},
     settings::ApiSettings,
 };
 use multichain_aggregator_logic::services::cluster::Cluster;
-use sea_orm::DatabaseConnection;
+use sea_orm::{sqlx::types::chrono, DatabaseConnection};
+use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
 pub struct ClusterExplorer {
@@ -72,7 +71,18 @@ impl ClusterExplorerService for ClusterExplorer {
         let direction = inner.direction.map(parse_query).transpose()?;
 
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+        let page_token = inner
+            .page_token
+            .map(parse_query_2)
+            .transpose()?
+            .map(|(t, h)| {
+                chrono::DateTime::from_timestamp_micros(t)
+                    .ok_or_else(|| {
+                        Status::invalid_argument(format!("invalid timestamp value: {t}"))
+                    })
+                    .map(|dt| (dt.naive_utc(), h))
+            })
+            .transpose()?;
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let (interop_messages, next_page_token) = cluster
@@ -90,9 +100,12 @@ impl ClusterExplorerService for ClusterExplorer {
 
         Ok(Response::new(ListInteropMessagesResponse {
             items: interop_messages.into_iter().map(|i| i.into()).collect(),
-            next_page_params: next_page_token.map(|(t, h)| Pagination {
-                page_token: format!("{t},{h}"),
-                page_size,
+            next_page_params: next_page_token.map(|(t, h)| {
+                let t = t.and_utc().timestamp_micros();
+                Pagination {
+                    page_token: format!("{t},{h}"),
+                    page_size,
+                }
             }),
         }))
     }
