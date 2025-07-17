@@ -1,4 +1,5 @@
 use crate::{
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::{
         kinds::{
             data_manipulation::map::MapToString,
@@ -8,15 +9,14 @@ use crate::{
         types::BlockscoutMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::smart_contracts;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{
-    sea_query::{Asterisk, Func, IntoColumnRef},
     ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, QueryTrait, Statement,
+    sea_query::{Asterisk, Func, IntoColumnRef},
 };
 
 pub struct TotalVerifiedContractsStatement;

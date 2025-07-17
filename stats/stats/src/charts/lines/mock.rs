@@ -1,23 +1,23 @@
 use crate::{
+    ChartError, ChartProperties, MissingDatePolicy, Named,
     data_source::{
+        UpdateContext,
         kinds::{
             local_db::{
-                parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+                DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days,
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         types::Get,
-        UpdateContext,
     },
     missing_date::fit_into_range,
     range::{Incrementable, UniversalRange},
-    types::{timespans::DateValue, Timespan, TimespanValue},
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    types::{Timespan, TimespanValue, timespans::DateValue},
 };
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use rand::{distributions::uniform::SampleUniform, rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, distributions::uniform::SampleUniform, rngs::StdRng};
 use std::{
     marker::PhantomData,
     ops::{Bound, Range},

@@ -3,9 +3,9 @@ use std::ops::{Bound, Range, RangeBounds, RangeInclusive};
 use chrono::{DateTime, Utc};
 
 use crate::{
-    data_source::{kinds::remote_db::RemoteQueryBehaviour, UpdateContext},
-    types::{Timespan, TimespanDuration},
     ChartError,
+    data_source::{UpdateContext, kinds::remote_db::RemoteQueryBehaviour},
+    types::{Timespan, TimespanDuration},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

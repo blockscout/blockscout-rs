@@ -1,4 +1,5 @@
 use crate::{
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     charts::db_interaction::utils::interval_24h_filter,
     data_source::{
         kinds::{
@@ -9,7 +10,6 @@ use crate::{
         types::BlockscoutMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use blockscout_db::entity::blocks;
 use chrono::{DateTime, NaiveDate, Utc};

@@ -4,14 +4,14 @@ use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use sea_orm::{FromQueryResult, Statement, TryGetable};
 
 use crate::{
+    ChartError,
     charts::db_interaction::read::{cached::find_one_value_cached, find_one_value},
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, Cacheable, UpdateContext, WrappedValue},
     },
-    range::{inclusive_range_to_exclusive, UniversalRange},
+    range::{UniversalRange, inclusive_range_to_exclusive},
     types::{Timespan, TimespanValue},
-    ChartError,
 };
 
 use super::StatementFromRange;
@@ -137,15 +137,15 @@ mod test {
     use sea_orm::{DatabaseBackend, DbBackend, MockDatabase, Statement};
 
     use crate::{
+        ChartKey,
         data_source::{
+            UpdateContext, UpdateParameters,
             kinds::remote_db::{RemoteQueryBehaviour, StatementFromRange},
             types::{BlockscoutMigrations, WrappedValue},
-            UpdateContext, UpdateParameters,
         },
         range::UniversalRange,
         tests::point_construction::dt,
         types::TimespanValue,
-        ChartKey,
     };
 
     use super::PullOne24hCached;

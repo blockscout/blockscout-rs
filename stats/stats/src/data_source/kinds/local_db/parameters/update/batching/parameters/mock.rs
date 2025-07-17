@@ -4,8 +4,9 @@ use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
+    ChartError,
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
-    tests::recorder::Recorder, types::timespans::DateValue, ChartError,
+    tests::recorder::Recorder, types::timespans::DateValue,
 };
 
 use super::PassVecStep;

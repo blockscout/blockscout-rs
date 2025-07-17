@@ -1,4 +1,5 @@
 use crate::{
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     charts::db_interaction::utils::interval_24h_filter,
     data_source::{
         kinds::{
@@ -9,14 +10,13 @@ use crate::{
         types::BlockscoutMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::transactions;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use migration::{Asterisk, Func, IntoColumnRef};
-use sea_orm::{prelude::*, DbBackend, IntoSimpleExpr, QuerySelect, QueryTrait};
+use sea_orm::{DbBackend, IntoSimpleExpr, QuerySelect, QueryTrait, prelude::*};
 
 pub struct NewContracts24hStatement;
 

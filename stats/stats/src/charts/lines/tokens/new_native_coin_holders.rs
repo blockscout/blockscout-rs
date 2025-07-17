@@ -1,4 +1,5 @@
 use crate::{
+    Named,
     charts::ChartProperties,
     data_source::kinds::{
         data_manipulation::{
@@ -7,16 +8,15 @@ use crate::{
             resolutions::sum::SumLowerResolution,
         },
         local_db::{
+            DirectVecLocalDbChartSource,
             parameters::update::batching::parameters::{
                 Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
             },
-            DirectVecLocalDbChartSource,
         },
     },
     define_and_impl_resolution_properties,
     lines::native_coin_holders_growth::NativeCoinHoldersGrowthInt,
     types::timespans::{Month, Week, Year},
-    Named,
 };
 
 use chrono::NaiveDate;

@@ -1,4 +1,5 @@
 use crate::{
+    ChartProperties, MissingDatePolicy, Named,
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
@@ -7,7 +8,6 @@ use crate::{
         types::BlockscoutMigrations,
     },
     types::TimespanValue,
-    ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;

@@ -1,11 +1,11 @@
 use crate::{
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::kinds::{
         data_manipulation::{last_point::LastPoint, map::StripExt},
         local_db::DirectPointLocalDbChartSource,
     },
     indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus},
     lines::AccountAbstractionWalletsGrowth,
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;

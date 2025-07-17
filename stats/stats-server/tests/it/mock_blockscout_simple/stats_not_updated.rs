@@ -14,7 +14,7 @@ use stats::tests::{
     mock_blockscout::{mock_blockscout_api, user_ops_status_response_json},
 };
 use stats_proto::blockscout::stats::v1::{
-    health_check_response::ServingStatus, Counters, HealthCheckResponse,
+    Counters, HealthCheckResponse, health_check_response::ServingStatus,
 };
 use stats_server::stats;
 use tokio::time::sleep;

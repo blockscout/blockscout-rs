@@ -236,14 +236,18 @@ mod tests {
         assert_eq!(Week::new(NaiveDate::MAX).checked_days(), None);
         assert_eq!(Week::new(NaiveDate::MIN).checked_days(), None);
 
-        assert!(Week::new(NaiveDate::MAX)
-            .saturating_previous_week()
-            .checked_days()
-            .is_some());
-        assert!(Week::new(NaiveDate::MIN)
-            .saturating_next_week()
-            .checked_days()
-            .is_some());
+        assert!(
+            Week::new(NaiveDate::MAX)
+                .saturating_previous_week()
+                .checked_days()
+                .is_some()
+        );
+        assert!(
+            Week::new(NaiveDate::MIN)
+                .saturating_next_week()
+                .checked_days()
+                .is_some()
+        );
     }
 
     #[test]

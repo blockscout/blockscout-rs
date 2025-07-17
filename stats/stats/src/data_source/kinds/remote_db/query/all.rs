@@ -8,14 +8,14 @@ use chrono::{DateTime, Utc};
 use sea_orm::{FromQueryResult, Statement};
 
 use crate::{
+    ChartError, ChartKey,
     charts::db_interaction::read::{cached::find_all_cached, find_all_points},
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
         types::{BlockscoutMigrations, Cacheable, UpdateContext},
     },
-    range::{data_source_query_range_to_db_statement_range, UniversalRange},
+    range::{UniversalRange, data_source_query_range_to_db_statement_range},
     types::{TimespanTrait, TimespanValue},
-    ChartError, ChartKey,
 };
 
 pub trait StatementFromRange {

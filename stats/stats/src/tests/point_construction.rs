@@ -6,8 +6,8 @@ use rust_decimal::Decimal;
 use crate::{
     charts::types::TimespanValue,
     types::{
-        timespans::{Month, Week, Year},
         Timespan,
+        timespans::{Month, Week, Year},
     },
 };
 

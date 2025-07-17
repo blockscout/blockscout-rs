@@ -290,8 +290,13 @@ pub fn init(
 pub fn init_blockscout_api_client(
     settings: &Settings,
 ) -> anyhow::Result<Option<blockscout_client::Configuration>> {
-    match (settings.ignore_blockscout_api_absence, &settings.blockscout_api_url) {
-        (_, Some(blockscout_api_url)) => Ok(Some(blockscout_client::Configuration::new(blockscout_api_url.clone()))),
+    match (
+        settings.ignore_blockscout_api_absence,
+        &settings.blockscout_api_url,
+    ) {
+        (_, Some(blockscout_api_url)) => Ok(Some(blockscout_client::Configuration::new(
+            blockscout_api_url.clone(),
+        ))),
         (true, None) => {
             tracing::info!(
                 "Blockscout API URL has not been provided and `IGNORE_BLOCKSCOUT_API_ABSENCE` setting is \

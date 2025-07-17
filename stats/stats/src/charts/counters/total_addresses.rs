@@ -1,15 +1,15 @@
 use crate::{
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     charts::db_interaction::read::query_estimated_table_rows,
     data_source::{
         kinds::{
-            local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
+            local_db::{DirectPointLocalDbChartSourceWithEstimate, parameters::ValueEstimation},
             remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
         },
         types::BlockscoutMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    types::{timespans::DateValue, TimespanValue},
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    types::{TimespanValue, timespans::DateValue},
 };
 use blockscout_db::entity::addresses;
 use chrono::{NaiveDate, Utc};

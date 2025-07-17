@@ -15,12 +15,12 @@ use chrono::{DateTime, TimeDelta, Utc};
 use rust_decimal::prelude::Zero;
 
 use crate::{
+    ChartError,
     data_processing::deltas,
-    data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
+    data_source::{DataSource, UpdateContext, kinds::AdapterDataSource},
     range::UniversalRange,
     types::{Timespan, TimespanValue},
     utils::day_start,
-    ChartError,
 };
 
 /// Calculate delta data from cumulative dependency.

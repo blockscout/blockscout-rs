@@ -3,7 +3,7 @@ use entity::chart_data;
 
 use sea_orm::{DbErr, FromQueryResult, QueryResult, Set, TryGetable};
 
-use super::{timespans::DateValue, TimespanValue};
+use super::{TimespanValue, timespans::DateValue};
 
 // Separate type instead of `TimespanValue` just to derive `FromQueryResult`
 /// Internal (database) representation of data points.

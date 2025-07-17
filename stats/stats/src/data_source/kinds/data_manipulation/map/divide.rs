@@ -4,8 +4,8 @@ use itertools::EitherOrBoth;
 use num_traits::AsPrimitive;
 
 use crate::{
-    data_processing::zip_same_timespan, data_source::kinds::data_manipulation::map::MapFunction,
-    types::TimespanValue, ChartError,
+    ChartError, data_processing::zip_same_timespan,
+    data_source::kinds::data_manipulation::map::MapFunction, types::TimespanValue,
 };
 
 use super::Map;

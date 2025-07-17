@@ -4,8 +4,8 @@ use std::{
 };
 
 use stats::{
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     ChartKey, IndexingStatus,
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use tokio::sync::Mutex;

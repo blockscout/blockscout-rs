@@ -3,18 +3,18 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
+    ChartKey, ChartProperties, Named,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
             local_db::{
-                parameters::update::batching::parameters::Batch30Days, DirectVecLocalDbChartSource,
+                DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days,
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
         types::BlockscoutMigrations,
     },
     utils::sql_with_range_filter_opt,
-    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};

@@ -6,6 +6,6 @@ pub mod lines;
 pub mod query_dispatch;
 pub mod types;
 pub use chart::{
-    chart_properties_portrait, ChartError, ChartKey, ChartObject, ChartProperties,
-    ChartPropertiesObject, MissingDatePolicy, Named, ResolutionKind,
+    ChartError, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject, MissingDatePolicy,
+    Named, ResolutionKind, chart_properties_portrait,
 };

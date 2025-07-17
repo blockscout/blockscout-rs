@@ -4,14 +4,14 @@ use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
+    ChartError,
     charts::db_interaction::write::clear_all_chart_data,
     data_source::kinds::local_db::parameters::update::pass_vec,
     gettable_const,
     types::{
-        timespans::{Month, Week, Year},
         Timespan, TimespanDuration, TimespanValue,
+        timespans::{Month, Week, Year},
     },
-    ChartError,
 };
 
 use super::parameter_traits::BatchStepBehaviour;

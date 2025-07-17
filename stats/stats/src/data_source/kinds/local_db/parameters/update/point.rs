@@ -3,11 +3,11 @@ use std::marker::PhantomData;
 use blockscout_metrics_tools::AggregateTimer;
 
 use crate::{
+    ChartError,
     charts::db_interaction::write::insert_data_many,
-    data_source::{kinds::local_db::UpdateBehaviour, DataSource, UpdateContext},
+    data_source::{DataSource, UpdateContext, kinds::local_db::UpdateBehaviour},
     range::UniversalRange,
     types::{Timespan, TimespanValue},
-    ChartError,
 };
 
 /// Store output of the `MainDep` right in the local db

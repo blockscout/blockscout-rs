@@ -6,6 +6,7 @@
 use std::fmt::Debug;
 
 use crate::{
+    ChartProperties, MissingDatePolicy, Named,
     data_processing::zip_same_timespan,
     data_source::kinds::{
         data_manipulation::{
@@ -13,19 +14,18 @@ use crate::{
             resolutions::sum::SumLowerResolution,
         },
         local_db::{
+            DirectVecLocalDbChartSource,
             parameters::update::batching::parameters::{
                 Batch30Weeks, Batch30Years, Batch36Months, BatchMaxDays,
             },
-            DirectVecLocalDbChartSource,
         },
     },
     define_and_impl_resolution_properties,
-    lines::{new_blocks::NewBlocksInt, NewTxnsInt},
+    lines::{NewTxnsInt, new_blocks::NewBlocksInt},
     types::{
-        timespans::{Month, Week, Year},
         Timespan, TimespanValue,
+        timespans::{Month, Week, Year},
     },
-    ChartProperties, MissingDatePolicy, Named,
 };
 
 use chrono::NaiveDate;

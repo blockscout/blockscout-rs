@@ -2,15 +2,15 @@ use std::{collections::HashSet, future::Future, marker::Send};
 
 use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
-use futures::{future::BoxFuture, FutureExt};
+use futures::{FutureExt, future::BoxFuture};
 use sea_orm::{DatabaseConnection, DbErr};
 use tracing::instrument;
 use tynm::type_name;
 
 use crate::{
+    ChartError, ChartKey,
     indexing_status::{IndexingStatus, IndexingStatusTrait},
     range::UniversalRange,
-    ChartError, ChartKey,
 };
 
 use super::types::UpdateContext;
@@ -191,7 +191,7 @@ pub trait DataSource {
     /// ## Description
     /// Update only thise data source's data (values + metadat)
     fn update_itself(cx: &UpdateContext<'_>)
-        -> impl Future<Output = Result<(), ChartError>> + Send;
+    -> impl Future<Output = Result<(), ChartError>> + Send;
 
     /// Set date to update this data dource (and its dependencies) from
     /// in the next update. Does not update by itself, it must be performed separately
@@ -325,7 +325,9 @@ impl DataSource for () {
         _db: &DatabaseConnection,
         _update_from: chrono::NaiveDate,
     ) -> Result<(), ChartError> {
-        unreachable!("not called by `set_next_update_from_recursively` and must not be called by anything else");
+        unreachable!(
+            "not called by `set_next_update_from_recursively` and must not be called by anything else"
+        );
     }
 }
 

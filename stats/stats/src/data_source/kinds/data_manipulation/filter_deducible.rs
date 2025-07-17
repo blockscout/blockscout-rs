@@ -8,10 +8,10 @@ use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
 
 use crate::{
-    data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
+    ChartError, ChartProperties, MissingDatePolicy,
+    data_source::{DataSource, UpdateContext, kinds::AdapterDataSource},
     range::UniversalRange,
     types::TimespanValue,
-    ChartError, ChartProperties, MissingDatePolicy,
 };
 
 /// Pass only essential points from `D`, removing ones that can be deduced
@@ -63,13 +63,13 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        data_source::{types::BlockscoutMigrations, UpdateParameters},
+        MissingDatePolicy, Named,
+        data_source::{UpdateParameters, types::BlockscoutMigrations},
         gettable_const,
         lines::PredefinedMockSource,
         range::UniversalRange,
         tests::point_construction::{d_v_double, dt},
         types::timespans::DateValue,
-        MissingDatePolicy, Named,
     };
 
     use super::*;

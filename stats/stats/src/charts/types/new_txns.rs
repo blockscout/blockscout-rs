@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use sea_orm::FromQueryResult;
 
-use crate::{data_source::kinds::data_manipulation::map::MapFunction, ChartError};
+use crate::{ChartError, data_source::kinds::data_manipulation::map::MapFunction};
 
 use super::{TimespanTrait, TimespanValue, ZeroTimespanValue};
 

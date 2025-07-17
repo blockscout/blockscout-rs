@@ -1,4 +1,5 @@
 use crate::{
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::kinds::{
         data_manipulation::map::{Map, MapFunction, MapToString, UnwrapOr},
         local_db::DirectPointLocalDbChartSource,
@@ -6,7 +7,6 @@ use crate::{
     gettable_const,
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::TimespanValue,
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 use chrono::NaiveDate;
 use entity::sea_orm_active_enums::ChartType;

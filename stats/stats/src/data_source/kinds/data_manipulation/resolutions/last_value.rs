@@ -9,10 +9,10 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 
 use crate::{
-    data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
+    ChartError,
+    data_source::{DataSource, UpdateContext, kinds::AdapterDataSource},
     range::UniversalRange,
     types::{ConsistsOf, Timespan, TimespanValue},
-    ChartError,
 };
 
 use super::{extend_to_timespan_boundaries, reduce_each_timespan};
@@ -62,13 +62,13 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        data_source::{types::BlockscoutMigrations, DataSource, UpdateContext, UpdateParameters},
+        MissingDatePolicy,
+        data_source::{DataSource, UpdateContext, UpdateParameters, types::BlockscoutMigrations},
         gettable_const,
         lines::PredefinedMockSource,
         range::UniversalRange,
         tests::point_construction::{d_v_int, dt, w_v_int},
         types::timespans::{DateValue, Week},
-        MissingDatePolicy,
     };
 
     use super::LastValueLowerResolution;

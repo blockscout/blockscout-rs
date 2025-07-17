@@ -1,9 +1,9 @@
 use sea_orm::TryGetable;
 
 use crate::{
+    ChartError,
     data_source::{kinds::data_manipulation::map::MapFunction, types::WrappedValue},
     types::TimespanValue,
-    ChartError,
 };
 
 use super::Map;

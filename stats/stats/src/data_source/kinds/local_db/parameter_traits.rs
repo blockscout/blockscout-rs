@@ -5,11 +5,11 @@ use chrono::{DateTime, Utc};
 use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
+    ChartError, RequestedPointsLimit,
     charts::db_interaction::write::set_last_updated_at,
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
-    ChartError, RequestedPointsLimit,
 };
 
 /// In most cases, [`super::DefaultCreate`] is enough.

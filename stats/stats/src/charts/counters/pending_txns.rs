@@ -1,16 +1,16 @@
 use crate::{
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     charts::db_interaction::read::find_one_value,
     data_source::{
+        UpdateContext,
         kinds::{
             local_db::DirectPointLocalDbChartSource,
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
-        UpdateContext,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     range::UniversalRange,
     types::TimespanValue,
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::transactions;

@@ -3,34 +3,34 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
+    ChartError, ChartKey, ChartProperties, Named,
     charts::{
-        db_interaction::read::{find_all_points, QueryAllBlockTimestampRange},
+        db_interaction::read::{QueryAllBlockTimestampRange, find_all_points},
         types::timespans::DateValue,
     },
     data_source::{
+        UpdateContext,
         kinds::{
             data_manipulation::{
                 map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
+                DirectVecLocalDbChartSource,
                 parameters::update::batching::parameters::{
                     Batch30Weeks, Batch30Years, Batch36Months, BatchMaxDays,
                 },
-                DirectVecLocalDbChartSource,
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
         types::BlockscoutMigrations,
-        UpdateContext,
     },
     define_and_impl_resolution_properties,
     indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
     missing_date::trim_out_of_range_sorted,
-    range::{data_source_query_range_to_db_statement_range, UniversalRange},
+    range::{UniversalRange, data_source_query_range_to_db_statement_range},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartError, ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};

@@ -160,8 +160,8 @@ pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt
 pub(crate) use new_blocks::NewBlocksStatement;
 pub(crate) use new_native_coin_transfers::NewNativeCoinTransfersInt;
 pub(crate) use new_txns::{
-    op_stack_operational::transactions_filter as op_stack_operational_transactions_filter,
     NewTxnsCombinedStatement, NewTxnsInt,
+    op_stack_operational::transactions_filter as op_stack_operational_transactions_filter,
 };
 pub(crate) use new_txns_window::NewTxnsWindowInt;
 

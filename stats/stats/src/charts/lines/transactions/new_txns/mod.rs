@@ -5,12 +5,13 @@ use chrono::{DateTime, Utc};
 use migration::{Alias, ExprTrait, IntoIden};
 use op_stack_operational::OpStackNewOperationalTxns;
 use sea_orm::{
-    sea_query, ColumnTrait, DatabaseBackend, EntityName, EntityTrait, IntoIdentity, IntoSimpleExpr,
-    QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement,
+    ColumnTrait, DatabaseBackend, EntityName, EntityTrait, IntoIdentity, IntoSimpleExpr,
+    QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, sea_query,
 };
 use sea_query::{Expr, Func};
 
 use crate::{
+    ChartKey, ChartProperties, QueryAllBlockTimestampRange,
     charts::db_interaction::utils::datetime_range_filter,
     counters::OpStackYesterdayOperationalTxns,
     data_source::{
@@ -19,7 +20,6 @@ use crate::{
     },
     lines::OpStackNewOperationalTxnsWindow,
     types::new_txns::NewTxnsCombinedPoint,
-    ChartKey, ChartProperties, QueryAllBlockTimestampRange,
 };
 
 pub mod all_new_txns;
@@ -130,7 +130,7 @@ mod tests {
 
     use crate::{
         data_source::{
-            kinds::remote_db::StatementFromRange, types::BlockscoutMigrations, DataSource,
+            DataSource, kinds::remote_db::StatementFromRange, types::BlockscoutMigrations,
         },
         lines::{NewTxnsCombinedStatement, OpStackNewOperationalTxns},
         tests::{normalize_sql, point_construction::dt},

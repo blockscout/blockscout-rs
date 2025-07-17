@@ -1,25 +1,25 @@
 use crate::{
+    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     charts::db_interaction::read::query_estimated_table_rows,
     data_source::{
+        UpdateContext,
         kinds::{
             data_manipulation::map::MapParseTo,
-            local_db::{parameters::ValueEstimation, DirectPointLocalDbChartSourceWithEstimate},
+            local_db::{DirectPointLocalDbChartSourceWithEstimate, parameters::ValueEstimation},
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
-        UpdateContext,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
 };
 
 use blockscout_db::entity::{blocks, transactions};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{
-    prelude::Expr, ColumnTrait, DatabaseConnection, EntityName, EntityTrait, PaginatorTrait,
-    QueryFilter, QuerySelect,
+    ColumnTrait, DatabaseConnection, EntityName, EntityTrait, PaginatorTrait, QueryFilter,
+    QuerySelect, prelude::Expr,
 };
 
 pub struct TotalTxnsQueryBehaviour;

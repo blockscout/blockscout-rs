@@ -1,17 +1,17 @@
 use std::marker::PhantomData;
 
 use crate::{
+    ChartError, ChartProperties, Named,
     data_source::{
+        UpdateContext,
         kinds::{
             local_db::DirectPointLocalDbChartSource,
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
         },
         types::Get,
-        UpdateContext,
     },
     range::UniversalRange,
     types::timespans::DateValue,
-    ChartError, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};

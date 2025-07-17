@@ -9,15 +9,15 @@ use blockscout_metrics_tools::AggregateTimer;
 use sea_orm::TransactionTrait;
 
 use crate::{
+    ChartError, ChartProperties,
     charts::db_interaction::write::clear_all_chart_data,
     data_source::{
-        kinds::local_db::{parameter_traits::QueryBehaviour, UpdateBehaviour},
-        source::DataSource,
         UpdateContext,
+        kinds::local_db::{UpdateBehaviour, parameter_traits::QueryBehaviour},
+        source::DataSource,
     },
     range::UniversalRange,
     types::{ExtendedTimespanValue, Timespan, TimespanValue},
-    ChartError, ChartProperties,
 };
 
 use super::pass_vec;

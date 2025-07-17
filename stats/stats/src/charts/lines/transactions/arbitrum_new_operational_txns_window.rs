@@ -7,27 +7,27 @@
 use std::collections::HashSet;
 
 use crate::{
+    ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
     charts::db_interaction::read::find_all_points,
     data_source::{
+        UpdateContext,
         kinds::{
             data_manipulation::map::{Map, MapParseTo},
             local_db::{
-                parameters::{
-                    update::clear_and_query_all::ClearAllAndPassVec, DefaultCreate, DefaultQueryVec,
-                },
                 LocalDbChartSource,
+                parameters::{
+                    DefaultCreate, DefaultQueryVec, update::clear_and_query_all::ClearAllAndPassVec,
+                },
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
         types::BlockscoutMigrations,
-        UpdateContext,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    lines::{NewBlocksStatement, NewTxnsWindowInt, NEW_TXNS_WINDOW_RANGE},
+    lines::{NEW_TXNS_WINDOW_RANGE, NewBlocksStatement, NewTxnsWindowInt},
     range::UniversalRange,
-    types::{timespans::DateValue, Timespan, TimespanDuration, TimespanValue},
+    types::{Timespan, TimespanDuration, TimespanValue, timespans::DateValue},
     utils::day_start,
-    ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};

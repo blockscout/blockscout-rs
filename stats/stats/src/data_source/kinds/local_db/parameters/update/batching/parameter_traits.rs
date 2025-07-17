@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
-    types::{Timespan, TimespanValue},
     ChartError,
+    types::{Timespan, TimespanValue},
 };
 
 pub trait BatchStepBehaviour<Resolution, MainInput, ResolutionInput>
