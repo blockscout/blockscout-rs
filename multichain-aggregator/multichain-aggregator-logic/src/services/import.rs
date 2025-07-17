@@ -46,6 +46,16 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert address token balances");
         })?;
+    if let Some(counters) = request.counters {
+        if let Some(global) = counters.global {
+            repository::counters::upsert_chain_counters(&tx, global)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error = ?e, "failed to upsert chain counters");
+                })?;
+        }
+    }
+
     tx.commit().await?;
 
     let interop_messages = messages_with_transfers
