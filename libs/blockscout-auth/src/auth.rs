@@ -1,4 +1,4 @@
-use crate::jwt_headers::{build_http_headers, extract_csrf_token, extract_jwt, CommonError};
+use crate::jwt_headers::{build_http_headers, extract_csrf_token, extract_jwt};
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use thiserror::Error;
@@ -26,9 +26,6 @@ struct AuthFailed {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error(transparent)]
-    Common(#[from] CommonError),
-
     #[error("blockscout API error: {0}")]
     BlockscoutApi(String),
 
@@ -37,6 +34,15 @@ pub enum Error {
 
     #[error("forbidden: {0}")]
     Forbidden(String),
+
+    #[error("invalid jwt token: {0}")]
+    InvalidJwt(String),
+
+    #[error("invalid csrf token: {0}")]
+    InvalidCsrfToken(String),
+
+    #[error("cannot build headers: {0}")]
+    HeaderError(String),
 }
 
 pub async fn auth_from_metadata(
@@ -106,8 +112,14 @@ pub async fn auth_from_tokens(
             Ok(success)
         }
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-            let failed: AuthFailed = serde_json::from_str(&response_raw)
-                .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+            let failed: AuthFailed = serde_json::from_str(&response_raw).map_err(|error| {
+                tracing::warn!(
+                    error = ?error,
+                    body = ?response_raw,
+                    "failed to parse blockscout response body"
+                );
+                Error::BlockscoutApi(format!("invalid body: {error}"))
+            })?;
             if status == StatusCode::UNAUTHORIZED {
                 Err(Error::Unauthorized(failed.message))
             } else {
@@ -123,7 +135,9 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::{init_mocked_blockscout_auth_service, MockUser};
+    use crate::{
+        init_mocked_blockscout_auth_service, jwt_headers::HEADER_JWT_TOKEN_NAME, MockUser,
+    };
     use reqwest::header::{HeaderMap, HeaderName};
     use serde::Serialize;
     use tonic::{codegen::http::header::CONTENT_TYPE, Extensions, Request};
@@ -141,7 +155,6 @@ mod tests {
             );
             headers.insert(COOKIE, cookies.parse().unwrap());
         } else {
-            const HEADER_JWT_TOKEN_NAME: &str = "authorization";
             headers.insert(HEADER_JWT_TOKEN_NAME, jwt.parse().unwrap());
         };
         headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
