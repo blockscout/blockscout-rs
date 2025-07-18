@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{data_source::types::Get, types::TimespanValue, ChartError};
+use crate::{ChartError, data_source::types::Get, types::TimespanValue};
 
 use super::{Map, MapFunction};
 

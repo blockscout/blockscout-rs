@@ -2,9 +2,9 @@ use chrono::NaiveDate;
 use itertools::EitherOrBoth;
 
 use crate::{
+    ChartError,
     charts::types::timespans::DateValue,
     types::{Timespan, TimespanValue},
-    ChartError,
 };
 use std::{
     cmp::Ordering,

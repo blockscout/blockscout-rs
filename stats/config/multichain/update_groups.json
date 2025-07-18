@@ -1,0 +1,5 @@
+{
+    "schedules": {
+        "total_interop_messages_group": "0 0 4 * * * *"
+    }
+}

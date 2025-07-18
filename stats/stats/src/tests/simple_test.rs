@@ -1,13 +1,17 @@
-use super::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data};
+use super::{
+    init_db::{init_db_all, init_db_all_multichain},
+    mock_blockscout::fill_mock_blockscout_data,
+};
 use crate::{
+    ChartProperties,
     data_source::{
         source::DataSource,
         types::{BlockscoutMigrations, UpdateContext, UpdateParameters},
     },
     query_dispatch::QuerySerialized,
     range::UniversalRange,
-    types::{timespans::DateValue, Timespan},
-    ChartProperties,
+    tests::mock_multichain::fill_mock_multichain_data,
+    types::{Timespan, timespans::DateValue},
 };
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -80,9 +84,10 @@ where
     fill_mock_blockscout_data(&blockscout, current_date).await;
 
     let mut parameters = UpdateParameters {
-        db: &db,
-        blockscout: &blockscout,
-        blockscout_applied_migrations: migrations,
+        stats_db: &db,
+        is_multichain_mode: false,
+        indexer_db: &blockscout,
+        indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -131,9 +136,10 @@ pub async fn dirty_force_update_and_check<C>(
         update_time_override.unwrap_or(DateTime::from_str("2023-03-01T12:00:01Z").unwrap());
 
     let parameters = UpdateParameters {
-        db,
-        blockscout,
-        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        stats_db: db,
+        is_multichain_mode: false,
+        indexer_db: blockscout,
+        indexer_applied_migrations: BlockscoutMigrations::latest(),
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -231,9 +237,10 @@ async fn ranged_test_chart_inner<C>(
     fill_mock_blockscout_data(&blockscout, max_date).await;
 
     let mut parameters = UpdateParameters {
-        db: &db,
-        blockscout: &blockscout,
-        blockscout_applied_migrations: migrations,
+        stats_db: &db,
+        is_multichain_mode: false,
+        indexer_db: &blockscout,
+        indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -275,6 +282,25 @@ pub async fn simple_test_counter<C>(
         expected,
         update_time,
         BlockscoutMigrations::latest(),
+        false,
+    )
+    .await
+}
+
+/// `test_name` must be unique to avoid db clashes
+pub async fn simple_test_counter_multichain<C>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    simple_test_counter_inner::<C>(
+        test_name,
+        expected,
+        update_time,
+        BlockscoutMigrations::latest(),
+        true,
     )
     .await
 }
@@ -295,7 +321,7 @@ pub async fn simple_test_counter_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations).await
+        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations, false).await
     }
 }
 
@@ -304,18 +330,27 @@ async fn simple_test_counter_inner<C>(
     expected: &str,
     update_time: Option<NaiveDateTime>,
     migrations: BlockscoutMigrations,
+    multichain_mode: bool,
 ) where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
 {
-    let (current_time, db, blockscout) = prepare_chart_test::<C>(test_name, update_time).await;
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
     let max_date = max_time.date_naive();
-    fill_mock_blockscout_data(&blockscout, max_date).await;
+    let (current_time, db, indexer) = if multichain_mode {
+        let (t, db, multichain) = prepare_multichain_chart_test::<C>(test_name, update_time).await;
+        fill_mock_multichain_data(&multichain, max_date).await;
+        (t, db, multichain)
+    } else {
+        let (t, db, blockscout) = prepare_chart_test::<C>(test_name, update_time).await;
+        fill_mock_blockscout_data(&blockscout, max_date).await;
+        (t, db, blockscout)
+    };
 
     let mut parameters = UpdateParameters {
-        db: &db,
-        blockscout: &blockscout,
-        blockscout_applied_migrations: migrations,
+        stats_db: &db,
+        is_multichain_mode: multichain_mode,
+        indexer_db: &indexer,
+        indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -353,9 +388,10 @@ where
         .unwrap();
 
     let parameters = UpdateParameters {
-        db: &db,
-        blockscout: &blockscout,
-        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        stats_db: &db,
+        is_multichain_mode: false,
+        indexer_db: &blockscout,
+        indexer_applied_migrations: BlockscoutMigrations::latest(),
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: false,
@@ -369,13 +405,32 @@ pub async fn prepare_chart_test<C: DataSource + ChartProperties>(
     test_name: &str,
     init_time: Option<NaiveDateTime>,
 ) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
+    prepare_chart_test_inner::<C>(test_name, init_time, false).await
+}
+
+pub async fn prepare_multichain_chart_test<C: DataSource + ChartProperties>(
+    test_name: &str,
+    init_time: Option<NaiveDateTime>,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
+    prepare_chart_test_inner::<C>(test_name, init_time, true).await
+}
+
+async fn prepare_chart_test_inner<C: DataSource + ChartProperties>(
+    test_name: &str,
+    init_time: Option<NaiveDateTime>,
+    multichain_mode: bool,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
     let _ = tracing_subscriber::fmt::try_init();
-    let (db, blockscout) = init_db_all(test_name).await;
+    let (db, indexer) = if multichain_mode {
+        init_db_all_multichain(test_name).await
+    } else {
+        init_db_all(test_name).await
+    };
     let init_time = init_time
         .map(|t| t.and_utc())
         .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
     C::init_recursively(&db, &init_time).await.unwrap();
-    (init_time, db, blockscout)
+    (init_time, db, indexer)
 }
 
 pub async fn get_counter<C: QuerySerialized<Output = DateValue<String>>>(

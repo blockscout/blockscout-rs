@@ -4,8 +4,9 @@ use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
+    ChartError,
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
-    tests::recorder::Recorder, types::timespans::DateValue, ChartError,
+    tests::recorder::Recorder, types::timespans::DateValue,
 };
 
 use super::PassVecStep;
@@ -14,7 +15,7 @@ use super::PassVecStep;
 pub struct StepInput<MI, RI> {
     pub chart_id: i32,
     pub update_time: DateTime<Utc>,
-    pub min_blockscout_block: i64,
+    pub min_indexer_block: i64,
     pub last_accurate_point: DateValue<String>,
     pub main_data: MI,
     pub resolution_data: RI,
@@ -36,7 +37,7 @@ where
         db: &C,
         chart_id: i32,
         update_time: DateTime<Utc>,
-        min_blockscout_block: i64,
+        min_indexer_block: i64,
         last_accurate_point: DateValue<String>,
         main_data: Vec<DateValue<String>>,
         resolution_data: (),
@@ -47,7 +48,7 @@ where
         StepsRecorder::record(StepInput {
             chart_id,
             update_time,
-            min_blockscout_block,
+            min_indexer_block,
             last_accurate_point: last_accurate_point.clone(),
             main_data: main_data.clone(),
             resolution_data,
@@ -57,7 +58,7 @@ where
             db,
             chart_id,
             update_time,
-            min_blockscout_block,
+            min_indexer_block,
             last_accurate_point,
             main_data,
             resolution_data,

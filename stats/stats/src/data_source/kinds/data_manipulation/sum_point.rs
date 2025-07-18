@@ -9,11 +9,11 @@ use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
 
 use crate::{
+    ChartError,
     data_processing::sum,
-    data_source::{kinds::AdapterDataSource, source::DataSource, UpdateContext},
+    data_source::{UpdateContext, kinds::AdapterDataSource, source::DataSource},
     range::UniversalRange,
     types::{Timespan, TimespanValue},
-    ChartError,
 };
 
 /// Sum all dependency's data.
