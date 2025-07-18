@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use zetachain_cctx_entity::{cctx_status, cross_chain_tx, inbound_params, outbound_params, revert_options, sea_orm_active_enums::CoinType as DbCoinType};
@@ -22,6 +24,18 @@ pub enum CoinType {
     ERC20,
     Cmd,
     NoAssetCall,
+}
+
+impl Display for CoinType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CoinType::Zeta => write!(f, "Zeta"),
+            CoinType::Gas => write!(f, "Gas"),
+            CoinType::ERC20 => write!(f, "Erc20"),
+            CoinType::Cmd => write!(f, "Cmd"),
+            CoinType::NoAssetCall => write!(f, "NoAssetCall"),
+        }
+    }
 }
 
 impl TryFrom<CoinType> for DbCoinType {
@@ -160,19 +174,19 @@ pub struct RelatedCctx {
     pub outbound_params: Vec<RelatedOutboundParams>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CctxListItem {
-    pub index: String,
-    pub status: String,
-    pub amount: String,
-    pub last_update_timestamp: NaiveDateTime,
-    pub source_chain_id: String,
-    pub target_chain_id: String,
-    pub sender_address: String,
-    pub receiver_address: String,
-    pub asset: String,
-    pub coin_type: String,
-}
+// #[derive(Debug, Serialize, Deserialize)]
+// pub struct CctxListItem {
+//     pub index: String,
+//     pub status: String,
+//     pub amount: String,
+//     pub last_update_timestamp: NaiveDateTime,
+//     pub source_chain_id: String,
+//     pub target_chain_id: String,
+//     pub sender_address: String,
+//     pub receiver_address: String,
+//     pub asset: String,
+//     pub coin_type: String,
+// }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncProgress {

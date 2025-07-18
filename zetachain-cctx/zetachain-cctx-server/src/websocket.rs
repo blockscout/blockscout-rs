@@ -2,13 +2,16 @@ use actix::{Actor, AsyncContext, Handler, Message, Recipient, StreamHandler};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use tonic::async_trait;
-use zetachain_cctx_logic::events::EventBroadcaster;
+use zetachain_cctx_logic::{events::EventBroadcaster, models::CompleteCctx};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CrossChainTx;
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{CrossChainTx, CctxListItem as CctxListItemProto};
+use zetachain_cctx_logic::models::CrossChainTx as CrossChainTxLogic;
 use actix::ActorContext;
+
+use crate::services::cctx::transform_complete_cctx_to_cross_chain_tx;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WebSocketEvent {
@@ -17,7 +20,7 @@ pub enum WebSocketEvent {
         cctx_data: CrossChainTx,
     },
     NewCctxImported {
-        cctx_indices: Vec<String>,
+        cctxs: Vec<CctxListItemProto>,
     },
 }
 
@@ -144,7 +147,7 @@ impl Handler<BroadcastEvent> for WebSocketManager {
                     tracing::debug!("Broadcasted CCTX update for {} to {} subscribers", cctx_index, subscribers.len());
                 }
             }
-            WebSocketEvent::NewCctxImported { cctx_indices } => {
+            WebSocketEvent::NewCctxImported { cctxs } => {
                 for &client_id in &self.new_cctx_subscribers {
                     if let Some((_, recipient)) = self.clients.get(&client_id) {
                         let _ = recipient.try_send(WebSocketMessage {
@@ -152,7 +155,7 @@ impl Handler<BroadcastEvent> for WebSocketManager {
                         });
                     }
                 }
-                tracing::debug!("Broadcasted new CCTX imports {:?} to {} subscribers", cctx_indices, self.new_cctx_subscribers.len());
+                tracing::debug!("Broadcasted new CCTX imports {:?} to {} subscribers", cctxs.iter().map(|cctx| cctx.index.clone()).collect::<Vec<String>>(), self.new_cctx_subscribers.len());
             }
         }
     }
@@ -235,27 +238,30 @@ impl WebSocketEventBroadcaster {
         });
     }
 
-    pub fn broadcast_new_cctxs(&self, cctx_indices: Vec<String>) {
+    pub fn broadcast_new_cctxs(&self, cctxs: Vec<CctxListItemProto>) {
         self.manager.do_send(BroadcastEvent {
-            event: WebSocketEvent::NewCctxImported { cctx_indices },
+            event: WebSocketEvent::NewCctxImported { cctxs },
         });
     }
 } 
 
 #[async_trait]
 impl EventBroadcaster for WebSocketEventBroadcaster {
-    async fn broadcast_cctx_update(&self, cctx_index: String, cctx_data: CrossChainTx) {
+    async fn broadcast_cctx_update(&self, cctx_index: String, cctx_data: CompleteCctx) {
+
+        if let Ok(cctx) = transform_complete_cctx_to_cross_chain_tx(cctx_data) {
         self.manager.do_send(BroadcastEvent {
             event: WebSocketEvent::CctxStatusUpdate {
                 cctx_index,
-                cctx_data,
-            },
-        });
+                    cctx_data: cctx,    
+                },
+            });
+        }
     }
 
-    async fn broadcast_new_cctxs(&self, cctx_indices: Vec<String>) {
+    async fn broadcast_new_cctxs(&self, cctxs: Vec<CctxListItemProto>) {
         self.manager.do_send(BroadcastEvent {
-            event: WebSocketEvent::NewCctxImported { cctx_indices },
+            event: WebSocketEvent::NewCctxImported { cctxs },
         });
     }
 }

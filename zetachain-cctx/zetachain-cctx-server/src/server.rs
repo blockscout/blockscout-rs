@@ -107,10 +107,10 @@ pub async fn run(settings: Settings, db: Arc<DatabaseConnection>, client: Arc<Cl
     
     // Create WebSocket manager
     let websocket_manager = WebSocketManager::default().start();
-    let websocket_broadcaster = WebSocketEventBroadcaster::new(websocket_manager.clone());
+    let websocket_broadcaster = Arc::new(WebSocketEventBroadcaster::new(websocket_manager.clone()));
     
     if settings.indexer.enabled {
-        let indexer = Indexer::new(settings.indexer, client, database, Arc::new(WebSocketEventBroadcaster::new(websocket_manager.clone())));
+        let indexer = Indexer::new(settings.indexer, client, database, websocket_broadcaster.clone());
         tokio::spawn(async move {
             //TODO: handle error, log it and restart the indexer
             let _ = indexer.run().await;

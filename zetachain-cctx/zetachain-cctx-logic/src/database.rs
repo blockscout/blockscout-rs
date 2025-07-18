@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::models::{
-    self, CctxListItem, CctxShort, CompleteCctx, CrossChainTx, RelatedCctx, RelatedOutboundParams, SyncProgress, Token, TokenInfo,
+    self, CctxShort, CompleteCctx, CrossChainTx, RelatedCctx, RelatedOutboundParams, SyncProgress, Token, TokenInfo,
 };
 use anyhow::Ok;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -12,17 +12,24 @@ use sea_orm::{
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use tracing::{instrument, Instrument};
 use uuid::Uuid;
-use zetachain_cctx_entity::sea_orm_active_enums::ProcessingStatus;
+use zetachain_cctx_entity::sea_orm_active_enums::{ProcessingStatus};
 use zetachain_cctx_entity::{
     cctx_status, cross_chain_tx as CrossChainTxEntity, inbound_params as InboundParamsEntity,
     outbound_params as OutboundParamsEntity, revert_options as RevertOptionsEntity,
     sea_orm_active_enums::{
-        CctxStatusStatus, CoinType, ConfirmationMode, InboundStatus, Kind, ProtocolContractVersion,
+        CctxStatusStatus, CoinType as DBCoinType, ConfirmationMode, InboundStatus, Kind, ProtocolContractVersion,
         TxFinalizationStatus,
     },
     token as TokenEntity,
     watermark,
 };
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
+    CctxListItem as CctxListItemProto,
+     CctxStatus as CctxStatusProto,
+      CoinType as CoinTypeProto,
+      CctxStatusReduced as CctxStatusReducedProto
+    };
+
 
 
 
@@ -39,6 +46,15 @@ fn sanitize_string(input: String) -> String {
         .filter(|&c| c != '\0') // Remove null bytes
         .collect::<String>()
         .replace('\u{FFFD}', "?") // Replace replacement character with question mark
+}
+
+pub fn reduce_status(status: CctxStatusProto) -> CctxStatusReducedProto {
+    match status {
+        CctxStatusProto::PendingOutbound | CctxStatusProto::PendingInbound | CctxStatusProto::PendingRevert => CctxStatusReducedProto::Pending,
+        CctxStatusProto::OutboundMined => CctxStatusReducedProto::Success,
+        CctxStatusProto::Aborted | CctxStatusProto::Reverted => CctxStatusReducedProto::Failed,
+        _ => CctxStatusReducedProto::Pending,
+    }
 }
 
 impl ZetachainCctxDatabase {
@@ -380,15 +396,14 @@ impl ZetachainCctxDatabase {
     }
 
     #[instrument(,level="debug",skip_all, fields(cctx_indexes = %cctxs.iter().map(|cctx| cctx.index.clone()).collect::<Vec<String>>().join(",")))]
-    pub async fn import_missing_cctxs(
+    pub async fn import_cctxs_and_move_watermark(
         self: &ZetachainCctxDatabase,
         job_id: Uuid,
         cctxs: Vec<CrossChainTx>,
         next_key: &str,
         realtime_threshold: i64,
         watermark_id: i32,
-        watermark_pointer: String,
-    ) -> anyhow::Result<(ProcessingStatus, String)> {
+    ) -> anyhow::Result<(ProcessingStatus,  Vec<CctxListItemProto>)> {
         let earliest_fetched = cctxs.last().unwrap();
         let latest_fetched = cctxs.first().unwrap();
         if earliest_fetched
@@ -401,7 +416,7 @@ impl ZetachainCctxDatabase {
             tracing::info!(
                 "earliest fetched cctx is too old, skipping and marking watermark as done"
             );
-            return Ok((ProcessingStatus::Done, watermark_pointer.clone()));
+            return Ok((ProcessingStatus::Done, Vec::new()));
         }
         let latest_synced = self.query_cctx(latest_fetched.index.clone()).await?;
         if latest_synced.is_some() {
@@ -409,14 +424,14 @@ impl ZetachainCctxDatabase {
                 "last synced cctx {} is present, marking as done",
                 earliest_fetched.index
             );
-            return Ok((ProcessingStatus::Done, watermark_pointer));
+            return Ok((ProcessingStatus::Done, Vec::new()));
         } else {
             tracing::debug!("last synced cctx is absent, inserting a batch and moving watermark");
             let tx = self.db.begin().await?;
-            self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
+            let inserted = self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
             self.move_watermark(watermark_id, next_key, &tx).await?;
             tx.commit().await?;
-            return Ok((ProcessingStatus::Unlocked, next_key.to_owned()));
+            return Ok((ProcessingStatus::Unlocked, inserted));
         }
     }
 
@@ -448,7 +463,7 @@ impl ZetachainCctxDatabase {
         job_id: Uuid,
         cctxs: Vec<CrossChainTx>,
         next_key: &str,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<CctxListItemProto>> {
         let tx = self.db.begin().await?;
         //check whether the latest fetched cctx is present in the database
         //we fetch transaction in LIFO order
@@ -462,7 +477,7 @@ impl ZetachainCctxDatabase {
                 latest_fetched.index,
                 next_key
             );
-            return Ok(());
+            return Ok(Vec::new());
         }
         //now we need to check the lower boudary ( the earliest of the fetched cctxs)
         let earliest_fetched = cctxs.last().unwrap();
@@ -479,10 +494,10 @@ impl ZetachainCctxDatabase {
                 .await?;
         }
 
-        self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
+        let inserted =self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
 
         tx.commit().await?;
-        Ok(())
+        Ok(inserted)
     }
     #[instrument(level = "debug", skip_all)]
     pub async fn import_cctxs(
@@ -508,9 +523,11 @@ impl ZetachainCctxDatabase {
         job_id: Uuid,
         cctxs: &Vec<CrossChainTx>,
         tx: &DatabaseTransaction,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<CctxListItemProto>> {
+
+        let mut cctx_list_items = Vec::new();
         if cctxs.is_empty() {
-            return Ok(());
+            return Ok(cctx_list_items);
         }
 
         // Prepare batch data for each table
@@ -568,100 +585,105 @@ impl ZetachainCctxDatabase {
 
         tracing::info!("job_id: {}, inserted cctxs: {}", job_id, indices.join(","));
         // Create a map from index to id for quick lookup
-        let index_to_id: std::collections::HashMap<String, i32> = inserted_cctxs
+        // let index_to_id: std::collections::HashMap<String, i32> = inserted_cctxs
+        //     .into_iter()
+        //     .map(|cctx| (cctx.index, cctx.id))
+        //     .collect();
+
+        let index_to_cctx: std::collections::HashMap<&str, &CrossChainTx> = cctxs
             .into_iter()
-            .map(|cctx| (cctx.index, cctx.id))
+            .map(|cctx| (cctx.index.as_str(), cctx))
             .collect();
 
         // Now prepare child records for each transaction
-        for cctx in cctxs {
-            if let Some(&tx_id) = index_to_id.get(&cctx.index) {
+        for cctx in inserted_cctxs {
+            if let Some(fetched_cctx) = index_to_cctx.get(cctx.index.as_str()) {
                 // Prepare cctx_status
+                let last_update_timestamp = fetched_cctx.cctx_status.last_update_timestamp.parse::<i64>().unwrap_or(0);
+                let last_update_timestamp = chrono::DateTime::from_timestamp(
+                    last_update_timestamp,
+                    0,
+                )
+                .ok_or(anyhow::anyhow!("Invalid timestamp"))?
+                .naive_utc();
                 let status_model = cctx_status::ActiveModel {
                     id: ActiveValue::NotSet,
-                    cross_chain_tx_id: ActiveValue::Set(tx_id),
+                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
                     status: ActiveValue::Set(
-                        CctxStatusStatus::try_from(cctx.cctx_status.status.clone())
+                        CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
                             .map_err(|e| anyhow::anyhow!(e))?,
                     ),
                     status_message: ActiveValue::Set(Some(sanitize_string(
-                        cctx.cctx_status.status_message.clone(),
+                        fetched_cctx.cctx_status.status_message.clone(),
                     ))),
                     error_message: ActiveValue::Set(Some(sanitize_string(
-                        cctx.cctx_status.error_message.clone(),
+                        fetched_cctx.cctx_status.error_message.clone(),
                     ))),
                     last_update_timestamp: ActiveValue::Set(
-                        chrono::DateTime::from_timestamp(
-                            cctx.cctx_status
-                                .last_update_timestamp
-                                .parse::<i64>()
-                                .unwrap_or(0),
-                            0,
-                        )
-                        .ok_or(anyhow::anyhow!("Invalid timestamp"))?
-                        .naive_utc(),
+                        last_update_timestamp,
                     ),
-                    is_abort_refunded: ActiveValue::Set(cctx.cctx_status.is_abort_refunded),
+                    is_abort_refunded: ActiveValue::Set(fetched_cctx.cctx_status.is_abort_refunded),
                     created_timestamp: ActiveValue::Set(
-                        cctx.cctx_status.created_timestamp.parse::<i64>()?,
+                        fetched_cctx.cctx_status.created_timestamp.parse::<i64>()?,
                     ),
                     error_message_revert: ActiveValue::Set(Some(sanitize_string(
-                        cctx.cctx_status.error_message_revert.clone(),
+                        fetched_cctx.cctx_status.error_message_revert.clone(),
                     ))),
                     error_message_abort: ActiveValue::Set(Some(sanitize_string(
-                        cctx.cctx_status.error_message_abort.clone(),
+                        fetched_cctx.cctx_status.error_message_abort.clone(),
                     ))),
                 };
                 status_models.push(status_model);
 
+                let coin_type = fetched_cctx.inbound_params.coin_type.clone();
                 // Prepare inbound_params
                 let inbound_model = InboundParamsEntity::ActiveModel {
                     id: ActiveValue::NotSet,
-                    cross_chain_tx_id: ActiveValue::Set(tx_id),
-                    sender: ActiveValue::Set(cctx.inbound_params.sender.clone()),
-                    sender_chain_id: ActiveValue::Set(cctx.inbound_params.sender_chain_id.clone()),
-                    tx_origin: ActiveValue::Set(cctx.inbound_params.tx_origin.clone()),
+                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
+                    sender: ActiveValue::Set(fetched_cctx.inbound_params.sender.clone()),
+                    sender_chain_id: ActiveValue::Set(fetched_cctx.inbound_params.sender_chain_id.clone()),
+                    tx_origin: ActiveValue::Set(fetched_cctx.inbound_params.tx_origin.clone()),
                     coin_type: ActiveValue::Set(
-                        CoinType::try_from(cctx.inbound_params.coin_type.clone())
+                        DBCoinType::try_from(fetched_cctx.inbound_params.coin_type.clone())
                             .map_err(|e| anyhow::anyhow!(e))?,
                     ),
-                    asset: ActiveValue::Set(Some(cctx.inbound_params.asset.clone())),
-                    amount: ActiveValue::Set(cctx.inbound_params.amount.clone()),
-                    observed_hash: ActiveValue::Set(cctx.inbound_params.observed_hash.clone()),
+                    asset: ActiveValue::Set(Some(fetched_cctx.inbound_params.asset.clone())),
+                    amount: ActiveValue::Set(fetched_cctx.inbound_params.amount.clone()),
+                    observed_hash: ActiveValue::Set(fetched_cctx.inbound_params.observed_hash.clone()),
                     observed_external_height: ActiveValue::Set(
-                        cctx.inbound_params.observed_external_height.clone(),
+                        fetched_cctx.inbound_params.observed_external_height.clone(),
                     ),
-                    ballot_index: ActiveValue::Set(cctx.inbound_params.ballot_index.clone()),
+                    ballot_index: ActiveValue::Set(fetched_cctx.inbound_params.ballot_index.clone()),
                     finalized_zeta_height: ActiveValue::Set(
-                        cctx.inbound_params.finalized_zeta_height.clone(),
+                        fetched_cctx.inbound_params.finalized_zeta_height.clone(),
                     ),
                     tx_finalization_status: ActiveValue::Set(
                         TxFinalizationStatus::try_from(
-                            cctx.inbound_params.tx_finalization_status.clone(),
+                            fetched_cctx.inbound_params.tx_finalization_status.clone(),
                         )
                         .map_err(|e| anyhow::anyhow!(e))?,
                     ),
-                    is_cross_chain_call: ActiveValue::Set(cctx.inbound_params.is_cross_chain_call),
+                    is_cross_chain_call: ActiveValue::Set(fetched_cctx.inbound_params.is_cross_chain_call),
                     status: ActiveValue::Set(
-                        InboundStatus::try_from(cctx.inbound_params.status.clone())
+                        InboundStatus::try_from(fetched_cctx.inbound_params.status.clone())
                             .map_err(|e| anyhow::anyhow!(e))?,
                     ),
                     confirmation_mode: ActiveValue::Set(
-                        ConfirmationMode::try_from(cctx.inbound_params.confirmation_mode.clone())
+                        ConfirmationMode::try_from(fetched_cctx.inbound_params.confirmation_mode.clone())
                             .map_err(|e| anyhow::anyhow!(e))?,
                     ),
                 };
                 inbound_models.push(inbound_model);
 
                 // Prepare outbound_params
-                for outbound in &cctx.outbound_params {
+                for outbound in &fetched_cctx.outbound_params {
                     let outbound_model = OutboundParamsEntity::ActiveModel {
                         id: ActiveValue::NotSet,
-                        cross_chain_tx_id: ActiveValue::Set(tx_id),
+                        cross_chain_tx_id: ActiveValue::Set(cctx.id),
                         receiver: ActiveValue::Set(outbound.receiver.clone()),
                         receiver_chain_id: ActiveValue::Set(outbound.receiver_chain_id.clone()),
                         coin_type: ActiveValue::Set(
-                            CoinType::try_from(outbound.coin_type.clone())
+                            DBCoinType::try_from(outbound.coin_type.clone())
                                 .map_err(|e| anyhow::anyhow!(e))?,
                         ),
                         amount: ActiveValue::Set(outbound.amount.clone()),
@@ -699,21 +721,36 @@ impl ZetachainCctxDatabase {
                 // Prepare revert_options
                 let revert_model = RevertOptionsEntity::ActiveModel {
                     id: ActiveValue::NotSet,
-                    cross_chain_tx_id: ActiveValue::Set(tx_id),
+                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
                     revert_address: ActiveValue::Set(Some(
-                        cctx.revert_options.revert_address.clone(),
+                        fetched_cctx.revert_options.revert_address.clone(),
                     )),
-                    call_on_revert: ActiveValue::Set(cctx.revert_options.call_on_revert),
+                    call_on_revert: ActiveValue::Set(fetched_cctx.revert_options.call_on_revert),
                     abort_address: ActiveValue::Set(Some(
-                        cctx.revert_options.abort_address.clone(),
+                        fetched_cctx.revert_options.abort_address.clone(),
                     )),
-                    revert_message: ActiveValue::Set(cctx.revert_options.revert_message.clone().map(|s| sanitize_string(s))),
+                    revert_message: ActiveValue::Set(fetched_cctx.revert_options.revert_message.clone().map(|s| sanitize_string(s))),
                     revert_gas_limit: ActiveValue::Set(
-                        cctx.revert_options.revert_gas_limit.clone(),
+                        fetched_cctx.revert_options.revert_gas_limit.clone(),
                     ),
                 };
                 revert_models.push(revert_model);
+                
+                cctx_list_items.push(CctxListItemProto {
+                    index: cctx.index,
+                    status: CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status).unwrap().into(),
+                    status_reduced: 0,
+                    amount: fetched_cctx.inbound_params.amount.clone(),
+                    last_update_timestamp: fetched_cctx.cctx_status.last_update_timestamp.parse::<i64>().unwrap_or(0),
+                    source_chain_id: fetched_cctx.inbound_params.sender_chain_id.clone(),
+                    target_chain_id: fetched_cctx.outbound_params[0].receiver_chain_id.clone(),
+                    sender_address: fetched_cctx.inbound_params.sender.clone(),
+                    receiver_address: fetched_cctx.outbound_params[0].receiver.clone(),
+                    asset: fetched_cctx.inbound_params.asset.clone(),
+                    coin_type: CoinTypeProto::from_str_name(&fetched_cctx.inbound_params.coin_type.to_string()).unwrap().into(),
+                });
             }
+            
         }
 
         // Batch insert all child records
@@ -802,7 +839,7 @@ impl ZetachainCctxDatabase {
                 .map_err(|e| anyhow::anyhow!("Batch insert revert_options failed: {}", e))?;
         }
 
-        Ok(())
+        Ok(cctx_list_items)
     }
 
     #[instrument(,level="trace",skip(self,job_id,watermark_id), fields(watermark_id = %watermark_id))]
@@ -1210,7 +1247,7 @@ impl ZetachainCctxDatabase {
             sender_chain_id: ActiveValue::Set(cctx.inbound_params.sender_chain_id),
             tx_origin: ActiveValue::Set(cctx.inbound_params.tx_origin),
             coin_type: ActiveValue::Set(
-                CoinType::try_from(cctx.inbound_params.coin_type)
+                DBCoinType::try_from(cctx.inbound_params.coin_type)
                     .map_err(|e| anyhow::anyhow!(e))?,
             ),
             asset: ActiveValue::Set(Some(cctx.inbound_params.asset)),
@@ -1253,7 +1290,7 @@ impl ZetachainCctxDatabase {
                 receiver: ActiveValue::Set(outbound.receiver),
                 receiver_chain_id: ActiveValue::Set(outbound.receiver_chain_id),
                 coin_type: ActiveValue::Set(
-                    CoinType::try_from(outbound.coin_type).map_err(|e| anyhow::anyhow!(e))?,
+                    DBCoinType::try_from(outbound.coin_type).map_err(|e| anyhow::anyhow!(e))?,
                 ),
                 amount: ActiveValue::Set(outbound.amount),
                 tss_nonce: ActiveValue::Set(outbound.tss_nonce),
@@ -1559,7 +1596,7 @@ impl ZetachainCctxDatabase {
             tx_origin: cctx_row
                 .try_get_by_index(27)
                 .map_err(|e| anyhow::anyhow!("cctx_row tx_origin: {}", e))?,
-            coin_type: CoinType::try_from(cctx_row.try_get_by_index::<String>(28)?)
+            coin_type: DBCoinType::try_from(cctx_row.try_get_by_index::<String>(28)?)
                 .map_err(|_| sea_orm::DbErr::Custom("Invalid coin_type".to_string()))?,
             asset: cctx_row
                 .try_get_by_index(29)
@@ -1668,7 +1705,7 @@ impl ZetachainCctxDatabase {
                 receiver_chain_id: outbound_row
                     .try_get_by_index(3)
                     .map_err(|e| anyhow::anyhow!("outbound_row receiver_chain_id: {}", e))?,
-                coin_type: CoinType::try_from(outbound_row.try_get_by_index::<String>(4)?)
+                coin_type: DBCoinType::try_from(outbound_row.try_get_by_index::<String>(4)?)
                     .map_err(|_| {
                         sea_orm::DbErr::Custom(
                             "outbound_row:Invalid outbound coin_type".to_string(),
@@ -1820,7 +1857,7 @@ impl ZetachainCctxDatabase {
         limit: i64,
         offset: i64,
         status_filter: Option<String>,
-    ) -> anyhow::Result<Vec<CctxListItem>> {
+    ) -> anyhow::Result<Vec<CctxListItemProto>> {
         let mut sql = String::from(
             r#"
         SELECT 
@@ -1880,6 +1917,8 @@ impl ZetachainCctxDatabase {
             // Read the status enum directly from the database
             let index =row.try_get_by_index(0).map_err(|e| anyhow::anyhow!("index: {}", e))?;
             let status = row.try_get_by_index::<String>(1).map_err(|e| anyhow::anyhow!("status: {}", e))?;
+            let status = CctxStatusProto::from_str_name(&status).unwrap();
+            let status_reduced = reduce_status(status);
             let last_update_timestamp = row.try_get_by_index::<NaiveDateTime>(2)
                 .map_err(|e| anyhow::anyhow!("last_update_timestamp: {}", e))?;
             let amount = row.try_get_by_index(3).map_err(|e| anyhow::anyhow!("amount: {}", e))?;
@@ -1889,18 +1928,19 @@ impl ZetachainCctxDatabase {
             let receiver_address = row.try_get_by_index(9).map_err(|e| anyhow::anyhow!("receiver_address: {}", e))?;
             let asset = row.try_get_by_index(8).map_err(|e| anyhow::anyhow!("asset: {}", e))?;
             let coin_type = row.try_get_by_index::<String>(10).map_err(|e| anyhow::anyhow!("coin_type: {}", e))?;
-
-            items.push(CctxListItem {
+            let coin_type = CoinTypeProto::from_str_name(&coin_type).unwrap();
+            items.push(CctxListItemProto {
                 index,
-                status,
+                status: status.into(),
+                status_reduced: status_reduced.into(),
                 amount,
-                last_update_timestamp,
+                last_update_timestamp: last_update_timestamp.and_utc().timestamp(),
                 source_chain_id,
                 target_chain_id,
                 sender_address,
                 receiver_address,
                 asset,
-                coin_type,
+                coin_type: coin_type.into(),
             });
         }
 
@@ -1908,6 +1948,8 @@ impl ZetachainCctxDatabase {
 
         Ok(items)
     }
+
+    
 
     #[instrument(level = "debug", skip_all)]
     pub async fn sync_tokens(

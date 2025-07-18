@@ -19,6 +19,7 @@ use zetachain_cctx_entity::sea_orm_active_enums::{
     CoinType, ProcessingStatus, ProtocolContractVersion,
 };
 use zetachain_cctx_entity::{cross_chain_tx, sea_orm_active_enums::Kind, watermark};
+use zetachain_cctx_logic::events::NoOpBroadcaster;
 
 use crate::helpers::{
     dummy_cctx_with_pagination_response, dummy_cross_chain_tx, dummy_related_cctxs_response,
@@ -131,6 +132,7 @@ async fn test_status_update() {
         },
         Arc::new(client),
         Arc::new(ZetachainCctxDatabase::new(db.client().clone())),
+        Arc::new(NoOpBroadcaster{}),
     );
 
     let indexer_handle = tokio::spawn(async move {
@@ -286,6 +288,7 @@ async fn test_status_update_links_related() {
         },
         Arc::new(client),
         Arc::new(ZetachainCctxDatabase::new(db.client().clone())),
+        Arc::new(NoOpBroadcaster{}),
     );
 
     let indexer_handle = tokio::spawn(async move {

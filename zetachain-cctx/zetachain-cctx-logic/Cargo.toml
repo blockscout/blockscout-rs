@@ -41,7 +41,7 @@ tokio = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 async-stream = { workspace = true }
-
+zetachain-cctx-proto = { path = "../zetachain-cctx-proto" }
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = [
 

@@ -7,6 +7,7 @@ use futures::future::join;
 
 use tokio::task::JoinHandle;
 use uuid::Uuid;
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem as CctxListItemProto;
 use crate::database::ZetachainCctxDatabase;
 use crate::models::{CctxShort, PagedCCTXResponse, PagedTokenResponse, Token};
 use crate::events::{EventBroadcaster, NoOpBroadcaster};
@@ -55,20 +56,18 @@ async fn level_data_gap(
     watermark_pointer: String,
     batch_size: u32,
     realtime_threshold: i64,
-) -> anyhow::Result<(ProcessingStatus,String)> {
+) -> anyhow::Result<(ProcessingStatus, Vec<CctxListItemProto>)> {
     let PagedCCTXResponse { cross_chain_tx : cctxs, pagination } = client
     .list_cctxs(Some(&watermark_pointer), false, batch_size)
     .await?;
     
     if cctxs.is_empty() {
         tracing::debug!("No recent cctxs found");
-        return Ok((ProcessingStatus::Done,watermark_pointer));
+        return Ok((ProcessingStatus::Done, Vec::new()));
     }
     
     let next_key = pagination.next_key.ok_or(anyhow::anyhow!("next_key is None"))?;
-    let res = database.import_missing_cctxs(job_id, cctxs, &next_key, realtime_threshold, watermark_id, watermark_pointer).await?;
-    tracing::debug!(" process_realtime_cctxs indexer import_missing_cctxs result: {:?}", res);
-    Ok(res)
+    database.import_cctxs_and_move_watermark(job_id, cctxs, &next_key, realtime_threshold, watermark_id).await
 }
 
 #[instrument(,level="info",skip_all, fields(job_id = %job_id, watermark_id = %watermark_id, watermark_pointer = %watermark_pointer))]
@@ -94,7 +93,9 @@ async fn historical_sync(
 }
 
 #[instrument(,level="debug",skip(database, client), fields(job_id = %job_id))]
-async fn realtime_fetch(job_id: Uuid,database: Arc<ZetachainCctxDatabase>, client: &Client,batch_size: u32) -> anyhow::Result<()> {
+async fn realtime_fetch(job_id: Uuid,
+    database: Arc<ZetachainCctxDatabase>,
+     client: &Client,batch_size: u32) -> anyhow::Result<Vec<CctxListItemProto>> {
     let response = client
         .list_cctxs(None, false, batch_size)
         .await
@@ -102,13 +103,11 @@ async fn realtime_fetch(job_id: Uuid,database: Arc<ZetachainCctxDatabase>, clien
     let txs = response.cross_chain_tx;
     if txs.is_empty() {
         tracing::debug!("No new cctxs found");
-        return Ok(());
+        return Ok(Vec::new());
     }
     let next_key = response.pagination.next_key.ok_or(anyhow::anyhow!("next_key is None"))?;
 
-    database.process_realtime_cctxs(job_id, txs, &next_key).await?;
-
-    Ok(())
+    database.process_realtime_cctxs(job_id, txs, &next_key).await
 }
 
 #[instrument(,level="debug",skip(database, client,cctx), fields(job_id = %job_id, cctx_index = %cctx.index))]
@@ -207,12 +206,20 @@ impl Indexer {
         let client = self.client.clone();
         let database = self.database.clone();
         let batch_size = self.settings.realtime_fetch_batch_size;
+        let broadcaster = self.broadcaster.clone();
         tokio::spawn(async move {
             
             loop {
                 let job_id = Uuid::new_v4();
-                if let Err(e) = realtime_fetch(job_id, database.clone(), &client, batch_size).await {
-                    tracing::error!(error = %e, job_id = %job_id, "Failed to fetch realtime data");
+                match realtime_fetch(job_id, database.clone(), &client, batch_size).await {
+                    ResultOk(inserted) => {
+                        if !inserted.is_empty() {
+                            // broadcaster.broadcast_new_cctxs(inserted).await;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, job_id = %job_id, "Failed to fetch realtime data");
+                    }
                 }
                 tokio::time::sleep(Duration::from_millis(polling_interval)).await;
             }
@@ -360,7 +367,7 @@ impl Indexer {
                            
                             match level_data_gap(job_id, database.clone(), &client, id, pointer, level_data_gap_batch_size, realtime_threshold)  
                              .await {
-                             ResultOk((ProcessingStatus::Done,_)) =>  database.mark_watermark_as_done(id,job_id).await.unwrap(),
+                             ResultOk((ProcessingStatus::Done, _inserted)) =>  database.mark_watermark_as_done(id,job_id).await.unwrap(),
                              ResultErr(e) => {
                                  tracing::warn!(error = %e, job_id = %job_id, "Failed to level data gap");
                                  if retries_number < retry_threshold as i32 {
