@@ -1,0 +1,32 @@
+[tracing]
+enabled = true
+format = "default"
+
+[database.connect]
+url = "postgres://postgres:postgres@database:5433/blockscout"
+
+[database.connect_options]
+min_connections = 10
+max_connections = 20
+connect_timeout = 10
+acquire_timeout = 10
+
+[database]
+create_database = true
+run_migrations = true
+
+[indexer]
+enabled = false
+polling_interval = 2000
+concurrency=10
+historical_batch_size=10
+status_update_batch_size = 5
+realtime_fetch_batch_size = 10
+retry_threshold = 10
+failed_cctxs_polling_interval = 10000
+realtime_threshold = 10000
+[rpc]
+url = "https://zetachain-athens.g.allthatnode.com/archive/rest/a0edcf7bca3748b0a115df6163411457/zeta-chain/"
+request_per_second = 10
+num_of_retries=30
+retry_delay_ms=500

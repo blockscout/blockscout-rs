@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  app:
+    image: zetachain-cctx-server:latest
+    platform: linux/amd64
+    ports:
+      - "8050:8050"
+    environment:
+      ZETACHAIN_CCTX__CONFIG=config/testnet.toml
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=zetachain_cctx
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data: 
