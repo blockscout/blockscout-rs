@@ -277,7 +277,7 @@ pub async fn search_block_numbers(
         Err(_) => return Ok((vec![], None)),
     };
 
-    let (block_ranges, _) = block_ranges::list_matching_block_ranges_paginated(
+    let (block_ranges, page_token) = block_ranges::list_matching_block_ranges_paginated(
         db,
         block_number,
         chain_ids,
