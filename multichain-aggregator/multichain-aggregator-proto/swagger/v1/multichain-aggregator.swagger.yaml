@@ -43,6 +43,70 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
+  /api/v1/block-numbers:
+    get:
+      operationId: MultichainAggregatorService_ListBlockNumbers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlockNumbersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/blocks:
+    get:
+      operationId: MultichainAggregatorService_ListBlocks
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlocksResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /api/v1/chains:
     get:
       operationId: MultichainAggregatorService_ListChains
@@ -555,15 +619,6 @@ definitions:
     properties:
       value:
         type: string
-  QuickSearchResponseChainBlockNumber:
-    type: object
-    properties:
-      chain_id:
-        type: string
-        format: int64
-      block_number:
-        type: string
-        format: uint64
   googlerpcStatus:
     type: object
     properties:
@@ -676,6 +731,15 @@ definitions:
         type: string
       icon_url:
         type: string
+  v1ChainBlockNumber:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+      block_number:
+        type: string
+        format: uint64
   v1CountInteropMessagesResponse:
     type: object
     properties:
@@ -771,6 +835,26 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Address'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListBlockNumbersResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainBlockNumber'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListBlocksResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListChainsResponse:
@@ -905,7 +989,7 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
+          $ref: '#/definitions/v1ChainBlockNumber'
       dapps:
         type: array
         items:
