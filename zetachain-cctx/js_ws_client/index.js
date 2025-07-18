@@ -1,4 +1,4 @@
-const ws = new WebSocket("ws://localhost:8050/ws/");
+const ws = new WebSocket("ws://localhost:8050/ws/cctxs");
 let connected = false;
 ws.onopen = () => {
     connected = true;
@@ -9,8 +9,8 @@ ws.onclose = () => {
     connected = false;
     console.log("Disconnected from server");
 };
-setInterval(() => {
-    if (connected) {
-        ws.send("hello");
-    }
-}, 1000);
+// setInterval(() => {
+//     if (connected) {
+//         ws.send("ping");
+//     }
+// }, 1000);

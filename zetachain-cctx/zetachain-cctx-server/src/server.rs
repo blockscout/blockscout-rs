@@ -10,7 +10,7 @@ use crate::{
 };
 use actix_web::{web, HttpRequest, Responder};
 use blockscout_service_launcher::{
-    launcher::{self, GracefulShutdownHandler, LaunchSettings}, tracing};
+    launcher::{self, GracefulShutdownHandler, LaunchSettings}, tracing as launcher_tracing};
 
     use actix_web_actors::ws;
 use sea_orm::DatabaseConnection;
@@ -72,8 +72,8 @@ pub fn route_ws(
     websocket_manager: actix::Addr<WebSocketManager>,
 ) {
     config.app_data(web::Data::new(websocket_manager));
-    config.route("/ws/{cctx_index}", web::get().to(ws_cctx_handler));
     config.route("/ws/cctxs", web::get().to(ws_cctxs_handler));
+    config.route("/ws/{cctx_index}", web::get().to(ws_cctx_handler));
 }
 
 impl Router {
@@ -101,7 +101,7 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings, db: Arc<DatabaseConnection>, client: Arc<Client>) -> Result<(), anyhow::Error> {
-    tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    launcher_tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
     let database = Arc::new(ZetachainCctxDatabase::new(db.clone()));
     let health = Arc::new(HealthService::default());
@@ -122,6 +122,7 @@ pub async fn run(settings: Settings, db: Arc<DatabaseConnection>, client: Arc<Cl
     if settings.indexer.enabled {
         let indexer = Indexer::new(settings.indexer, client, database, websocket_broadcaster.clone());
         tokio::spawn(async move {
+            tracing::info!("starting indexer");
             //TODO: handle error, log it and restart the indexer
             let _ = indexer.run().await;
         });

@@ -201,8 +201,7 @@ impl Indexer {
 
     #[instrument(,level="debug",skip(self))]
     fn realtime_fetch_handler(&self) -> JoinHandle<()> {
-        
-        let polling_interval = self.settings.realtime_polling_interval;
+        let realtime_polling_interval = self.settings.realtime_polling_interval;
         let client = self.client.clone();
         let database = self.database.clone();
         let batch_size = self.settings.realtime_fetch_batch_size;
@@ -214,14 +213,17 @@ impl Indexer {
                 match realtime_fetch(job_id, database.clone(), &client, batch_size).await {
                     ResultOk(inserted) => {
                         if !inserted.is_empty() {
-                            // broadcaster.broadcast_new_cctxs(inserted).await;
+                            tracing::info!("realtime_fetch_handler job_id: {} new cctxs found: {:?}", job_id, inserted.iter().map(|c| c.index.clone()).collect::<Vec<String>>());
+                            broadcaster.broadcast_new_cctxs(inserted).await;
+                        } else {
+                            tracing::info!("realtime_fetch_handler job_id: {} no new cctxs found", job_id);
                         }
                     }
                     Err(e) => {
                         tracing::error!(error = %e, job_id = %job_id, "Failed to fetch realtime data");
                     }
                 }
-                tokio::time::sleep(Duration::from_millis(polling_interval)).await;
+                tokio::time::sleep(Duration::from_millis(realtime_polling_interval)).await;
             }
         })
     }
@@ -230,6 +232,7 @@ impl Indexer {
 
     #[instrument(,level="debug",skip(self))]
     pub async fn run(&self)-> anyhow::Result<()> {
+        tracing::info!("indexer is running");
         if !self.settings.enabled {
             tracing::debug!("indexer is disabled");
             return Ok(());

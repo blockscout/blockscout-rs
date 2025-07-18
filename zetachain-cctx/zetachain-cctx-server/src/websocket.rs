@@ -2,6 +2,7 @@ use actix::{Actor, AsyncContext, Handler, Message, Recipient, StreamHandler};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use tonic::async_trait;
+use tracing::instrument;
 use zetachain_cctx_logic::{events::EventBroadcaster, models::CompleteCctx};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -94,6 +95,8 @@ impl Handler<Subscribe> for WebSocketManager {
             }
             SubscriptionType::NewCctxs => {
                 self.new_cctx_subscribers.push(msg.client_id);
+                tracing::info!("New CCTX subscriber: {:?} added to new_cctx_subscribers", msg.client_id);
+                tracing::info!("new_cctx_subscribers: {:?}", self.new_cctx_subscribers);
             }
         }
         
@@ -129,6 +132,7 @@ impl Handler<BroadcastEvent> for WebSocketManager {
     type Result = ();
 
     fn handle(&mut self, msg: BroadcastEvent, _ctx: &mut Self::Context) -> Self::Result {
+        tracing::info!("Broadcasting event: {:?}", msg.event);
         let event_json = serde_json::to_string(&msg.event).unwrap_or_else(|e| {
             tracing::error!("Failed to serialize event: {}", e);
             String::from("{\"error\":\"serialization_failed\"}")
@@ -148,11 +152,16 @@ impl Handler<BroadcastEvent> for WebSocketManager {
                 }
             }
             WebSocketEvent::NewCctxImported { cctxs } => {
+                tracing::info!("Broadcasting new CCTX imports: {:?}", cctxs.iter().map(|cctx| cctx.index.clone()).collect::<Vec<String>>());
                 for &client_id in &self.new_cctx_subscribers {
+                    tracing::info!("Searching for client: {:?}", client_id);
                     if let Some((_, recipient)) = self.clients.get(&client_id) {
+                        tracing::info!("Found client: {:?}", client_id);
                         let _ = recipient.try_send(WebSocketMessage {
                             content: event_json.clone(),
                         });
+                    } else {
+                        tracing::info!("Client not found: {:?}", client_id);
                     }
                 }
                 tracing::debug!("Broadcasted new CCTX imports {:?} to {} subscribers", cctxs.iter().map(|cctx| cctx.index.clone()).collect::<Vec<String>>(), self.new_cctx_subscribers.len());
@@ -229,6 +238,8 @@ impl WebSocketEventBroadcaster {
         Self { manager }
     }
 
+    #[allow(unused)]
+    #[instrument(level="debug",skip_all)]
     pub fn broadcast_cctx_update(&self, cctx_index: String, cctx_data: CrossChainTx) {
         self.manager.do_send(BroadcastEvent {
             event: WebSocketEvent::CctxStatusUpdate {
@@ -238,6 +249,8 @@ impl WebSocketEventBroadcaster {
         });
     }
 
+    #[allow(unused)]
+    #[instrument(level="debug",skip_all)]
     pub fn broadcast_new_cctxs(&self, cctxs: Vec<CctxListItemProto>) {
         self.manager.do_send(BroadcastEvent {
             event: WebSocketEvent::NewCctxImported { cctxs },

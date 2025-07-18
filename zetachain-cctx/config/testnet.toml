@@ -19,10 +19,10 @@ run_migrations = true
 enabled = true
 
 [indexer]
-enabled = false
-realtime_polling_interval = 200000
-polling_interval = 100000
-token_polling_interval = 1000
+enabled = true
+realtime_polling_interval = 1000
+polling_interval = 1000000
+token_polling_interval = 1000000
 token_batch_size = 100
 
 concurrency=10
@@ -33,8 +33,8 @@ retry_threshold = 10
 failed_cctxs_polling_interval = 10000
 realtime_threshold = 10000
 [rpc]
-# url = "https://zetachain-athens.g.allthatnode.com/archive/rest/a0edcf7bca3748b0a115df6163411457/zeta-chain/"
-url="https://zetachain-athens.blockpi.network/lcd/v1/public/"
+url = "https://zetachain-athens.g.allthatnode.com/archive/rest/a0edcf7bca3748b0a115df6163411457/zeta-chain/"
+# url="https://zetachain-athens.blockpi.network/lcd/v1/public/"
 request_per_second = 10
 num_of_retries=30
 retry_delay_ms=500

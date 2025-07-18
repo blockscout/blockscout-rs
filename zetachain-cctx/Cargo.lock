@@ -5819,6 +5819,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stream",
+ "async-trait",
  "base64 0.22.1",
  "blockscout-display-bytes",
  "blockscout-service-launcher",
@@ -5837,6 +5838,7 @@ dependencies = [
  "wiremock",
  "zetachain-cctx-entity",
  "zetachain-cctx-migration",
+ "zetachain-cctx-proto",
 ]
 
 [[package]]
