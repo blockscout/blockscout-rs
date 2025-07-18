@@ -20,7 +20,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
-    lines::{NewTxnsInt, new_txns::NewTxnsMonthlyInt},
+    lines::{NewTxnsInt, NewTxnsMonthlyInt},
     types::timespans::{Month, Week, Year},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
 };

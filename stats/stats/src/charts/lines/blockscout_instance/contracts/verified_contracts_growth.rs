@@ -9,7 +9,7 @@ use crate::{
         },
     },
     define_and_impl_resolution_properties,
-    lines::new_verified_contracts::NewVerifiedContractsInt,
+    lines::NewVerifiedContractsInt,
     types::timespans::{Month, Week, Year},
 };
 

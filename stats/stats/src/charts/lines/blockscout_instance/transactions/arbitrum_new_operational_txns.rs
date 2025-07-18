@@ -21,7 +21,7 @@ use crate::{
         },
     },
     define_and_impl_resolution_properties,
-    lines::{NewTxnsInt, new_blocks::NewBlocksInt},
+    lines::{NewBlocksInt, NewTxnsInt},
     types::{
         Timespan, TimespanValue,
         timespans::{Month, Week, Year},
