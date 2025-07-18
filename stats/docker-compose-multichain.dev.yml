@@ -14,6 +14,8 @@ services:
       db:
         condition: service_healthy
     image: postgres:17
+    # pg_dump -h localhost -p 5432 -U postgres multichain_aggregator -t interop_messages -t block_ranges > multichain_db.sql
+    # + added drop tables so that it doesn't complain
     volumes:
       - ./data/multichain/indexer_data.sql:/data.sql
     entrypoint:
