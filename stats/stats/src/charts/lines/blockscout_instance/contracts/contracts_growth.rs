@@ -8,7 +8,7 @@ use crate::{
         },
     },
     define_and_impl_resolution_properties,
-    lines::new_contracts::NewContractsInt,
+    lines::NewContractsInt,
     types::timespans::{Month, Week, Year},
 };
 

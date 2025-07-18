@@ -20,7 +20,7 @@ use crate::{
         types::BlockscoutMigrations,
     },
     define_and_impl_resolution_properties,
-    lines::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt},
+    lines::{NewBlocksInt, NewBlocksMonthlyInt},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
 };

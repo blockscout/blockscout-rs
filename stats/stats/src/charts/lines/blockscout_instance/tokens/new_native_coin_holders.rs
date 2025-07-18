@@ -15,7 +15,7 @@ use crate::{
         },
     },
     define_and_impl_resolution_properties,
-    lines::native_coin_holders_growth::NativeCoinHoldersGrowthInt,
+    lines::NativeCoinHoldersGrowthInt,
     types::timespans::{Month, Week, Year},
 };
 

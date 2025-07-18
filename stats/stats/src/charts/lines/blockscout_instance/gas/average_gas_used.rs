@@ -14,7 +14,7 @@ use crate::{
         },
     },
     define_and_impl_resolution_properties,
-    lines::blocks::new_blocks::NewBlocksInt,
+    lines::NewBlocksInt,
     types::timespans::{Month, Week, Year},
 };
 
