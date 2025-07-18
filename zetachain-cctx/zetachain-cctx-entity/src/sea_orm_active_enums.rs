@@ -59,6 +59,8 @@ pub enum Kind {
     Realtime,
     #[sea_orm(string_value = "Historical")]
     Historical,
+    #[sea_orm(string_value = "Token")]
+    Token,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "processing_status")]

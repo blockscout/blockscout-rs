@@ -24,6 +24,7 @@ async fn test_startup_works() {
         db_url,
         |mut x| {
             x.tracing.enabled = false;
+            x.websocket.enabled = false;
             x
         },
         db.client(),

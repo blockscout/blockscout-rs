@@ -151,7 +151,7 @@ impl Client {
         Ok(body)
     }
 
-    #[instrument(level="debug",skip_all)]
+    #[instrument(level="debug",skip_all,fields(pagination_key = ?pagination_key))]
     pub async fn list_tokens(
         &self,
         pagination_key: Option<&str>,

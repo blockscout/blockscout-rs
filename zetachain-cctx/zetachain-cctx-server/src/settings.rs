@@ -22,7 +22,32 @@ pub struct Settings {
     pub indexer: IndexerSettings,
     #[serde(default)]
     pub rpc: RpcSettings,
+    #[serde(default = "default_websocket_settings")]
+    pub websocket: WebSocketSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WebSocketSettings {
+    #[serde(default = "default_websocket_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for WebSocketSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_websocket_enabled(),
+        }
     }
+}
+
+fn default_websocket_enabled() -> bool {
+    true
+}
+
+fn default_websocket_settings() -> WebSocketSettings {
+    WebSocketSettings::default()
+}
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "ZETACHAIN_CCTX";
@@ -47,6 +72,7 @@ impl Settings {
             },
             indexer: Default::default(),
             rpc: Default::default(),
+            websocket: Default::default(),
         }
     }
 }

@@ -15,7 +15,7 @@ use wiremock::{
 use zetachain_cctx_entity::sea_orm_active_enums::ProcessingStatus;
 use zetachain_cctx_entity::{sea_orm_active_enums::Kind, watermark, token};
 use zetachain_cctx_logic::client::{Client, RpcSettings};
-use zetachain_cctx_logic::database::ZetachainCctxDatabase;
+use zetachain_cctx_logic::database::{self, ZetachainCctxDatabase};
 use zetachain_cctx_logic::events::NoOpBroadcaster;
 use zetachain_cctx_logic::indexer::Indexer;
 use zetachain_cctx_logic::settings::IndexerSettings;
@@ -241,6 +241,9 @@ async fn test_token_sync_pagination() {
     }
     let db = crate::helpers::init_db("test", "token_sync_pagination").await;
 
+    let database = ZetachainCctxDatabase::new(db.client());
+    database.setup_db().await.unwrap();
+
     // Setup mock server
     let mock_server = MockServer::start().await;
 
@@ -269,6 +272,56 @@ async fn test_token_sync_pagination() {
         .await;
 
     // Mock first page of tokens (no pagination key in query)
+    
+
+    // Mock second page of tokens (with pagination key)
+    Mock::given(method("GET"))
+        .and(path("/fungible/foreign_coins"))
+        .and(query_param("pagination.limit", "100"))
+        .and(query_param("pagination.key", "page2key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
+            &[
+                (
+                    "0x3333333333333333333333333333333333333333",
+                    "0xpage2asset1",
+                    "42161",
+                    6,
+                    "Page 2 Token 1",
+                    "P2T1",
+                    "ERC20",
+                    "80000",
+                    false,
+                    "3000000000"
+                ),
+            ],
+            Some("page3key"), // Has next page
+        )))
+        .mount(&mock_server)
+        .await;
+    // Mock third page of tokens (final page)
+    Mock::given(method("GET"))
+        .and(path("/fungible/foreign_coins"))
+        .and(query_param("pagination.limit", "100"))
+        .and(query_param("pagination.key", "page3key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
+            &[
+                (
+                    "0x4444444444444444444444444444444444444444",
+                    "0xpage3asset1",
+                    "137",
+                    8,
+                    "Page 3 Token 1",
+                    "P3T1",
+                    "ERC20",
+                    "120000",
+                    true,
+                    "4000000000"
+                ),
+            ],
+            None, // No next page
+        )))
+        .mount(&mock_server)
+        .await;
     Mock::given(method("GET"))
         .and(path("/fungible/foreign_coins"))
         .and(query_param("pagination.limit", "100"))
@@ -304,55 +357,7 @@ async fn test_token_sync_pagination() {
         .mount(&mock_server)
         .await;
 
-    // Mock second page of tokens (with pagination key)
-    Mock::given(method("GET"))
-        .and(path("/fungible/foreign_coins"))
-        .and(query_param("pagination.limit", "100"))
-        .and(query_param("pagination.key", "page2key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
-            &[
-                (
-                    "0x3333333333333333333333333333333333333333",
-                    "0xpage2asset1",
-                    "42161",
-                    6,
-                    "Page 2 Token 1",
-                    "P2T1",
-                    "ERC20",
-                    "80000",
-                    false,
-                    "3000000000"
-                ),
-            ],
-            Some("page3key"), // Has next page
-        )))
-        .mount(&mock_server)
-        .await;
-
-    // Mock third page of tokens (final page)
-    Mock::given(method("GET"))
-        .and(path("/fungible/foreign_coins"))
-        .and(query_param("pagination.limit", "100"))
-        .and(query_param("pagination.key", "page3key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
-            &[
-                (
-                    "0x4444444444444444444444444444444444444444",
-                    "0xpage3asset1",
-                    "137",
-                    8,
-                    "Page 3 Token 1",
-                    "P3T1",
-                    "ERC20",
-                    "120000",
-                    true,
-                    "4000000000"
-                ),
-            ],
-            None, // No next page
-        )))
-        .mount(&mock_server)
-        .await;
+    
 
     // Create client pointing to mock server
     let client = Client::new(RpcSettings {
@@ -362,23 +367,6 @@ async fn test_token_sync_pagination() {
     });
 
     let db_conn = db.client();
-
-    // Initialize database with historical watermark to prevent historical sync
-    let watermark_model = watermark::ActiveModel {
-        id: ActiveValue::NotSet,
-        kind: ActiveValue::Set(Kind::Historical),
-        pointer: ActiveValue::Set("COMPLETED".to_string()),
-        processing_status: ActiveValue::Set(ProcessingStatus::Done),
-        created_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
-        updated_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
-        updated_by: ActiveValue::Set("test".to_string()),
-        ..Default::default()
-    };
-
-    watermark::Entity::insert(watermark_model)
-        .exec(db_conn.as_ref())
-        .await
-        .unwrap();
 
     // Create indexer with fast token polling
     let indexer = Indexer::new(

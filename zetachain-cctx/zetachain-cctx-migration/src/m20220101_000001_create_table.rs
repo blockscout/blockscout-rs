@@ -14,7 +14,7 @@ impl MigrationTrait for Migration {
                     CREATE TYPE tx_finalization_status AS ENUM ('NotFinalized', 'Finalized', 'Executed');
                 END IF;
                 IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'kind') THEN
-                    CREATE TYPE kind AS ENUM ('Realtime', 'Historical');
+                    CREATE TYPE kind AS ENUM ('Realtime', 'Historical', 'Token');
                 END IF;
                 IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'cctx_status_status') THEN
                     CREATE TYPE cctx_status_status AS ENUM ('PendingInbound', 'PendingOutbound', 'PendingRevert', 'Aborted', 'Reverted', 'OutboundMined');
@@ -52,7 +52,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(Watermark::Kind)
-                            .enumeration("kind", ["Realtime", "Historical"])
+                            .enumeration("kind", ["Realtime", "Historical", "Token"])
                             .not_null(),
                     )
                     .col(ColumnDef::new(Watermark::Pointer).string().not_null())

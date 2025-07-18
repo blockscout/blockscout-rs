@@ -55,6 +55,7 @@ async fn test_token_api_get_token_info() {
         db_url,
         |mut x| {
             x.tracing.enabled = false;
+            x.websocket.enabled = false;
             x
         },
         db.client(),

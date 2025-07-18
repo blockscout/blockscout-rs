@@ -102,7 +102,7 @@ async fn test_batch_insert(){
 use migration::sea_orm::{EntityTrait, QueryFilter,ColumnTrait};
 use zetachain_cctx_entity::{cross_chain_tx,outbound_params};
 
- let response: PagedCCTXResponse = serde_json::from_str(BAD_CCTX).unwrap();
+ let response: PagedCCTXResponse = serde_json::from_str(BAD_CCTX).expect("Failed to parse JSON");
 
  let db = TestDbGuard::new::<migration::Migrator>("batch_insert").await;
 

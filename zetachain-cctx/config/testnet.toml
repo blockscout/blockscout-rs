@@ -15,11 +15,15 @@ acquire_timeout = 10
 create_database = true
 run_migrations = true
 
-[indexer]
+[websocket]
 enabled = true
+
+[indexer]
+enabled = false
 realtime_polling_interval = 200000
 polling_interval = 100000
 token_polling_interval = 1000
+token_batch_size = 100
 
 concurrency=10
 historical_batch_size=1

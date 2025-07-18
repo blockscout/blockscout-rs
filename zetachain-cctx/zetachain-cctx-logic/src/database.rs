@@ -52,8 +52,7 @@ pub fn reduce_status(status: CctxStatusProto) -> CctxStatusReducedProto {
     match status {
         CctxStatusProto::PendingOutbound | CctxStatusProto::PendingInbound | CctxStatusProto::PendingRevert => CctxStatusReducedProto::Pending,
         CctxStatusProto::OutboundMined => CctxStatusReducedProto::Success,
-        CctxStatusProto::Aborted | CctxStatusProto::Reverted => CctxStatusReducedProto::Failed,
-        _ => CctxStatusReducedProto::Pending,
+        CctxStatusProto::Aborted | CctxStatusProto::Reverted => CctxStatusReducedProto::Failed
     }
 }
 
@@ -306,8 +305,8 @@ impl ZetachainCctxDatabase {
                 pointer: ActiveValue::Set("MH==".to_string()), //0 in base64
                 created_at: ActiveValue::Set(Utc::now().naive_utc()),
                 updated_at: ActiveValue::Set(Utc::now().naive_utc()),
+                updated_by: ActiveValue::Set("setup".to_string()),
                 id: ActiveValue::NotSet,
-                updated_by: ActiveValue::Set("test".to_string()),
                 ..Default::default()
             })
             .exec(self.db.as_ref())
@@ -316,6 +315,31 @@ impl ZetachainCctxDatabase {
             tracing::debug!(
                 "historical watermark already exist, pointer: {}",
                 historical_watermark.unwrap().pointer
+            );
+        }
+
+        let token_watermark = watermark::Entity::find()
+            .filter(watermark::Column::Kind.eq(Kind::Token))
+            .one(self.db.as_ref())
+            .await?;
+        if token_watermark.is_none() {
+            tracing::debug!("inserting token watermark");
+            watermark::Entity::insert(watermark::ActiveModel {
+                kind: ActiveValue::Set(Kind::Token),
+                processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
+                pointer: ActiveValue::Set("MH==".to_string()), //0 in base64
+                created_at: ActiveValue::Set(Utc::now().naive_utc()),
+                updated_at: ActiveValue::Set(Utc::now().naive_utc()),
+                updated_by: ActiveValue::Set("setup".to_string()),
+                id: ActiveValue::NotSet,
+                ..Default::default()
+            })
+            .exec(self.db.as_ref())
+            .await?;
+        } else {
+            tracing::debug!(
+                "token watermark already exist, pointer: {}",
+                token_watermark.unwrap().pointer
             );
         }
         watermark::Entity::update_many()

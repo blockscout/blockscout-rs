@@ -19,6 +19,7 @@ async fn test_list_cctxs_endpoint() {
         |mut x| {
             x.indexer.enabled = false;
             x.tracing.enabled = false;
+            x.websocket.enabled = false;
             x
         },
         db.client(),
@@ -69,6 +70,7 @@ async fn test_list_cctxs_with_status_filter() {
         crate::helpers::init_zetachain_cctx_server(db_url, |mut x| {
             x.tracing.enabled = false;
             x.indexer.enabled = false;
+            x.websocket.enabled = false;
             x
         }, db.client(), Arc::new(client))
             .await;

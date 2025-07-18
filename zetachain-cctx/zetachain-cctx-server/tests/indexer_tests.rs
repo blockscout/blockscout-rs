@@ -485,6 +485,7 @@ async fn test_get_cctx_info() {
             x.indexer.polling_interval = 1000;
             x.tracing.enabled = false;
             x.indexer.enabled = false;
+            x.websocket.enabled = false;
             x
         },
         db.client(),
@@ -493,7 +494,7 @@ async fn test_get_cctx_info() {
         })),
     )
     .await;
-    let response: serde_json::Value = test_server::send_get_request(&base, format!("/api/v1/CctxInfoService:get?cctx_id={}", root_index).as_str())
+    let response: serde_json::Value = test_server::send_get_request(&base, format!("/api/v1/CctxInfo:get?cctx_id={}", root_index).as_str())
                 .await;
     
     let parsed_cctx: CrossChainTx = serde_json::from_value(response).unwrap();

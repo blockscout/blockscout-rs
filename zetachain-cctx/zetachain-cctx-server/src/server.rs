@@ -14,7 +14,7 @@ use blockscout_service_launcher::{
 
     use actix_web_actors::ws;
 use sea_orm::DatabaseConnection;
-use zetachain_cctx_logic::{client::Client, database::ZetachainCctxDatabase, indexer::Indexer};
+use zetachain_cctx_logic::{client::Client, database::ZetachainCctxDatabase, indexer::Indexer, events::{NoOpBroadcaster, EventBroadcaster}};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{cctx_info_server::CctxInfo, stats_server::StatsServer};
 
 use actix::ActorContext;
@@ -28,7 +28,7 @@ struct Router {
     cctx: Arc<CctxService>,
     stats: Arc<StatsService>,
     token_info: Arc<TokenInfoService>,
-    websocket_manager: actix::Addr<WebSocketManager>,
+    websocket_manager: Option<actix::Addr<WebSocketManager>>,
 }
 
 use actix::{Actor, StreamHandler, AsyncContext};
@@ -91,8 +91,12 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config.configure(|config| route_cctx_info(config, self.cctx.clone()));
         service_config.configure(|config| route_stats(config, self.stats.clone()));
-        service_config.configure(|config| route_ws(config, self.websocket_manager.clone()));
         service_config.configure(|config| route_token_info(config, self.token_info.clone()));
+        
+        // Only register WebSocket routes if WebSocket is enabled
+        if let Some(websocket_manager) = &self.websocket_manager {
+            service_config.configure(|config| route_ws(config, websocket_manager.clone()));
+        }
     }
 }
 
@@ -105,9 +109,15 @@ pub async fn run(settings: Settings, db: Arc<DatabaseConnection>, client: Arc<Cl
     let stats = Arc::new(StatsService::new(database.clone()));
     let token_info = Arc::new(TokenInfoService::new(database.clone()));
     
-    // Create WebSocket manager
-    let websocket_manager = WebSocketManager::default().start();
-    let websocket_broadcaster = Arc::new(WebSocketEventBroadcaster::new(websocket_manager.clone()));
+    // Create WebSocket manager only if enabled
+    let (websocket_manager, websocket_broadcaster) = if settings.websocket.enabled {
+        let manager = WebSocketManager::default().start();
+        let broadcaster = Arc::new(WebSocketEventBroadcaster::new(manager.clone())) as Arc<dyn EventBroadcaster>;
+        (Some(manager), broadcaster)
+    } else {
+        let broadcaster = Arc::new(NoOpBroadcaster) as Arc<dyn EventBroadcaster>;
+        (None, broadcaster)
+    };
     
     if settings.indexer.enabled {
         let indexer = Indexer::new(settings.indexer, client, database, websocket_broadcaster.clone());
