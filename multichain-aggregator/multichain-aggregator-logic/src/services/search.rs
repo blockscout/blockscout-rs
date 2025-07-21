@@ -8,10 +8,10 @@ use crate::{
     repository::{addresses, block_ranges, hashes},
     services::chains,
     types::{
-        addresses::{Address, DomainInfo, TokenType},
+        addresses::{Address, TokenType},
         block_ranges::ChainBlockNumber,
         dapp::MarketplaceDapp,
-        domains::Domain,
+        domains::{Domain, DomainInfo},
         hashes::{Hash, HashType},
         search_results::QuickSearchResult,
         token_info::Token,
@@ -214,24 +214,10 @@ pub async fn preload_domain_info(
                 );
             });
 
-        if let Ok(bens_proto::GetAddressResponse {
-            domain:
-                Some(bens_proto::DetailedDomain {
-                    name,
-                    resolved_address: Some(resolved_address),
-                    expiry_date,
-                    ..
-                }),
-            resolved_domains_count,
-        }) = res
-        {
-            let domain_info = DomainInfo {
-                address: resolved_address.hash,
-                name,
-                expiry_date,
-                names_count: resolved_domains_count as u32,
-            };
-            address.domain_info = Some(domain_info);
+        if let Ok(res) = res {
+            if let Ok(domain_info) = DomainInfo::try_from(res) {
+                address.domain_info = Some(domain_info);
+            }
         }
 
         address
@@ -483,6 +469,12 @@ impl SearchTerm {
                 )
                 .await;
 
+                let domains = addresses
+                    .iter()
+                    .filter_map(|a| a.domain_info.clone())
+                    .map(Domain::from)
+                    .collect::<Vec<_>>();
+
                 let nfts = addresses
                     .iter()
                     .filter(|a| {
@@ -494,6 +486,7 @@ impl SearchTerm {
                     .cloned()
                     .collect::<Vec<_>>();
 
+                results.domains.extend(domains);
                 results.addresses.extend(addresses);
                 results.nfts.extend(nfts);
             }
