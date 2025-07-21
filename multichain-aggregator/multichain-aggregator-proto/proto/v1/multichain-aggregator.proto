@@ -20,6 +20,9 @@ service MultichainAggregatorService {
   rpc ListDappCategories(ListDappCategoriesRequest)
       returns (ListDappCategoriesResponse) {}
   rpc ListDomains(ListDomainsRequest) returns (ListDomainsResponse) {}
+  rpc ListBlockNumbers(ListBlockNumbersRequest)
+      returns (ListBlockNumbersResponse) {}
+  rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse) {}
 }
 
 enum TokenType {
@@ -93,6 +96,11 @@ message Domain {
   string name = 2;
   optional string expiry_date = 3;
   google.protobuf.Struct protocol = 4;
+}
+
+message ChainBlockNumber {
+  int64 chain_id = 1;
+  uint64 block_number = 2;
 }
 
 message BatchImportRequest {
@@ -186,11 +194,6 @@ message BatchImportResponse { string status = 1; }
 message QuickSearchRequest { string q = 1; }
 
 message QuickSearchResponse {
-  message ChainBlockNumber {
-    int64 chain_id = 1;
-    uint64 block_number = 2;
-  }
-
   repeated Address addresses = 1;
   repeated Hash blocks = 2;
   repeated Hash transactions = 3;
@@ -284,5 +287,29 @@ message ListDomainsRequest {
 
 message ListDomainsResponse {
   repeated Domain items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListBlockNumbersRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListBlockNumbersResponse {
+  repeated ChainBlockNumber items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListBlocksRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListBlocksResponse {
+  repeated Hash items = 1;
   Pagination next_page_params = 2;
 }

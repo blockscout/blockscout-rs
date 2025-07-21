@@ -37,7 +37,7 @@ pub struct ChainBlockNumber {
     pub block_number: u64,
 }
 
-impl From<ChainBlockNumber> for proto::quick_search_response::ChainBlockNumber {
+impl From<ChainBlockNumber> for proto::ChainBlockNumber {
     fn from(v: ChainBlockNumber) -> Self {
         Self {
             chain_id: v.chain_id,
