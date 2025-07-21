@@ -156,7 +156,7 @@ message BatchImportRequest {
     string address_hash = 1;
     string token_address_hash = 2;
     optional string token_id = 3;
-    string value = 4;
+    optional string value = 4;
   }
   
   message CountersImport {
