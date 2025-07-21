@@ -12,8 +12,8 @@ use entity::{
 use sea_orm::{
     prelude::{DateTime, Expr},
     sea_query::OnConflict,
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, PaginatorTrait, QueryFilter,
-    QueryTrait, TransactionError, TransactionTrait,
+    ColumnTrait, Condition, ConnectionTrait, DbErr, EntityTrait, IdenStatic, PaginatorTrait,
+    QueryFilter, Select, TransactionError, TransactionTrait,
 };
 use std::collections::HashMap;
 
@@ -104,15 +104,50 @@ where
     })
 }
 
+#[derive(Default)]
+pub struct InteropMessageFilter {
+    pub init_chain_id: Option<ChainId>,
+    pub relay_chain_id: Option<ChainId>,
+    pub address: Option<AddressAlloy>,
+    pub direction: Option<MessageDirection>,
+    pub nonce: Option<i64>,
+    pub cluster_chain_ids: Option<Vec<ChainId>>,
+}
+
+impl InteropMessageFilter {
+    fn into_condition(self) -> Condition {
+        Condition::all()
+            .add_option(self.init_chain_id.map(|id| Column::InitChainId.eq(id)))
+            .add_option(self.relay_chain_id.map(|id| Column::RelayChainId.eq(id)))
+            .add_option(self.address.map(|address| {
+                let address = address.as_slice();
+                let sender_cond = Column::SenderAddressHash.eq(address);
+                let target_cond = Column::TargetAddressHash.eq(address);
+                match self.direction {
+                    Some(MessageDirection::From) => sender_cond,
+                    Some(MessageDirection::To) => target_cond,
+                    None => sender_cond.or(target_cond),
+                }
+            }))
+            .add_option(self.nonce.map(|nonce| Column::Nonce.eq(nonce)))
+            .add_option(self.cluster_chain_ids.map(|ids| {
+                Column::InitChainId
+                    .is_in(ids.clone())
+                    .and(Column::RelayChainId.is_in(ids))
+            }))
+    }
+
+    pub fn base_query(self) -> Select<Entity> {
+        Entity::find()
+            .filter(Column::InitTransactionHash.is_not_null())
+            .filter(self.into_condition())
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn list<C>(
     db: &C,
-    init_chain_id: Option<ChainId>,
-    relay_chain_id: Option<ChainId>,
-    address: Option<AddressAlloy>,
-    direction: Option<MessageDirection>,
-    nonce: Option<i64>,
-    cluster_chain_ids: Option<Vec<ChainId>>,
+    filter: InteropMessageFilter,
     page_size: u64,
     page_token: Option<(DateTime, TxHash)>,
 ) -> Result<
@@ -125,32 +160,8 @@ pub async fn list<C>(
 where
     C: ConnectionTrait,
 {
-    let mut c = Entity::find()
-        .filter(Column::InitTransactionHash.is_not_null())
-        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
-            q.filter(
-                Column::InitChainId
-                    .is_in(cluster_chain_ids.clone())
-                    .and(Column::RelayChainId.is_in(cluster_chain_ids)),
-            )
-        })
-        .apply_if(init_chain_id, |q, init_chain_id| {
-            q.filter(Column::InitChainId.eq(init_chain_id))
-        })
-        .apply_if(relay_chain_id, |q, relay_chain_id| {
-            q.filter(Column::RelayChainId.eq(relay_chain_id))
-        })
-        .apply_if(address, |q, address| {
-            let address = address.as_slice();
-            let sender_cond = Column::SenderAddressHash.eq(address);
-            let target_cond = Column::TargetAddressHash.eq(address);
-            match direction {
-                Some(MessageDirection::From) => q.filter(sender_cond),
-                Some(MessageDirection::To) => q.filter(target_cond),
-                None => q.filter(sender_cond.or(target_cond)),
-            }
-        })
-        .apply_if(nonce, |q, nonce| q.filter(Column::Nonce.eq(nonce)))
+    let mut c = filter
+        .base_query()
         .find_also_related(interop_messages_transfers::Entity)
         .cursor_by((Column::Timestamp, Column::InitTransactionHash));
     c.desc();
@@ -171,28 +182,9 @@ where
     .await
 }
 
-pub async fn count<C>(
-    db: &C,
-    chain_id: ChainId,
-    cluster_chain_ids: Option<Vec<ChainId>>,
-) -> Result<u64, DbErr>
+pub async fn count<C>(db: &C, filter: InteropMessageFilter) -> Result<u64, DbErr>
 where
     C: ConnectionTrait,
 {
-    Entity::find()
-        .filter(Column::InitTransactionHash.is_not_null())
-        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
-            q.filter(
-                Column::InitChainId
-                    .is_in(cluster_chain_ids.clone())
-                    .and(Column::RelayChainId.is_in(cluster_chain_ids)),
-            )
-        })
-        .filter(
-            Column::InitChainId
-                .eq(chain_id)
-                .or(Column::RelayChainId.eq(chain_id)),
-        )
-        .count(db)
-        .await
+    filter.base_query().count(db).await
 }

@@ -116,10 +116,10 @@ impl ClusterExplorerService for ClusterExplorer {
     ) -> Result<Response<CountInteropMessagesResponse>, Status> {
         let inner = request.into_inner();
 
-        let chain_id = parse_query(inner.chain_id)?;
+        let address = inner.address.map(parse_query).transpose()?;
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let count = cluster.count_interop_messages(&self.db, chain_id).await?;
+        let count = cluster.count_interop_messages(&self.db, address).await?;
 
         Ok(Response::new(CountInteropMessagesResponse { count }))
     }

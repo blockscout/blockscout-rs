@@ -149,7 +149,7 @@ paths:
           in: path
           required: true
           type: string
-        - name: chain_id
+        - name: address
           in: query
           required: false
           type: string
