@@ -7,7 +7,7 @@ use sea_orm::{prelude::BigDecimal, ActiveValue::Set};
 pub struct AddressTokenBalance {
     pub address_hash: alloy_primitives::Address,
     pub token_address_hash: alloy_primitives::Address,
-    pub value: BigDecimal,
+    pub value: Option<BigDecimal>,
     pub chain_id: ChainId,
     pub token_id: Option<BigDecimal>,
 }
