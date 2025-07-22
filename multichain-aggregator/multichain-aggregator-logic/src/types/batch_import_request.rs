@@ -160,7 +160,7 @@ impl
             chain_id,
             address_hash: atb.address_hash.parse()?,
             token_address_hash: atb.token_address_hash.parse()?,
-            value: atb.value.parse()?,
+            value: atb.value.map(|s| s.parse()).transpose()?,
             token_id: atb.token_id.map(|s| s.parse()).transpose()?,
         })
     }
