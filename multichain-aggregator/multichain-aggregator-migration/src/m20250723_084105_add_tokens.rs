@@ -7,7 +7,7 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let sql = r#"
-            ALTER TYPE token_type ADD VALUE 'ERC-7802';
+            ALTER TYPE token_type ADD VALUE IF NOT EXISTS 'ERC-7802';
 
             CREATE TABLE tokens (
                 chain_id bigint NOT NULL REFERENCES chains (id),
@@ -18,7 +18,7 @@ impl MigrationTrait for Migration {
                 token_type token_type NOT NULL,
                 address_hash bytea NOT NULL,
 
-                icon_url text NULL,
+                icon_url text,
 
                 fiat_value numeric,
                 circulating_market_cap numeric,
