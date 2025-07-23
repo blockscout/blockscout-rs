@@ -12,6 +12,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 api-client-framework = { workspace = true }
 blockscout-chains = { workspace = true }
+blockscout-service-launcher = { workspace = true }
 bigdecimal = { workspace = true }
 cached = { workspace = true, features = [
   "proc_macro",
@@ -24,7 +25,7 @@ prometheus = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 sea-orm = { workspace = true }
-alloy-primitives = { workspace = true }
+alloy-primitives = { workspace = true, features = ["serde"] }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -36,6 +37,7 @@ reqwest = { workspace = true }
 rust_decimal = { workspace = true }
 url = { workspace = true }
 futures = { workspace = true }
+recache = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }

@@ -4,6 +4,7 @@ pub use super::{
     address_coin_balances::Entity as AddressCoinBalances,
     address_token_balances::Entity as AddressTokenBalances, addresses::Entity as Addresses,
     api_keys::Entity as ApiKeys, block_ranges::Entity as BlockRanges, chains::Entity as Chains,
-    dapps::Entity as Dapps, hashes::Entity as Hashes, interop_messages::Entity as InteropMessages,
+    counters_global_imported::Entity as CountersGlobalImported, dapps::Entity as Dapps,
+    hashes::Entity as Hashes, interop_messages::Entity as InteropMessages,
     interop_messages_transfers::Entity as InteropMessagesTransfers, tokens::Entity as Tokens,
 };

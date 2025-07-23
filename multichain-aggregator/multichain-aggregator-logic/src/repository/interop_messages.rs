@@ -97,6 +97,7 @@ pub async fn list<C>(
     address: Option<AddressAlloy>,
     direction: Option<MessageDirection>,
     nonce: Option<i64>,
+    cluster_chain_ids: Option<Vec<ChainId>>,
     page_size: u64,
     page_token: Option<(DateTime, TxHash)>,
 ) -> Result<
@@ -111,6 +112,13 @@ where
 {
     let mut c = Entity::find()
         .filter(Column::InitTransactionHash.is_not_null())
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(
+                Column::InitChainId
+                    .is_in(cluster_chain_ids.clone())
+                    .and(Column::RelayChainId.is_in(cluster_chain_ids)),
+            )
+        })
         .apply_if(init_chain_id, |q, init_chain_id| {
             q.filter(Column::InitChainId.eq(init_chain_id))
         })
@@ -148,12 +156,23 @@ where
     .await
 }
 
-pub async fn count<C>(db: &C, chain_id: ChainId) -> Result<u64, DbErr>
+pub async fn count<C>(
+    db: &C,
+    chain_id: ChainId,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+) -> Result<u64, DbErr>
 where
     C: ConnectionTrait,
 {
     Entity::find()
         .filter(Column::InitTransactionHash.is_not_null())
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(
+                Column::InitChainId
+                    .is_in(cluster_chain_ids.clone())
+                    .and(Column::RelayChainId.is_in(cluster_chain_ids)),
+            )
+        })
         .filter(
             Column::InitChainId
                 .eq(chain_id)

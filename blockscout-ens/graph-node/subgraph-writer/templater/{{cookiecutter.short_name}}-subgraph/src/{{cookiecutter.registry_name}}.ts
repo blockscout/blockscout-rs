@@ -13,9 +13,8 @@ import { EMPTY_ADDRESS, EMPTY_ADDRESS_BYTEARRAY, ROOT_NODE, concat, createEventI
 
 const BIG_INT_ZERO = BigInt.fromI32(0);
 
-function createDomain(node: string, timestamp: BigInt): Domain {
+export function createDomain(node: string, timestamp: BigInt): Domain {
   let domain = new Domain(node);
-  domain = new Domain(node);
   domain.owner = EMPTY_ADDRESS;
   domain.isMigrated = true;
   domain.createdAt = timestamp;
@@ -77,7 +76,10 @@ function _handleNewOwner(event: NewOwnerEvent, isMigrated: boolean): void {
   let domain = getDomain(subnode, event.block.timestamp);
   let parent = getDomain(event.params.node.toHexString());
   if (parent === null) {
-    parent = createDomain(event.params.node.toHexString(), event.block.timestamp);
+    parent = createDomain(
+      event.params.node.toHexString(),
+      event.block.timestamp
+    );
   }
 
   if (domain === null) {
@@ -140,7 +142,10 @@ export function handleTransfer(event: TransferEvent): void {
   account.save();
 
   // Update the domain owner
-  let domain = getDomain(node)!;
+  let domain = getDomain(node);
+  if (domain == null) {
+    return;
+  }
 
   domain.owner = event.params.owner.toHexString();
   saveDomain(domain);
@@ -169,7 +174,10 @@ export function handleNewResolver(event: NewResolverEvent): void {
   }
 
   let node = event.params.node.toHexString();
-  let domain = getDomain(node)!;
+  let domain = getDomain(node);
+  if (domain == null) {
+    return;
+  }
   domain.resolver = id;
 
   if (id) {

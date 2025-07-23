@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use self::disperser::{disperser_client::DisperserClient, RetrieveBlobRequest};
 use anyhow::Result;
+use rustls::crypto;
 use tokio::time::sleep;
 use tonic::{transport::Channel, Status};
 
@@ -22,6 +23,11 @@ pub struct Client {
 
 impl Client {
     pub async fn new(disperser_endpoint: &str, retry_delays: Vec<u64>) -> Result<Self> {
+        // Is required as rustls cannot unambiguously determine the default provider
+        // out of enabled features only. This happens because different external crates
+        // depend on rustls and as a result both `ring` and `aws-lc-rs` features are enabled.
+        crypto::CryptoProvider::install_default(crypto::ring::default_provider())
+            .expect("installing default CryptoProvider failed");
         let client = DisperserClient::connect(disperser_endpoint.to_string()).await?;
         let retry_delays = retry_delays.into_iter().map(Duration::from_secs).collect();
         Ok(Self {
@@ -53,7 +59,7 @@ impl Client {
                         batch_id,
                         blob_index,
                         ?delay,
-                        "failed to fetch blob: {}, retrying",
+                        "failed to fetch blob: {:#?}, retrying",
                         e
                     );
                     last_err = e;

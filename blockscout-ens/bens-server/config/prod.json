@@ -234,6 +234,46 @@
         "use_protocols": [
           "ens"
         ]
+      },
+      "239": {
+        "blockscout": {
+          "url": "https://tac.blockscout.com"
+        },
+        "use_protocols": [
+          "ens"
+        ]
+      },
+      "2818": {
+        "blockscout": {
+          "url": "https://explorer.morphl2.io/"
+        },
+        "use_protocols": [
+          "morph"
+        ]
+      },
+      "169": {
+        "blockscout": {
+          "url": "https://pacific-explorer.manta.network"
+        },
+        "use_protocols": [
+          "manta"
+        ]
+      },
+      "42161": {
+        "blockscout": {
+          "url": "https://arbitrum.blockscout.com/"
+        },
+        "use_protocols": [
+          "arb"
+        ]
+      },
+      "167000": {
+        "blockscout": {
+          "url": "https://blockscout.mainnet.taiko.xyz"
+        },
+        "use_protocols": [
+          "taiko"
+        ]
       }
     },
     "protocols": {
@@ -613,6 +653,70 @@
           "type": "ens_like",
           "native_token_contract": "0x5c6cb93b1fc4e0a1274d07852cbd7ebd201b6593",
           "empty_label_hash": "0x3f3fcc15032dacacd8a3864982ab4207e1f7bc7a882d8a98b48f9ac6dd2084cb"
+        }
+      },
+      "morph": {
+        "tld_list": ["mph"],
+        "network_id": 2818,
+        "subgraph_name": "morph-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xe3b46508112af26f72b0d2d5f62d811ba20bcab0",
+          "empty_label_hash": "0x142333e25a92a966268fd01073bff15ebe24bf96050034d690952429654e538e"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "manta": {
+        "tld_list": ["manta"],
+        "network_id": 169,
+        "subgraph_name": "manta-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0xc492a2565f95dd20c304150b229a6cd21dddd629",
+          "empty_label_hash": "a8f7d4c6fcae674aad63ccf20c2dc72b14197ed3915639316d7e8e15139f3f5a"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "arb": {
+        "tld_list": ["arb"],
+        "network_id": 42161,
+        "subgraph_name": "arb-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x5d482D501b369F5bA034DEC5c5fb7A50d2D6Ca20"
+        },
+        "meta": {
+          "short_name": "SPACE ID",
+          "title": "SPACE ID",
+          "description": "SPACE ID is a universal domain name and identity platform",
+          "icon_url": "https://i.imgur.com/yYc2C6V.png",
+          "docs_url": "https://docs.space.id/"
+        }
+      },
+      "taiko": {
+        "tld_list": ["taiko"],
+        "network_id": 167000,
+        "subgraph_name": "mint-subgraph",
+        "address_resolve_technique": "reverse_registry",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x411B954302Eceed7266A1D11720103bA8fbb3786",
+          "empty_label_hash": "0xe1741fe4f9059fe5d633915d64d5dde873d7a7c2aa322bcd05eec8aa26cb0499"
         },
         "meta": {
           "short_name": "SPACE ID",

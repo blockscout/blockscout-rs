@@ -37,11 +37,21 @@ http:
     - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListDomains
       get: /api/v1/domains
 
-    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListInteropMessages
-      get: /api/v1/interop/messages
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListBlockNumbers
+      get: /api/v1/block-numbers
 
-    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.CountInteropMessages
-      get: /api/v1/interop/messages/count
+    - selector: blockscout.multichainAggregator.v1.MultichainAggregatorService.ListBlocks
+      get: /api/v1/blocks
+
+    #################### Cluster Explorer ####################
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListClusterChains
+      get: /api/v1/clusters/{cluster_id}/chains
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListInteropMessages
+      get: /api/v1/clusters/{cluster_id}/messages
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.CountInteropMessages
+      get: /api/v1/clusters/{cluster_id}/messages/count
 
     #################### Health ####################
 

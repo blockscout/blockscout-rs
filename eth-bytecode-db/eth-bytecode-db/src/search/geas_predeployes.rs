@@ -59,7 +59,7 @@ impl GeasPredeployDetails {
             main_file_path: "src/beacon_root/main.eas".to_string(),
             contract_name: "BeaconRootsPredeploy".to_string(),
             compiler_version: semver::Version::new(0, 2, 2),
-            abi: serde_json::json!([{"type":"fallback","stateMutability":"view","inputs":[{"name":"input","type":"bytes","internalType":"bytes"}],"outputs":[{"name":"output","type":"bytes","internalType":"bytes"}]}]),
+            abi: serde_json::json!([{"type":"fallback","stateMutability":"view"}]),
         }
     }
 
@@ -74,7 +74,7 @@ impl GeasPredeployDetails {
             main_file_path: "src/execution_hash/main.eas".to_string(),
             contract_name: "HistoryStoragePredeploy".to_string(),
             compiler_version: semver::Version::new(0, 2, 2),
-            abi: serde_json::json!([{"type":"fallback","stateMutability":"view","inputs":[{"name":"input","type":"bytes","internalType":"bytes"}],"outputs":[{"name":"output","type":"bytes","internalType":"bytes"}]}]),
+            abi: serde_json::json!([{"type":"fallback","stateMutability":"view"}]),
         }
     }
 
@@ -90,7 +90,7 @@ impl GeasPredeployDetails {
             main_file_path: "src/withdrawals/main.eas".to_string(),
             contract_name: "WithdrawalRequestPredeploy".to_string(),
             compiler_version: semver::Version::new(0, 2, 2),
-            abi: serde_json::json!([{"type":"fallback","stateMutability":"payable","inputs":[{"name":"input","type":"bytes","internalType":"bytes"}],"outputs":[{"name":"output","type":"bytes","internalType":"bytes"}]}]),
+            abi: serde_json::json!([{"type":"fallback","stateMutability":"payable"}]),
         }
     }
 
@@ -106,7 +106,7 @@ impl GeasPredeployDetails {
             main_file_path: "src/consolidations/main.eas".to_string(),
             contract_name: "ConsolidationRequestPredeploy".to_string(),
             compiler_version: semver::Version::new(0, 2, 2),
-            abi: serde_json::json!([{"type":"fallback","stateMutability":"payable","inputs":[{"name":"input","type":"bytes","internalType":"bytes"}],"outputs":[{"name":"output","type":"bytes","internalType":"bytes"}]}]),
+            abi: serde_json::json!([{"type":"fallback","stateMutability":"payable"}]),
         }
     }
 }

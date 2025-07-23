@@ -8,6 +8,7 @@ pub mod addresses;
 pub mod api_keys;
 pub mod block_ranges;
 pub mod chains;
+pub mod counters_global_imported;
 pub mod dapps;
 pub mod hashes;
 pub mod interop_messages;
