@@ -187,6 +187,14 @@ async fn mock_bens_server() -> MockServer {
                 "other_addresses": {},
                 "stored_offchain": false,
                 "resolved_with_wildcard": false,
+                "protocol": {
+                    "id": "ens",
+                    "short_name": "ENS",
+                    "title": "Ethereum Name Service",
+                    "description": "",
+                    "deployment_blockscout_base_url": "",
+                    "tld_list": ["eth"],
+                }
             },
             "resolved_domains_count": 1
         })))
