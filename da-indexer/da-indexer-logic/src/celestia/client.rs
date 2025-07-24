@@ -1,5 +1,3 @@
-pub mod share;
-
 use celestia_rpc::{Client, Error, Result};
 use http::{header, HeaderMap, HeaderValue};
 use jsonrpsee::{http_client::HttpClientBuilder, ws_client::WsClientBuilder};

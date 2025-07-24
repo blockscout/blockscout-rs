@@ -1,8 +1,5 @@
 use blockscout_service_launcher::test_database::TestDbGuard;
-use celestia_types::{
-    consts::appconsts::subtree_root_threshold, nmt::Namespace, AppVersion, Blob as CelestiaBlob,
-    Commitment,
-};
+use celestia_types::{nmt::Namespace, AppVersion, Blob as CelestiaBlob, Commitment};
 
 use crate::{
     celestia::repository::{blobs, blocks},
@@ -49,14 +46,14 @@ async fn smoke_test(db: TestDbGuard, s3_storage: Option<S3Storage>) {
                 &db.client(),
                 s3_storage.as_ref(),
                 height,
-                &blob.commitment.0,
+                blob.commitment.hash(),
             )
             .await
             .unwrap()
             .unwrap();
             assert_eq!(blob.namespace.as_bytes(), blob_db.namespace);
             assert_eq!(blob.data, blob_db.data);
-            assert_eq!(&blob.commitment.0[..], blob_db.commitment);
+            assert_eq!(&blob.commitment.hash()[..], blob_db.commitment);
         }
     }
 
@@ -76,19 +73,15 @@ fn celestia_blob(seed: u32) -> CelestiaBlob {
         Namespace::new(0, &[&[0_u8; 18], &sha3("namespace", seed)[..10]].concat()).unwrap();
     let data = sha3("data", seed).to_vec();
     let share_version = 0;
-    let commitment = Commitment::from_blob(
-        namespace,
-        &data,
-        share_version,
-        subtree_root_threshold(AppVersion::latest()),
-    )
-    .unwrap();
+    let commitment =
+        Commitment::from_blob(namespace, &data, share_version, None, AppVersion::latest()).unwrap();
     CelestiaBlob {
         namespace,
         data,
         share_version,
         commitment,
         index: None,
+        signer: None,
     }
 }
 

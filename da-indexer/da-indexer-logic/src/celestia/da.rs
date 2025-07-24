@@ -1,7 +1,4 @@
-use super::{
-    client::share::ShareClient, job::CelestiaJob, parser, repository::blocks,
-    settings::IndexerSettings,
-};
+use super::{job::CelestiaJob, parser, repository::blocks, settings::IndexerSettings};
 use crate::{
     celestia::{client, repository::blobs},
     indexer::{Job, DA},
@@ -9,7 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use celestia_rpc::{Client, HeaderClient};
+use celestia_rpc::{Client, HeaderClient, ShareClient};
 use celestia_types::{Blob, ExtendedHeader};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::sync::{
@@ -68,10 +65,7 @@ impl CelestiaDA {
 
         let mut blobs = vec![];
         if parser::maybe_contains_blobs(&header.dah) {
-            let eds = self
-                .client
-                .share_get_eds(height, header.header.version.app)
-                .await?;
+            let eds = self.client.share_get_eds(&header).await?;
             blobs = parser::parse_eds(&eds, header.header.version.app)?;
         }
 

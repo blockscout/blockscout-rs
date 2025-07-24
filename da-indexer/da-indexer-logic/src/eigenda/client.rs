@@ -22,13 +22,19 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn new(disperser_endpoint: &str, retry_delays: Vec<u64>) -> Result<Self> {
+    pub async fn new(
+        disperser_endpoint: &str,
+        disperser_max_decoding_message_size: usize,
+        retry_delays: Vec<u64>,
+    ) -> Result<Self> {
         // Is required as rustls cannot unambiguously determine the default provider
         // out of enabled features only. This happens because different external crates
         // depend on rustls and as a result both `ring` and `aws-lc-rs` features are enabled.
         crypto::CryptoProvider::install_default(crypto::ring::default_provider())
             .expect("installing default CryptoProvider failed");
-        let client = DisperserClient::connect(disperser_endpoint.to_string()).await?;
+        let client = DisperserClient::connect(disperser_endpoint.to_string())
+            .await?
+            .max_decoding_message_size(disperser_max_decoding_message_size);
         let retry_delays = retry_delays.into_iter().map(Duration::from_secs).collect();
         Ok(Self {
             retry_delays,

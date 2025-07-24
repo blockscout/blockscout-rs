@@ -35,7 +35,12 @@ impl EigenDA {
         settings: IndexerSettings,
     ) -> Result<Self> {
         let provider = EthProvider::new(&settings.rpc.url).await?;
-        let client = Client::new(&settings.disperser_url, vec![5, 15, 30]).await?;
+        let client = Client::new(
+            &settings.disperser_url,
+            settings.disperser_max_decoding_message_size,
+            vec![5, 15, 30],
+        )
+        .await?;
         let start_from = settings
             .start_block
             .unwrap_or(provider.get_block_number().await?);

@@ -1,17 +1,10 @@
-use cookie::Cookie;
-use reqwest::{
-    header::{HeaderMap, HeaderValue},
-    StatusCode,
-};
+use crate::jwt_headers::{build_http_headers, extract_csrf_token, extract_jwt};
+use reqwest::{Client, StatusCode};
 use serde::Deserialize;
-use std::collections::HashMap;
 use thiserror::Error;
-use tonic::{codegen::http::header::COOKIE, metadata::MetadataMap};
+use tonic::metadata::MetadataMap;
 use url::Url;
 
-const HEADER_JWT_TOKEN_NAME: &str = "authorization";
-const COOKIE_JWT_TOKEN_NAME: &str = "_explorer_key";
-const CSRF_TOKEN_NAME: &str = "x-csrf-token";
 const API_KEY_NAME: &str = "api_key";
 
 #[derive(Debug, Clone, Deserialize)]
@@ -27,24 +20,29 @@ pub struct AuthSuccess {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct AuthFalied {
-    message: String,
+struct AuthFailed {
+    pub message: String,
 }
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("invalid jwt token: {0}")]
-    InvalidJwt(String),
-    #[error("invalid csrf token: {0}")]
-    InvalidCsrfToken(String),
-    #[error("user is unauthorized: {0}")]
+    #[error("blockscout API error: {0}")]
+    BlockscoutApi(String),
+
+    #[error("unauthorized: {0}")]
     Unauthorized(String),
+
     #[error("forbidden: {0}")]
     Forbidden(String),
-    #[error("blockscout invalid response: {0}")]
-    BlockscoutApi(String),
-    #[error("internal error: {0}")]
-    InternalError(String),
+
+    #[error("invalid jwt token: {0}")]
+    InvalidJwt(String),
+
+    #[error("invalid csrf token: {0}")]
+    InvalidCsrfToken(String),
+
+    #[error("cannot build headers: {0}")]
+    HeaderError(String),
 }
 
 pub async fn auth_from_metadata(
@@ -54,12 +52,18 @@ pub async fn auth_from_metadata(
     blockscout_api_key: Option<&str>,
 ) -> Result<AuthSuccess, Error> {
     let jwt = extract_jwt(metadata)?;
-    let csrf_token = if is_safe_http_method {
+    let csrf_opt = if is_safe_http_method {
         None
     } else {
         Some(extract_csrf_token(metadata)?)
     };
-    auth_from_tokens(&jwt, csrf_token, blockscout_host, blockscout_api_key).await
+    auth_from_tokens(
+        &jwt,
+        csrf_opt.as_deref(),
+        blockscout_host,
+        blockscout_api_key,
+    )
+    .await
 }
 
 pub async fn auth_from_tokens(
@@ -70,14 +74,15 @@ pub async fn auth_from_tokens(
 ) -> Result<AuthSuccess, Error> {
     let mut url = blockscout_host
         .join("/api/account/v2/authenticate")
-        .expect("should be valid url");
+        .expect("invalid base url");
     url.set_query(
         blockscout_api_key
             .map(|api_key| format!("{API_KEY_NAME}={api_key}"))
             .as_deref(),
     );
+
     let headers = build_http_headers(jwt, csrf_token)?;
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let response = if csrf_token.is_some() {
         client.post(url)
     } else {
@@ -86,7 +91,7 @@ pub async fn auth_from_tokens(
     .headers(headers)
     .send()
     .await
-    .map_err(|_| Error::BlockscoutApi("failed to connect".to_string()))?;
+    .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
 
     let status = response.status();
     let response_raw = response
@@ -107,7 +112,7 @@ pub async fn auth_from_tokens(
             Ok(success)
         }
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-            let failed: AuthFalied = serde_json::from_str(&response_raw).map_err(|error| {
+            let failed: AuthFailed = serde_json::from_str(&response_raw).map_err(|error| {
                 tracing::warn!(
                     error = ?error,
                     body = ?response_raw,
@@ -121,77 +126,8 @@ pub async fn auth_from_tokens(
                 Err(Error::Forbidden(failed.message))
             }
         }
-        _ => {
-            tracing::warn!(
-                status = ?status,
-                body = ?response_raw,
-                "invalid response status from blockscout"
-            );
-            Err(Error::BlockscoutApi(format!(
-                "blockscout responded with {status}",
-            )))
-        }
+        _ => Err(Error::BlockscoutApi(format!("unexpected status {status}"))),
     }
-}
-
-fn extract_jwt(metadata: &MetadataMap) -> Result<String, Error> {
-    let cookies = get_cookies(metadata)?;
-    let maybe_cookie_jwt = cookies
-        .get(COOKIE_JWT_TOKEN_NAME)
-        .map(|cookie| cookie.value());
-    let maybe_header_jwt = metadata
-        .get(HEADER_JWT_TOKEN_NAME)
-        .map(|v| v.to_str())
-        .transpose()
-        .map_err(|e| Error::InvalidJwt(format!("invalid header format: {e}")))?;
-
-    let token = maybe_header_jwt
-        .or(maybe_cookie_jwt)
-        .ok_or_else(|| Error::InvalidJwt("jwt not found in request".to_string()))?;
-    Ok(token.to_string())
-}
-
-fn extract_csrf_token(metadata: &MetadataMap) -> Result<&str, Error> {
-    let token = metadata
-        .get(CSRF_TOKEN_NAME)
-        .ok_or(Error::InvalidCsrfToken("no csrf token found".to_string()))?
-        .to_str()
-        .map_err(|e| Error::InvalidCsrfToken(e.to_string()))?;
-    Ok(token)
-}
-
-fn get_cookies(metadata: &MetadataMap) -> Result<HashMap<String, Cookie>, Error> {
-    let cookies_raw = match metadata.get(COOKIE.as_str()) {
-        Some(cookie) => cookie
-            .to_str()
-            .map_err(|e| Error::InvalidJwt(format!("invalid cookie format: {e}")))?
-            .to_string(),
-        None => "".to_string(),
-    };
-    let cookies = Cookie::split_parse_encoded(cookies_raw)
-        .map(|val| {
-            val.map(|c| (c.name().to_string(), c))
-                .map_err(|e| Error::InvalidJwt(format!("cannot parse cookie: {e}")))
-        })
-        .collect::<Result<_, _>>()?;
-    Ok(cookies)
-}
-
-fn build_http_headers(jwt: &str, csrf_token: Option<&str>) -> Result<HeaderMap, Error> {
-    let mut map = HeaderMap::new();
-    map.insert(
-        COOKIE,
-        HeaderValue::from_str(&format!("{COOKIE_JWT_TOKEN_NAME}={jwt}"))
-            .map_err(|e| Error::InvalidJwt(e.to_string()))?,
-    );
-    if let Some(csrf_token) = csrf_token {
-        map.insert(
-            CSRF_TOKEN_NAME,
-            HeaderValue::from_str(csrf_token)
-                .map_err(|e| Error::InvalidCsrfToken(e.to_string()))?,
-        );
-    }
-    Ok(map)
 }
 
 #[cfg(test)]
@@ -199,12 +135,15 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::{init_mocked_blockscout_auth_service, MockUser};
-    use reqwest::header::HeaderName;
+    use crate::{
+        init_mocked_blockscout_auth_service, jwt_headers::HEADER_JWT_TOKEN_NAME, MockUser,
+    };
+    use reqwest::header::{HeaderMap, HeaderName};
     use serde::Serialize;
     use tonic::{codegen::http::header::CONTENT_TYPE, Extensions, Request};
 
     fn build_headers(jwt: &str, csrf_token: Option<&str>, in_cookie: bool) -> HeaderMap {
+        use tonic::codegen::http::header::COOKIE;
         let mut headers = HeaderMap::new();
         if in_cookie {
             let cookies = format!(

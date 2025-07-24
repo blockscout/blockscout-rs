@@ -81,11 +81,11 @@ impl Indexer {
         while let Err(err) = &self.da.process_job(job.clone()).await {
             match backoff.next() {
                 Some(delay) => {
-                    tracing::warn!(error = %err, job = ?job, ?delay, "failed to process job, retrying");
+                    tracing::warn!(job = ?job, ?delay, "failed to process job, retrying; error={err:#?}");
                     sleep(delay).await;
                 }
                 None => {
-                    tracing::error!(error = %err, job = ?job, "failed to process job, skipping for now, will retry later");
+                    tracing::error!(job = ?job, "failed to process job, skipping for now, will retry later; error={err:#?}");
                     self.failed_jobs.lock().await.insert(job.clone());
                     break;
                 }
