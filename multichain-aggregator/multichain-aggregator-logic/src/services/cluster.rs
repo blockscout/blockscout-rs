@@ -57,18 +57,17 @@ impl Cluster {
         }
 
         let cluster_chain_ids = self.chain_ids();
-        let (interop_messages, next_page_token) = interop_messages::list(
-            db,
+
+        let filter = interop_messages::InteropMessageFilter {
             init_chain_id,
             relay_chain_id,
             address,
             direction,
             nonce,
-            Some(cluster_chain_ids),
-            page_size,
-            page_token,
-        )
-        .await?;
+            cluster_chain_ids: Some(cluster_chain_ids),
+        };
+        let (interop_messages, next_page_token) =
+            interop_messages::list(db, filter, page_size, page_token).await?;
 
         Ok((
             interop_messages
@@ -82,12 +81,17 @@ impl Cluster {
     pub async fn count_interop_messages(
         &self,
         db: &DatabaseConnection,
-        chain_id: ChainId,
+        address: Option<AddressAlloy>,
     ) -> Result<u64, ServiceError> {
-        self.validate_chain_id(chain_id)?;
-
         let cluster_chain_ids = self.chain_ids();
-        let count = interop_messages::count(db, chain_id, Some(cluster_chain_ids)).await?;
+
+        let filter = interop_messages::InteropMessageFilter {
+            address,
+            cluster_chain_ids: Some(cluster_chain_ids),
+            ..Default::default()
+        };
+        let count = interop_messages::count(db, filter).await?;
+
         Ok(count)
     }
 }

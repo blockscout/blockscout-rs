@@ -85,7 +85,7 @@ message ListInteropMessagesResponse {
 
 message CountInteropMessagesRequest {
   string cluster_id = 1;
-  string chain_id = 2;
+  optional string address = 2;
 }
 
 message CountInteropMessagesResponse { uint64 count = 1; }
