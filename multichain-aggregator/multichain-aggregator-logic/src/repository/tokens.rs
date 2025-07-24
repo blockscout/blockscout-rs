@@ -149,6 +149,7 @@ where
     Ok(())
 }
 
+// TODO: extract into a separate module and test it
 async fn batch_update<C, A>(
     db: &C,
     models: impl IntoIterator<Item = A>,
