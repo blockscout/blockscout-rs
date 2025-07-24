@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use blockscout_service_launcher::test_server::send_get_request;
 use pretty_assertions::assert_eq;
-use stats::{lines::NEW_TXNS_WINDOW_RANGE, ResolutionKind};
+use stats::{ResolutionKind, lines::NEW_TXNS_WINDOW_RANGE};
 use stats_proto::blockscout::stats::v1::{
     ContractsPageStats, Counters, MainPageStats, TransactionsPageStats,
 };
@@ -97,7 +97,8 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
         assert!(
             line_resolutions.contains(&ResolutionKind::Day.into()),
             "At least day resolution must be enabled for enabled chart `{}`. Enabled resolutions: {:?}",
-            &line_name, line_resolutions
+            &line_name,
+            line_resolutions
         );
         for resolution in line_resolutions {
             let chart: serde_json::Value = send_get_request(

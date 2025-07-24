@@ -8,7 +8,7 @@ use crate::config::{
     json,
     types::{AllChartSettings, CounterInfo, LineChartCategory, LineChartInfo},
 };
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Entry};
 
 /// Prioritize values from environment
 pub fn override_charts(

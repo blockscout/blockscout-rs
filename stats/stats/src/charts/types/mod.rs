@@ -42,7 +42,7 @@ impl<T: Timespan + Clone> TimespanValue<T, String> {
     pub fn active_model(
         &self,
         chart_id: i32,
-        min_blockscout_block: Option<i64>,
+        min_indexer_block: Option<i64>,
     ) -> chart_data::ActiveModel {
         chart_data::ActiveModel {
             id: Default::default(),
@@ -50,7 +50,7 @@ impl<T: Timespan + Clone> TimespanValue<T, String> {
             date: Set(self.timespan.clone().into_date()),
             value: Set(self.value.clone()),
             created_at: Default::default(),
-            min_blockscout_block: Set(min_blockscout_block),
+            min_blockscout_block: Set(min_indexer_block),
         }
     }
 }

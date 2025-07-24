@@ -5,11 +5,11 @@ use chrono::{DateTime, Utc};
 use rust_decimal::prelude::Zero;
 
 use crate::{
+    ChartError,
     data_processing::cumsum,
-    data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
+    data_source::{DataSource, UpdateContext, kinds::AdapterDataSource},
     range::UniversalRange,
     types::TimespanValue,
-    ChartError,
 };
 
 /// Auxiliary source for cumulative chart.

@@ -10,7 +10,7 @@ use tokio::task::JoinSet;
 
 use crate::{
     common::{
-        get_test_stats_settings, run_consolidated_tests, wait_for_subset_to_update, ChartSubset,
+        ChartSubset, get_test_stats_settings, run_consolidated_tests, wait_for_subset_to_update,
     },
     it::mock_blockscout_simple::get_mock_blockscout,
 };

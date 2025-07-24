@@ -7,9 +7,9 @@ use rust_decimal::prelude::Zero;
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
+    ChartError, ChartProperties,
     data_source::kinds::local_db::parameters::update::batching::parameter_traits::BatchStepBehaviour,
     types::{Timespan, TimespanValue},
-    ChartError, ChartProperties,
 };
 
 use super::PassVecStep;
@@ -33,7 +33,7 @@ where
         db: &C,
         chart_id: i32,
         update_time: DateTime<Utc>,
-        min_blockscout_block: i64,
+        min_indexer_block: i64,
         last_accurate_point: TimespanValue<Resolution, String>,
         main_data: Vec<TimespanValue<Resolution, Value>>,
         _resolution_data: (),
@@ -65,7 +65,7 @@ where
             db,
             chart_id,
             update_time,
-            min_blockscout_block,
+            min_indexer_block,
             last_accurate_point,
             main_data,
             (),

@@ -1,0 +1,12 @@
+{
+    "counters_order": [
+        "total_interop_messages"
+    ],
+    "line_chart_categories": [
+        {
+            "id": "interop_messages",
+            "title": "Interop messages",
+            "charts_order": []
+        }
+    ]
+}

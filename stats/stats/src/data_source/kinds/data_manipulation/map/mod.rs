@@ -7,9 +7,9 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 
 use crate::{
-    data_source::{kinds::AdapterDataSource, DataSource, UpdateContext},
-    range::UniversalRange,
     ChartError,
+    data_source::{DataSource, UpdateContext, kinds::AdapterDataSource},
+    range::UniversalRange,
 };
 
 mod divide;

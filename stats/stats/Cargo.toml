@@ -1,12 +1,14 @@
 [package]
 name = "stats"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 entity = { path = "./entity" }
 blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "26eed65" }
 blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "980634e" }
+multichain-aggregator-entity = { workspace = true }
+multichain-aggregator-migration = { workspace = true }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",

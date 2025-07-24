@@ -6,12 +6,14 @@ use blockscout_service_launcher::{
 };
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use stats::{
+    ChartProperties, Named,
     counters::{
         ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
         ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
         OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
+        multichain::TotalInteropMessages,
     },
     indexing_status::BlockscoutIndexingStatus,
     lines::{
@@ -19,10 +21,9 @@ use stats::{
         ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
         OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
     },
-    ChartProperties,
 };
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     net::SocketAddr,
     path::PathBuf,
     str::FromStr,
@@ -30,8 +31,8 @@ use std::{
 use tracing::warn;
 
 use crate::{
-    config::{self, types::AllChartSettings},
     RuntimeSetup,
+    config::{self, types::AllChartSettings},
 };
 
 #[serde_as]
@@ -41,7 +42,8 @@ pub struct Settings {
     pub db_url: String,
     pub create_database: bool,
     pub run_migrations: bool,
-    pub blockscout_db_url: String,
+    pub blockscout_db_url: Option<String>,
+    pub indexer_db_url: Option<String>,
     /// Blockscout API url.
     ///
     /// Required. To launch without it api use [`Settings::ignore_blockscout_api_absence`].
@@ -60,6 +62,12 @@ pub struct Settings {
     pub enable_all_op_stack: bool,
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
+    /// Enable multichain mode.
+    ///
+    /// This will run stats service for a multichain explorer.
+    /// It takes precedence over other chart-related flags like `enable_all_arbitrum`,
+    /// `enable_all_op_stack`, `enable_all_eip_7702`.
+    pub multichain_mode: bool,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -69,6 +77,12 @@ pub struct Settings {
     pub charts_config: PathBuf,
     pub layout_config: PathBuf,
     pub update_groups_config: PathBuf,
+    /// Used only if `multichain_mode` is enabled as a second-priority config.
+    pub multichain_charts_config: Option<PathBuf>,
+    /// Used only if `multichain_mode` is enabled as a second-priority config.
+    pub multichain_layout_config: Option<PathBuf>,
+    /// Used only if `multichain_mode` is enabled as a second-priority config.
+    pub multichain_update_groups_config: Option<PathBuf>,
     /// Location of swagger file to serve
     pub swagger_path: PathBuf,
     pub api_keys: HashMap<String, String>,
@@ -109,14 +123,25 @@ impl Default for Settings {
             charts_config: PathBuf::from_str("config/charts.json").unwrap(),
             layout_config: PathBuf::from_str("config/layout.json").unwrap(),
             update_groups_config: PathBuf::from_str("config/update_groups.json").unwrap(),
+            multichain_charts_config: Some(
+                PathBuf::from_str("config/multichain/charts.json").unwrap(),
+            ),
+            multichain_layout_config: Some(
+                PathBuf::from_str("config/multichain/layout.json").unwrap(),
+            ),
+            multichain_update_groups_config: Some(
+                PathBuf::from_str("config/multichain/update_groups.json").unwrap(),
+            ),
             swagger_path: default_swagger_path(),
             blockscout_db_url: Default::default(),
+            indexer_db_url: Default::default(),
             blockscout_api_url: None,
             ignore_blockscout_api_absence: false,
             disable_internal_transactions: false,
             enable_all_arbitrum: false,
             enable_all_op_stack: false,
             enable_all_eip_7702: false,
+            multichain_mode: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
@@ -128,6 +153,45 @@ impl Default for Settings {
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "STATS";
+}
+
+impl Settings {
+    fn config_paths(
+        multichain_mode: bool,
+        main_config: PathBuf,
+        multichain_config: &Option<PathBuf>,
+    ) -> Vec<PathBuf> {
+        let mut list = vec![main_config];
+        match multichain_config {
+            Some(m) if multichain_mode => list.push(m.clone()),
+            _ => (),
+        }
+        list
+    }
+
+    pub fn charts_config_paths(&self) -> Vec<PathBuf> {
+        Self::config_paths(
+            self.multichain_mode,
+            self.charts_config.clone(),
+            &self.multichain_charts_config,
+        )
+    }
+
+    pub fn layout_config_paths(&self) -> Vec<PathBuf> {
+        Self::config_paths(
+            self.multichain_mode,
+            self.layout_config.clone(),
+            &self.multichain_layout_config,
+        )
+    }
+
+    pub fn update_groups_config_paths(&self) -> Vec<PathBuf> {
+        Self::config_paths(
+            self.multichain_mode,
+            self.update_groups_config.clone(),
+            &self.multichain_update_groups_config,
+        )
+    }
 }
 
 pub fn handle_disable_internal_transactions(
@@ -246,6 +310,34 @@ pub fn handle_enable_all_eip_7702(
             "eip-7702",
         )
     }
+}
+
+pub fn disable_all_non_multichain_charts(charts: &mut config::charts::Config<AllChartSettings>) {
+    let multichain_charts = HashSet::from([TotalInteropMessages::name()]);
+    for (name, settings) in charts.lines.iter_mut() {
+        if !multichain_charts.contains(name) {
+            settings.enabled = false;
+        }
+    }
+    for (name, settings) in charts.counters.iter_mut() {
+        if !multichain_charts.contains(name) {
+            settings.enabled = false;
+        }
+    }
+}
+
+pub fn apply_multichain_mode_settings(settings: &mut Settings) {
+    settings.blockscout_api_url = None;
+    settings.ignore_blockscout_api_absence = true;
+    settings.conditional_start.blocks_ratio.enabled = false;
+    settings
+        .conditional_start
+        .internal_transactions_ratio
+        .enabled = false;
+    settings
+        .conditional_start
+        .user_ops_past_indexing_finished
+        .enabled = false;
 }
 
 /// Various limits like rate limiting and restrictions on input.

@@ -1,4 +1,4 @@
-use crate::{types::TimespanValue, ChartError};
+use crate::{ChartError, types::TimespanValue};
 
 use super::{Map, MapFunction};
 
