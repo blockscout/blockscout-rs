@@ -54,6 +54,14 @@ paths:
           required: false
           type: string
           format: int64
+        - name: direction
+          in: query
+          required: false
+          type: string
+          enum:
+            - Asc
+            - Desc
+          default: Asc
         - name: status_reduced
           description: |-
             Comma-separated values for multiple filters
@@ -314,6 +322,12 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1RelatedCctx'
+  v1Direction:
+    type: string
+    enum:
+      - Asc
+      - Desc
+    default: Asc
   v1GetSyncProgressResponse:
     type: object
     properties:
@@ -460,6 +474,8 @@ definitions:
       limit:
         type: integer
         format: int64
+      direction:
+        $ref: '#/definitions/v1Direction'
   v1ProtocolContractVersion:
     type: string
     enum:

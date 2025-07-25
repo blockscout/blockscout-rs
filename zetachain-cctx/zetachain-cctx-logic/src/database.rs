@@ -24,8 +24,7 @@ use zetachain_cctx_entity::{
     token as TokenEntity, watermark,
 };
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
-    CctxListItem as CctxListItemProto, CctxStatus as CctxStatusProto,
-    CctxStatusReduced as CctxStatusReducedProto, CoinType as CoinTypeProto, ListCctxsResponse, Pagination,
+    CctxListItem as CctxListItemProto, CctxStatus as CctxStatusProto, CctxStatusReduced as CctxStatusReducedProto, CoinType as CoinTypeProto, Direction, ListCctxsResponse, Pagination
 };
 
 pub struct ZetachainCctxDatabase {
@@ -1933,6 +1932,7 @@ impl ZetachainCctxDatabase {
         limit: i64,
         page_key: Option<i64>,
         filters: Filters,
+        direction: Direction,
     ) -> anyhow::Result<ListCctxsResponse> {
 
         let mut sql = String::from(
@@ -2103,7 +2103,11 @@ impl ZetachainCctxDatabase {
         
         if let Some(page_key) = page_key {
             param_count += 1;
-            sql.push_str(&format!(" AND id < ${}", param_count));
+            if direction == Direction::Asc {
+                sql.push_str(&format!(" AND id > ${}", param_count));
+            } else {
+                sql.push_str(&format!(" AND id < ${}", param_count));
+            }
             params.push(sea_orm::Value::BigInt(Some(page_key)));
         }
 
@@ -2112,23 +2116,24 @@ impl ZetachainCctxDatabase {
 
         // Add ordering and pagination
         param_count += 1;
-        sql.push_str(&format!(" ORDER BY id DESC LIMIT ${}", param_count));
+        sql.push_str(&format!(" ORDER BY id {} LIMIT ${}", direction.as_str_name(), param_count));
         params.push(sea_orm::Value::BigInt(Some(limit * 2)));
 
-        
-
-        
-
         let statement = Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params);
-
+        tracing::debug!("statement: {}", statement.to_string());
         let rows = self.db.query_all(statement).await?;
-        tracing::info!("rows: {}, limit: {}", rows.len(), limit);
         let next_page_items_len = rows.len() - std::cmp::min(limit as usize, rows.len());
-        let next_page_key = rows.iter().map(|row| row.try_get_by_index(15).unwrap()).min().unwrap_or(0) as i64;
-        let mut items = Vec::new();
-        tracing::info!("rows_len: {}", rows.len());
-        tracing::info!("limit: {}", limit);
-        for row in rows.iter().take(limit as usize) {
+        let truncated =rows.iter().take(limit as usize);
+        let next_page_key = {
+            if direction == Direction::Asc {
+                truncated.clone().map(|row| row.try_get_by_index(15).unwrap()).max().unwrap_or(0) as i64
+            } else {
+                truncated.clone().map(|row| row.try_get_by_index(15).unwrap()).min().unwrap_or(0) as i64
+            }
+        };
+        let mut items = Vec::new();        
+        for row in truncated
+         {
             // Read the status enum directly from the database
             let index = row
                 .try_get_by_index(0)
@@ -2202,6 +2207,7 @@ impl ZetachainCctxDatabase {
             next_page_params: Some(Pagination {
                 page_key:next_page_key,
                 limit: next_page_items_len as u32,
+                direction: direction.into(),
             }),
         })
     }

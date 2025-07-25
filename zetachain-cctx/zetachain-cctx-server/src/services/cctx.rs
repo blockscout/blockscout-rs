@@ -4,6 +4,7 @@ use tonic::{Request, Response, Status};
 
 use zetachain_cctx_logic::database::ZetachainCctxDatabase;
 use zetachain_cctx_logic::models::{CompleteCctx, Filters};
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Direction;
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
     cctx_info_server::CctxInfo, CallOptions, CctxStatus, CoinType, CrossChainTx,
     GetCctxInfoRequest, InboundParams, ListCctxsRequest, ListCctxsResponse, OutboundParams,
@@ -178,8 +179,9 @@ impl CctxInfo for CctxService {
             end_timestamp: request.end_timestamp,
         };
 
+        let direction = Direction::try_from(request.direction).map_err(|e| Status::invalid_argument(e.to_string()))?;
         let content =self.database
-            .list_cctxs(request.limit, request.page_key, filters)
+            .list_cctxs(request.limit, request.page_key, filters, direction)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 

@@ -21,18 +21,18 @@ message GetCctxInfoRequest {
 message ListCctxsRequest {
   int64 limit = 1;
   optional int64 page_key = 2;
-  
+  Direction direction = 3;
   // Comma-separated values for multiple filters
-  optional string status_reduced = 3;      // "Pending,Success,Failed"
-  optional string sender_address = 4;      // "0x123,0x456,0x789"
-  optional string receiver_address = 5;    // "0xabc,0xdef,0xghi"
-  optional string asset = 6;               // "ETH,BTC,USDC"
-  optional string coin_type = 7;           // "Zeta,Gas,Erc20"
-  optional string source_chain_id = 8;     // "1,56,137"
-  optional string target_chain_id = 9;     // "1,56,137"
-  optional string token_symbol = 10;       // "ETH,BTC,USDC"
-  optional int64 start_timestamp = 11;
-  optional int64 end_timestamp = 12;
+  optional string status_reduced = 4;      // "Pending,Success,Failed"
+  optional string sender_address = 5;      // "0x123,0x456,0x789"
+  optional string receiver_address = 6;    // "0xabc,0xdef,0xghi"
+  optional string asset = 7;               // "ETH,BTC,USDC"
+  optional string coin_type = 8;           // "Zeta,Gas,Erc20"
+  optional string source_chain_id = 9;     // "1,56,137"
+  optional string target_chain_id = 10;     // "1,56,137"
+  optional string token_symbol = 11;       // "ETH,BTC,USDC"
+  optional int64 start_timestamp = 12;
+  optional int64 end_timestamp = 13;
 }
 
 message ListCctxsResponse {
@@ -44,6 +44,12 @@ message ListCctxsResponse {
 message Pagination {
   int64 page_key = 1;
   uint32 limit = 2;
+  Direction direction = 3;
+}
+
+enum Direction {
+  Asc = 0;
+  Desc = 1;
 }
 
 

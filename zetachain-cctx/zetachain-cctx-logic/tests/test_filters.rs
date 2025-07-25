@@ -3,6 +3,7 @@ mod helpers;
 use blockscout_service_launcher::tracing::init_logs;
 use zetachain_cctx_logic::{database::ZetachainCctxDatabase, models::Filters};
 use migration::sea_orm::TransactionTrait;
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Direction;
 use crate::helpers::*;
 use uuid::Uuid;
 
@@ -47,7 +48,7 @@ async fn query_cctxs_with_filters() {
         start_timestamp: None,
         end_timestamp: None,
         token_symbol: vec![],
-    }).await.unwrap();
+    }, Direction::Desc).await.unwrap();
 
     assert_eq!(cctxs.items.len(), 1);
 
@@ -62,7 +63,7 @@ async fn query_cctxs_with_filters() {
         start_timestamp: None,
         end_timestamp: None,
         token_symbol: vec![],
-    }).await.unwrap();
+    }, Direction::Desc).await.unwrap();
 
     assert_eq!(cctxs.items.len(), 2);
 
