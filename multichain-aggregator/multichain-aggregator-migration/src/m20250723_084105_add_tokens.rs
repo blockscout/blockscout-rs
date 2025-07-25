@@ -10,13 +10,13 @@ impl MigrationTrait for Migration {
             ALTER TYPE token_type ADD VALUE IF NOT EXISTS 'ERC-7802';
 
             CREATE TABLE tokens (
+                address_hash bytea NOT NULL,
                 chain_id bigint NOT NULL REFERENCES chains (id),
 
                 name text,
                 symbol text,
                 decimals smallint,
                 token_type token_type NOT NULL,
-                address_hash bytea NOT NULL,
 
                 icon_url text,
 

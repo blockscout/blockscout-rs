@@ -10,6 +10,8 @@ pub mod interop_message_transfers;
 pub mod interop_messages;
 pub mod tokens;
 
+mod batch_update;
+
 use sea_orm::{sea_query::IntoValueTuple, ConnectionTrait, Cursor, DbErr, SelectorTrait};
 
 pub async fn paginate_cursor<S, E, R1, R2, F>(
