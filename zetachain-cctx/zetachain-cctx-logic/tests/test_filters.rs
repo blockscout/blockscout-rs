@@ -36,7 +36,7 @@ async fn query_cctxs_with_filters() {
     tx.commit().await.unwrap();
 
     
-    let cctxs = database.list_cctxs(10, 0, Filters {
+    let cctxs = database.list_cctxs(10, None, Filters {
         status_reduced: vec!["Pending".to_string()],
         sender_address: vec!["0x1234567890123456789012345678901234567890".to_string()],
         receiver_address: vec![],
@@ -49,9 +49,9 @@ async fn query_cctxs_with_filters() {
         token_symbol: vec![],
     }).await.unwrap();
 
-    assert_eq!(cctxs.len(), 1);
+    assert_eq!(cctxs.items.len(), 1);
 
-    let cctxs = database.list_cctxs(10, 0, Filters {
+    let cctxs = database.list_cctxs(10, None, Filters {
         status_reduced: vec!["Pending".to_string(),"Success".to_string()],
         sender_address: vec![],
         receiver_address: vec![],
@@ -64,7 +64,7 @@ async fn query_cctxs_with_filters() {
         token_symbol: vec![],
     }).await.unwrap();
 
-    assert_eq!(cctxs.len(), 2);
+    assert_eq!(cctxs.items.len(), 2);
 
 
 }

@@ -49,7 +49,7 @@ paths:
           required: false
           type: string
           format: int64
-        - name: offset
+        - name: page_key
           in: query
           required: false
           type: string
@@ -454,10 +454,10 @@ definitions:
   v1Pagination:
     type: object
     properties:
-      page_token:
+      page_key:
         type: string
         format: int64
-      page_items:
+      limit:
         type: integer
         format: int64
   v1ProtocolContractVersion:

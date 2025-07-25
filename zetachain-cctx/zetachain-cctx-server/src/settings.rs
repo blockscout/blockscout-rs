@@ -24,6 +24,10 @@ pub struct Settings {
     pub rpc: RpcSettings,
     #[serde(default = "default_websocket_settings")]
     pub websocket: WebSocketSettings,
+    #[serde(default)]
+    pub restart_on_error: bool,
+    #[serde(default)]
+    pub restart_interval: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
@@ -47,6 +51,14 @@ fn default_websocket_enabled() -> bool {
 
 fn default_websocket_settings() -> WebSocketSettings {
     WebSocketSettings::default()
+}
+
+fn default_restart_on_error() -> bool {
+    true
+}
+
+fn default_restart_interval() -> u64 {
+    10000
 }
 
 impl ConfigSettings for Settings {
@@ -73,6 +85,8 @@ impl Settings {
             indexer: Default::default(),
             rpc: Default::default(),
             websocket: Default::default(),
+            restart_on_error: default_restart_on_error(),
+            restart_interval: default_restart_interval(),
         }
     }
 }

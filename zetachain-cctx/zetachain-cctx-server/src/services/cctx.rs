@@ -4,7 +4,6 @@ use tonic::{Request, Response, Status};
 
 use zetachain_cctx_logic::database::ZetachainCctxDatabase;
 use zetachain_cctx_logic::models::{CompleteCctx, Filters};
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Pagination;
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
     cctx_info_server::CctxInfo, CallOptions, CctxStatus, CoinType, CrossChainTx,
     GetCctxInfoRequest, InboundParams, ListCctxsRequest, ListCctxsResponse, OutboundParams,
@@ -20,8 +19,6 @@ impl CctxService {
         Self { database }
     }
 }
-
-
 
 /// Transforms a CompleteCctx from the database into a CrossChainTx for the API response
 pub fn transform_complete_cctx_to_cross_chain_tx(
@@ -155,20 +152,19 @@ impl CctxInfo for CctxService {
         request: Request<ListCctxsRequest>,
     ) -> Result<Response<ListCctxsResponse>, Status> {
         let request = request.into_inner();
-        
+
         // Helper function to parse comma-separated values
         let parse_comma_separated = |opt_str: Option<String>| -> Vec<String> {
             match opt_str {
-                Some(s) if !s.trim().is_empty() => {
-                    s.split(',')
-                        .map(|item| item.trim().to_string())
-                        .filter(|item| !item.is_empty())
-                        .collect()
-                }
+                Some(s) if !s.trim().is_empty() => s
+                    .split(',')
+                    .map(|item| item.trim().to_string())
+                    .filter(|item| !item.is_empty())
+                    .collect(),
                 _ => Vec::new(),
             }
         };
-        
+
         let filters = Filters {
             status_reduced: parse_comma_separated(request.status_reduced),
             sender_address: parse_comma_separated(request.sender_address),
@@ -181,22 +177,13 @@ impl CctxInfo for CctxService {
             start_timestamp: request.start_timestamp,
             end_timestamp: request.end_timestamp,
         };
-        
-        let cctxs = self
-            .database
-            .list_cctxs(request.limit+1, request.offset, filters)
+
+        let content =self.database
+            .list_cctxs(request.limit, request.page_key, filters)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 
-        let response_len = std::cmp::min(cctxs.len() as i32, request.limit as i32);
-        let page_items =std::cmp::max(cctxs.len() as i32 - request.limit as i32,0);
-        
-        let next_page_params = Pagination {
-            page_token: request.offset as i64 + response_len as i64,
-            page_items: page_items as u32,
-        };
-
-        Ok(Response::new(ListCctxsResponse { items: cctxs, next_page_params: Some(next_page_params) }))
+        Ok(Response::new(content))
     }
     async fn get_cctx_info(
         &self,

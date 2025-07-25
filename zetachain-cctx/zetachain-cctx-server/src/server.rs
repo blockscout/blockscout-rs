@@ -31,6 +31,7 @@ use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::
 ;
 
 use std::sync::Arc;
+use tokio::time::Duration;
 
 const SERVICE_NAME: &str = "zetachain_cctx";
 
@@ -138,15 +139,25 @@ pub async fn run(
 
     if settings.indexer.enabled {
         let indexer = Indexer::new(
-            settings.indexer,
+            settings.indexer.clone(),
             client,
             database,
             websocket_broadcaster.clone(),
         );
+        let restart_interval = settings.restart_interval;
+        let restart_on_error = settings.restart_on_error;
+        
         tokio::spawn(async move {
             tracing::info!("starting indexer");
             //TODO: handle error, log it and restart the indexer
-            let _ = indexer.run().await;
+            loop {
+                if let Err(e) = indexer.run().await {
+                    tracing::error!("indexer error: {}", e);
+                    if restart_on_error {
+                        tokio::time::sleep(Duration::from_millis(restart_interval)).await;
+                    }
+                }
+            }
         });
     }
 

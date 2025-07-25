@@ -25,7 +25,7 @@ use zetachain_cctx_entity::{
 };
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
     CctxListItem as CctxListItemProto, CctxStatus as CctxStatusProto,
-    CctxStatusReduced as CctxStatusReducedProto, CoinType as CoinTypeProto,
+    CctxStatusReduced as CctxStatusReducedProto, CoinType as CoinTypeProto, ListCctxsResponse, Pagination,
 };
 
 pub struct ZetachainCctxDatabase {
@@ -1928,12 +1928,12 @@ impl ZetachainCctxDatabase {
         }))
     }
 
-    pub async fn list_cctxs(
+    pub async fn  list_cctxs(
         &self,
         limit: i64,
-        offset: i64,
+        page_key: Option<i64>,
         filters: Filters,
-    ) -> anyhow::Result<Vec<CctxListItemProto>> {
+    ) -> anyhow::Result<ListCctxsResponse> {
 
         let mut sql = String::from(
             r#"
@@ -1964,7 +1964,8 @@ impl ZetachainCctxDatabase {
                 ) as status_reduced,
                 t.symbol as token_symbol,
                 t.zrc20_contract_address,
-                t.decimals
+                t.decimals,
+                cctx.id
             FROM
                 cross_chain_tx cctx
                 INNER JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
@@ -2099,26 +2100,35 @@ impl ZetachainCctxDatabase {
             params.push(sea_orm::Value::BigInt(Some(end_timestamp)));
         }
 
+        
+        if let Some(page_key) = page_key {
+            param_count += 1;
+            sql.push_str(&format!(" AND id < ${}", param_count));
+            params.push(sea_orm::Value::BigInt(Some(page_key)));
+        }
+
         // No need to group since we're only getting the last outbound_params row per CCTX
         sql.push_str(" ");
 
         // Add ordering and pagination
         param_count += 1;
-        sql.push_str(&format!(" ORDER BY created_timestamp DESC LIMIT ${}", param_count));
-        params.push(sea_orm::Value::BigInt(Some(limit)));
+        sql.push_str(&format!(" ORDER BY id DESC LIMIT ${}", param_count));
+        params.push(sea_orm::Value::BigInt(Some(limit * 2)));
 
-        param_count += 1;
-        sql.push_str(&format!(" OFFSET ${}", param_count));
-        params.push(sea_orm::Value::BigInt(Some(offset)));
+        
 
-        tracing::info!("sql: {}", sql.replace("\n", " "));
+        
 
         let statement = Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params);
 
         let rows = self.db.query_all(statement).await?;
-
+        tracing::info!("rows: {}, limit: {}", rows.len(), limit);
+        let next_page_items_len = rows.len() - std::cmp::min(limit as usize, rows.len());
+        let next_page_key = rows.iter().map(|row| row.try_get_by_index(15).unwrap()).min().unwrap_or(0) as i64;
         let mut items = Vec::new();
-        for row in rows {
+        tracing::info!("rows_len: {}", rows.len());
+        tracing::info!("limit: {}", limit);
+        for row in rows.iter().take(limit as usize) {
             // Read the status enum directly from the database
             let index = row
                 .try_get_by_index(0)
@@ -2187,7 +2197,13 @@ impl ZetachainCctxDatabase {
             });
         }
 
-        Ok(items)
+        Ok(ListCctxsResponse {
+            items,
+            next_page_params: Some(Pagination {
+                page_key:next_page_key,
+                limit: next_page_items_len as u32,
+            }),
+        })
     }
 
     #[instrument(level = "debug", skip_all)]

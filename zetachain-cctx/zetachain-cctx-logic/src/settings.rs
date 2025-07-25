@@ -17,8 +17,7 @@ pub struct IndexerSettings {
    pub realtime_threshold: i64,
    pub token_polling_interval: u64,
    pub token_batch_size: u32,
-   pub restart_on_error: bool,
-   pub restart_interval: u64,
+
 }
 
 
@@ -44,8 +43,6 @@ impl Default for IndexerSettings {
             realtime_threshold: 10000,
             token_polling_interval: 300_000, // 5 minutes
             token_batch_size: 100,
-            restart_on_error: true,
-            restart_interval: 1000,
         }
     }
 }

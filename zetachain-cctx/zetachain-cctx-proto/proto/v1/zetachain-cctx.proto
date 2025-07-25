@@ -20,7 +20,7 @@ message GetCctxInfoRequest {
 
 message ListCctxsRequest {
   int64 limit = 1;
-  int64 offset = 2;
+  optional int64 page_key = 2;
   
   // Comma-separated values for multiple filters
   optional string status_reduced = 3;      // "Pending,Success,Failed"
@@ -42,8 +42,8 @@ message ListCctxsResponse {
 
 
 message Pagination {
-  int64 page_token = 1;
-  uint32 page_items = 2;
+  int64 page_key = 1;
+  uint32 limit = 2;
 }
 
 
