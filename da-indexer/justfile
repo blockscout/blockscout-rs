@@ -8,8 +8,17 @@ db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "da_indexer")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
 
+s3-host := env_var_or_default('S3_HOST', "localhost")
+s3-port := env_var_or_default('S3_PORT', "9000")
+s3-access-key-id := env_var_or_default('S3_ACCESS_KEY_ID', "minioadmin")
+s3-secret-access-key := env_var_or_default('S3_SECRET_ACCESS_KEY', "minioadmin")
+s3-bucket := env_var_or_default('S3_BUCKET', "bucket")
+
 docker-name := env_var_or_default('DOCKER_NAME', "da-indexer-postgres")
+s3-docker-name := env_var_or_default('S3_DOCKER_NAME', "da-indexer-minio")
+
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
+test-s3-port := env_var_or_default('TEST_S3_PORT', "9990")
 
 
 start-postgres:
@@ -22,15 +31,23 @@ start-postgres:
 stop-postgres:
     docker kill {{docker-name}}
 
+start-minio:
+    docker run -p {{s3-port}}:9000 --name {{s3-docker-name}} --rm -d quay.io/minio/minio server /data
+
+stop-minio:
+    docker kill {{s3-docker-name}}
+
 test *args:
-    cargo test {{args}} -- --include-ignored
+    S3_ENDPOINT="http://{{s3-host}}:{{test-s3-port}}" S3_ACCESS_KEY_ID="{{s3-access-key-id}}" S3_SECRET_ACCESS_KEY="{{s3-secret-access-key}}" cargo test {{args}} -- --include-ignored
 
-test-with-db *args:
+test-with-services *args:
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
-    just db-port="{{test-db-port}}" db-name=""                                    test {{args}}
+    -just s3-port="{{test-s3-port}}" s3-bucket="test" s3-docker-name="{{s3-docker-name}}-test" start-minio
+    just db-port="{{test-db-port}}" db-name="" s3-port={{test-s3-port}} test {{args}}
 
-stop-test-postgres:
+stop-test-services:
     just docker-name="{{docker-name}}-test" stop-postgres
+    just s3-docker-name="{{s3-docker-name}}-test" stop-minio
 
 run:
     DA_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} DA_INDEXER__CONFIG=./da-indexer-server/config/celestia.toml cargo run --bin da-indexer-server

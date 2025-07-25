@@ -9,11 +9,11 @@ use sea_orm::{
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
 
 #[derive(Debug, Clone)]
-pub enum TokenUpdate {
-    Metadata(UpdateTokenMetadata),
-    PriceData(UpdateTokenPriceData),
-    Counters(UpdateTokenCounters),
-    Type(UpdateTokenType),
+pub struct TokenUpdate {
+    pub metadata: Option<UpdateTokenMetadata>,
+    pub price_data: Option<UpdateTokenPriceData>,
+    pub counters: Option<UpdateTokenCounters>,
+    pub r#type: Option<UpdateTokenType>,
 }
 
 #[derive(Debug, Clone)]

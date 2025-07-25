@@ -1,10 +1,12 @@
+use super::{job::CelestiaJob, parser, repository::blocks, settings::IndexerSettings};
 use crate::{
     celestia::{client, repository::blobs},
     indexer::{Job, DA},
+    s3_storage::S3Storage,
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use celestia_rpc::{Client, HeaderClient};
+use celestia_rpc::{Client, HeaderClient, ShareClient};
 use celestia_types::{Blob, ExtendedHeader};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::sync::{
@@ -12,23 +14,23 @@ use std::sync::{
     Arc,
 };
 
-use super::{
-    client::share::ShareClient, job::CelestiaJob, parser, repository::blocks,
-    settings::IndexerSettings,
-};
-
 pub struct CelestiaDA {
     settings: IndexerSettings,
 
     client: Client,
     db: Arc<DatabaseConnection>,
+    s3_storage: Option<S3Storage>,
 
     last_known_height: AtomicU64,
     catch_up_completed: AtomicBool,
 }
 
 impl CelestiaDA {
-    pub async fn new(db: Arc<DatabaseConnection>, settings: IndexerSettings) -> Result<Self> {
+    pub async fn new(
+        db: Arc<DatabaseConnection>,
+        s3_storage: Option<S3Storage>,
+        settings: IndexerSettings,
+    ) -> Result<Self> {
         let client = client::new_celestia_client(
             &settings.rpc.url,
             settings.rpc.auth_token.as_deref(),
@@ -52,6 +54,7 @@ impl CelestiaDA {
             settings,
             client,
             db,
+            s3_storage,
             last_known_height: AtomicU64::new(start_from.saturating_sub(1)),
             catch_up_completed: AtomicBool::new(false),
         })
@@ -62,10 +65,7 @@ impl CelestiaDA {
 
         let mut blobs = vec![];
         if parser::maybe_contains_blobs(&header.dah) {
-            let eds = self
-                .client
-                .share_get_eds(height, header.header.version.app)
-                .await?;
+            let eds = self.client.share_get_eds(&header).await?;
             blobs = parser::parse_eds(&eds, header.header.version.app)?;
         }
 
@@ -96,7 +96,8 @@ impl DA for CelestiaDA {
             // blobs might be quite big, so we save them periodically
             // to save ram and to avoid huge db insertions
             for chunk in blobs.chunks(self.settings.save_batch_size as usize) {
-                blobs::upsert_many(&txn, job.height, chunk.to_vec()).await?;
+                blobs::upsert_many(&txn, self.s3_storage.as_ref(), job.height, chunk.to_vec())
+                    .await?;
             }
             tracing::debug!(height = job.height, blobs_count, "saved blobs to db");
         }

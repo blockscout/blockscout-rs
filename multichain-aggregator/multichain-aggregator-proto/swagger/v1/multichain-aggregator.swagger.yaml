@@ -4,6 +4,7 @@ info:
   version: version not set
 tags:
   - name: MultichainAggregatorService
+  - name: ClusterExplorerService
   - name: Health
 consumes:
   - application/json
@@ -18,6 +19,70 @@ paths:
           description: A successful response.
           schema:
             $ref: '#/definitions/v1ListAddressesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/block-numbers:
+    get:
+      operationId: MultichainAggregatorService_ListBlockNumbers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlockNumbersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/blocks:
+    get:
+      operationId: MultichainAggregatorService_ListBlocks
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlocksResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -61,6 +126,99 @@ paths:
           type: boolean
       tags:
         - MultichainAggregatorService
+  /api/v1/clusters/{cluster_id}/chains:
+    get:
+      operationId: ClusterExplorerService_ListClusterChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListClusterChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/messages:
+    get:
+      operationId: ClusterExplorerService_ListInteropMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListInteropMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: init_chain_id
+          in: query
+          required: false
+          type: string
+        - name: relay_chain_id
+          in: query
+          required: false
+          type: string
+        - name: nonce
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: address
+          description: Address of the sender or receiver.
+          in: query
+          required: false
+          type: string
+        - name: direction
+          description: 'Message direction: "from" or "to". Valid only when address is provided.'
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/messages/count:
+    get:
+      operationId: ClusterExplorerService_CountInteropMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CountInteropMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
   /api/v1/dapps:
     get:
       operationId: MultichainAggregatorService_ListDapps
@@ -165,72 +323,6 @@ paths:
           required: true
           schema:
             $ref: '#/definitions/v1BatchImportRequest'
-      tags:
-        - MultichainAggregatorService
-  /api/v1/interop/messages:
-    get:
-      operationId: MultichainAggregatorService_ListInteropMessages
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1ListInteropMessagesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: init_chain_id
-          in: query
-          required: false
-          type: string
-        - name: relay_chain_id
-          in: query
-          required: false
-          type: string
-        - name: nonce
-          in: query
-          required: false
-          type: string
-          format: int64
-        - name: address
-          description: Address of the sender or receiver.
-          in: query
-          required: false
-          type: string
-        - name: direction
-          description: 'Message direction: "from" or "to". Valid only when address is provided.'
-          in: query
-          required: false
-          type: string
-        - name: page_size
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: page_token
-          in: query
-          required: false
-          type: string
-      tags:
-        - MultichainAggregatorService
-  /api/v1/interop/messages/count:
-    get:
-      operationId: MultichainAggregatorService_CountInteropMessages
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1CountInteropMessagesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: chain_id
-          in: query
-          required: false
-          type: string
       tags:
         - MultichainAggregatorService
   /api/v1/nfts:
@@ -420,6 +512,14 @@ definitions:
       max_block_number:
         type: string
         format: uint64
+  BatchImportRequestCountersImport:
+    type: object
+    properties:
+      timestamp:
+        type: string
+        format: int64
+      global_counters:
+        $ref: '#/definitions/CountersImportGlobalCounters'
   BatchImportRequestHashImport:
     type: object
     properties:
@@ -445,6 +545,18 @@ definitions:
         $ref: '#/definitions/TokenImportPriceData'
       counters:
         $ref: '#/definitions/TokenImportCounters'
+  CountersImportGlobalCounters:
+    type: object
+    properties:
+      daily_transactions_number:
+        type: string
+        format: uint64
+      total_transactions_number:
+        type: string
+        format: uint64
+      total_addresses_number:
+        type: string
+        format: uint64
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -518,15 +630,6 @@ definitions:
     properties:
       value:
         type: string
-  QuickSearchResponseChainBlockNumber:
-    type: object
-    properties:
-      chain_id:
-        type: string
-        format: int64
-      block_number:
-        type: string
-        format: uint64
   TokenImportCounters:
     type: object
     properties:
@@ -649,6 +752,8 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/BatchImportRequestAddressTokenBalanceImport'
+      counters:
+        $ref: '#/definitions/BatchImportRequestCountersImport'
       tokens:
         type: array
         items:
@@ -672,6 +777,15 @@ definitions:
         type: string
       icon_url:
         type: string
+  v1ChainBlockNumber:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+      block_number:
+        type: string
+        format: uint64
   v1CountInteropMessagesResponse:
     type: object
     properties:
@@ -769,7 +883,35 @@ definitions:
           $ref: '#/definitions/v1Address'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
+  v1ListBlockNumbersResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainBlockNumber'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListBlocksResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListChainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Chain'
+  v1ListClusterChainsResponse:
     type: object
     properties:
       items:
@@ -893,7 +1035,7 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
+          $ref: '#/definitions/v1ChainBlockNumber'
       dapps:
         type: array
         items:

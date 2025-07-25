@@ -5,7 +5,7 @@ use crate::{
         token_info::search_token_infos,
     },
     error::{ParseError, ServiceError},
-    repository::{addresses, block_ranges, hashes, interop_messages},
+    repository::{addresses, block_ranges, hashes},
     services::chains,
     types::{
         addresses::{Address, DomainInfo, TokenType},
@@ -13,18 +13,23 @@ use crate::{
         dapp::MarketplaceDapp,
         domains::Domain,
         hashes::{Hash, HashType},
-        interop_messages::{InteropMessage, MessageDirection},
         search_results::QuickSearchResult,
         token_info::Token,
         ChainId,
     },
 };
-use alloy_primitives::{Address as AddressAlloy, TxHash};
+use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
+use blockscout_service_launcher::database::ReadWriteRepo;
+use recache::{handler::CacheHandler, stores::redis::RedisStore};
 use regex::Regex;
-use sea_orm::{prelude::DateTime, DatabaseConnection};
-use std::{collections::HashSet, str::FromStr, sync::OnceLock};
+use sea_orm::DatabaseConnection;
+use std::{
+    collections::HashSet,
+    str::FromStr,
+    sync::{Arc, OnceLock},
+};
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
@@ -34,6 +39,21 @@ const QUICK_SEARCH_ENTITY_LIMIT: usize = 5;
 fn domain_name_with_tld_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\b[\p{L}\p{N}\p{Emoji}_-]{3,63}\.eth\b").unwrap())
+}
+
+macro_rules! maybe_cache_lookup {
+    ($cache:expr, $key:expr, $get:expr) => {
+        if let Some(cache) = $cache {
+            cache
+                .default_request()
+                .key($key)
+                .execute($get)
+                .await
+                .map_err(|err| err.into())
+        } else {
+            $get().await
+        }
+    };
 }
 
 pub enum AddressSearchConfig<'a> {
@@ -245,36 +265,36 @@ pub async fn search_hashes(
     ))
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn search_interop_messages(
+pub async fn search_block_numbers(
     db: &DatabaseConnection,
-    init_chain_id: Option<ChainId>,
-    relay_chain_id: Option<ChainId>,
-    address: Option<AddressAlloy>,
-    direction: Option<MessageDirection>,
-    nonce: Option<i64>,
+    query: String,
+    chain_ids: Vec<ChainId>,
     page_size: u64,
-    page_token: Option<(DateTime, TxHash)>,
-) -> Result<(Vec<InteropMessage>, Option<(DateTime, TxHash)>), ServiceError> {
-    let (interop_messages, next_page_token) = interop_messages::list(
+    page_token: Option<ChainId>,
+) -> Result<(Vec<ChainBlockNumber>, Option<ChainId>), ServiceError> {
+    let block_number = match alloy_primitives::BlockNumber::from_str(&query) {
+        Ok(block_number) => block_number,
+        Err(_) => return Ok((vec![], None)),
+    };
+
+    let (block_ranges, page_token) = block_ranges::list_matching_block_ranges_paginated(
         db,
-        init_chain_id,
-        relay_chain_id,
-        address,
-        direction,
-        nonce,
+        block_number,
+        chain_ids,
         page_size,
         page_token,
     )
     .await?;
 
-    Ok((
-        interop_messages
-            .into_iter()
-            .map(InteropMessage::try_from)
-            .collect::<Result<Vec<_>, _>>()?,
-        next_page_token,
-    ))
+    let block_numbers: Vec<_> = block_ranges
+        .into_iter()
+        .map(|r| ChainBlockNumber {
+            chain_id: r.chain_id,
+            block_number,
+        })
+        .collect::<Vec<_>>();
+
+    Ok((block_numbers, page_token))
 }
 
 pub async fn search_tokens(
@@ -391,33 +411,18 @@ pub async fn search_domains(
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
-    db: &DatabaseConnection,
-    dapp_client: &HttpApiClient,
-    token_info_client: &HttpApiClient,
-    bens_client: &HttpApiClient,
     query: String,
     priority_chain_ids: &[ChainId],
-    bens_protocols: Option<&[String]>,
-    domain_primary_chain_id: ChainId,
-    marketplace_enabled_cache: &chains::MarketplaceEnabledCache,
+    search_context: &SearchContext<'_>,
 ) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
 
     let terms = parse_search_terms(raw_query);
-    let context = SearchContext {
-        db,
-        dapp_client,
-        token_info_client,
-        bens_client,
-        bens_protocols,
-        domain_primary_chain_id,
-        marketplace_enabled_cache,
-    };
 
     // Each search term produces its own `SearchResults` struct.
     // E.g. `SearchTerm::Dapp` job populates only the `dapps` field of its result.
     // We need to merge all of them into a single `SearchResults` struct.
-    let jobs = terms.into_iter().map(|t| t.search(&context));
+    let jobs = terms.into_iter().map(|t| t.search(search_context));
 
     let mut results = futures::future::join_all(jobs)
         .await
@@ -435,6 +440,19 @@ pub async fn quick_search(
     Ok(results)
 }
 
+pub type UniformChainSearchCache = CacheHandler<RedisStore, String, Vec<Address>>;
+
+pub struct SearchContext<'a> {
+    pub db: Arc<ReadWriteRepo>,
+    pub dapp_client: &'a HttpApiClient,
+    pub token_info_client: &'a HttpApiClient,
+    pub bens_client: &'a HttpApiClient,
+    pub bens_protocols: Option<&'a [String]>,
+    pub domain_primary_chain_id: ChainId,
+    pub marketplace_enabled_cache: &'a chains::MarketplaceEnabledCache,
+    pub uniform_chain_search_cache: Option<&'a UniformChainSearchCache>,
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum SearchTerm {
     Hash(alloy_primitives::B256),
@@ -446,16 +464,6 @@ pub enum SearchTerm {
     Domain(String),
 }
 
-struct SearchContext<'a> {
-    db: &'a DatabaseConnection,
-    dapp_client: &'a HttpApiClient,
-    token_info_client: &'a HttpApiClient,
-    bens_client: &'a HttpApiClient,
-    bens_protocols: Option<&'a [String]>,
-    domain_primary_chain_id: ChainId,
-    marketplace_enabled_cache: &'a chains::MarketplaceEnabledCache,
-}
-
 impl SearchTerm {
     #[instrument(skip_all, level = "info", fields(term = ?self), err)]
     async fn search(
@@ -464,7 +472,7 @@ impl SearchTerm {
     ) -> Result<QuickSearchResult, ServiceError> {
         let mut results = QuickSearchResult::default();
 
-        let db = search_context.db;
+        let db = search_context.db.read_db();
 
         let num_active_chains = chains::list_repo_chains_cached(db, true).await?.len() as u64;
 
@@ -542,7 +550,7 @@ impl SearchTerm {
             }
             SearchTerm::Dapp(query) => {
                 let dapp_chains = chains::list_active_chains_cached(
-                    search_context.db,
+                    db,
                     &[chains::ChainSource::Dapp {
                         dapp_client: search_context.dapp_client,
                     }],
@@ -567,7 +575,7 @@ impl SearchTerm {
             }
             SearchTerm::TokenInfo(query) => {
                 let (tokens, _) = search_tokens(
-                    search_context.db,
+                    db,
                     search_context.token_info_client,
                     query,
                     vec![],
@@ -582,12 +590,32 @@ impl SearchTerm {
                 results.tokens.extend(tokens);
             }
             SearchTerm::ContractName(query) => {
-                let addresses =
-                    addresses::uniform_chain_search(db, query, Some(vec![]), num_active_chains)
+                let query = query.clone();
+                let db = Arc::clone(&search_context.db);
+
+                let get_address = || {
+                    let query = query.clone();
+                    async move {
+                        let addresses = addresses::uniform_chain_search(
+                            db.read_db(),
+                            query,
+                            Some(vec![]),
+                            num_active_chains,
+                        )
                         .await?
                         .into_iter()
                         .map(Address::try_from)
                         .collect::<Result<Vec<_>, _>>()?;
+
+                        Ok::<_, ServiceError>(addresses)
+                    }
+                };
+
+                let addresses = maybe_cache_lookup!(
+                    search_context.uniform_chain_search_cache,
+                    query.clone(),
+                    get_address
+                )?;
 
                 results.addresses.extend(addresses);
             }

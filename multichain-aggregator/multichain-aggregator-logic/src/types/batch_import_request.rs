@@ -3,6 +3,7 @@ use super::{
     address_token_balances::AddressTokenBalance,
     addresses::{proto_token_type_to_db_token_type, Address},
     block_ranges::BlockRange,
+    counters::{ChainCounters, Counters},
     hashes::{proto_hash_type_to_db_hash_type, Hash},
     interop_message_transfers::InteropMessageTransfer,
     interop_messages::InteropMessage,
@@ -27,6 +28,7 @@ pub struct BatchImportRequest {
     pub address_coin_balances: Vec<AddressCoinBalance>,
     pub address_token_balances: Vec<AddressTokenBalance>,
     pub tokens: Vec<TokenUpdate>,
+    pub counters: Option<Counters>,
 }
 
 macro_rules! opt_parse {
@@ -123,6 +125,10 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
                 .into_iter()
                 .map(|t| (chain_id, t).try_into())
                 .collect::<Result<Vec<_>, _>>()?,
+            counters: value
+                .counters
+                .map(|c| Counters::try_from((chain_id, c)))
+                .transpose()?,
         })
     }
 }
@@ -167,7 +173,7 @@ impl
             chain_id,
             address_hash: atb.address_hash.parse()?,
             token_address_hash: atb.token_address_hash.parse()?,
-            value: atb.value.parse()?,
+            value: opt_parse!(atb.value),
             token_id: opt_parse!(atb.token_id),
         })
     }
@@ -360,49 +366,51 @@ impl TryFrom<(ChainId, proto::batch_import_request::TokenImport)> for TokenUpdat
     fn try_from(
         (chain_id, t): (ChainId, proto::batch_import_request::TokenImport),
     ) -> Result<Self, Self::Error> {
-        let payload = t
-            .payload
-            .ok_or_else(|| ParseError::Custom("token payload is missing".to_string()))?;
-
         let address_hash = t
             .address_hash
             .parse::<alloy_primitives::Address>()?
             .to_vec();
 
-        let token_update = match payload {
-            proto::batch_import_request::token_import::Payload::Metadata(m) => {
-                let token_type = proto_token_type_to_db_token_type(m.token_type())
-                    .ok_or_else(|| ParseError::Custom("invalid token type".to_string()))?;
-                let metadata = UpdateTokenMetadata {
-                    address_hash,
-                    chain_id,
-                    name: m.name,
-                    symbol: m.symbol,
-                    decimals: m.decimals.map(i16::try_from).transpose()?,
-                    token_type,
-                    icon_url: m.icon_url,
-                    total_supply: opt_parse!(m.total_supply),
-                };
-                TokenUpdate::Metadata(metadata)
-            }
-            proto::batch_import_request::token_import::Payload::PriceData(m) => {
-                let price_data = UpdateTokenPriceData {
-                    address_hash,
-                    chain_id,
-                    fiat_value: opt_parse!(m.fiat_value),
-                    circulating_market_cap: opt_parse!(m.circulating_market_cap),
-                };
-                TokenUpdate::PriceData(price_data)
-            }
-            proto::batch_import_request::token_import::Payload::Counters(m) => {
-                let counters = UpdateTokenCounters {
-                    address_hash,
-                    chain_id,
-                    holders_count: opt_parse!(m.holders_count),
-                    transfers_count: opt_parse!(m.transfers_count),
-                };
-                TokenUpdate::Counters(counters)
-            }
+        let token_update = TokenUpdate {
+            metadata: t
+                .metadata
+                .map(|m| {
+                    let token_type = proto_token_type_to_db_token_type(m.token_type())
+                        .ok_or_else(|| ParseError::Custom("invalid token type".to_string()))?;
+                    Ok::<_, Self::Error>(UpdateTokenMetadata {
+                        address_hash: address_hash.clone(),
+                        chain_id,
+                        name: m.name,
+                        symbol: m.symbol,
+                        decimals: m.decimals.map(i16::try_from).transpose()?,
+                        token_type,
+                        icon_url: m.icon_url,
+                        total_supply: opt_parse!(m.total_supply),
+                    })
+                })
+                .transpose()?,
+            price_data: t
+                .price_data
+                .map(|m| {
+                    Ok::<_, Self::Error>(UpdateTokenPriceData {
+                        address_hash: address_hash.clone(),
+                        chain_id,
+                        fiat_value: opt_parse!(m.fiat_value),
+                        circulating_market_cap: opt_parse!(m.circulating_market_cap),
+                    })
+                })
+                .transpose()?,
+            counters: t
+                .counters
+                .map(|m| {
+                    Ok::<_, Self::Error>(UpdateTokenCounters {
+                        address_hash,
+                        chain_id,
+                        holders_count: opt_parse!(m.holders_count),
+                        transfers_count: opt_parse!(m.transfers_count),
+                    })
+                })
+                .transpose()?,
         };
 
         Ok(token_update)
@@ -415,5 +423,29 @@ fn parse_timestamp_secs(timestamp: i64) -> Result<NaiveDateTime, ParseError> {
         None => Err(ParseError::Custom(format!(
             "invalid timestamp: {timestamp}",
         ))),
+    }
+}
+
+impl TryFrom<(ChainId, proto::batch_import_request::CountersImport)> for Counters {
+    type Error = ParseError;
+
+    fn try_from(
+        (chain_id, proto): (ChainId, proto::batch_import_request::CountersImport),
+    ) -> Result<Self, Self::Error> {
+        let global = {
+            let g: Option<&proto::batch_import_request::counters_import::GlobalCounters> =
+                proto.global_counters.as_ref();
+            let timestamp = parse_timestamp_secs(proto.timestamp)?;
+
+            g.map(|g| ChainCounters {
+                chain_id,
+                timestamp,
+                daily_transactions_number: g.daily_transactions_number,
+                total_transactions_number: g.total_transactions_number,
+                total_addresses_number: g.total_addresses_number,
+            })
+        };
+
+        Ok(Self { global })
     }
 }

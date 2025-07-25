@@ -30,7 +30,7 @@ pub async fn list_repo_chains_cached(
     db: &DatabaseConnection,
     with_active_api_keys: bool,
 ) -> Result<Vec<Chain>, ServiceError> {
-    let chains = repository::chains::list_chains(db, with_active_api_keys)
+    let chains = repository::chains::list_by_active_api_keys(db, with_active_api_keys)
         .await?
         .into_iter()
         .map(|c| c.into())

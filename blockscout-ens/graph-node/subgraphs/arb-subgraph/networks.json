@@ -1,0 +1,38 @@
+{
+  "arb-mainnet": {
+    "Registry": {
+      "address": "0x4a067EE58e73ac5E4a43722E008DFdf65B2bF348",
+      "startBlock": 72086658
+    },
+    "Resolver": {
+      "startBlock": 72086658
+    },
+    "RegistrarController": {
+      "address": "0xf2198DfDCEcfb67e6028Ac64D0890f2A99bB6975",
+      "startBlock": 72086658
+    },
+    "Base": {
+      "address": "0x5d482D501b369F5bA034DEC5c5fb7A50d2D6Ca20",
+      "startBlock": 72086658
+    },
+    "": ""
+  },
+  "arb-faucet": {
+    "Registry": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Resolver": {
+      "startBlock": 0
+    },
+    "RegistrarController": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Base": {
+      "address": "",
+      "startBlock": 0
+    },
+    "": ""
+  }
+}

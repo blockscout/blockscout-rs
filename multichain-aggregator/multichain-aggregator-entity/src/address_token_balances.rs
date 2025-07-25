@@ -13,8 +13,8 @@ pub struct Model {
     pub token_address_hash: Vec<u8>,
     #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
     pub token_id: Option<BigDecimal>,
-    #[sea_orm(column_type = "Decimal(Some((78, 0)))")]
-    pub value: BigDecimal,
+    #[sea_orm(column_type = "Decimal(Some((78, 0)))", nullable)]
+    pub value: Option<BigDecimal>,
     pub chain_id: i64,
     pub created_at: DateTime,
     pub updated_at: DateTime,

@@ -1,5 +1,8 @@
 use crate::{
-    repository::macros::{is_distinct_from, update_if_not_null},
+    repository::{
+        batch_update::batch_update,
+        macros::{is_distinct_from, update_if_not_null},
+    },
     types::tokens::{
         TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData,
         UpdateTokenType,
@@ -7,11 +10,8 @@ use crate::{
 };
 use entity::tokens::{Column, Entity};
 use sea_orm::{
-    prelude::Expr,
-    sea_query::{Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, ValueTuple},
-    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DbErr, EntityName, EntityTrait,
-    IdenStatic, IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, TransactionError,
-    TransactionTrait,
+    prelude::Expr, sea_query::OnConflict, ColumnTrait, ConnectionTrait, DbErr, EntityTrait,
+    IdenStatic, IntoActiveModel, TransactionError, TransactionTrait,
 };
 
 pub async fn upsert_many<C>(db: &C, tokens: Vec<TokenUpdate>) -> Result<(), DbErr>
@@ -24,11 +24,17 @@ where
     let mut type_updates = Vec::new();
 
     for token in tokens {
-        match token {
-            TokenUpdate::Metadata(metadata) => metadata_updates.push(metadata),
-            TokenUpdate::PriceData(price_data) => price_updates.push(price_data),
-            TokenUpdate::Counters(counters) => counter_updates.push(counters),
-            TokenUpdate::Type(type_update) => type_updates.push(type_update),
+        if let Some(metadata) = token.metadata {
+            metadata_updates.push(metadata);
+        }
+        if let Some(price_data) = token.price_data {
+            price_updates.push(price_data);
+        }
+        if let Some(counters) = token.counters {
+            counter_updates.push(counters);
+        }
+        if let Some(r#type) = token.r#type {
+            type_updates.push(r#type);
         }
     }
 
@@ -109,12 +115,7 @@ where
 {
     updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
     let active_models = updates.into_iter().map(|m| m.into_active_model());
-    batch_update(
-        db,
-        active_models,
-        vec![Column::FiatValue, Column::CirculatingMarketCap],
-    )
-    .await?;
+    batch_update(db, active_models).await?;
 
     Ok(())
 }
@@ -128,12 +129,7 @@ where
 {
     updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
     let active_models = updates.into_iter().map(|m| m.into_active_model());
-    batch_update(
-        db,
-        active_models,
-        vec![Column::TransfersCount, Column::HoldersCount],
-    )
-    .await?;
+    batch_update(db, active_models).await?;
 
     Ok(())
 }
@@ -144,81 +140,7 @@ where
 {
     updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
     let active_models = updates.into_iter().map(|m| m.into_active_model());
-    batch_update(db, active_models, vec![Column::TokenType]).await?;
-
-    Ok(())
-}
-
-// TODO: extract into a separate module and test it
-async fn batch_update<C, A>(
-    db: &C,
-    models: impl IntoIterator<Item = A>,
-    update_columns: Vec<<A::Entity as EntityTrait>::Column>,
-) -> Result<(), DbErr>
-where
-    C: ConnectionTrait,
-    A: ActiveModelTrait,
-{
-    let cte_name = Alias::new("updates").into_iden();
-
-    // Select all the columns that are part of the primary key,
-    // as well as the columns that are explicitly being updated.
-    let mut required_columns = <A::Entity as EntityTrait>::PrimaryKey::iter()
-        .map(|c| c.into_column())
-        .collect::<Vec<_>>();
-    required_columns.extend(update_columns.clone());
-
-    // Get all values for required columns for each model
-    let value_tuples = models
-        .into_iter()
-        .map(|m| {
-            required_columns
-                .iter()
-                .map(|c| {
-                    m.get(*c)
-                        .into_value()
-                        .ok_or_else(|| DbErr::Custom(format!("missing column: {c:?}")))
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .map(ValueTuple::Many)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let cte = CommonTableExpression::new()
-        .query(
-            Query::select()
-                .column(ColumnRef::Asterisk)
-                .from_values(value_tuples, cte_name.clone())
-                .to_owned(),
-        )
-        .table_name(cte_name.clone())
-        .columns(required_columns)
-        .to_owned();
-
-    // Map table columns to CTE columns
-    let update_columns_mapping = update_columns
-        .iter()
-        .map(|c| (*c, c.save_as(Expr::col((cte_name.clone(), *c)))));
-
-    // Match rows from CTE with rows from the table by primary key
-    let mut conditions = Condition::all();
-    for key in <A::Entity as EntityTrait>::PrimaryKey::iter() {
-        let col = key.into_column();
-        let cte_col = Expr::col((cte_name.clone(), col));
-        let table_col = col.into_simple_expr();
-        conditions = conditions.add(table_col.eq(cte_col));
-    }
-
-    let query = Query::update()
-        .table(A::Entity::default().table_ref())
-        .values(update_columns_mapping)
-        .with_cte(cte)
-        .from(cte_name)
-        .cond_where(conditions)
-        .to_owned();
-
-    let stmt = db.get_database_backend().build(&query);
-    db.execute(stmt).await?;
+    batch_update(db, active_models).await?;
 
     Ok(())
 }
