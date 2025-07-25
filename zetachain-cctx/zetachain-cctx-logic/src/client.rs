@@ -28,7 +28,7 @@ impl Client {
     pub fn new(settings: RpcSettings) -> Self {
         let http = reqwest::Client::new();
         let limiter = Arc::new(RateLimiter::direct(Quota::per_second(
-            NonZeroU32::new(settings.request_per_second).unwrap(),
+            NonZeroU32::new(settings.request_per_second).unwrap_or(NonZeroU32::new(default_request_per_second()).unwrap()),
         )));
         Self {
             settings,
@@ -80,7 +80,7 @@ impl Client {
 
     #[instrument(level="debug",skip_all)]
     pub async fn fetch_cctx(&self, index: &str) -> anyhow::Result<CrossChainTx> {
-        let mut url: Url = self.settings.url.parse().unwrap();
+        let mut url: Url = Url::parse(&self.settings.url)?;
         url.set_path(&format!("{}crosschain/cctx/{}", url.path(), index));
         let request = Request::new(Method::GET, url);
         let response = self.make_request(request).await?.error_for_status()?;

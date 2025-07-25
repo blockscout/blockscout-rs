@@ -164,7 +164,7 @@ impl TryFrom<String> for CoinType {
         match value.as_str() {
             "Zeta" => Ok(CoinType::Zeta),
             "Gas" => Ok(CoinType::Gas),
-            "Erc20" => Ok(CoinType::Erc20),
+            "Erc20" | "ERC20" => Ok(CoinType::Erc20),
             "Cmd" => Ok(CoinType::Cmd),
             "NoAssetCall" => Ok(CoinType::NoAssetCall),
             _ => Err(format!("Invalid CoinType: {}", value)),
