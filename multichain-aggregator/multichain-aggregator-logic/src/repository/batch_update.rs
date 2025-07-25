@@ -6,17 +6,32 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue, Condition, ConnectionTrait, DbErr, EntityName, EntityTrait,
     IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, Value,
 };
+use thiserror::Error;
 
 pub async fn batch_update<C, A>(db: &C, models: impl IntoIterator<Item = A>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
     A: ActiveModelTrait,
 {
-    let query = prepare_batch_update_query(models)?;
+    let query = match prepare_batch_update_query(models) {
+        Ok(query) => query,
+        Err(PrepareBatchUpdateError::NoColumnsToUpdate) => {
+            return Ok(());
+        }
+        Err(e) => return Err(DbErr::Custom(e.to_string())),
+    };
     let stmt = db.get_database_backend().build(&query);
     db.execute(stmt).await?;
 
     Ok(())
+}
+
+#[derive(Error, Debug)]
+pub enum PrepareBatchUpdateError<A> {
+    #[error("primary key is not set: {0:?}")]
+    PrimaryKeyNotSet(A),
+    #[error("no columns to update")]
+    NoColumnsToUpdate,
 }
 
 // This is a modified version of the sea-orm batch insert query builder
@@ -26,7 +41,7 @@ where
 // https://github.com/SeaQL/sea-orm/blob/c87c0145f56e171b89a3967f95d8b6b7b743bd89/src/query/insert.rs#L173-L238
 fn prepare_batch_update_query<A>(
     models: impl IntoIterator<Item = A>,
-) -> Result<UpdateStatement, DbErr>
+) -> Result<UpdateStatement, PrepareBatchUpdateError<A>>
 where
     A: ActiveModelTrait,
 {
@@ -43,7 +58,7 @@ where
 
         // Each model must have a primary key value
         if am.get_primary_key_value().is_none() {
-            return Err(DbErr::Custom(format!("primary key is not set: {am:?}")));
+            return Err(PrepareBatchUpdateError::PrimaryKeyNotSet(am));
         }
 
         let mut values = Vec::with_capacity(columns.len());
@@ -77,7 +92,7 @@ where
         .collect::<Vec<_>>();
 
     if update_columns.is_empty() {
-        return Err(DbErr::Custom("no columns to update".to_string()));
+        return Err(PrepareBatchUpdateError::NoColumnsToUpdate);
     }
 
     let value_tuples = all_values
@@ -176,14 +191,20 @@ mod tests {
             id_1: Set(1),
             ..Default::default()
         };
-        assert!(prepare_batch_update_query(vec![incomplete_pk_model]).is_err());
+        assert!(matches!(
+            prepare_batch_update_query(vec![incomplete_pk_model]),
+            Err(PrepareBatchUpdateError::PrimaryKeyNotSet(_))
+        ));
 
         let empty_update = ActiveModel {
             id_1: Set(1),
             id_2: Set(2),
             ..Default::default()
         };
-        assert!(prepare_batch_update_query(vec![empty_update]).is_err());
+        assert!(matches!(
+            prepare_batch_update_query(vec![empty_update]),
+            Err(PrepareBatchUpdateError::NoColumnsToUpdate)
+        ));
 
         // f_1 is set for the first model, not set for the second
         // f_2 is set for both models
