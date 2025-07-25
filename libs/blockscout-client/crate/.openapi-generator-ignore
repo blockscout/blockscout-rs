@@ -25,19 +25,19 @@
 # =======
 # configs
 # =======
-Cargo.toml
+#Cargo.toml
 README.md
 git_push.sh
 .gitignore
 docs/*.md
 .travis.yml
 
-src/lib.rs
+#src/lib.rs
 
 # ===
 # api
 # ===
-src/apis/configuration.rs
+#src/apis/configuration.rs
 
 # ======
 # models
