@@ -47,10 +47,11 @@ where
 {
     let cte_name = Alias::new("updates").into_iden();
 
-    let mut columns: Vec<_> = <A::Entity as EntityTrait>::Column::iter()
+    let mut columns_to_update: Vec<_> = <A::Entity as EntityTrait>::Column::iter()
         .map(|_| None)
         .collect();
-    let mut null_value: Vec<Option<Value>> = std::iter::repeat_n(None, columns.len()).collect();
+    let mut null_value: Vec<Option<Value>> =
+        std::iter::repeat_n(None, columns_to_update.len()).collect();
     let mut all_values: Vec<Vec<Option<Value>>> = Vec::new();
 
     for model in models.into_iter() {
@@ -61,13 +62,13 @@ where
             return Err(PrepareBatchUpdateError::PrimaryKeyNotSet(am));
         }
 
-        let mut values = Vec::with_capacity(columns.len());
+        let mut values = Vec::with_capacity(columns_to_update.len());
         for (idx, col) in <A::Entity as EntityTrait>::Column::iter().enumerate() {
             let av = am.take(col);
             match av {
                 ActiveValue::Set(value) | ActiveValue::Unchanged(value) => {
                     // Mark the column as used
-                    columns[idx] = Some(col);
+                    columns_to_update[idx] = Some(col);
                     // Store the null value with the correct type
                     null_value[idx] = Some(value.as_null());
                     values.push(Some(value));
@@ -83,7 +84,11 @@ where
         all_values.push(values);
     }
 
-    let value_columns = columns.iter().cloned().flatten().collect::<Vec<_>>();
+    let value_columns = columns_to_update
+        .iter()
+        .cloned()
+        .flatten()
+        .collect::<Vec<_>>();
     // Filter out primary key columns
     let update_columns = value_columns
         .iter()
@@ -102,7 +107,7 @@ where
                 .into_iter()
                 .enumerate()
                 .filter_map(|(i, v)| {
-                    if columns[i].is_some() {
+                    if columns_to_update[i].is_some() {
                         match v {
                             Some(value) => Some(value),
                             None => null_value[i].clone(),
@@ -223,7 +228,7 @@ mod tests {
                 id_1: Set(1),
                 id_2: Set(2),
                 f_1: NotSet,
-                f_2: Set(vec![1, 2, 3]),
+                f_2: Set(vec![4, 5, 6]),
                 f_3: Set(Some("test".to_string())),
                 f_4: NotSet,
             },
@@ -232,7 +237,7 @@ mod tests {
         assert_eq!(query.to_string(PostgresQueryBuilder), [
             r#"WITH "updates" ("id_1", "id_2", "f_1", "f_2", "f_3") AS"#,
             r#"(SELECT * FROM"#,
-            r#"(VALUES (1, 2, 1, '\x010203', NULL), (1, 2, NULL, '\x010203', 'test')) AS "updates")"#,
+            r#"(VALUES (1, 2, 1, '\x010203', NULL), (1, 2, NULL, '\x040506', 'test')) AS "updates")"#,
             r#"UPDATE "test_model" SET"#,
             r#""f_1" = COALESCE("updates"."f_1", "test_model"."f_1"),"#,
             r#""f_2" = COALESCE("updates"."f_2", "test_model"."f_2"),"#,
