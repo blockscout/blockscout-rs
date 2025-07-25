@@ -19,6 +19,11 @@ where
     Ok(())
 }
 
+// This is a modified version of the sea-orm batch insert query builder
+// but adjusted for partial update queries.
+// Note: Partial updates are handled by coalescing the original value with the new value.
+// This implies that explicitly setting an ActiveValue to None will not overwrite the original value.
+// https://github.com/SeaQL/sea-orm/blob/c87c0145f56e171b89a3967f95d8b6b7b743bd89/src/query/insert.rs#L173-L238
 fn prepare_batch_update_query<A>(
     models: impl IntoIterator<Item = A>,
 ) -> Result<UpdateStatement, DbErr>
