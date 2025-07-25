@@ -31,6 +31,7 @@ enum TokenType {
   TOKEN_TYPE_ERC_721 = 2;
   TOKEN_TYPE_ERC_1155 = 3;
   TOKEN_TYPE_ERC_404 = 4;
+  TOKEN_TYPE_ERC_7802 = 5;
 }
 
 enum HashType {
@@ -178,6 +179,33 @@ message BatchImportRequest {
     optional GlobalCounters global_counters = 2;
   }
 
+  message TokenImport {
+    message Metadata {
+      optional string name = 1;
+      optional string symbol = 2;
+      optional int32 decimals = 3;
+      TokenType token_type = 4;
+      optional string icon_url = 5;
+      optional string total_supply = 6;
+    }
+
+    message Counters {
+      optional string holders_count = 1;
+      optional string transfers_count = 2;
+    }
+
+    message PriceData {
+      optional string fiat_value = 1;
+      optional string circulating_market_cap = 2;
+    }
+
+    string address_hash = 1;
+
+    optional Metadata metadata = 2;
+    optional PriceData price_data = 3;
+    optional Counters counters = 4;
+  }
+
   string chain_id = 1;
   repeated AddressImport addresses = 2;
   repeated BlockRangeImport block_ranges = 3;
@@ -186,7 +214,8 @@ message BatchImportRequest {
   repeated AddressCoinBalanceImport address_coin_balances = 6;
   repeated AddressTokenBalanceImport address_token_balances = 7;
   optional CountersImport counters = 8;
-  string api_key = 9;
+  repeated TokenImport tokens = 9;
+  string api_key = 10;
 }
 
 message BatchImportResponse { string status = 1; }

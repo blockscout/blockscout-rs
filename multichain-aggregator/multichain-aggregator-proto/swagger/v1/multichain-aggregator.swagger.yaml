@@ -534,6 +534,17 @@ definitions:
         $ref: '#/definitions/InteropMessageImportInit'
       relay:
         $ref: '#/definitions/InteropMessageImportRelay'
+  BatchImportRequestTokenImport:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      metadata:
+        $ref: '#/definitions/TokenImportMetadata'
+      price_data:
+        $ref: '#/definitions/TokenImportPriceData'
+      counters:
+        $ref: '#/definitions/TokenImportCounters'
   CountersImportGlobalCounters:
     type: object
     properties:
@@ -618,6 +629,36 @@ definitions:
     type: object
     properties:
       value:
+        type: string
+  TokenImportCounters:
+    type: object
+    properties:
+      holders_count:
+        type: string
+      transfers_count:
+        type: string
+  TokenImportMetadata:
+    type: object
+    properties:
+      name:
+        type: string
+      symbol:
+        type: string
+      decimals:
+        type: integer
+        format: int32
+      token_type:
+        $ref: '#/definitions/v1TokenType'
+      icon_url:
+        type: string
+      total_supply:
+        type: string
+  TokenImportPriceData:
+    type: object
+    properties:
+      fiat_value:
+        type: string
+      circulating_market_cap:
         type: string
   googlerpcStatus:
     type: object
@@ -713,6 +754,11 @@ definitions:
           $ref: '#/definitions/BatchImportRequestAddressTokenBalanceImport'
       counters:
         $ref: '#/definitions/BatchImportRequestCountersImport'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestTokenImport'
       api_key:
         type: string
   v1BatchImportResponse:
@@ -1033,4 +1079,5 @@ definitions:
       - TOKEN_TYPE_ERC_721
       - TOKEN_TYPE_ERC_1155
       - TOKEN_TYPE_ERC_404
+      - TOKEN_TYPE_ERC_7802
     default: TOKEN_TYPE_UNSPECIFIED
