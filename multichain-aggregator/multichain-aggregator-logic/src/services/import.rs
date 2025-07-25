@@ -120,6 +120,9 @@ fn prepare_erc_7802_token_updates(
             ])
         })
         .flatten()
-        .map(TokenUpdate::Type)
+        .map(|t| TokenUpdate {
+            r#type: Some(t),
+            ..Default::default()
+        })
         .collect()
 }

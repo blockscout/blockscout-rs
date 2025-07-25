@@ -8,7 +8,7 @@ use sea_orm::{
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TokenUpdate {
     pub metadata: Option<UpdateTokenMetadata>,
     pub price_data: Option<UpdateTokenPriceData>,
