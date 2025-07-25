@@ -1,1 +1,2 @@
 config/dev/*
+docker-compose.yml

@@ -82,5 +82,7 @@ Retries: every failed job increments a counter and is re-queued until retry_thre
 | `ZETACHAIN_CCCTX__INDEXER__TOKEN_BATCH_SIZE` | true | e.g. `100` | |
 | `ZETACHAIN_CCCTX__INDEXER__TOKEN_POLLING_INTERVAL` | true | e.g. `1000000` | |
 | `ZETACHAIN_CCCTX__WEBSOCKET__ENABLED` | | | `true` |
+| `ZETACHAIN_CCCTX__RESTART_INTERVAL` | | e.g. `1000` | `0` |
+| `ZETACHAIN_CCCTX__RESTART_ON_ERROR` | | e.g. `true` | `false` |
 
 [anchor]: <> (anchors.envs.end)

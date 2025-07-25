@@ -7,7 +7,7 @@ fn main() {
     run_env_collector_cli::<Settings>(
         "ZETACHAIN_CCCTX",
         "README.md",
-        "config/testnet.toml",
+        "config/dev/testnet.toml",
         PrefixFilter::blacklist(&[
             "ZETACHAIN_CCCTX__SERVER",
             "ZETACHAIN_CCCTX__TRACING",
