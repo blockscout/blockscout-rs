@@ -3,7 +3,10 @@ use crate::{
         batch_update::batch_update,
         macros::{is_distinct_from, update_if_not_null},
     },
-    types::tokens::{TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData},
+    types::tokens::{
+        TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData,
+        UpdateTokenType,
+    },
 };
 use entity::tokens::{Column, Entity};
 use sea_orm::{
@@ -18,6 +21,7 @@ where
     let mut metadata_updates = Vec::new();
     let mut price_updates = Vec::new();
     let mut counter_updates = Vec::new();
+    let mut type_updates = Vec::new();
 
     for token in tokens {
         if let Some(metadata) = token.metadata {
@@ -28,6 +32,9 @@ where
         }
         if let Some(counters) = token.counters {
             counter_updates.push(counters);
+        }
+        if let Some(r#type) = token.r#type {
+            type_updates.push(r#type);
         }
     }
 
@@ -46,6 +53,10 @@ where
 
             if !counter_updates.is_empty() {
                 update_token_counters(tx, counter_updates).await?;
+            }
+
+            if !type_updates.is_empty() {
+                update_token_type(tx, type_updates).await?;
             }
 
             Ok(())
@@ -113,6 +124,17 @@ async fn update_token_counters<C>(
     db: &C,
     mut updates: Vec<UpdateTokenCounters>,
 ) -> Result<(), DbErr>
+where
+    C: ConnectionTrait + TransactionTrait,
+{
+    updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
+    let active_models = updates.into_iter().map(|m| m.into_active_model());
+    batch_update(db, active_models).await?;
+
+    Ok(())
+}
+
+async fn update_token_type<C>(db: &C, mut updates: Vec<UpdateTokenType>) -> Result<(), DbErr>
 where
     C: ConnectionTrait + TransactionTrait,
 {

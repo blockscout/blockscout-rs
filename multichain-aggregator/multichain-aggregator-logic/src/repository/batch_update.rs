@@ -3,8 +3,8 @@ use sea_orm::{
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, Func, IntoIden, Query, UpdateStatement, ValueTuple,
     },
-    ActiveModelTrait, ActiveValue, Condition, ConnectionTrait, DbErr, EntityName, EntityTrait,
-    IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, Value,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, ConnectionTrait, DbErr, EntityName,
+    EntityTrait, IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, Value,
 };
 use thiserror::Error;
 
@@ -121,7 +121,7 @@ where
         (
             *c,
             Func::coalesce([
-                Expr::col((cte_name.clone(), *c)).into_simple_expr(),
+                c.save_as(Expr::col((cte_name.clone(), *c))),
                 c.into_simple_expr(),
             ])
             .into(),

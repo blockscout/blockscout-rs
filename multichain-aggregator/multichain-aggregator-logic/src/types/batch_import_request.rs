@@ -411,6 +411,7 @@ impl TryFrom<(ChainId, proto::batch_import_request::TokenImport)> for TokenUpdat
                     })
                 })
                 .transpose()?,
+            r#type: None,
         };
 
         Ok(token_update)

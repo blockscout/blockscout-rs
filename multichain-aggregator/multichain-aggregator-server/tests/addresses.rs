@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod helpers;
 mod test_db;
 
@@ -11,7 +12,7 @@ use sea_orm::prelude::Uuid;
 async fn test_list_addresses() {
     let db = database!(test_db::TestMigrator);
 
-    let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
+    let base = helpers::init_server(db.db_url()).await;
 
     helpers::upsert_api_keys(
         db.client().as_ref(),
@@ -45,7 +46,7 @@ async fn test_list_addresses() {
 async fn test_list_nfts() {
     let db = database!(test_db::TestMigrator);
 
-    let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
+    let base = helpers::init_server(db.db_url()).await;
 
     helpers::upsert_api_keys(
         db.client().as_ref(),
