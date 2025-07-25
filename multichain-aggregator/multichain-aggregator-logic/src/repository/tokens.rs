@@ -20,10 +20,14 @@ where
     let mut counter_updates = Vec::new();
 
     for token in tokens {
-        match token {
-            TokenUpdate::Metadata(metadata) => metadata_updates.push(metadata),
-            TokenUpdate::PriceData(price_data) => price_updates.push(price_data),
-            TokenUpdate::Counters(counters) => counter_updates.push(counters),
+        if let Some(metadata) = token.metadata {
+            metadata_updates.push(metadata);
+        }
+        if let Some(price_data) = token.price_data {
+            price_updates.push(price_data);
+        }
+        if let Some(counters) = token.counters {
+            counter_updates.push(counters);
         }
     }
 

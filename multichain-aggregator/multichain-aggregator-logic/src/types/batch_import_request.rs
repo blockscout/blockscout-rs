@@ -366,49 +366,51 @@ impl TryFrom<(ChainId, proto::batch_import_request::TokenImport)> for TokenUpdat
     fn try_from(
         (chain_id, t): (ChainId, proto::batch_import_request::TokenImport),
     ) -> Result<Self, Self::Error> {
-        let payload = t
-            .payload
-            .ok_or_else(|| ParseError::Custom("token payload is missing".to_string()))?;
-
         let address_hash = t
             .address_hash
             .parse::<alloy_primitives::Address>()?
             .to_vec();
 
-        let token_update = match payload {
-            proto::batch_import_request::token_import::Payload::Metadata(m) => {
-                let token_type = proto_token_type_to_db_token_type(m.token_type())
-                    .ok_or_else(|| ParseError::Custom("invalid token type".to_string()))?;
-                let metadata = UpdateTokenMetadata {
-                    address_hash,
-                    chain_id,
-                    name: m.name,
-                    symbol: m.symbol,
-                    decimals: m.decimals.map(i16::try_from).transpose()?,
-                    token_type,
-                    icon_url: m.icon_url,
-                    total_supply: opt_parse!(m.total_supply),
-                };
-                TokenUpdate::Metadata(metadata)
-            }
-            proto::batch_import_request::token_import::Payload::PriceData(m) => {
-                let price_data = UpdateTokenPriceData {
-                    address_hash,
-                    chain_id,
-                    fiat_value: opt_parse!(m.fiat_value),
-                    circulating_market_cap: opt_parse!(m.circulating_market_cap),
-                };
-                TokenUpdate::PriceData(price_data)
-            }
-            proto::batch_import_request::token_import::Payload::Counters(m) => {
-                let counters = UpdateTokenCounters {
-                    address_hash,
-                    chain_id,
-                    holders_count: opt_parse!(m.holders_count),
-                    transfers_count: opt_parse!(m.transfers_count),
-                };
-                TokenUpdate::Counters(counters)
-            }
+        let token_update = TokenUpdate {
+            metadata: t
+                .metadata
+                .map(|m| {
+                    let token_type = proto_token_type_to_db_token_type(m.token_type())
+                        .ok_or_else(|| ParseError::Custom("invalid token type".to_string()))?;
+                    Ok::<_, Self::Error>(UpdateTokenMetadata {
+                        address_hash: address_hash.clone(),
+                        chain_id,
+                        name: m.name,
+                        symbol: m.symbol,
+                        decimals: m.decimals.map(i16::try_from).transpose()?,
+                        token_type,
+                        icon_url: m.icon_url,
+                        total_supply: opt_parse!(m.total_supply),
+                    })
+                })
+                .transpose()?,
+            price_data: t
+                .price_data
+                .map(|m| {
+                    Ok::<_, Self::Error>(UpdateTokenPriceData {
+                        address_hash: address_hash.clone(),
+                        chain_id,
+                        fiat_value: opt_parse!(m.fiat_value),
+                        circulating_market_cap: opt_parse!(m.circulating_market_cap),
+                    })
+                })
+                .transpose()?,
+            counters: t
+                .counters
+                .map(|m| {
+                    Ok::<_, Self::Error>(UpdateTokenCounters {
+                        address_hash,
+                        chain_id,
+                        holders_count: opt_parse!(m.holders_count),
+                        transfers_count: opt_parse!(m.transfers_count),
+                    })
+                })
+                .transpose()?,
         };
 
         Ok(token_update)

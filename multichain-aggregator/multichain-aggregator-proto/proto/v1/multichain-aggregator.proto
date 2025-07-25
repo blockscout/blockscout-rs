@@ -201,11 +201,9 @@ message BatchImportRequest {
 
     string address_hash = 1;
 
-    oneof payload {
-      Metadata metadata = 2;
-      PriceData price_data = 3;
-      Counters counters = 4;
-    }
+    optional Metadata metadata = 2;
+    optional PriceData price_data = 3;
+    optional Counters counters = 4;
   }
 
   string chain_id = 1;
