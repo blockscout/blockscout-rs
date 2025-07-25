@@ -99,6 +99,7 @@ pub fn proto_token_type_to_db_token_type(token_type: proto::TokenType) -> Option
         proto::TokenType::Erc1155 => Some(TokenType::Erc1155),
         proto::TokenType::Erc721 => Some(TokenType::Erc721),
         proto::TokenType::Erc404 => Some(TokenType::Erc404),
+        proto::TokenType::Erc7802 => Some(TokenType::Erc7802),
         proto::TokenType::Unspecified => None,
     }
 }
@@ -109,5 +110,6 @@ pub fn db_token_type_to_proto_token_type(token_type: TokenType) -> proto::TokenT
         TokenType::Erc1155 => proto::TokenType::Erc1155,
         TokenType::Erc721 => proto::TokenType::Erc721,
         TokenType::Erc404 => proto::TokenType::Erc404,
+        TokenType::Erc7802 => proto::TokenType::Erc7802,
     }
 }

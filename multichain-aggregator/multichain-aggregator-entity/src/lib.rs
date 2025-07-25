@@ -14,3 +14,4 @@ pub mod hashes;
 pub mod interop_messages;
 pub mod interop_messages_transfers;
 pub mod sea_orm_active_enums;
+pub mod tokens;

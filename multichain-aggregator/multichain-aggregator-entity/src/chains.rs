@@ -33,6 +33,8 @@ pub enum Relation {
     Dapps,
     #[sea_orm(has_many = "super::hashes::Entity")]
     Hashes,
+    #[sea_orm(has_many = "super::tokens::Entity")]
+    Tokens,
 }
 
 impl Related<super::address_coin_balances::Entity> for Entity {
@@ -80,6 +82,12 @@ impl Related<super::dapps::Entity> for Entity {
 impl Related<super::hashes::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Hashes.def()
+    }
+}
+
+impl Related<super::tokens::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Tokens.def()
     }
 }
 

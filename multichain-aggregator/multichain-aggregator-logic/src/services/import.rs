@@ -2,7 +2,11 @@ use crate::{
     error::ServiceError,
     proto, repository,
     services::channel::{LatestBlockUpdateMessage, NEW_BLOCKS_TOPIC, NEW_INTEROP_MESSAGES_TOPIC},
-    types::{batch_import_request::BatchImportRequest, interop_messages::InteropMessage},
+    types::{
+        batch_import_request::BatchImportRequest,
+        interop_messages::InteropMessage,
+        tokens::{TokenType, TokenUpdate, UpdateTokenType},
+    },
 };
 use actix_phoenix_channel::ChannelBroadcaster;
 use sea_orm::{DatabaseConnection, TransactionTrait};
@@ -36,6 +40,11 @@ pub async fn batch_import(
             .inspect_err(|e| {
                 tracing::error!(error = ?e, "failed to upsert interop messages");
             })?;
+
+    let token_type_updates = prepare_erc_7802_token_updates(&messages_with_transfers);
+    let mut token_updates = request.tokens;
+    token_updates.extend(token_type_updates);
+
     repository::address_coin_balances::upsert_many(&tx, request.address_coin_balances)
         .await
         .inspect_err(|e| {
@@ -45,6 +54,11 @@ pub async fn batch_import(
         .await
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert address token balances");
+        })?;
+    repository::tokens::upsert_many(&tx, token_updates)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error = ?e, "failed to upsert tokens");
         })?;
     if let Some(counters) = request.counters {
         if let Some(global) = counters.global {
@@ -80,4 +94,35 @@ pub async fn batch_import(
     }
 
     Ok(())
+}
+
+fn prepare_erc_7802_token_updates(
+    messages_with_transfers: &[(
+        entity::interop_messages::Model,
+        Option<entity::interop_messages_transfers::Model>,
+    )],
+) -> Vec<TokenUpdate> {
+    messages_with_transfers
+        .iter()
+        .filter_map(|(message, transfer)| {
+            let address_hash = transfer.as_ref()?.token_address_hash.as_ref()?;
+            Some([
+                UpdateTokenType {
+                    chain_id: message.init_chain_id,
+                    address_hash: address_hash.clone(),
+                    token_type: TokenType::Erc7802,
+                },
+                UpdateTokenType {
+                    chain_id: message.relay_chain_id,
+                    address_hash: address_hash.clone(),
+                    token_type: TokenType::Erc7802,
+                },
+            ])
+        })
+        .flatten()
+        .map(|t| TokenUpdate {
+            r#type: Some(t),
+            ..Default::default()
+        })
+        .collect()
 }
