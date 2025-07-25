@@ -19,6 +19,14 @@ pub struct UserInfo {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct TxListResponse {
+    status: String,
+    message: String,
+    result: Vec<serde_json::Value>,
+}
+
+
+#[derive(Debug, Deserialize)]
 struct ErrorBody {
     message: String,
 }
@@ -68,4 +76,65 @@ pub async fn get_user_info_from_metadata(
         }
         _ => Err(Error::BlockscoutApi(format!("unexpected status {status}"))),
     }
+}
+
+pub async fn get_user_transaction_count(
+    blockscout_host: &Url,
+    blockscout_api_key: Option<&str>,
+    address_hash: &str,
+    offset: u32,
+) -> Result<usize, Error> {
+    let mut url = blockscout_host
+        .join("/api")
+        .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+
+    let offset_str = offset.to_string();
+    let mut params = vec![
+        ("module", "account"),
+        ("action", "txlist"),
+        ("address", address_hash),
+        ("page", "1"),
+        ("offset", &offset_str),
+        ("sort", "asc"),
+    ];
+    if let Some(key) = blockscout_api_key {
+        params.push((API_KEY_NAME, key));
+    }
+
+    let query = serde_urlencoded::to_string(&params)
+        .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+    url.set_query(Some(&query));
+
+    let client = Client::new();
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+
+    let status = response.status();
+    let body = response
+            .text()
+            .await
+            .map_err(|e| Error::BlockscoutApi(e.to_string()))?;
+    
+    if !status.is_success() {
+        return Err(Error::BlockscoutApi(format!(
+            "unexpected status {}: {}",
+            status,
+            body
+        )));
+    }
+
+    let tx_list: TxListResponse = serde_json::from_str(&body)
+        .map_err(|e| Error::BlockscoutApi(format!("parse error: {e}")))?;
+
+    if tx_list.status != "1" {
+        return Err(Error::BlockscoutApi(format!(
+            "api error: {}",
+            tx_list.message
+        )));
+    }
+
+    Ok(tx_list.result.len())
 }
