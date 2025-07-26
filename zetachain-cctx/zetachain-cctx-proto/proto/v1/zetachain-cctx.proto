@@ -12,6 +12,7 @@ service CctxInfo {
 
 service TokenInfo {
   rpc GetTokenInfo(GetTokenInfoRequest) returns (TokenInfoResponse) {}
+  rpc ListTokens(ListTokensRequest) returns (TokensResponse) {}
 }
 
 message GetCctxInfoRequest {
@@ -265,4 +266,9 @@ message TokenInfoResponse {
   int32 decimals = 2;
   string name = 3;
   string symbol = 4;
+}
+
+message ListTokensRequest {}
+message TokensResponse {
+  repeated TokenInfoResponse tokens = 1;
 }

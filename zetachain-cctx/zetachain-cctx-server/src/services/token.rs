@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use zetachain_cctx_logic::database::ZetachainCctxDatabase;
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
-    token_info_server::TokenInfo, GetTokenInfoRequest, TokenInfoResponse,
+    token_info_server::TokenInfo, GetTokenInfoRequest, ListTokensRequest, TokenInfoResponse, TokensResponse
 };
 use tonic::{Request, Response, Status};
 use tracing::instrument;
@@ -49,4 +49,21 @@ impl TokenInfo for TokenInfoService {
             None => Err(Status::not_found("Token not found")),
         }
     }
-} 
+
+    #[instrument(level = "debug", skip_all)]
+    async fn list_tokens(&self, _request: Request<ListTokensRequest>) -> Result<Response<TokensResponse>, Status> {
+        let tokens = self.db.list_tokens().await.map_err(|e| {
+            tracing::error!("Database error: {}", e);
+            Status::internal("Failed to query token information")
+        })?;
+
+        Ok(Response::new(TokensResponse {
+            tokens: tokens.into_iter().map(|token| TokenInfoResponse {
+                foreign_chain_id: token.foreign_chain_id,
+                decimals: token.decimals,
+                name: token.name,
+                symbol: token.symbol,
+            }).collect(),
+        }))
+    }
+}

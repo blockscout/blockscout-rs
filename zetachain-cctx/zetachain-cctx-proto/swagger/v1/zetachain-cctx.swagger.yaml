@@ -150,6 +150,20 @@ paths:
           type: string
       tags:
         - TokenInfo
+  /api/v1/TokenInfo:list:
+    get:
+      operationId: TokenInfo_ListTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1TokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      tags:
+        - TokenInfo
   /health:
     get:
       summary: |-
@@ -542,6 +556,14 @@ definitions:
         type: string
       symbol:
         type: string
+  v1TokensResponse:
+    type: object
+    properties:
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1TokenInfoResponse'
   v1TxFinalizationStatus:
     type: string
     enum:

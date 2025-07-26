@@ -2264,4 +2264,16 @@ impl ZetachainCctxDatabase {
             None => Ok(None),
         }
     }
+
+    pub async fn list_tokens(&self) -> anyhow::Result<Vec<TokenInfo>> {
+        let tokens = TokenEntity::Entity::find()
+            .all(self.db.as_ref())
+            .await?;
+        Ok(tokens.into_iter().map(|token| TokenInfo {
+            foreign_chain_id: token.foreign_chain_id,
+            decimals: token.decimals,
+            name: token.name,
+            symbol: token.symbol,
+        }).collect())
+    }
 }
