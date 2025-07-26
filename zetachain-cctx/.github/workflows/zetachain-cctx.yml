@@ -1,0 +1,93 @@
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - 'zetachain-cctx/v*'
+    paths:
+      - zetachain-cctx/**
+      - .github/workflows/zetachain-cctx.yml
+      - .github/workflows/_*.yml
+      - .github/actions/**
+  pull_request:
+    paths:
+      - zetachain-cctx/**
+      - .github/workflows/zetachain-cctx.yml
+      - .github/workflows/_*.yml
+      - .github/actions/**
+
+name: Test, lint and docker (zetachain-cctx)
+
+defaults:
+  run:
+    working-directory: zetachain-cctx
+
+jobs:
+  test:
+    name: Unit, doc and integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: admin
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          working-directory: zetachain-cctx
+
+      - name: Unit tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
+        if: success() || failure()
+
+      - name: Doc tests
+        run: cargo test --locked --workspace --all-features --doc
+        if: success() || failure()
+
+      - name: Integration tests
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
+        if: success() || failure()
+        env:
+          DATABASE_URL: postgres://postgres:admin@localhost:5432/
+
+  lint:
+    name: Linting
+    uses: ./.github/workflows/_linting.yml
+    with:
+      working-directory: zetachain-cctx
+
+  docker:
+    name: Docker build and docker push
+    needs:
+      - test
+      - lint
+    if: |
+      always() &&
+      (needs.test.result == 'success' || needs.test.result == 'cancelled') &&
+      (needs.lint.result == 'success' || needs.lint.result == 'cancelled')
+    uses: ./.github/workflows/_docker-build-push.yml
+    with:
+      service-name: zetachain-cctx
+  publish_types_package:
+    name: Publish types package
+    uses: './.github/workflows/npm-publisher.yml'
+    needs: docker
+    if: needs.docker.outputs.tag-value != ''
+    secrets: inherit
+    with:
+      
+      version: ${{ needs.docker.outputs.tag-value }}
+      
+      project_name: zetachain-cctx
