@@ -1,9 +1,9 @@
 use super::paginate_cursor;
-use crate::types::{block_ranges::BlockRange, ChainId};
+use crate::types::{ChainId, block_ranges::BlockRange};
 use entity::block_ranges::{Column, Entity, Model};
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, IntoActiveModel, QueryFilter, QueryTrait,
+    ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IntoActiveModel,
+    QueryFilter, QueryTrait, prelude::Expr, sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> Result<Vec<Model>, DbErr>

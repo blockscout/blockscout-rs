@@ -2,13 +2,13 @@ use crate::{
     error::ServiceError,
     repository::{chains, interop_messages},
     types::{
+        ChainId,
         chains::Chain,
         interop_messages::{InteropMessage, MessageDirection},
-        ChainId,
     },
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
-use sea_orm::{prelude::DateTime, DatabaseConnection};
+use sea_orm::{DatabaseConnection, prelude::DateTime};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone)]

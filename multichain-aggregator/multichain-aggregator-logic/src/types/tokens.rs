@@ -1,9 +1,9 @@
 use super::ChainId;
 use entity::tokens::ActiveModel;
 use sea_orm::{
-    prelude::{BigDecimal, Decimal},
     ActiveValue::{Set, Unchanged},
     DeriveIntoActiveModel, IntoActiveModel, IntoActiveValue,
+    prelude::{BigDecimal, Decimal},
 };
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;

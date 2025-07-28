@@ -1,7 +1,7 @@
 use super::ChainId;
 use crate::error::ParseError;
 use entity::address_coin_balances::{ActiveModel, Model};
-use sea_orm::{prelude::BigDecimal, ActiveValue::Set};
+use sea_orm::{ActiveValue::Set, prelude::BigDecimal};
 
 #[derive(Debug, Clone)]
 pub struct AddressCoinBalance {

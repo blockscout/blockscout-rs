@@ -1,4 +1,4 @@
-use env_collector::{run_env_collector_cli, EnvCollectorSettingsBuilder, PrefixFilter};
+use env_collector::{EnvCollectorSettingsBuilder, PrefixFilter, run_env_collector_cli};
 use multichain_aggregator_server::Settings;
 
 fn main() {

@@ -1,7 +1,7 @@
 use crate::types::address_token_balances::AddressTokenBalance;
 use entity::address_token_balances::{ActiveModel, Column, Entity};
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ColumnTrait, ConnectionTrait, DbErr, EntityTrait,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, prelude::Expr, sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(

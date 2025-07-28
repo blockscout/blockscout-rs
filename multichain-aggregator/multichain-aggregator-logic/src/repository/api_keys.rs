@@ -1,6 +1,6 @@
-use crate::types::{api_keys::ApiKey, ChainId};
+use crate::types::{ChainId, api_keys::ApiKey};
 use entity::api_keys::{Column, Entity};
-use sea_orm::{prelude::Uuid, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, prelude::Uuid};
 
 pub async fn find_by_key_and_chain_id(
     db: &DatabaseConnection,

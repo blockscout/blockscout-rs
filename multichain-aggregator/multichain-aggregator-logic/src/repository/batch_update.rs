@@ -1,10 +1,10 @@
 use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, ConnectionTrait, DbErr, EntityName,
+    EntityTrait, IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, Value,
     prelude::Expr,
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, Func, IntoIden, Query, UpdateStatement, ValueTuple,
     },
-    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, ConnectionTrait, DbErr, EntityName,
-    EntityTrait, IntoActiveModel, IntoSimpleExpr, Iterable, PrimaryKeyToColumn, Value,
 };
 use thiserror::Error;
 
@@ -167,9 +167,9 @@ where
 mod tests {
     use super::*;
     use sea_orm::{
+        ActiveValue::{NotSet, Set},
         entity::prelude::*,
         sea_query::PostgresQueryBuilder,
-        ActiveValue::{NotSet, Set},
     };
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
