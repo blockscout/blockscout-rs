@@ -1,10 +1,17 @@
 use crate::metrics;
 use anyhow::Context;
 use aws_credential_types::Credentials;
-use aws_sdk_s3::{self as s3, config::Region};
+use aws_sdk_s3::{
+    self as s3,
+    config::{
+        timeout::{TimeoutConfig, TimeoutConfigBuilder},
+        Region,
+    },
+};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use futures::{stream::TryStreamExt, StreamExt};
 use serde::Deserialize;
+use std::time::Duration;
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -18,6 +25,36 @@ pub struct S3StorageSettings {
     pub create_bucket: bool,
     #[serde(default)]
     pub validate_on_initialization: bool,
+    #[serde(default)]
+    pub timeout: TimeoutSettings,
+}
+
+#[derive(Deserialize, Debug, Default, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct TimeoutSettings {
+    pub connect_timeout: Option<Duration>,
+    pub read_timeout: Option<Duration>,
+    pub operation_timeout: Option<Duration>,
+    pub operation_attempt_timeout: Option<Duration>,
+}
+
+impl From<TimeoutSettings> for TimeoutConfig {
+    fn from(settings: TimeoutSettings) -> Self {
+        let mut builder = TimeoutConfigBuilder::new();
+        if let Some(value) = settings.connect_timeout {
+            builder = builder.connect_timeout(value);
+        }
+        if let Some(value) = settings.read_timeout {
+            builder = builder.read_timeout(value);
+        }
+        if let Some(value) = settings.operation_timeout {
+            builder = builder.operation_timeout(value);
+        }
+        if let Some(value) = settings.operation_attempt_timeout {
+            builder = builder.operation_attempt_timeout(value);
+        }
+        builder.build()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -43,6 +80,7 @@ impl S3Storage {
             .credentials_provider(credentials)
             .region(Region::new(""))
             .force_path_style(true) // required to use minio as underlying s3 storage provider
+            .timeout_config(settings.timeout.into())
             .build();
         let client = s3::Client::from_conf(config);
 
