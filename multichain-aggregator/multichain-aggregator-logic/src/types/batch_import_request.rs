@@ -1,13 +1,13 @@
 use super::{
+    ChainId,
     address_coin_balances::AddressCoinBalance,
     address_token_balances::AddressTokenBalance,
-    addresses::{proto_token_type_to_db_token_type, Address},
+    addresses::{Address, proto_token_type_to_db_token_type},
     block_ranges::BlockRange,
     counters::{ChainCounters, Counters},
-    hashes::{proto_hash_type_to_db_hash_type, Hash},
+    hashes::{Hash, proto_hash_type_to_db_hash_type},
     interop_message_transfers::InteropMessageTransfer,
     interop_messages::InteropMessage,
-    ChainId,
 };
 use crate::{
     error::{ParseError, ServiceError},

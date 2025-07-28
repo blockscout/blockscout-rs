@@ -8,6 +8,7 @@ use crate::{
     repository::{addresses, block_ranges, hashes},
     services::chains,
     types::{
+        ChainId,
         addresses::{Address, DomainInfo, TokenType},
         block_ranges::ChainBlockNumber,
         dapp::MarketplaceDapp,
@@ -15,7 +16,6 @@ use crate::{
         hashes::{Hash, HashType},
         search_results::QuickSearchResult,
         token_info::Token,
-        ChainId,
     },
 };
 use alloy_primitives::Address as AddressAlloy;

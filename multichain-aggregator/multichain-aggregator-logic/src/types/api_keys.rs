@@ -1,7 +1,7 @@
 use super::ChainId;
 use crate::error::{ParseError, ServiceError};
 use entity::api_keys::Model;
-use sea_orm::{entity::prelude::Uuid, DbErr};
+use sea_orm::{DbErr, entity::prelude::Uuid};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

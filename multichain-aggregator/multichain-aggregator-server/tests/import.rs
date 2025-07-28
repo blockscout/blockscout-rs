@@ -8,7 +8,7 @@ use helpers::{create_test_chains, init_server, upsert_api_keys};
 use migration::Migrator;
 use multichain_aggregator_logic::types::api_keys::ApiKey;
 use pretty_assertions::assert_eq;
-use sea_orm::{prelude::Uuid, EntityTrait};
+use sea_orm::{EntityTrait, prelude::Uuid};
 use serde_json::json;
 
 #[tokio::test]

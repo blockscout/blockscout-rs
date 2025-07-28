@@ -1,4 +1,4 @@
-use crate::types::{addresses::Address, ChainId};
+use crate::types::{ChainId, addresses::Address};
 use alloy_primitives::Address as AddressAlloy;
 use entity::{
     addresses::{Column, Entity, Model},
@@ -6,14 +6,14 @@ use entity::{
 };
 use regex::Regex;
 use sea_orm::{
+    ActiveValue::NotSet,
+    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
+    IntoSimpleExpr, Iterable, Order, QueryFilter, QuerySelect,
     prelude::Expr,
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
         WithClause,
     },
-    ActiveValue::NotSet,
-    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
-    IntoSimpleExpr, Iterable, Order, QueryFilter, QuerySelect,
 };
 use std::{collections::HashMap, sync::OnceLock};
 

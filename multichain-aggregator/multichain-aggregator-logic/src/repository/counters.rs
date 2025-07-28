@@ -4,7 +4,7 @@ use entity::counters_global_imported::{
     Entity as GlobalCountersEntity, Model as GlobalCountersModel,
 };
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
+    ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait, prelude::Expr, sea_query::OnConflict,
 };
 
 pub async fn upsert_chain_counters<C>(db: &C, data: ChainCounters) -> Result<(), DbErr>

@@ -1,5 +1,5 @@
 use migration::{
-    from_sql, Alias, DynIden, IntoIden, MigrationName, MigrationTrait, MigratorTrait, SchemaManager,
+    Alias, DynIden, IntoIden, MigrationName, MigrationTrait, MigratorTrait, SchemaManager, from_sql,
 };
 use sea_orm::DbErr;
 

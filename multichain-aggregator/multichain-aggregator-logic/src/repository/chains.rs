@@ -1,11 +1,11 @@
-use crate::types::{chains::Chain, ChainId};
+use crate::types::{ChainId, chains::Chain};
 use entity::{
     api_keys,
     chains::{ActiveModel, Column, Entity, Model},
 };
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, prelude::Expr, sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(db: &C, chains: Vec<Chain>) -> Result<(), DbErr>

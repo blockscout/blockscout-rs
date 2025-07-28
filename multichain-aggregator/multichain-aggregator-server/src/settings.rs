@@ -4,7 +4,7 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::{Deserialize, Serialize};
-use serde_with::{formats::CommaSeparator, serde_as, StringWithSeparator};
+use serde_with::{StringWithSeparator, formats::CommaSeparator, serde_as};
 use std::{collections::HashMap, time};
 use url::Url;
 
