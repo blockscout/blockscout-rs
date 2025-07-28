@@ -1,6 +1,6 @@
 use crate::types::address_coin_balances::AddressCoinBalance;
 use entity::address_coin_balances::{ActiveModel, Column, Entity};
-use sea_orm::{prelude::Expr, sea_query::OnConflict, ConnectionTrait, DbErr, EntityTrait};
+use sea_orm::{ConnectionTrait, DbErr, EntityTrait, prelude::Expr, sea_query::OnConflict};
 
 pub async fn upsert_many<C>(
     db: &C,

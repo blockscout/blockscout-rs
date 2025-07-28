@@ -12,7 +12,7 @@ pub mod tokens;
 
 mod batch_update;
 
-use sea_orm::{sea_query::IntoValueTuple, ConnectionTrait, Cursor, DbErr, SelectorTrait};
+use sea_orm::{ConnectionTrait, Cursor, DbErr, SelectorTrait, sea_query::IntoValueTuple};
 
 pub async fn paginate_cursor<S, E, R1, R2, F>(
     db: &impl ConnectionTrait,

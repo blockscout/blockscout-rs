@@ -1,10 +1,10 @@
 use crate::types::ChainId;
 use api_client_framework::{
-    serialize_query, Endpoint, Error, HttpApiClient as Client, HttpApiClientConfig,
+    Endpoint, Error, HttpApiClient as Client, HttpApiClientConfig, serialize_query,
 };
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
-use serde_with::{formats::CommaSeparator, serde_as, StringWithSeparator};
+use serde_with::{StringWithSeparator, formats::CommaSeparator, serde_as};
 use url::Url;
 
 pub fn new_client(url: Url) -> Result<Client, Error> {

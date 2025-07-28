@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "multichain-aggregator-entity",
     "multichain-aggregator-logic",

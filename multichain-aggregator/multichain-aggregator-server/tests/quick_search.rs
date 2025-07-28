@@ -10,8 +10,8 @@ use reqwest::StatusCode;
 use sea_orm::prelude::Uuid;
 use serde_json::json;
 use wiremock::{
-    matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
 };
 
 #[tokio::test]

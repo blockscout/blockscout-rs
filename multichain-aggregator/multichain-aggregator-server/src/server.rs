@@ -9,7 +9,7 @@ use crate::{
     services::{ClusterExplorer, HealthService, MultichainAggregator},
     settings::Settings,
 };
-use actix_phoenix_channel::{configure_channel_websocket_route, ChannelCentral};
+use actix_phoenix_channel::{ChannelCentral, configure_channel_websocket_route};
 use blockscout_service_launcher::{
     database,
     launcher::{self, LaunchSettings},
@@ -19,7 +19,7 @@ use multichain_aggregator_logic::{
     clients::{bens, dapp, token_info},
     metrics,
     services::{
-        chains::{fetch_and_upsert_blockscout_chains, MarketplaceEnabledCache},
+        chains::{MarketplaceEnabledCache, fetch_and_upsert_blockscout_chains},
         channel::Channel,
         cluster::Cluster,
         search::UniformChainSearchCache,

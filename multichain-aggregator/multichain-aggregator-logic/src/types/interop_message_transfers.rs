@@ -1,6 +1,6 @@
 use crate::{error::ParseError, proto, types::proto_address_hash_from_alloy};
 use alloy_primitives::Address;
-use sea_orm::{prelude::BigDecimal, ActiveValue::Set};
+use sea_orm::{ActiveValue::Set, prelude::BigDecimal};
 
 #[derive(Debug, Clone)]
 pub struct InteropMessageTransfer {

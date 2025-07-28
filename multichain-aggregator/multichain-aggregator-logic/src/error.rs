@@ -1,8 +1,8 @@
-use crate::types::{api_keys::ApiKeyError, ChainId};
+use crate::types::{ChainId, api_keys::ApiKeyError};
 use alloy_primitives::hex::FromHexError;
 use bigdecimal::ParseBigDecimalError;
 use recache::{handler::CacheRequestError, stores::redis::RedisStoreError};
-use sea_orm::{sqlx::types::uuid, DbErr};
+use sea_orm::{DbErr, sqlx::types::uuid};
 use std::num::{ParseIntError, TryFromIntError};
 use thiserror::Error;
 use tonic::Code;

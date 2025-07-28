@@ -10,8 +10,8 @@ use crate::{
 };
 use entity::tokens::{Column, Entity};
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ColumnTrait, ConnectionTrait, DbErr, EntityTrait,
-    IdenStatic, IntoActiveModel, TransactionError, TransactionTrait,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, IntoActiveModel,
+    TransactionError, TransactionTrait, prelude::Expr, sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(db: &C, tokens: Vec<TokenUpdate>) -> Result<(), DbErr>

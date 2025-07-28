@@ -1,8 +1,8 @@
 use super::{interop_message_transfers, macros::update_if_not_null, paginate_cursor};
 use crate::types::{
+    ChainId,
     interop_message_transfers::InteropMessageTransfer,
     interop_messages::{InteropMessage, MessageDirection},
-    ChainId,
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
 use entity::{
@@ -10,10 +10,10 @@ use entity::{
     interop_messages_transfers,
 };
 use sea_orm::{
-    prelude::{DateTime, Expr},
-    sea_query::OnConflict,
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, PaginatorTrait, QueryFilter,
     QueryTrait, TransactionError, TransactionTrait,
+    prelude::{DateTime, Expr},
+    sea_query::OnConflict,
 };
 use std::collections::HashMap;
 
