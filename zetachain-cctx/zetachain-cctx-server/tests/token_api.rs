@@ -5,11 +5,11 @@ use blockscout_service_launcher::test_server;
 use pretty_assertions::assert_eq;
 use sea_orm::{ActiveValue, EntityTrait};
 
-use zetachain_cctx_entity::{token, sea_orm_active_enums::CoinType};
+use zetachain_cctx_entity::{token, sea_orm_active_enums::CoinType as DbCoinType};
 use zetachain_cctx_logic::{client::{Client, RpcSettings}, database::ZetachainCctxDatabase};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::TokenInfoResponse
 ;
-
+use zetachain_cctx_logic::models::CoinType;
 use sea_orm::{PaginatorTrait,QueryFilter, ColumnTrait};
 
 use uuid::Uuid;
@@ -33,7 +33,7 @@ async fn test_token_api_get_token_info() {
         decimals: ActiveValue::Set(6),
         name: ActiveValue::Set("ZetaChain ZRC20 USDC on Arbitrum One".to_string()),
         symbol: ActiveValue::Set("USDC.ARB".to_string()),
-        coin_type: ActiveValue::Set(CoinType::Erc20),
+        coin_type: ActiveValue::Set(DbCoinType::Erc20),
         gas_limit: ActiveValue::Set("100000".to_string()),
         paused: ActiveValue::Set(false),
         liquidity_cap: ActiveValue::Set("750000000000".to_string()),
@@ -93,7 +93,7 @@ async fn test_token_database_sync_and_query() {
             decimals: 18,
             name: "Test Token 1".to_string(),
             symbol: "TEST1".to_string(),
-            coin_type: "ERC20".to_string(),
+            coin_type: CoinType::Gas,
             gas_limit: "100000".to_string(),
             paused: false,
             liquidity_cap: "1000000000".to_string(),
@@ -105,7 +105,7 @@ async fn test_token_database_sync_and_query() {
             decimals: 6,
             name: "Test Token 2".to_string(),
             symbol: "TEST2".to_string(),
-            coin_type: "ERC20".to_string(),
+            coin_type: CoinType::ERC20,
             gas_limit: "80000".to_string(),
             paused: true,
             liquidity_cap: "2000000000".to_string(),
@@ -159,7 +159,7 @@ async fn test_token_database_sync_and_query() {
             decimals: 18,
             name: "Updated Test Token 1".to_string(), // Changed name
             symbol: "UTEST1".to_string(), // Changed symbol
-            coin_type: "ERC20".to_string(),
+            coin_type: CoinType::ERC20,
             gas_limit: "150000".to_string(), // Changed gas limit
             paused: true, // Changed paused status
             liquidity_cap: "1500000000".to_string(), // Changed liquidity cap

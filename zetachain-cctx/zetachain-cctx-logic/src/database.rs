@@ -1962,9 +1962,9 @@ impl ZetachainCctxDatabase {
                         ELSE cs.status :: text
                     END
                 ) as status_reduced,
-                t.symbol as token_symbol,
-                t.zrc20_contract_address,
-                t.decimals,
+                COALESCE(t.symbol, gt.symbol) as token_symbol,
+                COALESCE(t.zrc20_contract_address, gt.zrc20_contract_address) as zrc20_contract_address,
+                COALESCE(t.decimals, gt.decimals) as decimals,
                 cctx.id
             FROM
                 cross_chain_tx cctx
@@ -1984,6 +1984,7 @@ impl ZetachainCctxDatabase {
                         outbound_params op
                 ) last_op ON cctx.id = last_op.cross_chain_tx_id AND last_op.rn = 1
                 LEFT JOIN token t ON ip.asset = t.asset and ip.asset!=''
+                LEFT JOIN token gt ON gt.coin_type::text = 'Gas' and gt.foreign_chain_id = ip.sender_chain_id
             ) as cctxs
         WHERE
         1 = 1
@@ -2109,6 +2110,19 @@ impl ZetachainCctxDatabase {
                 sql.push_str(&format!(" AND id < ${}", param_count));
             }
             params.push(sea_orm::Value::BigInt(Some(page_key)));
+        }
+
+        if !filters.token_symbol.is_empty() {
+            param_count += 1;
+            sql.push_str(&format!(" AND token_symbol = ANY(${})", param_count));
+            params.push(sea_orm::Value::Array(
+            sea_orm::sea_query::ArrayType::String,
+                Some(Box::new(
+                    filters.token_symbol.into_iter()
+                        .map(|s| sea_orm::Value::String(Some(Box::new(s))))
+                        .collect::<Vec<_>>()
+                ))
+            ));
         }
 
         // No need to group since we're only getting the last outbound_params row per CCTX

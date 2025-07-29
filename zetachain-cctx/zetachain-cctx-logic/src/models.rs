@@ -259,7 +259,7 @@ pub struct Token {
     pub decimals: i32,
     pub name: String,
     pub symbol: String,
-    pub coin_type: String,
+    pub coin_type: CoinType,
     pub gas_limit: String,
     pub paused: bool,
     pub liquidity_cap: String,
@@ -272,15 +272,7 @@ impl TryFrom<Token> for zetachain_cctx_entity::token::ActiveModel {
         use zetachain_cctx_entity::token;
         use sea_orm::ActiveValue;
         
-        let coin_type = match token.coin_type.as_str() {
-            "Zeta" => DbCoinType::Zeta,
-            "Gas" => DbCoinType::Gas,
-            "ERC20" | "Erc20" => DbCoinType::Erc20,
-            "Cmd" => DbCoinType::Cmd,
-            "NoAssetCall" => DbCoinType::NoAssetCall,
-            _ => return Err(anyhow::anyhow!("Invalid coin type: {}", token.coin_type)),
-        };
-        
+        let coin_type: DbCoinType = DbCoinType::try_from(token.coin_type).map_err(|e| anyhow::anyhow!(e))?;
         Ok(token::ActiveModel {
             id: ActiveValue::NotSet,
             zrc20_contract_address: ActiveValue::Set(token.zrc20_contract_address),

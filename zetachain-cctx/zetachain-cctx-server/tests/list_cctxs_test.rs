@@ -44,7 +44,7 @@ async fn test_list_cctxs_endpoint() {
 
     // Test the ListCctxs endpoint
     let response: serde_json::Value =
-        test_server::send_get_request(&base, "/api/v1/CctxInfo:list?limit=10&offset=0")
+        test_server::send_get_request(&base, "/api/v1/CctxInfo:list?limit=10&direction=DESC")
             .await;
 
     // The response should be a valid JSON object with a "cctxs" array
@@ -102,7 +102,7 @@ async fn test_list_cctxs_with_status_filter() {
     // Test the ListCctxs endpoint with status filter
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        "/api/v1/CctxInfo:list?limit=10&offset=0&status_reduced=Success",
+        "/api/v1/CctxInfo:list?limit=10&status_reduced=Success&direction=DESC",
     )
     .await;
 
@@ -121,7 +121,7 @@ async fn test_list_cctxs_with_status_filter() {
 
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        "/api/v1/CctxInfo:list?limit=10&offset=0&status_reduced=Pending",
+        "/api/v1/CctxInfo:list?limit=10&status_reduced=Pending&direction=DESC",
     )
     .await;
 
@@ -140,7 +140,7 @@ async fn test_list_cctxs_with_status_filter() {
 
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        "/api/v1/CctxInfo:list?limit=10&offset=0&status_reduced=Success,Pending",
+        "/api/v1/CctxInfo:list?limit=10&status_reduced=Success,Pending&direction=DESC",
     )
     .await;
 
@@ -226,7 +226,7 @@ async  fn test_list_cctxs_with_filters() {
     let status_reduced = "Pending";
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        format!("/api/v1/CctxInfo:list?limit=10&offset=0&status_reduced={status_reduced}&sender_address={sender_address}&receiver_address={receiver_address}&asset={asset}&coin_type={coin_type}&source_chain_id={source_chain_id}&target_chain_id={target_chain_id}&start_timestamp={start_timestamp}&end_timestamp={end_timestamp}").as_str(),
+        format!("/api/v1/CctxInfo:list?limit=10&status_reduced={status_reduced}&sender_address={sender_address}&receiver_address={receiver_address}&asset={asset}&coin_type={coin_type}&source_chain_id={source_chain_id}&target_chain_id={target_chain_id}&start_timestamp={start_timestamp}&end_timestamp={end_timestamp}&direction=DESC").as_str(),
     )
     .await;
 
@@ -244,7 +244,7 @@ async  fn test_list_cctxs_with_filters() {
     let status = "Success,Pending";
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        format!("/api/v1/CctxInfo:list?limit=10&offset=0&status_reduced={status}").as_str(),
+        format!("/api/v1/CctxInfo:list?limit=10&status_reduced={status}&direction=DESC").as_str(),
     )
     .await;
 
@@ -328,7 +328,7 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     // Test filtering by reduced status "Pending"
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        "/api/v1/CctxInfo:list?limit=20&offset=0&status_reduced=Pending",
+        "/api/v1/CctxInfo:list?limit=20&status_reduced=Pending&direction=DESC",
     )
     .await;
 
@@ -342,7 +342,7 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     // Test filtering by reduced status "Success"
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        "/api/v1/CctxInfo:list?limit=20&offset=0&status_reduced=Success",
+        "/api/v1/CctxInfo:list?limit=20&status_reduced=Success&direction=DESC",
     )
     .await;
 
@@ -356,7 +356,7 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     // Test filtering by reduced status "Failed"
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        "/api/v1/CctxInfo:list?limit=20&offset=0&status_reduced=Failed",
+        "/api/v1/CctxInfo:list?limit=20&status_reduced=Failed&direction=DESC",
     )
     .await;
 
