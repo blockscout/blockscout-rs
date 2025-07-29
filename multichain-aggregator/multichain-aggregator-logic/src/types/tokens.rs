@@ -1,7 +1,7 @@
 use super::ChainId;
 use entity::tokens::ActiveModel;
 use sea_orm::{
-    ActiveValue::{Set, Unchanged},
+    ActiveValue::{NotSet, Set, Unchanged},
     DeriveIntoActiveModel, IntoActiveModel, IntoActiveValue,
     prelude::{BigDecimal, Decimal},
 };
@@ -23,7 +23,7 @@ pub struct UpdateTokenMetadata {
     pub name: Option<String>,
     pub symbol: Option<String>,
     pub decimals: Option<i16>,
-    pub token_type: TokenType,
+    pub token_type: Option<TokenType>,
     pub icon_url: Option<String>,
     pub total_supply: Option<BigDecimal>,
 }
@@ -38,7 +38,10 @@ impl IntoActiveModel<ActiveModel> for UpdateTokenMetadata {
             name: IntoActiveValue::<_>::into_active_value(self.name),
             symbol: IntoActiveValue::<_>::into_active_value(self.symbol),
             decimals: IntoActiveValue::<_>::into_active_value(self.decimals),
-            token_type: Set(self.token_type),
+            token_type: match self.token_type {
+                Some(value) => Set(value),
+                None => NotSet,
+            },
             icon_url: IntoActiveValue::<_>::into_active_value(self.icon_url),
             total_supply: Set(self.total_supply),
             ..Default::default()
