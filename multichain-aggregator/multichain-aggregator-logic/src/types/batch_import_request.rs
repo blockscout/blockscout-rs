@@ -81,6 +81,32 @@ impl BatchImportRequest {
             |b: &AddressTokenBalance| b.chain_id,
             "address_token_balances"
         );
+
+        macro_rules! record_token_update {
+            ($metrics: expr, $token_update: expr, $entity_name: expr) => {
+                if let Some(update) = &$token_update {
+                    *$metrics
+                        .entry(update.chain_id)
+                        .or_insert(HashMap::new())
+                        .entry($entity_name)
+                        .or_insert(0) += 1;
+                }
+            };
+        }
+
+        let mut token_metrics: HashMap<ChainId, HashMap<&str, u64>> = HashMap::new();
+        for t in &self.tokens {
+            record_token_update!(token_metrics, t.metadata, "tokens_metadata");
+            record_token_update!(token_metrics, t.price_data, "tokens_price_data");
+            record_token_update!(token_metrics, t.counters, "tokens_counters");
+        }
+        for (chain_id, metrics) in token_metrics {
+            for (entity_name, count) in metrics {
+                IMPORT_ENTITIES_COUNT
+                    .with_label_values(&[chain_id.to_string().as_str(), entity_name])
+                    .inc_by(count);
+            }
+        }
     }
 }
 
