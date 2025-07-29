@@ -375,8 +375,7 @@ impl TryFrom<(ChainId, proto::batch_import_request::TokenImport)> for TokenUpdat
             metadata: t
                 .metadata
                 .map(|m| {
-                    let token_type = proto_token_type_to_db_token_type(m.token_type())
-                        .ok_or_else(|| ParseError::Custom("invalid token type".to_string()))?;
+                    let token_type = proto_token_type_to_db_token_type(m.token_type());
                     Ok::<_, Self::Error>(UpdateTokenMetadata {
                         address_hash: address_hash.clone(),
                         chain_id,

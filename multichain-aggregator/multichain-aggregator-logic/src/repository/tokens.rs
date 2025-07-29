@@ -18,6 +18,7 @@ pub async fn upsert_many<C>(db: &C, tokens: Vec<TokenUpdate>) -> Result<(), DbEr
 where
     C: ConnectionTrait + TransactionTrait,
 {
+    let mut metadata_upserts = Vec::new();
     let mut metadata_updates = Vec::new();
     let mut price_updates = Vec::new();
     let mut counter_updates = Vec::new();
@@ -25,7 +26,13 @@ where
 
     for token in tokens {
         if let Some(metadata) = token.metadata {
-            metadata_updates.push(metadata);
+            // Models with present NOT NULL columns are upserted.
+            // Other models are optionally updated.
+            if metadata.token_type.is_some() {
+                metadata_upserts.push(metadata);
+            } else {
+                metadata_updates.push(metadata);
+            }
         }
         if let Some(price_data) = token.price_data {
             price_updates.push(price_data);
@@ -43,8 +50,12 @@ where
     // while price and counter updates can only update existing ones.
     db.transaction(|tx| {
         Box::pin(async move {
+            if !metadata_upserts.is_empty() {
+                upsert_token_metadata(tx, metadata_upserts).await?;
+            }
+
             if !metadata_updates.is_empty() {
-                upsert_token_metadata(tx, metadata_updates).await?;
+                update_token_metadata(tx, metadata_updates).await?;
             }
 
             if !price_updates.is_empty() {
@@ -102,6 +113,20 @@ where
         .do_nothing()
         .exec_without_returning(db)
         .await?;
+
+    Ok(())
+}
+
+async fn update_token_metadata<C>(
+    db: &C,
+    mut updates: Vec<UpdateTokenMetadata>,
+) -> Result<(), DbErr>
+where
+    C: ConnectionTrait + TransactionTrait,
+{
+    updates.sort_by(|a, b| (&a.address_hash, a.chain_id).cmp(&(&b.address_hash, b.chain_id)));
+    let active_models = updates.into_iter().map(|m| m.into_active_model());
+    batch_update(db, active_models).await?;
 
     Ok(())
 }
