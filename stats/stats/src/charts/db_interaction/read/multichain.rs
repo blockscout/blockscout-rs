@@ -11,6 +11,9 @@ struct MinBlock {
 }
 
 pub async fn get_min_block_multichain(multichain: &DatabaseConnection) -> Result<i64, DbErr> {
+    // sum of all min blocks is a good indicator of new past data
+    // because min block for a chain can only decrease as the indexation continues
+    // or new chain may be added which will change the sum, indicating a need for the full reupdate
     let value = block_ranges::Entity::find()
         .select_only()
         .column_as(
