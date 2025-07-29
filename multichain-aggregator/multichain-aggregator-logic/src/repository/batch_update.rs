@@ -13,15 +13,27 @@ where
     C: ConnectionTrait,
     A: ActiveModelTrait,
 {
-    let query = match prepare_batch_update_query(models) {
+    let models = models.into_iter().collect::<Vec<_>>();
+    let models_count = models.len();
+    let query = match prepare_batch_update_query(models.into_iter()) {
         Ok(query) => query,
         Err(PrepareBatchUpdateError::NoColumnsToUpdate) => {
             return Ok(());
         }
         Err(e) => return Err(DbErr::Custom(e.to_string())),
     };
+
     let stmt = db.get_database_backend().build(&query);
-    db.execute(stmt).await?;
+    let res = db.execute(stmt).await?;
+
+    let rows_affected = res.rows_affected();
+    if rows_affected != models_count as u64 {
+        tracing::warn!(
+            rows_affected = rows_affected,
+            models_count = models_count,
+            "number of rows updated does not match number of models to update",
+        );
+    }
 
     Ok(())
 }
