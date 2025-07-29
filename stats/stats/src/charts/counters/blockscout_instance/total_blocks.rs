@@ -110,7 +110,7 @@ pub type TotalBlocksInt = MapParseTo<TotalBlocks, i64>;
 mod tests {
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::BlockscoutMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
         tests::{
             init_db::init_db_all,
             mock_blockscout::fill_mock_blockscout_data,
@@ -151,7 +151,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
@@ -180,7 +180,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
@@ -219,7 +219,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,

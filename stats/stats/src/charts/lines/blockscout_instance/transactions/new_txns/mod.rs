@@ -16,7 +16,7 @@ use crate::{
     counters::OpStackYesterdayOperationalTxns,
     data_source::{
         kinds::remote_db::{PullAllWithAndSortCached, RemoteDatabaseSource, StatementFromRange},
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     lines::OpStackNewOperationalTxnsWindow,
     types::new_txns::NewTxnsCombinedPoint,
@@ -33,7 +33,7 @@ pub struct NewTxnsCombinedStatement;
 impl StatementFromRange for NewTxnsCombinedStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
         enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         // not the cleanest solution but it works
@@ -130,7 +130,7 @@ mod tests {
 
     use crate::{
         data_source::{
-            DataSource, kinds::remote_db::StatementFromRange, types::BlockscoutMigrations,
+            DataSource, kinds::remote_db::StatementFromRange, types::IndexerMigrations,
         },
         lines::{NewTxnsCombinedStatement, OpStackNewOperationalTxns},
         tests::{normalize_sql, point_construction::dt},
@@ -147,7 +147,7 @@ mod tests {
 
         let denormalized_with_op_stack = NewTxnsCombinedStatement::get_statement(
             Some(test_range.clone()),
-            &BlockscoutMigrations::latest(),
+            &IndexerMigrations::latest(),
             &enabled_with_op_stack,
         );
         let expected = format!(
@@ -175,7 +175,7 @@ mod tests {
 
         let not_denormalized_with_op_stack = NewTxnsCombinedStatement::get_statement(
             Some(test_range.clone()),
-            &BlockscoutMigrations::empty(),
+            &IndexerMigrations::empty(),
             &enabled_with_op_stack,
         );
 
@@ -205,7 +205,7 @@ mod tests {
 
         let denormalized_without_op_stack = NewTxnsCombinedStatement::get_statement(
             Some(test_range),
-            &BlockscoutMigrations::latest(),
+            &IndexerMigrations::latest(),
             &HashSet::new(),
         );
         let expected = r#"

@@ -17,7 +17,7 @@ use crate::{
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -33,7 +33,7 @@ pub struct NewBlocksStatement;
 impl StatementFromRange for NewBlocksStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        _: &BlockscoutMigrations,
+        _: &IndexerMigrations,
         _: &HashSet<ChartKey>,
     ) -> Statement {
         sql_with_range_filter_opt!(
@@ -108,7 +108,7 @@ mod tests {
     use super::*;
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::BlockscoutMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
         query_dispatch::{QuerySerialized, serialize_line_points},
         range::UniversalRange,
         tests::{
@@ -174,7 +174,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             update_time_override: Some(current_time),
             enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             force_full: false,
@@ -252,7 +252,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,
@@ -349,7 +349,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,

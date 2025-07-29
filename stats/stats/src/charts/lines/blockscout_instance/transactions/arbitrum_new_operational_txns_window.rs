@@ -21,7 +21,7 @@ use crate::{
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     lines::{NEW_TXNS_WINDOW_RANGE, NewBlocksStatement, NewTxnsWindowInt},
@@ -38,7 +38,7 @@ use super::arbitrum_new_operational_txns::ArbitrumCalculateOperationalTxnsVec;
 
 fn new_blocks_window_statement(
     update_day: NaiveDate,
-    completed_migrations: &BlockscoutMigrations,
+    completed_migrations: &IndexerMigrations,
     enabled_update_charts_recursive: &HashSet<ChartKey>,
 ) -> Statement {
     // `update_day` is not included because the data would
@@ -150,7 +150,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive:
                 ArbitrumNewOperationalTxnsWindow::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),

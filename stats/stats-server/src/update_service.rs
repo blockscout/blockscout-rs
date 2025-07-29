@@ -14,7 +14,7 @@ use crate::{
 };
 use stats::{
     ChartKey,
-    data_source::types::{BlockscoutMigrations, UpdateParameters},
+    data_source::types::{IndexerMigrations, UpdateParameters},
 };
 
 use std::{collections::HashSet, sync::Arc};
@@ -404,7 +404,7 @@ impl UpdateService {
             "updating group of charts"
         );
         let Ok(active_migrations) =
-            BlockscoutMigrations::query_from_db(self.is_multichain_mode, &self.indexer_db)
+            IndexerMigrations::query_from_db(self.is_multichain_mode, &self.indexer_db)
                 .await
                 .inspect_err(|err| {
                     tracing::error!("error during blockscout migrations detection: {:?}", err)

@@ -170,7 +170,9 @@ where
         }
         let chart_id = metadata.id;
         let min_indexer_block = if cx.is_multichain_mode {
-            get_min_block_multichain()
+            get_min_block_multichain(cx.indexer_db)
+                .await
+                .map_err(ChartError::IndexerDB)?
         } else {
             get_min_block_blockscout(cx.indexer_db)
                 .await
@@ -346,7 +348,7 @@ where
 mod tests {
     use crate::{
         counters::TotalTxns,
-        data_source::{UpdateParameters, types::BlockscoutMigrations},
+        data_source::{UpdateParameters, types::IndexerMigrations},
         tests::{
             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
             point_construction::d,
@@ -369,7 +371,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: TotalTxns::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
@@ -418,7 +420,7 @@ mod tests {
                     parameter_traits::UpdateBehaviour,
                     parameters::{DefaultCreate, DefaultQueryLast},
                 },
-                types::{BlockscoutMigrations, Get},
+                types::{Get, IndexerMigrations},
             },
             gettable_const,
             tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
@@ -552,7 +554,7 @@ mod tests {
                 stats_db: &db,
                 is_multichain_mode: false,
                 indexer_db: &blockscout,
-                indexer_applied_migrations: BlockscoutMigrations::latest(),
+                indexer_applied_migrations: IndexerMigrations::latest(),
                 enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(next_time),
                 force_full: true,
@@ -574,7 +576,7 @@ mod tests {
                 stats_db: &db,
                 is_multichain_mode: false,
                 indexer_db: &blockscout,
-                indexer_applied_migrations: BlockscoutMigrations::latest(),
+                indexer_applied_migrations: IndexerMigrations::latest(),
                 enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
@@ -592,7 +594,7 @@ mod tests {
                 stats_db: &db,
                 is_multichain_mode: false,
                 indexer_db: &blockscout,
-                indexer_applied_migrations: BlockscoutMigrations::latest(),
+                indexer_applied_migrations: IndexerMigrations::latest(),
                 enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
@@ -608,7 +610,7 @@ mod tests {
                 stats_db: &db,
                 is_multichain_mode: false,
                 indexer_db: &blockscout,
-                indexer_applied_migrations: BlockscoutMigrations::latest(),
+                indexer_applied_migrations: IndexerMigrations::latest(),
                 enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,

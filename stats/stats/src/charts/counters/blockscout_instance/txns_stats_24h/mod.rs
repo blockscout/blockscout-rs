@@ -5,7 +5,7 @@ use crate::{
     charts::db_interaction::utils::datetime_range_filter,
     data_source::{
         kinds::remote_db::{PullOne24hCached, RemoteDatabaseSource, StatementFromRange},
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     lines::op_stack_operational_transactions_filter,
 };
@@ -26,7 +26,7 @@ pub struct TxnsStatsStatement;
 impl StatementFromRange for TxnsStatsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
         _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         use sea_orm::prelude::*;
@@ -94,7 +94,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        data_source::{kinds::remote_db::StatementFromRange, types::BlockscoutMigrations},
+        data_source::{kinds::remote_db::StatementFromRange, types::IndexerMigrations},
         tests::{normalize_sql, point_construction::dt},
     };
 
@@ -105,7 +105,7 @@ mod tests {
         // mostly a test for easier comprehension of `TxnsStatsStatement`
         let actual = TxnsStatsStatement::get_statement(
             Some(dt("2025-01-01T00:00:00").and_utc()..dt("2025-01-02T00:00:00").and_utc()),
-            &BlockscoutMigrations::latest(),
+            &IndexerMigrations::latest(),
             &HashSet::new(),
         );
 

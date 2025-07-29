@@ -5,7 +5,7 @@ use crate::{
             local_db::DirectPointLocalDbChartSource,
             remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::TimespanValue,
@@ -18,7 +18,7 @@ use sea_orm::{DbBackend, Statement};
 pub struct TotalTokensStatement;
 
 impl StatementForOne for TotalTokensStatement {
-    fn get_statement(_: &BlockscoutMigrations) -> Statement {
+    fn get_statement(_: &IndexerMigrations) -> Statement {
         Statement::from_string(
             DbBackend::Postgres,
             r#"

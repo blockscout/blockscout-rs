@@ -5,7 +5,7 @@ use crate::{
             local_db::DirectPointLocalDbChartSource,
             remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     types::TimespanValue,
 };
@@ -17,7 +17,7 @@ use sea_orm::{DbBackend, Statement};
 pub struct CompletedTxnsStatement;
 
 impl StatementForOne for CompletedTxnsStatement {
-    fn get_statement(completed_migrations: &BlockscoutMigrations) -> Statement {
+    fn get_statement(completed_migrations: &IndexerMigrations) -> Statement {
         if completed_migrations.denormalization {
             Statement::from_string(
                 DbBackend::Postgres,

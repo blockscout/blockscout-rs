@@ -19,7 +19,7 @@ use crate::{
             },
             remote_db::{PullEachWith, RemoteDatabaseSource, StatementFromTimespan},
         },
-        types::{BlockscoutMigrations, Get},
+        types::{IndexerMigrations, Get},
     },
     define_and_impl_resolution_properties, gettable_const,
     types::timespans::{Month, Week, Year},
@@ -37,7 +37,7 @@ impl<Recurrence: RecurrencePeriod> StatementFromTimespan
 {
     fn get_statement(
         range: Range<DateTime<Utc>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
     ) -> Statement {
         let recurrence_range = Recurrence::generate(range.clone());
         if completed_migrations.denormalization {

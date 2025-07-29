@@ -8,7 +8,7 @@ use crate::{
     charts::db_interaction::read::{cached::find_one_value_cached, find_one_value},
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
-        types::{BlockscoutMigrations, Cacheable, UpdateContext, WrappedValue},
+        types::{IndexerMigrations, Cacheable, UpdateContext, WrappedValue},
     },
     range::{UniversalRange, inclusive_range_to_exclusive},
     types::{Timespan, TimespanValue},
@@ -17,7 +17,7 @@ use crate::{
 use super::StatementFromRange;
 
 pub trait StatementForOne {
-    fn get_statement(completed_migrations: &BlockscoutMigrations) -> Statement;
+    fn get_statement(completed_migrations: &IndexerMigrations) -> Statement;
 }
 
 /// Get a single record from remote (blockscout) DB using statement
@@ -53,7 +53,7 @@ where
 pub trait StatementFromUpdateTime {
     fn get_statement(
         update_time: DateTime<Utc>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
     ) -> Statement;
 }
 
@@ -141,7 +141,7 @@ mod test {
         data_source::{
             UpdateContext, UpdateParameters,
             kinds::remote_db::{RemoteQueryBehaviour, StatementFromRange},
-            types::{BlockscoutMigrations, WrappedValue},
+            types::{IndexerMigrations, WrappedValue},
         },
         range::UniversalRange,
         tests::point_construction::dt,
@@ -154,7 +154,7 @@ mod test {
     impl StatementFromRange for TestStatement {
         fn get_statement(
             _range: Option<Range<DateTime<Utc>>>,
-            _completed_migrations: &BlockscoutMigrations,
+            _completed_migrations: &IndexerMigrations,
             _enabled_update_charts_recursive: &HashSet<ChartKey>,
         ) -> Statement {
             Statement::from_string(DbBackend::Postgres, "SELECT id as value FROM t;")
@@ -184,7 +184,7 @@ mod test {
             &db,
             false,
             &db,
-            BlockscoutMigrations::latest(),
+            IndexerMigrations::latest(),
             Some(time),
         ));
         assert_eq!(

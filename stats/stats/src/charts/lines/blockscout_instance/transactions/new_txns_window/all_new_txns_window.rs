@@ -65,7 +65,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::BlockscoutMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
         query_dispatch::QuerySerialized,
         range::UniversalRange,
         tests::{
@@ -91,7 +91,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: NewTxnsWindow::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,

@@ -6,7 +6,7 @@ use crate::{
             local_db::{DirectPointLocalDbChartSourceWithEstimate, parameters::ValueEstimation},
             remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
     types::{TimespanValue, timespans::DateValue},
@@ -19,7 +19,7 @@ use sea_orm::{DatabaseConnection, DbBackend, EntityName, Statement};
 pub struct TotalAddressesStatement;
 
 impl StatementForOne for TotalAddressesStatement {
-    fn get_statement(_: &BlockscoutMigrations) -> Statement {
+    fn get_statement(_: &IndexerMigrations) -> Statement {
         Statement::from_string(
             DbBackend::Postgres,
             r#"

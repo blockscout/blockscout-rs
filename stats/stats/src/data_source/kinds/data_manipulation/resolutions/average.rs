@@ -122,8 +122,7 @@ mod tests {
     use crate::{
         MissingDatePolicy,
         data_source::{
-            UpdateParameters, kinds::data_manipulation::map::MapParseTo,
-            types::BlockscoutMigrations,
+            UpdateParameters, kinds::data_manipulation::map::MapParseTo, types::IndexerMigrations,
         },
         gettable_const,
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
@@ -188,7 +187,7 @@ mod tests {
                 &db,
                 false,
                 &db,
-                BlockscoutMigrations::latest(),
+                IndexerMigrations::latest(),
                 Some(dt("2024-07-15T09:00:00").and_utc()),
             )),
             (dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()).into(),
@@ -237,7 +236,7 @@ mod tests {
                 &empty_db,
                 false,
                 &empty_db,
-                BlockscoutMigrations::latest(),
+                IndexerMigrations::latest(),
                 Some(dt("2024-07-30T09:00:00").and_utc()),
             ));
         let week_1_average = (5.0 * 100.0 + 34.2 * 2.0 + 10.3 * 12.0) / (100.0 + 2.0 + 12.0);
@@ -288,7 +287,7 @@ mod tests {
                 &empty_db,
                 false,
                 &empty_db,
-                BlockscoutMigrations::latest(),
+                IndexerMigrations::latest(),
                 Some(dt("2023-03-30T09:00:00").and_utc()),
             ));
         assert_eq!(
@@ -335,7 +334,7 @@ mod tests {
                 &empty_db,
                 false,
                 &empty_db,
-                BlockscoutMigrations::latest(),
+                IndexerMigrations::latest(),
                 Some(dt("2023-03-30T09:00:00").and_utc()),
             ));
         assert_eq!(

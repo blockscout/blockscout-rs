@@ -17,7 +17,7 @@ use crate::{
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
@@ -38,7 +38,7 @@ pub struct NewUserOpsStatement;
 impl StatementFromRange for NewUserOpsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        _completed_migrations: &BlockscoutMigrations,
+        _completed_migrations: &IndexerMigrations,
         _: &HashSet<ChartKey>,
     ) -> Statement {
         let date_intermediate_col = "date".into_identity();

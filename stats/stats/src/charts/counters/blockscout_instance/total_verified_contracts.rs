@@ -6,7 +6,7 @@ use crate::{
             local_db::DirectPointLocalDbChartSource,
             remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
 };
@@ -24,7 +24,7 @@ pub struct TotalVerifiedContractsStatement;
 impl StatementFromUpdateTime for TotalVerifiedContractsStatement {
     fn get_statement(
         update_time: DateTime<Utc>,
-        _completed_migrations: &BlockscoutMigrations,
+        _completed_migrations: &IndexerMigrations,
     ) -> Statement {
         smart_contracts::Entity::find()
             .select_only()

@@ -27,7 +27,7 @@ use stats::{
         TotalAddresses, TotalBlocks, TotalContracts, TotalTxns, TotalVerifiedContracts, TxnsFee24h,
         YesterdayTxns,
     },
-    data_source::{UpdateContext, UpdateParameters, types::BlockscoutMigrations},
+    data_source::{UpdateContext, UpdateParameters, types::IndexerMigrations},
     lines::{
         ArbitrumNewOperationalTxnsWindow, NEW_TXNS_WINDOW_RANGE, NewTxnsWindow,
         OpStackNewOperationalTxnsWindow,
@@ -238,7 +238,7 @@ impl ReadService {
         points_limit: Option<RequestedPointsLimit>,
         query_time: DateTime<Utc>,
     ) -> Result<Data, ChartError> {
-        let migrations = BlockscoutMigrations::query_from_db(self.multichain_mode, &self.indexer)
+        let migrations = IndexerMigrations::query_from_db(self.multichain_mode, &self.indexer)
             .await
             .map_err(ChartError::IndexerDB)?;
         let context =

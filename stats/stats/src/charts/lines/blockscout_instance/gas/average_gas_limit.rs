@@ -17,7 +17,7 @@ use crate::{
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     lines::{NewBlocksInt, NewBlocksMonthlyInt},
@@ -34,7 +34,7 @@ pub struct AverageGasLimitStatement;
 impl StatementFromRange for AverageGasLimitStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        _: &BlockscoutMigrations,
+        _: &IndexerMigrations,
         _: &HashSet<ChartKey>,
     ) -> Statement {
         sql_with_range_filter_opt!(

@@ -9,7 +9,7 @@ use crate::{
     data_source::{
         UpdateContext,
         kinds::remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     range::UniversalRange,
     types::{Timespan, TimespanDuration, new_txns::NewTxnsCombinedPoint},
@@ -27,7 +27,7 @@ pub const WINDOW: u64 = 30;
 
 fn new_txns_window_combined_statement(
     update_day: NaiveDate,
-    completed_migrations: &BlockscoutMigrations,
+    completed_migrations: &IndexerMigrations,
     enabled_update_charts_recursive: &HashSet<ChartKey>,
 ) -> Statement {
     // `update_day` is not included because the data would

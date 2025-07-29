@@ -12,7 +12,7 @@ use crate::{
     charts::db_interaction::read::{cached::find_all_cached, find_all_points},
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
-        types::{BlockscoutMigrations, Cacheable, UpdateContext},
+        types::{IndexerMigrations, Cacheable, UpdateContext},
     },
     range::{UniversalRange, data_source_query_range_to_db_statement_range},
     types::{TimespanTrait, TimespanValue},
@@ -23,7 +23,7 @@ pub trait StatementFromRange {
     /// can be used for selecting more optimal query
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
         enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement;
 }

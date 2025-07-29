@@ -19,7 +19,7 @@ use crate::{
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -35,7 +35,7 @@ pub struct NewBlockRewardsStatement;
 impl StatementFromRange for NewBlockRewardsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        _: &BlockscoutMigrations,
+        _: &IndexerMigrations,
         _: &HashSet<ChartKey>,
     ) -> Statement {
         sql_with_range_filter_opt!(
@@ -101,7 +101,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::BlockscoutMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
         range::UniversalRange,
         tests::{
             init_db::init_db_all,
@@ -153,7 +153,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: NewBlockRewardsMonthlyInt::all_dependencies_chart_keys(
             ),
             update_time_override: Some(current_time),

@@ -1,7 +1,32 @@
-pub fn get_min_block_multichain() -> i64 {
-    // No reasonable value for min block in multichain db
-    // Data is indexed for each chain separately, therefore we need some other mechanism
-    // to detect that we need to recalculate the data
-    // todo: implement when adding more complex multichain charts (i.e. per-address stats)
-    i64::MAX
+use multichain_aggregator_entity::block_ranges;
+use sea_orm::{
+    DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, sea_query::Expr,
+};
+
+#[derive(FromQueryResult)]
+struct MinBlock {
+    min_block: i64,
+}
+
+pub async fn get_min_block_multichain(multichain: &DatabaseConnection) -> Result<i64, DbErr> {
+    let not_found_value = i64::MAX;
+    let min_blocks = block_ranges::Entity::find()
+        .select_only()
+        .column_as(
+            Expr::col(block_ranges::Column::MinBlockNumber).min(),
+            "min_block",
+        )
+        .group_by(block_ranges::Column::ChainId)
+        .into_model::<MinBlock>()
+        .all(multichain)
+        .await?;
+    let min_block = min_blocks
+        .iter()
+        .map(|m| m.min_block)
+        .reduce(i64::saturating_add)
+        .unwrap_or_else(|| {
+            tracing::warn!("no block ranges found in multichain database");
+            not_found_value
+        });
+    Ok(min_block)
 }

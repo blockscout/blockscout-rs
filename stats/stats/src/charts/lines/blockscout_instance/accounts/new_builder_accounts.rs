@@ -21,7 +21,7 @@ use crate::{
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus},
@@ -39,7 +39,7 @@ pub struct NewBuilderAccountsStatement;
 impl StatementFromRange for NewBuilderAccountsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
         _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         if !completed_migrations.denormalization {

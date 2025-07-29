@@ -12,7 +12,7 @@ use crate::{
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     utils::sql_with_range_filter_opt,
 };
@@ -26,7 +26,7 @@ pub struct ActiveAccountsStatement;
 impl StatementFromRange for ActiveAccountsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
         _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         if completed_migrations.denormalization {

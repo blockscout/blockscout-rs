@@ -137,7 +137,7 @@ mod tests {
 
     use crate::{
         ChartError, MissingDatePolicy, Named,
-        data_source::{UpdateContext, UpdateParameters, types::BlockscoutMigrations},
+        data_source::{UpdateContext, UpdateParameters, types::IndexerMigrations},
         tests::init_db::init_db_all,
         types::timespans::DateValue,
     };
@@ -153,7 +153,7 @@ mod tests {
             &db,
             false,
             &blockscout,
-            BlockscoutMigrations::latest(),
+            IndexerMigrations::latest(),
             Some(current_time),
         );
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());

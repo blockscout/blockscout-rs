@@ -12,7 +12,7 @@ use crate::{
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
 };
@@ -30,7 +30,7 @@ pub struct ActiveAccountAbstractionWalletsStatement;
 impl StatementFromRange for ActiveAccountAbstractionWalletsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        _completed_migrations: &BlockscoutMigrations,
+        _completed_migrations: &IndexerMigrations,
         _: &HashSet<ChartKey>,
     ) -> Statement {
         count_distinct_in_user_ops(user_operations::Column::Sender.into_column_ref(), range)

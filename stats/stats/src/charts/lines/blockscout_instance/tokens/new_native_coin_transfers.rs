@@ -17,7 +17,7 @@ use crate::{
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -33,7 +33,7 @@ pub struct NewNativeCoinTransfersStatement;
 impl StatementFromRange for NewNativeCoinTransfersStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
         _: &HashSet<ChartKey>,
     ) -> Statement {
         if completed_migrations.denormalization {

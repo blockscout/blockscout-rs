@@ -6,7 +6,7 @@ use crate::{
     ChartProperties,
     data_source::{
         source::DataSource,
-        types::{BlockscoutMigrations, UpdateContext, UpdateParameters},
+        types::{IndexerMigrations, UpdateContext, UpdateParameters},
     },
     query_dispatch::QuerySerialized,
     range::UniversalRange,
@@ -26,9 +26,9 @@ pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
         .collect()
 }
 
-const MIGRATIONS_VARIANTS: [BlockscoutMigrations; 2] = [
-    BlockscoutMigrations::empty(),
-    BlockscoutMigrations::latest(),
+const MIGRATIONS_VARIANTS: [IndexerMigrations; 2] = [
+    IndexerMigrations::empty(),
+    IndexerMigrations::latest(),
 ];
 
 /// `test_name` must be unique to avoid db clashes
@@ -42,7 +42,7 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
-    simple_test_chart_inner::<C>(test_name, expected, BlockscoutMigrations::latest()).await
+    simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest()).await
 }
 
 /// tests all statement kinds for different migrations combinations.
@@ -72,7 +72,7 @@ pub fn chart_output_to_expected(output: Vec<Point>) -> Vec<(String, String)> {
 async fn simple_test_chart_inner<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
-    migrations: BlockscoutMigrations,
+    migrations: IndexerMigrations,
 ) -> (TestDbGuard, TestDbGuard)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
@@ -139,7 +139,7 @@ pub async fn dirty_force_update_and_check<C>(
         stats_db: db,
         is_multichain_mode: false,
         indexer_db: blockscout,
-        indexer_applied_migrations: BlockscoutMigrations::latest(),
+        indexer_applied_migrations: IndexerMigrations::latest(),
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: true,
@@ -179,7 +179,7 @@ pub async fn ranged_test_chart<C>(
         from,
         to,
         update_time,
-        BlockscoutMigrations::latest(),
+        IndexerMigrations::latest(),
     )
     .await
 }
@@ -221,7 +221,7 @@ async fn ranged_test_chart_inner<C>(
     from: C::Resolution,
     to: C::Resolution,
     update_time: Option<NaiveDateTime>,
-    migrations: BlockscoutMigrations,
+    migrations: IndexerMigrations,
 ) where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
@@ -281,7 +281,7 @@ pub async fn simple_test_counter<C>(
         test_name,
         expected,
         update_time,
-        BlockscoutMigrations::latest(),
+        IndexerMigrations::latest(),
         false,
     )
     .await
@@ -299,7 +299,7 @@ pub async fn simple_test_counter_multichain<C>(
         test_name,
         expected,
         update_time,
-        BlockscoutMigrations::latest(),
+        IndexerMigrations::latest(),
         true,
     )
     .await
@@ -329,7 +329,7 @@ async fn simple_test_counter_inner<C>(
     test_name: &str,
     expected: &str,
     update_time: Option<NaiveDateTime>,
-    migrations: BlockscoutMigrations,
+    migrations: IndexerMigrations,
     multichain_mode: bool,
 ) where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
@@ -391,7 +391,7 @@ where
         stats_db: &db,
         is_multichain_mode: false,
         indexer_db: &blockscout,
-        indexer_applied_migrations: BlockscoutMigrations::latest(),
+        indexer_applied_migrations: IndexerMigrations::latest(),
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
         force_full: false,

@@ -17,7 +17,7 @@ use crate::{
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
@@ -34,7 +34,7 @@ pub struct NativeCoinSupplyStatement;
 impl StatementFromRange for NativeCoinSupplyStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        _: &BlockscoutMigrations,
+        _: &IndexerMigrations,
         _: &HashSet<ChartKey>,
     ) -> Statement {
         let day_range: Option<Range<NaiveDate>> = range.map(|r| {

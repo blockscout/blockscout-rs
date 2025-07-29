@@ -32,7 +32,7 @@ use crate::{
     construct_update_group,
     data_source::{
         kinds::local_db::parameters::update::batching::parameters::PassVecStep,
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
@@ -46,7 +46,7 @@ pub struct NewContractsQuery;
 impl StatementFromRange for NewContractsQuery {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
         _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         // choose the statement based on migration progress
@@ -299,7 +299,7 @@ async fn update_examples() {
         stats_db: &db,
         is_multichain_mode: false,
         indexer_db: &blockscout,
-        indexer_applied_migrations: BlockscoutMigrations::latest(),
+        indexer_applied_migrations: IndexerMigrations::latest(),
         enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
         update_time_override: None,
         force_full: true,

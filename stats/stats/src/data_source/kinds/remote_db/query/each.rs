@@ -12,7 +12,7 @@ use crate::{
     charts::db_interaction::read::find_one_value,
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
-        types::{BlockscoutMigrations, UpdateContext},
+        types::{IndexerMigrations, UpdateContext},
     },
     range::{UniversalRange, exclusive_range_to_inclusive},
     types::{Timespan, TimespanValue},
@@ -21,7 +21,7 @@ use crate::{
 pub trait StatementFromTimespan {
     fn get_statement(
         point: Range<DateTime<Utc>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
     ) -> Statement;
 }
 

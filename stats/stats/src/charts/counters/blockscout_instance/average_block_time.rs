@@ -149,7 +149,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateParameters, types::BlockscoutMigrations},
+        data_source::{DataSource, UpdateParameters, types::IndexerMigrations},
         tests::{
             mock_blockscout::fill_many_blocks,
             simple_test::{get_counter, prepare_chart_test, simple_test_counter},
@@ -202,7 +202,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: false,
             indexer_db: &blockscout,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: AverageBlockTime::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: true,

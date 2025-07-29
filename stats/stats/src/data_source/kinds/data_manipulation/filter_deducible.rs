@@ -64,7 +64,7 @@ where
 mod tests {
     use crate::{
         MissingDatePolicy, Named,
-        data_source::{UpdateParameters, types::BlockscoutMigrations},
+        data_source::{UpdateParameters, types::IndexerMigrations},
         gettable_const,
         lines::PredefinedMockSource,
         range::UniversalRange,
@@ -142,7 +142,7 @@ mod tests {
                 &empty_db,
                 false,
                 &empty_db,
-                BlockscoutMigrations::latest(),
+                IndexerMigrations::latest(),
                 Some(dt("2024-07-30T09:00:00").and_utc()),
             ));
         assert_eq!(

@@ -23,7 +23,7 @@ use crate::{
             },
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
@@ -42,7 +42,7 @@ pub struct NewAccountAbstractionWalletsStatement;
 impl StatementFromRange for NewAccountAbstractionWalletsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        _completed_migrations: &BlockscoutMigrations,
+        _completed_migrations: &IndexerMigrations,
         _: &HashSet<ChartKey>,
     ) -> Statement {
         // `MIN_UTC` does not fit into postgres' timestamp. Unix epoch start should be enough

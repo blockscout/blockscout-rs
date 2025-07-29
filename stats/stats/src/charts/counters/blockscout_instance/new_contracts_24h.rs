@@ -7,7 +7,7 @@ use crate::{
             local_db::DirectPointLocalDbChartSource,
             remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
         },
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
 };
@@ -23,7 +23,7 @@ pub struct NewContracts24hStatement;
 impl StatementFromUpdateTime for NewContracts24hStatement {
     fn get_statement(
         update_time: DateTime<Utc>,
-        _completed_migrations: &BlockscoutMigrations,
+        _completed_migrations: &IndexerMigrations,
     ) -> sea_orm::Statement {
         transactions::Entity::find()
             .select_only()

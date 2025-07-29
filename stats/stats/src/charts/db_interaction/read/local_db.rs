@@ -586,7 +586,7 @@ mod tests {
         counters::TotalBlocks,
         data_source::{
             DataSource, UpdateContext, UpdateParameters,
-            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations,
+            kinds::local_db::parameters::DefaultQueryVec, types::IndexerMigrations,
         },
         lines::{AccountsGrowth, ActiveAccounts, NewTxns, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
@@ -840,7 +840,7 @@ mod tests {
             is_multichain_mode: false,
             // shouldn't use this because mock data contains total blocks value
             indexer_db: &db,
-            indexer_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
