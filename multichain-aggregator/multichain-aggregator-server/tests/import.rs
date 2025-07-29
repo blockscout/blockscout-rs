@@ -46,7 +46,7 @@ async fn test_import_interop_messages() {
     .await;
 
     let get_token = || async {
-        entity::tokens::Entity::find_by_id((1, token_address_hash.clone().to_vec()))
+        entity::tokens::Entity::find_by_id((token_address_hash.clone().to_vec(), 1))
             .one(db.client().as_ref())
             .await
             .unwrap()

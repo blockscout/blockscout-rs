@@ -5,8 +5,8 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "block_ranges")]
 pub struct Model {
-    pub min_block_number: i32,
-    pub max_block_number: i32,
+    pub min_block_number: i64,
+    pub max_block_number: i64,
     #[sea_orm(primary_key, auto_increment = false)]
     pub chain_id: i64,
     pub created_at: DateTime,
