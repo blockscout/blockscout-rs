@@ -6,6 +6,12 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "tokens")]
 pub struct Model {
+    #[sea_orm(
+        primary_key,
+        auto_increment = false,
+        column_type = "VarBinary(StringLen::None)"
+    )]
+    pub address_hash: Vec<u8>,
     #[sea_orm(primary_key, auto_increment = false)]
     pub chain_id: i64,
     #[sea_orm(column_type = "Text", nullable)]
@@ -14,12 +20,6 @@ pub struct Model {
     pub symbol: Option<String>,
     pub decimals: Option<i16>,
     pub token_type: TokenType,
-    #[sea_orm(
-        primary_key,
-        auto_increment = false,
-        column_type = "VarBinary(StringLen::None)"
-    )]
-    pub address_hash: Vec<u8>,
     #[sea_orm(column_type = "Text", nullable)]
     pub icon_url: Option<String>,
     pub fiat_value: Option<Decimal>,
