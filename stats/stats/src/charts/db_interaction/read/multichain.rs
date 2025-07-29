@@ -1,32 +1,36 @@
 use multichain_aggregator_entity::block_ranges;
+use num_traits::ToPrimitive;
+use rust_decimal::Decimal;
 use sea_orm::{
     DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, sea_query::Expr,
 };
 
 #[derive(FromQueryResult, Debug)]
 struct MinBlock {
-    min_block: i64,
+    min_block: Option<Decimal>,
 }
 
 pub async fn get_min_block_multichain(multichain: &DatabaseConnection) -> Result<i64, DbErr> {
-    let not_found_value = i64::MAX;
-    let min_blocks = block_ranges::Entity::find()
+    let value = block_ranges::Entity::find()
         .select_only()
         .column_as(
-            Expr::col(block_ranges::Column::MinBlockNumber).min(),
+            Expr::col(block_ranges::Column::MinBlockNumber).sum(),
             "min_block",
         )
-        .group_by(block_ranges::Column::ChainId)
         .into_model::<MinBlock>()
-        .all(multichain)
+        .one(multichain)
         .await?;
-    let min_block = min_blocks
-        .iter()
-        .map(|m| m.min_block)
-        .reduce(i64::saturating_add)
-        .unwrap_or_else(|| {
+
+    match value.and_then(|r| r.min_block).map(|m| m.to_i64().ok_or(m)) {
+        Some(Ok(min_block)) => Ok(min_block),
+        Some(Err(sum)) => {
+            tracing::warn!(sum =? sum, "failed to convert min block sum to i64");
+            Ok(i64::MAX)
+        }
+        None => {
             tracing::warn!("no block ranges found in multichain database");
-            not_found_value
-        });
-    Ok(min_block)
+            // set max so that if ranges appear, the reupdate is triggered
+            Ok(i64::MAX)
+        }
+    }
 }
