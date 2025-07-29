@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package blockscout.zetachainCctx.v1;
 
+
 option go_package = "github.com/blockscout/blockscout-rs/zetachain-cctx";
 
 
@@ -13,6 +14,14 @@ service CctxInfo {
 service TokenInfo {
   rpc GetTokenInfo(GetTokenInfoRequest) returns (TokenInfoResponse) {}
   rpc ListTokens(ListTokensRequest) returns (TokensResponse) {}
+}
+
+// Service providing full list of tokens with metadata including icon URLs
+service TokenList {
+  rpc ListTokens (ListTokensRequest) returns (TokensResponse) {}
+}
+
+message ListTokensRequest {
 }
 
 message GetCctxInfoRequest {
@@ -266,9 +275,10 @@ message TokenInfoResponse {
   int32 decimals = 2;
   string name = 3;
   string symbol = 4;
+  optional string icon_url = 5;
 }
 
-message ListTokensRequest {}
+
 message TokensResponse {
   repeated TokenInfoResponse tokens = 1;
 }

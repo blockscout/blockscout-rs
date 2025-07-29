@@ -45,6 +45,7 @@ impl TokenInfo for TokenInfoService {
                 decimals: token.decimals,
                 name: token.name,
                 symbol: token.symbol,
+                icon_url: token.icon_url,
             })),
             None => Err(Status::not_found("Token not found")),
         }
@@ -63,6 +64,7 @@ impl TokenInfo for TokenInfoService {
                 decimals: token.decimals,
                 name: token.name,
                 symbol: token.symbol,
+                icon_url: token.icon_url,
             }).collect(),
         }))
     }

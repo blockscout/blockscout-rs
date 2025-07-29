@@ -263,6 +263,7 @@ pub struct Token {
     pub gas_limit: String,
     pub paused: bool,
     pub liquidity_cap: String,
+    pub icon_url: Option<String>,
 }
 
 impl TryFrom<Token> for zetachain_cctx_entity::token::ActiveModel {
@@ -285,6 +286,7 @@ impl TryFrom<Token> for zetachain_cctx_entity::token::ActiveModel {
             gas_limit: ActiveValue::Set(token.gas_limit),
             paused: ActiveValue::Set(token.paused),
             liquidity_cap: ActiveValue::Set(token.liquidity_cap),
+            icon_url: ActiveValue::Set(token.icon_url),
             created_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
             updated_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
         })
@@ -304,4 +306,5 @@ pub struct TokenInfo {
     pub decimals: i32,
     pub name: String,
     pub symbol: String,
+    pub icon_url: Option<String>,
 }

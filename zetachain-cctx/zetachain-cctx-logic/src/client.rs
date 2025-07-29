@@ -20,6 +20,7 @@ pub struct RpcSettings {
     pub request_per_second: u32,
     pub num_of_retries: u32,
     pub retry_delay_ms: u32,
+    pub blockscout_instance_url: String,
 }
 
 type Limiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
@@ -151,6 +152,26 @@ impl Client {
         Ok(body)
     }
 
+    #[instrument(level="debug", skip_all)]
+    pub async fn fetch_token_icon(&self, contract_address: &str) -> anyhow::Result<Option<String>> {
+        // Build URL: {blockscout_instance_url}/api/v2/tokens/{zrc20_contract_address}
+        let mut url: Url = self.settings.blockscout_instance_url.parse()?;
+        let base_path = url.path().to_string();
+        url.set_path(&format!("{}api/v2/tokens/{}", base_path, contract_address));
+
+        let req = Request::new(Method::GET, url);
+        let resp = self.make_request(req).await?;
+
+        if resp.status().is_success() {
+            // Assume response contains JSON with field "icon_url"
+            let json: serde_json::Value = resp.json().await.unwrap_or_default();
+            if let Some(icon) = json.get("icon_url").and_then(|v| v.as_str()) {
+                return Ok(Some(icon.to_string()));
+            }
+        }
+        Ok(None)
+    }
+
     #[instrument(level="debug",skip_all,fields(pagination_key = ?pagination_key))]
     pub async fn list_tokens(
         &self,
@@ -202,6 +223,7 @@ impl Default for RpcSettings {
             request_per_second: default_request_per_second(),
             num_of_retries: default_num_of_retries(),
             retry_delay_ms: default_retry_delay_ms(),
+            blockscout_instance_url: "http://localhost".to_string(),
         }
     }
 }

@@ -19,6 +19,8 @@ pub struct Model {
     pub gas_limit: String,
     pub paused: bool,
     pub liquidity_cap: String,
+    // New optional field to store token icon URL
+    pub icon_url: Option<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }

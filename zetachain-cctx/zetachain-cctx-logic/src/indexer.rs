@@ -158,9 +158,16 @@ async fn sync_tokens(
     let mut next_key: Option<String> = None;
     
     loop {
-        let response = client
+        let mut response = client
             .list_tokens(next_key.as_deref(), batch_size)
             .await?;
+
+        // Enrich tokens with icon URLs
+        for token in &mut response.foreign_coins {
+            if let Some(icon) = client.fetch_token_icon(&token.zrc20_contract_address).await.unwrap_or(None) {
+                token.icon_url = Some(icon);
+            }
+        }
         
         if response.foreign_coins.is_empty() {
             tracing::debug!("No tokens found");

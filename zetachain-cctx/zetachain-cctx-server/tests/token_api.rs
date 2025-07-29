@@ -39,6 +39,7 @@ async fn test_token_api_get_token_info() {
         liquidity_cap: ActiveValue::Set("750000000000".to_string()),
         created_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
         updated_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        icon_url: ActiveValue::Set(Some("https://example.com/icon.png".to_string())),
     };
 
     token::Entity::insert(test_token)
@@ -97,6 +98,7 @@ async fn test_token_database_sync_and_query() {
             gas_limit: "100000".to_string(),
             paused: false,
             liquidity_cap: "1000000000".to_string(),
+            icon_url: Some("https://example.com/icon.png".to_string()),
         },
         zetachain_cctx_logic::models::Token {
             zrc20_contract_address: "0x2222222222222222222222222222222222222222".to_string(),
@@ -109,6 +111,7 @@ async fn test_token_database_sync_and_query() {
             gas_limit: "80000".to_string(),
             paused: true,
             liquidity_cap: "2000000000".to_string(),
+            icon_url: Some("https://example.com/icon.png".to_string()),
         },
     ];
 
@@ -163,6 +166,7 @@ async fn test_token_database_sync_and_query() {
             gas_limit: "150000".to_string(), // Changed gas limit
             paused: true, // Changed paused status
             liquidity_cap: "1500000000".to_string(), // Changed liquidity cap
+            icon_url: Some("https://example.com/icon.png".to_string()),
         },
     ];
 

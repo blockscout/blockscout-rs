@@ -28,3 +28,6 @@ http:
     - selector: blockscout.zetachainCctx.v1.TokenInfo.ListTokens
       get: /api/v1/TokenInfo:list
 
+    - selector: blockscout.zetachainCctx.v1.TokenList.ListTokens
+      get: /api/v1/Tokens:list
+

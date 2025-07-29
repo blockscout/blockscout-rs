@@ -82,6 +82,7 @@ fn dummy_token(name: &str, symbol: &str, asset: Option<String>, chain_id: &str, 
         gas_limit: "1000000000000000000".to_string(),
         paused: false,
         liquidity_cap: "1000000000000000000".to_string(),
+        icon_url: Some("https://example.com/icon.png".to_string()),
     }
 }
 

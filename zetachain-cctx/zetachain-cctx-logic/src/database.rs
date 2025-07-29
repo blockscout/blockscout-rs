@@ -2252,6 +2252,7 @@ impl ZetachainCctxDatabase {
                         TokenEntity::Column::Paused,
                         TokenEntity::Column::LiquidityCap,
                         TokenEntity::Column::UpdatedAt,
+                        TokenEntity::Column::IconUrl,
                     ])
                     .to_owned(),
             )
@@ -2274,6 +2275,7 @@ impl ZetachainCctxDatabase {
                 decimals: token.decimals,
                 name: token.name,
                 symbol: token.symbol,
+                icon_url: token.icon_url,
             })),
             None => Ok(None),
         }
@@ -2288,6 +2290,7 @@ impl ZetachainCctxDatabase {
             decimals: token.decimals,
             name: token.name,
             symbol: token.symbol,
+            icon_url: token.icon_url,
         }).collect())
     }
 }
