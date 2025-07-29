@@ -127,13 +127,12 @@ services:
     environment:
       - STATS__MULTICHAIN_MODE=true
       - STATS__DB_URL=postgres://stats:n0uejXPl61ci6ldCuE2gQU5Y@stats-db:5432/stats
-      - STATS__BLOCKSCOUT_DB_URL=${STATS__BLOCKSCOUT_DB_URL:-postgresql://multichain_aggregator:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/multichain_aggregator}
+      - STATS__INDEXER_DB_URL=${STATS__BLOCKSCOUT_DB_URL:-postgresql://multichain_aggregator:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/multichain_aggregator}
       - STATS__CREATE_DATABASE=true
       - STATS__RUN_MIGRATIONS=true
       - STATS__SERVER__HTTP__ENABLED=true
       - STATS__SERVER__HTTP__ADDR=0.0.0.0:8050
       - STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152
-      - STATS__SERVER__HTTP__BASE_PATH=/kek
       - RUST_BACKTRACE=1
     ports:
       - 8080:8050

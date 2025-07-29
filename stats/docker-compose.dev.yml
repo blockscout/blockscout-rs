@@ -110,13 +110,12 @@ services:
     container_name: 'stats'
     environment:
       - STATS__DB_URL=postgres://stats:n0uejXPl61ci6ldCuE2gQU5Y@stats-db:5432/stats
-      - STATS__BLOCKSCOUT_DB_URL=${STATS__BLOCKSCOUT_DB_URL:-postgresql://blockscout:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout}
+      - STATS__INDEXER_DB_URL=${STATS__BLOCKSCOUT_DB_URL:-postgresql://blockscout:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout}
       - STATS__CREATE_DATABASE=true
       - STATS__RUN_MIGRATIONS=true
       - STATS__SERVER__HTTP__ENABLED=true
       - STATS__SERVER__HTTP__ADDR=0.0.0.0:8050
       - STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152
-      - STATS__SERVER__HTTP__BASE_PATH=/kek
       - STATS__BLOCKSCOUT_API_URL=http://backend:4000
       - RUST_BACKTRACE=1
     ports:
