@@ -12,7 +12,7 @@ use crate::{
     charts::db_interaction::read::{cached::find_all_cached, find_all_points},
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
-        types::{IndexerMigrations, Cacheable, UpdateContext},
+        types::{Cacheable, IndexerMigrations, UpdateContext},
     },
     range::{UniversalRange, data_source_query_range_to_db_statement_range},
     types::{TimespanTrait, TimespanValue},

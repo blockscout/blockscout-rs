@@ -8,7 +8,7 @@ use crate::{
     charts::db_interaction::read::{cached::find_one_value_cached, find_one_value},
     data_source::{
         kinds::remote_db::RemoteQueryBehaviour,
-        types::{IndexerMigrations, Cacheable, UpdateContext, WrappedValue},
+        types::{Cacheable, IndexerMigrations, UpdateContext, WrappedValue},
     },
     range::{UniversalRange, inclusive_range_to_exclusive},
     types::{Timespan, TimespanValue},

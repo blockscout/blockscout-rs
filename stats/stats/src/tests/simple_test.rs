@@ -26,10 +26,8 @@ pub fn map_str_tuple_to_owned(l: Vec<(&str, &str)>) -> Vec<(String, String)> {
         .collect()
 }
 
-const MIGRATIONS_VARIANTS: [IndexerMigrations; 2] = [
-    IndexerMigrations::empty(),
-    IndexerMigrations::latest(),
-];
+const MIGRATIONS_VARIANTS: [IndexerMigrations; 2] =
+    [IndexerMigrations::empty(), IndexerMigrations::latest()];
 
 /// `test_name` must be unique to avoid db clashes
 ///

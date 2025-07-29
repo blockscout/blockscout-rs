@@ -19,7 +19,7 @@ use crate::{
             },
             remote_db::{PullEachWith, RemoteDatabaseSource, StatementFromTimespan},
         },
-        types::{IndexerMigrations, Get},
+        types::{Get, IndexerMigrations},
     },
     define_and_impl_resolution_properties, gettable_const,
     types::timespans::{Month, Week, Year},

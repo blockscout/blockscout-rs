@@ -129,9 +129,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        data_source::{
-            DataSource, kinds::remote_db::StatementFromRange, types::IndexerMigrations,
-        },
+        data_source::{DataSource, kinds::remote_db::StatementFromRange, types::IndexerMigrations},
         lines::{NewTxnsCombinedStatement, OpStackNewOperationalTxns},
         tests::{normalize_sql, point_construction::dt},
     };
