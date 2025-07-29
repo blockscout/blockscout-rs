@@ -3,13 +3,23 @@
 use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime};
-use multichain_aggregator_entity::{addresses, interop_messages};
+use multichain_aggregator_entity::{addresses, block_ranges, chains, interop_messages};
 use sea_orm::{DatabaseConnection, EntityTrait, Set};
 
 pub async fn fill_mock_multichain_data(multichain: &DatabaseConnection, max_date: NaiveDate) {
     let accounts = mock_addresses();
     let interop_messages = mock_interop_messages(&accounts, max_date);
     interop_messages::Entity::insert_many(interop_messages.clone())
+        .exec(multichain)
+        .await
+        .unwrap();
+    let chains = mock_chains();
+    chains::Entity::insert_many(chains)
+        .exec(multichain)
+        .await
+        .unwrap();
+    let block_ranges = mock_block_ranges();
+    block_ranges::Entity::insert_many(block_ranges)
         .exec(multichain)
         .await
         .unwrap();
@@ -78,4 +88,29 @@ fn mock_interop_message(
         updated_at: Set(Default::default()),
         ..Default::default()
     }
+}
+
+fn mock_chains() -> Vec<chains::ActiveModel> {
+    vec![(1, "Ethereum"), (2, "Ethereum 2"), (3, "Ethereum 3")]
+        .into_iter()
+        .map(|(id, name)| chains::ActiveModel {
+            id: Set(id),
+            name: Set(Some(name.to_string())),
+            ..Default::default()
+        })
+        .collect()
+}
+
+fn mock_block_ranges() -> Vec<block_ranges::ActiveModel> {
+    vec![(1, 1, 10), (2, 1, 12345), (3, 100, 150)]
+        .into_iter()
+        .map(
+            |(chain_id, min_block, max_block)| block_ranges::ActiveModel {
+                chain_id: Set(chain_id),
+                min_block_number: Set(min_block),
+                max_block_number: Set(max_block),
+                ..Default::default()
+            },
+        )
+        .collect()
 }

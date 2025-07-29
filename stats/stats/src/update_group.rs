@@ -228,7 +228,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
 /// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
 /// #     },
-/// #     types::{UpdateContext, UpdateParameters, BlockscoutMigrations},
+/// #     types::{UpdateContext, UpdateParameters, IndexerMigrations},
 /// # };
 /// # use chrono::{NaiveDate, DateTime, Utc};
 /// # use entity::sea_orm_active_enums::ChartType;
@@ -238,7 +238,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// struct DummyRemoteStatement;
 ///
 /// impl StatementFromRange for DummyRemoteStatement {
-///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &BlockscoutMigrations, _: &HashSet<ChartKey>) -> Statement {
+///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &IndexerMigrations, _: &HashSet<ChartKey>) -> Statement {
 ///         todo!()
 ///     }
 /// }

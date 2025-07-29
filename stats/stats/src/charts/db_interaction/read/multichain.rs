@@ -3,7 +3,7 @@ use sea_orm::{
     DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, sea_query::Expr,
 };
 
-#[derive(FromQueryResult)]
+#[derive(FromQueryResult, Debug)]
 struct MinBlock {
     min_block: i64,
 }

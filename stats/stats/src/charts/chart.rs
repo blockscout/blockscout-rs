@@ -20,7 +20,6 @@ use super::{
 
 #[derive(Error, Debug)]
 pub enum ChartError {
-    // todo: rename
     #[error("indexer database error: {0}")]
     IndexerDB(DbErr),
     #[error("stats database error: {0}")]

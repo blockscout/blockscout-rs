@@ -2671,15 +2671,16 @@ dependencies = [
 [[package]]
 name = "multichain-aggregator-entity"
 version = "0.0.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?tag=multichain-aggregator%2Fv1.5.1#e1b33244c17ad599f63152de8d66fc0add56b5d7"
+source = "git+https://github.com/blockscout/blockscout-rs/?rev=3ff537ef1f1f8287edeb876b6899d316c25a1401#3ff537ef1f1f8287edeb876b6899d316c25a1401"
 dependencies = [
  "sea-orm",
+ "serde",
 ]
 
 [[package]]
 name = "multichain-aggregator-migration"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs/?tag=multichain-aggregator%2Fv1.5.1#e1b33244c17ad599f63152de8d66fc0add56b5d7"
+source = "git+https://github.com/blockscout/blockscout-rs/?rev=3ff537ef1f1f8287edeb876b6899d316c25a1401#3ff537ef1f1f8287edeb876b6899d316c25a1401"
 dependencies = [
  "async-std",
  "sea-orm-migration",
