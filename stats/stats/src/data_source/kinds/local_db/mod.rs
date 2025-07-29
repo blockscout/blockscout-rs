@@ -170,9 +170,7 @@ where
         }
         let chart_id = metadata.id;
         let min_indexer_block = if cx.is_multichain_mode {
-            get_min_block_multichain(cx.indexer_db)
-                .await
-                .map_err(ChartError::IndexerDB)?
+            get_min_block_multichain()
         } else {
             get_min_block_blockscout(cx.indexer_db)
                 .await
