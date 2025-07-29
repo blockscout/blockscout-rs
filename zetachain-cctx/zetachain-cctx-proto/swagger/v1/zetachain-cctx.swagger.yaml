@@ -165,20 +165,6 @@ paths:
             $ref: '#/definitions/googlerpcStatus'
       tags:
         - TokenInfo
-  /api/v1/Tokens:list:
-    get:
-      operationId: TokenList_ListTokens
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1TokensResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      tags:
-        - TokenList
   /health:
     get:
       summary: |-
