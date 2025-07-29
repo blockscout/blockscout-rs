@@ -1,9 +1,9 @@
 use super::paginate_cursor;
-use crate::types::{block_ranges::BlockRange, ChainId};
-use entity::block_ranges::{ActiveModel, Column, Entity, Model};
+use crate::types::{ChainId, block_ranges::BlockRange};
+use entity::block_ranges::{Column, Entity, Model};
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, QueryFilter, QueryTrait,
+    ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IntoActiveModel,
+    QueryFilter, QueryTrait, prelude::Expr, sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> Result<Vec<Model>, DbErr>
@@ -16,7 +16,7 @@ where
 
     let block_ranges = block_ranges.into_iter().map(|block_range| {
         let model: Model = block_range.into();
-        let mut active: ActiveModel = model.into();
+        let mut active = model.into_active_model();
         active.created_at = NotSet;
         active.updated_at = NotSet;
         active

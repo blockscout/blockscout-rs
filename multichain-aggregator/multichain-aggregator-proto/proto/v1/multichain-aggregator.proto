@@ -20,6 +20,9 @@ service MultichainAggregatorService {
   rpc ListDappCategories(ListDappCategoriesRequest)
       returns (ListDappCategoriesResponse) {}
   rpc ListDomains(ListDomainsRequest) returns (ListDomainsResponse) {}
+  rpc ListBlockNumbers(ListBlockNumbersRequest)
+      returns (ListBlockNumbersResponse) {}
+  rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse) {}
 }
 
 enum TokenType {
@@ -28,6 +31,7 @@ enum TokenType {
   TOKEN_TYPE_ERC_721 = 2;
   TOKEN_TYPE_ERC_1155 = 3;
   TOKEN_TYPE_ERC_404 = 4;
+  TOKEN_TYPE_ERC_7802 = 5;
 }
 
 enum HashType {
@@ -95,6 +99,11 @@ message Domain {
   google.protobuf.Struct protocol = 4;
 }
 
+message ChainBlockNumber {
+  int64 chain_id = 1;
+  uint64 block_number = 2;
+}
+
 message BatchImportRequest {
   message AddressImport {
     string hash = 1;
@@ -156,7 +165,7 @@ message BatchImportRequest {
     string address_hash = 1;
     string token_address_hash = 2;
     optional string token_id = 3;
-    string value = 4;
+    optional string value = 4;
   }
   
   message CountersImport {
@@ -170,6 +179,33 @@ message BatchImportRequest {
     optional GlobalCounters global_counters = 2;
   }
 
+  message TokenImport {
+    message Metadata {
+      optional string name = 1;
+      optional string symbol = 2;
+      optional int32 decimals = 3;
+      TokenType token_type = 4;
+      optional string icon_url = 5;
+      optional string total_supply = 6;
+    }
+
+    message Counters {
+      optional string holders_count = 1;
+      optional string transfers_count = 2;
+    }
+
+    message PriceData {
+      optional string fiat_value = 1;
+      optional string circulating_market_cap = 2;
+    }
+
+    string address_hash = 1;
+
+    optional Metadata metadata = 2;
+    optional PriceData price_data = 3;
+    optional Counters counters = 4;
+  }
+
   string chain_id = 1;
   repeated AddressImport addresses = 2;
   repeated BlockRangeImport block_ranges = 3;
@@ -178,7 +214,8 @@ message BatchImportRequest {
   repeated AddressCoinBalanceImport address_coin_balances = 6;
   repeated AddressTokenBalanceImport address_token_balances = 7;
   optional CountersImport counters = 8;
-  string api_key = 9;
+  repeated TokenImport tokens = 9;
+  string api_key = 10;
 }
 
 message BatchImportResponse { string status = 1; }
@@ -186,11 +223,6 @@ message BatchImportResponse { string status = 1; }
 message QuickSearchRequest { string q = 1; }
 
 message QuickSearchResponse {
-  message ChainBlockNumber {
-    int64 chain_id = 1;
-    uint64 block_number = 2;
-  }
-
   repeated Address addresses = 1;
   repeated Hash blocks = 2;
   repeated Hash transactions = 3;
@@ -284,5 +316,29 @@ message ListDomainsRequest {
 
 message ListDomainsResponse {
   repeated Domain items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListBlockNumbersRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListBlockNumbersResponse {
+  repeated ChainBlockNumber items = 1;
+  Pagination next_page_params = 2;
+}
+
+message ListBlocksRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
+
+message ListBlocksResponse {
+  repeated Hash items = 1;
   Pagination next_page_params = 2;
 }

@@ -275,6 +275,79 @@ impl MultichainAggregatorService for MultichainAggregator {
         }))
     }
 
+    async fn list_blocks(
+        &self,
+        request: Request<ListBlocksRequest>,
+    ) -> Result<Response<ListBlocksResponse>, Status> {
+        let inner = request.into_inner();
+
+        let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query).transpose()?;
+
+        let chain_ids = self
+            .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
+            .await?;
+
+        let (blocks, next_page_token) = search::search_hashes(
+            self.repo.read_db(),
+            inner.q,
+            Some(types::hashes::HashType::Block),
+            chain_ids,
+            page_size as u64,
+            page_token,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error = ?err, "failed to list blocks");
+            Status::internal("failed to list blocks")
+        })?;
+
+        Ok(Response::new(ListBlocksResponse {
+            items: blocks.into_iter().map(|t| t.into()).collect(),
+            next_page_params: next_page_token.map(|c| Pagination {
+                page_token: c.to_string(),
+                page_size,
+            }),
+        }))
+    }
+
+    async fn list_block_numbers(
+        &self,
+        request: Request<ListBlockNumbersRequest>,
+    ) -> Result<Response<ListBlockNumbersResponse>, Status> {
+        let inner = request.into_inner();
+
+        let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.map(parse_query).transpose()?;
+
+        let chain_ids = self
+            .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
+            .await?;
+
+        let (block_numbers, next_page_token) = search::search_block_numbers(
+            self.repo.read_db(),
+            inner.q,
+            chain_ids,
+            page_size as u64,
+            page_token,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error = ?err, "failed to list block numbers");
+            Status::internal("failed to list block numbers")
+        })?;
+
+        Ok(Response::new(ListBlockNumbersResponse {
+            items: block_numbers.into_iter().map(|b| b.into()).collect(),
+            next_page_params: next_page_token.map(|c| Pagination {
+                page_token: c.to_string(),
+                page_size,
+            }),
+        }))
+    }
+
     async fn quick_search(
         &self,
         request: Request<QuickSearchRequest>,

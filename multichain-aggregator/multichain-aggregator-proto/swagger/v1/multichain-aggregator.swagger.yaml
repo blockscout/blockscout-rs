@@ -43,6 +43,70 @@ paths:
           type: string
       tags:
         - MultichainAggregatorService
+  /api/v1/block-numbers:
+    get:
+      operationId: MultichainAggregatorService_ListBlockNumbers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlockNumbersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/blocks:
+    get:
+      operationId: MultichainAggregatorService_ListBlocks
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlocksResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
   /api/v1/chains:
     get:
       operationId: MultichainAggregatorService_ListChains
@@ -470,6 +534,17 @@ definitions:
         $ref: '#/definitions/InteropMessageImportInit'
       relay:
         $ref: '#/definitions/InteropMessageImportRelay'
+  BatchImportRequestTokenImport:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      metadata:
+        $ref: '#/definitions/TokenImportMetadata'
+      price_data:
+        $ref: '#/definitions/TokenImportPriceData'
+      counters:
+        $ref: '#/definitions/TokenImportCounters'
   CountersImportGlobalCounters:
     type: object
     properties:
@@ -555,15 +630,36 @@ definitions:
     properties:
       value:
         type: string
-  QuickSearchResponseChainBlockNumber:
+  TokenImportCounters:
     type: object
     properties:
-      chain_id:
+      holders_count:
         type: string
-        format: int64
-      block_number:
+      transfers_count:
         type: string
-        format: uint64
+  TokenImportMetadata:
+    type: object
+    properties:
+      name:
+        type: string
+      symbol:
+        type: string
+      decimals:
+        type: integer
+        format: int32
+      token_type:
+        $ref: '#/definitions/v1TokenType'
+      icon_url:
+        type: string
+      total_supply:
+        type: string
+  TokenImportPriceData:
+    type: object
+    properties:
+      fiat_value:
+        type: string
+      circulating_market_cap:
+        type: string
   googlerpcStatus:
     type: object
     properties:
@@ -658,6 +754,11 @@ definitions:
           $ref: '#/definitions/BatchImportRequestAddressTokenBalanceImport'
       counters:
         $ref: '#/definitions/BatchImportRequestCountersImport'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestTokenImport'
       api_key:
         type: string
   v1BatchImportResponse:
@@ -676,6 +777,15 @@ definitions:
         type: string
       icon_url:
         type: string
+  v1ChainBlockNumber:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+      block_number:
+        type: string
+        format: uint64
   v1CountInteropMessagesResponse:
     type: object
     properties:
@@ -771,6 +881,26 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Address'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListBlockNumbersResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainBlockNumber'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListBlocksResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListChainsResponse:
@@ -905,7 +1035,7 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
+          $ref: '#/definitions/v1ChainBlockNumber'
       dapps:
         type: array
         items:
@@ -949,4 +1079,5 @@ definitions:
       - TOKEN_TYPE_ERC_721
       - TOKEN_TYPE_ERC_1155
       - TOKEN_TYPE_ERC_404
+      - TOKEN_TYPE_ERC_7802
     default: TOKEN_TYPE_UNSPECIFIED

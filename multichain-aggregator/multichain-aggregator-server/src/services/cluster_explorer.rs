@@ -4,7 +4,7 @@ use crate::{
     settings::ApiSettings,
 };
 use multichain_aggregator_logic::services::cluster::Cluster;
-use sea_orm::{sqlx::types::chrono, DatabaseConnection};
+use sea_orm::{DatabaseConnection, sqlx::types::chrono};
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 

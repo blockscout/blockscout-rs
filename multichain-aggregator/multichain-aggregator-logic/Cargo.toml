@@ -1,7 +1,7 @@
 [package]
 name = "multichain-aggregator-logic"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 multichain-aggregator-entity = { workspace = true }
@@ -34,6 +34,7 @@ thiserror = { workspace = true }
 tonic = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
+rust_decimal = { workspace = true }
 url = { workspace = true }
 futures = { workspace = true }
 recache = { workspace = true }

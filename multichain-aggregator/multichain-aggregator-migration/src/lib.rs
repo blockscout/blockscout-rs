@@ -7,6 +7,8 @@ mod m20250427_051405_add_interop_messages;
 mod m20250602_105925_remove_interop_message_chain_id_ref;
 mod m20250604_091215_add_token_and_coin_balances;
 mod m20250611_103754_add_counters;
+mod m20250721_093013_make_token_balance_nullable;
+mod m20250723_084105_add_tokens;
 
 pub struct Migrator;
 
@@ -20,6 +22,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250602_105925_remove_interop_message_chain_id_ref::Migration),
             Box::new(m20250604_091215_add_token_and_coin_balances::Migration),
             Box::new(m20250611_103754_add_counters::Migration),
+            Box::new(m20250721_093013_make_token_balance_nullable::Migration),
+            Box::new(m20250723_084105_add_tokens::Migration),
         ]
     }
 }

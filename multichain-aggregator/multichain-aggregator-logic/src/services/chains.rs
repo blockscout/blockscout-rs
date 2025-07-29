@@ -2,12 +2,12 @@ use crate::{
     clients::{dapp, token_info},
     error::ServiceError,
     repository,
-    types::{chains::Chain, ChainId},
+    types::{ChainId, chains::Chain},
 };
 use api_client_framework::HttpApiClient;
 use blockscout_chains::BlockscoutChainsClient;
 use cached::proc_macro::{cached, once};
-use futures::{stream, StreamExt};
+use futures::{StreamExt, stream};
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use std::{
@@ -16,7 +16,7 @@ use std::{
 };
 use tokio::{
     sync::RwLock,
-    time::{interval, Duration, Instant},
+    time::{Duration, Instant, interval},
 };
 use url::Url;
 
@@ -230,11 +230,7 @@ impl MarketplaceEnabledCache {
             .into_iter()
             .filter_map(|c| {
                 let is_enabled = *cache.get(&get_chain_id(&c)).unwrap_or(&false);
-                if is_enabled {
-                    Some(c)
-                } else {
-                    None
-                }
+                if is_enabled { Some(c) } else { None }
             })
             .collect::<Vec<_>>()
     }

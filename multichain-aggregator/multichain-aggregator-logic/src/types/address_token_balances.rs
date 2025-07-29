@@ -1,13 +1,13 @@
 use super::ChainId;
 use crate::error::ParseError;
 use entity::address_token_balances::{ActiveModel, Model};
-use sea_orm::{prelude::BigDecimal, ActiveValue::Set};
+use sea_orm::{ActiveValue::Set, prelude::BigDecimal};
 
 #[derive(Debug, Clone)]
 pub struct AddressTokenBalance {
     pub address_hash: alloy_primitives::Address,
     pub token_address_hash: alloy_primitives::Address,
-    pub value: BigDecimal,
+    pub value: Option<BigDecimal>,
     pub chain_id: ChainId,
     pub token_id: Option<BigDecimal>,
 }

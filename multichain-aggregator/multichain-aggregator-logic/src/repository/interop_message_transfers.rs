@@ -1,7 +1,7 @@
 use crate::types::interop_message_transfers::InteropMessageTransfer;
 use entity::interop_messages_transfers::{ActiveModel, Column, Entity, Model};
 use sea_orm::{
-    sea_query::OnConflict, ActiveValue::Set, ConnectionTrait, DbErr, EntityTrait, Iterable,
+    ActiveValue::Set, ConnectionTrait, DbErr, EntityTrait, Iterable, sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(

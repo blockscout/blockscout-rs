@@ -1,19 +1,19 @@
-use crate::types::{addresses::Address, ChainId};
+use crate::types::{ChainId, addresses::Address};
 use alloy_primitives::Address as AddressAlloy;
 use entity::{
-    addresses::{ActiveModel, Column, Entity, Model},
+    addresses::{Column, Entity, Model},
     sea_orm_active_enums as db_enum,
 };
 use regex::Regex;
 use sea_orm::{
+    ActiveValue::NotSet,
+    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
+    IntoSimpleExpr, Iterable, Order, QueryFilter, QuerySelect,
     prelude::Expr,
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
         WithClause,
     },
-    ActiveValue::NotSet,
-    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoSimpleExpr,
-    Iterable, Order, QueryFilter, QuerySelect,
 };
 use std::{collections::HashMap, sync::OnceLock};
 
@@ -29,7 +29,7 @@ where
     addresses.sort_by(|a, b| (a.hash, a.chain_id).cmp(&(b.hash, b.chain_id)));
     let addresses = addresses.into_iter().map(|address| {
         let model: Model = address.into();
-        let mut active: ActiveModel = model.into();
+        let mut active = model.into_active_model();
         active.created_at = NotSet;
         active.updated_at = NotSet;
         active

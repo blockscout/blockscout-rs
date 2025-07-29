@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "multichain-aggregator-entity",
     "multichain-aggregator-logic",
@@ -65,6 +65,7 @@ chrono = "0.4.38"
 env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.3.0" }
 regex = "1.10"
 reqwest = "0.12"
+rust_decimal = "1.37"
 thiserror = "1.0"
 url = "2.4"
 futures = "0.3"

@@ -8,6 +8,7 @@ use crate::{
     repository::{addresses, block_ranges, hashes},
     services::chains,
     types::{
+        ChainId,
         addresses::{Address, TokenType},
         block_ranges::ChainBlockNumber,
         dapp::MarketplaceDapp,
@@ -15,7 +16,6 @@ use crate::{
         hashes::{Hash, HashType},
         search_results::QuickSearchResult,
         token_info::Token,
-        ChainId,
     },
 };
 use alloy_primitives::Address as AddressAlloy;
@@ -249,6 +249,38 @@ pub async fn search_hashes(
             .collect::<Result<Vec<_>, _>>()?,
         page_token,
     ))
+}
+
+pub async fn search_block_numbers(
+    db: &DatabaseConnection,
+    query: String,
+    chain_ids: Vec<ChainId>,
+    page_size: u64,
+    page_token: Option<ChainId>,
+) -> Result<(Vec<ChainBlockNumber>, Option<ChainId>), ServiceError> {
+    let block_number = match alloy_primitives::BlockNumber::from_str(&query) {
+        Ok(block_number) => block_number,
+        Err(_) => return Ok((vec![], None)),
+    };
+
+    let (block_ranges, page_token) = block_ranges::list_matching_block_ranges_paginated(
+        db,
+        block_number,
+        chain_ids,
+        page_size,
+        page_token,
+    )
+    .await?;
+
+    let block_numbers: Vec<_> = block_ranges
+        .into_iter()
+        .map(|r| ChainBlockNumber {
+            chain_id: r.chain_id,
+            block_number,
+        })
+        .collect::<Vec<_>>();
+
+    Ok((block_numbers, page_token))
 }
 
 pub async fn search_tokens(
