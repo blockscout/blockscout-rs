@@ -8,19 +8,13 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 use stats::{
-    ChartProperties, Named,
     counters::{
-        ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
-        ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
-        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
-        multichain::TotalInteropMessages,
-    },
-    indexing_status::BlockscoutIndexingStatus,
-    lines::{
+        multichain::{TotalAddressesNumber, TotalInteropMessages, TotalInteropTransfers, TotalTxnsNumber}, ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns, ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns
+    }, indexing_status::BlockscoutIndexingStatus, lines::{
         ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
         ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
         OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
-    },
+    }, ChartProperties, Named
 };
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
@@ -313,7 +307,12 @@ pub fn handle_enable_all_eip_7702(
 }
 
 pub fn disable_all_non_multichain_charts(charts: &mut config::charts::Config<AllChartSettings>) {
-    let multichain_charts = HashSet::from([TotalInteropMessages::name()]);
+    let multichain_charts = HashSet::from([
+        TotalInteropMessages::name(),
+        TotalInteropTransfers::name(),
+        TotalAddressesNumber::name(),
+        TotalTxnsNumber::name(),
+        ]);
     for (name, settings) in charts.lines.iter_mut() {
         if !multichain_charts.contains(name) {
             settings.enabled = false;

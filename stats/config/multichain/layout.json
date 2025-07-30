@@ -1,12 +1,17 @@
 {
     "counters_order": [
-        "total_interop_messages"
+        "total_interop_messages",
+        "total_interop_transfers",
+        "total_txns_number",
+        "total_addresses_number"
     ],
     "line_chart_categories": [
         {
-            "id": "interop_messages",
-            "title": "Interop messages",
-            "charts_order": []
+            "id": "transactions",
+            "title": "Transactions",
+            "charts_order": [
+                "daily_txns_number"
+            ]
         }
     ]
 }

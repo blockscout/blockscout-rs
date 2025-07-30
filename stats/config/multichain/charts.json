@@ -4,7 +4,19 @@
         "total_interop_messages": {
             "title": "Total interop messages",
             "description": "Number of interop messages over all time"
+        },
+        "total_interop_transfers": {
+            "title": "Total interop transfers",
+            "description": "Number of interop transfers over all time"
+        },
+        "total_txns_number": {
+            "title": "Total transactions",
+            "description": "Number of transactions across all chains in the cluster"
+        },
+        "total_addresses_number": {
+            "title": "Total addresses",
+            "description": "Number of addresses across all chains in the cluster"
         }
     },
-    "line_charts": {}
+    "line_charts": { }
 }

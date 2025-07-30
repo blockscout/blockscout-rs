@@ -371,6 +371,9 @@ impl RuntimeSetup {
             Arc::new(VerifiedContractsPageGroup),
             // multichain
             Arc::new(TotalInteropMessagesGroup),
+            Arc::new(TotalInteropTransfersGroup),
+            Arc::new(TotalAddressesNumberGroup),
+            Arc::new(TotalTxnsNumberGroup),
         ]
     }
 
