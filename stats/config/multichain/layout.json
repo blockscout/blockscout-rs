@@ -10,7 +10,7 @@
             "id": "transactions",
             "title": "Transactions",
             "charts_order": [
-                "daily_txns_number"
+                "daily_txns_multichain_window"
             ]
         }
     ]

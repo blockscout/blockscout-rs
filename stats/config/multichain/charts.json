@@ -18,5 +18,10 @@
             "description": "Number of addresses across all chains in the cluster"
         }
     },
-    "line_charts": { }
+    "line_charts": {
+        "daily_txns_multichain_window": {
+            "title": "Daily transactions",
+            "description": "The chart displays daily transactions across all chains for the past 30 days"
+        }
+    }
 }
