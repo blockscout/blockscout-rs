@@ -12,14 +12,10 @@ service CctxInfo {
 }
 
 service TokenInfo {
-  rpc GetTokenInfo(GetTokenInfoRequest) returns (TokenInfoResponse) {}
-  rpc ListTokens(ListTokensRequest) returns (TokensResponse) {}
+  rpc GetTokenInfo(GetTokenInfoRequest) returns (Token) {}
+  rpc ListTokens(ListTokensRequest) returns (Tokens) {}
 }
 
-// Service providing full list of tokens with metadata including icon URLs
-service TokenList {
-  rpc ListTokens (ListTokensRequest) returns (TokensResponse) {}
-}
 
 message ListTokensRequest {
 }
@@ -36,7 +32,7 @@ message ListCctxsRequest {
   optional string status_reduced = 4;      // "Pending,Success,Failed"
   optional string sender_address = 5;      // "0x123,0x456,0x789"
   optional string receiver_address = 6;    // "0xabc,0xdef,0xghi"
-  optional string asset = 7;               // "ETH,BTC,USDC"
+  optional string asset = 7;               // "0x123,0x456,0x789"
   optional string coin_type = 8;           // "Zeta,Gas,Erc20"
   optional string source_chain_id = 9;     // "1,56,137"
   optional string target_chain_id = 10;     // "1,56,137"
@@ -259,26 +255,29 @@ message CrossChainTx {
   string zeta_fees = 5;
   string relayed_message = 6; // Not used by protocol , just relayed across
   Status cctx_status = 8;
-  InboundParams inbound_params = 9;
-  repeated OutboundParams outbound_params = 10;
-  ProtocolContractVersion protocol_contract_version = 11;
-  RevertOptions revert_options = 12;
-  repeated RelatedCctx related_cctxs = 13;
+  CctxStatusReduced cctx_status_reduced = 10;
+  InboundParams inbound_params = 11;
+  repeated OutboundParams outbound_params = 12;
+  ProtocolContractVersion protocol_contract_version = 13;
+  RevertOptions revert_options = 14;
+  repeated RelatedCctx related_cctxs = 15;
 }
 
 message GetTokenInfoRequest {
   string asset = 1;
 }
 
-message TokenInfoResponse {
+message Token {
   string foreign_chain_id = 1;
   int32 decimals = 2;
   string name = 3;
   string symbol = 4;
-  optional string icon_url = 5;
+  string zrc20_contract_address = 5;
+  optional string icon_url = 6;
+  CoinType coin_type = 7;
 }
 
 
-message TokensResponse {
-  repeated TokenInfoResponse tokens = 1;
+message Tokens {
+  repeated Token tokens = 1;
 }

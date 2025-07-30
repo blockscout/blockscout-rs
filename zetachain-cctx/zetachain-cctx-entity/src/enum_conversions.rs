@@ -158,6 +158,23 @@ impl From<CoinType> for i32 {
     }
 }
 
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Token as TokenProto;
+use crate::token::Model as Token;
+
+impl Into<TokenProto> for Token {
+    fn into(self) -> TokenProto {
+        TokenProto {
+            zrc20_contract_address: self.zrc20_contract_address,
+            foreign_chain_id: self.foreign_chain_id,
+            decimals: self.decimals,
+            name: self.name,
+            symbol: self.symbol,
+            icon_url: self.icon_url,
+            coin_type: self.coin_type.into(),
+        }
+    }
+}
+
 impl TryFrom<String> for CoinType {
     type Error = String;
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -171,6 +188,7 @@ impl TryFrom<String> for CoinType {
         }
     }
 }
+
 //convert ProtocolContractVersion to i32
 // enum ProtocolContractVersion {
 //     V1 = 0;

@@ -7,8 +7,7 @@ use sea_orm::{ActiveValue, EntityTrait};
 
 use zetachain_cctx_entity::{token, sea_orm_active_enums::CoinType as DbCoinType};
 use zetachain_cctx_logic::{client::{Client, RpcSettings}, database::ZetachainCctxDatabase};
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::TokenInfoResponse
-;
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Token as TokenProto;
 use zetachain_cctx_logic::models::CoinType;
 use sea_orm::{PaginatorTrait,QueryFilter, ColumnTrait};
 
@@ -63,7 +62,7 @@ async fn test_token_api_get_token_info() {
     // Test successful token retrieval
     
 
-    let token_info: TokenInfoResponse = test_server::send_get_request(&server, &format!("/api/v1/TokenInfo:get?asset={}", asset)).await;
+    let token_info: TokenProto = test_server::send_get_request(&server, &format!("/api/v1/TokenInfo:get?asset={}", asset)).await;
     
 
     // Verify the response matches the inserted token

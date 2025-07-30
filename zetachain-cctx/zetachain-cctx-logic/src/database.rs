@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::models::{
     self, CctxShort, CompleteCctx, CrossChainTx, Filters, RelatedCctx, RelatedOutboundParams,
-    SyncProgress, Token, TokenInfo,
+    SyncProgress,Token
 };
 use anyhow::Ok;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -24,7 +24,7 @@ use zetachain_cctx_entity::{
     token as TokenEntity, watermark,
 };
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
-    CctxListItem as CctxListItemProto, CctxStatus as CctxStatusProto, CctxStatusReduced as CctxStatusReducedProto, CoinType as CoinTypeProto, Direction, ListCctxsResponse, Pagination
+    CctxListItem as CctxListItemProto, CctxStatus as CctxStatusProto, CctxStatusReduced as CctxStatusReducedProto, CoinType as CoinTypeProto, Direction, ListCctxsResponse, Pagination, Token as TokenProto
 };
 
 pub struct ZetachainCctxDatabase {
@@ -2263,34 +2263,21 @@ impl ZetachainCctxDatabase {
         Ok(())
     }
 
-    pub async fn get_token_by_asset(&self, asset: &str) -> anyhow::Result<Option<TokenInfo>> {
+    pub async fn get_token_by_asset(&self, asset: &str) -> anyhow::Result<Option<TokenProto>> {
         let token = TokenEntity::Entity::find()
             .filter(TokenEntity::Column::Asset.eq(asset))
             .one(self.db.as_ref())
-            .await?;
+            .await?
+            .map(|token| token.into());
 
-        match token {
-            Some(token) => Ok(Some(TokenInfo {
-                foreign_chain_id: token.foreign_chain_id,
-                decimals: token.decimals,
-                name: token.name,
-                symbol: token.symbol,
-                icon_url: token.icon_url,
-            })),
-            None => Ok(None),
-        }
+        Ok(token)
+
     }
 
-    pub async fn list_tokens(&self) -> anyhow::Result<Vec<TokenInfo>> {
+    pub async fn list_tokens(&self) -> anyhow::Result<Vec<TokenProto>> {
         let tokens = TokenEntity::Entity::find()
             .all(self.db.as_ref())
             .await?;
-        Ok(tokens.into_iter().map(|token| TokenInfo {
-            foreign_chain_id: token.foreign_chain_id,
-            decimals: token.decimals,
-            name: token.name,
-            symbol: token.symbol,
-            icon_url: token.icon_url,
-        }).collect())
+        Ok(tokens.into_iter().map(|token| token.into()).collect())
     }
 }

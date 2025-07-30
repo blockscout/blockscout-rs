@@ -266,6 +266,7 @@ pub struct Token {
     pub icon_url: Option<String>,
 }
 
+
 impl TryFrom<Token> for zetachain_cctx_entity::token::ActiveModel {
     type Error = anyhow::Error;
     
@@ -298,13 +299,4 @@ pub struct PagedTokenResponse {
     #[serde(rename = "foreignCoins")]
     pub foreign_coins: Vec<Token>,
     pub pagination: Pagination,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TokenInfo {
-    pub foreign_chain_id: String,
-    pub decimals: i32,
-    pub name: String,
-    pub symbol: String,
-    pub icon_url: Option<String>,
 }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tonic::{Request, Response, Status};
 
-use zetachain_cctx_logic::database::ZetachainCctxDatabase;
+use zetachain_cctx_logic::database::{reduce_status, ZetachainCctxDatabase};
 use zetachain_cctx_logic::models::{CompleteCctx, Filters};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Direction;
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
@@ -25,13 +25,16 @@ impl CctxService {
 pub fn transform_complete_cctx_to_cross_chain_tx(
     entity: CompleteCctx,
 ) -> Result<CrossChainTx, String> {
+    let status:i32 = entity.status.status.into();
+    let status = CctxStatus::try_from(status).map_err(|e| e.to_string())?;
+    let status_reduced = reduce_status(status);
     let cctx = CrossChainTx {
         creator: entity.cctx.creator,
         index: entity.cctx.index,
         zeta_fees: entity.cctx.zeta_fees,
         relayed_message: entity.cctx.relayed_message.unwrap_or_default(),
         cctx_status: Some(CCTXStatus {
-            status: entity.status.status.into(),
+            status: status.into(),
             status_message: entity.status.status_message.unwrap_or_default(),
             error_message: entity.status.error_message.unwrap_or_default(),
             last_update_timestamp: entity.status.last_update_timestamp.and_utc().timestamp(),
@@ -40,6 +43,7 @@ pub fn transform_complete_cctx_to_cross_chain_tx(
             error_message_abort: entity.status.error_message_abort.unwrap_or_default(),
             error_message_revert: entity.status.error_message_revert.unwrap_or_default(),
         }),
+        cctx_status_reduced: status_reduced.into(),
         inbound_params: Some(InboundParams {
             sender: entity.inbound.sender,
             sender_chain_id: entity.inbound.sender_chain_id.parse().unwrap_or(0),

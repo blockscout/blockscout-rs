@@ -5,7 +5,6 @@ info:
 tags:
   - name: CctxInfo
   - name: TokenInfo
-  - name: TokenList
   - name: Health
   - name: Stats
 consumes:
@@ -82,7 +81,7 @@ paths:
           required: false
           type: string
         - name: asset
-          description: '"ETH,BTC,USDC"'
+          description: '"0x123,0x456,0x789"'
           in: query
           required: false
           type: string
@@ -139,7 +138,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1TokenInfoResponse'
+            $ref: '#/definitions/v1Token'
         default:
           description: An unexpected error response.
           schema:
@@ -158,7 +157,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1TokensResponse'
+            $ref: '#/definitions/v1Tokens'
         default:
           description: An unexpected error response.
           schema:
@@ -321,6 +320,8 @@ definitions:
         title: Not used by protocol , just relayed across
       cctx_status:
         $ref: '#/definitions/zetachainCctxv1Status'
+      cctx_status_reduced:
+        $ref: '#/definitions/v1CctxStatusReduced'
       inbound_params:
         $ref: '#/definitions/v1InboundParams'
       outbound_params:
@@ -545,7 +546,7 @@ definitions:
       revert_gas_limit:
         type: string
     title: RevertOptions represents the options for reverting a cctx
-  v1TokenInfoResponse:
+  v1Token:
     type: object
     properties:
       foreign_chain_id:
@@ -557,16 +558,20 @@ definitions:
         type: string
       symbol:
         type: string
+      zrc20_contract_address:
+        type: string
       icon_url:
         type: string
-  v1TokensResponse:
+      coin_type:
+        $ref: '#/definitions/v1CoinType'
+  v1Tokens:
     type: object
     properties:
       tokens:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1TokenInfoResponse'
+          $ref: '#/definitions/v1Token'
   v1TxFinalizationStatus:
     type: string
     enum:
