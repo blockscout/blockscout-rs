@@ -6,14 +6,14 @@ use chrono::{DateTime, Utc};
 use itertools::{EitherOrBoth, Itertools};
 
 use crate::{
+    ChartError,
     data_processing::zip_same_timespan,
     data_source::{
-        kinds::{data_manipulation::resolutions::reduce_each_timespan, AdapterDataSource},
         DataSource, UpdateContext,
+        kinds::{AdapterDataSource, data_manipulation::resolutions::reduce_each_timespan},
     },
     range::UniversalRange,
     types::{ConsistsOf, Timespan, TimespanValue},
-    ChartError,
 };
 
 use super::extend_to_timespan_boundaries;
@@ -120,15 +120,14 @@ mod tests {
     use std::ops::Range;
 
     use crate::{
+        MissingDatePolicy,
         data_source::{
-            kinds::data_manipulation::map::MapParseTo, types::BlockscoutMigrations,
-            UpdateParameters,
+            UpdateParameters, kinds::data_manipulation::map::MapParseTo, types::IndexerMigrations,
         },
         gettable_const,
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
         tests::point_construction::{d, d_v_double, d_v_int, dt, w_v_double, week_of},
         types::timespans::{DateValue, Week, WeekValue},
-        MissingDatePolicy,
     };
 
     use super::*;
@@ -186,8 +185,9 @@ mod tests {
         let output: Vec<WeekValue<f64>> = <TestedAverageSource as DataSource>::query_data(
             &UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &db,
+                false,
                 &db,
-                BlockscoutMigrations::latest(),
+                IndexerMigrations::latest(),
                 Some(dt("2024-07-15T09:00:00").and_utc()),
             )),
             (dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()).into(),
@@ -234,8 +234,9 @@ mod tests {
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &empty_db,
+                false,
                 &empty_db,
-                BlockscoutMigrations::latest(),
+                IndexerMigrations::latest(),
                 Some(dt("2024-07-30T09:00:00").and_utc()),
             ));
         let week_1_average = (5.0 * 100.0 + 34.2 * 2.0 + 10.3 * 12.0) / (100.0 + 2.0 + 12.0);
@@ -284,8 +285,9 @@ mod tests {
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &empty_db,
+                false,
                 &empty_db,
-                BlockscoutMigrations::latest(),
+                IndexerMigrations::latest(),
                 Some(dt("2023-03-30T09:00:00").and_utc()),
             ));
         assert_eq!(
@@ -330,8 +332,9 @@ mod tests {
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &empty_db,
+                false,
                 &empty_db,
-                BlockscoutMigrations::latest(),
+                IndexerMigrations::latest(),
                 Some(dt("2023-03-30T09:00:00").and_utc()),
             ));
         assert_eq!(

@@ -4,14 +4,14 @@ use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
+    ChartError,
     charts::db_interaction::write::clear_all_chart_data,
     data_source::kinds::local_db::parameters::update::pass_vec,
     gettable_const,
     types::{
-        timespans::{Month, Week, Year},
         Timespan, TimespanDuration, TimespanValue,
+        timespans::{Month, Week, Year},
     },
-    ChartError,
 };
 
 use super::parameter_traits::BatchStepBehaviour;
@@ -41,12 +41,12 @@ where
         db: &C,
         chart_id: i32,
         _update_time: DateTime<Utc>,
-        min_blockscout_block: i64,
+        min_indexer_block: i64,
         _last_accurate_point: TimespanValue<Resolution, String>,
         main_data: Vec<TimespanValue<Resolution, String>>,
         _resolution_data: (),
     ) -> Result<usize, ChartError> {
-        pass_vec(db, chart_id, min_blockscout_block, main_data).await
+        pass_vec(db, chart_id, min_indexer_block, main_data).await
     }
 }
 
@@ -66,7 +66,7 @@ where
         db: &C,
         chart_id: i32,
         _update_time: DateTime<Utc>,
-        min_blockscout_block: i64,
+        min_indexer_block: i64,
         _last_accurate_point: TimespanValue<Resolution, String>,
         main_data: Vec<TimespanValue<Resolution, String>>,
         _resolution_data: (),
@@ -79,7 +79,7 @@ where
             &db,
             chart_id,
             _update_time,
-            min_blockscout_block,
+            min_indexer_block,
             _last_accurate_point,
             main_data,
             _resolution_data,

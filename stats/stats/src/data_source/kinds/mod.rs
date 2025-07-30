@@ -29,7 +29,7 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 use sea_orm::{DatabaseConnection, DbErr};
 
-use crate::{range::UniversalRange, ChartError, ChartKey};
+use crate::{ChartError, ChartKey, range::UniversalRange};
 
 use super::{DataSource, UpdateContext};
 

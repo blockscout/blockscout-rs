@@ -93,6 +93,20 @@ macro_rules! sql_with_range_filter_opt {
 
 pub(crate) use sql_with_range_filter_opt;
 
+macro_rules! singleton_groups {
+    ($($chart: ident),+ $(,)?) => {
+        $(
+            ::paste::paste!(
+                $crate::construct_update_group!([< $chart Group >] {
+                    charts: [$chart]
+                });
+            );
+        )+
+    };
+}
+
+pub(crate) use singleton_groups;
+
 #[cfg(test)]
 mod test {
     use itertools::Itertools;

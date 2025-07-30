@@ -5,11 +5,11 @@ use chrono::{DateTime, Utc};
 use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
+    ChartError, RequestedPointsLimit,
     charts::db_interaction::write::set_last_updated_at,
     data_source::{DataSource, UpdateContext},
     range::UniversalRange,
     types::TimespanValue,
-    ChartError, RequestedPointsLimit,
 };
 
 /// In most cases, [`super::DefaultCreate`] is enough.
@@ -31,12 +31,12 @@ where
     /// Update only chart values.
     ///
     /// `dependency_data_fetch_timer` - timer to track data fetch from (remote) dependencies.
-    /// `min_blockscout_block` - indicator of blockscout reindexation
+    /// `min_indexer_block` - indicator of blockscout reindexation
     fn update_values(
         cx: &UpdateContext<'_>,
         chart_id: i32,
         last_accurate_point: Option<TimespanValue<Resolution, String>>,
-        min_blockscout_block: i64,
+        min_indexer_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> impl Future<Output = Result<(), ChartError>> + Send;
 

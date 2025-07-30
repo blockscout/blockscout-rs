@@ -6,15 +6,15 @@ pub use point::PassPoint;
 use sea_orm::{ConnectionTrait, TransactionTrait};
 
 use crate::{
+    ChartError,
     charts::db_interaction::write::insert_data_many,
     types::{Timespan, TimespanValue},
-    ChartError,
 };
 
 pub(crate) async fn pass_vec<Resolution, C>(
     db: &C,
     chart_id: i32,
-    min_blockscout_block: i64,
+    min_indexer_block: i64,
     main_data: Vec<TimespanValue<Resolution, String>>,
 ) -> Result<usize, ChartError>
 where
@@ -31,7 +31,7 @@ where
     // cloning already stored chart is counter-productive/not effective.
     let values = main_data
         .into_iter()
-        .map(|value| value.active_model(chart_id, Some(min_blockscout_block)));
+        .map(|value| value.active_model(chart_id, Some(min_indexer_block)));
     insert_data_many(db, values)
         .await
         .map_err(ChartError::StatsDB)?;

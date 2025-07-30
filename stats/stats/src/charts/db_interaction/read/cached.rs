@@ -1,9 +1,9 @@
 /// Cached query methods. Can be used on any db, because why not.
 /// Intended for heavy queries to blockscout database.
 use crate::{
-    data_source::{types::Cacheable, UpdateContext},
-    types::TimespanTrait,
     ChartError,
+    data_source::{UpdateContext, types::Cacheable},
+    types::TimespanTrait,
 };
 
 use sea_orm::{FromQueryResult, Statement};

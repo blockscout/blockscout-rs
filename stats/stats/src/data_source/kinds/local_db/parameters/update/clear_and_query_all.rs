@@ -9,15 +9,15 @@ use blockscout_metrics_tools::AggregateTimer;
 use sea_orm::TransactionTrait;
 
 use crate::{
+    ChartError, ChartProperties,
     charts::db_interaction::write::clear_all_chart_data,
     data_source::{
-        kinds::local_db::{parameter_traits::QueryBehaviour, UpdateBehaviour},
-        source::DataSource,
         UpdateContext,
+        kinds::local_db::{UpdateBehaviour, parameter_traits::QueryBehaviour},
+        source::DataSource,
     },
     range::UniversalRange,
     types::{ExtendedTimespanValue, Timespan, TimespanValue},
-    ChartError, ChartProperties,
 };
 
 use super::pass_vec;
@@ -42,11 +42,11 @@ where
         cx: &UpdateContext<'_>,
         chart_id: i32,
         _last_accurate_point: Option<TimespanValue<ChartProps::Resolution, String>>,
-        min_blockscout_block: i64,
+        min_indexer_block: i64,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), ChartError> {
         let now = Instant::now();
-        let db = cx.db.begin().await.map_err(ChartError::StatsDB)?;
+        let db = cx.stats_db.begin().await.map_err(ChartError::StatsDB)?;
         tracing::info!(
             chart =% ChartProps::key(),
             "clearing all data and querying from scratch"
@@ -57,7 +57,7 @@ where
         // updating all at once => full range
         let range = UniversalRange::full();
         let main_data = MainDep::query_data(cx, range, dependency_data_fetch_timer).await?;
-        let found = pass_vec(&db, chart_id, min_blockscout_block, main_data).await?;
+        let found = pass_vec(&db, chart_id, min_indexer_block, main_data).await?;
         tracing::info!(
             found =? found,
             elapsed =? now.elapsed(),

@@ -1,14 +1,14 @@
 /// Methods intended for interacting with local db
 use crate::{
-    charts::{chart::ChartMetadata, ChartKey},
+    ChartError, ChartProperties, MissingDatePolicy,
+    charts::{ChartKey, chart::ChartMetadata},
     data_source::kinds::local_db::parameter_traits::QueryBehaviour,
     missing_date::{fill_and_filter_chart, fit_into_range},
     range::exclusive_range_to_inclusive,
     types::{
-        timespans::{DateValue, Month, Week, Year},
         ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue,
+        timespans::{DateValue, Month, Week, Year},
     },
-    ChartError, ChartProperties, MissingDatePolicy,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -18,8 +18,8 @@ use entity::{
 };
 use itertools::Itertools;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
-    FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
+    ColumnTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, QuerySelect, Statement, sea_query::Expr,
 };
 use std::fmt::Debug;
 use tracing::instrument;
@@ -424,10 +424,10 @@ struct SyncInfo {
 /// Get last 'finalized' row (for which no recomputations needed).
 ///
 /// In case of inconsistencies or set `force_full`, returns `None`.
-#[instrument(level="info", skip_all, fields(min_blockscout_block = min_blockscout_block, chart =? ChartProps::key()))]
+#[instrument(level="info", skip_all, fields(min_indexer_block = observed_min_indexer_block, chart =? ChartProps::key()))]
 pub async fn last_accurate_point<ChartProps, Query>(
     chart_id: i32,
-    min_blockscout_block: i64,
+    observed_min_indexer_block: i64,
     db: &DatabaseConnection,
     force_full: bool,
     approximate_trailing_points: u64,
@@ -442,7 +442,8 @@ where
         tracing::info!("running full update due to force override");
         None
     } else {
-        let recorded_min_blockscout_block: Option<SyncInfo> = chart_data::Entity::find()
+        let recorded_min_indexer_block: Option<SyncInfo> = chart_data::Entity::find()
+            .select_only()
             .column(chart_data::Column::MinBlockscoutBlock)
             .filter(chart_data::Column::ChartId.eq(chart_id))
             .order_by_desc(chart_data::Column::Date)
@@ -451,10 +452,10 @@ where
             .await
             .map_err(ChartError::StatsDB)?;
 
-        match recorded_min_blockscout_block {
+        match recorded_min_indexer_block {
             Some(SyncInfo {
-                min_blockscout_block: Some(recorded_min_blockscout_block),
-            }) if recorded_min_blockscout_block == min_blockscout_block => {
+                min_blockscout_block: Some(recorded_min_indexer_block),
+            }) if recorded_min_indexer_block == observed_min_indexer_block => {
                 let metadata = get_chart_metadata(db, &ChartProps::key()).await?;
                 let Some(last_updated_at) = metadata.last_updated_at else {
                     // data is present, but `last_updated_at` is not set
@@ -511,7 +512,7 @@ where
                         };
 
                         tracing::info!(
-                            min_chart_block = recorded_min_blockscout_block,
+                            min_chart_block = recorded_min_indexer_block,
                             last_accurate_point = ?last_accurate_point,
                             "running partial update"
                         );
@@ -519,7 +520,7 @@ where
                     }
                 }
             }
-            // != min_blockscout_block
+            // != min_indexer_block
             Some(SyncInfo {
                 min_blockscout_block: Some(block),
             }) => {
@@ -580,11 +581,12 @@ impl RequestedPointsLimit {
 mod tests {
     use super::*;
     use crate::{
+        Named,
         charts::ResolutionKind,
         counters::TotalBlocks,
         data_source::{
-            kinds::local_db::parameters::DefaultQueryVec, types::BlockscoutMigrations, DataSource,
-            UpdateContext, UpdateParameters,
+            DataSource, UpdateContext, UpdateParameters,
+            kinds::local_db::parameters::DefaultQueryVec, types::IndexerMigrations,
         },
         lines::{AccountsGrowth, ActiveAccounts, NewTxns, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
@@ -593,7 +595,6 @@ mod tests {
             simple_test::get_counter,
         },
         types::timespans::Month,
-        Named,
     };
     use chrono::DateTime;
     use entity::{chart_data, charts, sea_orm_active_enums::ChartType};
@@ -835,10 +836,11 @@ mod tests {
         let current_time = dt("2022-11-12T08:08:08").and_utc();
         let date = current_time.date_naive();
         let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            db: &db,
+            stats_db: &db,
+            is_multichain_mode: false,
             // shouldn't use this because mock data contains total blocks value
-            blockscout: &db,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            indexer_db: &db,
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,

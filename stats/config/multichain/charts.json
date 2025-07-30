@@ -1,0 +1,10 @@
+{
+    "template_values": {},
+    "counters": {
+        "total_interop_messages": {
+            "title": "Total interop messages",
+            "description": "Number of interop messages over all time"
+        }
+    },
+    "line_charts": {}
+}

@@ -43,7 +43,6 @@ test-with-db *args:
     -just                                           stop-test-postgres              2> /dev/null
     just                                            start-postgres-and-build-tests
     just db-port="{{test-db-port}}" db-name=""      test                            {{args}}
-    just                                            stop-test-postgres
 
 start-postgres-and-build-tests:
     #!/bin/bash -eux
