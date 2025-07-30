@@ -201,7 +201,7 @@ async fn test_token_sync_stream_works() {
         .expect("USDC token should exist");
 
     assert_eq!(usdc_token.asset, "0xaf88d065e77c8cC2239327C5EDb3A432268e5831");
-    assert_eq!(usdc_token.foreign_chain_id, "42161");
+    assert_eq!(usdc_token.foreign_chain_id, 42161);
     assert_eq!(usdc_token.decimals, 6);
     assert_eq!(usdc_token.name, "ZetaChain ZRC20 USDC on Arbitrum One");
     assert_eq!(usdc_token.symbol, "USDC.ARB");
@@ -217,7 +217,7 @@ async fn test_token_sync_stream_works() {
         .expect("WBTC token should exist");
 
     assert_eq!(wbtc_token.asset, "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599");
-    assert_eq!(wbtc_token.foreign_chain_id, "1");
+    assert_eq!(wbtc_token.foreign_chain_id, 1);
     assert_eq!(wbtc_token.decimals, 8);
     assert_eq!(wbtc_token.name, "ZetaChain ZRC20 WBTC on Ethereum Mainnet");
     assert_eq!(wbtc_token.symbol, "WBTC.ETH");
@@ -431,12 +431,12 @@ async fn test_token_sync_pagination() {
     // Verify specific data from different pages
     let page2_token = page2_token1.unwrap();
     assert_eq!(page2_token.asset, "0xpage2asset1");
-    assert_eq!(page2_token.foreign_chain_id, "42161");
+    assert_eq!(page2_token.foreign_chain_id, 42161);
     assert_eq!(page2_token.name, "Page 2 Token 1");
 
     let page3_token = page3_token1.unwrap();
     assert_eq!(page3_token.asset, "0xpage3asset1");
-    assert_eq!(page3_token.foreign_chain_id, "137");
+    assert_eq!(page3_token.foreign_chain_id, 137);
     assert_eq!(page3_token.paused, true);
     assert_eq!(page3_token.name, "Page 3 Token 1");
 } 

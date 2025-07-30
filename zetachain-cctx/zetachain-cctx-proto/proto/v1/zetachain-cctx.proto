@@ -120,9 +120,9 @@ message InboundParams {
       5; // for ERC20 coin type, the asset is an address of the ERC20 contract
   string amount = 6 ;
   string observed_hash = 7;
-  uint64 observed_external_height = 8;
+  int64 observed_external_height = 8;
   string ballot_index = 9;
-  uint64 finalized_zeta_height = 10;
+  int64 finalized_zeta_height = 10;
   TxFinalizationStatus tx_finalization_status = 11;
 
   // this field describes if a smart contract call should be made for a inbound
@@ -152,7 +152,7 @@ message CallOptions {
 
 message OutboundParams {
   string receiver = 1;
-  int64 receiver_chainId = 2;
+  int32 receiver_chainId = 2;
   CoinType coin_type = 3;
   string amount = 4 ;
   uint64 tss_nonce = 5;
@@ -167,7 +167,7 @@ message OutboundParams {
   uint64 observed_external_height = 10;
   uint64 gas_used = 20;
   string effective_gas_price = 21;
-  uint64 effective_gas_limit = 22;
+  int64 effective_gas_limit = 22;
   string tss_pubkey = 11;
   TxFinalizationStatus tx_finalization_status = 12;
 
@@ -220,8 +220,8 @@ message CctxListItem {
   CctxStatus status = 2;
   CctxStatusReduced status_reduced = 3;
   string amount = 4;
-  string source_chain_id = 5;
-  string target_chain_id = 6;
+  int32 source_chain_id = 5;
+  int32 target_chain_id = 6;
   int64 created_timestamp = 7;
   int64 last_update_timestamp = 8;
   string sender_address = 9;
@@ -236,17 +236,26 @@ message CctxListItem {
 message RelatedCctx {
   string index = 1;
   int32 depth = 2;
-  string source_chain_id = 3;
+  int32 source_chain_id = 3;
   CctxStatus status = 4;
   string inbound_amount = 5;
   CoinType inbound_coin_type = 6;
   repeated RelatedOutboundParams outbound_params = 7;
+  optional string token_symbol = 8;
+  optional string token_name = 9;
+  optional int32 token_decimals = 10;
+  optional string token_zrc20_contract_address = 11;
+  optional string token_icon_url = 12;
+  int64 created_timestamp = 13;
+  optional string parent_index = 14;
+  optional string inbound_asset = 15;
 }
 
 message RelatedOutboundParams {
   string amount = 1;
-  string chain_id = 2;
+  int32 chain_id = 2;
   CoinType coin_type = 3;
+  int64 gas_used = 4;
 }
 
 message CrossChainTx {
@@ -268,7 +277,7 @@ message GetTokenInfoRequest {
 }
 
 message Token {
-  string foreign_chain_id = 1;
+  int32 foreign_chain_id = 1;
   int32 decimals = 2;
   string name = 3;
   string symbol = 4;

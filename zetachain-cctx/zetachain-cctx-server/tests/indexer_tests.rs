@@ -454,29 +454,29 @@ async fn test_get_cctx_info() {
     assert!(cctx.is_some());
     let cctx = cctx.unwrap();
     assert_eq!(
-        cctx.cctx.index,
+        cctx.index,
         root_index
     );
     assert_eq!(
-        cctx.cctx.creator,
+        cctx.creator,
         "creator"
     );
-    assert_eq!(cctx.cctx.zeta_fees, "0");
-    assert_eq!(cctx.cctx.relayed_message, Some("msg".to_string()));
+    assert_eq!(cctx.zeta_fees, "0");
+    assert_eq!(cctx.relayed_message, "msg");
     assert_eq!(
-        cctx.cctx.protocol_contract_version,
-        ProtocolContractVersion::V2
+        cctx.protocol_contract_version,
+        i32::from(ProtocolContractVersion::V2)
     );
-    assert_eq!(cctx.outbounds.len(), 2);
+    assert_eq!(cctx.outbound_params.len(), 2);
     assert_eq!(
-        cctx.outbounds[0].receiver,
+        cctx.outbound_params[0].receiver,
         "receiver"
     );
-    assert_eq!(cctx.outbounds[0].receiver_chain_id, "2");
-    assert_eq!(cctx.outbounds[0].coin_type, CoinType::Zeta);
-    assert_eq!(cctx.outbounds[0].amount, "1000000000000000000");
-    assert_eq!(cctx.outbounds[0].tss_nonce, "42");
-    assert_eq!(cctx.outbounds[0].gas_limit, "1337");
+    assert_eq!(cctx.outbound_params[0].receiver_chain_id, 2);
+    assert_eq!(cctx.outbound_params[0].coin_type, i32::from(CoinType::Zeta));
+    assert_eq!(cctx.outbound_params[0].amount, "1000000000000000000");
+    assert_eq!(cctx.outbound_params[0].tss_nonce, 42);
+    assert_eq!(cctx.outbound_params[0].gas_limit, 1337);
 
     let base = helpers::init_zetachain_cctx_server(
         db.db_url(),
@@ -501,25 +501,25 @@ async fn test_get_cctx_info() {
     
     
 
-    assert_eq!(parsed_cctx.index, cctx.cctx.index);
-    assert_eq!(parsed_cctx.creator, cctx.cctx.creator);
-    assert_eq!(parsed_cctx.zeta_fees, cctx.cctx.zeta_fees);
+    assert_eq!(parsed_cctx.index, cctx.index);
+    assert_eq!(parsed_cctx.creator, cctx.creator);
+    assert_eq!(parsed_cctx.zeta_fees, cctx.zeta_fees);
     
     
     let related_cctxs = parsed_cctx.related_cctxs;
-    assert_eq!(related_cctxs.len(), 1);
-    assert_eq!(related_cctxs[0].index, "child_cctx");
-    assert_eq!(related_cctxs[0].depth, 1);
-    assert_eq!(related_cctxs[0].source_chain_id, "1");
-    assert_eq!(related_cctxs[0].status, 3);
-    assert_eq!(related_cctxs[0].inbound_amount, "8504");
-    assert_eq!(related_cctxs[0].inbound_coin_type, 0);
-    assert_eq!(related_cctxs[0].outbound_params.len(), 2);
-    assert_eq!(related_cctxs[0].outbound_params[0].chain_id, "2");
-    assert_eq!(related_cctxs[0].outbound_params[0].coin_type, 0);
-    assert_eq!(related_cctxs[0].outbound_params[0].amount, "1000000000000000000");
-    assert_eq!(related_cctxs[0].outbound_params[1].chain_id, "3");
-    assert_eq!(related_cctxs[0].outbound_params[1].coin_type, 2);
-    assert_eq!(related_cctxs[0].outbound_params[1].amount, "42691234567890");
+    assert_eq!(related_cctxs.len(), 2);
+    assert_eq!(related_cctxs[1].index, "child_cctx");
+    assert_eq!(related_cctxs[1].depth, 1);
+    assert_eq!(related_cctxs[1].source_chain_id, 1);
+    assert_eq!(related_cctxs[1].status, 3);
+    assert_eq!(related_cctxs[1].inbound_amount, "8504");
+    assert_eq!(related_cctxs[1].inbound_coin_type, 0);
+    assert_eq!(related_cctxs[1].outbound_params.len(), 2);
+    assert_eq!(related_cctxs[1].outbound_params[0].chain_id, 2);
+    assert_eq!(related_cctxs[1].outbound_params[0].coin_type, 0);
+    assert_eq!(related_cctxs[1].outbound_params[0].amount, "1000000000000000000");
+    assert_eq!(related_cctxs[1].outbound_params[1].chain_id, 3);
+    assert_eq!(related_cctxs[1].outbound_params[1].coin_type, 2);
+    assert_eq!(related_cctxs[1].outbound_params[1].amount, "42691234567890");
 
 }

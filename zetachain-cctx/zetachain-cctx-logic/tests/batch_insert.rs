@@ -128,9 +128,9 @@ let cctx = cctx.unwrap();
  assert_eq!(outbound_params.len(),2);
 
 
- assert_eq!(outbound_params.first().unwrap().receiver_chain_id, "7001");
+ assert_eq!(outbound_params.first().unwrap().receiver_chain_id, 7001);
 
- assert_eq!(outbound_params.last().unwrap().receiver_chain_id, "8001");
+ assert_eq!(outbound_params.last().unwrap().receiver_chain_id, 8001);
 
 
 }

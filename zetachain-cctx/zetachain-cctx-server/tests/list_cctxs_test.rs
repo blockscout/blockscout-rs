@@ -56,8 +56,8 @@ async fn test_list_cctxs_endpoint() {
     assert_eq!(cctxs[0].index, "test_list_cctxs_endpoint_1");
     assert_eq!(cctxs[0].status, 1);
     assert_eq!(cctxs[0].amount, "8504");
-    assert_eq!(cctxs[0].source_chain_id, "1");
-    assert_eq!(cctxs[0].target_chain_id, "2");
+    assert_eq!(cctxs[0].source_chain_id, 1);
+    assert_eq!(cctxs[0].target_chain_id, 2);
 }
 
 #[tokio::test]

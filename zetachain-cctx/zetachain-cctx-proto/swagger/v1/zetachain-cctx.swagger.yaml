@@ -235,9 +235,11 @@ definitions:
       amount:
         type: string
       source_chain_id:
-        type: string
+        type: integer
+        format: int32
       target_chain_id:
-        type: string
+        type: integer
+        format: int32
       created_timestamp:
         type: string
         format: int64
@@ -388,12 +390,12 @@ definitions:
         type: string
       observed_external_height:
         type: string
-        format: uint64
+        format: int64
       ballot_index:
         type: string
       finalized_zeta_height:
         type: string
-        format: uint64
+        format: int64
       tx_finalization_status:
         $ref: '#/definitions/v1TxFinalizationStatus'
       is_cross_chain_call:
@@ -437,8 +439,8 @@ definitions:
       receiver:
         type: string
       receiver_chainId:
-        type: string
-        format: int64
+        type: integer
+        format: int32
       coin_type:
         $ref: '#/definitions/v1CoinType'
       amount:
@@ -471,7 +473,7 @@ definitions:
         type: string
       effective_gas_limit:
         type: string
-        format: uint64
+        format: int64
       tss_pubkey:
         type: string
       tx_finalization_status:
@@ -510,7 +512,8 @@ definitions:
         type: integer
         format: int32
       source_chain_id:
-        type: string
+        type: integer
+        format: int32
       status:
         $ref: '#/definitions/v1CctxStatus'
       inbound_amount:
@@ -522,15 +525,37 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1RelatedOutboundParams'
+      token_symbol:
+        type: string
+      token_name:
+        type: string
+      token_decimals:
+        type: integer
+        format: int32
+      token_zrc20_contract_address:
+        type: string
+      token_icon_url:
+        type: string
+      created_timestamp:
+        type: string
+        format: int64
+      parent_index:
+        type: string
+      inbound_asset:
+        type: string
   v1RelatedOutboundParams:
     type: object
     properties:
       amount:
         type: string
       chain_id:
-        type: string
+        type: integer
+        format: int32
       coin_type:
         $ref: '#/definitions/v1CoinType'
+      gas_used:
+        type: string
+        format: int64
   v1RevertOptions:
     type: object
     properties:
@@ -550,7 +575,8 @@ definitions:
     type: object
     properties:
       foreign_chain_id:
-        type: string
+        type: integer
+        format: int32
       decimals:
         type: integer
         format: int32

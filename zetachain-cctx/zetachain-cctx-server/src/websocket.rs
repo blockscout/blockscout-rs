@@ -3,13 +3,11 @@ use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use tonic::async_trait;
 use tracing::instrument;
-use zetachain_cctx_logic::{events::EventBroadcaster, models::CompleteCctx};
+use zetachain_cctx_logic::events::EventBroadcaster;
 use std::collections::HashMap;
 use uuid::Uuid;
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{CrossChainTx, CctxListItem as CctxListItemProto};
 use actix::ActorContext;
-
-use crate::services::cctx::transform_complete_cctx_to_cross_chain_tx;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WebSocketEvent {
@@ -257,16 +255,16 @@ impl WebSocketEventBroadcaster {
 
 #[async_trait]
 impl EventBroadcaster for WebSocketEventBroadcaster {
-    async fn broadcast_cctx_update(&self, cctx_index: String, cctx_data: CompleteCctx) {
+    async fn broadcast_cctx_update(&self, cctx_index: String, cctx_data: CrossChainTx) {
 
-        if let Ok(cctx) = transform_complete_cctx_to_cross_chain_tx(cctx_data) {
+        
         self.manager.do_send(BroadcastEvent {
             event: WebSocketEvent::CctxStatusUpdate {
                 cctx_index,
-                    cctx_data: cctx,    
+                cctx_data,    
                 },
             });
-        }
+        
     }
 
     async fn broadcast_new_cctxs(&self, cctxs: Vec<CctxListItemProto>) {

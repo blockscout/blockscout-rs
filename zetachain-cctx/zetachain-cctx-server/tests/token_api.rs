@@ -28,7 +28,7 @@ async fn test_token_api_get_token_info() {
         id: ActiveValue::NotSet,
         zrc20_contract_address: ActiveValue::Set("0x0327f0660525b15Cdb8f1f5FBF0dD7Cd5Ba182aD".to_string()),
         asset: ActiveValue::Set(asset.to_string()),
-        foreign_chain_id: ActiveValue::Set("42161".to_string()),
+        foreign_chain_id: ActiveValue::Set(42161),
         decimals: ActiveValue::Set(6),
         name: ActiveValue::Set("ZetaChain ZRC20 USDC on Arbitrum One".to_string()),
         symbol: ActiveValue::Set("USDC.ARB".to_string()),
@@ -66,7 +66,7 @@ async fn test_token_api_get_token_info() {
     
 
     // Verify the response matches the inserted token
-    assert_eq!(token_info.foreign_chain_id, "42161");
+    assert_eq!(token_info.foreign_chain_id, 42161);
     assert_eq!(token_info.decimals, 6);
     assert_eq!(token_info.name, "ZetaChain ZRC20 USDC on Arbitrum One");
     assert_eq!(token_info.symbol, "USDC.ARB");
@@ -132,7 +132,7 @@ async fn test_token_database_sync_and_query() {
         .unwrap()
         .expect("Token 1 should exist");
 
-    assert_eq!(token_info1.foreign_chain_id, "1");
+    assert_eq!(token_info1.foreign_chain_id, 1);
     assert_eq!(token_info1.decimals, 18);
     assert_eq!(token_info1.name, "Test Token 1");
     assert_eq!(token_info1.symbol, "TEST1");
@@ -143,7 +143,7 @@ async fn test_token_database_sync_and_query() {
         .unwrap()
         .expect("Token 2 should exist");
 
-    assert_eq!(token_info2.foreign_chain_id, "42161");
+    assert_eq!(token_info2.foreign_chain_id, 42161);
     assert_eq!(token_info2.decimals, 6);
     assert_eq!(token_info2.name, "Test Token 2");
     assert_eq!(token_info2.symbol, "TEST2");

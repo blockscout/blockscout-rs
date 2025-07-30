@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use crate::models::{CompleteCctx};
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem as CctxListItemProto;
+
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{CctxListItem as CctxListItemProto, CrossChainTx as CrossChainTxProto};
 
 #[async_trait]
 pub trait EventBroadcaster: Send + Sync {
     /// Broadcast that a CCTX has been updated
-    async fn broadcast_cctx_update(&self, cctx_index: String, cctx_data: CompleteCctx);
+    async fn broadcast_cctx_update(&self, cctx_index: String, cctx_data: CrossChainTxProto);
     
     /// Broadcast that new CCTXs have been imported
     async fn broadcast_new_cctxs(&self, cctxs: Vec<CctxListItemProto>);
@@ -16,7 +16,7 @@ pub struct NoOpBroadcaster;
 
 #[async_trait]
 impl EventBroadcaster for NoOpBroadcaster {
-    async fn broadcast_cctx_update(&self, _cctx_index: String, _cctx_data: CompleteCctx) {
+    async fn broadcast_cctx_update(&self, _cctx_index: String, _cctx_data: CrossChainTxProto) {
         // No-op
     }
     

@@ -11,7 +11,7 @@ pub struct Model {
     #[sea_orm(unique)]
     pub zrc20_contract_address: String,
     pub asset: String,
-    pub foreign_chain_id: String,
+    pub foreign_chain_id: i32,
     pub decimals: i32,
     pub name: String,
     pub symbol: String,
@@ -19,10 +19,9 @@ pub struct Model {
     pub gas_limit: String,
     pub paused: bool,
     pub liquidity_cap: String,
-    // New optional field to store token icon URL
-    pub icon_url: Option<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
+    pub icon_url: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

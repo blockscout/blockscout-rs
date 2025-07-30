@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use zetachain_cctx_entity::{cctx_status, cross_chain_tx, inbound_params, outbound_params, revert_options, sea_orm_active_enums::CoinType as DbCoinType};
+use zetachain_cctx_entity::{ sea_orm_active_enums::CoinType as DbCoinType};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PagedCCTXResponse {
@@ -172,27 +172,27 @@ pub struct CrossChainTx {
     pub protocol_contract_version: String,
 }
 
-#[derive(Debug)]
-pub struct CompleteCctx {
-    pub cctx: cross_chain_tx::Model,
-    pub status: cctx_status::Model,
-    pub inbound: inbound_params::Model,
-    pub outbounds: Vec<outbound_params::Model>,
-    pub revert: revert_options::Model,
-    pub related: Vec<RelatedCctx>,
-}
+// #[derive(Debug)]
+// pub struct CompleteCctx {
+//     pub cctx: cross_chain_tx::Model,
+//     pub status: cctx_status::Model,
+//     pub inbound: inbound_params::Model,
+//     pub outbounds: Vec<outbound_params::Model>,
+//     pub revert: revert_options::Model,
+//     pub related: Vec<RelatedCctx>,
+// }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RelatedCctx {
-    pub index: String,
-    pub depth: i32,
-    pub source_chain_id: String,
-    pub status: String,
-    pub inbound_amount: String,
-    pub inbound_coin_type: String,
-    pub inbound_asset: Option<String>,
-    pub outbound_params: Vec<RelatedOutboundParams>,
-}
+// #[derive(Debug, Serialize, Deserialize)]
+// pub struct RelatedCctx {
+//     pub index: String,
+//     pub depth: i32,
+//     pub source_chain_id: String,
+//     pub status: String,
+//     pub inbound_amount: String,
+//     pub inbound_coin_type: String,
+//     pub inbound_asset: Option<String>,
+//     pub outbound_params: Vec<RelatedOutboundParams>,
+// }
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -202,8 +202,8 @@ pub struct Filters {
     pub receiver_address: Vec<String>,
     pub asset: Vec<String>,
     pub coin_type: Vec<String>,
-    pub source_chain_id: Vec<String>,
-    pub target_chain_id: Vec<String>,
+    pub source_chain_id: Vec<i32>,
+    pub target_chain_id: Vec<i32>,
     pub start_timestamp: Option<i64>,
     pub end_timestamp: Option<i64>,
     pub token_symbol: Vec<String>,
@@ -234,12 +234,12 @@ pub struct SyncProgress {
     pub realtime_gaps_count: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RelatedOutboundParams {
-    pub amount: String,
-    pub chain_id: String,
-    pub coin_type: String,
-}
+// #[derive(Debug, Serialize, Deserialize)]
+// pub struct RelatedOutboundParams {
+//     pub amount: String,
+//     pub chain_id: String,
+//     pub coin_type: String,
+// }
 
 #[derive(Debug)]
 pub struct CctxWithStatus {
@@ -279,7 +279,7 @@ impl TryFrom<Token> for zetachain_cctx_entity::token::ActiveModel {
             id: ActiveValue::NotSet,
             zrc20_contract_address: ActiveValue::Set(token.zrc20_contract_address),
             asset: ActiveValue::Set(token.asset),
-            foreign_chain_id: ActiveValue::Set(token.foreign_chain_id),
+            foreign_chain_id: ActiveValue::Set(token.foreign_chain_id.parse::<i32>()?),
             decimals: ActiveValue::Set(token.decimals),
             name: ActiveValue::Set(token.name),
             symbol: ActiveValue::Set(token.symbol),

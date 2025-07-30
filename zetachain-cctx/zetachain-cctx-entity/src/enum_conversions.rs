@@ -189,11 +189,6 @@ impl TryFrom<String> for CoinType {
     }
 }
 
-//convert ProtocolContractVersion to i32
-// enum ProtocolContractVersion {
-//     V1 = 0;
-//     V2 = 1;
-//   }
 impl From<ProtocolContractVersion> for i32 {
     fn from(status: ProtocolContractVersion) -> Self {
         match status {

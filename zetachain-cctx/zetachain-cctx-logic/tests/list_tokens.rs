@@ -16,7 +16,7 @@ async fn test_list_tokens_returns_all() {
             id: ActiveValue::NotSet,
             zrc20_contract_address: ActiveValue::Set(format!("0x{:040x}", i)),
             asset: ActiveValue::Set(format!("0xasset{}", i)),
-            foreign_chain_id: ActiveValue::Set("1".to_string()),
+            foreign_chain_id: ActiveValue::Set(1),
             decimals: ActiveValue::Set(18),
             name: ActiveValue::Set(format!("Token{}", i)),
             symbol: ActiveValue::Set(format!("TK{}", i)),

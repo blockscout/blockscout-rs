@@ -271,7 +271,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(InboundParams::Sender).string().not_null())
                     .col(
                         ColumnDef::new(InboundParams::SenderChainId)
-                            .string()
+                            .integer()
                             .not_null(),
                     )
                     .col(ColumnDef::new(InboundParams::TxOrigin).string().not_null())
@@ -286,7 +286,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(InboundParams::ObservedExternalHeight)
-                            .string()
+                            .big_integer()
                             .not_null(),
                     )
                     .col(
@@ -297,7 +297,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(InboundParams::FinalizedZetaHeight)
-                            .string()
+                            .big_integer()
                             .not_null(),
                     )
                     .col(
@@ -355,7 +355,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(OutboundParams::Receiver).string().not_null())
                     .col(
                         ColumnDef::new(OutboundParams::ReceiverChainId)
-                            .string()
+                            .integer()
                             .not_null(),
                     )
                     .col(ColumnDef::new(OutboundParams::CoinType).enumeration("coin_type", ["Zeta", "Gas", "Erc20", "Cmd", "NoAssetCall"]).not_null())
@@ -372,10 +372,10 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(OutboundParams::BallotIndex).string().null())
                     .col(
                         ColumnDef::new(OutboundParams::ObservedExternalHeight)
-                            .string()
+                            .big_integer()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(OutboundParams::GasUsed).string().not_null())
+                    .col(ColumnDef::new(OutboundParams::GasUsed).big_integer().not_null())
                     .col(
                         ColumnDef::new(OutboundParams::EffectiveGasPrice)
                             .string()
@@ -383,7 +383,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(OutboundParams::EffectiveGasLimit)
-                            .string()
+                            .big_integer()
                             .not_null(),
                     )
                     .col(
