@@ -7,7 +7,7 @@ db-user := env_var_or_default('DB_USER', "postgres")
 db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "stats")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
-export RUST_LOG := env_var_or_default('RUST_LOG', "error")
+export RUST_LOG := env_var_or_default('RUST_LOG', "info")
 export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "0")
 
 docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
@@ -43,6 +43,7 @@ test-with-db *args:
     -just                                           stop-test-postgres              2> /dev/null
     just                                            start-postgres-and-build-tests
     just db-port="{{test-db-port}}" db-name=""      test                            {{args}}
+    just                                            stop-test-postgres
 
 start-postgres-and-build-tests:
     #!/bin/bash -eux
@@ -64,3 +65,15 @@ restart-generate-entities:
     just stats/migrate-up
     just stats/generate-entities
     just stop-postgres
+
+run-multichain:
+    STATS__MULTICHAIN_MODE=true \
+    STATS__DB_URL={{DATABASE_URL}} \
+    STATS__INDEXER_DB_URL=postgresql://postgres:admin@localhost:9433/multichain_aggregator \
+    STATS__CREATE_DATABASE=true \
+    STATS__RUN_MIGRATIONS=true \
+    STATS__SERVER__HTTP__ENABLED=true \
+    STATS__SERVER__HTTP__ADDR=0.0.0.0:8080 \
+    STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152 \
+    cargo run --bin stats-server
+    
