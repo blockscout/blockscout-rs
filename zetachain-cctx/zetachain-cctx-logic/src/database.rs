@@ -1864,13 +1864,13 @@ impl ZetachainCctxDatabase {
                 .into(),
                 call_options: Some(CallOptionsProto {
                     gas_limit: outbound_row
-                        .try_get_by_index::<String>(18)
+                        .try_get_by_index::<Option<String>>(18)
                         .map_err(|e| anyhow::anyhow!("outbound_row gas_limit: {}", e))?
-                        .parse::<u64>()
-                        .map_err(|e| anyhow::anyhow!("outbound_row gas_limit: {}", e))?,
+                        .map(|x| x.parse::<u64>().unwrap_or(0)),
                     is_arbitrary_call: outbound_row
-                        .try_get_by_index(19)
-                        .map_err(|e| anyhow::anyhow!("outbound_row is_arbitrary_call: {}", e))?,
+                        .try_get_by_index::<Option<bool>>(19)
+                        .map_err(|e| anyhow::anyhow!("outbound_row is_arbitrary_call: {}", e))?
+                        ,
                 }),
                 confirmation_mode: ConfirmationModeProto::from_str_name(
                     outbound_row
