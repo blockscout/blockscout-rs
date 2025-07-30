@@ -1,17 +1,9 @@
 use super::ChainId;
-use crate::{error::ParseError, proto};
+use crate::{error::ParseError, proto, types::domains::DomainInfo};
 use entity::addresses::Model;
 use serde::{Deserialize, Serialize};
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DomainInfo {
-    pub address: String,
-    pub name: String,
-    pub expiry_date: Option<String>,
-    pub names_count: u32,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Address {
@@ -59,17 +51,6 @@ impl TryFrom<Model> for Address {
             is_verified_contract: v.is_verified_contract,
             is_token: v.is_token,
         })
-    }
-}
-
-impl From<DomainInfo> for proto::DomainInfo {
-    fn from(v: DomainInfo) -> Self {
-        Self {
-            address: v.address,
-            name: v.name,
-            expiry_date: v.expiry_date,
-            names_count: v.names_count,
-        }
     }
 }
 

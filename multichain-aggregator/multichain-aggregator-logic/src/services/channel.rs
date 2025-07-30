@@ -22,5 +22,5 @@ impl ChannelHandler for Channel {
 #[derive(Serialize)]
 pub struct LatestBlockUpdateMessage {
     pub chain_id: ChainId,
-    pub block_number: i32,
+    pub block_number: i64,
 }
