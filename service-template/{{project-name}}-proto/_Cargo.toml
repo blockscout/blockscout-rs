@@ -14,7 +14,8 @@ tonic = { workspace = true }
 prost-wkt = { workspace = true }
 prost-wkt-types = { workspace = true }
 prost-types = { workspace = true }
-actix-prost-convert-trait = { workspace = true }
+convert-trait = { workspace = true }
+url = { workspace = true }
 
 [build-dependencies]
 actix-prost-build = { workspace = true }

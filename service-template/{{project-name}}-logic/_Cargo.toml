@@ -12,6 +12,8 @@ edition = "2024"
 anyhow = { workspace = true }
 blockscout-display-bytes = { workspace = true }
 tracing = { workspace = true }
+thiserror = { workspace = true }
+tonic = { workspace = true }
 {% if database %}
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
@@ -34,7 +36,6 @@ sea-orm = { workspace = true, features = [
 #semver = { workspace = true }
 #serde = { workspace = true }
 #serde_json = { workspace = true }
-#thiserror = { workspace = true }
 #tokio = { workspace = true }
 #tonic = { workspace = true, features = ["tls-roots"] }
 #tracing-subscriber = { workspace = true, features = ["env-filter"]}

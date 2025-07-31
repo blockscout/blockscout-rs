@@ -58,11 +58,15 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
 
     {% if database and migrations -%}
-    let _db_connection = database::initialize_postgres::<Migrator>(&settings.database).await?;
+    let db = Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
     {% endif -%}
 
     {% if proto_ex -%}
-    let {{proto_ex_name}} = Arc::new({{ProtoExName}}Impl::default());
+    let {{proto_ex_name}} = Arc::new({{ProtoExName}}Impl {
+        {% if database -%}
+        db: db.clone(),
+        {% endif -%}
+    });
     {% endif -%}
 
     let router = Router {
