@@ -108,9 +108,9 @@ pub fn get_test_stats_settings(
     let mut settings = Settings::build().expect("Failed to build settings");
     let (server_settings, base) = get_test_server_settings();
     settings.server = server_settings;
-    settings.charts_config = PathBuf::from_str("../config/charts.json").unwrap();
-    settings.layout_config = PathBuf::from_str("../config/layout.json").unwrap();
-    settings.update_groups_config = PathBuf::from_str("../config/update_groups.json").unwrap();
+    settings.charts_config = PathBuf::from_str("../config/blockscout_instance/charts.json").unwrap();
+    settings.layout_config = PathBuf::from_str("../config/blockscout_instance/layout.json").unwrap();
+    settings.update_groups_config = PathBuf::from_str("../config/blockscout_instance/update_groups.json").unwrap();
     settings.db_url = stats_db.db_url();
     settings.indexer_db_url = Some(blockscout_db.db_url());
     settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());

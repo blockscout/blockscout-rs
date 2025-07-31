@@ -114,9 +114,9 @@ impl Default for Settings {
             concurrent_start_updates: 3,
             limits: Default::default(),
             conditional_start: Default::default(),
-            charts_config: PathBuf::from_str("config/charts.json").unwrap(),
-            layout_config: PathBuf::from_str("config/layout.json").unwrap(),
-            update_groups_config: PathBuf::from_str("config/update_groups.json").unwrap(),
+            charts_config: PathBuf::from_str("config/blockscout_instance/charts.json").unwrap(),
+            layout_config: PathBuf::from_str("config/blockscout_instance/layout.json").unwrap(),
+            update_groups_config: PathBuf::from_str("config/blockscout_instance/update_groups.json").unwrap(),
             multichain_charts_config: Some(
                 PathBuf::from_str("config/multichain/charts.json").unwrap(),
             ),

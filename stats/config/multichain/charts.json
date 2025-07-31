@@ -19,7 +19,11 @@
         }
     },
     "line_charts": {
-        "daily_txns_multichain_window": {
+        "new_txns_multichain": {
+            "title": "New transactions",
+            "description": "Number of new transactions across all chains"
+        },
+        "new_txns_multichain_window": {
             "title": "Daily transactions",
             "description": "The chart displays daily transactions across all chains for the past 30 days"
         }

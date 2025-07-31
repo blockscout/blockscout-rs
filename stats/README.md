@@ -73,9 +73,9 @@ Some variables are hidden in a disclosure widget below the table.
 | `STATS__BLOCKSCOUT_DB_URL` | | Postgres URL to blockscout db. Renamed to `*_INDEXER_DB_URL` but left for backwards-compatibility | `null` |
 | `STATS__CREATE_DATABASE` | | Create database on start | `false` |
 | `STATS__RUN_MIGRATIONS` | | Run migrations on start | `false` |
-| `STATS__CHARTS_CONFIG` | | Path to config file for charts | `"config/charts.json"` |
-| `STATS__LAYOUT_CONFIG` | | Path to config file for chart layout | `"config/layout.json"` |
-| `STATS__UPDATE_GROUPS_CONFIG` | | Path to config file for update groups | `"config/update_groups.json"` |
+| `STATS__CHARTS_CONFIG` | | Path to config file for charts | `"config/blockscout_instance/charts.json"` |
+| `STATS__LAYOUT_CONFIG` | | Path to config file for chart layout | `"config/blockscout_instance/layout.json"` |
+| `STATS__UPDATE_GROUPS_CONFIG` | | Path to config file for update groups | `"config/blockscout_instance/update_groups.json"` |
 | `STATS__MULTICHAIN_CHARTS_CONFIG` | | Path to config file for multichain charts (less priority over regular config) | `config/multichain/charts.json` |
 | `STATS__MULTICHAIN_LAYOUT_CONFIG` | | Path to config file for multichain chart layout (less priority over regular config) | `config/multichain/layout.json` |
 | `STATS__MULTICHAIN_UPDATE_GROUPS_CONFIG` | | Path to config file for multichain update groups (less priority over regular config) | `config/multichain/update_groups.json` |

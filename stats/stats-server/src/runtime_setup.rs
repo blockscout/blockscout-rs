@@ -369,11 +369,13 @@ impl RuntimeSetup {
             Arc::new(TxnsStats24hGroup),
             Arc::new(NewBuilderAccountsGroup),
             Arc::new(VerifiedContractsPageGroup),
-            // multichain
+            // multichain: singletons
             Arc::new(TotalInteropMessagesGroup),
             Arc::new(TotalInteropTransfersGroup),
             Arc::new(TotalAddressesNumberGroup),
             Arc::new(TotalTxnsNumberGroup),
+            // multichain: groups
+            Arc::new(NewTxnsMultichainGroup),
         ]
     }
 
