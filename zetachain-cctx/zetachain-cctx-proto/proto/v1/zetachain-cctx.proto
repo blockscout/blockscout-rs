@@ -152,7 +152,7 @@ message CallOptions {
 
 message OutboundParams {
   string receiver = 1;
-  int32 receiver_chainId = 2;
+  int32 receiver_chain_id = 2;
   CoinType coin_type = 3;
   string amount = 4 ;
   uint64 tss_nonce = 5;
@@ -188,8 +188,8 @@ message Status {
   // error_message carries information about the error that caused the tx
   // to be PendingRevert, Reverted or Aborted.
   string error_message = 6;
-  int64 lastUpdate_timestamp = 3;
-  bool isAbortRefunded = 4;
+  int64 last_update_timestamp = 3;
+  bool is_abort_refunded = 4;
   // when the CCTX was created. only populated on new transactions.
   int64 created_timestamp = 5;
   // error_message_revert carries information about the revert outbound tx ,

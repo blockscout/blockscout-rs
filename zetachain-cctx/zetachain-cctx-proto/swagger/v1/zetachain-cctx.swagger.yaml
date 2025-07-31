@@ -449,7 +449,7 @@ definitions:
     properties:
       receiver:
         type: string
-      receiver_chainId:
+      receiver_chain_id:
         type: integer
         format: int32
       coin_type:
@@ -635,10 +635,10 @@ definitions:
         description: |-
           error_message carries information about the error that caused the tx
           to be PendingRevert, Reverted or Aborted.
-      lastUpdate_timestamp:
+      last_update_timestamp:
         type: string
         format: int64
-      isAbortRefunded:
+      is_abort_refunded:
         type: boolean
       created_timestamp:
         type: string

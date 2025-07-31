@@ -24,9 +24,9 @@ pub struct Settings {
     pub rpc: RpcSettings,
     #[serde(default = "default_websocket_settings")]
     pub websocket: WebSocketSettings,
-    #[serde(default)]
+    #[serde(default = "default_restart_on_error")]
     pub restart_on_error: bool,
-    #[serde(default)]
+    #[serde(default = "default_restart_interval")]
     pub restart_interval: u64,
 }
 
@@ -66,11 +66,7 @@ impl ConfigSettings for Settings {
 }
 
 impl Settings {
-    pub fn default(
-        
-        database_url: String,
-        
-    ) -> Self {
+    pub fn default(database_url: String) -> Self {
         Self {
             server: Default::default(),
             metrics: Default::default(),

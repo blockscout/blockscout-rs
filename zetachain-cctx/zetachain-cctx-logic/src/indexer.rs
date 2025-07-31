@@ -17,7 +17,6 @@ use std::result::Result::Err as ResultErr;
 use crate::{client::Client, settings::IndexerSettings};
 use futures::StreamExt;
 use tracing::instrument;
-use tracing::Instrument;
 use futures::stream::{select_with_strategy, PollNext};
 
 
@@ -284,17 +283,14 @@ impl Indexer {
         let historical_stream = Box::pin(async_stream::stream! {
             loop {
                 let job_id = Uuid::new_v4();
-                match self.database.get_unlocked_watermarks(Kind::Historical).instrument(tracing::info_span!("historical_stream", job_id = %job_id)).await {
+                match self.database.get_unlocked_watermarks(Kind::Historical).await {
                     std::result::Result::Ok(watermarks) => {
-                        if let Some((id,pointer,_)) = watermarks.first() {
-                            tracing::debug!(" historical_stream job_id: {} acquired historical watermark: {}", job_id, pointer);
-                            yield IndexerJob::HistoricalDataFetch(*id,pointer.clone(), job_id);
-                        } else {
-                            tracing::debug!(" historical_stream job_id: {} no historical watermarks found", job_id);
+                        for (id,pointer,_retries_number) in watermarks.into_iter() {
+                            yield IndexerJob::HistoricalDataFetch(id,pointer, job_id);
                         }
                     }
                     Err(e) => {
-                        tracing::debug!(" historical_stream job_id: {} failed to acquire historical watermark: {}", job_id, e);
+                        tracing::error!(error = %e, job_id = %job_id, "Failed to get unlocked watermarks");
                     }
                 }
                 tokio::time::sleep(Duration::from_millis(self.settings.polling_interval)).await;

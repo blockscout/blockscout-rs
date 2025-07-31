@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use zetachain_cctx_entity::{ sea_orm_active_enums::CoinType as DbCoinType};
+use zetachain_cctx_entity::sea_orm_active_enums::CoinType as DbCoinType;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PagedCCTXResponse {
@@ -172,29 +172,6 @@ pub struct CrossChainTx {
     pub protocol_contract_version: String,
 }
 
-// #[derive(Debug)]
-// pub struct CompleteCctx {
-//     pub cctx: cross_chain_tx::Model,
-//     pub status: cctx_status::Model,
-//     pub inbound: inbound_params::Model,
-//     pub outbounds: Vec<outbound_params::Model>,
-//     pub revert: revert_options::Model,
-//     pub related: Vec<RelatedCctx>,
-// }
-
-// #[derive(Debug, Serialize, Deserialize)]
-// pub struct RelatedCctx {
-//     pub index: String,
-//     pub depth: i32,
-//     pub source_chain_id: String,
-//     pub status: String,
-//     pub inbound_amount: String,
-//     pub inbound_coin_type: String,
-//     pub inbound_asset: Option<String>,
-//     pub outbound_params: Vec<RelatedOutboundParams>,
-// }
-
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Filters {
     pub status_reduced: Vec<String>,
@@ -234,13 +211,6 @@ pub struct SyncProgress {
     pub realtime_gaps_count: i64,
 }
 
-// #[derive(Debug, Serialize, Deserialize)]
-// pub struct RelatedOutboundParams {
-//     pub amount: String,
-//     pub chain_id: String,
-//     pub coin_type: String,
-// }
-
 #[derive(Debug)]
 pub struct CctxWithStatus {
     pub id: i32,
@@ -266,15 +236,15 @@ pub struct Token {
     pub icon_url: Option<String>,
 }
 
-
 impl TryFrom<Token> for zetachain_cctx_entity::token::ActiveModel {
     type Error = anyhow::Error;
-    
+
     fn try_from(token: Token) -> Result<Self, Self::Error> {
-        use zetachain_cctx_entity::token;
         use sea_orm::ActiveValue;
-        
-        let coin_type: DbCoinType = DbCoinType::try_from(token.coin_type).map_err(|e| anyhow::anyhow!(e))?;
+        use zetachain_cctx_entity::token;
+
+        let coin_type: DbCoinType =
+            DbCoinType::try_from(token.coin_type).map_err(|e| anyhow::anyhow!(e))?;
         Ok(token::ActiveModel {
             id: ActiveValue::NotSet,
             zrc20_contract_address: ActiveValue::Set(token.zrc20_contract_address),
