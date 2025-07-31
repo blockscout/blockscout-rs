@@ -14,7 +14,7 @@ message GetSyncProgressRequest {
 }
 
 message GetSyncProgressResponse {
-  int64 historic_watermark_timestamp = 1;
+  string historic_watermark_timestamp = 1;
   int64 pending_status_updates_count = 2;
   int64 pending_cctxs_count = 3;
   int64 realtime_gaps_count = 4;

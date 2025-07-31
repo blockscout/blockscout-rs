@@ -362,7 +362,6 @@ definitions:
     properties:
       historic_watermark_timestamp:
         type: string
-        format: int64
       pending_status_updates_count:
         type: string
         format: int64
