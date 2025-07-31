@@ -162,7 +162,7 @@ message OutboundParams {
   string gas_priority_fee = 23;
   // the above are commands for zetaclients
   // the following fields are used when the outbound tx is mined
-  string hash = 8;
+  optional string hash = 8;
   string ballot_index = 9;
   uint64 observed_external_height = 10;
   uint64 gas_used = 20;

@@ -281,7 +281,6 @@ impl MigrationTrait for Migration {
                     .col(
                         ColumnDef::new(InboundParams::ObservedHash)
                             .string()
-                            .unique_key()
                             .not_null(),
                     )
                     .col(

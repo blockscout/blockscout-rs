@@ -1495,6 +1495,7 @@ impl ZetachainCctxDatabase {
         })
     }
 
+    #[instrument(level = "debug", skip_all, fields(index = %index))]
     pub async fn get_complete_cctx(
         &self,
         index: String,
@@ -1836,8 +1837,9 @@ impl ZetachainCctxDatabase {
                     .try_get_by_index::<String>(9)
                     .map_err(|e| anyhow::anyhow!("outbound_row gas_priority_fee: {}", e))?,
                 hash: outbound_row
-                    .try_get_by_index::<String>(10)
-                    .map_err(|e| anyhow::anyhow!("outbound_row hash: {}", e))?,
+                    .try_get_by_index::<Option<String>>(10)
+                    .map_err(|e| anyhow::anyhow!("outbound_row hash: {}", e))?
+                    .map(|x| x.clone()),
                 ballot_index: outbound_row
                     .try_get_by_index::<String>(11)
                     .map_err(|e| anyhow::anyhow!("outbound_row ballot_index: {}", e))?,
@@ -2035,6 +2037,7 @@ impl ZetachainCctxDatabase {
         }))
     }
 
+    #[instrument(level = "info", skip_all)]
     pub async fn list_cctxs(
         &self,
         limit: i64,
@@ -2256,7 +2259,7 @@ impl ZetachainCctxDatabase {
         params.push(sea_orm::Value::BigInt(Some(limit * 2)));
 
         let statement = Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params);
-        tracing::debug!("statement: {}", statement.to_string());
+        tracing::info!("statement: {}", statement.to_string());
         let rows = self.db.query_all(statement).await.map_err(|e| anyhow::anyhow!("statement returned error: {}", e))?;
         let next_page_items_len = rows.len() - std::cmp::min(limit as usize, rows.len());
         let truncated = rows.iter().take(limit as usize);
