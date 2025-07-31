@@ -340,6 +340,17 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1RelatedCctx'
+      token_symbol:
+        type: string
+      token_name:
+        type: string
+      zrc20_contract_address:
+        type: string
+      icon_url:
+        type: string
+      decimals:
+        type: integer
+        format: int32
   v1Direction:
     type: string
     enum:

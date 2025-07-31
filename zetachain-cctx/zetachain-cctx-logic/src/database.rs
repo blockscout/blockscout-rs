@@ -1502,60 +1502,68 @@ impl ZetachainCctxDatabase {
         // Single query to get all data with JOINs
         let sql = r#"
         SELECT 
-            -- CrossChainTx fields
-            cctx.id as cctx_id,--0
-            cctx.creator,--1
-            cctx.index,--2
-            cctx.zeta_fees,--3
-            cctx.retries_number,--4
-            cctx.processing_status::text,--5
-            cctx.relayed_message,--6
-            cctx.last_status_update_timestamp,--7
-            cctx.protocol_contract_version::text,--8
-            cctx.root_id,--9
-            cctx.parent_id,--10
-            cctx.depth,--11
-            cctx.updated_by,--12
-            -- CctxStatus fields
-            cs.id as status_id,--13
-            cs.cross_chain_tx_id as status_cross_chain_tx_id,--14
-            cs.status::text,--15
-            cs.status_message::text,--16
-            cs.error_message,--17
-            cs.last_update_timestamp,--18
-            cs.is_abort_refunded,--19
-            cs.created_timestamp,--20
-            cs.error_message_revert,--21
-            cs.error_message_abort,--22
-            -- InboundParams fields
-            ip.id as inbound_id,--23
-            ip.cross_chain_tx_id as inbound_cross_chain_tx_id,--24
-            ip.sender,--25
-            ip.sender_chain_id,--26
-            ip.tx_origin,--27
-            ip.coin_type::text,--28
-            ip.asset,--29
-            ip.amount,--30
-            ip.observed_hash,--31
-            ip.observed_external_height,--32
-            ip.ballot_index,--33
-            ip.finalized_zeta_height,--34
-            ip.tx_finalization_status::text,--35
-            ip.is_cross_chain_call,--36
-            ip.status::text as inbound_status,--37
-            ip.confirmation_mode::text as inbound_confirmation_mode,--38
-            -- RevertOptions fields
-            ro.id as revert_id,--39
-            ro.cross_chain_tx_id as revert_cross_chain_tx_id,--40
-            ro.revert_address,--41
-            ro.call_on_revert,--42
-            ro.abort_address,--43
-            ro.revert_message,--44
-            ro.revert_gas_limit--45
+        -- CrossChainTx fields
+        cctx.id as cctx_id,--0
+        cctx.creator,--1
+        cctx.index,--2
+        cctx.zeta_fees,--3
+        cctx.retries_number,--4
+        cctx.processing_status::text,--5
+        cctx.relayed_message,--6
+        cctx.last_status_update_timestamp,--7
+        cctx.protocol_contract_version::text,--8
+        cctx.root_id,--9
+        cctx.parent_id,--10
+        cctx.depth,--11
+        cctx.updated_by,--12
+        -- CctxStatus fields
+        cs.id as status_id,--13
+        cs.cross_chain_tx_id as status_cross_chain_tx_id,--14
+        cs.status::text,--15
+        cs.status_message::text,--16
+        cs.error_message,--17
+        cs.last_update_timestamp,--18
+        cs.is_abort_refunded,--19
+        cs.created_timestamp,--20
+        cs.error_message_revert,--21
+        cs.error_message_abort,--22
+        -- InboundParams fields
+        ip.id as inbound_id,--23
+        ip.cross_chain_tx_id as inbound_cross_chain_tx_id,--24
+        ip.sender,--25
+        ip.sender_chain_id,--26
+        ip.tx_origin,--27
+        ip.coin_type::text,--28
+        ip.asset,--29
+        ip.amount,--30
+        ip.observed_hash,--31
+        ip.observed_external_height,--32
+        ip.ballot_index,--33
+        ip.finalized_zeta_height,--34
+        ip.tx_finalization_status::text,--35
+        ip.is_cross_chain_call,--36
+        ip.status::text as inbound_status,--37
+        ip.confirmation_mode::text as inbound_confirmation_mode,--38
+        -- RevertOptions fields
+        ro.id as revert_id,--39
+        ro.cross_chain_tx_id as revert_cross_chain_tx_id,--40
+        ro.revert_address,--41
+        ro.call_on_revert,--42
+        ro.abort_address,--43
+        ro.revert_message,--44
+        ro.revert_gas_limit,--45
+        COALESCE(erc20.symbol, gas.symbol) as token_symbol,--46
+        COALESCE(erc20.zrc20_contract_address, gas.zrc20_contract_address) as zrc20_contract_address,--47
+        COALESCE(erc20.icon_url, gas.icon_url) as icon_url,--48
+        COALESCE(erc20.decimals, gas.decimals) as decimals,--49
+        COALESCE(erc20.name, gas.name) as token_name--50
+
         FROM cross_chain_tx cctx
         LEFT JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
         LEFT JOIN inbound_params ip ON cctx.id = ip.cross_chain_tx_id
         LEFT JOIN revert_options ro ON cctx.id = ro.cross_chain_tx_id
+        LEFT JOIN token erc20 ON ip.asset = erc20.zrc20_contract_address
+        LEFT JOIN token gas ON  gas.foreign_chain_id =ip.sender_chain_id and ip.coin_type = gas.coin_type and gas.coin_type  in ('Zeta', 'Gas')
         WHERE cctx.index = $1
         "#;
 
@@ -1605,47 +1613,27 @@ impl ZetachainCctxDatabase {
         }
 
         // Build CrossChainTx
-        let cctx = CrossChainTxEntity::Model {
-            id: cctx_row
+        
+            let id: i32 = cctx_row
                 .try_get_by_index(0)
-                .map_err(|e| anyhow::anyhow!("cctx_row id: {}", e))?,
-            creator: cctx_row
+                .map_err(|e| anyhow::anyhow!("cctx_row id: {}", e))?;
+            let creator: String = cctx_row
                 .try_get_by_index(1)
-                .map_err(|e| anyhow::anyhow!("cctx_row creator: {}", e))?,
-            index: cctx_row
+                .map_err(|e| anyhow::anyhow!("cctx_row creator: {}", e))?;
+            let index: String = cctx_row
                 .try_get_by_index(2)
-                .map_err(|e| anyhow::anyhow!("cctx_row index: {}", e))?,
-            zeta_fees: cctx_row
+                .map_err(|e| anyhow::anyhow!("cctx_row index: {}", e))?;
+            let zeta_fees: String = cctx_row
                 .try_get_by_index(3)
-                .map_err(|e| anyhow::anyhow!("cctx_row zeta_fees: {}", e))?,
-            retries_number: cctx_row
-                .try_get_by_index(4)
-                .map_err(|e| anyhow::anyhow!("cctx_row retries_number: {}", e))?,
-            processing_status: ProcessingStatus::try_from(cctx_row.try_get_by_index::<String>(5)?)
-                .map_err(|_| sea_orm::DbErr::Custom("Invalid processing_status".to_string()))?,
-            relayed_message: cctx_row
+                .map_err(|e| anyhow::anyhow!("cctx_row zeta_fees: {}", e))?;
+
+            let relayed_message: String = cctx_row
                 .try_get_by_index(6)
-                .map_err(|e| anyhow::anyhow!("cctx_row relayed_message: {}", e))?,
-            last_status_update_timestamp: cctx_row
-                .try_get_by_index(7)
-                .map_err(|e| anyhow::anyhow!("cctx_row last_status_update_timestamp: {}", e))?,
-            protocol_contract_version: ProtocolContractVersion::try_from(
-                cctx_row.try_get_by_index::<String>(8)?,
-            )
-            .map_err(|_| sea_orm::DbErr::Custom("Invalid protocol_contract_version".to_string()))?,
-            root_id: cctx_row
-                .try_get_by_index(9)
-                .map_err(|e| anyhow::anyhow!("cctx_row root_id: {}", e))?,
-            parent_id: cctx_row
-                .try_get_by_index(10)
-                .map_err(|e| anyhow::anyhow!("cctx_row parent_id: {}", e))?,
-            depth: cctx_row
-                .try_get_by_index(11)
-                .map_err(|e| anyhow::anyhow!("cctx_row depth: {}", e))?,
-            updated_by: cctx_row
-                .try_get_by_index(12)
-                .map_err(|e| anyhow::anyhow!("cctx_row updated_by: {}", e))?,
-        };
+                .map_err(|e| anyhow::anyhow!("cctx_row relayed_message: {}", e))?;
+            let protocol_contract_version: ProtocolContractVersion = ProtocolContractVersion::try_from(
+                cctx_row.try_get_by_index::<String>(8)?)
+            .map_err(|_| sea_orm::DbErr::Custom("Invalid protocol_contract_version".to_string()))?;
+        
 
         let last_update_timestamp: NaiveDateTime = cctx_row
             .try_get_by_index(18)
@@ -1737,6 +1725,22 @@ impl ZetachainCctxDatabase {
             .into(),
         };
 
+        let token_symbol: Option<String> = cctx_row
+            .try_get_by_index(46)
+            .map_err(|e| anyhow::anyhow!("cctx_row token_symbol: {}", e))?;
+        let zrc20_contract_address: Option<String> = cctx_row
+            .try_get_by_index(47)
+            .map_err(|e| anyhow::anyhow!("cctx_row zrc20_contract_address: {}", e))?;
+        let icon_url: Option<String> = cctx_row
+            .try_get_by_index(48)
+            .map_err(|e| anyhow::anyhow!("cctx_row icon_url: {}", e))?;
+        let decimals: Option<i32> = cctx_row
+            .try_get_by_index(49)
+            .map_err(|e| anyhow::anyhow!("cctx_row decimals: {}", e))?;
+        let token_name: Option<String> = cctx_row
+            .try_get_by_index(50)
+            .map_err(|e| anyhow::anyhow!("cctx_row token_name: {}", e))?;
+
         // Build RevertOptions
         let revert = RevertOptionsProto {
             revert_address: cctx_row
@@ -1790,7 +1794,7 @@ impl ZetachainCctxDatabase {
         let outbounds_statement = Statement::from_sql_and_values(
             DbBackend::Postgres,
             outbounds_sql,
-            vec![sea_orm::Value::Int(Some(cctx.id))],
+            vec![sea_orm::Value::Int(Some(id))],
         );
 
         let outbounds_rows = self.db.query_all(outbounds_statement).await?;
@@ -1927,7 +1931,7 @@ impl ZetachainCctxDatabase {
         let related_statement = Statement::from_sql_and_values(
             DbBackend::Postgres,
             related_sql,
-            vec![sea_orm::Value::String(Some(Box::new(index)))],
+            vec![sea_orm::Value::String(Some(Box::new(index.clone())))],
         );
 
         let related_rows = self.db.query_all(related_statement).await.map_err(|e| anyhow::anyhow!("related_rows: {}", e))?;
@@ -2012,17 +2016,22 @@ impl ZetachainCctxDatabase {
         );
 
         Ok(Some(CrossChainTxProto {
-            creator: cctx.creator,
-            index: cctx.index,
-            zeta_fees: cctx.zeta_fees,
-            relayed_message: cctx.relayed_message.unwrap_or_default(),
+            creator: creator,
+            index: index,
+            zeta_fees: zeta_fees,
+            relayed_message: relayed_message,
             cctx_status: Some(status),
             cctx_status_reduced: status_reduced.into(),
             inbound_params: Some(inbound),
             outbound_params: outbounds,
             revert_options: Some(revert),
-            protocol_contract_version: cctx.protocol_contract_version.into(),
+            protocol_contract_version: protocol_contract_version.into(),
             related_cctxs: related,
+            token_symbol: token_symbol,
+            token_name: token_name,
+            zrc20_contract_address: zrc20_contract_address,
+            icon_url: icon_url,
+            decimals: decimals,
         }))
     }
 

@@ -270,6 +270,11 @@ message CrossChainTx {
   ProtocolContractVersion protocol_contract_version = 13;
   RevertOptions revert_options = 14;
   repeated RelatedCctx related_cctxs = 15;
+  optional string token_symbol = 16;
+  optional string token_name = 17;
+  optional string zrc20_contract_address = 18;
+  optional string icon_url = 19;
+  optional int32 decimals = 20;
 }
 
 message GetTokenInfoRequest {
