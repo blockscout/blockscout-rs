@@ -3,6 +3,11 @@
 
 TODO: this is codegenerated text, change it and provide description of service
 
+## Envs
+
+[anchor]: <> (anchors.envs.start)
+[anchor]: <> (anchors.envs.end)
+
 ## Dev
 
 + Install [just](https://github.com/casey/just) cli. Just is like make but better.
