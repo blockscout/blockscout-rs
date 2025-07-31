@@ -29,7 +29,7 @@ jobs:
     {%- if database %}
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17.2
         env:
           POSTGRES_PASSWORD: admin
           POSTGRES_USER: postgres
@@ -41,6 +41,8 @@ jobs:
         ports:
           - 5432:5432
     {%- endif %}
+    env:
+      JOBS: 2
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -50,21 +52,39 @@ jobs:
         with:
           working-directory: {{project-name}}
 
+      - name: Set Swap Space
+        id: swapfile
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 14
+
+      - name: Build
+        id: build
+        if: steps.swapfile.outcome == 'success'
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features --jobs $JOBS
+      
+      - name: ENVs in documentation
+        run: cargo run --bin check-envs -- --validate-only
+
       - name: Unit tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
-        if: success() || failure()
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins --jobs $JOBS -- --nocapture
+        if: steps.build.outcome == 'success'
 
       - name: Doc tests
-        run: cargo test --locked --workspace --all-features --doc
-        if: success() || failure()
+        run: cargo test --locked --workspace --all-features --doc --jobs $JOBS
+        if: steps.build.outcome == 'success'
 
       - name: Integration tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
-        if: success() || failure()
-        {%- if database %}
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
+        if: steps.build.outcome == 'success'
+
+      {%- if database %}
+      - name: DB tests
+        run: RUST_BACKTRACE=1 RUST_LOG=warn cargo test --locked --workspace -- --nocapture --ignored
+        if: steps.build.outcome == 'success'
         env:
           DATABASE_URL: postgres://postgres:admin@localhost:5432/
-        {%- endif %}
+      {%- endif %}
 
   lint:
     name: Linting
@@ -84,6 +104,11 @@ jobs:
     uses: ./.github/workflows/_docker-build-push.yml
     with:
       service-name: {{project-name}}
+    secrets:
+      {% raw %}
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
+      {% endraw %}
 
   {%- if types %}
   publish_types_package:
@@ -98,3 +123,14 @@ jobs:
       {% endraw %}
       project_name: {{project-name}}
   {%- endif %}
+
+  push-swagger:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
+    uses: ./.github/workflows/_push_swagger.yml
+    with:
+      service_name: '{{project-name}}'
+      swagger_path: '{{project-name}}/{{project-name}}-proto/swagger/v1/{{project-name}}.swagger.yaml'
+    secrets:
+      {% raw %} 
+      api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}
+      {% endraw %}

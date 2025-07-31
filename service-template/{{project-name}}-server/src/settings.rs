@@ -3,9 +3,9 @@ use blockscout_service_launcher::{
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
     #[serde(default)]
@@ -42,6 +42,7 @@ impl Settings {
                 connect: DatabaseConnectSettings::Url(database_url),
                 create_database: Default::default(),
                 run_migrations: Default::default(),
+                connect_options: Default::default(),
             },{% endif %}
         }
     }

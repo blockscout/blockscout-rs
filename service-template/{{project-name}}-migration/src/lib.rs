@@ -10,3 +10,8 @@ impl MigratorTrait for Migrator {
         vec![Box::new(m20220101_000001_create_table::Migration)]
     }
 }
+
+pub async fn from_sql(manager: &SchemaManager<'_>, content: &str) -> Result<(), DbErr> {
+    manager.get_connection().execute_unprepared(content).await?;
+    Ok(())
+}
