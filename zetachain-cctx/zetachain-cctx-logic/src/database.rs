@@ -537,375 +537,6 @@ impl ZetachainCctxDatabase {
         tx.commit().await?;
         Ok(())
     }
-    /// Batch insert multiple CrossChainTx records with their child entities
-    #[instrument(skip_all, level = "debug")]
-    pub async fn batch_insert_transactions(
-        &self,
-        job_id: Uuid,
-        cctxs: &Vec<CrossChainTx>,
-        tx: &DatabaseTransaction,
-    ) -> anyhow::Result<Vec<CctxListItemProto>> {
-        let mut cctx_list_items = Vec::new();
-        if cctxs.is_empty() {
-            return Ok(cctx_list_items);
-        }
-
-        // Prepare batch data for each table
-        let mut cctx_models = Vec::new();
-        let mut status_models = Vec::new();
-        let mut inbound_models = Vec::new();
-        let mut outbound_models = Vec::new();
-        let mut revert_models = Vec::new();
-
-        // First, prepare all the parent records
-        for cctx in cctxs {
-            let cctx_model = CrossChainTxEntity::ActiveModel {
-                id: ActiveValue::NotSet,
-                creator: ActiveValue::Set(cctx.creator.clone()),
-                index: ActiveValue::Set(cctx.index.clone()),
-                retries_number: ActiveValue::Set(0),
-                processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
-                zeta_fees: ActiveValue::Set(cctx.zeta_fees.clone()),
-                relayed_message: ActiveValue::Set(Some(cctx.relayed_message.clone())),
-                protocol_contract_version: ActiveValue::Set(
-                    ProtocolContractVersion::try_from(cctx.protocol_contract_version.clone())
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                ),
-                last_status_update_timestamp: ActiveValue::Set(Utc::now().naive_utc()),
-                root_id: ActiveValue::Set(None), //When querying we treat None as being your own root
-                parent_id: ActiveValue::Set(None),
-                depth: ActiveValue::Set(0),
-                updated_by: ActiveValue::Set(job_id.to_string()),
-            };
-            cctx_models.push(cctx_model);
-        }
-        let indices = cctx_models
-            .iter()
-            .map(|cctx| cctx.index.as_ref().clone())
-            .collect::<Vec<String>>();
-        // Batch insert parent records
-        let inserted_cctxs = CrossChainTxEntity::Entity::insert_many(cctx_models)
-            .on_conflict(
-                sea_orm::sea_query::OnConflict::column(CrossChainTxEntity::Column::Index)
-                    .update_columns([
-                        CrossChainTxEntity::Column::LastStatusUpdateTimestamp,
-                        CrossChainTxEntity::Column::UpdatedBy,
-                    ])
-                    .to_owned(),
-            )
-            .exec_with_returning_many(self.db.as_ref())
-            .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Batch insert cctxs failed: {}, indices: {}",
-                    e,
-                    indices.join(",")
-                )
-            })?;
-
-        tracing::info!("job_id: {}, inserting cctxs: {}", job_id, indices.join(","));
-
-        let index_to_cctx: std::collections::HashMap<&str, &CrossChainTx> = cctxs
-            .into_iter()
-            .map(|cctx| (cctx.index.as_str(), cctx))
-            .collect();
-
-        // Now prepare child records for each transaction
-        for cctx in inserted_cctxs {
-            if let Some(fetched_cctx) = index_to_cctx.get(cctx.index.as_str()) {
-                // Prepare cctx_status
-                let last_update_timestamp = fetched_cctx
-                    .cctx_status
-                    .last_update_timestamp
-                    .parse::<i64>()
-                    .unwrap_or(0);
-                let last_update_timestamp =
-                    chrono::DateTime::from_timestamp(last_update_timestamp, 0)
-                        .ok_or(anyhow::anyhow!("Invalid timestamp"))?
-                        .naive_utc();
-                let status_model = cctx_status::ActiveModel {
-                    id: ActiveValue::NotSet,
-                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
-                    status: ActiveValue::Set(
-                        CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
-                            .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                    status_message: ActiveValue::Set(Some(sanitize_string(
-                        fetched_cctx.cctx_status.status_message.clone(),
-                    ))),
-                    error_message: ActiveValue::Set(Some(sanitize_string(
-                        fetched_cctx.cctx_status.error_message.clone(),
-                    ))),
-                    last_update_timestamp: ActiveValue::Set(last_update_timestamp),
-                    is_abort_refunded: ActiveValue::Set(fetched_cctx.cctx_status.is_abort_refunded),
-                    created_timestamp: ActiveValue::Set(
-                        fetched_cctx.cctx_status.created_timestamp.parse::<i64>()?,
-                    ),
-                    error_message_revert: ActiveValue::Set(Some(sanitize_string(
-                        fetched_cctx.cctx_status.error_message_revert.clone(),
-                    ))),
-                    error_message_abort: ActiveValue::Set(Some(sanitize_string(
-                        fetched_cctx.cctx_status.error_message_abort.clone(),
-                    ))),
-                };
-                status_models.push(status_model);
-
-                // Prepare inbound_params
-                let inbound_model = InboundParamsEntity::ActiveModel {
-                    id: ActiveValue::NotSet,
-                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
-                    sender: ActiveValue::Set(fetched_cctx.inbound_params.sender.clone()),
-                    sender_chain_id: ActiveValue::Set(
-                        fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
-                    ),
-                    tx_origin: ActiveValue::Set(fetched_cctx.inbound_params.tx_origin.clone()),
-                    coin_type: ActiveValue::Set(
-                        DBCoinType::try_from(fetched_cctx.inbound_params.coin_type.clone())
-                            .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                    asset: ActiveValue::Set(Some(fetched_cctx.inbound_params.asset.clone())),
-                    amount: ActiveValue::Set(fetched_cctx.inbound_params.amount.clone()),
-                    observed_hash: ActiveValue::Set(
-                        fetched_cctx.inbound_params.observed_hash.clone(),
-                    ),
-                    observed_external_height: ActiveValue::Set(
-                        fetched_cctx
-                            .inbound_params
-                            .observed_external_height
-                            .parse::<i64>()?,
-                    ),
-                    ballot_index: ActiveValue::Set(
-                        fetched_cctx.inbound_params.ballot_index.clone(),
-                    ),
-                    finalized_zeta_height: ActiveValue::Set(
-                        fetched_cctx
-                            .inbound_params
-                            .finalized_zeta_height
-                            .parse::<i64>()?,
-                    ),
-                    tx_finalization_status: ActiveValue::Set(
-                        TxFinalizationStatus::try_from(
-                            fetched_cctx.inbound_params.tx_finalization_status.clone(),
-                        )
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                    is_cross_chain_call: ActiveValue::Set(
-                        fetched_cctx.inbound_params.is_cross_chain_call,
-                    ),
-                    status: ActiveValue::Set(
-                        InboundStatus::try_from(fetched_cctx.inbound_params.status.clone())
-                            .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                    confirmation_mode: ActiveValue::Set(
-                        ConfirmationMode::try_from(
-                            fetched_cctx.inbound_params.confirmation_mode.clone(),
-                        )
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                };
-                inbound_models.push(inbound_model);
-
-                // Prepare outbound_params
-                for outbound in &fetched_cctx.outbound_params {
-                    let outbound_model = OutboundParamsEntity::ActiveModel {
-                        id: ActiveValue::NotSet,
-                        cross_chain_tx_id: ActiveValue::Set(cctx.id),
-                        receiver: ActiveValue::Set(outbound.receiver.clone()),
-                        receiver_chain_id: ActiveValue::Set(
-                            outbound.receiver_chain_id.parse::<i32>()?,
-                        ),
-                        coin_type: ActiveValue::Set(
-                            DBCoinType::try_from(outbound.coin_type.clone())
-                                .map_err(|e| anyhow::anyhow!(e))?,
-                        ),
-                        amount: ActiveValue::Set(outbound.amount.clone()),
-                        tss_nonce: ActiveValue::Set(outbound.tss_nonce.clone()),
-                        gas_limit: ActiveValue::Set(outbound.gas_limit.clone()),
-                        gas_price: ActiveValue::Set(Some(outbound.gas_price.clone())),
-                        gas_priority_fee: ActiveValue::Set(Some(outbound.gas_priority_fee.clone())),
-                        hash: ActiveValue::Set(if outbound.hash.is_empty() {
-                            None
-                        } else {
-                            Some(outbound.hash.clone())
-                        }),
-                        ballot_index: ActiveValue::Set(Some(outbound.ballot_index.clone())),
-                        observed_external_height: ActiveValue::Set(
-                            outbound.observed_external_height.parse::<i64>()?,
-                        ),
-                        gas_used: ActiveValue::Set(outbound.gas_used.parse::<i64>()?),
-                        effective_gas_price: ActiveValue::Set(outbound.effective_gas_price.clone()),
-                        effective_gas_limit: ActiveValue::Set(
-                            outbound.effective_gas_limit.parse::<i64>()?,
-                        ),
-                        tss_pubkey: ActiveValue::Set(outbound.tss_pubkey.clone()),
-                        tx_finalization_status: ActiveValue::Set(
-                            TxFinalizationStatus::try_from(outbound.tx_finalization_status.clone())
-                                .map_err(|e| anyhow::anyhow!(e))?,
-                        ),
-                        call_options_gas_limit: ActiveValue::Set(
-                            outbound.call_options.clone().map(|c| c.gas_limit.clone()),
-                        ),
-                        call_options_is_arbitrary_call: ActiveValue::Set(
-                            outbound.call_options.clone().map(|c| c.is_arbitrary_call),
-                        ),
-                        confirmation_mode: ActiveValue::Set(
-                            ConfirmationMode::try_from(outbound.confirmation_mode.clone())
-                                .map_err(|e| anyhow::anyhow!(e))?,
-                        ),
-                    };
-                    outbound_models.push(outbound_model);
-                }
-
-                // Prepare revert_options
-                let revert_model = RevertOptionsEntity::ActiveModel {
-                    id: ActiveValue::NotSet,
-                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
-                    revert_address: ActiveValue::Set(Some(
-                        fetched_cctx.revert_options.revert_address.clone(),
-                    )),
-                    call_on_revert: ActiveValue::Set(fetched_cctx.revert_options.call_on_revert),
-                    abort_address: ActiveValue::Set(Some(
-                        fetched_cctx.revert_options.abort_address.clone(),
-                    )),
-                    revert_message: ActiveValue::Set(
-                        fetched_cctx
-                            .revert_options
-                            .revert_message
-                            .clone()
-                            .map(|s| sanitize_string(s)),
-                    ),
-                    revert_gas_limit: ActiveValue::Set(
-                        fetched_cctx.revert_options.revert_gas_limit.clone(),
-                    ),
-                };
-                revert_models.push(revert_model);
-
-                cctx_list_items.push(CctxListItemProto {
-                    index: cctx.index,
-                    status: CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status)
-                        .unwrap()
-                        .into(),
-                    status_reduced: 0,
-                    amount: fetched_cctx.inbound_params.amount.clone(),
-                    last_update_timestamp: fetched_cctx
-                        .cctx_status
-                        .last_update_timestamp
-                        .parse::<i64>()
-                        .unwrap_or(0),
-                    created_timestamp: fetched_cctx
-                        .cctx_status
-                        .created_timestamp
-                        .parse::<i64>()
-                        .unwrap_or(0),
-                    source_chain_id: fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
-                    target_chain_id: fetched_cctx.outbound_params[0]
-                        .receiver_chain_id
-                        .parse::<i32>()?,
-                    sender_address: fetched_cctx.inbound_params.sender.clone(),
-                    receiver_address: fetched_cctx.outbound_params[0].receiver.clone(),
-                    asset: fetched_cctx.inbound_params.asset.clone(),
-                    coin_type: CoinTypeProto::from_str_name(
-                        &fetched_cctx.inbound_params.coin_type.to_string(),
-                    )
-                    .unwrap()
-                    .into(),
-                    token_symbol: None,
-                    zrc20_contract_address: None,
-                    decimals: None,
-                });
-            }
-        }
-
-        // Batch insert all child records
-        if !status_models.is_empty() {
-            cctx_status::Entity::insert_many(status_models)
-                .on_conflict(
-                    sea_orm::sea_query::OnConflict::column(cctx_status::Column::CrossChainTxId)
-                        .update_columns([
-                            cctx_status::Column::Status,
-                            cctx_status::Column::StatusMessage,
-                            cctx_status::Column::ErrorMessage,
-                            cctx_status::Column::LastUpdateTimestamp,
-                            cctx_status::Column::IsAbortRefunded,
-                            cctx_status::Column::CreatedTimestamp,
-                            cctx_status::Column::ErrorMessageRevert,
-                            cctx_status::Column::ErrorMessageAbort,
-                        ])
-                        .to_owned(),
-                )
-                .exec(tx)
-                .instrument(tracing::debug_span!("inserting cctx_status"))
-                .await?;
-        }
-
-        if !inbound_models.is_empty() {
-            InboundParamsEntity::Entity::insert_many(inbound_models)
-                .on_conflict(
-                    sea_orm::sea_query::OnConflict::columns([
-                        InboundParamsEntity::Column::BallotIndex,
-                        InboundParamsEntity::Column::ObservedHash,
-                    ])
-                    .update_columns([
-                        InboundParamsEntity::Column::Status,
-                        InboundParamsEntity::Column::ConfirmationMode,
-                    ])
-                    .to_owned(),
-                )
-                .exec(tx)
-                .instrument(tracing::debug_span!("inserting inbound_params"))
-                .await
-                .map_err(|e| anyhow::anyhow!("Batch insert inbound_params failed: {}", e))?;
-        }
-        if !outbound_models.is_empty() {
-            OutboundParamsEntity::Entity::insert_many(outbound_models)
-                .on_conflict(
-                    sea_orm::sea_query::OnConflict::columns([
-                        OutboundParamsEntity::Column::CrossChainTxId,
-                        OutboundParamsEntity::Column::Receiver,
-                        OutboundParamsEntity::Column::ReceiverChainId,
-                    ])
-                    .update_columns([
-                        OutboundParamsEntity::Column::Hash,
-                        OutboundParamsEntity::Column::TxFinalizationStatus,
-                        OutboundParamsEntity::Column::GasUsed,
-                        OutboundParamsEntity::Column::EffectiveGasPrice,
-                        OutboundParamsEntity::Column::EffectiveGasLimit,
-                        OutboundParamsEntity::Column::TssNonce,
-                        OutboundParamsEntity::Column::CallOptionsGasLimit,
-                        OutboundParamsEntity::Column::CallOptionsIsArbitraryCall,
-                        OutboundParamsEntity::Column::ConfirmationMode,
-                    ])
-                    .to_owned(),
-                )
-                .exec(tx)
-                .instrument(tracing::debug_span!("inserting outbound_params"))
-                .await
-                .map_err(|e| anyhow::anyhow!("Batch insert outbound_params failed: {}", e))?;
-        }
-        if !revert_models.is_empty() {
-            RevertOptionsEntity::Entity::insert_many(revert_models)
-                .on_conflict(
-                    sea_orm::sea_query::OnConflict::column(
-                        RevertOptionsEntity::Column::CrossChainTxId,
-                    )
-                    .update_columns([
-                        RevertOptionsEntity::Column::RevertAddress,
-                        RevertOptionsEntity::Column::CallOnRevert,
-                        RevertOptionsEntity::Column::AbortAddress,
-                        RevertOptionsEntity::Column::RevertMessage,
-                        RevertOptionsEntity::Column::RevertGasLimit,
-                    ])
-                    .to_owned(),
-                )
-                .exec(tx)
-                .instrument(tracing::debug_span!("inserting revert_options"))
-                .await
-                .map_err(|e| anyhow::anyhow!("Batch insert revert_options failed: {}", e))?;
-        }
-
-        Ok(cctx_list_items)
-    }
-
     #[instrument(,level="trace",skip(self,job_id,watermark_id), fields(watermark_id = %watermark_id))]
     pub async fn unlock_watermark(&self, watermark_id: i32, job_id: Uuid) -> anyhow::Result<()> {
         let res = watermark::Entity::update(watermark::ActiveModel {
@@ -1957,6 +1588,14 @@ impl ZetachainCctxDatabase {
                 })
                 .collect();
 
+            let status = CctxStatusProto::from_str_name(
+                related_row
+                    .try_get_by_index::<String>(3)
+                    .map_err(|e| anyhow::anyhow!("related_row status: {}", e))?
+                    .as_str(),
+            )
+            .ok_or(anyhow::anyhow!("Invalid status"))?;
+
             related.push(RelatedCctxProto {
                 index: related_row
                     .try_get_by_index::<String>(0)
@@ -1967,14 +1606,8 @@ impl ZetachainCctxDatabase {
                 source_chain_id: related_row
                     .try_get_by_index::<i32>(2)
                     .map_err(|e| anyhow::anyhow!("related_row source_chain_id: {}", e))?,
-                status: CctxStatusProto::from_str_name(
-                    related_row
-                        .try_get_by_index::<String>(3)
-                        .map_err(|e| anyhow::anyhow!("related_row status: {}", e))?
-                        .as_str(),
-                )
-                .ok_or(anyhow::anyhow!("Invalid status"))?
-                .into(),
+                status: status.into(),
+                status_reduced: reduce_status(status).into(),
                 created_timestamp: related_row
                     .try_get_by_index::<i64>(4)
                     .map_err(|e| anyhow::anyhow!("related_row created_timestamp: {}", e))?,
@@ -2412,6 +2045,455 @@ impl ZetachainCctxDatabase {
 
         Ok(token)
     }
+
+    // --------------------------- Refactored batch insert helpers ---------------------------
+    #[instrument(skip_all, level = "debug")]
+    pub async fn batch_insert_transactions(
+        &self,
+        job_id: Uuid,
+        cctxs: &Vec<CrossChainTx>,
+        tx: &DatabaseTransaction,
+    ) -> anyhow::Result<Vec<CctxListItemProto>> {
+        // Early return for empty input.
+        if cctxs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // 1. Prepare and insert parent CrossChainTx records.
+        let cctx_models = Self::prepare_parent_models(job_id, cctxs)?;
+        let inserted_cctxs = self.insert_parent_models(cctx_models).await?;
+
+        // 2. Map fetched cctxs by index for quick access when preparing child records.
+        let index_to_cctx = cctxs
+            .iter()
+            .map(|cctx| (cctx.index.as_str(), cctx))
+            .collect::<std::collections::HashMap<_, _>>();
+
+        // 3. Prepare child entity models and construct the protobuf response.
+        let (status_models, inbound_models, outbound_models, revert_models, cctx_list_items) =
+            Self::prepare_child_models(&inserted_cctxs, &index_to_cctx)?;
+
+        // 4. Persist child entities inside the provided transaction.
+        self.insert_cctx_status_models(status_models, tx).await?;
+        self.insert_inbound_params_models(inbound_models, tx)
+            .await?;
+        self.insert_outbound_params_models(outbound_models, tx)
+            .await?;
+        self.insert_revert_options_models(revert_models, tx).await?;
+
+        Ok(cctx_list_items)
+    }
+
+    fn prepare_parent_models(
+        job_id: Uuid,
+        cctxs: &Vec<CrossChainTx>,
+    ) -> anyhow::Result<Vec<CrossChainTxEntity::ActiveModel>> {
+        let mut models = Vec::new();
+        for cctx in cctxs {
+            let model = CrossChainTxEntity::ActiveModel {
+                id: ActiveValue::NotSet,
+                creator: ActiveValue::Set(cctx.creator.clone()),
+                index: ActiveValue::Set(cctx.index.clone()),
+                retries_number: ActiveValue::Set(0),
+                processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
+                zeta_fees: ActiveValue::Set(cctx.zeta_fees.clone()),
+                relayed_message: ActiveValue::Set(Some(cctx.relayed_message.clone())),
+                protocol_contract_version: ActiveValue::Set(
+                    ProtocolContractVersion::try_from(cctx.protocol_contract_version.clone())
+                        .map_err(|e| anyhow::anyhow!(e))?,
+                ),
+                last_status_update_timestamp: ActiveValue::Set(Utc::now().naive_utc()),
+                root_id: ActiveValue::Set(None),
+                parent_id: ActiveValue::Set(None),
+                depth: ActiveValue::Set(0),
+                updated_by: ActiveValue::Set(job_id.to_string()),
+            };
+            models.push(model);
+        }
+        Ok(models)
+    }
+
+    async fn insert_parent_models(
+        &self,
+        cctx_models: Vec<CrossChainTxEntity::ActiveModel>,
+    ) -> anyhow::Result<Vec<CrossChainTxEntity::Model>> {
+        if cctx_models.is_empty() {
+            return Ok(Vec::new());
+        }
+        let indices = cctx_models
+            .iter()
+            .map(|m| m.index.as_ref().clone())
+            .collect::<Vec<String>>();
+        let inserted = CrossChainTxEntity::Entity::insert_many(cctx_models)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::column(CrossChainTxEntity::Column::Index)
+                    .update_columns([
+                        CrossChainTxEntity::Column::LastStatusUpdateTimestamp,
+                        CrossChainTxEntity::Column::UpdatedBy,
+                    ])
+                    .to_owned(),
+            )
+            .exec_with_returning_many(self.db.as_ref())
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Batch insert cctxs failed: {}, indices: {}",
+                    e,
+                    indices.join(",")
+                )
+            })?;
+
+        tracing::info!("inserting cctxs: {}", indices.join(","));
+        Ok(inserted)
+    }
+
+    fn prepare_child_models(
+        inserted_cctxs: &Vec<CrossChainTxEntity::Model>,
+        index_to_cctx: &std::collections::HashMap<&str, &CrossChainTx>,
+    ) -> anyhow::Result<(
+        Vec<cctx_status::ActiveModel>,
+        Vec<InboundParamsEntity::ActiveModel>,
+        Vec<OutboundParamsEntity::ActiveModel>,
+        Vec<RevertOptionsEntity::ActiveModel>,
+        Vec<CctxListItemProto>,
+    )> {
+        let mut status_models = Vec::new();
+        let mut inbound_models = Vec::new();
+        let mut outbound_models = Vec::new();
+        let mut revert_models = Vec::new();
+        let mut cctx_list_items = Vec::new();
+
+        for cctx in inserted_cctxs {
+            if let Some(fetched_cctx) = index_to_cctx.get(cctx.index.as_str()) {
+                // Prepare status model
+                let last_update_timestamp = fetched_cctx
+                    .cctx_status
+                    .last_update_timestamp
+                    .parse::<i64>()
+                    .unwrap_or(0);
+                let last_update_timestamp =
+                    chrono::DateTime::<Utc>::from_timestamp(last_update_timestamp, 0)
+                        .ok_or(anyhow::anyhow!("Invalid timestamp"))?
+                        .naive_utc();
+
+                status_models.push(cctx_status::ActiveModel {
+                    id: ActiveValue::NotSet,
+                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
+                    status: ActiveValue::Set(
+                        CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
+                            .map_err(|e| anyhow::anyhow!(e))?,
+                    ),
+                    status_message: ActiveValue::Set(Some(sanitize_string(
+                        fetched_cctx.cctx_status.status_message.clone(),
+                    ))),
+                    error_message: ActiveValue::Set(Some(sanitize_string(
+                        fetched_cctx.cctx_status.error_message.clone(),
+                    ))),
+                    last_update_timestamp: ActiveValue::Set(last_update_timestamp),
+                    is_abort_refunded: ActiveValue::Set(fetched_cctx.cctx_status.is_abort_refunded),
+                    created_timestamp: ActiveValue::Set(
+                        fetched_cctx.cctx_status.created_timestamp.parse::<i64>()?,
+                    ),
+                    error_message_revert: ActiveValue::Set(Some(sanitize_string(
+                        fetched_cctx.cctx_status.error_message_revert.clone(),
+                    ))),
+                    error_message_abort: ActiveValue::Set(Some(sanitize_string(
+                        fetched_cctx.cctx_status.error_message_abort.clone(),
+                    ))),
+                });
+
+                // Prepare inbound params model
+                inbound_models.push(InboundParamsEntity::ActiveModel {
+                    id: ActiveValue::NotSet,
+                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
+                    sender: ActiveValue::Set(fetched_cctx.inbound_params.sender.clone()),
+                    sender_chain_id: ActiveValue::Set(
+                        fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
+                    ),
+                    tx_origin: ActiveValue::Set(fetched_cctx.inbound_params.tx_origin.clone()),
+                    coin_type: ActiveValue::Set(
+                        DBCoinType::try_from(fetched_cctx.inbound_params.coin_type.clone())
+                            .map_err(|e| anyhow::anyhow!(e))?,
+                    ),
+                    asset: ActiveValue::Set(Some(fetched_cctx.inbound_params.asset.clone())),
+                    amount: ActiveValue::Set(fetched_cctx.inbound_params.amount.clone()),
+                    observed_hash: ActiveValue::Set(
+                        fetched_cctx.inbound_params.observed_hash.clone(),
+                    ),
+                    observed_external_height: ActiveValue::Set(
+                        fetched_cctx
+                            .inbound_params
+                            .observed_external_height
+                            .parse::<i64>()?,
+                    ),
+                    ballot_index: ActiveValue::Set(
+                        fetched_cctx.inbound_params.ballot_index.clone(),
+                    ),
+                    finalized_zeta_height: ActiveValue::Set(
+                        fetched_cctx
+                            .inbound_params
+                            .finalized_zeta_height
+                            .parse::<i64>()?,
+                    ),
+                    tx_finalization_status: ActiveValue::Set(
+                        TxFinalizationStatus::try_from(
+                            fetched_cctx.inbound_params.tx_finalization_status.clone(),
+                        )
+                        .map_err(|e| anyhow::anyhow!(e))?,
+                    ),
+                    is_cross_chain_call: ActiveValue::Set(
+                        fetched_cctx.inbound_params.is_cross_chain_call,
+                    ),
+                    status: ActiveValue::Set(
+                        InboundStatus::try_from(fetched_cctx.inbound_params.status.clone())
+                            .map_err(|e| anyhow::anyhow!(e))?,
+                    ),
+                    confirmation_mode: ActiveValue::Set(
+                        ConfirmationMode::try_from(
+                            fetched_cctx.inbound_params.confirmation_mode.clone(),
+                        )
+                        .map_err(|e| anyhow::anyhow!(e))?,
+                    ),
+                });
+
+                // Prepare outbound models
+                for outbound in &fetched_cctx.outbound_params {
+                    outbound_models.push(OutboundParamsEntity::ActiveModel {
+                        id: ActiveValue::NotSet,
+                        cross_chain_tx_id: ActiveValue::Set(cctx.id),
+                        receiver: ActiveValue::Set(outbound.receiver.clone()),
+                        receiver_chain_id: ActiveValue::Set(
+                            outbound.receiver_chain_id.parse::<i32>()?,
+                        ),
+                        coin_type: ActiveValue::Set(
+                            DBCoinType::try_from(outbound.coin_type.clone())
+                                .map_err(|e| anyhow::anyhow!(e))?,
+                        ),
+                        amount: ActiveValue::Set(outbound.amount.clone()),
+                        tss_nonce: ActiveValue::Set(outbound.tss_nonce.clone()),
+                        gas_limit: ActiveValue::Set(outbound.gas_limit.clone()),
+                        gas_price: ActiveValue::Set(Some(outbound.gas_price.clone())),
+                        gas_priority_fee: ActiveValue::Set(Some(outbound.gas_priority_fee.clone())),
+                        hash: ActiveValue::Set(if outbound.hash.is_empty() {
+                            None
+                        } else {
+                            Some(outbound.hash.clone())
+                        }),
+                        ballot_index: ActiveValue::Set(Some(outbound.ballot_index.clone())),
+                        observed_external_height: ActiveValue::Set(
+                            outbound.observed_external_height.parse::<i64>()?,
+                        ),
+                        gas_used: ActiveValue::Set(outbound.gas_used.parse::<i64>()?),
+                        effective_gas_price: ActiveValue::Set(outbound.effective_gas_price.clone()),
+                        effective_gas_limit: ActiveValue::Set(
+                            outbound.effective_gas_limit.parse::<i64>()?,
+                        ),
+                        tss_pubkey: ActiveValue::Set(outbound.tss_pubkey.clone()),
+                        tx_finalization_status: ActiveValue::Set(
+                            TxFinalizationStatus::try_from(outbound.tx_finalization_status.clone())
+                                .map_err(|e| anyhow::anyhow!(e))?,
+                        ),
+                        call_options_gas_limit: ActiveValue::Set(
+                            outbound.call_options.clone().map(|c| c.gas_limit.clone()),
+                        ),
+                        call_options_is_arbitrary_call: ActiveValue::Set(
+                            outbound.call_options.clone().map(|c| c.is_arbitrary_call),
+                        ),
+                        confirmation_mode: ActiveValue::Set(
+                            ConfirmationMode::try_from(outbound.confirmation_mode.clone())
+                                .map_err(|e| anyhow::anyhow!(e))?,
+                        ),
+                    });
+                }
+
+                // Prepare revert options model
+                revert_models.push(RevertOptionsEntity::ActiveModel {
+                    id: ActiveValue::NotSet,
+                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
+                    revert_address: ActiveValue::Set(Some(
+                        fetched_cctx.revert_options.revert_address.clone(),
+                    )),
+                    call_on_revert: ActiveValue::Set(fetched_cctx.revert_options.call_on_revert),
+                    abort_address: ActiveValue::Set(Some(
+                        fetched_cctx.revert_options.abort_address.clone(),
+                    )),
+                    revert_message: ActiveValue::Set(
+                        fetched_cctx
+                            .revert_options
+                            .revert_message
+                            .clone()
+                            .map(|s| sanitize_string(s)),
+                    ),
+                    revert_gas_limit: ActiveValue::Set(
+                        fetched_cctx.revert_options.revert_gas_limit.clone(),
+                    ),
+                });
+
+                // Prepare proto list item
+                cctx_list_items.push(CctxListItemProto {
+                    index: cctx.index.clone(),
+                    status: CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status)
+                        .unwrap()
+                        .into(),
+                    status_reduced: 0,
+                    amount: fetched_cctx.inbound_params.amount.clone(),
+                    last_update_timestamp: fetched_cctx
+                        .cctx_status
+                        .last_update_timestamp
+                        .parse::<i64>()
+                        .unwrap_or(0),
+                    created_timestamp: fetched_cctx
+                        .cctx_status
+                        .created_timestamp
+                        .parse::<i64>()
+                        .unwrap_or(0),
+                    source_chain_id: fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
+                    target_chain_id: fetched_cctx.outbound_params[0]
+                        .receiver_chain_id
+                        .parse::<i32>()?,
+                    sender_address: fetched_cctx.inbound_params.sender.clone(),
+                    receiver_address: fetched_cctx.outbound_params[0].receiver.clone(),
+                    asset: fetched_cctx.inbound_params.asset.clone(),
+                    coin_type: CoinTypeProto::from_str_name(
+                        &fetched_cctx.inbound_params.coin_type.to_string(),
+                    )
+                    .unwrap()
+                    .into(),
+                    token_symbol: None,
+                    zrc20_contract_address: None,
+                    decimals: None,
+                });
+            }
+        }
+
+        Ok((
+            status_models,
+            inbound_models,
+            outbound_models,
+            revert_models,
+            cctx_list_items,
+        ))
+    }
+
+    async fn insert_cctx_status_models(
+        &self,
+        status_models: Vec<cctx_status::ActiveModel>,
+        tx: &DatabaseTransaction,
+    ) -> anyhow::Result<()> {
+        if status_models.is_empty() {
+            return Ok(());
+        }
+        cctx_status::Entity::insert_many(status_models)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::column(cctx_status::Column::CrossChainTxId)
+                    .update_columns([
+                        cctx_status::Column::Status,
+                        cctx_status::Column::StatusMessage,
+                        cctx_status::Column::ErrorMessage,
+                        cctx_status::Column::LastUpdateTimestamp,
+                        cctx_status::Column::IsAbortRefunded,
+                        cctx_status::Column::CreatedTimestamp,
+                        cctx_status::Column::ErrorMessageRevert,
+                        cctx_status::Column::ErrorMessageAbort,
+                    ])
+                    .to_owned(),
+            )
+            .exec(tx)
+            .instrument(tracing::debug_span!("inserting cctx_status"))
+            .await?;
+        Ok(())
+    }
+
+    async fn insert_inbound_params_models(
+        &self,
+        inbound_models: Vec<InboundParamsEntity::ActiveModel>,
+        tx: &DatabaseTransaction,
+    ) -> anyhow::Result<()> {
+        if inbound_models.is_empty() {
+            return Ok(());
+        }
+        InboundParamsEntity::Entity::insert_many(inbound_models)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::columns([
+                    InboundParamsEntity::Column::BallotIndex,
+                    InboundParamsEntity::Column::ObservedHash,
+                ])
+                .update_columns([
+                    InboundParamsEntity::Column::Status,
+                    InboundParamsEntity::Column::ConfirmationMode,
+                ])
+                .to_owned(),
+            )
+            .exec(tx)
+            .instrument(tracing::debug_span!("inserting inbound_params"))
+            .await
+            .map_err(|e| anyhow::anyhow!("Batch insert inbound_params failed: {}", e))?;
+        Ok(())
+    }
+
+    async fn insert_outbound_params_models(
+        &self,
+        outbound_models: Vec<OutboundParamsEntity::ActiveModel>,
+        tx: &DatabaseTransaction,
+    ) -> anyhow::Result<()> {
+        if outbound_models.is_empty() {
+            return Ok(());
+        }
+        OutboundParamsEntity::Entity::insert_many(outbound_models)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::columns([
+                    OutboundParamsEntity::Column::CrossChainTxId,
+                    OutboundParamsEntity::Column::Receiver,
+                    OutboundParamsEntity::Column::ReceiverChainId,
+                ])
+                .update_columns([
+                    OutboundParamsEntity::Column::Hash,
+                    OutboundParamsEntity::Column::TxFinalizationStatus,
+                    OutboundParamsEntity::Column::GasUsed,
+                    OutboundParamsEntity::Column::EffectiveGasPrice,
+                    OutboundParamsEntity::Column::EffectiveGasLimit,
+                    OutboundParamsEntity::Column::TssNonce,
+                    OutboundParamsEntity::Column::CallOptionsGasLimit,
+                    OutboundParamsEntity::Column::CallOptionsIsArbitraryCall,
+                    OutboundParamsEntity::Column::ConfirmationMode,
+                ])
+                .to_owned(),
+            )
+            .exec(tx)
+            .instrument(tracing::debug_span!("inserting outbound_params"))
+            .await
+            .map_err(|e| anyhow::anyhow!("Batch insert outbound_params failed: {}", e))?;
+        Ok(())
+    }
+
+    async fn insert_revert_options_models(
+        &self,
+        revert_models: Vec<RevertOptionsEntity::ActiveModel>,
+        tx: &DatabaseTransaction,
+    ) -> anyhow::Result<()> {
+        if revert_models.is_empty() {
+            return Ok(());
+        }
+        RevertOptionsEntity::Entity::insert_many(revert_models)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::column(RevertOptionsEntity::Column::CrossChainTxId)
+                    .update_columns([
+                        RevertOptionsEntity::Column::RevertAddress,
+                        RevertOptionsEntity::Column::CallOnRevert,
+                        RevertOptionsEntity::Column::AbortAddress,
+                        RevertOptionsEntity::Column::RevertMessage,
+                        RevertOptionsEntity::Column::RevertGasLimit,
+                    ])
+                    .to_owned(),
+            )
+            .exec(tx)
+            .instrument(tracing::debug_span!("inserting revert_options"))
+            .await
+            .map_err(|e| anyhow::anyhow!("Batch insert revert_options failed: {}", e))?;
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------------
 
     pub async fn list_tokens(&self) -> anyhow::Result<Vec<TokenProto>> {
         let tokens = TokenEntity::Entity::find()

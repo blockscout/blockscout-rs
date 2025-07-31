@@ -527,6 +527,8 @@ definitions:
         format: int32
       status:
         $ref: '#/definitions/v1CctxStatus'
+      status_reduced:
+        $ref: '#/definitions/v1CctxStatusReduced'
       inbound_amount:
         type: string
       inbound_coin_type:

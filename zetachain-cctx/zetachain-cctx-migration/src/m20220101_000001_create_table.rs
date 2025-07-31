@@ -527,6 +527,24 @@ impl MigrationTrait for Migration {
                 IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'processing_status') THEN
                     DROP TYPE processing_status;
                 END IF;
+                IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'kind') THEN
+                    DROP TYPE kind;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'cctx_status_status') THEN
+                    DROP TYPE cctx_status_status;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inbound_status') THEN
+                    DROP TYPE inbound_status;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'confirmation_mode') THEN
+                    DROP TYPE confirmation_mode;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'coin_type') THEN
+                    DROP TYPE coin_type;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'protocol_contract_version') THEN
+                    DROP TYPE protocol_contract_version;
+                END IF;
             END $$;"#,
         )
         .await?;

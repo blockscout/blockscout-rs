@@ -149,12 +149,13 @@ pub async fn run(
         
         tokio::spawn(async move {
             tracing::info!("starting indexer");
-            //TODO: handle error, log it and restart the indexer
+            let mut backoff = Duration::from_millis(restart_interval);
             loop {
                 if let Err(e) = indexer.run().await {
                     tracing::error!("indexer error: {}", e);
                     if restart_on_error {
-                        tokio::time::sleep(Duration::from_millis(restart_interval)).await;
+                        tokio::time::sleep(backoff).await;
+                        backoff = backoff * 2;
                     }
                 }
             }

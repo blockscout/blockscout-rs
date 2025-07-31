@@ -238,17 +238,18 @@ message RelatedCctx {
   int32 depth = 2;
   int32 source_chain_id = 3;
   CctxStatus status = 4;
-  string inbound_amount = 5;
-  CoinType inbound_coin_type = 6;
-  repeated RelatedOutboundParams outbound_params = 7;
-  optional string token_symbol = 8;
-  optional string token_name = 9;
-  optional int32 token_decimals = 10;
-  optional string token_zrc20_contract_address = 11;
-  optional string token_icon_url = 12;
-  int64 created_timestamp = 13;
-  optional string parent_index = 14;
-  optional string inbound_asset = 15;
+  CctxStatusReduced status_reduced = 5;
+  string inbound_amount = 6;
+  CoinType inbound_coin_type = 7;
+  repeated RelatedOutboundParams outbound_params = 8;
+  optional string token_symbol = 9;
+  optional string token_name = 10;
+  optional int32 token_decimals = 11;
+  optional string token_zrc20_contract_address = 12;
+  optional string token_icon_url = 13;
+  int64 created_timestamp = 14;
+  optional string parent_index = 15;
+  optional string inbound_asset = 16;
 }
 
 message RelatedOutboundParams {
