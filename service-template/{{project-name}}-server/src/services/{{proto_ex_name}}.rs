@@ -5,6 +5,7 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use convert_trait::TryConvert;
 use {{project_name}}_logic::ApiError;
+use {{project_name}}_logic::plus;
 
 pub struct {{ProtoExName}}Impl {
     {% if database -%}
@@ -27,9 +28,12 @@ impl {{ProtoExName}} for {{ProtoExName}}Impl {
         &self,
         request: Request<{{ProtoExName}}SearchRequest>,
     ) -> Result<Response<{{ProtoExName}}SearchResponse>, Status> {
-        let items = (0..10).map(|i| Item {
-            id: i.to_string(),
-            name: format!("Item {}", i),
+        let items = (0..10).map(|i| {
+            let id = plus(i, i); 
+            Item {
+                id: id.to_string(),
+                name: format!("Item #{}", id),
+            }
         }).collect();
         let response = {{ProtoExName}}SearchResponse {
             items,

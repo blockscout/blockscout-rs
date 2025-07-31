@@ -47,6 +47,7 @@ blockscout-service-launcher = { workspace = true, features = [
     {% endif %}
 ] }
 pretty_assertions = { workspace = true }
+rstest = { workspace = true }
 {% if migrations -%}
 {{project-name}}-migration = { workspace = true }
 {% endif -%}
