@@ -1,45 +1,47 @@
 [package]
 name = "{{project-name}}-server"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 
 [dependencies]
-{{project-name}}-proto = { path = "../{{project-name}}-proto" }
+{{project-name}}-proto = { workspace = true }
 {% if logic -%}
-{{project-name}}-logic = { path = "../{{project-name}}-logic" }
+{{project-name}}-logic = { workspace = true }
 {% endif -%}
 {% if migrations -%}
-{{project-name}}-migration = { path = "../{{project-name}}-migration" }
+{{project-name}}-migration = { workspace = true }
 {% endif -%}
 
-actix-web = "4.2"
-anyhow = "1.0"
-async-trait = "0.1"
-blockscout-service-launcher = { workspace = true, features = [{% if database -%} "database-0_12" {% endif -%}] }
-config = "0.14"
-sea-orm = "0.12.2"
-serde = "1.0"
-serde_json = "1.0.96"
-tokio = { version = "1.23", features = [ "rt-multi-thread", "macros" ] }
-tonic = "0.8"
-tracing = "0.1"
+actix-web = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+blockscout-service-launcher = { workspace = true, features = [{% if database -%} "database-1" {% endif -%}] }
+config = { workspace = true }
+sea-orm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
+tonic = { workspace = true }
+tracing = { workspace = true }
+env-collector = { workspace = true }
+convert-trait = { workspace = true }
 
 # # Uncomment if needed
-# ethers = "2.0.0"
-# blockscout-display-bytes = "1.0"
-# serde_with = "2.1"
+# ethers = { workspace = true }
+# blockscout-display-bytes = { workspace = true }
+# serde_with = { workspace = true }
 
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = [ "test-server",{% if database -%} "test-database"{% endif -%} ] }
-pretty_assertions = "1.3"
-reqwest = { version = "0.12", features = ["json"]}
+pretty_assertions = { workspace = true }
+reqwest = { workspace = true, features = ["json"]}
 # # Uncomment if needed
-# mockall = "0.11"
-# bytes = "1.5.0"
-# hex = "0.4.3"
-# rand = "0.8"
-# rstest = "0.18.2"
-# sea-orm = { version = "*", features = [ "sqlx-sqlite" ]}
-# tokio-stream = { version = "0.1", features = ["net"] }
+# mockall = { workspace = true }
+# bytes = { workspace = true }
+# hex = { workspace = true }
+# rand = { workspace = true }
+# rstest = { workspace = true }
+# sea-orm = { workspace = true }
+# tokio-stream = { workspace = true }
