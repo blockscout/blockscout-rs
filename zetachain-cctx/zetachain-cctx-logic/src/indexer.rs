@@ -87,7 +87,9 @@ async fn historical_sync(
     }
     let next_key = response.pagination.next_key.ok_or(anyhow::anyhow!("next_key is None"))?;
     //atomically insert cctxs and update watermark    
-    database.import_cctxs(job_id, cross_chain_txs, &next_key, watermark_id).await?;
+    let imported = database.import_cctxs(job_id, cross_chain_txs, &next_key, watermark_id).await?;
+
+    tracing::debug!("imported cctxs: {:?}", imported.iter().map(|c| c.index.clone()).collect::<Vec<String>>());
     Ok(())
 }
 

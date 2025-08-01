@@ -507,19 +507,19 @@ impl ZetachainCctxDatabase {
         cctxs: Vec<CrossChainTx>,
         next_key: &str,
         watermark_id: i32,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<CctxListItemProto>> {
         let tx = self.db.begin().await?;
-        let upper_bound_timestamp = cctxs
+        let upper_bound_timestamp:i64 = cctxs
             .last()
             .unwrap()
             .cctx_status
             .last_update_timestamp
             .parse::<i64>()
-            .unwrap_or(0);
+            .unwrap_or_default();
         let upper_bound_timestamp = DateTime::<Utc>::from_timestamp(upper_bound_timestamp, 0)
             .unwrap()
             .naive_utc();
-        self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
+        let imported = self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
         //Watermark with id 1 is the main historic sync thread, all others are one-offs that might be manually added to the db
         let new_status = if watermark_id != 1 {
             ProcessingStatus::Done
@@ -535,7 +535,7 @@ impl ZetachainCctxDatabase {
         )
         .await?;
         tx.commit().await?;
-        Ok(())
+        Ok(imported)
     }
     #[instrument(,level="trace",skip(self,job_id,watermark_id), fields(watermark_id = %watermark_id))]
     pub async fn unlock_watermark(&self, watermark_id: i32, job_id: Uuid) -> anyhow::Result<()> {
@@ -2046,7 +2046,6 @@ impl ZetachainCctxDatabase {
         Ok(token)
     }
 
-    // --------------------------- Refactored batch insert helpers ---------------------------
     #[instrument(skip_all, level = "debug")]
     pub async fn batch_insert_transactions(
         &self,

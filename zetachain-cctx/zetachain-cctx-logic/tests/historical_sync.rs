@@ -8,7 +8,9 @@ use pretty_assertions::assert_eq;
 use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 use sea_orm::PaginatorTrait;
 use serde_json::json;
+use uuid::Uuid;
 use wiremock::matchers::path_regex;
+
 use wiremock::{
     matchers::{method, path, query_param},
     Mock, MockServer, ResponseTemplate,
@@ -243,4 +245,187 @@ async fn test_historical_sync_updates_pointer() {
     assert_eq!(status.last_update_timestamp, watermark_timestamp);
 
 
+}
+
+#[tokio::test]
+async fn test_database_processes_one_off_watermark(){
+    
+    let db = crate::helpers::init_db("test", "test_database_processes_one_off_watermark").await;
+    let db_conn = db.client();
+
+    let database = ZetachainCctxDatabase::new(db_conn.clone());
+
+      //default historic stream with watermark ID = 1
+      let default_historic_watermark = watermark::ActiveModel {
+        id: ActiveValue::NotSet,
+        kind: ActiveValue::Set(Kind::Historical),
+        pointer: ActiveValue::Set("MH==".to_string()), // Start from beginning
+        processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
+        created_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        updated_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        updated_by: ActiveValue::Set("test".to_string()),
+        ..Default::default()
+    };
+
+    let default_watermark = watermark::Entity::insert(default_historic_watermark)
+        .exec_with_returning(db_conn.as_ref())
+        .await
+        .unwrap();
+
+    assert_eq!(default_watermark.id, 1);
+
+    let one_off_watermark = watermark::ActiveModel {
+        id: ActiveValue::NotSet,
+        kind: ActiveValue::Set(Kind::Historical),
+        pointer: ActiveValue::Set("ONE_OFF".to_string()), // Start from beginning
+        processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
+        created_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        updated_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        updated_by: ActiveValue::Set("test".to_string()),
+        ..Default::default()
+    };
+
+    let one_off_watermark = watermark::Entity::insert(one_off_watermark)
+        .exec_with_returning(db_conn.as_ref())
+        .await
+        .unwrap();
+
+    assert_eq!(one_off_watermark.id, 2);
+
+
+    let imported = database.import_cctxs(Uuid::new_v4(), vec![
+        helpers::dummy_cross_chain_tx("dummy_index", "OutboundMined")
+    ], "ONE_OFF", one_off_watermark.id).await.unwrap();
+
+    assert_eq!(imported.len(), 1);
+    assert_eq!(imported[0].index, "dummy_index");
+
+    let watermark = watermark::Entity::find()
+        .filter(watermark::Column::Id.eq(one_off_watermark.id))
+        .one(db_conn.as_ref())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(watermark.processing_status, ProcessingStatus::Done);
+}
+#[tokio::test]
+async fn one_off_historical_watermark_is_processed(){
+
+    let db = crate::helpers::init_db("test", "one_off_historical_watermark_is_processed").await;
+    let db_conn = db.client();
+    
+
+    //default historic stream with watermark ID = 1
+    let default_historic_watermark = watermark::ActiveModel {
+        id: ActiveValue::NotSet,
+        kind: ActiveValue::Set(Kind::Historical),
+        pointer: ActiveValue::Set("MH==".to_string()), // Start from beginning
+        processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
+        created_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        updated_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        updated_by: ActiveValue::Set("test".to_string()),
+        ..Default::default()
+    };
+
+    watermark::Entity::insert(default_historic_watermark)
+        .exec(db_conn.as_ref())
+        .await
+        .unwrap();
+
+    let one_off_watermark = watermark::ActiveModel {
+        id: ActiveValue::NotSet,
+        kind: ActiveValue::Set(Kind::Historical),
+        pointer: ActiveValue::Set("ONE_OFF".to_string()), // Start from beginning
+        processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
+        created_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        updated_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        updated_by: ActiveValue::Set("test".to_string()),
+        ..Default::default()
+    };
+
+    let one_off_watermark = watermark::Entity::insert(one_off_watermark)
+        .exec_with_returning(db_conn.as_ref())
+        .await
+        .unwrap();
+
+
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path_regex(r"/crosschain/cctx/.+"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(helpers::dummy_cross_chain_tx("dummy_index", "OutboundMined")))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/crosschain/cctx"))
+        .and(query_param("unordered", "true"))
+        .and(query_param("pagination.key", "ONE_OFF"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(helpers::dummy_cctx_with_pagination_response(
+            &["one_off_index_1", "one_off_index_2"],
+            "MUST_NOT_BE_REACHED",
+        )))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/crosschain/cctx"))
+        .and(query_param("unordered", "true"))
+        .and(query_param("pagination.key", "MH=="))
+        .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/crosschain/cctx"))
+        .and(query_param("unordered", "false"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
+        .mount(&mock_server)
+        .await;
+
+    fn create_error(_: &wiremock::Request) -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::ConnectionReset, "one off watermarks must not be moved and produce additional requests")
+    }
+
+    // one-off watermark must be marked as done and do not lead to additional requests
+    Mock::given(method("GET"))
+    .and(path("/crosschain/cctx"))
+    .and(query_param("unordered", "true"))
+    .and(query_param("pagination.key", "MUST_NOT_BE_REACHED"))
+    .respond_with_err(create_error)
+    .expect(0)
+    .mount(&mock_server)
+    .await;
+
+    let client = Client::new(RpcSettings {
+        url: mock_server.uri().to_string(),
+        request_per_second: 100,
+        ..Default::default()
+    });
+
+    let indexer = Indexer::new(
+        IndexerSettings {
+            polling_interval: 100, // Fast polling for tests
+            concurrency: 10,
+            enabled: true,
+            ..Default::default()
+        },
+        Arc::new(client),
+        Arc::new(ZetachainCctxDatabase::new(db_conn.clone())),
+        Arc::new(NoOpBroadcaster {}),
+    );
+
+    let indexer_handle = tokio::spawn(async move {
+        let _ = indexer.run().await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    indexer_handle.abort();
+    
+    let watermark = watermark::Entity::find()
+        .filter(watermark::Column::Id.eq(one_off_watermark.id))
+        .one(db_conn.as_ref())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(watermark.processing_status, ProcessingStatus::Done);
 }
