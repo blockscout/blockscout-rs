@@ -34,6 +34,7 @@ mod s3_storage {
             save_concurrency_limit: None,
             create_bucket: false,
             validate_on_initialization: true,
+            timeout: Default::default(),
         })
         .await
         .expect("cannot initialize s3 storage")
