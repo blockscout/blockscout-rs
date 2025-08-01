@@ -17,9 +17,8 @@ COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
 RUN cargo build --release
 
-FROM ubuntu:20.04 AS run
-RUN apt-get update && \
-    apt-get install -y libssl1.1 libssl-dev ca-certificates curl
+FROM ubuntu:24.04 as run
+RUN apt-get update && apt-get install -y libssl3 libssl-dev ca-certificates
 
 WORKDIR /app
 ENV APP_USER=app
