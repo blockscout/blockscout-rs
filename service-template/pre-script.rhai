@@ -14,6 +14,9 @@ variable::set("PROJECT_NAME", to_shouty_snake_case(project_name));
 variable::set("project-name-title", to_title_case(project_name));
 variable::set("project_name", to_snake_case(project_name));
 
+let crate_name = variable::get("crate_name");
+variable::set("CRATE_NAME", to_shouty_snake_case(crate_name));
+
 let proto_ex = variable::get("proto_ex");
 if proto_ex {
     variable::set("proto_ex_name", to_snake_case(variable::get("proto_ex_name")));

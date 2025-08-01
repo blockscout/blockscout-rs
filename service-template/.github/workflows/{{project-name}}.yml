@@ -41,8 +41,6 @@ jobs:
         ports:
           - 5432:5432
     {%- endif %}
-    env:
-      JOBS: 2
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -52,26 +50,19 @@ jobs:
         with:
           working-directory: {{project-name}}
 
-      - name: Set Swap Space
-        id: swapfile
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 14
-
       - name: Build
         id: build
-        if: steps.swapfile.outcome == 'success'
-        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features --jobs $JOBS
+        run: RUST_BACKTRACE=1 cargo test --no-run --locked --workspace --all-features
       
       - name: ENVs in documentation
         run: cargo run --bin check-envs -- --validate-only
 
       - name: Unit tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins --jobs $JOBS -- --nocapture
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture
         if: steps.build.outcome == 'success'
 
       - name: Doc tests
-        run: cargo test --locked --workspace --all-features --doc --jobs $JOBS
+        run: cargo test --locked --workspace --all-features --doc
         if: steps.build.outcome == 'success'
 
       - name: Integration tests
