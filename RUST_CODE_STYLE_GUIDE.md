@@ -1,4 +1,5 @@
-# Rust Code Style Guide
+Rust Code Style Guide
+===
 
 ## Table of Contents
 1. [General Principles](#general-principles)
@@ -143,16 +144,16 @@ pub struct AccountDB {
 
 ### Basic CRUD function names
 
-- `get_` function should take identificator as param and return object. return error in take object doesnt exist
+- `get_` functions take an identifier and return the object; they must return an error if the object does not exist
   - `get_book(id: String) -> Result<Book, Error>`
 - `find_` function is `get_` function but can return None in case object doesn't exist
   - `find_book(id: String) -> Result<Option<Book>, Error>`
 - `list_` or `search_` functions can take some filter params and return list of objects. It can also return pagination information
   - `search_books(filter: BookFilter) -> Result<Vec<Book>, Error>`  
   - `list_books(filter: BookFilter) -> Result<(Vec<Book>, PaginationResult), Error>`
-- `delete_` function should take identificator and return Result<(), Error>
+- `delete_` function should take identifier and return Result<(), Error>
   - `delete_book(id: String) -> Result<(), Error>`
-- `update_` function should take identificator and update params and return updated object
+- `update_` function should take identifier and update params and return updated object
   - `update_book(id: String, params: UpdateBookParams) -> Result<Book, Error>`
 - `create_` function should take creation params and return created object
   - `create_book(params: CreateBookParams) -> Result<Book, Error>`
@@ -162,7 +163,7 @@ pub struct AccountDB {
 ### Service Layout
 Follow the established pattern for service organization:
 
-```
+```txt
 {service-name}/
 ├── {service-name}-proto/          # gRPC protocol definitions
 │   ├── proto/                     # .proto files
@@ -335,15 +336,15 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
 #[instrument(skip(self))]
 async fn process_job(&self, job: &Job) -> Result<(), Error> {
-    tracing::debug!(job_type = %job.job_type(), "Processing job");
+    tracing::debug!(job_type = ?job.job_type(), "Processing job");
     
     match self.process(job).await {
         Ok(result) => {
-            tracinf::info!(job_id = %job.id(), "Job completed successfully");
+            tracing::info!(job_id = ?job.id(), "Job completed successfully");
             Ok(result)
         }
         Err(err) => {
-            tracing::error!(job_id = %job.id(), error = ?err, "Job processing failed");
+            tracing::error!(job_id = ?job.id(), error = ?err, "Job processing failed");
             Err(err)
         }
     }
