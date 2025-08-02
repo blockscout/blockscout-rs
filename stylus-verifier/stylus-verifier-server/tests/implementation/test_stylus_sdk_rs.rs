@@ -10,58 +10,47 @@ const LIST_CARGO_STYLUS_VERSIONS_ROUTE: &str = "/api/v1/stylus-sdk-rs/cargo-styl
 mod verify_github_repository {
     use super::*;
 
+    async fn test(test_name: &str) {
+        let test_case: VerifyGithubRepositoryTestCase =
+            VerifyGithubRepositoryTestCase::from_file(test_name);
+
+        let server = crate::start_server().await;
+
+        let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
+            &server.base_url,
+            VERIFY_GITHUB_REPOSITORY_ROUTE,
+            &test_case.to_request(),
+        )
+        .await;
+
+        test_case.check_verify_response(response);
+    }
+
     #[tokio::test]
     async fn stylus_hello_world_0_5_0() {
-        let test_case: VerifyGithubRepositoryTestCase = VerifyGithubRepositoryTestCase::from_file(
-            "verify_github_repository_stylus_hello_world_0.5.0",
-        );
-
-        let server = crate::start_server().await;
-
-        let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
-            &server.base_url,
-            VERIFY_GITHUB_REPOSITORY_ROUTE,
-            &test_case.to_request(),
-        )
-        .await;
-
-        test_case.check_verify_response(response);
+        test("verify_github_repository_stylus_hello_world_0.5.0").await
     }
 
     #[tokio::test]
-    async fn with_prefix_0_5_0() {
-        let test_case: VerifyGithubRepositoryTestCase = VerifyGithubRepositoryTestCase::from_file(
-            "verify_github_repository_single_call_with_prefix_0.5.0",
-        );
-
-        let server = crate::start_server().await;
-
-        let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
-            &server.base_url,
-            VERIFY_GITHUB_REPOSITORY_ROUTE,
-            &test_case.to_request(),
-        )
-        .await;
-
-        test_case.check_verify_response(response);
-    }
-
-    #[tokio::test]
-    async fn with_prefix_0_6_1() {
-        let test_case: VerifyGithubRepositoryTestCase = VerifyGithubRepositoryTestCase::from_file(
-            "verify_github_repository_single_call_with_prefix_0.6.1",
-        );
-
-        let server = crate::start_server().await;
-
-        let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
-            &server.base_url,
-            VERIFY_GITHUB_REPOSITORY_ROUTE,
-            &test_case.to_request(),
-        )
-        .await;
-
-        test_case.check_verify_response(response);
+    #[rstest::rstest]
+    #[case::zero_five_zero("0.5.0")]
+    #[case::zero_five_one("0.5.1")]
+    #[case::zero_five_two("0.5.2")]
+    #[case::zero_five_three("0.5.3")]
+    #[case::zero_five_five("0.5.5")]
+    #[case::zero_five_six("0.5.6")]
+    #[case::zero_five_seven("0.5.7")]
+    #[case::zero_five_eight("0.5.8")]
+    #[case::zero_five_ten("0.5.10")]
+    #[case::zero_five_eleven("0.5.11")]
+    #[case::zero_five_twelve("0.5.12")]
+    #[case::zero_six_zero("0.6.0")]
+    #[case::zero_six_one("0.6.1")]
+    async fn with_prefix(#[case] stylus_version: &str) {
+        test(&format!(
+            "verify_github_repository_single_call_with_prefix_{stylus_version}"
+        ))
+        .await
     }
 }
 
