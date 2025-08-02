@@ -45,6 +45,24 @@ mod verify_github_repository {
 
         test_case.check_verify_response(response);
     }
+
+    #[tokio::test]
+    async fn with_prefix_0_6_1() {
+        let test_case: VerifyGithubRepositoryTestCase = VerifyGithubRepositoryTestCase::from_file(
+            "verify_github_repository_single_call_with_prefix_0.6.1",
+        );
+
+        let server = crate::start_server().await;
+
+        let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
+            &server.base_url,
+            VERIFY_GITHUB_REPOSITORY_ROUTE,
+            &test_case.to_request(),
+        )
+        .await;
+
+        test_case.check_verify_response(response);
+    }
 }
 
 mod list_cargo_stylus_versions {
