@@ -1,10 +1,13 @@
 use crate::{
     proto::{cluster_explorer_service_server::ClusterExplorerService, *},
-    services::utils::{parse_query, parse_query_2},
+    services::utils::{ParsePageToken, page_token_to_proto, parse_query},
     settings::ApiSettings,
 };
-use multichain_aggregator_logic::services::cluster::Cluster;
-use sea_orm::{DatabaseConnection, sqlx::types::chrono};
+use multichain_aggregator_logic::{
+    error::ServiceError, services::cluster::Cluster,
+    types::addresses::proto_token_type_to_db_token_type,
+};
+use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
@@ -71,18 +74,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let direction = inner.direction.map(parse_query).transpose()?;
 
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner
-            .page_token
-            .map(parse_query_2)
-            .transpose()?
-            .map(|(t, h)| {
-                chrono::DateTime::from_timestamp_micros(t)
-                    .ok_or_else(|| {
-                        Status::invalid_argument(format!("invalid timestamp value: {t}"))
-                    })
-                    .map(|dt| (dt.naive_utc(), h))
-            })
-            .transpose()?;
+        let page_token = inner.page_token.parse_page_token()?;
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let (interop_messages, next_page_token) = cluster
@@ -100,13 +92,7 @@ impl ClusterExplorerService for ClusterExplorer {
 
         Ok(Response::new(ListInteropMessagesResponse {
             items: interop_messages.into_iter().map(|i| i.into()).collect(),
-            next_page_params: next_page_token.map(|(t, h)| {
-                let t = t.and_utc().timestamp_micros();
-                Pagination {
-                    page_token: format!("{t},{h}"),
-                    page_size,
-                }
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -122,5 +108,49 @@ impl ClusterExplorerService for ClusterExplorer {
         let count = cluster.count_interop_messages(&self.db, chain_id).await?;
 
         Ok(Response::new(CountInteropMessagesResponse { count }))
+    }
+
+    async fn get_address(
+        &self,
+        request: Request<GetAddressRequest>,
+    ) -> Result<Response<GetAddressResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let address = parse_query(inner.address_hash)?;
+
+        let address_info = cluster.get_address_info(&self.db, address).await?;
+
+        Ok(Response::new(
+            GetAddressResponse::try_from(address_info).map_err(ServiceError::from)?,
+        ))
+    }
+
+    async fn list_address_tokens(
+        &self,
+        request: Request<ListAddressTokensRequest>,
+    ) -> Result<Response<ListAddressTokensResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let token_type = proto_token_type_to_db_token_type(inner.token_type());
+        let address = parse_query(inner.address_hash)?;
+
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.parse_page_token()?;
+
+        let (tokens, next_page_token) = cluster
+            .list_address_tokens(&self.db, address, token_type, page_size as u64, page_token)
+            .await?;
+
+        let items = tokens
+            .into_iter()
+            .map(|t| t.try_into().map_err(ServiceError::from))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Response::new(ListAddressTokensResponse {
+            items,
+            next_page_params: page_token_to_proto(next_page_token, page_size),
+        }))
     }
 }

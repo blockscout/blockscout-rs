@@ -10,6 +10,7 @@ pub mod blockscout {
     }
 
     pub mod cluster_explorer {
+        use crate::blockscout::multichain_aggregator;
         pub mod v1 {
             include!(concat!(
                 env!("OUT_DIR"),

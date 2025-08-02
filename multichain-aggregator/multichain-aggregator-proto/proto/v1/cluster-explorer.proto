@@ -13,6 +13,8 @@ service ClusterExplorerService {
       returns (ListInteropMessagesResponse) {}
   rpc CountInteropMessages(CountInteropMessagesRequest)
       returns (CountInteropMessagesResponse) {}
+  rpc GetAddress(GetAddressRequest) returns (GetAddressResponse) {}
+  rpc ListAddressTokens(ListAddressTokensRequest) returns (ListAddressTokensResponse) {}
 }
 
 message AddressHash {
@@ -89,3 +91,55 @@ message CountInteropMessagesRequest {
 }
 
 message CountInteropMessagesResponse { uint64 count = 1; }
+
+message TokenInfo {
+  string address_hash = 1;
+  optional string circulating_market_cap = 2;
+  optional string decimals = 3;
+  optional string holders_count = 4;
+  optional string icon_url = 5;
+  optional string name = 6;
+  optional string symbol = 7;
+  optional string total_supply = 8;
+  blockscout.multichainAggregator.v1.TokenType token_type = 9;
+  optional string exchange_rate = 10;
+}
+
+message GetAddressRequest {
+  string cluster_id = 1;
+  string address_hash = 2;
+}
+
+message GetAddressResponse {
+  // Chain-specific information.
+  message ChainInfo {
+    string coin_balance = 1;
+    bool is_contract = 2;
+    bool is_verified = 3;
+  }
+
+  string hash = 1;
+  // Map of chain id to chain-specific information.
+  map<string, ChainInfo> chain_infos = 2;
+  bool has_tokens = 3;
+  bool has_interop_message_transfers = 4;
+}
+
+message ListAddressTokensRequest {
+  string cluster_id = 1;
+  string address_hash = 2;
+  blockscout.multichainAggregator.v1.TokenType token_type = 3;
+  optional uint32 page_size = 4;
+  optional string page_token = 5;
+}
+
+message ListAddressTokensResponse {
+  message TokenBalanceInfo {
+    TokenInfo token = 1;
+    optional string token_id = 2;
+    string value = 3;
+  }
+
+  repeated TokenBalanceInfo items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}

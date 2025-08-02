@@ -1,6 +1,15 @@
 use super::ChainId;
 use crate::{error::ParseError, proto, types::domains::DomainInfo};
-use entity::addresses::Model;
+use bigdecimal::BigDecimal;
+use entity::{
+    address_coin_balances,
+    addresses::{Column, Entity, Model},
+};
+use sea_orm::{
+    DerivePartialModel, FromJsonQueryResult, IntoSimpleExpr,
+    prelude::Expr,
+    sea_query::{Func, SimpleExpr},
+};
 use serde::{Deserialize, Serialize};
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
@@ -70,6 +79,81 @@ impl From<Address> for proto::Address {
             is_verified_contract: Some(v.is_verified_contract),
             is_token: Some(v.is_token),
             chain_id: v.chain_id.to_string(),
+        }
+    }
+}
+
+fn chain_infos_query() -> SimpleExpr {
+    Expr::cust_with_exprs(
+        "json_agg(json_build_object('chain_id',$1,'coin_balance',$2,'is_contract',$3,'is_verified',$4))",
+        vec![
+            Column::ChainId.into_simple_expr(),
+            Func::coalesce([
+                address_coin_balances::Column::Value.into_simple_expr(),
+                Expr::value(0),
+            ])
+            .into(),
+            Column::IsContract.into_simple_expr(),
+            Column::IsVerifiedContract.into_simple_expr(),
+        ],
+    )
+    .into_simple_expr()
+}
+
+#[derive(DerivePartialModel)]
+#[sea_orm(entity = "Entity", from_query_result)]
+pub struct AddressInfo {
+    pub hash: Vec<u8>,
+    #[sea_orm(from_expr = r#"chain_infos_query()"#)]
+    pub chain_infos: Vec<ChainInfo>,
+    #[sea_orm(skip)]
+    pub has_tokens: bool,
+    #[sea_orm(skip)]
+    pub has_interop_message_transfers: bool,
+}
+
+impl AddressInfo {
+    pub fn default(hash: Vec<u8>) -> Self {
+        Self {
+            hash,
+            chain_infos: vec![],
+            has_tokens: false,
+            has_interop_message_transfers: false,
+        }
+    }
+}
+
+impl TryFrom<AddressInfo> for proto::GetAddressResponse {
+    type Error = ParseError;
+
+    fn try_from(v: AddressInfo) -> Result<Self, Self::Error> {
+        Ok(Self {
+            hash: alloy_primitives::Address::try_from(v.hash.as_slice())?.to_string(),
+            chain_infos: v
+                .chain_infos
+                .into_iter()
+                .map(|c| (c.chain_id.to_string(), c.into()))
+                .collect(),
+            has_tokens: false,
+            has_interop_message_transfers: false,
+        })
+    }
+}
+
+#[derive(Debug, FromJsonQueryResult, Serialize, Deserialize)]
+pub struct ChainInfo {
+    chain_id: ChainId,
+    coin_balance: BigDecimal,
+    is_contract: bool,
+    is_verified: bool,
+}
+
+impl From<ChainInfo> for proto::get_address_response::ChainInfo {
+    fn from(v: ChainInfo) -> Self {
+        Self {
+            coin_balance: v.coin_balance.to_string(),
+            is_contract: v.is_contract,
+            is_verified: v.is_verified,
         }
     }
 }

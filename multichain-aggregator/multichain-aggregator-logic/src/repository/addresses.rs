@@ -1,6 +1,10 @@
-use crate::types::{ChainId, addresses::Address};
+use crate::types::{
+    ChainId,
+    addresses::{Address, AddressInfo},
+};
 use alloy_primitives::Address as AddressAlloy;
 use entity::{
+    address_coin_balances,
     addresses::{Column, Entity, Model},
     sea_orm_active_enums as db_enum,
 };
@@ -8,7 +12,7 @@ use regex::Regex;
 use sea_orm::{
     ActiveValue::NotSet,
     ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
-    IntoSimpleExpr, Iterable, Order, QueryFilter, QuerySelect,
+    IntoSimpleExpr, Iterable, JoinType, Order, QueryFilter, QuerySelect, QueryTrait,
     prelude::Expr,
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
@@ -265,6 +269,36 @@ where
         )),
         None => Ok((addresses, None)),
     }
+}
+
+pub async fn get_address_info<C>(
+    db: &C,
+    address: AddressAlloy,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+) -> Result<Option<AddressInfo>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    let coin_balances_rel = Entity::belongs_to(address_coin_balances::Entity)
+        .from((Column::Hash, Column::ChainId))
+        .to((
+            address_coin_balances::Column::AddressHash,
+            address_coin_balances::Column::ChainId,
+        ))
+        .into();
+
+    let address_info = Entity::find()
+        .join(JoinType::LeftJoin, coin_balances_rel)
+        .filter(Column::Hash.eq(address.as_slice()))
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(Column::ChainId.is_in(cluster_chain_ids))
+        })
+        .group_by(Column::Hash)
+        .into_partial_model::<AddressInfo>()
+        .one(db)
+        .await?;
+
+    Ok(address_info)
 }
 
 fn parse_db_address(hash: &[u8]) -> AddressAlloy {
