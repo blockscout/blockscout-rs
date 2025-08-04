@@ -6,7 +6,6 @@ mod m20220101_000003_create_token_table;
 mod m20220101_000004_add_inbound_params_composite_unique;
 mod m20240101_000005_add_icon_url_to_token;
 mod m20240101_000006_add_performance_indices;
-mod m20240101_000007_add_list_query_indices;
 
 pub struct Migrator;
 
@@ -20,7 +19,6 @@ impl MigratorTrait for Migrator {
             Box::new(m20220101_000004_add_inbound_params_composite_unique::Migration),
             Box::new(m20240101_000005_add_icon_url_to_token::Migration),
             Box::new(m20240101_000006_add_performance_indices::Migration),
-            Box::new(m20240101_000007_add_list_query_indices::Migration),
         ]
     }
 }

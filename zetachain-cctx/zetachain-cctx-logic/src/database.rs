@@ -688,6 +688,7 @@ impl ZetachainCctxDatabase {
         batch_id: Uuid,
         polling_interval: u64,
     ) -> anyhow::Result<Vec<CctxShort>> {
+        // Optimized query that pre-calculates the backoff intervals to avoid complex expressions in WHERE clause
         let statement = format!(
             r#"
         WITH cctxs AS (
@@ -695,8 +696,21 @@ impl ZetachainCctxDatabase {
             FROM cross_chain_tx cctx
             JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
             WHERE cctx.processing_status = 'Unlocked'::processing_status
-            AND cctx.last_status_update_timestamp + INTERVAL  '$1 milliseconds' * (POWER(2, cctx.retries_number) - 1) < NOW()
-            ORDER BY cctx.last_status_update_timestamp ASC,cs.created_timestamp DESC
+            AND cctx.last_status_update_timestamp + 
+                CASE 
+                    WHEN cctx.retries_number = 0 THEN INTERVAL '0 milliseconds'
+                    WHEN cctx.retries_number = 1 THEN INTERVAL '$1 milliseconds'
+                    WHEN cctx.retries_number = 2 THEN INTERVAL '$1 milliseconds' * 3
+                    WHEN cctx.retries_number = 3 THEN INTERVAL '$1 milliseconds' * 7
+                    WHEN cctx.retries_number = 4 THEN INTERVAL '$1 milliseconds' * 15
+                    WHEN cctx.retries_number = 5 THEN INTERVAL '$1 milliseconds' * 31
+                    WHEN cctx.retries_number = 6 THEN INTERVAL '$1 milliseconds' * 63
+                    WHEN cctx.retries_number = 7 THEN INTERVAL '$1 milliseconds' * 127
+                    WHEN cctx.retries_number = 8 THEN INTERVAL '$1 milliseconds' * 255
+                    WHEN cctx.retries_number = 9 THEN INTERVAL '$1 milliseconds' * 511
+                    ELSE INTERVAL '$1 milliseconds' * 1023
+                END < NOW()
+            ORDER BY cctx.last_status_update_timestamp ASC, cs.created_timestamp DESC
             LIMIT $2
             FOR UPDATE SKIP LOCKED
         )
@@ -1192,7 +1206,7 @@ impl ZetachainCctxDatabase {
         LEFT JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
         LEFT JOIN inbound_params ip ON cctx.id = ip.cross_chain_tx_id
         LEFT JOIN revert_options ro ON cctx.id = ro.cross_chain_tx_id
-        LEFT JOIN token erc20 ON ip.asset = erc20.zrc20_contract_address
+        LEFT JOIN token erc20 ON ip.asset = erc20.asset
         LEFT JOIN token gas ON  gas.foreign_chain_id =ip.sender_chain_id and ip.coin_type = gas.coin_type and gas.coin_type  in ('Zeta', 'Gas')
         WHERE cctx.index = $1
         "#;
@@ -1683,61 +1697,7 @@ impl ZetachainCctxDatabase {
         filters: Filters,
         direction: Direction,
     ) -> anyhow::Result<ListCctxsResponse> {
-        let mut sql = String::from(
-            r#"
-        SELECT * FROM (
-            SELECT
-                cctx.index, --0
-                cs.status :: text, --1
-                cs.last_update_timestamp, --2
-                ip.amount, --3
-                ip.sender_chain_id, --4
-                last_op.receiver_chain_id AS receiver_chain_id, --5
-                cs.created_timestamp AS created_timestamp, --6
-                ip.sender AS sender_address, --7
-                ip.asset AS asset, --8
-                last_op.receiver :: text AS receiver_address, --9
-                ip.coin_type :: text AS coin_type, --10
-                (
-                    CASE
-                        WHEN cs.status :: text IN (
-                            'PendingOutbound',
-                            'PendingInbound',
-                            'PendingRevert'
-                        ) THEN 'Pending'
-                        WHEN cs.status :: text = 'OutboundMined' THEN 'Success'
-                        WHEN cs.status :: text IN ('Aborted', 'Reverted') THEN 'Failed'
-                        ELSE cs.status :: text
-                    END
-                ) as status_reduced, --11
-                COALESCE(t.symbol, gt.symbol) as token_symbol, --12
-                COALESCE(t.zrc20_contract_address, gt.zrc20_contract_address) as zrc20_contract_address, --13
-                COALESCE(t.decimals, gt.decimals) as decimals, --14
-                cctx.id --15
-            FROM
-                cross_chain_tx cctx
-                INNER JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
-                INNER JOIN inbound_params ip ON cctx.id = ip.cross_chain_tx_id
-                INNER JOIN (
-                    SELECT
-                        op.cross_chain_tx_id,
-                        op.receiver,
-                        op.receiver_chain_id,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY op.cross_chain_tx_id
-                            ORDER BY
-                                op.id ASC
-                        ) as rn
-                    FROM
-                        outbound_params op
-                ) last_op ON cctx.id = last_op.cross_chain_tx_id AND last_op.rn = 1
-                LEFT JOIN token t ON ip.asset = t.asset and ip.asset!=''
-                LEFT JOIN token gt ON gt.coin_type::text = 'Gas' and gt.foreign_chain_id = ip.sender_chain_id
-            ) as cctxs
-        WHERE
-        1 = 1
-        "#,
-        );
+        let mut sql = include_str!("list_cctx_query.sql").to_string();
 
         let mut params: Vec<sea_orm::Value> = Vec::new();
         let mut param_count = 0;
