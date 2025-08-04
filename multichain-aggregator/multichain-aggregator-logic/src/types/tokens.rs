@@ -117,7 +117,7 @@ impl TryFrom<Token> for proto::TokenInfo {
             name: value.name,
             symbol: value.symbol,
             total_supply: value.total_supply.map(|t| t.to_plain_string()),
-            token_type: db_token_type_to_proto_token_type(value.token_type).into(),
+            r#type: db_token_type_to_proto_token_type(value.token_type).into(),
             exchange_rate: value.fiat_value.map(|f| f.to_string()),
         })
     }

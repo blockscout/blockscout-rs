@@ -170,7 +170,7 @@ paths:
           in: path
           required: true
           type: string
-        - name: token_type
+        - name: type
           in: query
           required: false
           type: string
@@ -1200,7 +1200,7 @@ definitions:
         type: string
       total_supply:
         type: string
-      token_type:
+      type:
         $ref: '#/definitions/v1TokenType'
       exchange_rate:
         type: string

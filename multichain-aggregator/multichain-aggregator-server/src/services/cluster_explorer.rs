@@ -133,7 +133,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let inner = request.into_inner();
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let token_type = proto_token_type_to_db_token_type(inner.token_type());
+        let token_type = proto_token_type_to_db_token_type(inner.r#type());
         let address = parse_query(inner.address_hash)?;
 
         let page_size = self.normalize_page_size(inner.page_size);
