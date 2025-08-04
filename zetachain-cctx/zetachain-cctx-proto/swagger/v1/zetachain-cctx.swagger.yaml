@@ -362,6 +362,11 @@ definitions:
     properties:
       historic_watermark_timestamp:
         type: string
+        format: int64
+      historic_lag:
+        type: string
+        format: int64
+        title: difference between current time and historic watermark timestamp
       pending_status_updates_count:
         type: string
         format: int64
@@ -371,6 +376,7 @@ definitions:
       realtime_gaps_count:
         type: string
         format: int64
+        title: number of gaps in realtime stream
   v1HealthCheckResponse:
     type: object
     properties:

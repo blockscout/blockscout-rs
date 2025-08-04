@@ -9,6 +9,7 @@ use zetachain_cctx_logic::models::{
     CallOptions, CctxStatus, CoinType, CrossChainTx, InboundParams, OutboundParams, RevertOptions
 };
 use zetachain_cctx_server::Settings;
+use rand::Rng;
 
 #[allow(dead_code)]
 pub async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
@@ -69,7 +70,7 @@ pub fn dummy_cross_chain_tx(index: &str, status: &str) -> CrossChainTx {
             status: status.to_string(),
             status_message: "".to_string(),
             error_message: "".to_string(),
-            last_update_timestamp: (Utc::now().timestamp() - 1000).to_string(),
+            last_update_timestamp: (Utc::now().timestamp() - rand::rng().random_range(1000..10000)).to_string(),
             is_abort_refunded: false,
             created_timestamp: "0".to_string(),
             error_message_revert: "".to_string(),

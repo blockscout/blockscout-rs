@@ -9,9 +9,9 @@ use zetachain_cctx_entity::{
 };
 use sea_orm::TransactionTrait;
 use zetachain_cctx_logic::{
-    database::ZetachainCctxDatabase,
-    models::{CallOptions, CctxStatus, CrossChainTx, InboundParams, OutboundParams, RevertOptions},
+    database::ZetachainCctxDatabase
 };
+mod helpers;
 
 // Helper that creates a brand-new temporary database, runs migrations and returns the guard
 async fn init_db(test_name: &str) -> TestDbGuard {
@@ -20,72 +20,6 @@ async fn init_db(test_name: &str) -> TestDbGuard {
 }
 
 
-#[allow(dead_code)]
-pub fn dummy_cross_chain_tx(index: &str, status: &str) -> CrossChainTx {
-    CrossChainTx {
-        creator: "creator".to_string(),
-        index: index.to_string(),
-        zeta_fees: "0".to_string(),
-        relayed_message: "msg".to_string(),
-        cctx_status: CctxStatus {
-            status: status.to_string(),
-            status_message: "".to_string(),
-            error_message: "".to_string(),
-            last_update_timestamp: (Utc::now().timestamp() - 1000).to_string(),
-            is_abort_refunded: false,
-            created_timestamp: "0".to_string(),
-            error_message_revert: "".to_string(),
-            error_message_abort: "".to_string(),
-        },
-        inbound_params: InboundParams {
-            sender: "sender".to_string(),
-            sender_chain_id: "1".to_string(),
-            tx_origin: "origin".to_string(),
-            coin_type: zetachain_cctx_logic::models::CoinType::Zeta,
-            asset: "".to_string(),
-            amount: "0".to_string(),
-            observed_hash: index.to_string(),
-            observed_external_height: "0".to_string(),
-            ballot_index: index.to_string(),
-            finalized_zeta_height: "0".to_string(),
-            tx_finalization_status: "NotFinalized".to_string(),
-            is_cross_chain_call: false,
-            status: "SUCCESS".to_string(),
-            confirmation_mode: "SAFE".to_string(),
-        },
-        outbound_params: vec![OutboundParams {
-            receiver: "receiver".to_string(),
-            receiver_chain_id: "2".to_string(),
-            coin_type: zetachain_cctx_logic::models::CoinType::Zeta,
-            amount: "1000000000000000000".to_string(),
-            tss_nonce: "0".to_string(),
-            gas_limit: "0".to_string(),
-            gas_price: "0".to_string(),
-            gas_priority_fee: "0".to_string(),
-            hash: index.to_string(),
-            ballot_index: "".to_string(),
-            observed_external_height: "0".to_string(),
-            gas_used: "0".to_string(),
-            effective_gas_price: "0".to_string(),
-            effective_gas_limit: "0".to_string(),
-            tss_pubkey: "".to_string(),
-            tx_finalization_status: "NotFinalized".to_string(),
-            call_options: Some(CallOptions {
-                gas_limit: "0".to_string(),
-                is_arbitrary_call: false,
-            }),
-            confirmation_mode: "SAFE".to_string(),
-        }],
-        protocol_contract_version: "V1".to_string(),
-        revert_options: RevertOptions {
-            revert_address: "".to_string(),
-            call_on_revert: false,
-            abort_address: "".to_string(),
-            revert_message: None,
-            revert_gas_limit: "0".to_string(),
-        },
-    }
-}
 
 #[tokio::test]
 async fn test_traverse_and_update_tree_relationships() {
@@ -132,7 +66,7 @@ async fn test_traverse_and_update_tree_relationships() {
 
     // Insert CHILD1 without parent/root links
     let child1_index = "child1";
-    let child1_tx = dummy_cross_chain_tx(child1_index, "PendingOutbound");
+    let child1_tx = helpers::dummy_cross_chain_tx(child1_index, "PendingOutbound");
     let tx = db_conn.begin().await.unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &vec![child1_tx.clone()], &tx)
@@ -150,7 +84,7 @@ async fn test_traverse_and_update_tree_relationships() {
 
     // Insert GRANDCHILD that references CHILD1 as its parent, but root is unknown
     let grandchild_index = "grandchild";
-    let grandchild_tx = dummy_cross_chain_tx(grandchild_index, "PendingOutbound");
+    let grandchild_tx = helpers::dummy_cross_chain_tx(grandchild_index, "PendingOutbound");
     // insert grandchild first
     let tx2 = db_conn.begin().await.unwrap();
     database

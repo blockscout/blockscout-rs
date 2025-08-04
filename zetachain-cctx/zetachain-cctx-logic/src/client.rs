@@ -82,7 +82,7 @@ impl Client {
     #[instrument(level="debug",skip_all)]
     pub async fn fetch_cctx(&self, index: &str) -> anyhow::Result<CrossChainTx> {
         let mut url: Url = Url::parse(&self.settings.url)?;
-        url.set_path(&format!("{}crosschain/cctx/{}", url.path(), index));
+        url.set_path(&format!("{}zeta-chain/crosschain/cctx/{}", url.path(), index));
         let request = Request::new(Method::GET, url);
         let response = self.make_request(request).await?.error_for_status()?;
         let body = response.json::<CCTXResponse>().await?;
@@ -98,7 +98,7 @@ impl Client {
     ) -> Result<PagedCCTXResponse, Error> {
         let mut url: Url = self.settings.url.parse().unwrap();
         let path = url.path();
-        url.set_path(&format!("{}crosschain/cctx", path));
+        url.set_path(&format!("{}zeta-chain/crosschain/cctx", path));
         url.query_pairs_mut()
             .append_pair("pagination.limit", &batch_size.to_string())
             .append_pair("unordered", &unordered.to_string())
@@ -129,7 +129,7 @@ impl Client {
     ) -> Result<InboundHashToCctxResponse, Error> {
         let mut url: Url = self.settings.url.parse().unwrap();
         let path = url.path();
-        url.set_path(&format!("{}crosschain/inboundHashToCctxData/{}", path, cctx_index));
+        url.set_path(&format!("{}zeta-chain/crosschain/inboundHashToCctxData/{}", path, cctx_index));
 
         let request = Request::new(Method::GET, url.clone());
         let response = self
@@ -180,7 +180,7 @@ impl Client {
     ) -> Result<PagedTokenResponse, Error> {
         let mut url: Url = self.settings.url.parse().unwrap();
         let path = url.path();
-        url.set_path(&format!("{}fungible/foreign_coins", path));
+        url.set_path(&format!("{}zeta-chain/fungible/foreign_coins", path));
         url.query_pairs_mut()
             .append_pair("pagination.limit", &batch_size.to_string())
             .finish();
