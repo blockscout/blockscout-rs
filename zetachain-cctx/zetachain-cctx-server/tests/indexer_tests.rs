@@ -437,7 +437,7 @@ async fn test_get_cctx_info() {
     let child_cctx = dummy_cross_chain_tx("child_cctx", "OutboundMined");
     let tx = db.begin().await.unwrap();
     database
-        .import_related_cctx(child_cctx, Uuid::new_v4(), Some(1), Some(1), 1, &tx)
+        .import_related_cctx(child_cctx, Uuid::new_v4(), 1, 1, 1, &tx)
         .await
         .unwrap();
     tx.commit().await.unwrap();
