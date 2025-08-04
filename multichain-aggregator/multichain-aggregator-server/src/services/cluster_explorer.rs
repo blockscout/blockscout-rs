@@ -1,6 +1,6 @@
 use crate::{
     proto::{cluster_explorer_service_server::ClusterExplorerService, *},
-    services::utils::{ParsePageToken, page_token_to_proto, parse_query},
+    services::utils::{PageTokenExtractor, page_token_to_proto, parse_query},
     settings::ApiSettings,
 };
 use multichain_aggregator_logic::{
@@ -74,7 +74,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let direction = inner.direction.map(parse_query).transpose()?;
 
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.parse_page_token()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let (interop_messages, next_page_token) = cluster
@@ -137,7 +137,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let address = parse_query(inner.address_hash)?;
 
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.parse_page_token()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let (tokens, next_page_token) = cluster
             .list_address_tokens(&self.db, address, token_type, page_size as u64, page_token)

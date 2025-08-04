@@ -57,6 +57,7 @@ anyhow = "1.0"
 api-client-framework = { git = "https://github.com/blockscout/blockscout-rs", rev = "d60c1d8" }
 async-std = { version = "1", features = ["attributes", "tokio1"] }
 async-trait = "0.1"
+base64 = "0.22"
 bigdecimal = "0.4"
 blockscout-chains = { git = "https://github.com/blockscout/blockscout-rs", version = "0.3.0" }
 cached = { version = "0.55", default-features = false }

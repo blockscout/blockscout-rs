@@ -1,6 +1,6 @@
 use crate::{
     proto::{multichain_aggregator_service_server::MultichainAggregatorService, *},
-    services::utils::{ParsePageToken, page_token_to_proto, parse_query},
+    services::utils::{PageTokenExtractor, page_token_to_proto, parse_query},
     settings::ApiSettings,
 };
 use actix_phoenix_channel::ChannelBroadcaster;
@@ -163,7 +163,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.parse_page_token()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -203,7 +203,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.parse_page_token()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -240,7 +240,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.parse_page_token()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -274,7 +274,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.parse_page_token()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -308,7 +308,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.parse_page_token()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -477,7 +477,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.parse_page_token()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let (domains, next_page_token) = search::search_domains(
             &self.bens_client,
