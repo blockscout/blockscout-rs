@@ -101,6 +101,8 @@ where
         })
         .apply_if(page_token, |q, page_token| {
             let (fiat_value, value, id) = page_token;
+            // Handle pagination similar to how it's done in the Elixir backend
+            // https://github.com/blockscout/blockscout/blob/dff7814bb06327a9f80d0850470e8798e48301fe/apps/explorer/lib/explorer/chain.ex#L2882-L2917
             match fiat_value {
                 None => q.filter(Expr::cust_with_exprs(
                     "$1 IS NULL AND ($2 < $3 OR ($2 = $3 AND $4 < $5))",
