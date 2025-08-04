@@ -12,8 +12,6 @@ use crate::database::ZetachainCctxDatabase;
 use crate::models::{CctxShort, PagedCCTXResponse};
 use crate::events::EventBroadcaster;
 use zetachain_cctx_entity::sea_orm_active_enums::{Kind, ProcessingStatus};
-use std::result::Result::Ok as ResultOk;
-use std::result::Result::Err as ResultErr;
 use crate::{client::Client, settings::IndexerSettings};
 use futures::StreamExt;
 use tracing::instrument;
@@ -219,7 +217,7 @@ impl Indexer {
             loop {
                 let job_id = Uuid::new_v4();
                 match realtime_fetch(job_id, database.clone(), &client, batch_size).await {
-                    ResultOk(inserted) => {
+                    std::result::Result::Ok(inserted) => {
                         if !inserted.is_empty() {
                             tracing::info!("realtime_fetch_handler job_id: {} new cctxs found: {:?}", job_id, inserted.iter().map(|c| c.index.clone()).collect::<Vec<String>>());
                             broadcaster.broadcast_new_cctxs(inserted).await;
@@ -356,11 +354,11 @@ impl Indexer {
                     match job {
                         IndexerJob::StatusUpdate(cctx, job_id) => {
                             if let Err(e) =  refresh_status_and_link_related(database.clone(), &client, &cctx, job_id).await {
-                                tracing::info!(error = %e, job_id = %job_id, index = %cctx.index, "Failed to refresh status and link related cctx");
+                                tracing::warn!(error = %e, job_id = %job_id, index = %cctx.index, "Failed to refresh status and link related cctx");
                                 if cctx.retries_number == retry_threshold as i32 {
-                                    database.mark_cctx_as_failed(&cctx).await.unwrap();
+                                    let _ = database.mark_cctx_as_failed(&cctx).await.map_err(|e| anyhow::anyhow!(format!("Failed to mark cctx as failed: {}", e)));
                                 } else {
-                                database.unlock_cctx(cctx.id, job_id).await.unwrap();
+                                    let _ = database.unlock_cctx(cctx.id, job_id).await.map_err(|e| anyhow::anyhow!(format!("Failed to unlock cctx: {}", e)));
                                 }
                             }
                         }
@@ -368,13 +366,13 @@ impl Indexer {
                            
                             match level_data_gap(job_id, database.clone(), &client, id, pointer, level_data_gap_batch_size, realtime_threshold)  
                              .await {
-                             ResultOk((ProcessingStatus::Done, _inserted)) =>  database.mark_watermark_as_done(id,job_id).await.unwrap(),
-                             ResultErr(e) => {
-                                 tracing::warn!(error = %e, job_id = %job_id, "Failed to level data gap");
-                                 if retries_number < retry_threshold as i32 {
-                                    database.unlock_watermark(id,job_id).await.unwrap();
+                             std::result::Result::Ok((ProcessingStatus::Done, _inserted)) =>  database.mark_watermark_as_done(id,job_id).await.unwrap(),
+                             std::result::Result::Err(e) => {
+                                tracing::warn!(error = %e, job_id = %job_id, "Failed to level data gap");
+                                 if retries_number == retry_threshold as i32 {
+                                    let _ = database.mark_watermark_as_failed(id).await.map_err(|e| anyhow::anyhow!(format!("Failed to mark watermark as failed: {}", e)));
                                  } else {
-                                    database.mark_watermark_as_failed(id).await.unwrap();
+                                    let _ = database.unlock_watermark(id,job_id).await.map_err(|e| anyhow::anyhow!(format!("Failed to unlock watermark: {}", e)));
                                  }
                              }
                              _ => {}
