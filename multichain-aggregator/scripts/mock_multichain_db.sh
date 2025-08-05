@@ -192,10 +192,49 @@ send_tokens() {
   import_batch "$payload" "tokens"
 }
 
+send_counters() {
+  echo "Sending $N counter entries... "
+  
+  for i in $(seq 1 "$N"); do
+    echo -n "  Day $i: "
+    
+    local daily_transactions=$(random_number 1000000)
+    local total_transactions=$((daily_transactions + $(random_number 10000000)))
+    local total_addresses=$(random_number 100000)
+    local days_ago=$(random_number "$N")
+    local timestamp=$(($(date -u +%s) - (days_ago * 86400)))
+    
+    payload=$(jq -n \
+      --arg chain_id "$CHAIN_ID" \
+      --arg api_key "$MULTICHAIN_AGGREGATOR_API_KEY" \
+      --arg timestamp "$timestamp" \
+      --arg daily_transactions_number "$daily_transactions" \
+      --arg total_transactions_number "$total_transactions" \
+      --arg total_addresses_number "$total_addresses" \
+      '{
+        chain_id: $chain_id,
+        counters: {
+          timestamp: $timestamp,
+          global_counters: {
+            daily_transactions_number: $daily_transactions_number,
+            total_transactions_number: $total_transactions_number,
+            total_addresses_number: $total_addresses_number
+          }
+        },
+        api_key: $api_key
+      }'
+    )
+
+    import_batch "$payload" "counters"
+  done
+}
+
 # --- Execute all imports ---
 
-send_addresses
-send_block_ranges
-send_hashes
-send_address_coin_balances
-send_tokens
+# send_addresses
+# send_block_ranges
+# send_hashes
+# send_address_coin_balances
+# send_tokens
+send_counters
+
