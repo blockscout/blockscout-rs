@@ -44,6 +44,8 @@ pub struct Settings {
     pub run_migrations: bool,
     pub blockscout_db_url: Option<String>,
     pub indexer_db_url: Option<String>,
+    /// Url for second db of indexer (currently assumed to be CCTX (cross chain transactions) indexer, see `zetachain-cctx` service)
+    pub second_indexer_db_url: Option<String>,
     /// Blockscout API url.
     ///
     /// Required. To launch without it api use [`Settings::ignore_blockscout_api_absence`].
@@ -62,6 +64,12 @@ pub struct Settings {
     pub enable_all_op_stack: bool,
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
+    /// Enable stats for per-instance CCTX data. Requires `second_indexer_db_url` to be set.
+    /// Currently, charts are for data from `zetachain-cctx` service.
+    ///
+    /// Note: it's not a interop/multichain CCTX stats, therefore it's not compatible with
+    /// `multichain_mode`.
+    pub enable_all_local_cctx: bool,
     /// Enable multichain mode.
     ///
     /// This will run stats service for a multichain explorer.
@@ -135,12 +143,14 @@ impl Default for Settings {
             swagger_path: default_swagger_path(),
             blockscout_db_url: Default::default(),
             indexer_db_url: Default::default(),
+            second_indexer_db_url: Default::default(),
             blockscout_api_url: None,
             ignore_blockscout_api_absence: false,
             disable_internal_transactions: false,
             enable_all_arbitrum: false,
             enable_all_op_stack: false,
             enable_all_eip_7702: false,
+            enable_all_local_cctx: false,
             multichain_mode: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
@@ -305,6 +315,29 @@ pub fn handle_enable_all_eip_7702(
             &[
                 NewEip7702Auths::key().name(),
                 Eip7702AuthsGrowth::key().name(),
+            ],
+            charts,
+            "eip-7702",
+        )
+    }
+}
+
+pub fn handle_enable_all_cctx(
+    multichain_mode: bool,
+    enable_all: bool,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if enable_all {
+        if multichain_mode {
+            panic!(
+                "Multichain mode is not compatible with enabling local cross chain transactions stats"
+            );
+        }
+        enable_charts(
+            &[
+                // TODO: uncomment!
+                // NewCrossChainTxns::key().name(),
+                // CrossChainTxnsGrowth::key().name(),
             ],
             charts,
             "eip-7702",

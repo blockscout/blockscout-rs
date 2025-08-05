@@ -46,6 +46,7 @@ pub struct ReadService {
     db: Arc<DatabaseConnection>,
     indexer: Arc<DatabaseConnection>,
     multichain_mode: bool,
+    second_indexer_db: Option<Arc<DatabaseConnection>>,
     charts: Arc<RuntimeSetup>,
     authorization: Arc<AuthorizationProvider>,
     update_service: Arc<UpdateService>,
@@ -57,6 +58,7 @@ impl ReadService {
         db: Arc<DatabaseConnection>,
         indexer: Arc<DatabaseConnection>,
         multichain_mode: bool,
+        second_indexer_db: Option<Arc<DatabaseConnection>>,
         charts: Arc<RuntimeSetup>,
         update_service: Arc<UpdateService>,
         authorization: Arc<AuthorizationProvider>,
@@ -66,6 +68,7 @@ impl ReadService {
             db,
             indexer,
             multichain_mode,
+            second_indexer_db,
             charts,
             update_service,
             authorization,
@@ -247,6 +250,7 @@ impl ReadService {
                 false,
                 &self.indexer,
                 migrations,
+                self.second_indexer_db.as_deref(),
                 Some(query_time),
             ));
         query_handle

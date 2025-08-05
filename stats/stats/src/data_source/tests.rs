@@ -295,15 +295,13 @@ async fn update_examples() {
     let group = SyncUpdateGroup::new(&mutexes, Arc::new(ExampleUpdateGroup)).unwrap();
     group.create_charts_sync(&db, None, &enabled).await.unwrap();
 
-    let parameters = UpdateParameters {
-        stats_db: &db,
-        is_multichain_mode: false,
-        indexer_db: &blockscout,
-        indexer_applied_migrations: IndexerMigrations::latest(),
-        enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
-        update_time_override: None,
-        force_full: true,
-    };
+    let parameters = UpdateParameters::default_test_parameters(
+        &db,
+        &blockscout,
+        group.enabled_members_with_deps(&enabled),
+        None,
+    )
+    .with_force_full();
     group
         .update_charts_sync(parameters, &enabled)
         .await

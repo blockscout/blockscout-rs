@@ -180,13 +180,9 @@ mod test {
             ])
             .into_connection();
         let time = dt("2023-01-01T00:00:00").and_utc();
-        let cx = UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
-            &db,
-            false,
-            &db,
-            IndexerMigrations::latest(),
-            Some(time),
-        ));
+        let cx = UpdateContext::from_params_now_or_override(
+            UpdateParameters::default_test_query_parameters(&db, &db, Some(time)),
+        );
         assert_eq!(
             TimespanValue {
                 timespan: time.date_naive(),

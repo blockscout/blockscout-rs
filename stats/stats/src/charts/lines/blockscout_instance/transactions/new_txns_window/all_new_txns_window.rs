@@ -65,7 +65,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters},
         query_dispatch::QuerySerialized,
         range::UniversalRange,
         tests::{
@@ -87,15 +87,12 @@ mod tests {
         }
         let current_time = dt("2022-12-01T00:00:00").and_utc();
 
-        let mut parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: NewTxnsWindow::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: false,
-        };
+        let mut parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            NewTxnsWindow::all_dependencies_chart_keys(),
+            Some(current_time),
+        );
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         NewTxnsWindow::update_recursively(&cx).await.unwrap();
         assert_eq!(

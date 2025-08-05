@@ -149,7 +149,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateParameters, types::IndexerMigrations},
+        data_source::{DataSource, UpdateParameters},
         tests::{
             mock_blockscout::fill_many_blocks,
             simple_test::{get_counter, prepare_chart_test, simple_test_counter},
@@ -198,15 +198,13 @@ mod tests {
             total_sum as f64 / limit_block_times as f64
         };
         fill_many_blocks(&blockscout, current_time.naive_utc(), &block_times).await;
-        let mut parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: AverageBlockTime::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: true,
-        };
+        let mut parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            AverageBlockTime::all_dependencies_chart_keys(),
+            Some(current_time),
+        )
+        .with_force_full();
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         AverageBlockTime::update_recursively(&cx).await.unwrap();
         assert_eq!(

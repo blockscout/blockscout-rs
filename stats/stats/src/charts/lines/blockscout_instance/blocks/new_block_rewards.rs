@@ -101,7 +101,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters},
         range::UniversalRange,
         tests::{
             init_db::init_db_all,
@@ -149,16 +149,12 @@ mod tests {
             .unwrap();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        let parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: NewBlockRewardsMonthlyInt::all_dependencies_chart_keys(
-            ),
-            update_time_override: Some(current_time),
-            force_full: false,
-        };
+        let parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            NewBlockRewardsMonthlyInt::all_dependencies_chart_keys(),
+            Some(current_time),
+        );
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         NewBlockRewardsMonthlyInt::update_recursively(&cx)
             .await
