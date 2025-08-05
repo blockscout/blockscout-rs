@@ -1,0 +1,13 @@
+multichain_mode = true
+
+db_url = "postgres://postgres:admin@localhost:5432/stats"
+blockscout_db_url = "postgres://postgres:admin@localhost:9433/multichain_aggregator"
+
+[database]
+create_database = true
+run_migrations = true
+
+[server.http]
+enabled = true
+addr = "0.0.0.0:8050"
+max_body_size = 2097152
