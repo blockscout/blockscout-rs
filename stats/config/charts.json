@@ -54,6 +54,11 @@
             "title": "Total accounts",
             "description": "Number of EOAs that sent at least 1 transaction"
         },
+        "total_builder_accounts": {
+            "enabled": false,
+            "title": "Total builder accounts",
+            "description": "Number of accounts that deployed at least one contract"
+        },
         "total_native_coin_transfers": {
             "title": "Total {{native_coin_symbol}} transfers",
             "description": "Number of transactions with the transfer of the {{native_coin_symbol}}"
@@ -159,7 +164,7 @@
         "new_builder_accounts": {
             "enabled": false,
             "title": "New builder accounts",
-            "description": "Number of newly added accounts"
+            "description": "Number of newly added accounts that deployed at least one contract"
         },
         "builder_accounts_growth": {
             "enabled": false,

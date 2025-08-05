@@ -5,6 +5,7 @@
         "last_new_contracts",
         "last_new_verified_contracts",
         "total_accounts",
+        "total_builder_accounts",
         "total_addresses",
         "total_blocks",
         "total_contracts",

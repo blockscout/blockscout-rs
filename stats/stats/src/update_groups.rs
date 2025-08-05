@@ -321,6 +321,7 @@ construct_update_group!(NewBuilderAccountsGroup {
         BuilderAccountsGrowthWeekly,
         BuilderAccountsGrowthMonthly,
         BuilderAccountsGrowthYearly,
+        TotalBuilderAccounts,
     ],
 });
 
