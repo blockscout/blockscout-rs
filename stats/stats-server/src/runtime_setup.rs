@@ -376,6 +376,7 @@ impl RuntimeSetup {
             Arc::new(TotalTxnsNumberGroup),
             // multichain: groups
             Arc::new(NewTxnsMultichainGroup),
+            Arc::new(NewTxnsMultichainWindowGroup),
         ]
     }
 

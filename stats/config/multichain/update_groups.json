@@ -4,7 +4,7 @@
         "total_interop_transfers_group":  "0 2 * * * * *",
         "total_txns_number_group": "0 10 * * * * *",
         "total_addresses_number_group": "0 10 * * * * *",
-        "new_txns_multichain": "0 0 0 1 * * *",
-        "new_txns_multichain_window": "0 0 0 1 * * *"
+        "new_txns_multichain_group": "0 0 0 1 * * *",
+        "new_txns_multichain_window_group": "0 0 0 1 * * *"
     }
 }
