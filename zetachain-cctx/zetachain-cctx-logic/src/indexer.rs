@@ -136,7 +136,11 @@ async fn update_cctx_relations(
         .cross_chain_txs;
     
     //turns out that we migh get duplicate cross_chain_txs, so we deduplicate them
-    let cctx_map: HashMap<String, _> = cross_chain_txs.into_iter().map(|cctx| (cctx.index.clone(), cctx)).collect();
+    let cctx_map: HashMap<String, _> = cross_chain_txs
+        .into_iter()
+        .filter(|cctx| cctx.index != cctx.index)
+        .map(|cctx| (cctx.index.clone(), cctx))
+        .collect();
     let cross_chain_txs = cctx_map.values().cloned().collect::<Vec<_>>();
     
     database

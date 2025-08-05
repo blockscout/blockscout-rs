@@ -790,7 +790,7 @@ impl ZetachainCctxDatabase {
         Ok(())
     }
 
-    async fn calculate_token_id(&self, cctx: &CrossChainTx) -> anyhow::Result<Option<i32>> {
+    pub async fn calculate_token_id(&self, cctx: &CrossChainTx) -> anyhow::Result<Option<i32>> {
         if cctx.inbound_params.coin_type == models::CoinType::ERC20 {
             let token = TokenEntity::Entity::find()
                 .filter(TokenEntity::Column::Asset.eq(&cctx.inbound_params.asset))
@@ -811,15 +811,13 @@ impl ZetachainCctxDatabase {
             };
 
             let chain_id = chain_id.parse::<i32>().unwrap_or_default();
-
+            let coin_type = zetachain_cctx_entity::sea_orm_active_enums::CoinType::try_from(
+                cctx.inbound_params.coin_type.clone(),
+            )?;
             let token = TokenEntity::Entity::find()
                 .filter(
                     sea_orm::Condition::all()
-                        .add(TokenEntity::Column::CoinType.eq(
-                            zetachain_cctx_entity::sea_orm_active_enums::CoinType::try_from(
-                                cctx.inbound_params.coin_type.clone(),
-                            )?,
-                        ))
+                        .add(TokenEntity::Column::CoinType.eq(coin_type))
                         .add(TokenEntity::Column::ForeignChainId.eq(chain_id)),
                 )
                 .one(self.db.as_ref())
@@ -930,9 +928,12 @@ impl ZetachainCctxDatabase {
             retries_number: ActiveValue::Set(0),
             token_id: ActiveValue::Set(token_id),
             receiver: ActiveValue::Set(Some(cctx.outbound_params[0].receiver.clone())),
-            receiver_chain_id: ActiveValue::Set(
-                Some(cctx.outbound_params[0].receiver_chain_id.clone().parse::<i32>()?),
-            ),
+            receiver_chain_id: ActiveValue::Set(Some(
+                cctx.outbound_params[0]
+                    .receiver_chain_id
+                    .clone()
+                    .parse::<i32>()?,
+            )),
             processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
             zeta_fees: ActiveValue::Set(cctx.zeta_fees),
             relayed_message: ActiveValue::Set(Some(cctx.relayed_message)),
@@ -2106,9 +2107,12 @@ impl ZetachainCctxDatabase {
                 token_id: ActiveValue::Set(token_id),
                 zeta_fees: ActiveValue::Set(cctx.zeta_fees.clone()),
                 receiver: ActiveValue::Set(Some(cctx.outbound_params[0].receiver.clone())),
-                receiver_chain_id: ActiveValue::Set(
-                    Some(cctx.outbound_params[0].receiver_chain_id.clone().parse::<i32>()?),
-                ),
+                receiver_chain_id: ActiveValue::Set(Some(
+                    cctx.outbound_params[0]
+                        .receiver_chain_id
+                        .clone()
+                        .parse::<i32>()?,
+                )),
                 relayed_message: ActiveValue::Set(Some(cctx.relayed_message.clone())),
                 protocol_contract_version: ActiveValue::Set(
                     ProtocolContractVersion::try_from(cctx.protocol_contract_version.clone())
