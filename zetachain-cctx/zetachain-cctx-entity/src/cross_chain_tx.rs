@@ -24,8 +24,8 @@ pub struct Model {
     pub depth: i32,
     pub updated_by: String,
     pub token_id: Option<i32>,
-    pub receiver_chain_id: i32,
-    pub receiver: String,
+    pub receiver_chain_id: Option<i32>,
+    pub receiver: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

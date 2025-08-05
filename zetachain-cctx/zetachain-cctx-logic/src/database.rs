@@ -929,9 +929,9 @@ impl ZetachainCctxDatabase {
             index: ActiveValue::Set(cctx.index),
             retries_number: ActiveValue::Set(0),
             token_id: ActiveValue::Set(token_id),
-            receiver: ActiveValue::Set(cctx.outbound_params[0].receiver.clone()),
+            receiver: ActiveValue::Set(Some(cctx.outbound_params[0].receiver.clone())),
             receiver_chain_id: ActiveValue::Set(
-                cctx.outbound_params[0].receiver_chain_id.clone().parse::<i32>()?,
+                Some(cctx.outbound_params[0].receiver_chain_id.clone().parse::<i32>()?),
             ),
             processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
             zeta_fees: ActiveValue::Set(cctx.zeta_fees),
@@ -2105,9 +2105,9 @@ impl ZetachainCctxDatabase {
                 processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
                 token_id: ActiveValue::Set(token_id),
                 zeta_fees: ActiveValue::Set(cctx.zeta_fees.clone()),
-                receiver: ActiveValue::Set(cctx.outbound_params[0].receiver.clone()),
+                receiver: ActiveValue::Set(Some(cctx.outbound_params[0].receiver.clone())),
                 receiver_chain_id: ActiveValue::Set(
-                    cctx.outbound_params[0].receiver_chain_id.clone().parse::<i32>()?,
+                    Some(cctx.outbound_params[0].receiver_chain_id.clone().parse::<i32>()?),
                 ),
                 relayed_message: ActiveValue::Set(Some(cctx.relayed_message.clone())),
                 protocol_contract_version: ActiveValue::Set(

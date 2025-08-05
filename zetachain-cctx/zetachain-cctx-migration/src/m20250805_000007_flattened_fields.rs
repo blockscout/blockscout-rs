@@ -16,11 +16,11 @@ impl MigrationTrait for Migration {
                     .add_column_if_not_exists(
                         ColumnDef::new("receiver_chain_id")
                             .integer()
-                            .not_null()
+                            .null()
                             .to_owned(),
                     )
                     .add_column_if_not_exists(
-                        ColumnDef::new("receiver").string().not_null().to_owned(),
+                        ColumnDef::new("receiver").string().null().to_owned(),
                     )
                     .to_owned(),
             )

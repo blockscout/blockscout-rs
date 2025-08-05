@@ -1,7 +1,7 @@
 use blockscout_service_launcher::test_database::TestDbGuard;
 use uuid::Uuid;
 use zetachain_cctx_entity::token;
-use zetachain_cctx_logic::{database::ZetachainCctxDatabase, models::PagedCCTXResponse};
+use zetachain_cctx_logic::{database::ZetachainCctxDatabase};
 use migration::sea_orm::TransactionTrait;
 mod helpers;
 
