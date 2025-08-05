@@ -91,11 +91,12 @@ impl AddressSearchConfig<'_> {
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn search_addresses(
     db: &DatabaseConnection,
-    bens_client: &HttpApiClient,
+    bens_client: HttpApiClient,
+    domain_search_cache: Option<&DomainSearchCache>,
     config: AddressSearchConfig<'_>,
     query: String,
     chain_ids: Vec<ChainId>,
@@ -121,10 +122,11 @@ pub async fn search_addresses(
             if let Ok(address) = alloy_primitives::Address::from_str(&query) {
                 (vec![address], None)
             } else if domain_name_with_tld_regex().is_match(&query) {
-                let domains = search_domains(
-                    bens_client,
+                let domains = search_domains_cached(
+                    domain_search_cache,
+                    bens_client.clone(),
                     query.clone(),
-                    bens_protocols,
+                    bens_protocols.map(|p| p.to_vec()),
                     domain_primary_chain_id,
                     bens_domain_lookup_limit,
                     None,
@@ -181,7 +183,7 @@ pub async fn search_addresses(
         .collect::<Result<Vec<_>, _>>()?;
 
     let domain_primary_chain_id = config.domain_primary_chain_id();
-    let addresses = preload_domain_info(bens_client, domain_primary_chain_id, addresses).await;
+    let addresses = preload_domain_info(&bens_client, domain_primary_chain_id, addresses).await;
 
     Ok((addresses, page_token))
 }
@@ -358,9 +360,9 @@ pub async fn search_dapps(
 }
 
 pub async fn search_domains(
-    bens_client: &HttpApiClient,
+    bens_client: HttpApiClient,
     query: String,
-    protocols: Option<&[String]>,
+    protocols: Option<Vec<String>>,
     primary_chain_id: ChainId,
     page_size: u32,
     page_token: Option<String>,
@@ -390,6 +392,39 @@ pub async fn search_domains(
         .collect::<Result<Vec<_>, _>>()?;
 
     let next_page_token = res.next_page_params.map(|p| p.page_token);
+
+    Ok((domains, next_page_token))
+}
+
+pub async fn search_domains_cached(
+    cache: Option<&DomainSearchCache>,
+    bens_client: HttpApiClient,
+    query: String,
+    protocols: Option<Vec<String>>,
+    primary_chain_id: ChainId,
+    page_size: u32,
+    page_token: Option<String>,
+) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
+    let key = format!(
+        "{}:{}:{}:{}:{}",
+        query,
+        protocols.as_ref().map(|p| p.join(",")).unwrap_or_default(),
+        primary_chain_id,
+        page_size,
+        page_token.clone().unwrap_or_default(),
+    );
+    let get = move || {
+        search_domains(
+            bens_client,
+            query.clone(),
+            protocols,
+            primary_chain_id,
+            page_size,
+            page_token,
+        )
+    };
+
+    let (domains, next_page_token) = maybe_cache_lookup!(cache, key, get)?;
 
     Ok((domains, next_page_token))
 }
@@ -426,7 +461,7 @@ pub async fn quick_search(
     Ok(results)
 }
 
-pub type UniformChainSearchCache = CacheHandler<RedisStore, String, Vec<Address>>;
+pub type DomainSearchCache = CacheHandler<RedisStore, String, (Vec<Domain>, Option<String>)>;
 
 pub struct SearchContext<'a> {
     pub db: Arc<ReadWriteRepo>,
@@ -436,7 +471,7 @@ pub struct SearchContext<'a> {
     pub bens_protocols: Option<&'a [String]>,
     pub domain_primary_chain_id: ChainId,
     pub marketplace_enabled_cache: &'a chains::MarketplaceEnabledCache,
-    pub uniform_chain_search_cache: Option<&'a UniformChainSearchCache>,
+    pub domain_search_cache: Option<&'a DomainSearchCache>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -446,7 +481,6 @@ pub enum SearchTerm {
     BlockNumber(alloy_primitives::BlockNumber),
     Dapp(String),
     TokenInfo(String),
-    ContractName(String),
     Domain(String),
 }
 
@@ -582,43 +616,14 @@ impl SearchTerm {
 
                 results.tokens.extend(tokens);
             }
-            SearchTerm::ContractName(query) => {
-                let query = query.clone();
-                let db = Arc::clone(&search_context.db);
-
-                let get_address = || {
-                    let query = query.clone();
-                    async move {
-                        let addresses = addresses::uniform_chain_search(
-                            db.read_db(),
-                            query,
-                            Some(vec![]),
-                            num_active_chains,
-                        )
-                        .await?
-                        .into_iter()
-                        .map(Address::try_from)
-                        .collect::<Result<Vec<_>, _>>()?;
-
-                        Ok::<_, ServiceError>(addresses)
-                    }
-                };
-
-                let addresses = maybe_cache_lookup!(
-                    search_context.uniform_chain_search_cache,
-                    query.clone(),
-                    get_address
-                )?;
-
-                results.addresses.extend(addresses);
-            }
             SearchTerm::Domain(query) => {
-                let (domains, _) = search_domains(
-                    search_context.bens_client,
+                let (domains, _) = search_domains_cached(
+                    search_context.domain_search_cache,
+                    search_context.bens_client.clone(),
                     query,
-                    search_context.bens_protocols,
+                    search_context.bens_protocols.map(|p| p.to_vec()),
                     search_context.domain_primary_chain_id,
-                    QUICK_SEARCH_NUM_ITEMS as u32,
+                    1, // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
                     None,
                 )
                 .await?;
@@ -680,7 +685,6 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
 
     if query.len() >= MIN_QUERY_LENGTH {
         terms.push(SearchTerm::TokenInfo(query.to_string()));
-        terms.push(SearchTerm::ContractName(query.to_string()));
         terms.push(SearchTerm::Domain(query.to_string()));
     }
 
@@ -721,7 +725,6 @@ mod tests {
             parse_search_terms("0x00"),
             vec![
                 SearchTerm::TokenInfo("0x00".to_string()),
-                SearchTerm::ContractName("0x00".to_string()),
                 SearchTerm::Domain("0x00".to_string()),
                 SearchTerm::Dapp("0x00".to_string()),
             ]
@@ -732,7 +735,6 @@ mod tests {
             vec![
                 SearchTerm::BlockNumber(1234),
                 SearchTerm::TokenInfo("1234".to_string()),
-                SearchTerm::ContractName("1234".to_string()),
                 SearchTerm::Domain("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
             ]
@@ -742,7 +744,6 @@ mod tests {
             parse_search_terms("test.domain"),
             vec![
                 SearchTerm::TokenInfo("test.domain".to_string()),
-                SearchTerm::ContractName("test.domain".to_string()),
                 SearchTerm::Domain("test.domain".to_string()),
                 SearchTerm::Dapp("test.domain".to_string()),
             ]

@@ -12,7 +12,7 @@ use multichain_aggregator_logic::{
     services::{
         api_key_manager::ApiKeyManager,
         chains, import,
-        search::{self, SearchContext, UniformChainSearchCache},
+        search::{self, DomainSearchCache, SearchContext},
     },
     types,
 };
@@ -31,7 +31,7 @@ pub struct MultichainAggregator {
     domain_primary_chain_id: types::ChainId,
     marketplace_enabled_cache: chains::MarketplaceEnabledCache,
     channel_broadcaster: ChannelBroadcaster,
-    uniform_chain_search_cache: Option<UniformChainSearchCache>,
+    domain_search_cache: Option<DomainSearchCache>,
 }
 
 impl MultichainAggregator {
@@ -47,7 +47,7 @@ impl MultichainAggregator {
         domain_primary_chain_id: types::ChainId,
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
         channel_broadcaster: ChannelBroadcaster,
-        uniform_chain_search_cache: Option<UniformChainSearchCache>,
+        domain_search_cache: Option<DomainSearchCache>,
     ) -> Self {
         Self {
             api_key_manager: ApiKeyManager::new(repo.main_db().clone()),
@@ -61,7 +61,7 @@ impl MultichainAggregator {
             domain_primary_chain_id,
             marketplace_enabled_cache,
             channel_broadcaster,
-            uniform_chain_search_cache,
+            domain_search_cache,
         }
     }
 
@@ -171,7 +171,8 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
-            &self.bens_client,
+            self.bens_client.clone(),
+            self.domain_search_cache.as_ref(),
             search::AddressSearchConfig::GeneralSearch {
                 bens_protocols: self.bens_protocols.as_deref(),
                 domain_primary_chain_id: self.domain_primary_chain_id,
@@ -214,7 +215,8 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
-            &self.bens_client,
+            self.bens_client.clone(),
+            None, // domain cache is not needed for nft search
             search::AddressSearchConfig::NFTSearch {
                 domain_primary_chain_id: self.domain_primary_chain_id,
             },
@@ -362,7 +364,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             bens_protocols: self.bens_protocols.as_deref(),
             domain_primary_chain_id: self.domain_primary_chain_id,
             marketplace_enabled_cache: &self.marketplace_enabled_cache,
-            uniform_chain_search_cache: self.uniform_chain_search_cache.as_ref(),
+            domain_search_cache: self.domain_search_cache.as_ref(),
         };
 
         let results = search::quick_search(inner.q, &self.quick_search_chains, &context)
@@ -496,10 +498,11 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let page_size = self.normalize_page_size(inner.page_size);
 
-        let (domains, next_page_token) = search::search_domains(
-            &self.bens_client,
+        let (domains, next_page_token) = search::search_domains_cached(
+            self.domain_search_cache.as_ref(),
+            self.bens_client.clone(),
             inner.q,
-            self.bens_protocols.as_deref(),
+            self.bens_protocols.as_deref().map(|p| p.to_vec()),
             self.domain_primary_chain_id,
             page_size,
             inner.page_token,

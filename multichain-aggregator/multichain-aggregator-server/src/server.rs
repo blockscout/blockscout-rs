@@ -22,7 +22,7 @@ use multichain_aggregator_logic::{
         chains::{MarketplaceEnabledCache, fetch_and_upsert_blockscout_chains},
         channel::Channel,
         cluster::Cluster,
-        search::UniformChainSearchCache,
+        search::DomainSearchCache,
     },
 };
 use recache::stores::redis::RedisStore;
@@ -99,19 +99,19 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let channel = Arc::new(ChannelCentral::new(Channel));
 
-    let uniform_chain_search_cache = if let Some(cache_settings) = settings.cache {
-        let cache_name = "uniform_chain_search";
+    let domain_search_cache = if let Some(cache_settings) = settings.cache {
+        let cache_name = "domain_search";
         let redis_cache = RedisStore::builder()
             .connection_string(cache_settings.redis.url.to_string())
             .reconnect_retry_factor(2)
             .reconnect_max_delay(Duration::from_secs(30))
-            .prefix(format!("multichain_aggregator:{cache_name}"))
+            .prefix(format!("multichain:{cache_name}"))
             .build()
             .await?;
 
-        let cache_handler = UniformChainSearchCache::builder(Arc::new(redis_cache))
-            .default_ttl(cache_settings.uniform_chain_search_cache.ttl)
-            .maybe_default_refresh_ahead(cache_settings.uniform_chain_search_cache.refresh_ahead)
+        let cache_handler = DomainSearchCache::builder(Arc::new(redis_cache))
+            .default_ttl(cache_settings.domain_search_cache.ttl)
+            .maybe_default_refresh_ahead(cache_settings.domain_search_cache.refresh_ahead)
             .on_hit(Arc::new(|_, _| {
                 metrics::CACHE_HIT_TOTAL
                     .with_label_values(&[cache_name])
@@ -165,7 +165,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.domain_primary_chain_id,
         marketplace_enabled_cache,
         channel.channel_broadcaster(),
-        uniform_chain_search_cache,
+        domain_search_cache,
     ));
 
     let router = Router {
