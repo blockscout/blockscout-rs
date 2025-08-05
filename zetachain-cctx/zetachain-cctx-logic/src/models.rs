@@ -17,7 +17,7 @@ pub struct CCTXResponse {
     pub cross_chain_tx: CrossChainTx,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum CoinType {
     Zeta,
     Gas,
@@ -56,7 +56,7 @@ impl Display for CoinType {
 }
 
 impl TryFrom<CoinType> for DbCoinType {
-    type Error = String;
+    type Error = anyhow::Error;
     fn try_from(value: CoinType) -> Result<Self, Self::Error> {
         match value {
             CoinType::Zeta => Ok(DbCoinType::Zeta),

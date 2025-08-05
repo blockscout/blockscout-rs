@@ -1,16 +1,13 @@
-
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::Utc;
+use sea_orm::TransactionTrait;
 use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 use uuid::Uuid;
 use zetachain_cctx_entity::{
     cctx_status, cross_chain_tx,
     sea_orm_active_enums::{CctxStatusStatus, ProcessingStatus, ProtocolContractVersion},
 };
-use sea_orm::TransactionTrait;
-use zetachain_cctx_logic::{
-    database::ZetachainCctxDatabase
-};
+use zetachain_cctx_logic::database::ZetachainCctxDatabase;
 mod helpers;
 
 // Helper that creates a brand-new temporary database, runs migrations and returns the guard
@@ -19,13 +16,11 @@ async fn init_db(test_name: &str) -> TestDbGuard {
     TestDbGuard::new::<migration::Migrator>(&db_name).await
 }
 
-
-
 #[tokio::test]
 async fn test_traverse_and_update_tree_relationships() {
     let db = init_db("tree_relationships").await;
     let db_conn = db.client();
-    let database = ZetachainCctxDatabase::new(db_conn.clone());
+    let database = ZetachainCctxDatabase::new(db_conn.clone(), 7001);
 
     // Insert ROOT CCTX (has no parent/root links yet)
     let root_index = "root";
@@ -35,6 +30,9 @@ async fn test_traverse_and_update_tree_relationships() {
         index: ActiveValue::Set(root_index.into()),
         zeta_fees: ActiveValue::Set("0".into()),
         retries_number: ActiveValue::Set(0),
+        token_id: ActiveValue::Set(None),
+        receiver: ActiveValue::Set("0xdeadbeef".to_string()),
+        receiver_chain_id: ActiveValue::Set(111555111),
         processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
         relayed_message: ActiveValue::Set(Some("msg".into())),
         last_status_update_timestamp: ActiveValue::Set(Utc::now().naive_utc()),
@@ -44,7 +42,10 @@ async fn test_traverse_and_update_tree_relationships() {
         depth: ActiveValue::Set(0),
         updated_by: ActiveValue::Set("test".into()),
     };
-    let insert_res = cross_chain_tx::Entity::insert(root_tx).exec(db_conn.as_ref()).await.unwrap();
+    let insert_res = cross_chain_tx::Entity::insert(root_tx)
+        .exec(db_conn.as_ref())
+        .await
+        .unwrap();
     let root_id = insert_res.last_insert_id;
 
     // Status row for root (OutboundMined so that the function marks processed)
@@ -140,4 +141,4 @@ async fn test_traverse_and_update_tree_relationships() {
 
     // Root link should point to ROOT after traversal
     assert_eq!(updated_grandchild.root_id, Some(root_id));
-} 
+}

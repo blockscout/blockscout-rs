@@ -1,0 +1,49 @@
+# Migration Dockerfile - Lightweight image for running database migrations
+FROM rust:1.75-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy only the migration-related files
+COPY zetachain-cctx-migration/ ./zetachain-cctx-migration/
+COPY zetachain-cctx-entity/ ./zetachain-cctx-entity/
+COPY zetachain-cctx-logic/ ./zetachain-cctx-logic/
+COPY Cargo.toml Cargo.lock ./
+
+# Build the migration binary
+RUN cargo build --release --bin zetachain-cctx-migration
+
+# Create a minimal runtime image
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user
+RUN groupadd -r app && useradd -r -g app app
+
+# Set working directory
+WORKDIR /app
+
+# Copy the built binary
+COPY --from=builder /app/target/release/zetachain-cctx-migration /app/zetachain-cctx-migration
+
+# Change ownership
+RUN chown -R app:app /app
+
+# Switch to app user
+USER app
+
+# Default command
+CMD ["./zetachain-cctx-migration"] 

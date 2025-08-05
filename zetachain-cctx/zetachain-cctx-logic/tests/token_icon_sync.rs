@@ -46,18 +46,18 @@ async fn test_icon_url_synced() {
     let blockscout_server = MockServer::start().await;
 
     // Mock token list response
-    Mock::given(method("GET")).and(path("/fungible/foreign_coins"))
+    Mock::given(method("GET")).and(path("/zeta-chain/fungible/foreign_coins"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response()))
         .mount(&api_server).await;
 
     // Mock cctx endpoints to noop
-    Mock::given(method("GET")).and(path("/crosschain/cctx"))
+    Mock::given(method("GET")).and(path("/zeta-chain/crosschain/cctx"))
         .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
         .mount(&api_server).await;
-    Mock::given(method("GET")).and(path_regex(r"/crosschain/cctx/.+"))
+    Mock::given(method("GET")).and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
         .respond_with(ResponseTemplate::new(200).set_body_json(helpers::dummy_cross_chain_tx("dummy", "OutboundMined")))
         .mount(&api_server).await;
-    Mock::given(method("GET")).and(path_regex(r"/crosschain/inboundHashToCctxData/.+"))
+    Mock::given(method("GET")).and(path_regex(r"/zeta-chain/crosschain/inboundHashToCctxData/.+"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"CrossChainTxs": []})))
         .mount(&api_server).await;
 
@@ -73,7 +73,7 @@ async fn test_icon_url_synced() {
         ..Default::default()
     });
 
-    let database = ZetachainCctxDatabase::new(db.client());
+    let database = ZetachainCctxDatabase::new(db.client(),7001);
     database.setup_db().await.unwrap();
 
     let indexer = Indexer::new(

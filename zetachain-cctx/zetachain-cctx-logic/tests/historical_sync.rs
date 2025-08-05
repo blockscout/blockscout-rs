@@ -2,11 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 mod helpers;
 
-
-
 use pretty_assertions::assert_eq;
-use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 use sea_orm::PaginatorTrait;
+use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
 use uuid::Uuid;
 use wiremock::matchers::path_regex;
@@ -18,6 +16,7 @@ use wiremock::{
 use zetachain_cctx_entity::cctx_status::{Column as CctxStatusColumn, Entity as CctxStatusEntity};
 use zetachain_cctx_entity::{inbound_params, outbound_params, revert_options};
 
+use zetachain_cctx_entity::cctx_status;
 use zetachain_cctx_entity::sea_orm_active_enums::ProcessingStatus;
 use zetachain_cctx_entity::{cross_chain_tx, sea_orm_active_enums::Kind, watermark};
 use zetachain_cctx_logic::client::{Client, RpcSettings};
@@ -25,7 +24,6 @@ use zetachain_cctx_logic::database::ZetachainCctxDatabase;
 use zetachain_cctx_logic::events::NoOpBroadcaster;
 use zetachain_cctx_logic::indexer::Indexer;
 use zetachain_cctx_logic::settings::IndexerSettings;
-use zetachain_cctx_entity::cctx_status;
 #[tokio::test]
 async fn test_historical_sync_updates_pointer() {
     //if env var TRACING=true then call init_tests_logs()
@@ -40,7 +38,7 @@ async fn test_historical_sync_updates_pointer() {
     // Mock responses for different pagination scenarios
     // Mock first page response (default case)
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "true"))
         .and(query_param("pagination.key", "MH=="))
         .respond_with(ResponseTemplate::new(200).set_body_json(
@@ -54,7 +52,7 @@ async fn test_historical_sync_updates_pointer() {
 
     // Mock second page response when pagination.key == "SECOND_PAGE"
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "true"))
         .and(query_param("pagination.key", "SECOND_PAGE"))
         .respond_with(ResponseTemplate::new(200).set_body_json(
@@ -68,18 +66,21 @@ async fn test_historical_sync_updates_pointer() {
 
     // Mock third page response when pagination.key == "THIRD_PAGE"
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "true"))
         .and(query_param("pagination.key", "THIRD_PAGE"))
         .respond_with(ResponseTemplate::new(200).set_body_json(
-            helpers::dummy_cctx_with_pagination_response(&["page_3_index_1", "page_3_index_2"], "end"),
+            helpers::dummy_cctx_with_pagination_response(
+                &["page_3_index_1", "page_3_index_2"],
+                "end",
+            ),
         ))
         .mount(&mock_server)
         .await;
 
     // Mock third page response when pagination.key == "THIRD_PAGE"
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "true"))
         .and(query_param("pagination.key", "end"))
         .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
@@ -88,23 +89,27 @@ async fn test_historical_sync_updates_pointer() {
 
     // Mock realtime fetch response (unordered=false)
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "false"))
         .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
         .mount(&mock_server)
         .await;
 
     Mock::given(method("GET"))
-        .and(path_regex(r"/crosschain/cctx/.+"))
+        .and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(helpers::dummy_cross_chain_tx("dummy_index", "OutboundMined")),
+            ResponseTemplate::new(200).set_body_json(helpers::dummy_cross_chain_tx(
+                "dummy_index",
+                "OutboundMined",
+            )),
         )
         .mount(&mock_server)
         .await;
 
     Mock::given(method("GET"))
-        .and(path_regex(r"/inboundHashToCctxData/.+"))
+        .and(path_regex(
+            r"/zeta-chain/crosschain/inboundHashToCctxData/.+",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!(
             {"CrossChainTxs": []}
         )))
@@ -120,7 +125,6 @@ async fn test_historical_sync_updates_pointer() {
 
     // Initialize database with historical watermark
     let db_conn = db.client();
-
 
     let watermark_model = watermark::ActiveModel {
         id: ActiveValue::NotSet,
@@ -138,7 +142,7 @@ async fn test_historical_sync_updates_pointer() {
         .await
         .unwrap();
 
-    let broadcaster = Arc::new(NoOpBroadcaster{});
+    let broadcaster = Arc::new(NoOpBroadcaster {});
     // Create indexer
     let indexer = Indexer::new(
         IndexerSettings {
@@ -148,7 +152,7 @@ async fn test_historical_sync_updates_pointer() {
             ..Default::default()
         },
         Arc::new(client),
-        Arc::new(ZetachainCctxDatabase::new(db_conn.clone())),
+        Arc::new(ZetachainCctxDatabase::new(db_conn.clone(), 7001)),
         broadcaster,
     );
 
@@ -190,13 +194,18 @@ async fn test_historical_sync_updates_pointer() {
         .await
         .unwrap();
 
-
-
     // We expect 6 total CCTX records (2 from each page)
     assert_eq!(cctx_count, 6);
 
     // // Verify specific CCTX records exist
-    for index in ["page_1_index_1", "page_1_index_2", "page_2_index_1", "page_2_index_2", "page_3_index_1", "page_3_index_2"] {
+    for index in [
+        "page_1_index_1",
+        "page_1_index_2",
+        "page_2_index_1",
+        "page_2_index_2",
+        "page_3_index_1",
+        "page_3_index_2",
+    ] {
         let cctx = cross_chain_tx::Entity::find()
             .filter(cross_chain_tx::Column::Index.eq(index))
             .one(db_conn.as_ref())
@@ -210,13 +219,21 @@ async fn test_historical_sync_updates_pointer() {
             .one(db_conn.as_ref())
             .await
             .unwrap();
-        assert!(inbound.is_some(), "inbound params not found for cctx: {}", index);
+        assert!(
+            inbound.is_some(),
+            "inbound params not found for cctx: {}",
+            index
+        );
         let outbound = outbound_params::Entity::find()
             .filter(outbound_params::Column::CrossChainTxId.eq(cctx_id))
             .one(db_conn.as_ref())
             .await
             .unwrap();
-        assert!(outbound.is_some(), "outbound params not found for cctx: {}", index);
+        assert!(
+            outbound.is_some(),
+            "outbound params not found for cctx: {}",
+            index
+        );
         let status = CctxStatusEntity::find()
             .filter(CctxStatusColumn::CrossChainTxId.eq(cctx_id))
             .one(db_conn.as_ref())
@@ -231,32 +248,30 @@ async fn test_historical_sync_updates_pointer() {
         assert!(revert.is_some());
     }
 
-
     let (_, status) = cross_chain_tx::Entity::find()
-    .find_also_related(cctx_status::Entity)
-    .filter(cross_chain_tx::Column::Index.eq("page_3_index_2"))
-    .one(db_conn.as_ref())
-    .await.unwrap().unwrap();
+        .find_also_related(cctx_status::Entity)
+        .filter(cross_chain_tx::Column::Index.eq("page_3_index_2"))
+        .one(db_conn.as_ref())
+        .await
+        .unwrap()
+        .unwrap();
 
     let status = status.unwrap();
 
     let watermark_timestamp = final_watermark.upper_bound_timestamp.unwrap();
 
     assert_eq!(status.last_update_timestamp, watermark_timestamp);
-
-
 }
 
 #[tokio::test]
-async fn test_database_processes_one_off_watermark(){
-    
+async fn test_database_processes_one_off_watermark() {
     let db = crate::helpers::init_db("test", "test_database_processes_one_off_watermark").await;
     let db_conn = db.client();
 
-    let database = ZetachainCctxDatabase::new(db_conn.clone());
+    let database = ZetachainCctxDatabase::new(db_conn.clone(), 7001);
 
-      //default historic stream with watermark ID = 1
-      let default_historic_watermark = watermark::ActiveModel {
+    //default historic stream with watermark ID = 1
+    let default_historic_watermark = watermark::ActiveModel {
         id: ActiveValue::NotSet,
         kind: ActiveValue::Set(Kind::Historical),
         pointer: ActiveValue::Set("MH==".to_string()), // Start from beginning
@@ -292,10 +307,18 @@ async fn test_database_processes_one_off_watermark(){
 
     assert_eq!(one_off_watermark.id, 2);
 
-
-    let imported = database.import_cctxs(Uuid::new_v4(), vec![
-        helpers::dummy_cross_chain_tx("dummy_index", "OutboundMined")
-    ], "ONE_OFF", one_off_watermark.id).await.unwrap();
+    let imported = database
+        .import_cctxs(
+            Uuid::new_v4(),
+            vec![helpers::dummy_cross_chain_tx(
+                "dummy_index",
+                "OutboundMined",
+            )],
+            "ONE_OFF",
+            one_off_watermark.id,
+        )
+        .await
+        .unwrap();
 
     assert_eq!(imported.len(), 1);
     assert_eq!(imported[0].index, "dummy_index");
@@ -309,11 +332,12 @@ async fn test_database_processes_one_off_watermark(){
     assert_eq!(watermark.processing_status, ProcessingStatus::Done);
 }
 #[tokio::test]
-async fn one_off_historical_watermark_is_processed(){
-
+async fn one_off_historical_watermark_is_processed() {
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
+        helpers::init_tests_logs().await;
+    }
     let db = crate::helpers::init_db("test", "one_off_historical_watermark_is_processed").await;
     let db_conn = db.client();
-    
 
     //default historic stream with watermark ID = 1
     let default_historic_watermark = watermark::ActiveModel {
@@ -348,52 +372,61 @@ async fn one_off_historical_watermark_is_processed(){
         .await
         .unwrap();
 
-
     let mock_server = MockServer::start().await;
 
     Mock::given(method("GET"))
         .and(path_regex(r"/crosschain/cctx/.+"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(helpers::dummy_cross_chain_tx("dummy_index", "OutboundMined")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(helpers::dummy_cross_chain_tx(
+                "dummy_index",
+                "OutboundMined",
+            )),
+        )
         .mount(&mock_server)
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "true"))
         .and(query_param("pagination.key", "ONE_OFF"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(helpers::dummy_cctx_with_pagination_response(
-            &["one_off_index_1", "one_off_index_2"],
-            "MUST_NOT_BE_REACHED",
-        )))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            helpers::dummy_cctx_with_pagination_response(
+                &["one_off_index_1", "one_off_index_2"],
+                "MUST_NOT_BE_REACHED",
+            ),
+        ))
         .mount(&mock_server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "true"))
         .and(query_param("pagination.key", "MH=="))
         .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
         .mount(&mock_server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "false"))
         .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
         .mount(&mock_server)
         .await;
 
     fn create_error(_: &wiremock::Request) -> std::io::Error {
-        std::io::Error::new(std::io::ErrorKind::ConnectionReset, "one off watermarks must not be moved and produce additional requests")
+        std::io::Error::new(
+            std::io::ErrorKind::ConnectionReset,
+            "one off watermarks must not be moved and produce additional requests",
+        )
     }
 
     // one-off watermark must be marked as done and do not lead to additional requests
     Mock::given(method("GET"))
-    .and(path("/crosschain/cctx"))
-    .and(query_param("unordered", "true"))
-    .and(query_param("pagination.key", "MUST_NOT_BE_REACHED"))
-    .respond_with_err(create_error)
-    .expect(0)
-    .mount(&mock_server)
-    .await;
+        .and(path("/zeta-chain/crosschain/cctx"))
+        .and(query_param("unordered", "true"))
+        .and(query_param("pagination.key", "MUST_NOT_BE_REACHED"))
+        .respond_with_err(create_error)
+        .expect(0)
+        .mount(&mock_server)
+        .await;
 
     let client = Client::new(RpcSettings {
         url: mock_server.uri().to_string(),
@@ -409,7 +442,7 @@ async fn one_off_historical_watermark_is_processed(){
             ..Default::default()
         },
         Arc::new(client),
-        Arc::new(ZetachainCctxDatabase::new(db_conn.clone())),
+        Arc::new(ZetachainCctxDatabase::new(db_conn.clone(), 7001)),
         Arc::new(NoOpBroadcaster {}),
     );
 
@@ -420,7 +453,7 @@ async fn one_off_historical_watermark_is_processed(){
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
     indexer_handle.abort();
-    
+
     let watermark = watermark::Entity::find()
         .filter(watermark::Column::Id.eq(one_off_watermark.id))
         .one(db_conn.as_ref())

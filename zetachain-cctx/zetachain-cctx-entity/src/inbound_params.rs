@@ -18,7 +18,6 @@ pub struct Model {
     pub coin_type: CoinType,
     pub asset: Option<String>,
     pub amount: String,
-    #[sea_orm(unique)]
     pub observed_hash: String,
     pub observed_external_height: i64,
     #[sea_orm(unique)]

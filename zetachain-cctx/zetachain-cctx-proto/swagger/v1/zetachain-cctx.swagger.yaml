@@ -389,8 +389,8 @@ definitions:
         type: string
         title: this address is the immediate contract/EOA that calls
       sender_chain_id:
-        type: string
-        format: int64
+        type: integer
+        format: int32
         title: the Connector.send()
       tx_origin:
         type: string

@@ -23,6 +23,9 @@ pub struct Model {
     pub parent_id: Option<i32>,
     pub depth: i32,
     pub updated_by: String,
+    pub token_id: Option<i32>,
+    pub receiver_chain_id: i32,
+    pub receiver: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -51,6 +54,14 @@ pub enum Relation {
     OutboundParams,
     #[sea_orm(has_one = "super::revert_options::Entity")]
     RevertOptions,
+    #[sea_orm(
+        belongs_to = "super::token::Entity",
+        from = "Column::TokenId",
+        to = "super::token::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
+    Token,
 }
 
 impl Related<super::cctx_status::Entity> for Entity {
@@ -74,6 +85,12 @@ impl Related<super::outbound_params::Entity> for Entity {
 impl Related<super::revert_options::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::RevertOptions.def()
+    }
+}
+
+impl Related<super::token::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Token.def()
     }
 }
 

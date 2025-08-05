@@ -7,7 +7,6 @@ use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Direction;
 use crate::helpers::*;
 use uuid::Uuid;
 
-
 #[tokio::test]
 async fn query_cctxs_with_filters() {
 
@@ -27,11 +26,47 @@ async fn query_cctxs_with_filters() {
 
     let mut dummy_cctx_1 = dummy_cross_chain_tx("dummy_cctx_1", "PendingInbound");
     dummy_cctx_1.inbound_params.sender = "0x1234567890123456789012345678901234567890".to_string();
+    dummy_cctx_1.inbound_params.sender_chain_id = "1".to_string();
 
-    let dummy_cctx_2 = dummy_cross_chain_tx("dummy_cctx_2", "OutboundMined");
-    
 
-    let database = ZetachainCctxDatabase::new(db.client());
+    let token_eth = Token{
+        name: "dummy_token_1".to_string(),
+        symbol: "ETH".to_string(),
+        asset: "".to_string(),
+        foreign_chain_id: "1".to_string(),
+        coin_type: CoinType::Gas,
+        decimals: 18,
+        gas_limit: "1000000000000000000".to_string(),
+        paused: false,
+        liquidity_cap: "1000000000000000000".to_string(),
+        icon_url: Some("https://example.com/icon.png".to_string()),
+        zrc20_contract_address: Uuid::new_v4().to_string(),
+    };
+
+
+    let token_usdc = Token{
+        name: "dummy_token_2".to_string(),
+        symbol: "USDC".to_string(),
+        asset: Uuid::new_v4().to_string(),
+        foreign_chain_id: "2".to_string(),
+        coin_type: CoinType::ERC20,
+        decimals: 18,
+        gas_limit: "1000000000000000000".to_string(),
+        paused: false,
+        liquidity_cap: "1000000000000000000".to_string(),
+        icon_url: Some("https://example.com/icon.png".to_string()),
+        zrc20_contract_address: Uuid::new_v4().to_string(),
+    };
+
+    let database = ZetachainCctxDatabase::new(db.client(),7001);
+    database.sync_tokens(Uuid::new_v4(), vec![token_eth.clone(), token_usdc.clone()]).await.unwrap();    
+
+    let mut dummy_cctx_2 = dummy_cross_chain_tx("dummy_cctx_2", "OutboundMined");
+    dummy_cctx_2.inbound_params.asset = token_usdc.asset.clone();
+    dummy_cctx_2.inbound_params.coin_type = token_usdc.coin_type;
+    dummy_cctx_2.inbound_params.sender_chain_id = token_usdc.foreign_chain_id.clone();
+
+    let database = ZetachainCctxDatabase::new(db.client(),7001);
     let tx = db.client().begin().await.unwrap();
     database.batch_insert_transactions(Uuid::new_v4(), &vec![dummy_cctx_1, dummy_cctx_2], &tx).await.unwrap();
     tx.commit().await.unwrap();
@@ -106,7 +141,7 @@ async fn query_cctxs_with_token_symbol_filter() {
     let eth = dummy_token("dummy_token_1", "ETH", None, "1", CoinType::Gas);
     let usdc = dummy_token("dummy_token_2", "USDC", Some(Uuid::new_v4().to_string()), "2", CoinType::ERC20);
 
-    let database = ZetachainCctxDatabase::new(db.client());
+    let database = ZetachainCctxDatabase::new(db.client(),7001);
     
     database.sync_tokens(Uuid::new_v4(), vec![eth.clone(), usdc.clone()]).await.unwrap();
     
@@ -120,7 +155,7 @@ async fn query_cctxs_with_token_symbol_filter() {
     dummy_cctx_2.inbound_params.asset = usdc.asset.clone();
     dummy_cctx_2.inbound_params.coin_type = usdc.coin_type;
 
-    let database = ZetachainCctxDatabase::new(db.client());
+    let database = ZetachainCctxDatabase::new(db.client(),7001);
     let tx = db.client().begin().await.unwrap();
     database.batch_insert_transactions(Uuid::new_v4(), &vec![dummy_cctx_1, dummy_cctx_2], &tx).await.unwrap();
     tx.commit().await.unwrap();

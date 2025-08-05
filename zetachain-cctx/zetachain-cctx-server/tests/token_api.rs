@@ -82,7 +82,7 @@ async fn test_token_database_sync_and_query() {
     let db_conn = db.client();
 
     // Create database instance
-    let database = Arc::new(ZetachainCctxDatabase::new(db_conn.clone()));
+    let database = Arc::new(ZetachainCctxDatabase::new(db_conn.clone(),7001));
 
     // Create test tokens using the models
     let tokens = vec![

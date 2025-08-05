@@ -113,7 +113,7 @@ enum InboundStatus {
 message InboundParams {
   string sender = 1; // this address is the immediate contract/EOA that calls
   // the Connector.send()
-  int64 sender_chain_id = 2;
+  int32 sender_chain_id = 2;
   string tx_origin = 3; // this address is the EOA that signs the inbound tx
   CoinType coin_type = 4;
   string asset =

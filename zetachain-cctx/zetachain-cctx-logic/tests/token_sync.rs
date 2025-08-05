@@ -70,13 +70,13 @@ async fn test_token_sync_stream_works() {
 
     // Mock empty responses for CCTX endpoints to suppress other streams
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
         .mount(&mock_server)
         .await;
 
     Mock::given(method("GET"))
-        .and(path_regex(r"/crosschain/cctx/.+"))
+        .and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(helpers::dummy_cross_chain_tx("dummy_index", "OutboundMined")),
@@ -85,7 +85,7 @@ async fn test_token_sync_stream_works() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path_regex(r"/crosschain/inboundHashToCctxData/.+"))
+        .and(path_regex(r"/zeta-chain/crosschain/inboundHashToCctxData/.+"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!(
             {"CrossChainTxs": []}
         )))
@@ -94,7 +94,7 @@ async fn test_token_sync_stream_works() {
 
     // Mock token response with test data
     Mock::given(method("GET"))
-        .and(path("/fungible/foreign_coins"))
+        .and(path("/zeta-chain/fungible/foreign_coins"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
             &[
                 (
@@ -164,7 +164,7 @@ async fn test_token_sync_stream_works() {
             ..Default::default()
         },
         Arc::new(client),
-        Arc::new(ZetachainCctxDatabase::new(db_conn.clone())),
+        Arc::new(ZetachainCctxDatabase::new(db_conn.clone(),7001)),
         Arc::new(NoOpBroadcaster{}),
     );
 
@@ -233,7 +233,7 @@ async fn test_token_sync_pagination() {
     }
     let db = crate::helpers::init_db("test", "token_sync_pagination").await;
 
-    let database = ZetachainCctxDatabase::new(db.client());
+    let database = ZetachainCctxDatabase::new(db.client(),7001);
     database.setup_db().await.unwrap();
 
     // Setup mock server
@@ -268,7 +268,7 @@ async fn test_token_sync_pagination() {
 
     // Mock second page of tokens (with pagination key)
     Mock::given(method("GET"))
-        .and(path("/fungible/foreign_coins"))
+        .and(path("/zeta-chain/fungible/foreign_coins"))
         .and(query_param("pagination.limit", "100"))
         .and(query_param("pagination.key", "page2key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
@@ -292,7 +292,7 @@ async fn test_token_sync_pagination() {
         .await;
     // Mock third page of tokens (final page)
     Mock::given(method("GET"))
-        .and(path("/fungible/foreign_coins"))
+        .and(path("/zeta-chain/fungible/foreign_coins"))
         .and(query_param("pagination.limit", "100"))
         .and(query_param("pagination.key", "page3key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
@@ -315,7 +315,7 @@ async fn test_token_sync_pagination() {
         .mount(&mock_server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/fungible/foreign_coins"))
+        .and(path("/zeta-chain/fungible/foreign_coins"))
         .and(query_param("pagination.limit", "100"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
             &[
@@ -371,7 +371,7 @@ async fn test_token_sync_pagination() {
             ..Default::default()
         },
         Arc::new(client),
-        Arc::new(ZetachainCctxDatabase::new(db_conn.clone())),
+        Arc::new(ZetachainCctxDatabase::new(db_conn.clone(),7001)),
         Arc::new(NoOpBroadcaster{}),
     );
 

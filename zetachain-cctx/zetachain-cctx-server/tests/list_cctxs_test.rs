@@ -35,13 +35,36 @@ async fn test_list_cctxs_endpoint() {
     )
     .await;
 
+    let token = zetachain_cctx_logic::models::Token{
+        name: "dummy_token_1".to_string(),
+        symbol: "DUMMY".to_string(),
+        asset: "0x0000000000000000000000000000000000000001".to_string(),
+        foreign_chain_id: "7001".to_string(),
+        coin_type: CoinType::ERC20,
+        decimals: 18,
+        gas_limit: "1000000000000000000".to_string(),
+        paused: false,
+        liquidity_cap: "1000000000000000000".to_string(),
+        icon_url: None,
+        zrc20_contract_address: Uuid::new_v4().to_string(),
+    };
+
+    
+
     let dummy_cctxs: Vec<CrossChainTx> = vec!["test_list_cctxs_endpoint_1"]
         .iter()
-        .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingOutbound"))
+        .map(|x| {
+            let mut cctx = crate::helpers::dummy_cross_chain_tx(x, "PendingOutbound");
+            cctx.inbound_params.asset = token.asset.clone();
+            cctx.inbound_params.coin_type = token.coin_type.clone();
+            cctx.inbound_params.sender_chain_id = token.foreign_chain_id.clone();
+            cctx
+        })
         .collect();
 
-    let database = ZetachainCctxDatabase::new(db.client());
+    let database = ZetachainCctxDatabase::new(db.client(),7001);
 
+    database.sync_tokens(Uuid::new_v4(), vec![token]).await.unwrap();
     let tx = db.client().begin().await.unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &dummy_cctxs, &tx)
@@ -63,7 +86,7 @@ async fn test_list_cctxs_endpoint() {
     assert_eq!(cctxs[0].index, "test_list_cctxs_endpoint_1");
     assert_eq!(cctxs[0].status, 1);
     assert_eq!(cctxs[0].amount, "8504");
-    assert_eq!(cctxs[0].source_chain_id, 1);
+    assert_eq!(cctxs[0].source_chain_id, 7001);
     assert_eq!(cctxs[0].target_chain_id, 2);
 }
 
@@ -95,7 +118,22 @@ async fn test_list_cctxs_with_status_filter() {
         Arc::new(client),
     )
     .await;
+let database = ZetachainCctxDatabase::new(db.client(),7001);
 
+    let token = zetachain_cctx_logic::models::Token{
+        name: "dummy_token_1".to_string(),
+        symbol: "DUMMY".to_string(),
+        asset: "0x0000000000000000000000000000000000000001".to_string(),
+        foreign_chain_id: "7001".to_string(),
+        coin_type: CoinType::ERC20,
+        decimals: 18,
+        gas_limit: "1000000000000000000".to_string(),
+        paused: false,
+        liquidity_cap: "1000000000000000000".to_string(),
+        icon_url: None,
+        zrc20_contract_address: Uuid::new_v4().to_string(),
+    };
+    database.sync_tokens(Uuid::new_v4(), vec![token.clone()]).await.unwrap();
     let dummy_cctxs: Vec<CrossChainTx> = vec![
         "test_list_cctxs_with_status_filter_1",
         "test_list_cctxs_with_status_filter_2",
@@ -111,9 +149,16 @@ async fn test_list_cctxs_with_status_filter() {
         .iter()
         .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingOutbound")),
     )
+    .map(|x| {
+        let mut cctx = x;
+        cctx.inbound_params.asset = token.asset.clone();
+        cctx.inbound_params.coin_type = token.coin_type.clone();
+        cctx.inbound_params.sender_chain_id = token.foreign_chain_id.clone();
+        cctx
+    })
     .collect();
 
-    let database = ZetachainCctxDatabase::new(db.client());
+    
     let tx = db.client().begin().await.unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &dummy_cctxs, &tx)
@@ -191,7 +236,7 @@ async fn test_list_cctxs_with_filters() {
     let sender_address = "0x73B37B8BAbAC0e846bB2C4c581e60bFF2BFBE76e";
     let receiver_address = "0xa4dc1ebdcca3351f8d356910e7f17594c17f1747";
     let asset = "0x0000000000000000000000000000000000000000";
-    let coin_type = "Zeta";
+    let coin_type = CoinType::ERC20;
     let source_chain_ids = vec!["7001", "7002"];
     let target_chain_id_1 = "97";
     let target_chain_id_2 = "96";
@@ -215,13 +260,26 @@ async fn test_list_cctxs_with_filters() {
     )
     .await;
 
-    let mut cctx_1 =
-        crate::helpers::dummy_cross_chain_tx("test_list_cctxs_with_filters_1", status_1);
+    let token = zetachain_cctx_logic::models::Token{
+        name: "dummy_token_1".to_string(),
+        symbol: "DUMMY".to_string(),
+        asset: asset.to_string(),
+        foreign_chain_id: "7001".to_string(),
+        coin_type: coin_type.clone(),
+        decimals: 18,
+        gas_limit: "1000000000000000000".to_string(),
+        paused: false,
+        liquidity_cap: "1000000000000000000".to_string(),
+        icon_url: None,
+        zrc20_contract_address: Uuid::new_v4().to_string(),
+    };
+
+    let mut cctx_1 = crate::helpers::dummy_cross_chain_tx("test_list_cctxs_with_filters_1", status_1);
+    cctx_1.inbound_params.asset = token.asset.clone();
+    cctx_1.inbound_params.coin_type = token.coin_type.clone();
+    cctx_1.inbound_params.sender_chain_id = token.foreign_chain_id.clone();
     cctx_1.inbound_params.sender = sender_address.to_string();
 
-    cctx_1.inbound_params.asset = asset.to_string();
-    cctx_1.inbound_params.coin_type = CoinType::try_from(coin_type.to_string()).unwrap();
-    cctx_1.inbound_params.sender_chain_id = source_chain_ids[0].to_string();
     cctx_1.outbound_params[0].receiver = receiver_address.to_string();
     cctx_1.outbound_params[0].receiver_chain_id = target_chain_id_1.to_string();
     cctx_1.cctx_status.status = status_1.to_string();
@@ -230,18 +288,19 @@ async fn test_list_cctxs_with_filters() {
 
     let mut cctx_2 =
         crate::helpers::dummy_cross_chain_tx("test_list_cctxs_with_filters_2", status_2);
+    cctx_2.inbound_params.asset = token.asset.clone();
+    cctx_2.inbound_params.coin_type = token.coin_type.clone();
+    cctx_2.inbound_params.sender_chain_id = token.foreign_chain_id.clone();
     cctx_2.inbound_params.sender = sender_address.to_string();
-    cctx_2.inbound_params.asset = asset.to_string();
-    cctx_2.inbound_params.coin_type = CoinType::try_from(coin_type.to_string()).unwrap();
-    cctx_2.inbound_params.sender_chain_id = source_chain_ids[1].to_string();
     cctx_2.outbound_params[0].receiver = receiver_address.to_string();
     cctx_2.outbound_params[0].receiver_chain_id = target_chain_id_2.to_string();
     cctx_2.cctx_status.status = status_2.to_string();
     cctx_2.cctx_status.created_timestamp = start_timestamp.to_string();
     cctx_2.cctx_status.last_update_timestamp = end_timestamp.to_string();
 
-    let database = ZetachainCctxDatabase::new(db.client());
+    let database = ZetachainCctxDatabase::new(db.client(),7001);
     let tx = db.client().begin().await.unwrap();
+    database.sync_tokens(Uuid::new_v4(), vec![token]).await.unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &vec![cctx_1, cctx_2], &tx)
         .await
@@ -251,9 +310,31 @@ async fn test_list_cctxs_with_filters() {
     let source_chain_id = source_chain_ids[0].to_string();
     let target_chain_id = format!("{},{}", target_chain_id_1, target_chain_id_2);
     let status_reduced = "Pending";
+    let coin_type = coin_type.to_string();
+    let mut path = "/api/v1/CctxInfo:list?".to_string();
+    let filters = vec![
+        ("limit", "10"),
+        ("status_reduced", status_reduced),
+        ("sender_address", sender_address),
+        ("receiver_address", receiver_address),
+        ("asset", asset),
+        ("coin_type", &coin_type),
+        ("source_chain_id", &source_chain_id),
+        ("target_chain_id", &target_chain_id),
+        ("start_timestamp", start_timestamp),
+        ("end_timestamp", end_timestamp),
+        ("direction", "DESC"),
+    ];
+
+    for (key, value) in filters {
+        path.push_str(&format!("{}={}&", key, value));
+    }
+
+    path.pop();
+    
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        format!("/api/v1/CctxInfo:list?limit=10&status_reduced={status_reduced}&sender_address={sender_address}&receiver_address={receiver_address}&asset={asset}&coin_type={coin_type}&source_chain_id={source_chain_id}&target_chain_id={target_chain_id}&start_timestamp={start_timestamp}&end_timestamp={end_timestamp}&direction=DESC").as_str(),
+        path.as_str(),
     )
     .await;
 
@@ -284,6 +365,14 @@ async fn test_list_cctxs_with_filters() {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_list_cctxs_with_status_reduced_filter() {
+    if std::env::var("TEST_TRACING").is_ok() {
+        init_logs(
+            "test_list_cctxs_with_status_reduced_filter",
+            &TracingSettings::default(),
+            &JaegerSettings::default(),
+        )
+        .unwrap();
+    }
     let db = crate::helpers::init_db("test", "list_cctxs_with_status_reduced_filter").await;
     let db_url = db.db_url();
 
@@ -300,6 +389,20 @@ async fn test_list_cctxs_with_status_reduced_filter() {
         Arc::new(client),
     )
     .await;
+
+    let token = zetachain_cctx_logic::models::Token{
+        name: "dummy_token_1".to_string(),
+        symbol: "DUMMY".to_string(),
+        asset: "0x0000000000000000000000000000000000000001".to_string(),
+        foreign_chain_id: "7001".to_string(),
+        coin_type: CoinType::ERC20,
+        decimals: 18,
+        gas_limit: "1000000000000000000".to_string(),
+        paused: false,
+        liquidity_cap: "1000000000000000000".to_string(),
+        icon_url: None,
+        zrc20_contract_address: Uuid::new_v4().to_string(),
+    };
 
     // Create CCTXs with different statuses that should map to the same reduced status
     let pending_cctxs: Vec<CrossChainTx> = vec![
@@ -322,6 +425,13 @@ async fn test_list_cctxs_with_status_reduced_filter() {
             .iter()
             .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingRevert")),
     )
+    .map(|x| {
+        let mut cctx = x;
+        cctx.inbound_params.asset = token.asset.clone();
+        cctx.inbound_params.coin_type = token.coin_type.clone();
+        cctx.inbound_params.sender_chain_id = token.foreign_chain_id.clone();
+        cctx
+    })
     .collect();
 
     let success_cctxs: Vec<CrossChainTx> = vec![
@@ -349,10 +459,18 @@ async fn test_list_cctxs_with_status_reduced_filter() {
         .into_iter()
         .chain(success_cctxs.into_iter())
         .chain(failed_cctxs.into_iter())
+        .map(|x| {
+            let mut cctx = x;
+            cctx.inbound_params.asset = token.asset.clone();
+            cctx.inbound_params.coin_type = token.coin_type.clone();
+            cctx.inbound_params.sender_chain_id = token.foreign_chain_id.clone();
+            cctx
+        })
         .collect();
 
-    let database = ZetachainCctxDatabase::new(db.client());
+    let database = ZetachainCctxDatabase::new(db.client(),7001);
     let tx = db.client().begin().await.unwrap();
+    database.sync_tokens(Uuid::new_v4(), vec![token]).await.unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &all_cctxs, &tx)
         .await

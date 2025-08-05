@@ -17,6 +17,7 @@ pub struct IndexerSettings {
    pub realtime_threshold: i64,
    pub token_polling_interval: u64,
    pub token_batch_size: u32,
+   pub zetachain_id: i32,
 
 }
 
@@ -43,6 +44,7 @@ impl Default for IndexerSettings {
             realtime_threshold: 10000,
             token_polling_interval: 300_000, // 5 minutes
             token_batch_size: 100,
+            zetachain_id: 7001,
         }
     }
 }

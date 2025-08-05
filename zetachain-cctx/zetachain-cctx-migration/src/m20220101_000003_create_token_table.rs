@@ -29,9 +29,21 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Token::Decimals).integer().not_null())
                     .col(ColumnDef::new(Token::Name).string().not_null())
                     .col(ColumnDef::new(Token::Symbol).string().not_null())
-                    .col(ColumnDef::new(Token::CoinType).enumeration("coin_type", ["Zeta", "Gas", "Erc20", "Cmd", "NoAssetCall"]).not_null())
+                    .col(
+                        ColumnDef::new(Token::CoinType)
+                            .enumeration(
+                                "coin_type",
+                                ["Zeta", "Gas", "Erc20", "Cmd", "NoAssetCall"],
+                            )
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Token::GasLimit).string().not_null())
-                    .col(ColumnDef::new(Token::Paused).boolean().not_null().default(false))
+                    .col(
+                        ColumnDef::new(Token::Paused)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
                     .col(ColumnDef::new(Token::LiquidityCap).string().not_null())
                     .col(
                         ColumnDef::new(Token::CreatedAt)
@@ -117,4 +129,4 @@ enum Token {
     LiquidityCap,
     CreatedAt,
     UpdatedAt,
-} 
+}

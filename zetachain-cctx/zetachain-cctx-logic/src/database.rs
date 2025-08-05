@@ -33,6 +33,7 @@ use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
 
 pub struct ZetachainCctxDatabase {
     db: Arc<DatabaseConnection>,
+    zetachain_id: i32,
 }
 
 /// Sanitizes strings by removing null bytes and replacing invalid UTF-8 sequences
@@ -57,9 +58,10 @@ pub fn reduce_status(status: CctxStatusProto) -> CctxStatusReducedProto {
 }
 
 impl ZetachainCctxDatabase {
-    pub fn new(db: Arc<DatabaseConnection>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<DatabaseConnection>, zetachain_id: i32) -> Self {
+        Self { db, zetachain_id }
     }
+
     #[instrument(level = "debug", skip_all)]
     pub async fn mark_watermark_as_failed(&self, watermark_id: i32) -> anyhow::Result<()> {
         watermark::Entity::update(watermark::ActiveModel {
@@ -509,7 +511,7 @@ impl ZetachainCctxDatabase {
         watermark_id: i32,
     ) -> anyhow::Result<Vec<CctxListItemProto>> {
         let tx = self.db.begin().await?;
-        let upper_bound_timestamp:i64 = cctxs
+        let upper_bound_timestamp: i64 = cctxs
             .last()
             .unwrap()
             .cctx_status
@@ -696,8 +698,8 @@ impl ZetachainCctxDatabase {
             FROM cross_chain_tx cctx
             JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
             WHERE cctx.processing_status = 'Unlocked'::processing_status
-            AND cctx.last_status_update_timestamp + 
-                CASE 
+            AND cctx.last_status_update_timestamp +
+                CASE
                     WHEN cctx.retries_number = 0 THEN INTERVAL '0 milliseconds'
                     WHEN cctx.retries_number = 1 THEN INTERVAL '$1 milliseconds'
                     WHEN cctx.retries_number = 2 THEN INTERVAL '$1 milliseconds' * 3
@@ -786,6 +788,44 @@ impl ZetachainCctxDatabase {
         .exec(tx)
         .await?;
         Ok(())
+    }
+
+    async fn calculate_token_id(&self, cctx: &CrossChainTx) -> anyhow::Result<Option<i32>> {
+        if cctx.inbound_params.coin_type == models::CoinType::ERC20 {
+            let token = TokenEntity::Entity::find()
+                .filter(TokenEntity::Column::Asset.eq(&cctx.inbound_params.asset))
+                .one(self.db.as_ref())
+                .await?;
+            return Ok(token.map(|t| t.id));
+        } else {
+            let chain_id = if cctx
+                .inbound_params
+                .sender_chain_id
+                .parse::<i32>()
+                .unwrap_or_default()
+                == self.zetachain_id
+            {
+                &cctx.outbound_params[0].receiver_chain_id
+            } else {
+                &cctx.inbound_params.sender_chain_id
+            };
+
+            let chain_id = chain_id.parse::<i32>().unwrap_or_default();
+
+            let token = TokenEntity::Entity::find()
+                .filter(
+                    sea_orm::Condition::all()
+                        .add(TokenEntity::Column::CoinType.eq(
+                            zetachain_cctx_entity::sea_orm_active_enums::CoinType::try_from(
+                                cctx.inbound_params.coin_type.clone(),
+                            )?,
+                        ))
+                        .add(TokenEntity::Column::ForeignChainId.eq(chain_id)),
+                )
+                .one(self.db.as_ref())
+                .await?;
+            return Ok(token.map(|t| t.id));
+        }
     }
 
     #[instrument(,level="trace",skip_all)]
@@ -882,11 +922,17 @@ impl ZetachainCctxDatabase {
     ) -> anyhow::Result<()> {
         // Insert main cross_chain_tx record
         let index = cctx.index.clone();
+        let token_id = self.calculate_token_id(&cctx).await?;
         let cctx_model = CrossChainTxEntity::ActiveModel {
             id: ActiveValue::NotSet,
             creator: ActiveValue::Set(cctx.creator),
             index: ActiveValue::Set(cctx.index),
             retries_number: ActiveValue::Set(0),
+            token_id: ActiveValue::Set(token_id),
+            receiver: ActiveValue::Set(cctx.outbound_params[0].receiver.clone()),
+            receiver_chain_id: ActiveValue::Set(
+                cctx.outbound_params[0].receiver_chain_id.clone().parse::<i32>()?,
+            ),
             processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
             zeta_fees: ActiveValue::Set(cctx.zeta_fees),
             relayed_message: ActiveValue::Set(Some(cctx.relayed_message)),
@@ -2019,7 +2065,7 @@ impl ZetachainCctxDatabase {
         }
 
         // 1. Prepare and insert parent CrossChainTx records.
-        let cctx_models = Self::prepare_parent_models(job_id, cctxs)?;
+        let cctx_models = self.prepare_parent_models(job_id, cctxs).await?;
         let inserted_cctxs = self.insert_parent_models(cctx_models).await?;
 
         // 2. Map fetched cctxs by index for quick access when preparing child records.
@@ -2043,19 +2089,26 @@ impl ZetachainCctxDatabase {
         Ok(cctx_list_items)
     }
 
-    fn prepare_parent_models(
+    async fn prepare_parent_models(
+        &self,
         job_id: Uuid,
         cctxs: &Vec<CrossChainTx>,
     ) -> anyhow::Result<Vec<CrossChainTxEntity::ActiveModel>> {
         let mut models = Vec::new();
         for cctx in cctxs {
+            let token_id = self.calculate_token_id(cctx).await?;
             let model = CrossChainTxEntity::ActiveModel {
                 id: ActiveValue::NotSet,
                 creator: ActiveValue::Set(cctx.creator.clone()),
                 index: ActiveValue::Set(cctx.index.clone()),
                 retries_number: ActiveValue::Set(0),
                 processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
+                token_id: ActiveValue::Set(token_id),
                 zeta_fees: ActiveValue::Set(cctx.zeta_fees.clone()),
+                receiver: ActiveValue::Set(cctx.outbound_params[0].receiver.clone()),
+                receiver_chain_id: ActiveValue::Set(
+                    cctx.outbound_params[0].receiver_chain_id.clone().parse::<i32>()?,
+                ),
                 relayed_message: ActiveValue::Set(Some(cctx.relayed_message.clone())),
                 protocol_contract_version: ActiveValue::Set(
                     ProtocolContractVersion::try_from(cctx.protocol_contract_version.clone())

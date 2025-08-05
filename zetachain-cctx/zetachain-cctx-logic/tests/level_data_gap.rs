@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use pretty_assertions::assert_eq;
 use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
-use sea_orm::{ConnectionTrait, PaginatorTrait};
+use sea_orm::PaginatorTrait;
 use serde_json::json;
 use wiremock::matchers::path_regex;
 use wiremock::{
@@ -26,23 +26,12 @@ use zetachain_cctx_logic::{
 #[tokio::test]
 async fn test_level_data_gap() {
     
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
+        helpers::init_tests_logs().await;
+    }
     let db = crate::helpers::init_db("test", "indexer_level_data_gap").await;
 
-    //simulate some previous sync progress
-    // let last_update_timestamp= chrono::DateTime::<Utc>::from_timestamp(1750344684 as i64, 0).unwrap();
-    let insert_statement = format!(
-        r#"
-    INSERT INTO cross_chain_tx (creator, index, zeta_fees, processing_status, relayed_message, last_status_update_timestamp, protocol_contract_version,updated_by) 
-    VALUES ('zeta18pksjzclks34qkqyaahf2rakss80mnusju77cm', '0x7f70bf83ed66c8029d8b2fce9ca95a81d053243537d0ea694de5a9c8e7d42f31', '0', 'Unlocked'::processing_status, '', '2025-01-19 12:31:24', 'V2','test');
-    INSERT INTO cctx_status (cross_chain_tx_id, status, status_message, error_message, last_update_timestamp, is_abort_refunded, created_timestamp, error_message_revert, error_message_abort) 
-    VALUES (1, 'OutboundMined', '', '', '2025-01-19 12:31:24', false, 1750344684, '', '');
-    "#
-    );
-
-    db.client()
-        .execute_unprepared(&insert_statement)
-        .await
-        .unwrap();
+    let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
 
     // suppress historical sync
     watermark::Entity::insert(watermark::ActiveModel {
@@ -62,7 +51,7 @@ async fn test_level_data_gap() {
     let mock_server = MockServer::start().await;
     //suppress historical sync
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "true"))
         .and(query_param("pagination.key", "end"))
         .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
@@ -71,7 +60,7 @@ async fn test_level_data_gap() {
 
 
         Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "false"))
         .and(query_param("pagination.key", "SECOND_PAGE"))
         .respond_with(ResponseTemplate::new(200).set_body_json(
@@ -85,7 +74,7 @@ async fn test_level_data_gap() {
     // since these cctx are absent, the indexer is exprected to follow through and request the next page
 
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "false"))
         .and(query_param("pagination.key", "THIRD_PAGE"))
         .respond_with(ResponseTemplate::new(200).set_body_json(
@@ -96,7 +85,7 @@ async fn test_level_data_gap() {
         .await;
     // simulate realtime fetcher getting some relevant data
     Mock::given(method("GET"))
-        .and(path("/crosschain/cctx"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "false"))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             helpers::dummy_cctx_with_pagination_response(
@@ -113,7 +102,7 @@ async fn test_level_data_gap() {
 
     //supress status update/related cctx search
     Mock::given(method("GET"))
-        .and(path_regex(r"/crosschain/cctx/.+"))
+        .and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
         .respond_with(ResponseTemplate::new(200).set_body_json( 
             json!({
                 "CrossChainTx": helpers::dummy_cross_chain_tx("page_3_index_1", "OutboundMined")
@@ -123,7 +112,7 @@ async fn test_level_data_gap() {
         .await;
     //supress status update/related cctx search
     Mock::given(method("GET"))
-        .and(path_regex(r"crosschain/inboundHashToCctxData/.+"))
+        .and(path_regex(r"/zeta-chain/crosschain/inboundHashToCctxData/.+"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(
@@ -150,7 +139,7 @@ async fn test_level_data_gap() {
             ..Default::default()
         },
         Arc::new(rpc_client),
-        Arc::new(ZetachainCctxDatabase::new(db.client().clone())),
+        Arc::new(database),
         Arc::new(NoOpBroadcaster{}),
     );
 
@@ -196,5 +185,5 @@ async fn test_level_data_gap() {
         .unwrap();
 
     // 7 cctxs are expected: 1 historical, 6 realtime
-    assert_eq!(cctx_count, 7);
+    assert_eq!(cctx_count, 6);
 }

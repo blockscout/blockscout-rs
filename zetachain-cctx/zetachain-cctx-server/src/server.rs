@@ -120,7 +120,7 @@ pub async fn run(
 ) -> Result<(), anyhow::Error> {
     launcher_tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
-    let database = Arc::new(ZetachainCctxDatabase::new(db.clone()));
+    let database = Arc::new(ZetachainCctxDatabase::new(db.clone(), settings.indexer.zetachain_id));
     let health = Arc::new(HealthService::default());
     let cctx = Arc::new(CctxService::new(database.clone()));
     let stats = Arc::new(StatsService::new(database.clone()));
