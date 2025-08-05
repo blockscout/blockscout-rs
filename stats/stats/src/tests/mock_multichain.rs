@@ -3,7 +3,7 @@
 use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime};
-use multichain_aggregator_entity::{addresses, block_ranges, chains, interop_messages};
+use multichain_aggregator_entity::{addresses, block_ranges, chains, interop_messages, counters_global_imported};
 use sea_orm::{DatabaseConnection, EntityTrait, Set};
 
 pub async fn fill_mock_multichain_data(multichain: &DatabaseConnection, max_date: NaiveDate) {
@@ -20,6 +20,11 @@ pub async fn fill_mock_multichain_data(multichain: &DatabaseConnection, max_date
         .unwrap();
     let block_ranges = mock_block_ranges();
     block_ranges::Entity::insert_many(block_ranges)
+        .exec(multichain)
+        .await
+        .unwrap();
+    let counters_global_imported = mock_counters_global_imported(max_date);
+    counters_global_imported::Entity::insert_many(counters_global_imported)
         .exec(multichain)
         .await
         .unwrap();
@@ -114,3 +119,50 @@ fn mock_block_ranges() -> Vec<block_ranges::ActiveModel> {
         )
         .collect()
 }
+
+fn mock_counters_global_imported(max_date: NaiveDate) -> Vec<counters_global_imported::ActiveModel> {
+    // Now each tuple includes: (date, daily_txns, total_txns, total_addresses)
+    let dates_and_txns = vec![
+        ("2022-11-09", 150, 1000, 100),
+        ("2022-11-10", 200, 1200, 120),
+        ("2022-11-11", 175, 1375, 130),
+        ("2022-11-12", 225, 1600, 140),
+        ("2022-12-01", 300, 1900, 150),
+        ("2023-01-15", 250, 2150, 155),
+        ("2023-02-01", 275, 2425, 160),
+        ("2023-03-01", 325, 2750, 170),
+    ];
+
+    dates_and_txns
+        .into_iter()
+        .map(|(date_str, daily_txns, total_txns, total_addresses)| {
+            let date = NaiveDate::from_str(date_str).unwrap();
+            if date <= max_date {
+                Some(mock_counter_global_imported(date, daily_txns, total_txns, total_addresses))
+            } else {
+                None
+            }
+        })
+        .filter_map(|x| x)
+        .collect()
+}
+
+fn mock_counter_global_imported(
+    date: NaiveDate,
+    daily_transactions: i64,
+    total_transactions: i64,
+    total_addresses: i64,
+) -> counters_global_imported::ActiveModel {
+    counters_global_imported::ActiveModel {
+        id: Set(Default::default()), // Auto-increment
+        chain_id: Set(1), // Default chain ID
+        date: Set(date),
+        daily_transactions_number: Set(Some(daily_transactions)),
+        total_transactions_number: Set(Some(total_transactions)),
+        total_addresses_number: Set(Some(total_addresses)),
+        created_at: Set(Default::default()),
+        updated_at: Set(Default::default()),
+        ..Default::default()
+    }
+}
+
