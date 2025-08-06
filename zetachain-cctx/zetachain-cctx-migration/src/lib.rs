@@ -7,6 +7,7 @@ mod m20220101_000004_add_inbound_params_composite_unique;
 mod m20240101_000005_add_icon_url_to_token;
 mod m20240101_000006_add_performance_indices;
 mod m20250805_000007_flattened_fields;
+mod m20250805_000008_remove_ballot_index_unique;
 
 pub struct Migrator;
 
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240101_000005_add_icon_url_to_token::Migration),
             Box::new(m20240101_000006_add_performance_indices::Migration),
             Box::new(m20250805_000007_flattened_fields::Migration),
+            Box::new(m20250805_000008_remove_ballot_index_unique::Migration),
         ]
     }
 }
