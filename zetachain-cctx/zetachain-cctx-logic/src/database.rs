@@ -795,6 +795,13 @@ impl ZetachainCctxDatabase {
         if cctx.inbound_params.coin_type == models::CoinType::NoAssetCall {
             return Ok(None);
         }
+        if cctx.inbound_params.coin_type == models::CoinType::Zeta {
+            let token = TokenEntity::Entity::find()
+                .filter(TokenEntity::Column::CoinType.eq(DBCoinType::Zeta))
+                .one(self.db.as_ref())
+                .await?;
+            return Ok(token.map(|t| t.id));
+        }
         if cctx.inbound_params.coin_type == models::CoinType::ERC20 {
             let token = TokenEntity::Entity::find()
                 .filter(TokenEntity::Column::Asset.eq(&cctx.inbound_params.asset))
