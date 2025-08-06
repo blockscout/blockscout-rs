@@ -35,7 +35,7 @@ async fn test_list_cctxs_endpoint() {
     )
     .await;
 
-    let token = zetachain_cctx_logic::models::Token{
+    let token = zetachain_cctx_logic::models::Token {
         name: "dummy_token_1".to_string(),
         symbol: "DUMMY".to_string(),
         asset: "0x0000000000000000000000000000000000000001".to_string(),
@@ -49,8 +49,6 @@ async fn test_list_cctxs_endpoint() {
         zrc20_contract_address: Uuid::new_v4().to_string(),
     };
 
-    
-
     let dummy_cctxs: Vec<CrossChainTx> = vec!["test_list_cctxs_endpoint_1"]
         .iter()
         .map(|x| {
@@ -62,9 +60,9 @@ async fn test_list_cctxs_endpoint() {
         })
         .collect();
 
-    let database = ZetachainCctxDatabase::new(db.client(),7001);
+    let database = ZetachainCctxDatabase::new(db.client(), 7001);
 
-    database.sync_tokens(Uuid::new_v4(), vec![token]).await.unwrap();
+    database.setup_db().await.unwrap();
     let tx = db.client().begin().await.unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &dummy_cctxs, &tx)
@@ -93,7 +91,7 @@ async fn test_list_cctxs_endpoint() {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_list_cctxs_with_status_filter() {
-    if std::env::var("TEST_TRACING").is_ok() {
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
         init_logs(
             "test_list_cctxs_with_status_filter",
             &TracingSettings::default(),
@@ -118,9 +116,9 @@ async fn test_list_cctxs_with_status_filter() {
         Arc::new(client),
     )
     .await;
-let database = ZetachainCctxDatabase::new(db.client(),7001);
+    let database = ZetachainCctxDatabase::new(db.client(), 7001);
 
-    let token = zetachain_cctx_logic::models::Token{
+    let token = zetachain_cctx_logic::models::Token {
         name: "dummy_token_1".to_string(),
         symbol: "DUMMY".to_string(),
         asset: "0x0000000000000000000000000000000000000001".to_string(),
@@ -133,7 +131,11 @@ let database = ZetachainCctxDatabase::new(db.client(),7001);
         icon_url: None,
         zrc20_contract_address: Uuid::new_v4().to_string(),
     };
-    database.sync_tokens(Uuid::new_v4(), vec![token.clone()]).await.unwrap();
+    database.setup_db().await.unwrap();
+    database
+        .sync_tokens(Uuid::new_v4(), vec![token.clone()])
+        .await
+        .unwrap();
     let dummy_cctxs: Vec<CrossChainTx> = vec![
         "test_list_cctxs_with_status_filter_1",
         "test_list_cctxs_with_status_filter_2",
@@ -158,7 +160,6 @@ let database = ZetachainCctxDatabase::new(db.client(),7001);
     })
     .collect();
 
-    
     let tx = db.client().begin().await.unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &dummy_cctxs, &tx)
@@ -221,7 +222,7 @@ let database = ZetachainCctxDatabase::new(db.client(),7001);
 #[ignore = "Needs database to run"]
 async fn test_list_cctxs_with_filters() {
     //if TEST_TRACING is true, then initi
-    if std::env::var("TEST_TRACING").is_ok() {
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
         init_logs(
             "test_list_cctxs_with_filters",
             &TracingSettings::default(),
@@ -260,7 +261,7 @@ async fn test_list_cctxs_with_filters() {
     )
     .await;
 
-    let token = zetachain_cctx_logic::models::Token{
+    let token = zetachain_cctx_logic::models::Token {
         name: "dummy_token_1".to_string(),
         symbol: "DUMMY".to_string(),
         asset: asset.to_string(),
@@ -274,7 +275,8 @@ async fn test_list_cctxs_with_filters() {
         zrc20_contract_address: Uuid::new_v4().to_string(),
     };
 
-    let mut cctx_1 = crate::helpers::dummy_cross_chain_tx("test_list_cctxs_with_filters_1", status_1);
+    let mut cctx_1 =
+        crate::helpers::dummy_cross_chain_tx("test_list_cctxs_with_filters_1", status_1);
     cctx_1.inbound_params.asset = token.asset.clone();
     cctx_1.inbound_params.coin_type = token.coin_type.clone();
     cctx_1.inbound_params.sender_chain_id = token.foreign_chain_id.clone();
@@ -298,9 +300,13 @@ async fn test_list_cctxs_with_filters() {
     cctx_2.cctx_status.created_timestamp = start_timestamp.to_string();
     cctx_2.cctx_status.last_update_timestamp = end_timestamp.to_string();
 
-    let database = ZetachainCctxDatabase::new(db.client(),7001);
+    let database = ZetachainCctxDatabase::new(db.client(), 7001);
+    database.setup_db().await.unwrap();
     let tx = db.client().begin().await.unwrap();
-    database.sync_tokens(Uuid::new_v4(), vec![token]).await.unwrap();
+    database
+        .sync_tokens(Uuid::new_v4(), vec![token])
+        .await
+        .unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &vec![cctx_1, cctx_2], &tx)
         .await
@@ -331,12 +337,8 @@ async fn test_list_cctxs_with_filters() {
     }
 
     path.pop();
-    
-    let response: serde_json::Value = test_server::send_get_request(
-        &base,
-        path.as_str(),
-    )
-    .await;
+
+    let response: serde_json::Value = test_server::send_get_request(&base, path.as_str()).await;
 
     // The response should be a valid JSON object with a "cctxs" array
     assert!(response.is_object());
@@ -365,7 +367,7 @@ async fn test_list_cctxs_with_filters() {
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn test_list_cctxs_with_status_reduced_filter() {
-    if std::env::var("TEST_TRACING").is_ok() {
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
         init_logs(
             "test_list_cctxs_with_status_reduced_filter",
             &TracingSettings::default(),
@@ -390,7 +392,7 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     )
     .await;
 
-    let token = zetachain_cctx_logic::models::Token{
+    let token = zetachain_cctx_logic::models::Token {
         name: "dummy_token_1".to_string(),
         symbol: "DUMMY".to_string(),
         asset: "0x0000000000000000000000000000000000000001".to_string(),
@@ -468,9 +470,13 @@ async fn test_list_cctxs_with_status_reduced_filter() {
         })
         .collect();
 
-    let database = ZetachainCctxDatabase::new(db.client(),7001);
+    let database = ZetachainCctxDatabase::new(db.client(), 7001);
+    database.setup_db().await.unwrap();
     let tx = db.client().begin().await.unwrap();
-    database.sync_tokens(Uuid::new_v4(), vec![token]).await.unwrap();
+    database
+        .sync_tokens(Uuid::new_v4(), vec![token])
+        .await
+        .unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &all_cctxs, &tx)
         .await

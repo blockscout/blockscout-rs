@@ -319,7 +319,7 @@ impl ZetachainCctxDatabase {
 
         //insert unknown token if not present
         let unknown_token = TokenEntity::Entity::find()
-            .filter(TokenEntity::Column::Asset.eq("UNKNOWN"))
+            .filter(TokenEntity::Column::Zrc20ContractAddress.eq("UNKNOWN"))
             .one(self.db.as_ref())
             .await?;
         if unknown_token.is_none() {
@@ -819,11 +819,11 @@ impl ZetachainCctxDatabase {
 
     async fn get_unknown_token_id(&self) -> anyhow::Result<i32> {
         let unknown_token_id = TokenEntity::Entity::find()
-            .filter(TokenEntity::Column::Asset.eq("UNKNOWN"))
+            .filter(TokenEntity::Column::Zrc20ContractAddress.eq("UNKNOWN"))
             .one(self.db.as_ref())
             .await?
             .map(|t| t.id)
-            .unwrap_or(1);
+            .ok_or(anyhow::anyhow!("fallback token is absent"))?;
         Ok(unknown_token_id)
     }
 
@@ -840,7 +840,7 @@ impl ZetachainCctxDatabase {
                     .await?
                     .map(|t| t.id)
                     .unwrap_or(unknown_token_id);
-                
+
                 return Ok(Some(token));
             }
             models::CoinType::ERC20 => {
@@ -971,9 +971,7 @@ impl ZetachainCctxDatabase {
     ) -> anyhow::Result<()> {
         // Insert main cross_chain_tx record
         let index = cctx.index.clone();
-        let token_id = self.calculate_token_id(&cctx).await.map_err(|e| {
-            anyhow::anyhow!("Failed to calculate token id for cctx {}: {}", index, e)
-        })?;
+        let token_id = self.calculate_token_id(&cctx).await?;
         let cctx_model = CrossChainTxEntity::ActiveModel {
             id: ActiveValue::NotSet,
             creator: ActiveValue::Set(cctx.creator),

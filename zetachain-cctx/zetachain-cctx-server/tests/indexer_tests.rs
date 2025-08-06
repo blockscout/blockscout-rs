@@ -46,20 +46,6 @@ async fn test_status_update() {
 
     let pending_tx_index = "root_index";
 
-    watermark::Entity::insert(watermark::ActiveModel {
-        id: ActiveValue::NotSet,
-        kind: ActiveValue::Set(Kind::Historical),
-        pointer: ActiveValue::Set("MH==".to_string()),
-        processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
-        created_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
-        updated_at: ActiveValue::Set(chrono::Utc::now().naive_utc()),
-        updated_by: ActiveValue::Set("test".to_string()),
-        ..Default::default()
-    })
-    .exec(db.client().as_ref())
-    .await
-    .unwrap();
-
     //import a single cctx
     Mock::given(method("GET"))
         .and(path("/zeta-chain/crosschain/cctx"))
@@ -88,7 +74,9 @@ async fn test_status_update() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path_regex(r"/zeta-chain/crosschain/inboundHashToCctxData/\d+"))
+        .and(path_regex(
+            r"/zeta-chain/crosschain/inboundHashToCctxData/\d+",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!(
             {"CrossChainTxs": []}
         )))
@@ -123,6 +111,8 @@ async fn test_status_update() {
         ..Default::default()
     });
 
+    let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
+    database.setup_db().await.unwrap();
     let indexer = Indexer::new(
         IndexerSettings {
             polling_interval: 100, // Fast polling for tests
@@ -131,8 +121,8 @@ async fn test_status_update() {
             ..Default::default()
         },
         Arc::new(client),
-        Arc::new(ZetachainCctxDatabase::new(db.client().clone(),7001)),
-        Arc::new(NoOpBroadcaster{}),
+        Arc::new(database),
+        Arc::new(NoOpBroadcaster {}),
     );
 
     let indexer_handle = tokio::spawn(async move {
@@ -214,7 +204,11 @@ async fn test_status_update_links_related() {
     //Check import a child cctx from inboundHashToCctxData
     Mock::given(method("GET"))
         .and(path(
-            format!("/zeta-chain/crosschain/inboundHashToCctxData/{}", root_index).as_str(),
+            format!(
+                "/zeta-chain/crosschain/inboundHashToCctxData/{}",
+                root_index
+            )
+            .as_str(),
         ))
         .respond_with(
             ResponseTemplate::new(200)
@@ -227,7 +221,11 @@ async fn test_status_update_links_related() {
     let child_2_index = "child_2_index";
     Mock::given(method("GET"))
         .and(path(
-            format!("/zeta-chain/crosschain/inboundHashToCctxData/{}", child_1_index).as_str(),
+            format!(
+                "/zeta-chain/crosschain/inboundHashToCctxData/{}",
+                child_1_index
+            )
+            .as_str(),
         ))
         .respond_with(
             ResponseTemplate::new(200)
@@ -239,7 +237,11 @@ async fn test_status_update_links_related() {
     //And it will be updated by status update
     Mock::given(method("GET"))
         .and(path(
-            format!("/zeta-chain/crosschain/inboundHashToCctxData/{}", child_2_index).as_str(),
+            format!(
+                "/zeta-chain/crosschain/inboundHashToCctxData/{}",
+                child_2_index
+            )
+            .as_str(),
         ))
         .respond_with(
             ResponseTemplate::new(200)
@@ -250,7 +252,9 @@ async fn test_status_update_links_related() {
 
     //This will let indexer know that there are no further children for child_3_index
     Mock::given(method("GET"))
-        .and(path("/zeta-chain/crosschain/inboundHashToCctxData/child_3_index"))
+        .and(path(
+            "/zeta-chain/crosschain/inboundHashToCctxData/child_3_index",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!(
             {"CrossChainTxs": []}
         )))
@@ -287,8 +291,8 @@ async fn test_status_update_links_related() {
             ..Default::default()
         },
         Arc::new(client),
-        Arc::new(ZetachainCctxDatabase::new(db.client().clone(),7001)),
-        Arc::new(NoOpBroadcaster{}),
+        Arc::new(ZetachainCctxDatabase::new(db.client().clone(), 7001)),
+        Arc::new(NoOpBroadcaster {}),
     );
 
     let indexer_handle = tokio::spawn(async move {
@@ -379,7 +383,7 @@ async fn test_status_update_links_related() {
 #[tokio::test]
 async fn test_lock_watermark() {
     let db = crate::helpers::init_db("test", "indexer_lock_watermark").await;
-    let database = ZetachainCctxDatabase::new(db.client().clone(),7001);
+    let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
 
     watermark::Entity::insert(watermark::ActiveModel {
         id: ActiveValue::NotSet,
@@ -431,13 +435,14 @@ async fn test_get_cctx_info() {
     let root_index = "root_cctx".to_string();
     let root_cctx = dummy_cross_chain_tx(&root_index, "OutboundMined");
     let tx = db.begin().await.unwrap();
-    let database = ZetachainCctxDatabase::new(db.client().clone(),7001);
+    let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
+    database.setup_db().await.unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &vec![root_cctx], &tx)
         .await
         .unwrap();
     tx.commit().await.unwrap();
-    
+
     let child_cctx = dummy_cross_chain_tx("child_cctx", "OutboundMined");
     let tx = db.begin().await.unwrap();
     database
@@ -447,24 +452,14 @@ async fn test_get_cctx_info() {
     tx.commit().await.unwrap();
 
     let cctx = database
-        .get_complete_cctx(
-            root_index.clone(),
-        )
+        .get_complete_cctx(root_index.clone())
         .await
         .unwrap();
 
-
-
     assert!(cctx.is_some());
     let cctx = cctx.unwrap();
-    assert_eq!(
-        cctx.index,
-        root_index
-    );
-    assert_eq!(
-        cctx.creator,
-        "creator"
-    );
+    assert_eq!(cctx.index, root_index);
+    assert_eq!(cctx.creator, "creator");
     assert_eq!(cctx.zeta_fees, "0");
     assert_eq!(cctx.relayed_message, "msg");
     assert_eq!(
@@ -472,10 +467,7 @@ async fn test_get_cctx_info() {
         i32::from(ProtocolContractVersion::V2)
     );
     assert_eq!(cctx.outbound_params.len(), 2);
-    assert_eq!(
-        cctx.outbound_params[0].receiver,
-        "receiver"
-    );
+    assert_eq!(cctx.outbound_params[0].receiver, "receiver");
     assert_eq!(cctx.outbound_params[0].receiver_chain_id, 2);
     assert_eq!(cctx.outbound_params[0].coin_type, i32::from(CoinType::Zeta));
     assert_eq!(cctx.outbound_params[0].amount, "1000000000000000000");
@@ -498,20 +490,21 @@ async fn test_get_cctx_info() {
         })),
     )
     .await;
-    let response: serde_json::Value = test_server::send_get_request(&base, format!("/api/v1/CctxInfo:get?cctx_id={}", root_index).as_str())
-                .await;
-    
+    let response: serde_json::Value = test_server::send_get_request(
+        &base,
+        format!("/api/v1/CctxInfo:get?cctx_id={}", root_index).as_str(),
+    )
+    .await;
+
     let parsed_cctx: CrossChainTx = serde_json::from_value(response).unwrap();
-    
-    
 
     assert_eq!(parsed_cctx.index, cctx.index);
     assert_eq!(parsed_cctx.creator, cctx.creator);
     assert_eq!(parsed_cctx.zeta_fees, cctx.zeta_fees);
-    
-    
+
     let related_cctxs = parsed_cctx.related_cctxs;
-    let expected_coin_type:i32 = zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CoinType::Erc20.into();
+    let expected_coin_type: i32 =
+        zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CoinType::Erc20.into();
     assert_eq!(related_cctxs.len(), 2);
     assert_eq!(related_cctxs[1].index, "child_cctx");
     assert_eq!(related_cctxs[1].depth, 1);
@@ -522,9 +515,11 @@ async fn test_get_cctx_info() {
     assert_eq!(related_cctxs[1].outbound_params.len(), 2);
     assert_eq!(related_cctxs[1].outbound_params[0].chain_id, 2);
     assert_eq!(related_cctxs[1].outbound_params[0].coin_type, 0);
-    assert_eq!(related_cctxs[1].outbound_params[0].amount, "1000000000000000000");
+    assert_eq!(
+        related_cctxs[1].outbound_params[0].amount,
+        "1000000000000000000"
+    );
     assert_eq!(related_cctxs[1].outbound_params[1].chain_id, 3);
     assert_eq!(related_cctxs[1].outbound_params[1].coin_type, 2);
     assert_eq!(related_cctxs[1].outbound_params[1].amount, "42691234567890");
-
 }

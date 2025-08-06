@@ -8,6 +8,7 @@ use zetachain_cctx_entity::{
     sea_orm_active_enums::{CctxStatusStatus, ProcessingStatus, ProtocolContractVersion},
 };
 use zetachain_cctx_logic::database::ZetachainCctxDatabase;
+
 mod helpers;
 
 // Helper that creates a brand-new temporary database, runs migrations and returns the guard
@@ -20,7 +21,11 @@ async fn init_db(test_name: &str) -> TestDbGuard {
 async fn test_traverse_and_update_tree_relationships() {
     let db = init_db("tree_relationships").await;
     let db_conn = db.client();
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
+        helpers::init_tests_logs().await;
+    }
     let database = ZetachainCctxDatabase::new(db_conn.clone(), 7001);
+    database.setup_db().await.unwrap();
 
     // Insert ROOT CCTX (has no parent/root links yet)
     let root_index = "root";
