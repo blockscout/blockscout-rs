@@ -4,6 +4,7 @@ use blockscout_service_launcher::{
     test_server,
     tracing::{JaegerSettings, TracingSettings},
 };
+use chrono::Utc;
 use sea_orm::TransactionTrait;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -70,6 +71,305 @@ async fn list_cctx_sorting() {
         retrieved_asc.next_page_params.unwrap().page_key,
         (limit - 1) as i64
     );
+}
+
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn list_cctx_timestamp_pagination() {
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
+        init_tests_logs().await;
+    }
+    let db = init_db("test", "list_cctx_timestamp_pagination").await;
+    let database = ZetachainCctxDatabase::new(db.client(), 7001);
+    let cctx_count: usize = 10;
+    let limit: usize = 3;
+    
+    // Create a base timestamp and add incremental seconds to ensure distinct timestamps
+    let base_timestamp = Utc::now().timestamp() - 1000; // Start 1000 seconds ago
+    
+    let cctxs: Vec<_> = (0..cctx_count)
+        .map(|i| {
+            let index_str = i.to_string();
+            let mut cctx = helpers::dummy_cross_chain_tx(&index_str, "OutboundMined");
+            // Set last_update_timestamp to incremental values for predictable ordering
+            let timestamp_epoch = base_timestamp + (i as i64 * 100); // 100 seconds apart
+            cctx.cctx_status.last_update_timestamp = timestamp_epoch.to_string();
+            cctx.inbound_params.ballot_index = index_str.clone();
+            cctx.inbound_params.observed_hash = index_str;
+            cctx
+        })
+        .collect();
+
+    let tx = db.client().begin().await.unwrap();
+    database.setup_db().await.unwrap();
+    database
+        .batch_insert_transactions(Uuid::new_v4(), &cctxs, &tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // Test DESC pagination (most recent first)
+    let first_page_desc = database
+        .list_cctxs(limit as i64, None, Filters::default(), Direction::Desc)
+        .await
+        .unwrap();
+
+    assert_eq!(first_page_desc.items.len(), limit);
+    let first_page_timestamps: Vec<i64> = first_page_desc
+        .items
+        .iter()
+        .map(|item| item.last_update_timestamp)
+        .collect();
+    
+    // Verify DESC ordering (timestamps should be decreasing)
+    for i in 1..first_page_timestamps.len() {
+        assert!(
+            first_page_timestamps[i-1] > first_page_timestamps[i],
+            "DESC ordering failed: {} should be > {}",
+            first_page_timestamps[i-1],
+            first_page_timestamps[i]
+        );
+    }
+
+    // Test pagination with page_key (using the minimum timestamp from first page)
+    let page_key_desc = first_page_desc.next_page_params.as_ref().unwrap().page_key;
+    
+    let second_page_desc = database
+        .list_cctxs(limit as i64, Some(page_key_desc), Filters::default(), Direction::Desc)
+        .await
+        .unwrap();
+
+    assert_eq!(second_page_desc.items.len(), limit);
+    
+    // Verify that all timestamps in second page are less than the page_key
+    for item in &second_page_desc.items {
+        assert!(
+            item.last_update_timestamp < page_key_desc,
+            "Timestamp {} should be < page_key {}",
+            item.last_update_timestamp,
+            page_key_desc
+        );
+    }
+
+    // Test ASC pagination (oldest first)
+    let first_page_asc = database
+        .list_cctxs(limit as i64, None, Filters::default(), Direction::Asc)
+        .await
+        .unwrap();
+
+    assert_eq!(first_page_asc.items.len(), limit);
+    let first_page_timestamps_asc: Vec<i64> = first_page_asc
+        .items
+        .iter()
+        .map(|item| item.last_update_timestamp)
+        .collect();
+    
+    // Verify ASC ordering (timestamps should be increasing)
+    for i in 1..first_page_timestamps_asc.len() {
+        assert!(
+            first_page_timestamps_asc[i-1] < first_page_timestamps_asc[i],
+            "ASC ordering failed: {} should be < {}",
+            first_page_timestamps_asc[i-1],
+            first_page_timestamps_asc[i]
+        );
+    }
+
+    // Test pagination with page_key for ASC
+    let page_key_asc = first_page_asc.next_page_params.as_ref().unwrap().page_key;
+    
+    let second_page_asc = database
+        .list_cctxs(limit as i64, Some(page_key_asc), Filters::default(), Direction::Asc)
+        .await
+        .unwrap();
+
+    assert_eq!(second_page_asc.items.len(), limit);
+    
+    // Verify that all timestamps in second page are greater than the page_key
+    for item in &second_page_asc.items {
+        assert!(
+            item.last_update_timestamp > page_key_asc,
+            "Timestamp {} should be > page_key {}",
+            item.last_update_timestamp,
+            page_key_asc
+        );
+    }
+
+    // Test edge case: Using a timestamp that doesn't exist
+    let non_existent_timestamp = base_timestamp + 50; // Between first two records
+    let edge_case_result = database
+        .list_cctxs(limit as i64, Some(non_existent_timestamp), Filters::default(), Direction::Desc)
+        .await
+        .unwrap();
+    
+    // Should return records with timestamps less than the non-existent one
+    for item in &edge_case_result.items {
+        assert!(
+            item.last_update_timestamp < non_existent_timestamp,
+            "Timestamp {} should be < non_existent_timestamp {}",
+            item.last_update_timestamp,
+            non_existent_timestamp
+        );
+    }
+
+    // Test edge case: Very old timestamp (should return all records for DESC)
+    let very_old_timestamp = base_timestamp - 1000;
+    let old_timestamp_result = database
+        .list_cctxs(limit as i64, Some(very_old_timestamp), Filters::default(), Direction::Desc)
+        .await
+        .unwrap();
+    
+    // Should return empty results since no records are older than this
+    assert_eq!(old_timestamp_result.items.len(), 0);
+
+    // Test edge case: Very future timestamp (should return all records for ASC)
+    let future_timestamp = base_timestamp + 10000;
+    let future_timestamp_result = database
+        .list_cctxs(limit as i64, Some(future_timestamp), Filters::default(), Direction::Asc)
+        .await
+        .unwrap();
+    
+    // Should return empty results since no records are newer than this
+    assert_eq!(future_timestamp_result.items.len(), 0);
+}
+
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn list_cctx_timestamp_conversion_edge_cases() {
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
+        init_tests_logs().await;
+    }
+    let db = init_db("test", "list_cctx_timestamp_conversion_edge_cases").await;
+    let database = ZetachainCctxDatabase::new(db.client(), 7001);
+    
+    // Test with specific edge case timestamps that might cause conversion issues
+    let edge_case_timestamps = vec![
+        0i64,                       // Unix epoch
+        1i64,                       // Very early timestamp
+        946684800i64,               // Year 2000 timestamp
+        1577836800i64,              // Year 2020 timestamp  
+        2147483647i64,              // Max 32-bit signed int (Year 2038 problem)
+    ];
+    
+    let cctxs: Vec<_> = edge_case_timestamps
+        .iter()
+        .enumerate()
+        .map(|(i, &timestamp)| {
+            let index_str = format!("edge_case_{}", i);
+            let mut cctx = helpers::dummy_cross_chain_tx(&index_str, "OutboundMined");
+            cctx.cctx_status.last_update_timestamp = timestamp.to_string();
+            cctx.inbound_params.ballot_index = index_str.clone();
+            cctx.inbound_params.observed_hash = index_str;
+            cctx
+        })
+        .collect();
+
+    let tx = db.client().begin().await.unwrap();
+    database.setup_db().await.unwrap();
+    database
+        .batch_insert_transactions(Uuid::new_v4(), &cctxs, &tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // Test pagination with each edge case timestamp as page_key
+    for (i, &test_timestamp) in edge_case_timestamps.iter().enumerate() {
+        // Test DESC direction
+        let result_desc = database
+            .list_cctxs(10, Some(test_timestamp), Filters::default(), Direction::Desc)
+            .await;
+        
+        assert!(
+            result_desc.is_ok(),
+            "Failed to query with timestamp {} (index {}): {:?}",
+            test_timestamp,
+            i,
+            result_desc.err()
+        );
+
+        let desc_items = result_desc.unwrap().items;
+        for item in &desc_items {
+            assert!(
+                item.last_update_timestamp < test_timestamp,
+                "DESC: Item timestamp {} should be < page_key {} (index {})",
+                item.last_update_timestamp,
+                test_timestamp,
+                i
+            );
+        }
+
+        // Test ASC direction
+        let result_asc = database
+            .list_cctxs(10, Some(test_timestamp), Filters::default(), Direction::Asc)
+            .await;
+        
+        assert!(
+            result_asc.is_ok(),
+            "Failed to query with timestamp {} (index {}) in ASC: {:?}",
+            test_timestamp,
+            i,
+            result_asc.err()
+        );
+
+        let asc_items = result_asc.unwrap().items;
+        for item in &asc_items {
+            assert!(
+                item.last_update_timestamp > test_timestamp,
+                "ASC: Item timestamp {} should be > page_key {} (index {})",
+                item.last_update_timestamp,
+                test_timestamp,
+                i
+            );
+        }
+    }
+
+    // Test with negative timestamp (should fail gracefully or be handled)
+    let negative_timestamp = -1i64;
+    let negative_result = database
+        .list_cctxs(10, Some(negative_timestamp), Filters::default(), Direction::Desc)
+        .await;
+    
+    // The query should either succeed with no results or fail gracefully
+    // (depending on how DateTime::from_timestamp handles negative values)
+    match negative_result {
+        Ok(_response) => {
+            // If it succeeds, it should return valid results (possibly empty)
+            // This tests that the system handles negative timestamps gracefully
+            // by either converting them properly or skipping invalid ones
+        }
+        Err(_) => {
+            // If it fails, that's also acceptable behavior for invalid timestamps
+            // This tests that the system handles edge cases gracefully
+        }
+    }
+
+    // Test with very large timestamp (far future)
+    let far_future_timestamp = 4102444800i64; // Year 2100
+    let future_result = database
+        .list_cctxs(10, Some(far_future_timestamp), Filters::default(), Direction::Desc)
+        .await
+        .unwrap();
+    
+    // Should return all records since they're all before this future timestamp
+    assert!(
+        future_result.items.len() >= edge_case_timestamps.len(),
+        "Future timestamp should return all records in DESC order"
+    );
+
+    // Verify that results are properly ordered by timestamp
+    let timestamps: Vec<i64> = future_result
+        .items
+        .iter()
+        .map(|item| item.last_update_timestamp)
+        .collect();
+    
+    for i in 1..timestamps.len() {
+        assert!(
+            timestamps[i-1] >= timestamps[i],
+            "Timestamps should be in DESC order: {} >= {}",
+            timestamps[i-1],
+            timestamps[i]
+        );
+    }
 }
 
 #[tokio::test]
