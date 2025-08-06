@@ -21,7 +21,7 @@ pub use charts::{
     ChartError, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject, MissingDatePolicy,
     Named, ResolutionKind, counters,
     db_interaction::read::{
-        ApproxUnsignedDiff, QueryAllBlockTimestampRange, ReadError, RequestedPointsLimit,
+        ApproxUnsignedDiff, QueryFullIndexerTimestampRange, ReadError, RequestedPointsLimit,
     },
     indexing_status,
     indexing_status::IndexingStatus,

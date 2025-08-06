@@ -4,7 +4,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
     data_source::{
         kinds::{
             local_db::{
@@ -69,7 +69,7 @@ impl StatementFromRange for ActiveAccountsStatement {
 }
 
 pub type ActiveAccountsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<ActiveAccountsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<ActiveAccountsStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct Properties;

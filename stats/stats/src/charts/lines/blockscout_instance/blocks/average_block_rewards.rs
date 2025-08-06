@@ -2,7 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -60,7 +60,7 @@ impl StatementFromRange for AverageBlockRewardsQuery {
 }
 
 pub type AverageBlockRewardsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<AverageBlockRewardsQuery, NaiveDate, f64, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<AverageBlockRewardsQuery, NaiveDate, f64, QueryFullIndexerTimestampRange>,
 >;
 
 pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;

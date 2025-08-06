@@ -10,16 +10,9 @@ use chrono::{DateTime, Utc};
 use parameter_traits::BatchStepBehaviour;
 
 use crate::{
-    ChartError, ChartProperties,
-    charts::db_interaction::read::get_min_date_blockscout,
-    data_source::{
-        UpdateContext,
-        kinds::local_db::{UpdateBehaviour, parameter_traits::QueryBehaviour},
-        source::DataSource,
-        types::Get,
-    },
-    range::UniversalRange,
-    types::{ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue},
+    charts::db_interaction::read::get_min_date, data_source::{
+        kinds::local_db::{parameter_traits::QueryBehaviour, UpdateBehaviour}, source::DataSource, types::Get, UpdateContext
+    }, range::UniversalRange, types::{ExtendedTimespanValue, Timespan, TimespanDuration, TimespanValue}, ChartError, ChartProperties
 };
 
 pub mod parameter_traits;
@@ -69,7 +62,7 @@ where
         let update_range_start = match update_from {
             Some(d) => d,
             None => ChartProps::Resolution::from_date(
-                get_min_date_blockscout(cx.indexer_db)
+                get_min_date(cx.indexer_db, cx.is_multichain_mode)
                     .await
                     .map(|time| time.date())
                     .map_err(ChartError::IndexerDB)?,

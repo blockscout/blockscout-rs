@@ -2,7 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -58,7 +58,7 @@ impl StatementFromRange for AverageBlockSizeStatement {
 }
 
 pub type AverageBlockSizeRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<AverageBlockSizeStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<AverageBlockSizeStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct Properties;

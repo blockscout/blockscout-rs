@@ -5,7 +5,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::{
     ChartError, ChartKey, ChartProperties, Named,
     charts::{
-        db_interaction::read::{QueryAllBlockTimestampRange, find_all_points},
+        db_interaction::read::{QueryFullIndexerTimestampRange, find_all_points},
         types::timespans::DateValue,
     },
     data_source::{
@@ -85,7 +85,7 @@ impl RemoteQueryBehaviour for NewAccountAbstractionWalletsQueryBehaviour {
         range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<DateValue<String>>, ChartError> {
         let statement_range =
-            data_source_query_range_to_db_statement_range::<QueryAllBlockTimestampRange>(cx, range)
+            data_source_query_range_to_db_statement_range::<QueryFullIndexerTimestampRange>(cx, range)
                 .await?;
         let statement = NewAccountAbstractionWalletsStatement::get_statement(
             statement_range.clone(),

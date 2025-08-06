@@ -1,6 +1,9 @@
+use chrono::NaiveDateTime;
 use multichain_aggregator_entity::block_ranges;
+use multichain_aggregator_entity::counters_global_imported;
 use num_traits::ToPrimitive;
 use rust_decimal::Decimal;
+use chrono::{NaiveDate, Utc};
 use sea_orm::{
     DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, sea_query::Expr,
 };
@@ -36,4 +39,28 @@ pub async fn get_min_block_multichain(multichain: &DatabaseConnection) -> Result
             Ok(i64::MAX)
         }
     }
+}
+
+#[derive(FromQueryResult, Debug)]
+struct MinDate {
+    date: Option<NaiveDate>,
+}
+
+// Getting the earliest date when the cluster's counters are available  
+pub async fn get_min_date_multichain(multichain: &DatabaseConnection) -> Result<NaiveDateTime, DbErr> {
+    let min_date = counters_global_imported::Entity::find()
+        .select_only()
+        .column_as(Expr::col(counters_global_imported::Column::Date).min(), "date")
+        .into_model::<MinDate>()
+        .one(multichain)
+        .await?;
+
+    let naive_date = min_date
+        .and_then(|r| r.date)
+        .unwrap_or_else(|| Utc::now().date_naive());
+
+    let naive_datetime = naive_date.and_hms_opt(0, 0, 0)
+        .ok_or_else(|| DbErr::Custom("Invalid time: 00:00:00".into()))?;
+
+    Ok(naive_datetime)
 }
