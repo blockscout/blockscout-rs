@@ -56,18 +56,18 @@ macro_rules! maybe_cache_lookup {
     };
 }
 
-pub enum AddressSearchConfig<'a> {
+pub enum AddressSearchConfig {
     NFTSearch {
         domain_primary_chain_id: ChainId,
     },
     GeneralSearch {
-        bens_protocols: Option<&'a [String]>,
+        bens_protocols: Option<Arc<Vec<String>>>,
         bens_domain_lookup_limit: u32,
         domain_primary_chain_id: ChainId,
     },
 }
 
-impl AddressSearchConfig<'_> {
+impl AddressSearchConfig {
     pub fn token_types(&self) -> Option<Vec<TokenType>> {
         match self {
             AddressSearchConfig::NFTSearch { .. } => {
@@ -97,7 +97,7 @@ pub async fn search_addresses(
     db: &DatabaseConnection,
     bens_client: HttpApiClient,
     domain_search_cache: Option<&DomainSearchCache>,
-    config: AddressSearchConfig<'_>,
+    config: AddressSearchConfig,
     query: String,
     chain_ids: Vec<ChainId>,
     page_size: u64,
@@ -107,7 +107,7 @@ pub async fn search_addresses(
         return Ok((vec![], None));
     }
 
-    let (addresses, contract_name_query) = match config {
+    let (addresses, contract_name_query) = match &config {
         AddressSearchConfig::GeneralSearch {
             bens_protocols,
             bens_domain_lookup_limit,
@@ -126,9 +126,9 @@ pub async fn search_addresses(
                     domain_search_cache,
                     bens_client.clone(),
                     query.clone(),
-                    bens_protocols.map(|p| p.to_vec()),
-                    domain_primary_chain_id,
-                    bens_domain_lookup_limit,
+                    bens_protocols.clone(),
+                    *domain_primary_chain_id,
+                    *bens_domain_lookup_limit,
                     None,
                 )
                 .await
@@ -362,7 +362,7 @@ pub async fn search_dapps(
 pub async fn search_domains(
     bens_client: HttpApiClient,
     query: String,
-    protocols: Option<Vec<String>>,
+    protocols: Option<Arc<Vec<String>>>,
     primary_chain_id: ChainId,
     page_size: u32,
     page_token: Option<String>,
@@ -400,7 +400,7 @@ pub async fn search_domains_cached(
     cache: Option<&DomainSearchCache>,
     bens_client: HttpApiClient,
     query: String,
-    protocols: Option<Vec<String>>,
+    protocols: Option<Arc<Vec<String>>>,
     primary_chain_id: ChainId,
     page_size: u32,
     page_token: Option<String>,
@@ -413,7 +413,7 @@ pub async fn search_domains_cached(
         page_size,
         page_token.clone().unwrap_or_default(),
     );
-    let get = move || {
+    let get = || {
         search_domains(
             bens_client,
             query.clone(),
@@ -468,7 +468,7 @@ pub struct SearchContext<'a> {
     pub dapp_client: &'a HttpApiClient,
     pub token_info_client: &'a HttpApiClient,
     pub bens_client: &'a HttpApiClient,
-    pub bens_protocols: Option<&'a [String]>,
+    pub bens_protocols: Option<Arc<Vec<String>>>,
     pub domain_primary_chain_id: ChainId,
     pub marketplace_enabled_cache: &'a chains::MarketplaceEnabledCache,
     pub domain_search_cache: Option<&'a DomainSearchCache>,
@@ -621,7 +621,7 @@ impl SearchTerm {
                     search_context.domain_search_cache,
                     search_context.bens_client.clone(),
                     query,
-                    search_context.bens_protocols.map(|p| p.to_vec()),
+                    search_context.bens_protocols.clone(),
                     search_context.domain_primary_chain_id,
                     1, // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
                     None,
