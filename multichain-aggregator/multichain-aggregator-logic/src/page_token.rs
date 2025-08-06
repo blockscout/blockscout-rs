@@ -13,8 +13,8 @@ pub enum PageTokenParsingError {
     JsonDecodeError(String),
     #[error("invalid format, expected {0} values")]
     FormatError(u32),
-    #[error("invalid format '{0}' in part #{1}")]
-    ParsingError(String, u32),
+    #[error("invalid format '{0}' in part #{1}; expected `{2}`")]
+    ParsingError(String, u32, String),
 }
 
 pub trait PageTokenFormat: Sized {
@@ -31,9 +31,17 @@ impl<T: PageTokenFormat> PageTokenFormat for Option<T> {
             Some((is_some, value)) => match is_some {
                 "1" => Ok(Some(T::parse_page_token(value.to_string())?)),
                 "0" => Ok(None),
-                _ => Err(PageTokenParsingError::ParsingError(page_token, 1)),
+                _ => Err(PageTokenParsingError::ParsingError(
+                    page_token,
+                    1,
+                    "0 or 1".to_string(),
+                )),
             },
-            None => Err(PageTokenParsingError::ParsingError(page_token, 0)),
+            None => Err(PageTokenParsingError::ParsingError(
+                page_token,
+                0,
+                "Option".to_string(),
+            )),
         }
     }
 
@@ -52,7 +60,7 @@ macro_rules! impl_page_token_format {
                 fn parse_page_token(page_token: String) -> Result<Self, PageTokenParsingError> {
                     page_token
                         .parse()
-                        .map_err(|_| PageTokenParsingError::ParsingError(page_token, 0))
+                        .map_err(|_| PageTokenParsingError::ParsingError(page_token, 0, stringify!($type).to_string()))
                 }
 
                 fn format_page_token(self) -> String {
@@ -69,7 +77,7 @@ impl PageTokenFormat for Decimal {
     fn parse_page_token(page_token: String) -> Result<Self, PageTokenParsingError> {
         page_token
             .parse()
-            .map_err(|_| PageTokenParsingError::ParsingError(page_token, 0))
+            .map_err(|_| PageTokenParsingError::ParsingError(page_token, 0, "Decimal".to_string()))
     }
 
     fn format_page_token(self) -> String {
@@ -79,9 +87,9 @@ impl PageTokenFormat for Decimal {
 
 impl PageTokenFormat for BigDecimal {
     fn parse_page_token(page_token: String) -> Result<Self, PageTokenParsingError> {
-        page_token
-            .parse()
-            .map_err(|_| PageTokenParsingError::ParsingError(page_token, 0))
+        page_token.parse().map_err(|_| {
+            PageTokenParsingError::ParsingError(page_token, 0, "BigDecimal".to_string())
+        })
     }
 
     fn format_page_token(self) -> String {
@@ -96,7 +104,11 @@ impl PageTokenFormat for NaiveDateTime {
             .map(chrono::DateTime::from_timestamp_micros)
         {
             Ok(Some(dt)) => Ok(dt.naive_utc()),
-            _ => Err(PageTokenParsingError::ParsingError(page_token, 0)),
+            _ => Err(PageTokenParsingError::ParsingError(
+                page_token,
+                0,
+                "NaiveDateTime".to_string(),
+            )),
         }
     }
 
@@ -105,10 +117,16 @@ impl PageTokenFormat for NaiveDateTime {
     }
 }
 
+macro_rules! count {
+    () => (0usize);
+    ( $x:ident $(,)? ) => (1usize);
+    ( $x:ident, $($xs:ident),+ $(,)? ) => (1usize + count!($($xs),*));
+}
+
 // Tuples are formatted as base64-encoded JSON array of strings
 // where each element is formatted as a string using the PageTokenFormat trait
 macro_rules! impl_page_token_format_tuple {
-    ($len:literal: ($($T:ident $var:ident),+)) => {
+    ($($T:ident $var:ident),+) => {
         impl<$($T: PageTokenFormat),+> PageTokenFormat for ($($T),+,) {
             fn parse_page_token(page_token: String) -> Result<Self, PageTokenParsingError> {
                 let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -124,7 +142,7 @@ macro_rules! impl_page_token_format_tuple {
                             $T::parse_page_token($var.to_string())?,
                         )+
                     )),
-                    _ => Err(PageTokenParsingError::FormatError($len as u32)),
+                    _ => Err(PageTokenParsingError::FormatError(count!($($T),+) as u32)),
                 }
             }
 
@@ -142,9 +160,9 @@ macro_rules! impl_page_token_format_tuple {
     };
 }
 
-impl_page_token_format_tuple!(1: (T1 v1));
-impl_page_token_format_tuple!(2: (T1 v1, T2 v2));
-impl_page_token_format_tuple!(3: (T1 v1, T2 v2, T3 v3));
+impl_page_token_format_tuple!(T1 v1);
+impl_page_token_format_tuple!(T1 v1, T2 v2);
+impl_page_token_format_tuple!(T1 v1, T2 v2, T3 v3);
 
 #[cfg(test)]
 mod tests {

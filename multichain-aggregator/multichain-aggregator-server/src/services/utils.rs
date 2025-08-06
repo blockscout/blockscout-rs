@@ -21,7 +21,7 @@ impl<T: PageTokenFormat> PageTokenExtractor<T> for Option<String> {
     fn extract_page_token(self) -> Result<Option<T>, Status> {
         self.map(|s| {
             T::parse_page_token(s.clone())
-                .map_err(|_| Status::invalid_argument("invalid page_token"))
+                .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))
         })
         .transpose()
     }
