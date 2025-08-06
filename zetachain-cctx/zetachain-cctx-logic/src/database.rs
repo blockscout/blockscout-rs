@@ -1921,14 +1921,17 @@ impl ZetachainCctxDatabase {
             params.push(sea_orm::Value::BigInt(Some(end_timestamp)));
         }
 
-        if let Some(page_key) = page_key {
+        if let Some(page_key) = page_key
+            .and_then(|key| DateTime::<Utc>::from_timestamp(key, 0))
+            .map(|dt| dt.naive_utc())
+        {
             param_count += 1;
             if direction == Direction::Asc {
-                sql.push_str(&format!(" AND id > ${}", param_count));
+                sql.push_str(&format!(" AND last_update_timestamp > ${}", param_count));
             } else {
-                sql.push_str(&format!(" AND id < ${}", param_count));
+                sql.push_str(&format!(" AND last_update_timestamp < ${}", param_count));
             }
-            params.push(sea_orm::Value::BigInt(Some(page_key)));
+            params.push(sea_orm::Value::ChronoDateTime(Some(Box::new(page_key))));
         }
 
         if !filters.token_symbol.is_empty() {
@@ -1952,7 +1955,7 @@ impl ZetachainCctxDatabase {
         // Add ordering and pagination
         param_count += 1;
         sql.push_str(&format!(
-            " ORDER BY id {} LIMIT ${}",
+            " ORDER BY last_update_timestamp {} LIMIT ${}",
             direction.as_str_name(),
             param_count
         ));
@@ -1967,18 +1970,22 @@ impl ZetachainCctxDatabase {
             .map_err(|e| anyhow::anyhow!("statement returned error: {}", e))?;
         let next_page_items_len = rows.len() - std::cmp::min(limit as usize, rows.len());
         let truncated = rows.iter().take(limit as usize);
-        let ids = truncated.clone().map(|row| {
-            row.try_get_by_index::<i64>(15)
-                .map_err(|e| anyhow::anyhow!("row.try_get_by_index(15): {}", e))
+        let timestamps = truncated.clone().map(|row| {
+            row.try_get_by_index::<NaiveDateTime>(2)
+                .map_err(|e| {
+                    anyhow::anyhow!("row.try_get_by_index(2) last_update_timestamp: {}", e)
+                })
                 .unwrap_or_default()
         });
-        let next_page_key: i64 = {
+        tracing::info!("timestamps: {:?}", timestamps);
+        let next_page_key = {
             if direction == Direction::Asc {
-                ids.max().unwrap_or_default() as i64
+                timestamps.max()
             } else {
-                ids.min().unwrap_or_default() as i64
+                timestamps.min()
             }
         };
+        let next_page_key = next_page_key.unwrap_or_default().and_utc().timestamp();
         let mut items = Vec::new();
         for row in truncated {
             // Read the status enum directly from the database

@@ -7,13 +7,70 @@ use blockscout_service_launcher::{
 use sea_orm::TransactionTrait;
 use std::sync::Arc;
 use uuid::Uuid;
+use zetachain_cctx_logic::models::Filters;
 use zetachain_cctx_logic::{
     client::{Client, RpcSettings},
     database::ZetachainCctxDatabase,
     models::{CoinType, CrossChainTx},
 };
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{CctxListItem, ListCctxsResponse};
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
+    CctxListItem, Direction, ListCctxsResponse,
+};
+
+use crate::helpers::{init_db, init_tests_logs};
 // use crate::helpers::{init_db, init_zetachain_cctx_server};
+
+#[tokio::test]
+#[ignore = "Needs database to run"]
+async fn list_cctx_sorting() {
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
+        init_tests_logs().await;
+    }
+    let db = init_db("test", "list_cctx_sorting").await;
+    let database = ZetachainCctxDatabase::new(db.client(), 7001);
+    let cctx_count: usize = 10;
+    let limit: usize = 4;
+    let cctxs: Vec<_> = (0..cctx_count)
+        .map(|i| {
+            let index_str = i.to_string();
+            let mut cctx = helpers::dummy_cross_chain_tx(&index_str, "OutboundMined");
+            cctx.cctx_status.last_update_timestamp = index_str.clone();
+            cctx.inbound_params.ballot_index = index_str.clone();
+            cctx.inbound_params.observed_hash = index_str;
+            cctx
+        })
+        .collect();
+
+    let tx = db.client().begin().await.unwrap();
+    database.setup_db().await.unwrap();
+    database
+        .batch_insert_transactions(Uuid::new_v4(), &cctxs, &tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let retrieved_desc = database
+        .list_cctxs(limit as i64, None, Filters::default(), Direction::Desc)
+        .await
+        .unwrap();
+
+    assert_eq!(retrieved_desc.items.len(), limit);
+    assert_eq!(
+        retrieved_desc.next_page_params.unwrap().page_key,
+        (cctx_count - limit) as i64
+    );
+
+    let retrieved_asc = database
+        .list_cctxs(limit as i64, None, Filters::default(), Direction::Asc)
+        .await
+        .unwrap();
+
+    assert_eq!(retrieved_asc.items.len(), limit);
+    assert_eq!(
+        retrieved_asc.next_page_params.unwrap().page_key,
+        (limit - 1) as i64
+    );
+}
 
 #[tokio::test]
 #[ignore = "Needs database to run"]
