@@ -24,7 +24,7 @@ use multichain_aggregator_logic::{
             list_active_chains_cached,
         },
         channel::Channel,
-        cluster::Cluster,
+        cluster::{Cluster, DecodedCalldataCache},
         search::UniformChainSearchCache,
     },
 };
@@ -73,6 +73,29 @@ impl launcher::HttpRouter for Router {
     }
 }
 
+macro_rules! add_cache_metrics {
+    ($cache_builder:expr, $cache_name:expr) => {
+        $cache_builder
+        .on_hit(Arc::new(|_, _| {
+            metrics::CACHE_HIT_TOTAL
+                .with_label_values(&[$cache_name])
+                .inc();
+        }))
+        .on_computed(Arc::new(|_, _| {
+            // `on_computed` is triggered when the cache entry is computed and not found in the cache.
+            // In this case, we consider it a cache miss.
+            metrics::CACHE_MISS_TOTAL
+                .with_label_values(&[$cache_name])
+                .inc();
+        }))
+        .on_refresh_computed(Arc::new(|_, _| {
+            metrics::CACHE_REFRESH_AHEAD_TOTAL
+                .with_label_values(&[$cache_name])
+                .inc();
+        }))
+    };
+}
+
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     blockscout_service_launcher::tracing::init_logs(
         SERVICE_NAME,
@@ -106,39 +129,44 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let channel = Arc::new(ChannelCentral::new(Channel));
 
-    let uniform_chain_search_cache = if let Some(cache_settings) = settings.cache {
-        let cache_name = "uniform_chain_search";
+    let redis_cache = if let Some(cache_settings) = &settings.cache {
         let redis_cache = RedisStore::builder()
             .connection_string(cache_settings.redis.url.to_string())
             .reconnect_retry_factor(2)
             .reconnect_max_delay(Duration::from_secs(30))
-            .prefix(format!("multichain_aggregator:{cache_name}"))
+            .prefix("multichain_aggregator")
             .build()
             .await?;
 
-        let cache_handler = UniformChainSearchCache::builder(Arc::new(redis_cache))
-            .default_ttl(cache_settings.uniform_chain_search_cache.ttl)
-            .maybe_default_refresh_ahead(cache_settings.uniform_chain_search_cache.refresh_ahead)
-            .on_hit(Arc::new(|_, _| {
-                metrics::CACHE_HIT_TOTAL
-                    .with_label_values(&[cache_name])
-                    .inc();
-            }))
-            .on_computed(Arc::new(|_, _| {
-                // `on_computed` is triggered when the cache entry is computed and not found in the cache.
-                // In this case, we consider it a cache miss.
-                metrics::CACHE_MISS_TOTAL
-                    .with_label_values(&[cache_name])
-                    .inc();
-            }))
-            .on_refresh_computed(Arc::new(|_, _| {
-                metrics::CACHE_REFRESH_AHEAD_TOTAL
-                    .with_label_values(&[cache_name])
-                    .inc();
-            }))
-            .build();
+        Some(Arc::new(redis_cache))
+    } else {
+        None
+    };
 
-        Some(cache_handler)
+    let uniform_chain_search_cache = if let Some(cache_settings) = &settings.cache
+        && cache_settings.uniform_chain_search_cache.enabled
+        && let Some(redis_cache) = &redis_cache
+    {
+        let cache_name = "uniform_chain_search";
+        let cache_builder = UniformChainSearchCache::builder(Arc::clone(redis_cache))
+            .default_ttl(cache_settings.uniform_chain_search_cache.ttl)
+            .maybe_default_refresh_ahead(cache_settings.uniform_chain_search_cache.refresh_ahead);
+        let cache = add_cache_metrics!(cache_builder, cache_name).build();
+        Some(cache)
+    } else {
+        None
+    };
+
+    let decoded_calldata_cache = if let Some(cache_settings) = &settings.cache
+        && cache_settings.decoded_calldata_cache.enabled
+        && let Some(redis_cache) = &redis_cache
+    {
+        let cache_name = "decoded_calldata";
+        let cache_builder = DecodedCalldataCache::builder(Arc::clone(redis_cache))
+            .default_ttl(cache_settings.decoded_calldata_cache.ttl)
+            .maybe_default_refresh_ahead(cache_settings.decoded_calldata_cache.refresh_ahead);
+        let cache = add_cache_metrics!(cache_builder, cache_name).build();
+        Some(cache)
     } else {
         None
     };
@@ -168,13 +196,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                         .expect("chain url should be present")
                         .parse()
                         .expect("chain url should be valid");
-                    (
-                        id,
-                        blockscout::new_client(url).expect("client should be valid"),
-                    )
+                    let client = blockscout::new_client(url).expect("client should be valid");
+                    (id, Arc::new(client))
                 })
                 .collect::<BTreeMap<_, _>>();
-            (name.clone(), Cluster::new(blockscout_clients))
+            (
+                name.clone(),
+                Cluster::new(blockscout_clients, decoded_calldata_cache.clone()),
+            )
         })
         .collect();
     let cluster_explorer = Arc::new(ClusterExplorer::new(

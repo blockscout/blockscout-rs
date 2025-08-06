@@ -6,7 +6,7 @@ use crate::{
     },
     error::{ParseError, ServiceError},
     repository::{addresses, block_ranges, hashes},
-    services::chains,
+    services::{chains, macros::maybe_cache_lookup},
     types::{
         ChainId,
         addresses::{Address, TokenType},
@@ -39,21 +39,6 @@ const QUICK_SEARCH_ENTITY_LIMIT: usize = 5;
 fn domain_name_with_tld_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\b[\p{L}\p{N}\p{Emoji}_-]{3,63}\.eth\b").unwrap())
-}
-
-macro_rules! maybe_cache_lookup {
-    ($cache:expr, $key:expr, $get:expr) => {
-        if let Some(cache) = $cache {
-            cache
-                .default_request()
-                .key($key)
-                .execute($get)
-                .await
-                .map_err(|err| err.into())
-        } else {
-            $get().await
-        }
-    };
 }
 
 pub enum AddressSearchConfig<'a> {

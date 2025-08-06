@@ -2,6 +2,7 @@ use crate::{
     clients::blockscout,
     error::ServiceError,
     repository::{chains, interop_messages},
+    services::macros::maybe_cache_lookup,
     types::{
         ChainId,
         chains::Chain,
@@ -10,17 +11,27 @@ use crate::{
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
 use api_client_framework::HttpApiClient;
+use recache::{handler::CacheHandler, stores::redis::RedisStore};
 use sea_orm::{DatabaseConnection, prelude::DateTime};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
-#[derive(Clone)]
+pub type DecodedCalldataCache = CacheHandler<RedisStore, String, serde_json::Value>;
+type BlockscoutClients = BTreeMap<ChainId, Arc<HttpApiClient>>;
+
 pub struct Cluster {
-    blockscout_clients: BTreeMap<ChainId, HttpApiClient>,
+    blockscout_clients: BlockscoutClients,
+    decoded_calldata_cache: Option<DecodedCalldataCache>,
 }
 
 impl Cluster {
-    pub fn new(blockscout_clients: BTreeMap<ChainId, HttpApiClient>) -> Self {
-        Self { blockscout_clients }
+    pub fn new(
+        blockscout_clients: BlockscoutClients,
+        decoded_calldata_cache: Option<DecodedCalldataCache>,
+    ) -> Self {
+        Self {
+            blockscout_clients,
+            decoded_calldata_cache,
+        }
     }
 
     pub fn validate_chain_id(&self, chain_id: ChainId) -> Result<(), ServiceError> {
@@ -58,23 +69,25 @@ impl Cluster {
         if let (Some(payload), Some(target_address_hash)) =
             (&message.payload, &message.target_address_hash)
         {
-            let decoded_payload = self
+            let blockscout_client = self
                 .blockscout_clients
                 .get(&init_chain_id)
-                .expect("chain id was validated")
-                .request(&blockscout::decode_calldata::DecodeCalldata {
-                    params: blockscout::decode_calldata::DecodeCalldataParams {
-                        calldata: payload.to_string(),
-                        address_hash: target_address_hash.to_string(),
-                    },
-                })
-                .await
-                .inspect_err(|e| {
-                    tracing::error!("failed to fetch decoded calldata: {e}");
-                });
+                .expect("chain id should be validated")
+                .clone();
+
+            let decoded_payload = fetch_decoded_calldata_cached(
+                &self.decoded_calldata_cache,
+                blockscout_client,
+                payload,
+                target_address_hash.to_string(),
+            )
+            .await
+            .inspect_err(|e| {
+                tracing::error!("failed to fetch decoded calldata: {e}");
+            });
 
             if let Ok(decoded_payload) = decoded_payload {
-                message.decoded_payload = Some(decoded_payload.result);
+                message.decoded_payload = Some(decoded_payload);
             }
         }
 
@@ -129,4 +142,32 @@ impl Cluster {
         let count = interop_messages::count(db, chain_id, Some(cluster_chain_ids)).await?;
         Ok(count)
     }
+}
+
+pub async fn fetch_decoded_calldata_cached(
+    cache: &Option<DecodedCalldataCache>,
+    blockscout_client: Arc<HttpApiClient>,
+    calldata: &alloy_primitives::Bytes,
+    address_hash: String,
+) -> Result<serde_json::Value, ServiceError> {
+    let calldata_hash = alloy_primitives::keccak256(calldata).to_string();
+    let calldata = calldata.to_string();
+
+    // address_hash is not part of the key, because it does not affect the decoded calldata
+    let key = format!("decoded_calldata:{calldata_hash}");
+
+    let get_decoded_payload = || async move {
+        blockscout_client
+            .request(&blockscout::decode_calldata::DecodeCalldata {
+                params: blockscout::decode_calldata::DecodeCalldataParams {
+                    calldata,
+                    address_hash,
+                },
+            })
+            .await
+            .map(|r| r.result)
+            .map_err(ServiceError::from)
+    };
+
+    maybe_cache_lookup!(cache, key, get_decoded_payload)
 }

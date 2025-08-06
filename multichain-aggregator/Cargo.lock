@@ -4358,7 +4358,7 @@ dependencies = [
 [[package]]
 name = "recache"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=54b19d5#54b19d5e13f5846f9119671624c4b90601710bc9"
+source = "git+https://github.com/blockscout/blockscout-rs?branch=lok52%2Frecache-clone-handler#447937397b60675db3e33746e94e972a6e959c2f"
 dependencies = [
  "async-trait",
  "bon",
