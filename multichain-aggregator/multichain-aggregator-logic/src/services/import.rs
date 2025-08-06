@@ -4,7 +4,7 @@ use crate::{
     services::channel::{LatestBlockUpdateMessage, NEW_BLOCKS_TOPIC, NEW_INTEROP_MESSAGES_TOPIC},
     types::{
         batch_import_request::BatchImportRequest,
-        interop_messages::InteropMessage,
+        interop_messages::ExtendedInteropMessage,
         tokens::{TokenType, TokenUpdate, UpdateTokenType},
     },
 };
@@ -74,8 +74,7 @@ pub async fn batch_import(
 
     let interop_messages = messages_with_transfers
         .into_iter()
-        .filter(|(m, _)| m.init_transaction_hash.is_some())
-        .filter_map(|m| InteropMessage::try_from(m).ok())
+        .filter(|m| m.init_transaction_hash.is_some())
         .map(proto::InteropMessage::from)
         .collect::<Vec<_>>();
     if !interop_messages.is_empty() {
@@ -97,15 +96,17 @@ pub async fn batch_import(
 }
 
 fn prepare_erc_7802_token_updates(
-    messages_with_transfers: &[(
-        entity::interop_messages::Model,
-        Option<entity::interop_messages_transfers::Model>,
-    )],
+    messages_with_transfers: &[ExtendedInteropMessage],
 ) -> Vec<TokenUpdate> {
     messages_with_transfers
         .iter()
-        .filter_map(|(message, transfer)| {
-            let address_hash = transfer.as_ref()?.token_address_hash.as_ref()?;
+        .filter_map(|message| {
+            let address_hash = message
+                .transfer
+                .as_ref()?
+                .token_address_hash
+                .as_ref()?
+                .to_vec();
             Some([
                 UpdateTokenType {
                     chain_id: message.init_chain_id,

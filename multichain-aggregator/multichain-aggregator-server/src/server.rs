@@ -16,17 +16,24 @@ use blockscout_service_launcher::{
 };
 use migration::Migrator;
 use multichain_aggregator_logic::{
-    clients::{bens, dapp, token_info},
+    clients::{bens, blockscout, dapp, token_info},
     metrics,
     services::{
-        chains::{MarketplaceEnabledCache, fetch_and_upsert_blockscout_chains},
+        chains::{
+            ChainSource, MarketplaceEnabledCache, fetch_and_upsert_blockscout_chains,
+            list_active_chains_cached,
+        },
         channel::Channel,
         cluster::Cluster,
         search::UniformChainSearchCache,
     },
 };
 use recache::stores::redis::RedisStore;
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 const SERVICE_NAME: &str = "multichain_aggregator";
 
@@ -136,6 +143,12 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         None
     };
 
+    let chain_urls = list_active_chains_cached(repo.read_db(), &[ChainSource::Repository])
+        .await?
+        .into_iter()
+        .map(|c| (c.id, c.explorer_url))
+        .collect::<BTreeMap<_, _>>();
+
     let clusters = settings
         .cluster_explorer
         .clusters
@@ -145,7 +158,23 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             if chain_ids.is_empty() {
                 panic!("cluster {name} has no chain_ids");
             }
-            (name.clone(), Cluster::new(chain_ids))
+            let blockscout_clients = chain_ids
+                .into_iter()
+                .map(|id| {
+                    let url = chain_urls
+                        .get(&id)
+                        .cloned()
+                        .expect("chain should be present")
+                        .expect("chain url should be present")
+                        .parse()
+                        .expect("chain url should be valid");
+                    (
+                        id,
+                        blockscout::new_client(url).expect("client should be valid"),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+            (name.clone(), Cluster::new(blockscout_clients))
         })
         .collect();
     let cluster_explorer = Arc::new(ClusterExplorer::new(

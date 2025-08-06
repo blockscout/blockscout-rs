@@ -50,6 +50,9 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListInteropMessages
       get: /api/v1/clusters/{cluster_id}/messages
 
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetInteropMessage
+      get: /api/v1/clusters/{cluster_id}/messages/{init_chain_id}/{nonce}
+
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.CountInteropMessages
       get: /api/v1/clusters/{cluster_id}/messages/count
 

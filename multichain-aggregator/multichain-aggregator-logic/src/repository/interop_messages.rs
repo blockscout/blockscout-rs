@@ -1,12 +1,14 @@
 use super::{interop_message_transfers, macros::update_if_not_null, paginate_cursor};
-use crate::types::{
-    ChainId,
-    interop_message_transfers::InteropMessageTransfer,
-    interop_messages::{InteropMessage, MessageDirection},
+use crate::{
+    error::ParseError,
+    types::{
+        ChainId,
+        interop_messages::{ExtendedInteropMessage, MessageDirection},
+    },
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
 use entity::{
-    interop_messages::{ActiveModel, Column, Entity, Model},
+    interop_messages::{ActiveModel, Column, Entity},
     interop_messages_transfers,
 };
 use sea_orm::{
@@ -19,8 +21,8 @@ use std::collections::HashMap;
 
 pub async fn upsert_many_with_transfers<C>(
     db: &C,
-    mut interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
-) -> Result<Vec<(Model, Option<interop_messages_transfers::Model>)>, DbErr>
+    mut interop_messages: Vec<ExtendedInteropMessage>,
+) -> Result<Vec<ExtendedInteropMessage>, DbErr>
 where
     C: ConnectionTrait + TransactionTrait,
 {
@@ -30,12 +32,14 @@ where
         return Ok(vec![]);
     }
 
-    interop_messages
-        .sort_by(|(a, _), (b, _)| (a.init_chain_id, a.nonce).cmp(&(b.init_chain_id, b.nonce)));
+    interop_messages.sort_by(|a, b| (a.init_chain_id, a.nonce).cmp(&(b.init_chain_id, b.nonce)));
 
     let (interop_messages, transfers): (Vec<_>, Vec<_>) = interop_messages
         .into_iter()
-        .map(|(m, t)| (ActiveModel::from(m), t))
+        .map(|m| {
+            let transfer = m.transfer.clone();
+            (ActiveModel::from(m), transfer)
+        })
         .unzip();
 
     db.transaction(|tx| {
@@ -73,13 +77,21 @@ where
                 .map(|t| (t.interop_message_id, t))
                 .collect::<HashMap<_, _>>();
 
-            Ok(messages
+            messages
                 .into_iter()
                 .map(|m| {
-                    let t = id_to_transfer.remove(&m.id);
-                    (m, t)
+                    let transfer = id_to_transfer
+                        .remove(&m.id)
+                        .map(TryFrom::try_from)
+                        .transpose()?;
+
+                    let mut message = ExtendedInteropMessage::try_from(m)?;
+                    message.transfer = transfer;
+
+                    Ok::<_, ParseError>(message)
                 })
-                .collect())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| DbErr::Custom(e.to_string()))
         })
     })
     .await
@@ -87,6 +99,23 @@ where
         TransactionError::Connection(e) => e,
         TransactionError::Transaction(e) => e,
     })
+}
+
+pub async fn get<C>(
+    db: &C,
+    init_chain_id: ChainId,
+    nonce: i64,
+) -> Result<Option<ExtendedInteropMessage>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    Entity::find()
+        .filter(Column::InitChainId.eq(init_chain_id))
+        .filter(Column::Nonce.eq(nonce))
+        .left_join(interop_messages_transfers::Entity)
+        .into_partial_model::<ExtendedInteropMessage>()
+        .one(db)
+        .await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -100,13 +129,7 @@ pub async fn list<C>(
     cluster_chain_ids: Option<Vec<ChainId>>,
     page_size: u64,
     page_token: Option<(DateTime, TxHash)>,
-) -> Result<
-    (
-        Vec<(Model, Option<interop_messages_transfers::Model>)>,
-        Option<(DateTime, TxHash)>,
-    ),
-    DbErr,
->
+) -> Result<(Vec<ExtendedInteropMessage>, Option<(DateTime, TxHash)>), DbErr>
 where
     C: ConnectionTrait,
 {
@@ -136,13 +159,14 @@ where
             }
         })
         .apply_if(nonce, |q, nonce| q.filter(Column::Nonce.eq(nonce)))
-        .find_also_related(interop_messages_transfers::Entity)
-        .cursor_by((Column::Timestamp, Column::InitTransactionHash));
+        .left_join(interop_messages_transfers::Entity)
+        .cursor_by((Column::Timestamp, Column::InitTransactionHash))
+        .into_partial_model::<ExtendedInteropMessage>();
     c.desc();
 
     let page_token = page_token.map(|(t, h)| (t, h.to_vec()));
 
-    paginate_cursor(db, c, page_size, page_token, |(u, _)| {
+    paginate_cursor(db, c, page_size, page_token, |u| {
         let init_transaction_hash = u
             .init_transaction_hash
             .as_ref()

@@ -7,7 +7,7 @@ use super::{
     counters::{ChainCounters, Counters},
     hashes::{Hash, proto_hash_type_to_db_hash_type},
     interop_message_transfers::InteropMessageTransfer,
-    interop_messages::InteropMessage,
+    interop_messages::ExtendedInteropMessage,
 };
 use crate::{
     error::{ParseError, ServiceError},
@@ -24,7 +24,7 @@ pub struct BatchImportRequest {
     pub block_ranges: Vec<BlockRange>,
     pub hashes: Vec<Hash>,
     pub addresses: Vec<Address>,
-    pub interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
+    pub interop_messages: Vec<ExtendedInteropMessage>,
     pub address_coin_balances: Vec<AddressCoinBalance>,
     pub address_token_balances: Vec<AddressTokenBalance>,
     pub tokens: Vec<TokenUpdate>,
@@ -62,7 +62,7 @@ impl BatchImportRequest {
         calculate_entity_metrics!(&self.addresses, |a: &Address| a.chain_id, "addresses");
         calculate_entity_metrics!(
             &self.interop_messages,
-            |(m, _): &(InteropMessage, _)| {
+            |m: &ExtendedInteropMessage| {
                 if m.init_transaction_hash.is_some() {
                     m.init_chain_id
                 } else {
@@ -134,7 +134,7 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
             interop_messages: value
                 .interop_messages
                 .into_iter()
-                .map(|m| InteropMessageWithTransfer::try_from((chain_id, m)).map(|a| (a.0, a.1)))
+                .map(|m| ExtendedInteropMessage::try_from((chain_id, m)))
                 .collect::<Result<Vec<_>, _>>()?,
             address_coin_balances: value
                 .address_coin_balances
@@ -252,10 +252,8 @@ impl TryFrom<(ChainId, proto::batch_import_request::AddressImport)> for Address 
     }
 }
 
-struct InteropMessageWithTransfer(InteropMessage, Option<InteropMessageTransfer>);
-
 impl TryFrom<(ChainId, proto::batch_import_request::InteropMessageImport)>
-    for InteropMessageWithTransfer
+    for ExtendedInteropMessage
 {
     type Error = ParseError;
 
@@ -265,36 +263,34 @@ impl TryFrom<(ChainId, proto::batch_import_request::InteropMessageImport)>
         let message = m.message.ok_or_else(|| {
             ParseError::Custom("interop message is missing or invalid".to_string())
         })?;
-        let (msg, transfer) = match message {
+        let msg = match message {
             proto::batch_import_request::interop_message_import::Message::Init(init) => {
-                let InteropMessageWithTransfer(msg, transfer) = init.try_into()?;
+                let msg: ExtendedInteropMessage = init.try_into()?;
                 if msg.init_chain_id != chain_id {
                     return Err(ParseError::ChainIdMismatch {
                         expected: chain_id,
                         actual: msg.init_chain_id,
                     });
                 }
-                (msg, transfer)
+                msg
             }
             proto::batch_import_request::interop_message_import::Message::Relay(relay) => {
-                let msg: InteropMessage = relay.try_into()?;
+                let msg: ExtendedInteropMessage = relay.try_into()?;
                 if msg.relay_chain_id != chain_id {
                     return Err(ParseError::ChainIdMismatch {
                         expected: chain_id,
                         actual: msg.relay_chain_id,
                     });
                 }
-                (msg, None)
+                msg
             }
         };
 
-        Ok(Self(msg, transfer))
+        Ok(msg)
     }
 }
 
-impl TryFrom<proto::batch_import_request::interop_message_import::Init>
-    for InteropMessageWithTransfer
-{
+impl TryFrom<proto::batch_import_request::interop_message_import::Init> for ExtendedInteropMessage {
     type Error = ParseError;
 
     fn try_from(
@@ -345,23 +341,26 @@ impl TryFrom<proto::batch_import_request::interop_message_import::Init>
             let init_chain_id = m.init_chain_id.parse()?;
             let relay_chain_id = m.relay_chain_id.parse()?;
 
-            InteropMessage::base(nonce, init_chain_id, relay_chain_id)
+            ExtendedInteropMessage::base(nonce, init_chain_id, relay_chain_id)
         };
 
-        let msg = InteropMessage {
+        let msg = ExtendedInteropMessage {
             sender_address_hash,
             target_address_hash,
             init_transaction_hash,
             timestamp,
             payload,
+            transfer,
             ..base_msg
         };
 
-        Ok(Self(msg, transfer))
+        Ok(msg)
     }
 }
 
-impl TryFrom<proto::batch_import_request::interop_message_import::Relay> for InteropMessage {
+impl TryFrom<proto::batch_import_request::interop_message_import::Relay>
+    for ExtendedInteropMessage
+{
     type Error = ParseError;
 
     fn try_from(
@@ -372,7 +371,7 @@ impl TryFrom<proto::batch_import_request::interop_message_import::Relay> for Int
             let init_chain_id = m.init_chain_id.parse()?;
             let relay_chain_id = m.relay_chain_id.parse()?;
 
-            InteropMessage::base(nonce, init_chain_id, relay_chain_id)
+            ExtendedInteropMessage::base(nonce, init_chain_id, relay_chain_id)
         };
 
         let relay_transaction_hash = Some(m.relay_transaction_hash.parse()?);
