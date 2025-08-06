@@ -792,49 +792,46 @@ impl ZetachainCctxDatabase {
 
     #[instrument(,level="trace",skip_all,fields(cctx_id = %cctx.index))]
     pub async fn calculate_token_id(&self, cctx: &CrossChainTx) -> anyhow::Result<Option<i32>> {
-        if cctx.inbound_params.coin_type == models::CoinType::NoAssetCall {
-            return Ok(None);
-        }
-        if cctx.inbound_params.coin_type == models::CoinType::Zeta {
-            let token = TokenEntity::Entity::find()
-                .filter(TokenEntity::Column::CoinType.eq(DBCoinType::Zeta))
-                .one(self.db.as_ref())
-                .await?;
-            return Ok(token.map(|t| t.id));
-        }
-        if cctx.inbound_params.coin_type == models::CoinType::ERC20 {
-            let token = TokenEntity::Entity::find()
-                .filter(TokenEntity::Column::Asset.eq(&cctx.inbound_params.asset))
-                .one(self.db.as_ref())
-                .await?;
-            return Ok(token.map(|t| t.id));
-        } else {
-            let chain_id = if cctx
-                .inbound_params
-                .sender_chain_id
-                .parse::<i32>()
-                .unwrap_or_default()
-                == self.zetachain_id
-            {
-                &cctx.outbound_params[0].receiver_chain_id
-            } else {
-                &cctx.inbound_params.sender_chain_id
-            };
 
-            let chain_id = chain_id.parse::<i32>().unwrap_or_default();
-            let coin_type = zetachain_cctx_entity::sea_orm_active_enums::CoinType::try_from(
-                cctx.inbound_params.coin_type.clone(),
-            )?;
-            let token:zetachain_cctx_entity::token::Model = TokenEntity::Entity::find()
-                .filter(
-                    sea_orm::Condition::all()
-                        .add(TokenEntity::Column::CoinType.eq(coin_type.clone() ))
-                        .add(TokenEntity::Column::ForeignChainId.eq(chain_id)),
-                )
-                .one(self.db.as_ref())
-                .await?
-                .ok_or(anyhow::anyhow!("Token not found, index:{}, chain_id:{}, coin_type:{}", cctx.index, chain_id, &coin_type))?;
-            return Ok(Some(token.id));
+
+        match cctx.inbound_params.coin_type {
+            models::CoinType::NoAssetCall | models::CoinType::Cmd => return Ok(None),
+            models::CoinType::Zeta => {
+                let token = TokenEntity::Entity::find()
+                    .filter(TokenEntity::Column::CoinType.eq(DBCoinType::Zeta))
+                    .one(self.db.as_ref())
+                    .await?;
+                return Ok(token.map(|t| t.id));
+            }
+            models::CoinType::ERC20 => {
+                let token = TokenEntity::Entity::find()
+                    .filter(TokenEntity::Column::Asset.eq(&cctx.inbound_params.asset))
+                    .one(self.db.as_ref())
+                    .await?
+                    .ok_or(anyhow::anyhow!("ERC20 token not found, asset: {}, index: {}", cctx.inbound_params.asset, cctx.index))?;
+                return Ok(Some(token.id));
+            }
+            models::CoinType::Gas => {
+                let chain_id = if cctx
+                    .inbound_params
+                    .sender_chain_id
+                    .parse::<i32>()
+                    .unwrap_or_default()
+                    == self.zetachain_id
+                {
+                    &cctx.outbound_params[0].receiver_chain_id
+                } else {
+                    &cctx.inbound_params.sender_chain_id
+                };
+                let chain_id = chain_id.parse::<i32>().unwrap_or_default();
+                let token = TokenEntity::Entity::find()
+                    .filter(TokenEntity::Column::CoinType.eq(DBCoinType::Gas))
+                    .filter(TokenEntity::Column::ForeignChainId.eq(chain_id))
+                    .one(self.db.as_ref())
+                    .await?
+                    .ok_or(anyhow::anyhow!("Gas token not found, chain_id: {}, index: {}", chain_id, cctx.index))?;
+                return Ok(Some(token.id));
+            }
         }
     }
 
