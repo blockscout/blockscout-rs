@@ -186,6 +186,7 @@ async fn test_token_sync_stream_works() {
 
     // Verify tokens were inserted
     let token_count = token::Entity::find()
+        .filter(token::Column::Asset.ne("UNKNOWN"))
         .count(db_conn.as_ref())
         .await
         .unwrap();
@@ -393,6 +394,7 @@ async fn test_token_sync_pagination() {
 
     // Verify all tokens from all pages were inserted
     let token_count = token::Entity::find()
+        .filter(token::Column::Asset.ne("UNKNOWN"))
         .count(db_conn.as_ref())
         .await
         .unwrap();

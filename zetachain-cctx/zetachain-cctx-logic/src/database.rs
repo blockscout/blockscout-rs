@@ -317,6 +317,33 @@ impl ZetachainCctxDatabase {
             );
         }
 
+        //insert unknown token if not present
+        let unknown_token = TokenEntity::Entity::find()
+            .filter(TokenEntity::Column::Asset.eq("UNKNOWN"))
+            .one(self.db.as_ref())
+            .await?;
+        if unknown_token.is_none() {
+            tracing::debug!("inserting unknown token");
+            TokenEntity::Entity::insert(TokenEntity::ActiveModel {
+                zrc20_contract_address: ActiveValue::Set("UNKNOWN".to_string()),
+                asset: ActiveValue::Set("UNKNOWN".to_string()),
+                foreign_chain_id: ActiveValue::Set(-9999),
+                decimals: ActiveValue::Set(18),
+                name: ActiveValue::Set("UNKNOWN".to_string()),
+                symbol: ActiveValue::Set("UNKNOWN".to_string()),
+                coin_type: ActiveValue::Set(DBCoinType::Gas),
+                gas_limit: ActiveValue::Set("UNKNOWN".to_string()),
+                paused: ActiveValue::Set(false),
+                liquidity_cap: ActiveValue::Set("UNKNOWN".to_string()),
+                created_at: ActiveValue::Set(Utc::now().naive_utc()),
+                updated_at: ActiveValue::Set(Utc::now().naive_utc()),
+                icon_url: ActiveValue::Set(None),
+                ..Default::default()
+            })
+            .exec(self.db.as_ref())
+            .await?;
+        }
+
         let token_watermark = watermark::Entity::find()
             .filter(watermark::Column::Kind.eq(Kind::Token))
             .one(self.db.as_ref())
@@ -790,9 +817,19 @@ impl ZetachainCctxDatabase {
         Ok(())
     }
 
+    async fn get_unknown_token_id(&self) -> anyhow::Result<i32> {
+        let unknown_token_id = TokenEntity::Entity::find()
+            .filter(TokenEntity::Column::Asset.eq("UNKNOWN"))
+            .one(self.db.as_ref())
+            .await?
+            .map(|t| t.id)
+            .unwrap_or(1);
+        Ok(unknown_token_id)
+    }
+
     #[instrument(,level="trace",skip_all,fields(cctx_id = %cctx.index))]
     pub async fn calculate_token_id(&self, cctx: &CrossChainTx) -> anyhow::Result<Option<i32>> {
-
+        let unknown_token_id = self.get_unknown_token_id().await?;
 
         match cctx.inbound_params.coin_type {
             models::CoinType::NoAssetCall | models::CoinType::Cmd => return Ok(None),
@@ -800,16 +837,20 @@ impl ZetachainCctxDatabase {
                 let token = TokenEntity::Entity::find()
                     .filter(TokenEntity::Column::CoinType.eq(DBCoinType::Zeta))
                     .one(self.db.as_ref())
-                    .await?;
-                return Ok(token.map(|t| t.id));
+                    .await?
+                    .map(|t| t.id)
+                    .unwrap_or(unknown_token_id);
+                
+                return Ok(Some(token));
             }
             models::CoinType::ERC20 => {
-                let token = TokenEntity::Entity::find()
+                let token_id = TokenEntity::Entity::find()
                     .filter(TokenEntity::Column::Asset.eq(&cctx.inbound_params.asset))
                     .one(self.db.as_ref())
                     .await?
-                    .ok_or(anyhow::anyhow!("ERC20 token not found, asset: {}, index: {}", cctx.inbound_params.asset, cctx.index))?;
-                return Ok(Some(token.id));
+                    .map(|t| t.id)
+                    .unwrap_or(unknown_token_id);
+                return Ok(Some(token_id));
             }
             models::CoinType::Gas => {
                 let chain_id = if cctx
@@ -824,13 +865,14 @@ impl ZetachainCctxDatabase {
                     &cctx.inbound_params.sender_chain_id
                 };
                 let chain_id = chain_id.parse::<i32>().unwrap_or_default();
-                let token = TokenEntity::Entity::find()
+                let token_id = TokenEntity::Entity::find()
                     .filter(TokenEntity::Column::CoinType.eq(DBCoinType::Gas))
                     .filter(TokenEntity::Column::ForeignChainId.eq(chain_id))
                     .one(self.db.as_ref())
                     .await?
-                    .ok_or(anyhow::anyhow!("Gas token not found, chain_id: {}, index: {}", chain_id, cctx.index))?;
-                return Ok(Some(token.id));
+                    .map(|t| t.id)
+                    .unwrap_or(unknown_token_id);
+                return Ok(Some(token_id));
             }
         }
     }
@@ -929,7 +971,9 @@ impl ZetachainCctxDatabase {
     ) -> anyhow::Result<()> {
         // Insert main cross_chain_tx record
         let index = cctx.index.clone();
-        let token_id = self.calculate_token_id(&cctx).await?;
+        let token_id = self.calculate_token_id(&cctx).await.map_err(|e| {
+            anyhow::anyhow!("Failed to calculate token id for cctx {}: {}", index, e)
+        })?;
         let cctx_model = CrossChainTxEntity::ActiveModel {
             id: ActiveValue::NotSet,
             creator: ActiveValue::Set(cctx.creator),
@@ -1154,7 +1198,11 @@ impl ZetachainCctxDatabase {
 
     pub async fn get_sync_progress(&self) -> anyhow::Result<SyncProgress> {
         let historical_watermark = watermark::Entity::find()
-            .filter(watermark::Column::Kind.eq(Kind::Historical))
+            .filter(
+                sea_orm::Condition::all()
+                    .add(watermark::Column::Kind.eq(Kind::Historical))
+                    .add(watermark::Column::Id.eq(1)),
+            )
             .one(self.db.as_ref())
             .await?
             .ok_or(anyhow::anyhow!("Historical watermark not found"))?;
@@ -2106,7 +2154,19 @@ impl ZetachainCctxDatabase {
     ) -> anyhow::Result<Vec<CrossChainTxEntity::ActiveModel>> {
         let mut models = Vec::new();
         for cctx in cctxs {
-            let token_id = self.calculate_token_id(cctx).await?;
+            //if calculcate_token_id fails, we skip this cctx
+            //if we fail insertion, the whole batch would be lost, which is not desired
+            let token_id = match self.calculate_token_id(cctx).await {
+                std::result::Result::Ok(value) => value,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to calculate token id for cctx {}: {}",
+                        cctx.index,
+                        e
+                    );
+                    continue;
+                }
+            };
             let model = CrossChainTxEntity::ActiveModel {
                 id: ActiveValue::NotSet,
                 creator: ActiveValue::Set(cctx.creator.clone()),

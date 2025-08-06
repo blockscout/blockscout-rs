@@ -327,6 +327,11 @@ impl Indexer {
             }
         });
 
+        if self.settings.token_sync_enabled {
+            //we need to sync tokens first, because we need to have tokens in the database to process the historical data
+            sync_tokens(Uuid::new_v4(), self.database.clone(), &self.client, self.settings.token_batch_size).await?;
+        }
+
 
         //Most of the data is processed in streams, because we don't care about exact timings but rather the eventual consistency and processing order.
         // Priority strategy in descending order:
