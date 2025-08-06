@@ -195,9 +195,13 @@ impl From<ExtendedInteropMessage> for proto::InteropMessage {
                 .map(proto::interop_message::InteropMessageTransfer::from),
             message_type,
             method,
-            decoded_payload: v
-                .decoded_payload
-                .map(|p| serde_json::from_value(p).expect("failed to deserialize protocol")),
+            decoded_payload: v.decoded_payload.and_then(|p| {
+                serde_json::from_value(p)
+                    .inspect_err(|_| {
+                        tracing::error!("failed to deserialize protocol");
+                    })
+                    .ok()
+            }),
         }
     }
 }
