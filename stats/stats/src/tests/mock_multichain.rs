@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime};
 use multichain_aggregator_entity::{addresses, block_ranges, chains, interop_messages, counters_global_imported};
-use sea_orm::{DatabaseConnection, EntityTrait, Set};
+use sea_orm::{ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 
 pub async fn fill_mock_multichain_data(multichain: &DatabaseConnection, max_date: NaiveDate) {
     let accounts = mock_addresses();
@@ -121,16 +121,16 @@ fn mock_block_ranges() -> Vec<block_ranges::ActiveModel> {
 }
 
 fn mock_counters_global_imported(max_date: NaiveDate) -> Vec<counters_global_imported::ActiveModel> {
-    // Now each tuple includes: (date, daily_txns, total_txns, total_addresses)
+    // each tuple includes: (date, daily_txns, total_txns, total_addresses)
     let dates_and_txns = vec![
-        ("2022-11-09", 150, 1000, 100),
-        ("2022-11-10", 200, 1200, 120),
-        ("2022-11-11", 175, 1375, 130),
-        ("2022-11-12", 225, 1600, 140),
-        ("2022-12-01", 300, 1900, 150),
-        ("2023-01-15", 250, 2150, 155),
-        ("2023-02-01", 275, 2425, 160),
-        ("2023-03-01", 325, 2750, 170),
+        ("2022-08-06", 8, 50, 100),
+        ("2022-08-05", 2, 42, 120),
+        ("2022-08-04", 18, 40, 130),
+        ("2022-08-02", 0, 22, 140),
+        ("2022-08-01", 2, 22, 150),
+        ("2022-07-30", 10, 20, 155),
+        ("2022-07-20", 9, 10, 160),
+        ("2022-07-01", 1, 1, 170),
     ];
 
     dates_and_txns
@@ -154,8 +154,8 @@ fn mock_counter_global_imported(
     total_addresses: i64,
 ) -> counters_global_imported::ActiveModel {
     counters_global_imported::ActiveModel {
-        id: Set(Default::default()), // Auto-increment
-        chain_id: Set(1), // Default chain ID
+        id: NotSet,
+        chain_id: Set(1),
         date: Set(date),
         daily_transactions_number: Set(Some(daily_transactions)),
         total_transactions_number: Set(Some(total_transactions)),

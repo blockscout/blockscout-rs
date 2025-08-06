@@ -74,15 +74,15 @@ pub type TotalTxnsNumber =
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_counter_multichain;
+    use crate::tests::{point_construction::dt, simple_test::simple_test_counter_multichain};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_txns_number() {
         simple_test_counter_multichain::<TotalTxnsNumber>(
             "update_total_txns_number",
-            "3",
-            None,
+            "50",
+            Some(dt("2022-08-06T00:00:00")),
         )
         .await;
     }

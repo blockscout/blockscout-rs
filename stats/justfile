@@ -5,13 +5,13 @@ db-host := env_var_or_default('DB_HOST', "localhost")
 db-port := env_var_or_default('DB_PORT', "5432")
 db-user := env_var_or_default('DB_USER', "postgres")
 db-password := env_var_or_default('DB_PASSWORD', "admin")
-db-name := env_var_or_default('DB_NAME', "stats")
+db-name := env_var_or_default('DB_NAME', "info")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
-export RUST_LOG := env_var_or_default('RUST_LOG', "info")
+export RUST_LOG := env_var_or_default('RUST_LOG', "error")
 export RUST_BACKTRACE := env_var_or_default('RUST_BACKTRACE', "0")
 
 docker-name := env_var_or_default('DOCKER_NAME', "stats-postgres")
-test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
+test-db-port := env_var_or_default('TEST_DB_PORT', "9434")
 
 docker-build-dev *args:
     docker compose -f docker-compose.dev.yml build
@@ -21,7 +21,7 @@ docker-run-dev *args:
 
 start-postgres:
     # we run it in --rm mode, so all data will be deleted after stopping
-    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres -N 500
+    docker run -p {{db-port}}:5432 --name {{docker-name}} -e POSTGRES_PASSWORD={{db-password}} -e POSTGRES_USER={{db-user}} --rm -d postgres:17.5 -N 500
     sleep 3
     # wait for postgres to start, but only if db_name is not empty
     $SHELL -c '[[ -z "{{db-name}}" ]] || docker exec -it {{docker-name}} psql -U postgres -c "create database {{db-name}};"'
