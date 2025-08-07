@@ -1,8 +1,9 @@
 use blockscout_service_launcher::{test_database::TestDbGuard};
 use chrono::Utc;
 use serde_json::Value;
+use uuid::Uuid;
 use zetachain_cctx_logic::models::{
-    CallOptions, CctxStatus, CrossChainTx, InboundParams, OutboundParams, RevertOptions,
+    CallOptions, CctxStatus, CrossChainTx, InboundParams, OutboundParams, RevertOptions, Token,
 };
 use zetachain_cctx_logic::models::CoinType;
 use rand::Rng;
@@ -175,4 +176,26 @@ pub fn empty_response() -> serde_json::Value {
         "total": "0"
     }
     })
+}
+#[allow(dead_code)]
+pub fn dummy_token(
+    name: &str,
+    symbol: &str,
+    asset: Option<String>,
+    chain_id: &str,
+    coin_type: CoinType,
+) -> Token {
+    Token {
+        foreign_chain_id: chain_id.to_string(),
+        symbol: symbol.to_string(),
+        name: name.to_string(),
+        decimals: 18,
+        zrc20_contract_address: Uuid::new_v4().to_string(),
+        asset: asset.unwrap_or("".to_string()),
+        coin_type,
+        gas_limit: "1000000000000000000".to_string(),
+        paused: false,
+        liquidity_cap: "1000000000000000000".to_string(),
+        icon_url: Some("https://example.com/icon.png".to_string()),
+    }
 }

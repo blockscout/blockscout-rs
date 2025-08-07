@@ -125,28 +125,6 @@ async fn query_cctxs_with_filters() {
     assert_eq!(cctxs.items.len(), 2);
 }
 
-fn dummy_token(
-    name: &str,
-    symbol: &str,
-    asset: Option<String>,
-    chain_id: &str,
-    coin_type: CoinType,
-) -> Token {
-    Token {
-        foreign_chain_id: chain_id.to_string(),
-        symbol: symbol.to_string(),
-        name: name.to_string(),
-        decimals: 18,
-        zrc20_contract_address: Uuid::new_v4().to_string(),
-        asset: asset.unwrap_or("".to_string()),
-        coin_type,
-        gas_limit: "1000000000000000000".to_string(),
-        paused: false,
-        liquidity_cap: "1000000000000000000".to_string(),
-        icon_url: Some("https://example.com/icon.png".to_string()),
-    }
-}
-
 #[tokio::test]
 async fn query_cctxs_with_token_symbol_filter() {
     if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {

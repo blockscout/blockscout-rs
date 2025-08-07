@@ -20,7 +20,6 @@ pub struct Model {
     pub amount: String,
     pub observed_hash: String,
     pub observed_external_height: i64,
-    #[sea_orm(unique)]
     pub ballot_index: String,
     pub finalized_zeta_height: i64,
     pub tx_finalization_status: TxFinalizationStatus,
