@@ -1,9 +1,7 @@
 use crate::{
     client::models::{
         operations::Operations as ApiOperations,
-        profiling::{
-            BlockchainTypeLowercase, OperationData as ApiOperationData, OperationMetaInfo,
-        },
+        profiling::{BlockchainType, OperationData as ApiOperationData, OperationMetaInfo},
     },
     utils::{
         blockchain_address_to_db_format, is_generic_hash, is_tac_address, is_ton_address,
@@ -914,36 +912,39 @@ impl TacDatabase {
         operation: &operation::Model,
         meta_info: &OperationMetaInfo,
     ) -> Result<(), DbErr> {
-        let get_fee = |chain: BlockchainTypeLowercase| {
+        let get_fee = |chain: BlockchainType| {
             meta_info
                 .fee_info
                 .get(&chain)
                 .and_then(|fee_opt| fee_opt.as_ref())
         };
 
-        let get_executors = |chain: BlockchainTypeLowercase| {
-            meta_info.valid_executors.get(&chain).cloned().flatten()
-        };
+        let get_executors =
+            |chain: BlockchainType| meta_info.valid_executors.get(&chain).cloned().flatten();
 
         let parse_decimal = |s: &str| Decimal::from_str(s).ok();
 
         let meta_model = operation_meta_info::ActiveModel {
             operation_id: Set(operation.id.clone()),
-            tac_valid_executors: Set(get_executors(BlockchainTypeLowercase::Tac)),
-            ton_valid_executors: Set(get_executors(BlockchainTypeLowercase::Ton)),
-            tac_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
-                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
-            tac_executor_fee: Set(get_fee(BlockchainTypeLowercase::Tac)
-                .and_then(|fee| parse_decimal(&fee.executor_fee))),
-            tac_token_fee_symbol: Set(
-                get_fee(BlockchainTypeLowercase::Tac).map(|fee| fee.token_fee_symbol.clone())
+            tac_valid_executors: Set(get_executors(BlockchainType::Tac)),
+            ton_valid_executors: Set(get_executors(BlockchainType::Ton)),
+            tac_protocol_fee: Set(
+                get_fee(BlockchainType::Tac).and_then(|fee| parse_decimal(&fee.protocol_fee))
             ),
-            ton_protocol_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
-                .and_then(|fee| parse_decimal(&fee.protocol_fee))),
-            ton_executor_fee: Set(get_fee(BlockchainTypeLowercase::Ton)
-                .and_then(|fee| parse_decimal(&fee.executor_fee))),
+            tac_executor_fee: Set(
+                get_fee(BlockchainType::Tac).and_then(|fee| parse_decimal(&fee.executor_fee))
+            ),
+            tac_token_fee_symbol: Set(
+                get_fee(BlockchainType::Tac).map(|fee| fee.token_fee_symbol.clone())
+            ),
+            ton_protocol_fee: Set(
+                get_fee(BlockchainType::Ton).and_then(|fee| parse_decimal(&fee.protocol_fee))
+            ),
+            ton_executor_fee: Set(
+                get_fee(BlockchainType::Ton).and_then(|fee| parse_decimal(&fee.executor_fee))
+            ),
             ton_token_fee_symbol: Set(
-                get_fee(BlockchainTypeLowercase::Ton).map(|fee| fee.token_fee_symbol.clone())
+                get_fee(BlockchainType::Ton).map(|fee| fee.token_fee_symbol.clone())
             ),
         };
 
