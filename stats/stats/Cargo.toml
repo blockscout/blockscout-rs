@@ -9,6 +9,8 @@ blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "26
 blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "980634e" }
 multichain-aggregator-entity = { workspace = true }
 multichain-aggregator-migration = { workspace = true }
+zetachain-cctx-entity = { workspace = true }
+zetachain-cctx-migration = { workspace = true }
 sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
