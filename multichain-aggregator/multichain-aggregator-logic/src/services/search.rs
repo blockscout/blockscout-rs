@@ -216,10 +216,10 @@ pub async fn preload_domain_info(
                 );
             });
 
-        if let Ok(res) = res {
-            if let Ok(domain_info) = DomainInfo::try_from(res) {
-                address.domain_info = Some(domain_info);
-            }
+        if let Ok(res) = res
+            && let Ok(domain_info) = DomainInfo::try_from(res)
+        {
+            address.domain_info = Some(domain_info);
         }
 
         address
