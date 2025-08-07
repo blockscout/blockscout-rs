@@ -1,6 +1,6 @@
 use crate::{
     proto::{multichain_aggregator_service_server::MultichainAggregatorService, *},
-    services::utils::{parse_query, parse_query_2},
+    services::utils::{PageTokenExtractor, page_token_to_proto, parse_query},
     settings::ApiSettings,
 };
 use actix_phoenix_channel::ChannelBroadcaster;
@@ -163,7 +163,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -191,10 +191,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListAddressesResponse {
             items: addresses.into_iter().map(|a| a.into()).collect(),
-            next_page_params: next_page_token.map(|(a, c)| Pagination {
-                page_token: format!("{},{}", a.to_checksum(None), c),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -206,7 +203,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -232,10 +229,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListNftsResponse {
             items: addresses.into_iter().map(|a| a.into()).collect(),
-            next_page_params: next_page_token.map(|(a, c)| Pagination {
-                page_token: format!("{},{}", a.to_checksum(None), c),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -247,7 +241,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -269,10 +263,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListTransactionsResponse {
             items: transactions.into_iter().map(|t| t.into()).collect(),
-            next_page_params: next_page_token.map(|c| Pagination {
-                page_token: c.to_string(),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -284,7 +275,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -306,10 +297,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListBlocksResponse {
             items: blocks.into_iter().map(|t| t.into()).collect(),
-            next_page_params: next_page_token.map(|c| Pagination {
-                page_token: c.to_string(),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -321,7 +309,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -342,10 +330,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListBlockNumbersResponse {
             items: block_numbers.into_iter().map(|b| b.into()).collect(),
-            next_page_params: next_page_token.map(|c| Pagination {
-                page_token: c.to_string(),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -402,10 +387,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListTokensResponse {
             items: tokens.into_iter().map(|t| t.into()).collect(),
-            next_page_params: next_page_token.map(|page_token| Pagination {
-                page_token,
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -496,6 +478,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
 
         let (domains, next_page_token) = search::search_domains_cached(
             self.domain_search_cache.as_ref(),
@@ -504,16 +487,13 @@ impl MultichainAggregatorService for MultichainAggregator {
             self.bens_protocols,
             self.domain_primary_chain_id,
             page_size,
-            inner.page_token,
+            page_token,
         )
         .await?;
 
         Ok(Response::new(ListDomainsResponse {
             items: domains.into_iter().map(|d| d.into()).collect(),
-            next_page_params: next_page_token.map(|page_token| Pagination {
-                page_token,
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 }
