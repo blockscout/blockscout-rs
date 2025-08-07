@@ -20,6 +20,7 @@ use zetachain_cctx_entity::sea_orm_active_enums::{
 };
 use zetachain_cctx_entity::{cross_chain_tx, sea_orm_active_enums::Kind, watermark};
 use zetachain_cctx_logic::events::NoOpBroadcaster;
+use zetachain_cctx_logic::models::{CrossChainTx, Token};
 
 use crate::helpers::{
     dummy_cctx_with_pagination_response, dummy_cross_chain_tx, dummy_related_cctxs_response,
@@ -31,7 +32,7 @@ use zetachain_cctx_logic::{
     indexer::Indexer,
     settings::IndexerSettings,
 };
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CrossChainTx;
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CrossChainTx as CrossChainTxProto;
 
 #[tokio::test]
 async fn test_status_update() {
@@ -496,7 +497,7 @@ async fn test_get_cctx_info() {
     )
     .await;
 
-    let parsed_cctx: CrossChainTx = serde_json::from_value(response).unwrap();
+    let parsed_cctx: CrossChainTxProto = serde_json::from_value(response).unwrap();
 
     assert_eq!(parsed_cctx.index, cctx.index);
     assert_eq!(parsed_cctx.creator, cctx.creator);

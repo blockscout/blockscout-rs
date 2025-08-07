@@ -710,7 +710,7 @@ impl ZetachainCctxDatabase {
         watermarks.map_err(|e| anyhow::anyhow!(e))
     }
 
-    #[instrument(,level="trace",skip(self), fields(batch_id = %batch_id))]
+    #[instrument(,level="debug",skip(self), fields(batch_id = %batch_id))]
     pub async fn query_cctxs_for_status_update(
         &self,
         batch_size: u32,
@@ -739,7 +739,7 @@ impl ZetachainCctxDatabase {
                     WHEN cctx.retries_number = 9 THEN INTERVAL '$1 milliseconds' * 511
                     ELSE INTERVAL '$1 milliseconds' * 1023
                 END < NOW()
-            ORDER BY cctx.last_status_update_timestamp ASC, cs.created_timestamp DESC
+            ORDER BY cs.last_update_timestamp DESC
             LIMIT $2
             FOR UPDATE SKIP LOCKED
         )
@@ -1215,27 +1215,11 @@ impl ZetachainCctxDatabase {
             .all(self.db.as_ref())
             .await?;
 
-        let pending_cctxs_status_updates = CrossChainTxEntity::Entity::find()
-            .filter(
-                CrossChainTxEntity::Column::ProcessingStatus
-                    .is_in(vec![ProcessingStatus::Locked, ProcessingStatus::Unlocked]),
-            )
-            .all(self.db.as_ref())
-            .await?;
-
-        let pending_cctxs = cctx_status::Entity::find()
-            .filter(cctx_status::Column::Status.is_not_in(vec![
-                CctxStatusStatus::OutboundMined,
-                CctxStatusStatus::Aborted,
-                CctxStatusStatus::Reverted,
-            ]))
-            .all(self.db.as_ref())
-            .await?;
 
         Ok(SyncProgress {
             historical_watermark_timestamp,
-            pending_status_updates_count: pending_cctxs_status_updates.len() as i64,
-            pending_cctxs_count: pending_cctxs.len() as i64,
+            pending_status_updates_count: 0,
+            pending_cctxs_count: 0,
             realtime_gaps_count: realtime_gaps.len() as i64,
         })
     }

@@ -299,7 +299,7 @@ impl Indexer {
                 let batch_id = Uuid::new_v4();
                 match self.database.query_cctxs_for_status_update(status_update_batch_size, batch_id, polling_interval).await {
                     std::result::Result::Ok(cctxs) => {
-                        tracing::debug!("batch_id: {} query_cctxs_for_status_update returned {:?} cctxs for status update", batch_id, cctxs.iter().map(|c| c.index.clone()).collect::<Vec<String>>());
+                        tracing::info!("batch_id: {} query_cctxs_for_status_update returned {:?} cctxs for status update", batch_id, cctxs.iter().map(|c| c.index.clone()).collect::<Vec<String>>());
                         for cctx in cctxs {
                             let job_id = Uuid::new_v4();
                             yield IndexerJob::StatusUpdate(cctx, job_id);
