@@ -1454,6 +1454,7 @@ impl ZetachainCctxDatabase {
             confirmation_mode::text --20
         FROM outbound_params
         WHERE cross_chain_tx_id = $1
+        order by id ASC
         "#;
 
         let outbounds_statement = Statement::from_sql_and_values(
