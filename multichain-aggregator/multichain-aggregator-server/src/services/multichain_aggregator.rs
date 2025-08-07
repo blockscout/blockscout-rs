@@ -176,8 +176,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             search::AddressSearchConfig::GeneralSearch {
                 bens_protocols: self.bens_protocols,
                 domain_primary_chain_id: self.domain_primary_chain_id,
-                // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
-                bens_domain_lookup_limit: 1,
+                bens_domain_lookup_limit: self.api_settings.default_page_size,
             },
             inner.q,
             chain_ids,

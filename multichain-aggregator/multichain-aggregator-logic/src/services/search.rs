@@ -623,7 +623,7 @@ impl SearchTerm {
                     query,
                     search_context.bens_protocols,
                     search_context.domain_primary_chain_id,
-                    1, // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
+                    QUICK_SEARCH_NUM_ITEMS as u32,
                     None,
                 )
                 .await?;
