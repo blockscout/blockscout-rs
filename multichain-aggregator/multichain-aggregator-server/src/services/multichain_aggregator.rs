@@ -1,6 +1,6 @@
 use crate::{
     proto::{multichain_aggregator_service_server::MultichainAggregatorService, *},
-    services::utils::{parse_query, parse_query_2},
+    services::utils::{PageTokenExtractor, page_token_to_proto, parse_query},
     settings::ApiSettings,
 };
 use actix_phoenix_channel::ChannelBroadcaster;
@@ -12,7 +12,7 @@ use multichain_aggregator_logic::{
     services::{
         api_key_manager::ApiKeyManager,
         chains, import,
-        search::{self, SearchContext, UniformChainSearchCache},
+        search::{self, DomainSearchCache, SearchContext},
     },
     types,
 };
@@ -27,11 +27,11 @@ pub struct MultichainAggregator {
     bens_client: HttpApiClient,
     api_settings: ApiSettings,
     quick_search_chains: Vec<types::ChainId>,
-    bens_protocols: Option<Vec<String>>,
+    bens_protocols: Option<&'static [String]>,
     domain_primary_chain_id: types::ChainId,
     marketplace_enabled_cache: chains::MarketplaceEnabledCache,
     channel_broadcaster: ChannelBroadcaster,
-    uniform_chain_search_cache: Option<UniformChainSearchCache>,
+    domain_search_cache: Option<DomainSearchCache>,
 }
 
 impl MultichainAggregator {
@@ -43,11 +43,11 @@ impl MultichainAggregator {
         bens_client: HttpApiClient,
         api_settings: ApiSettings,
         quick_search_chains: Vec<types::ChainId>,
-        bens_protocols: Option<Vec<String>>,
+        bens_protocols: Option<&'static [String]>,
         domain_primary_chain_id: types::ChainId,
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
         channel_broadcaster: ChannelBroadcaster,
-        uniform_chain_search_cache: Option<UniformChainSearchCache>,
+        domain_search_cache: Option<DomainSearchCache>,
     ) -> Self {
         Self {
             api_key_manager: ApiKeyManager::new(repo.main_db().clone()),
@@ -61,7 +61,7 @@ impl MultichainAggregator {
             domain_primary_chain_id,
             marketplace_enabled_cache,
             channel_broadcaster,
-            uniform_chain_search_cache,
+            domain_search_cache,
         }
     }
 
@@ -163,7 +163,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -171,12 +171,12 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
-            &self.bens_client,
+            self.bens_client.clone(),
+            self.domain_search_cache.as_ref(),
             search::AddressSearchConfig::GeneralSearch {
-                bens_protocols: self.bens_protocols.as_deref(),
+                bens_protocols: self.bens_protocols,
                 domain_primary_chain_id: self.domain_primary_chain_id,
-                // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
-                bens_domain_lookup_limit: 1,
+                bens_domain_lookup_limit: self.api_settings.default_page_size,
             },
             inner.q,
             chain_ids,
@@ -191,10 +191,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListAddressesResponse {
             items: addresses.into_iter().map(|a| a.into()).collect(),
-            next_page_params: next_page_token.map(|(a, c)| Pagination {
-                page_token: format!("{},{}", a.to_checksum(None), c),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -206,7 +203,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -214,7 +211,8 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
-            &self.bens_client,
+            self.bens_client.clone(),
+            None, // domain cache is not needed for nft search
             search::AddressSearchConfig::NFTSearch {
                 domain_primary_chain_id: self.domain_primary_chain_id,
             },
@@ -231,10 +229,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListNftsResponse {
             items: addresses.into_iter().map(|a| a.into()).collect(),
-            next_page_params: next_page_token.map(|(a, c)| Pagination {
-                page_token: format!("{},{}", a.to_checksum(None), c),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -246,7 +241,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -268,10 +263,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListTransactionsResponse {
             items: transactions.into_iter().map(|t| t.into()).collect(),
-            next_page_params: next_page_token.map(|c| Pagination {
-                page_token: c.to_string(),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -283,7 +275,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -305,10 +297,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListBlocksResponse {
             items: blocks.into_iter().map(|t| t.into()).collect(),
-            next_page_params: next_page_token.map(|c| Pagination {
-                page_token: c.to_string(),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -320,7 +309,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -341,10 +330,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListBlockNumbersResponse {
             items: block_numbers.into_iter().map(|b| b.into()).collect(),
-            next_page_params: next_page_token.map(|c| Pagination {
-                page_token: c.to_string(),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -359,10 +345,10 @@ impl MultichainAggregatorService for MultichainAggregator {
             dapp_client: &self.dapp_client,
             token_info_client: &self.token_info_client,
             bens_client: &self.bens_client,
-            bens_protocols: self.bens_protocols.as_deref(),
+            bens_protocols: self.bens_protocols,
             domain_primary_chain_id: self.domain_primary_chain_id,
             marketplace_enabled_cache: &self.marketplace_enabled_cache,
-            uniform_chain_search_cache: self.uniform_chain_search_cache.as_ref(),
+            domain_search_cache: self.domain_search_cache.as_ref(),
         };
 
         let results = search::quick_search(inner.q, &self.quick_search_chains, &context)
@@ -401,10 +387,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListTokensResponse {
             items: tokens.into_iter().map(|t| t.into()).collect(),
-            next_page_params: next_page_token.map(|page_token| Pagination {
-                page_token,
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -495,23 +478,22 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
 
-        let (domains, next_page_token) = search::search_domains(
-            &self.bens_client,
+        let (domains, next_page_token) = search::search_domains_cached(
+            self.domain_search_cache.as_ref(),
+            self.bens_client.clone(),
             inner.q,
-            self.bens_protocols.as_deref(),
+            self.bens_protocols,
             self.domain_primary_chain_id,
             page_size,
-            inner.page_token,
+            page_token,
         )
         .await?;
 
         Ok(Response::new(ListDomainsResponse {
             items: domains.into_iter().map(|d| d.into()).collect(),
-            next_page_params: next_page_token.map(|page_token| Pagination {
-                page_token,
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 }

@@ -50,6 +50,7 @@ fn compile(
         .field_attribute("BatchImportRequest.tokens", "#[serde(default)]")
         .field_attribute("BatchImportRequest.AddressImport.token_type", "#[serde(default)]")
         .field_attribute("BatchImportRequest.TokenImport.Metadata.token_type", "#[serde(default)]")
+        .field_attribute("ListAddressTokensRequest.type", "#[serde(default)]")
         .extern_path(".google.protobuf", "::prost-wkt-types");
     config.compile_protos(protos, includes)?;
 

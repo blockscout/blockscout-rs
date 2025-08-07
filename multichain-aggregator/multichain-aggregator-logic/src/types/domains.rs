@@ -2,7 +2,7 @@ use crate::{error::ParseError, proto};
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Domain {
     pub address: Option<alloy_primitives::Address>,
     pub name: String,
