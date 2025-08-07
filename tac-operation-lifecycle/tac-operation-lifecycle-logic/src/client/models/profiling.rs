@@ -93,10 +93,12 @@ impl FromStr for BlockchainType {
         match s.to_lowercase().as_str() {
             "tac" => Ok(BlockchainType::Tac),
             "ton" => Ok(BlockchainType::Ton),
-            _ => Ok(BlockchainType::Unknown),
+            _ => Err(()),
         }
     }
 }
+
+const SUPPORTED_BLOCKCHAIN_TYPE_NAMES: [&str; 2] = ["tac", "ton"];
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,7 +132,7 @@ where
     D: Deserializer<'de>,
 {
     let map: HashMap<String, serde_json::Value> = HashMap::deserialize(deserializer)?;
-    Ok(["tac", "ton"]
+    Ok(SUPPORTED_BLOCKCHAIN_TYPE_NAMES
         .into_iter()
         .filter_map(|k| {
             let key = k.parse().ok()?;
@@ -153,7 +155,7 @@ where
     D: Deserializer<'de>,
 {
     let map: HashMap<String, serde_json::Value> = HashMap::deserialize(deserializer)?;
-    Ok(["tac", "ton"]
+    Ok(SUPPORTED_BLOCKCHAIN_TYPE_NAMES
         .into_iter()
         .filter_map(|k| {
             let key = k.parse().ok()?;
