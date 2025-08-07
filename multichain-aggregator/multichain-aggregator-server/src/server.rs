@@ -154,6 +154,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.api.clone(),
     ));
 
+    let bens_protocols = settings.service.bens_protocols.map(|p| &*p.leak());
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
         Arc::new(repo),
         dapp_client,
@@ -161,7 +162,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bens_client,
         settings.service.api,
         settings.service.quick_search_chains,
-        settings.service.bens_protocols,
+        bens_protocols,
         settings.service.domain_primary_chain_id,
         marketplace_enabled_cache,
         channel.channel_broadcaster(),
