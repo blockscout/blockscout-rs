@@ -91,9 +91,9 @@ impl<'a> UpdateParameters<'a> {
         time_override: Option<chrono::DateTime<Utc>>,
     ) -> Self {
         UpdateParameters::query_parameters(
-            &db,
+            db,
             false,
-            &indexer,
+            indexer,
             IndexerMigrations::latest(),
             None,
             time_override,

@@ -107,6 +107,22 @@ macro_rules! singleton_groups {
 
 pub(crate) use singleton_groups;
 
+macro_rules! derive_setters {
+    ($t: ident, [$($field: ident: $field_t: ident),* $(,)?]) => {
+        $(
+            impl $t {
+                ::paste::paste! {
+                    pub fn [< with_ $field >](self, $field: $field_t) -> Self {
+                        Self { $field, ..self }
+                    }
+                }
+            }
+        )*
+    };
+}
+
+pub(crate) use derive_setters;
+
 #[cfg(test)]
 mod test {
     use itertools::Itertools;

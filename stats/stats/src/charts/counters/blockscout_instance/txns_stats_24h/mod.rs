@@ -119,10 +119,10 @@ mod tests {
                 CAST((AVG((COALESCE("transactions"."gas_price", "blocks"."base_fee_per_gas" + LEAST("transactions"."max_priority_fee_per_gas", "transactions"."max_fee_per_gas" - "blocks"."base_fee_per_gas"))) * "transactions"."gas_used") / 1000000000000000000) AS FLOAT) AS "fee_average"
             FROM "blocks"
             INNER JOIN "transactions" ON "blocks"."hash" = "transactions"."block_hash"
-            WHERE "transactions"."block_timestamp" < '2025-01-02 00:00:00 +00:00'
-                AND "transactions"."block_timestamp" >= '2025-01-01 00:00:00 +00:00'
-                AND "blocks"."timestamp" < '2025-01-02 00:00:00 +00:00'
-                AND "blocks"."timestamp" >= '2025-01-01 00:00:00 +00:00'
+            WHERE "transactions"."block_timestamp" < '2025-01-02 00:00:00.000000 +00:00'
+                AND "transactions"."block_timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
+                AND "blocks"."timestamp" < '2025-01-02 00:00:00.000000 +00:00'
+                AND "blocks"."timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
         "#;
         assert_eq!(normalize_sql(expected), normalize_sql(&actual.to_string()))
     }

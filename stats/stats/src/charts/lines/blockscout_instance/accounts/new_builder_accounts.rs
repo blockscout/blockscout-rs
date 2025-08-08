@@ -24,7 +24,7 @@ use crate::{
         types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
-    indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus},
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait},
     missing_date::trim_out_of_range_sorted,
     range::{UniversalRange, data_source_query_range_to_db_statement_range},
     types::timespans::{Month, Week, Year},
@@ -168,11 +168,8 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
-            // don't need user ops at all
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::InternalTransactionsIndexed)
     }
 }
 

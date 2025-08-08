@@ -20,7 +20,9 @@ use crate::{
         types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
+    indexing_status::{
+        BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait,
+    },
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
 };
@@ -97,10 +99,7 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE.with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
     }
 }
 

@@ -4,7 +4,7 @@ use crate::{
         data_manipulation::map::{Map, MapFunction, MapParseTo},
         local_db::DirectPointLocalDbChartSource,
     },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    indexing_status::IndexingStatusTrait,
     types::TimespanValue,
 };
 use chrono::NaiveDate;
@@ -46,10 +46,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

@@ -9,7 +9,9 @@ use crate::{
         },
     },
     define_and_impl_resolution_properties,
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
+    indexing_status::{
+        BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
+    },
     types::timespans::{Month, Week, Year},
 };
 
@@ -36,10 +38,9 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
+            .with_user_ops(UserOpsIndexingStatus::PastOperationsIndexed)
     }
 }
 

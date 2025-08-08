@@ -8,7 +8,7 @@ use crate::{
             remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, query::query_yesterday_data},
         },
     },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    indexing_status::IndexingStatusTrait,
     lines::NewBlocksStatement,
     range::UniversalRange,
     types::TimespanValue,
@@ -59,10 +59,7 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

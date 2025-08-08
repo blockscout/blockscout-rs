@@ -400,6 +400,7 @@ pub struct StartConditionSettings {
     pub blocks_ratio: ToggleableThreshold,
     pub internal_transactions_ratio: ToggleableThreshold,
     pub user_ops_past_indexing_finished: ToggleableCheck,
+    pub zetachain_indexed_until_today: ToggleableCheck,
     pub check_period_secs: u32,
 }
 
@@ -410,6 +411,7 @@ impl Default for StartConditionSettings {
             blocks_ratio: ToggleableThreshold::default(),
             internal_transactions_ratio: ToggleableThreshold::default(),
             user_ops_past_indexing_finished: ToggleableCheck::default(),
+            zetachain_indexed_until_today: ToggleableCheck::default(),
             check_period_secs: 5,
         }
     }
@@ -421,6 +423,9 @@ impl StartConditionSettings {
     }
     pub fn user_ops_checks_enabled(&self) -> bool {
         self.user_ops_past_indexing_finished.enabled
+    }
+    pub fn zetachain_checks_enabled(&self) -> bool {
+        self.zetachain_indexed_until_today.enabled
     }
 }
 

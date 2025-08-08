@@ -14,7 +14,7 @@ use crate::{
             },
         },
     },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    indexing_status::IndexingStatusTrait,
     types::new_txns::ExtractOpStackTxns,
 };
 
@@ -41,10 +41,7 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

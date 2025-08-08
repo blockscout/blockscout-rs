@@ -14,7 +14,9 @@ use crate::{
         },
         types::IndexerMigrations,
     },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
+    indexing_status::{
+        BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
+    },
 };
 
 use blockscout_db::entity::user_operations;
@@ -61,10 +63,9 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
+            .with_user_ops(UserOpsIndexingStatus::PastOperationsIndexed)
     }
 }
 

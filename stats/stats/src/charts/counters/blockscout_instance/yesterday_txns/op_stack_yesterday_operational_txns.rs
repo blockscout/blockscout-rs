@@ -1,7 +1,7 @@
 use crate::{
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::kinds::{data_manipulation::map::Map, local_db::DirectPointLocalDbChartSource},
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    indexing_status::IndexingStatusTrait,
     types::new_txns::ExtractOpStackTxns,
 };
 use chrono::NaiveDate;
@@ -30,10 +30,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

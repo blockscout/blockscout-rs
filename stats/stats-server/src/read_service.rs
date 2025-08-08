@@ -54,6 +54,7 @@ pub struct ReadService {
 }
 
 impl ReadService {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         db: Arc<DatabaseConnection>,
         indexer: Arc<DatabaseConnection>,

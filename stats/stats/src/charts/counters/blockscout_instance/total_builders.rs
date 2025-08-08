@@ -4,7 +4,7 @@ use crate::{
         data_manipulation::{last_point::LastPoint, map::StripExt},
         local_db::DirectPointLocalDbChartSource,
     },
-    indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus},
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait},
     lines::BuilderAccountsGrowth,
 };
 
@@ -29,10 +29,8 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::InternalTransactionsIndexed)
     }
 }
 

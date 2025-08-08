@@ -107,7 +107,7 @@ struct InitialUpdateTrackerInner {
 impl InitialUpdateTrackerInner {
     /// Need charts with their status requirements
     fn new(charts: &BTreeMap<ChartKey, IndexingStatus>) -> Self {
-        let charts_satisfying_status =
+        let charts_satisfied_by_status =
             |charts: &BTreeMap<ChartKey, IndexingStatus>, status: &IndexingStatus| -> HashSet<_> {
                 charts
                     .iter()
@@ -117,30 +117,27 @@ impl InitialUpdateTrackerInner {
                     .collect()
             };
 
-        let nothing_indexed_status = IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
-        };
-        let only_blocks_indexed_status = IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
-        };
-        let internal_indexed_status = IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
-        };
-        let user_ops_indexed_status = IndexingStatus {
+        let nothing_indexed_status = IndexingStatus::MIN
+            .with_blockscout(BlockscoutIndexingStatus::NoneIndexed)
+            .with_user_ops(UserOpsIndexingStatus::IndexingPastOperations);
+        let only_blocks_indexed_status = IndexingStatus::MIN
+            .with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
+            .with_user_ops(UserOpsIndexingStatus::IndexingPastOperations);
+        let internal_indexed_status = IndexingStatus::MIN
+            .with_blockscout(BlockscoutIndexingStatus::InternalTransactionsIndexed)
+            .with_user_ops(UserOpsIndexingStatus::IndexingPastOperations);
+        let user_ops_indexed_status = IndexingStatus::MIN
+            // User ops charts sometimes also depend on blockscout.
             // We want to include all user ops dependant charts
             // therefore we set blockscout to be as indexed as possible
-            blockscout: BlockscoutIndexingStatus::MAX,
-            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
-        };
+            .with_blockscout(BlockscoutIndexingStatus::MAX)
+            .with_user_ops(UserOpsIndexingStatus::PastOperationsIndexed);
 
-        let independent = charts_satisfying_status(charts, &nothing_indexed_status);
-        let blocks_dependent = charts_satisfying_status(charts, &only_blocks_indexed_status);
+        let independent = charts_satisfied_by_status(charts, &nothing_indexed_status);
+        let blocks_dependent = charts_satisfied_by_status(charts, &only_blocks_indexed_status);
         let internal_transactions_dependent =
-            charts_satisfying_status(charts, &internal_indexed_status);
-        let user_ops_dependent = charts_satisfying_status(charts, &user_ops_indexed_status);
+            charts_satisfied_by_status(charts, &internal_indexed_status);
+        let user_ops_dependent = charts_satisfied_by_status(charts, &user_ops_indexed_status);
         Self::verify_tracking_all_charts(
             charts,
             &[

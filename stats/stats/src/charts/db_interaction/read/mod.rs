@@ -14,6 +14,7 @@ mod blockscout;
 pub mod cached;
 mod local_db;
 pub mod multichain;
+pub mod zetachain_cctx;
 
 pub use blockscout::*;
 pub use local_db::*;

@@ -79,7 +79,7 @@ pub async fn stats(
     let shutdown = shutdown.unwrap_or_default();
     let mut futures = JoinSet::new();
 
-    let (status_waiter_task, status_listener) = init_waiter(&settings)?;
+    let (status_waiter_task, status_listener) = init_waiter(&settings, cctx_indexer.clone())?;
     if let Some(status_waiter_task) = status_waiter_task {
         spawn_and_track(&mut futures, &shutdown.task_tracker, status_waiter_task);
     }
@@ -310,13 +310,14 @@ async fn create_charts_if_needed(
 /// Returns `(<waiter task>, <listener>)`
 fn init_waiter(
     settings: &Settings,
+    cctx_db: Option<Arc<DatabaseConnection>>,
 ) -> anyhow::Result<(
     Option<impl Future<Output = anyhow::Result<()>> + use<>>,
     Option<IndexingStatusListener>,
 )> {
     let blockscout_api_config = init_blockscout_api_client(settings)?;
     let (status_waiter, status_listener) = blockscout_api_config
-        .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone()))
+        .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone(), cctx_db))
         .unzip();
     let status_task = status_waiter.map(|w| {
         async move {

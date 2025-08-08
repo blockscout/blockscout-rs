@@ -160,8 +160,8 @@ mod tests {
                 FROM "transactions"
                 WHERE
                     "transactions"."block_consensus" = TRUE AND
-                    "transactions"."block_timestamp" < '2025-01-02 00:00:00 +00:00' AND
-                    "transactions"."block_timestamp" >= '2025-01-01 00:00:00 +00:00'
+                    "transactions"."block_timestamp" < '2025-01-02 00:00:00.000000 +00:00' AND
+                    "transactions"."block_timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
                 GROUP BY "date"
                 ORDER BY "date" ASC
             "#,
@@ -190,8 +190,8 @@ mod tests {
                 INNER JOIN "blocks" ON "transactions"."block_hash" = "blocks"."hash"
                 WHERE
                     "blocks"."consensus" = TRUE AND
-                    "blocks"."timestamp" < '2025-01-02 00:00:00 +00:00' AND
-                    "blocks"."timestamp" >= '2025-01-01 00:00:00 +00:00'
+                    "blocks"."timestamp" < '2025-01-02 00:00:00.000000 +00:00' AND
+                    "blocks"."timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
                 GROUP BY "date"
                 ORDER BY "date" ASC
             "#,
@@ -214,8 +214,8 @@ mod tests {
             FROM "transactions"
             WHERE
                 "transactions"."block_consensus" = TRUE AND
-                "transactions"."block_timestamp" < '2025-01-02 00:00:00 +00:00' AND
-                "transactions"."block_timestamp" >= '2025-01-01 00:00:00 +00:00'
+                "transactions"."block_timestamp" < '2025-01-02 00:00:00.000000 +00:00' AND
+                "transactions"."block_timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
             GROUP BY "date"
             ORDER BY "date" ASC
         "#

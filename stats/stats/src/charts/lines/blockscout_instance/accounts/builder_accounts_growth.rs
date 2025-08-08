@@ -11,7 +11,7 @@ use crate::{
         },
     },
     define_and_impl_resolution_properties,
-    indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus},
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait},
     types::timespans::{Month, Week, Year},
 };
 
@@ -37,11 +37,8 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
-            // don't need user ops at all
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::InternalTransactionsIndexed)
     }
 }
 
