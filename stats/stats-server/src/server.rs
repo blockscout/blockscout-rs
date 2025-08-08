@@ -9,8 +9,8 @@ use crate::{
     runtime_setup::RuntimeSetup,
     settings::{
         Settings, apply_multichain_mode_settings, disable_all_non_multichain_charts,
-        handle_disable_internal_transactions, handle_enable_all_arbitrum, handle_enable_all_cctx,
-        handle_enable_all_eip_7702, handle_enable_all_op_stack,
+        handle_disable_internal_transactions, handle_enable_all_arbitrum,
+        handle_enable_all_eip_7702, handle_enable_all_op_stack, handle_enable_all_zetachain_cctx,
     },
     update_service::UpdateService,
 };
@@ -54,7 +54,7 @@ pub async fn stats(
         &mut settings.conditional_start,
         &mut charts_config,
     );
-    handle_enable_all_cctx(
+    handle_enable_all_zetachain_cctx(
         settings.multichain_mode,
         settings.enable_all_local_cctx,
         &mut charts_config,

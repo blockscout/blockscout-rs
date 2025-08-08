@@ -322,7 +322,7 @@ pub fn handle_enable_all_eip_7702(
     }
 }
 
-pub fn handle_enable_all_cctx(
+pub fn handle_enable_all_zetachain_cctx(
     multichain_mode: bool,
     enable_all: bool,
     charts: &mut config::charts::Config<AllChartSettings>,

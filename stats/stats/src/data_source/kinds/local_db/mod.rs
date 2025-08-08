@@ -352,7 +352,7 @@ mod tests {
         tests::{
             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
             point_construction::d,
-            simple_test::{get_counter, prepare_chart_test},
+            simple_test::{get_counter, prepare_blockscout_chart_test},
         },
     };
 
@@ -362,7 +362,8 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_txns_with_reindex() {
         let test_name = "update_total_txns_with_reindex";
-        let (current_time, db, blockscout) = prepare_chart_test::<TotalTxns>(test_name, None).await;
+        let (current_time, db, blockscout) =
+            prepare_blockscout_chart_test::<TotalTxns>(test_name, None).await;
         let current_date = current_time.date_naive();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 

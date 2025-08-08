@@ -68,7 +68,7 @@ mod tests {
         tests::{
             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
             point_construction::dt,
-            simple_test::{chart_output_to_expected, map_str_tuple_to_owned, prepare_chart_test},
+            simple_test::{chart_output_to_expected, map_str_tuple_to_owned, prepare_blockscout_chart_test},
         },
     };
 
@@ -76,7 +76,7 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_txns_window_clears_and_overwrites() {
         let (init_time, db, blockscout) =
-            prepare_chart_test::<NewTxnsWindow>("update_txns_window_clears_and_overwrites", None)
+            prepare_blockscout_chart_test::<NewTxnsWindow>("update_txns_window_clears_and_overwrites", None)
                 .await;
         {
             let current_date = init_time.date_naive();

@@ -5,6 +5,7 @@ mod gas;
 mod tokens;
 mod transactions;
 mod user_ops;
+mod zetachain_cctx;
 
 use accounts::*;
 use blocks::*;
@@ -13,6 +14,7 @@ use gas::*;
 use tokens::*;
 use transactions::*;
 use user_ops::*;
+use zetachain_cctx::*;
 
 #[cfg(test)]
 mod mock;

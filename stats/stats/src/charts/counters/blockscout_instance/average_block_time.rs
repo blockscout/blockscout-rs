@@ -149,7 +149,7 @@ mod tests {
         data_source::{DataSource, UpdateParameters},
         tests::{
             mock_blockscout::fill_many_blocks,
-            simple_test::{get_counter, prepare_chart_test, simple_test_counter},
+            simple_test::{get_counter, prepare_blockscout_chart_test, simple_test_counter},
         },
     };
 
@@ -160,7 +160,8 @@ mod tests {
         // and at least `OFFSET_BLOCKS + LIMIT_BLOCKS` blocks to test the limit
 
         let (current_time, db, blockscout) =
-            prepare_chart_test::<AverageBlockTime>("update_average_block_time", None).await;
+            prepare_blockscout_chart_test::<AverageBlockTime>("update_average_block_time", None)
+                .await;
 
         let times_generator = [100u64, 200, 300];
         let block_times = std::iter::repeat_n(1, 2)

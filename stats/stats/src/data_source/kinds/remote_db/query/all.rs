@@ -60,7 +60,7 @@ where
         range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<TimespanValue<Resolution, Value>>, ChartError> {
         let statement = prepare_range_query_statement::<S, AllRangeSource>(cx, range).await?;
-        find_all_points(cx, statement).await
+        find_all_points(cx.indexer_db, statement).await
     }
 }
 /// Pull data from remote (blockscout) db according to statement
@@ -93,7 +93,7 @@ where
         range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<Point>, ChartError> {
         let statement = prepare_range_query_statement::<S, AllRangeSource>(cx, range).await?;
-        find_all_cached(cx, statement).await
+        find_all_cached(&cx.cache, cx.indexer_db, statement).await
     }
 }
 

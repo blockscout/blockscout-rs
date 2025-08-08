@@ -70,7 +70,7 @@ impl RemoteQueryBehaviour for NewBlocksWindowQuery {
             &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        find_all_points::<DateValue<String>>(cx, statement).await
+        find_all_points::<_, DateValue<String>>(cx.indexer_db, statement).await
     }
 }
 
@@ -125,14 +125,14 @@ mod tests {
         tests::{
             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
             point_construction::dt,
-            simple_test::{chart_output_to_expected, map_str_tuple_to_owned, prepare_chart_test},
+            simple_test::{chart_output_to_expected, map_str_tuple_to_owned, prepare_blockscout_chart_test},
         },
     };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_arbitrum_operational_txns_window_clears_and_overwrites() {
-        let (init_time, db, blockscout) = prepare_chart_test::<ArbitrumNewOperationalTxnsWindow>(
+        let (init_time, db, blockscout) = prepare_blockscout_chart_test::<ArbitrumNewOperationalTxnsWindow>(
             "update_arbitrum_operational_txns_window_clears_and_overwrites",
             None,
         )
