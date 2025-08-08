@@ -20,9 +20,7 @@ use crate::{
         types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
-    indexing_status::{
-        BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait,
-    },
+    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait},
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
 };
