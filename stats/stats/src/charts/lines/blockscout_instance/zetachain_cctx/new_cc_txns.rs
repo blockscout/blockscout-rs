@@ -57,13 +57,16 @@ impl StatementFromRange for NewZetachainCrossChainTxnsStatement {
                     .cast_as("date"),
                 date_col,
             )
-            .expr_as(Func::count(Asterisk.into_column_ref()), "value")
+            .expr_as(
+                Func::count(Asterisk.into_column_ref()).cast_as("TEXT"),
+                "value",
+            )
             .left_join(zetachain_cctx_entity::cctx_status::Entity)
             .apply_if(range, |query, range| {
                 let timestamp_col =
                     zetachain_cctx_entity::cctx_status::Column::CreatedTimestamp.into_expr();
-                let start = Expr::cust_with_values("extract(epoch from ?)", [range.start]);
-                let end = Expr::cust_with_values("extract(epoch from ?)", [range.end]);
+                let start = Expr::cust_with_values("extract(epoch from $1)", [range.start]);
+                let end = Expr::cust_with_values("extract(epoch from $1)", [range.end]);
                 query
                     .filter(timestamp_col.clone().lt(end))
                     .filter(timestamp_col.gte(start))
@@ -149,13 +152,38 @@ pub type NewZetachainCrossChainTxnsYearly = DirectVecLocalDbChartSource<
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
+
     use super::*;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::{
+        normalize_sql, point_construction::dt, simple_test::simple_test_chart_with_zetachain_cctx,
+    };
+
+    #[test]
+    fn statement_is_correct() {
+        // mostly a test for easier comprehension of `NewZetachainCrossChainTxnsStatement`
+        let actual = NewZetachainCrossChainTxnsStatement::get_statement(
+            Some(dt("2025-01-01T00:00:00").and_utc()..dt("2025-01-02T00:00:00").and_utc()),
+            &IndexerMigrations::latest(),
+            &HashSet::new(),
+        );
+        let expected = r#"
+            SELECT
+                CAST(to_timestamp("cctx_status"."created_timestamp") AS date) AS "date",
+                CAST(COUNT(*) AS TEXT) AS "value"
+            FROM "cross_chain_tx"
+            LEFT JOIN "cctx_status" ON "cross_chain_tx"."id" = "cctx_status"."cross_chain_tx_id"
+            WHERE "cctx_status"."created_timestamp" < (extract(epoch from '2025-01-02 00:00:00.000000 +00:00'))
+                AND "cctx_status"."created_timestamp" >= (extract(epoch from '2025-01-01 00:00:00.000000 +00:00'))
+            GROUP BY "date"
+        "#;
+        assert_eq!(normalize_sql(expected), normalize_sql(&actual.to_string()))
+    }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_new_zetachain_cross_chain_txns() {
-        simple_test_chart::<NewZetachainCrossChainTxns>(
+        simple_test_chart_with_zetachain_cctx::<NewZetachainCrossChainTxns>(
             "update_new_zetachain_cross_chain_txns",
             vec![("2022-11-09", "1"), ("2022-11-10", "2")],
         )

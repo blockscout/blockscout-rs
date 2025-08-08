@@ -1,6 +1,7 @@
 use super::{
-    init_db::{init_db_all, init_db_all_multichain},
+    init_db::{init_db_all, init_db_all_multichain, init_db_zetachain_cctx},
     mock_blockscout::fill_mock_blockscout_data,
+    mock_zetachain_cctx::fill_mock_zetachain_cctx_data,
 };
 use crate::{
     ChartProperties,
@@ -14,7 +15,7 @@ use crate::{
     types::{Timespan, timespans::DateValue},
 };
 use blockscout_service_launcher::test_database::TestDbGuard;
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use pretty_assertions::assert_eq;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use stats_proto::blockscout::stats::v1::Point;
@@ -40,7 +41,13 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
-    simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest()).await
+    let (db, blockscout, _zetachain_cctx) =
+        simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest(), false).await;
+    assert!(
+        _zetachain_cctx.is_none(),
+        "zetachain cctx db was initialized needlessly"
+    );
+    (db, blockscout)
 }
 
 /// tests all statement kinds for different migrations combinations.
@@ -59,8 +66,28 @@ pub async fn simple_test_chart_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations).await;
+        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations, false).await;
     }
+}
+
+/// test chart with initializing zetachain cctx indexer db
+///
+/// see [`simple_test_chart`] for more details
+pub async fn simple_test_chart_with_zetachain_cctx<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+) -> (TestDbGuard, TestDbGuard, TestDbGuard)
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    let (db, blockscout, zetachain_cctx) =
+        simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest(), true).await;
+    (
+        db,
+        blockscout,
+        zetachain_cctx.expect("zetachain cctx db should be initialized"),
+    )
 }
 
 pub fn chart_output_to_expected(output: Vec<Point>) -> Vec<(String, String)> {
@@ -71,17 +98,19 @@ async fn simple_test_chart_inner<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
     migrations: IndexerMigrations,
-) -> (TestDbGuard, TestDbGuard)
+    connect_zetachain_cctx: bool,
+) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
     let expected = map_str_tuple_to_owned(expected);
-    let (init_time, db, blockscout) = prepare_simple_any_test::<C>(
+    let (init_time, db, blockscout, zetachain_cctx) = prepare_simple_any_test::<C>(
         test_name,
         None,
         DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap(),
         false,
+        connect_zetachain_cctx,
     )
     .await;
 
@@ -90,7 +119,7 @@ where
         is_multichain_mode: false,
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
-        second_indexer_db: None,
+        second_indexer_db: zetachain_cctx.as_deref(),
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(init_time),
         force_full: true,
@@ -117,7 +146,7 @@ where
         ),
         &expected
     );
-    (db, blockscout)
+    (db, blockscout, zetachain_cctx)
 }
 
 /// Expects to have `test_name` db's initialized (e.g. by [`simple_test_chart`]).
@@ -235,8 +264,8 @@ async fn ranged_test_chart_inner<C>(
     let range = { from.into_time_range().start..to.into_time_range().end };
 
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
-    let (init_time, db, blockscout) =
-        prepare_simple_any_test::<C>(test_name, update_time, max_time, false).await;
+    let (init_time, db, blockscout, _) =
+        prepare_simple_any_test::<C>(test_name, update_time, max_time, false, false).await;
 
     let mut parameters = UpdateParameters {
         stats_db: &db,
@@ -338,8 +367,9 @@ async fn simple_test_counter_inner<C>(
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
 {
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
-    let (init_time, db, indexer) =
-        prepare_simple_any_test::<C>(test_name, update_time, max_time, multichain_mode).await;
+    let (init_time, db, indexer, _) =
+        prepare_simple_any_test::<C>(test_name, update_time, max_time, multichain_mode, false)
+            .await;
 
     let mut parameters = UpdateParameters {
         stats_db: &db,
@@ -369,9 +399,14 @@ where
 {
     let _ = tracing_subscriber::fmt::try_init();
     let init_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
-    let (init_time, db, blockscout) =
-        prepare_simple_any_test::<C>(test_name, Some(init_time.naive_utc()), init_time, false)
-            .await;
+    let (init_time, db, blockscout, _) = prepare_simple_any_test::<C>(
+        test_name,
+        Some(init_time.naive_utc()),
+        init_time,
+        false,
+        false,
+    )
+    .await;
 
     // need to analyze or vacuum for `reltuples` to be updated.
     // source: https://www.postgresql.org/docs/9.3/planner-stats.html
@@ -402,22 +437,61 @@ pub async fn prepare_blockscout_chart_test<C: DataSource + ChartProperties>(
     let init_time = init_time
         .map(|t| t.and_utc())
         .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
-    prepare_chart_test_inner::<C>(test_name, init_time, false).await
+    let (init_time, db, indexer, _) =
+        prepare_chart_test_inner::<C>(test_name, init_time, false, false).await;
+    (init_time, db, indexer)
 }
 
 async fn prepare_chart_test_inner<C: DataSource + ChartProperties>(
     test_name: &str,
     init_time: DateTime<Utc>,
     multichain_mode: bool,
-) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
+    connect_zetachain_cctx: bool,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard, Option<TestDbGuard>) {
     let _ = tracing_subscriber::fmt::try_init();
     let (db, indexer) = if multichain_mode {
         init_db_all_multichain(test_name).await
     } else {
         init_db_all(test_name).await
     };
+    let zetachain_cctx = if connect_zetachain_cctx {
+        Some(init_db_zetachain_cctx(test_name).await)
+    } else {
+        None
+    };
     C::init_recursively(&db, &init_time).await.unwrap();
-    (init_time, db, indexer)
+    (init_time, db, indexer, zetachain_cctx)
+}
+
+/// Both for counters and line charts
+///
+/// returns `(init_time, db, indexer, zetachain_cctx)`
+async fn prepare_simple_any_test<C: DataSource + ChartProperties>(
+    test_name: &str,
+    update_time: Option<NaiveDateTime>,
+    max_time: DateTime<Utc>,
+    multichain_mode: bool,
+    connect_zetachain_cctx: bool,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard, Option<TestDbGuard>) {
+    let init_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
+    let max_date = max_time.date_naive();
+    let (init_time, db, indexer, zetachain_cctx) = prepare_chart_test_inner::<C>(
+        test_name,
+        init_time,
+        multichain_mode,
+        connect_zetachain_cctx,
+    )
+    .await;
+    if multichain_mode {
+        fill_mock_multichain_data(&indexer, max_date).await;
+    } else {
+        fill_mock_blockscout_data(&indexer, max_date).await;
+    }
+    if let Some(zetachain_cctx) = &zetachain_cctx {
+        fill_mock_zetachain_cctx_data(zetachain_cctx, max_date).await;
+    }
+
+    (init_time, db, indexer, zetachain_cctx)
 }
 
 pub async fn get_counter<C: QuerySerialized<Output = DateValue<String>>>(
@@ -426,25 +500,4 @@ pub async fn get_counter<C: QuerySerialized<Output = DateValue<String>>>(
     C::query_data_static(cx, UniversalRange::full(), None, false)
         .await
         .unwrap()
-}
-
-/// Both for counters and line charts
-async fn prepare_simple_any_test<C: DataSource + ChartProperties>(
-    test_name: &str,
-    update_time: Option<NaiveDateTime>,
-    max_time: DateTime<Utc>,
-    multichain_mode: bool,
-    // connect_zetachain_cctx: bool,
-) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
-    let init_time = update_time.map(|t| t.and_utc()).unwrap_or(max_time);
-    let max_date = max_time.date_naive();
-    let (init_time, db, indexer) =
-        prepare_chart_test_inner::<C>(test_name, init_time, multichain_mode).await;
-    if multichain_mode {
-        fill_mock_multichain_data(&indexer, max_date).await;
-    } else {
-        fill_mock_blockscout_data(&indexer, max_date).await;
-    }
-
-    (init_time, db, indexer)
 }

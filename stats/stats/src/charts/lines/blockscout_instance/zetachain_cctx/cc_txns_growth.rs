@@ -73,12 +73,12 @@ pub type ZetachainCrossChainTxnsGrowthYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::simple_test::simple_test_chart_with_zetachain_cctx;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_zetachain_cross_chain_txns_growth() {
-        simple_test_chart::<ZetachainCrossChainTxnsGrowth>(
+        simple_test_chart_with_zetachain_cctx::<ZetachainCrossChainTxnsGrowth>(
             "update_zetachain_cross_chain_txns_growth",
             vec![("2022-11-09", "1"), ("2022-11-10", "3")],
         )
