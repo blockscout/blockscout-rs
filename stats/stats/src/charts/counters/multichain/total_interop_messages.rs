@@ -80,7 +80,7 @@ mod tests {
     async fn update_total_interop_messages() {
         simple_test_counter_multichain::<TotalInteropMessages>(
             "update_total_interop_messages",
-            "3",
+            "6",
             None,
         )
         .await;
