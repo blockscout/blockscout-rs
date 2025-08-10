@@ -229,6 +229,35 @@ send_counters() {
   done
 }
 
+send_interop_messages() {
+  echo -n "Sending $N interop_messages... "
+
+  payload=$(jq -n \
+    --arg chain_id "$CHAIN_ID" \
+    --arg api_key "$MULTICHAIN_AGGREGATOR_API_KEY" \
+    --argjson interop_messages "$(for i in $(seq 1 "$N"); do
+      jq -n \
+        --arg sender_address_hash "0x$(random_address_hash)" \
+        --arg target_address_hash "0x$(random_address_hash)" \
+        --argjson nonce "$i" \
+        --argjson init_chain_id "$CHAIN_ID" \
+        --arg timestamp "2015-07-30T16:02:18.000000Z" \
+        --arg init_transaction_hash "0x$(random_32byte_hash)" \
+        '{sender_address_hash: $sender_address_hash,
+          target_address_hash: $target_address_hash,
+          nonce: $nonce,
+          init_chain_id: $init_chain_id,
+          init_transaction_hash: $init_transaction_hash,
+          timestamp: $timestamp,
+          relay_chain_id: 1,
+          payload: ""}'
+    done | jq -s .)" \
+    '{chain_id: $chain_id, interop_messages: $interop_messages, api_key: $api_key}'
+  )
+
+  import_batch "$payload" "interop_messages"
+}
+
 # --- Execute all imports ---
 
 # send_addresses
@@ -236,5 +265,6 @@ send_counters() {
 # send_hashes
 # send_address_coin_balances
 # send_tokens
-send_counters
+# send_counters
+send_interop_messages
 
