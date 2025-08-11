@@ -5,7 +5,7 @@
   },
   "response": {
     "status": 200,
-    "body": "{\"transactions_count\":\"20\",\"token_transfers_count\":\"13\",\"gas_usage_count\":\"5776632\",\"validations_count\":\"0\"}",
+    "body": "{\"transactions_count\":\"20\",\"gas_usage_count\":\"5776632\",\"token_transfers_count\":\"13\",\"validations_count\":\"0\"}",
     "headers": {
       "Content-Type": "application/json"
     }
