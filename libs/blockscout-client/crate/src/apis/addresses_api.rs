@@ -29,7 +29,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}
     ///
     ///
-
     async fn get_address(
         &self,
         params: GetAddressParams,
@@ -38,7 +37,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/blocks-validated
     ///
     ///
-
     async fn get_address_blocks_validated(
         &self,
         params: GetAddressBlocksValidatedParams,
@@ -50,7 +48,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/coin-balance-history
     ///
     ///
-
     async fn get_address_coin_balance_history(
         &self,
         params: GetAddressCoinBalanceHistoryParams,
@@ -62,7 +59,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/coin-balance-history-by-day
     ///
     ///
-
     async fn get_address_coin_balance_history_by_day(
         &self,
         params: GetAddressCoinBalanceHistoryByDayParams,
@@ -74,7 +70,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/counters
     ///
     ///
-
     async fn get_address_counters(
         &self,
         params: GetAddressCountersParams,
@@ -83,7 +78,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/internal-transactions
     ///
     ///
-
     async fn get_address_internal_txs(
         &self,
         params: GetAddressInternalTxsParams,
@@ -92,7 +86,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/logs
     ///
     ///
-
     async fn get_address_logs(
         &self,
         params: GetAddressLogsParams,
@@ -101,7 +94,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/nft
     ///
     ///
-
     async fn get_address_nft(
         &self,
         params: GetAddressNftParams,
@@ -110,7 +102,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/nft/collections
     ///
     ///
-
     async fn get_address_nft_collections(
         &self,
         params: GetAddressNftCollectionsParams,
@@ -122,7 +113,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/token-balances
     ///
     ///
-
     async fn get_address_token_balances(
         &self,
         params: GetAddressTokenBalancesParams,
@@ -131,7 +121,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/token-transfers
     ///
     ///
-
     async fn get_address_token_transfers(
         &self,
         params: GetAddressTokenTransfersParams,
@@ -143,7 +132,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/tokens
     ///
     ///
-
     async fn get_address_tokens(
         &self,
         params: GetAddressTokensParams,
@@ -152,7 +140,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/transactions
     ///
     ///
-
     async fn get_address_txs(
         &self,
         params: GetAddressTxsParams,
@@ -161,7 +148,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses/{address_hash}/withdrawals
     ///
     ///
-
     async fn get_address_withdrawals(
         &self,
         params: GetAddressWithdrawalsParams,
@@ -170,7 +156,6 @@ pub trait AddressesApi: Send + Sync {
     /// GET /api/v2/addresses
     ///
     ///
-
     async fn get_addresses(
         &self,
     ) -> Result<ResponseContent<GetAddressesSuccess>, Error<GetAddressesError>>;
@@ -189,7 +174,6 @@ impl AddressesApiClient {
 /// struct for passing parameters to the method [`get_address`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressParams {
     /// Address hash
     pub address_hash: String,
@@ -198,7 +182,6 @@ pub struct GetAddressParams {
 /// struct for passing parameters to the method [`get_address_blocks_validated`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressBlocksValidatedParams {
     /// Address hash
     pub address_hash: String,
@@ -207,7 +190,6 @@ pub struct GetAddressBlocksValidatedParams {
 /// struct for passing parameters to the method [`get_address_coin_balance_history`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressCoinBalanceHistoryParams {
     /// Address hash
     pub address_hash: String,
@@ -216,7 +198,6 @@ pub struct GetAddressCoinBalanceHistoryParams {
 /// struct for passing parameters to the method [`get_address_coin_balance_history_by_day`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressCoinBalanceHistoryByDayParams {
     /// Address hash
     pub address_hash: String,
@@ -225,7 +206,6 @@ pub struct GetAddressCoinBalanceHistoryByDayParams {
 /// struct for passing parameters to the method [`get_address_counters`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressCountersParams {
     /// Address hash
     pub address_hash: String,
@@ -234,7 +214,6 @@ pub struct GetAddressCountersParams {
 /// struct for passing parameters to the method [`get_address_internal_txs`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressInternalTxsParams {
     /// Address hash
     pub address_hash: String,
@@ -245,7 +224,6 @@ pub struct GetAddressInternalTxsParams {
 /// struct for passing parameters to the method [`get_address_logs`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressLogsParams {
     /// Address hash
     pub address_hash: String,
@@ -254,7 +232,6 @@ pub struct GetAddressLogsParams {
 /// struct for passing parameters to the method [`get_address_nft`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressNftParams {
     /// Address hash
     pub address_hash: String,
@@ -265,7 +242,6 @@ pub struct GetAddressNftParams {
 /// struct for passing parameters to the method [`get_address_nft_collections`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressNftCollectionsParams {
     /// Address hash
     pub address_hash: String,
@@ -276,7 +252,6 @@ pub struct GetAddressNftCollectionsParams {
 /// struct for passing parameters to the method [`get_address_token_balances`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressTokenBalancesParams {
     /// Address hash
     pub address_hash: String,
@@ -285,7 +260,6 @@ pub struct GetAddressTokenBalancesParams {
 /// struct for passing parameters to the method [`get_address_token_transfers`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressTokenTransfersParams {
     /// Address hash
     pub address_hash: String,
@@ -300,7 +274,6 @@ pub struct GetAddressTokenTransfersParams {
 /// struct for passing parameters to the method [`get_address_tokens`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressTokensParams {
     /// Address hash
     pub address_hash: String,
@@ -311,7 +284,6 @@ pub struct GetAddressTokensParams {
 /// struct for passing parameters to the method [`get_address_txs`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressTxsParams {
     /// Address hash
     pub address_hash: String,
@@ -322,7 +294,6 @@ pub struct GetAddressTxsParams {
 /// struct for passing parameters to the method [`get_address_withdrawals`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetAddressWithdrawalsParams {
     /// Address hash
     pub address_hash: String,

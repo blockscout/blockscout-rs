@@ -29,7 +29,6 @@ pub trait CelestiaServiceApi: Send + Sync {
     /// GET /api/v1/celestia/blob
     ///
     ///
-
     async fn celestia_service_get_blob(
         &self,
         params: CelestiaServiceGetBlobParams,
@@ -38,7 +37,6 @@ pub trait CelestiaServiceApi: Send + Sync {
     /// GET /api/v1/celestia/l2BatchMetadata
     ///
     ///
-
     async fn celestia_service_get_l2_batch_metadata(
         &self,
         params: CelestiaServiceGetL2BatchMetadataParams,
@@ -50,7 +48,6 @@ pub trait CelestiaServiceApi: Send + Sync {
     /// GET /api/v2/health
     ///
     ///
-
     async fn health_check(
         &self,
         params: HealthCheckParams,
@@ -70,7 +67,6 @@ impl CelestiaServiceApiClient {
 /// struct for passing parameters to the method [`celestia_service_get_blob`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct CelestiaServiceGetBlobParams {
     pub height: Option<String>,
 
@@ -82,7 +78,6 @@ pub struct CelestiaServiceGetBlobParams {
 /// struct for passing parameters to the method [`celestia_service_get_l2_batch_metadata`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct CelestiaServiceGetL2BatchMetadataParams {
     pub height: Option<String>,
 
@@ -94,7 +89,6 @@ pub struct CelestiaServiceGetL2BatchMetadataParams {
 /// struct for passing parameters to the method [`health_check`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct HealthCheckParams {
     pub service: Option<String>,
 }

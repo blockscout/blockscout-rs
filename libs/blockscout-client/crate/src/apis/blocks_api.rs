@@ -29,7 +29,6 @@ pub trait BlocksApi: Send + Sync {
     /// GET /api/v2/blocks/{block_number_or_hash}
     ///
     ///
-
     async fn get_block(
         &self,
         params: GetBlockParams,
@@ -38,7 +37,6 @@ pub trait BlocksApi: Send + Sync {
     /// GET /api/v2/blocks/{block_number_or_hash}/transactions
     ///
     ///
-
     async fn get_block_txs(
         &self,
         params: GetBlockTxsParams,
@@ -47,7 +45,6 @@ pub trait BlocksApi: Send + Sync {
     /// GET /api/v2/blocks/{block_number_or_hash}/withdrawals
     ///
     ///
-
     async fn get_block_withdrawals(
         &self,
         params: GetBlockWithdrawalsParams,
@@ -56,7 +53,6 @@ pub trait BlocksApi: Send + Sync {
     /// GET /api/v2/blocks
     ///
     ///
-
     async fn get_blocks(
         &self,
         params: GetBlocksParams,
@@ -76,7 +72,6 @@ impl BlocksApiClient {
 /// struct for passing parameters to the method [`get_block`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetBlockParams {
     /// Block number or hash
     pub block_number_or_hash: String,
@@ -85,7 +80,6 @@ pub struct GetBlockParams {
 /// struct for passing parameters to the method [`get_block_txs`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetBlockTxsParams {
     /// Block number or hash
     pub block_number_or_hash: String,
@@ -94,7 +88,6 @@ pub struct GetBlockTxsParams {
 /// struct for passing parameters to the method [`get_block_withdrawals`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetBlockWithdrawalsParams {
     /// Block number or hash
     pub block_number_or_hash: String,
@@ -103,7 +96,6 @@ pub struct GetBlockWithdrawalsParams {
 /// struct for passing parameters to the method [`get_blocks`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetBlocksParams {
     pub r#type: Option<String>,
 }

@@ -29,7 +29,6 @@ pub trait MainPageApi: Send + Sync {
     /// GET /api/v2/main-page/indexing-status
     ///
     ///
-
     async fn get_indexing_status(
         &self,
     ) -> Result<ResponseContent<GetIndexingStatusSuccess>, Error<GetIndexingStatusError>>;
@@ -37,7 +36,6 @@ pub trait MainPageApi: Send + Sync {
     /// GET /api/v2/main-page/blocks
     ///
     ///
-
     async fn get_main_page_tokens(
         &self,
     ) -> Result<ResponseContent<GetMainPageTokensSuccess>, Error<GetMainPageTokensError>>;
@@ -45,7 +43,6 @@ pub trait MainPageApi: Send + Sync {
     /// GET /api/v2/main-page/transactions
     ///
     ///
-
     async fn get_main_page_txs(
         &self,
     ) -> Result<ResponseContent<GetMainPageTxsSuccess>, Error<GetMainPageTxsError>>;

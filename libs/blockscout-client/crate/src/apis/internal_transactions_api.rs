@@ -29,7 +29,6 @@ pub trait InternalTransactionsApi: Send + Sync {
     /// GET /api/v2/internal-transactions
     ///
     ///
-
     async fn get_internal_transactions(
         &self,
     ) -> Result<ResponseContent<GetInternalTransactionsSuccess>, Error<GetInternalTransactionsError>>;

@@ -37,8 +37,7 @@ impl<S: Subscriber + for<'lookup> LookupSpan<'lookup>> Layer<S> for RequestIdSto
                         extensions.insert(fields);
                     } else {
                         eprintln!(
-                            "[tracing-subscriber] Unable to format the following event, ignoring: {:?}",
-                            attrs
+                            "[tracing-subscriber] Unable to format the following event, ignoring: {attrs:?}",
                         );
                     }
                 }
@@ -187,7 +186,7 @@ mod tests {
 
     fn parse_json(s: &str) -> serde_json::Value {
         serde_json::from_str::<serde_json::Value>(s)
-            .unwrap_or_else(|_| panic!("failed to parse '{}'", s))
+            .unwrap_or_else(|_| panic!("failed to parse '{s}'"))
     }
 
     fn parse_captured_logs(logs: String) -> Vec<serde_json::Value> {

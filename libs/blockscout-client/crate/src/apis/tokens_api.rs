@@ -29,7 +29,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}/instances/{id}
     ///
     ///
-
     async fn get_nft_instance(
         &self,
         params: GetNftInstanceParams,
@@ -38,7 +37,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}/instances/{id}/transfers
     ///
     ///
-
     async fn get_nft_instance_transfers(
         &self,
         params: GetNftInstanceTransfersParams,
@@ -47,7 +45,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}/instances/{id}/transfers-count
     ///
     ///
-
     async fn get_nft_instance_transfers_count(
         &self,
         params: GetNftInstanceTransfersCountParams,
@@ -59,7 +56,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}/instances
     ///
     ///
-
     async fn get_nft_instances(
         &self,
         params: GetNftInstancesParams,
@@ -68,7 +64,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}
     ///
     ///
-
     async fn get_token(
         &self,
         params: GetTokenParams,
@@ -77,7 +72,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}/counters
     ///
     ///
-
     async fn get_token_counters(
         &self,
         params: GetTokenCountersParams,
@@ -86,7 +80,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}/holders
     ///
     ///
-
     async fn get_token_holders(
         &self,
         params: GetTokenHoldersParams,
@@ -95,7 +88,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}/instances/{id}/holders
     ///
     ///
-
     async fn get_token_instance_holders(
         &self,
         params: GetTokenInstanceHoldersParams,
@@ -104,7 +96,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens/{address_hash}/transfers
     ///
     ///
-
     async fn get_token_token_transfers(
         &self,
         params: GetTokenTokenTransfersParams,
@@ -113,7 +104,6 @@ pub trait TokensApi: Send + Sync {
     /// GET /api/v2/tokens
     ///
     ///
-
     async fn get_tokens_list(
         &self,
         params: GetTokensListParams,
@@ -122,7 +112,6 @@ pub trait TokensApi: Send + Sync {
     /// PATCH /api/v2/tokens/{address_hash}/instances/{id}/refetch-metadata
     ///
     ///
-
     async fn refetch_token_instance_metadata(
         &self,
         params: RefetchTokenInstanceMetadataParams,
@@ -145,7 +134,6 @@ impl TokensApiClient {
 /// struct for passing parameters to the method [`get_nft_instance`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetNftInstanceParams {
     /// Address hash
     pub address_hash: String,
@@ -157,7 +145,6 @@ pub struct GetNftInstanceParams {
 /// struct for passing parameters to the method [`get_nft_instance_transfers`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetNftInstanceTransfersParams {
     /// Address hash
     pub address_hash: String,
@@ -169,7 +156,6 @@ pub struct GetNftInstanceTransfersParams {
 /// struct for passing parameters to the method [`get_nft_instance_transfers_count`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetNftInstanceTransfersCountParams {
     /// Address hash
     pub address_hash: String,
@@ -181,7 +167,6 @@ pub struct GetNftInstanceTransfersCountParams {
 /// struct for passing parameters to the method [`get_nft_instances`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetNftInstancesParams {
     /// Address hash
     pub address_hash: String,
@@ -190,7 +175,6 @@ pub struct GetNftInstancesParams {
 /// struct for passing parameters to the method [`get_token`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTokenParams {
     /// Address hash
     pub address_hash: String,
@@ -199,7 +183,6 @@ pub struct GetTokenParams {
 /// struct for passing parameters to the method [`get_token_counters`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTokenCountersParams {
     /// Address hash
     pub address_hash: String,
@@ -208,7 +191,6 @@ pub struct GetTokenCountersParams {
 /// struct for passing parameters to the method [`get_token_holders`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTokenHoldersParams {
     /// Address hash
     pub address_hash: String,
@@ -217,7 +199,6 @@ pub struct GetTokenHoldersParams {
 /// struct for passing parameters to the method [`get_token_instance_holders`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTokenInstanceHoldersParams {
     /// Address hash
     pub address_hash: String,
@@ -229,7 +210,6 @@ pub struct GetTokenInstanceHoldersParams {
 /// struct for passing parameters to the method [`get_token_token_transfers`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTokenTokenTransfersParams {
     /// Address hash
     pub address_hash: String,
@@ -238,7 +218,6 @@ pub struct GetTokenTokenTransfersParams {
 /// struct for passing parameters to the method [`get_tokens_list`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTokensListParams {
     pub q: Option<String>,
 
@@ -248,7 +227,6 @@ pub struct GetTokensListParams {
 /// struct for passing parameters to the method [`refetch_token_instance_metadata`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct RefetchTokenInstanceMetadataParams {
     /// Address hash
     pub address_hash: String,

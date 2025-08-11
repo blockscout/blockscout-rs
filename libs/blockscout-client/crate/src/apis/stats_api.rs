@@ -29,7 +29,6 @@ pub trait StatsApi: Send + Sync {
     /// GET /api/v2/stats/charts/market
     ///
     ///
-
     async fn get_market_chart(
         &self,
     ) -> Result<ResponseContent<GetMarketChartSuccess>, Error<GetMarketChartError>>;
@@ -37,13 +36,11 @@ pub trait StatsApi: Send + Sync {
     /// GET /api/v2/stats
     ///
     ///
-
     async fn get_stats(&self) -> Result<ResponseContent<GetStatsSuccess>, Error<GetStatsError>>;
 
     /// GET /api/v2/stats/charts/transactions
     ///
     ///
-
     async fn get_txs_chart(
         &self,
     ) -> Result<ResponseContent<GetTxsChartSuccess>, Error<GetTxsChartError>>;

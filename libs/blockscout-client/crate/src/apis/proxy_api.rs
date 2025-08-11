@@ -29,7 +29,6 @@ pub trait ProxyApi: Send + Sync {
     /// GET /api/v2/proxy/account-abstraction/status
     ///
     ///
-
     async fn get_account_abstraction_status(
         &self,
     ) -> Result<

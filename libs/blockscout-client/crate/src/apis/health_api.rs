@@ -29,13 +29,11 @@ pub trait HealthApi: Send + Sync {
     /// GET /api/health
     ///
     ///
-
     async fn health(&self) -> Result<ResponseContent<HealthSuccess>, Error<HealthError>>;
 
     /// GET /api/v1/health
     ///
     ///
-
     async fn health_v1(&self) -> Result<ResponseContent<HealthV1Success>, Error<HealthV1Error>>;
 }
 

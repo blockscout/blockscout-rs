@@ -29,7 +29,6 @@ pub trait SmartContractsApi: Send + Sync {
     /// GET /api/v2/smart-contracts/{address_hash}
     ///
     ///
-
     async fn get_smart_contract(
         &self,
         params: GetSmartContractParams,
@@ -38,7 +37,6 @@ pub trait SmartContractsApi: Send + Sync {
     /// GET /api/v2/smart-contracts
     ///
     ///
-
     async fn get_smart_contracts(
         &self,
         params: GetSmartContractsParams,
@@ -47,7 +45,6 @@ pub trait SmartContractsApi: Send + Sync {
     /// GET /api/v2/smart-contracts/counters
     ///
     ///
-
     async fn get_smart_contracts_counters(
         &self,
     ) -> Result<
@@ -69,7 +66,6 @@ impl SmartContractsApiClient {
 /// struct for passing parameters to the method [`get_smart_contract`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetSmartContractParams {
     /// Address hash
     pub address_hash: String,
@@ -78,7 +74,6 @@ pub struct GetSmartContractParams {
 /// struct for passing parameters to the method [`get_smart_contracts`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetSmartContractsParams {
     pub q: Option<String>,
 

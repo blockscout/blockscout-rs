@@ -29,7 +29,6 @@ pub trait ConfigApi: Send + Sync {
     /// GET /api/v2/config/json-rpc-url
     ///
     ///
-
     async fn get_json_rpc_url(
         &self,
     ) -> Result<ResponseContent<GetJsonRpcUrlSuccess>, Error<GetJsonRpcUrlError>>;

@@ -29,7 +29,6 @@ pub trait TransactionsApi: Send + Sync {
     /// GET /api/v2/transactions/{transaction_hash}/internal-transactions
     ///
     ///
-
     async fn get_transaction_internal_txs(
         &self,
         params: GetTransactionInternalTxsParams,
@@ -41,7 +40,6 @@ pub trait TransactionsApi: Send + Sync {
     /// GET /api/v2/transactions/{transaction_hash}/logs
     ///
     ///
-
     async fn get_transaction_logs(
         &self,
         params: GetTransactionLogsParams,
@@ -50,7 +48,6 @@ pub trait TransactionsApi: Send + Sync {
     /// GET /api/v2/transactions/{transaction_hash}/raw-trace
     ///
     ///
-
     async fn get_transaction_raw_trace(
         &self,
         params: GetTransactionRawTraceParams,
@@ -59,7 +56,6 @@ pub trait TransactionsApi: Send + Sync {
     /// GET /api/v2/transactions/{transaction_hash}/state-changes
     ///
     ///
-
     async fn get_transaction_state_changes(
         &self,
         params: GetTransactionStateChangesParams,
@@ -71,7 +67,6 @@ pub trait TransactionsApi: Send + Sync {
     /// GET /api/v2/transactions/{transaction_hash}/summary
     ///
     ///
-
     async fn get_transaction_summary(
         &self,
         params: GetTransactionSummaryParams,
@@ -80,7 +75,6 @@ pub trait TransactionsApi: Send + Sync {
     /// GET /api/v2/transactions/{transaction_hash}/token-transfers
     ///
     ///
-
     async fn get_transaction_token_transfers(
         &self,
         params: GetTransactionTokenTransfersParams,
@@ -92,7 +86,6 @@ pub trait TransactionsApi: Send + Sync {
     /// GET /api/v2/transactions/{transaction_hash}
     ///
     ///
-
     async fn get_tx(
         &self,
         params: GetTxParams,
@@ -101,7 +94,6 @@ pub trait TransactionsApi: Send + Sync {
     /// GET /api/v2/transactions
     ///
     ///
-
     async fn get_txs(
         &self,
         params: GetTxsParams,
@@ -121,7 +113,6 @@ impl TransactionsApiClient {
 /// struct for passing parameters to the method [`get_transaction_internal_txs`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTransactionInternalTxsParams {
     /// Transaction hash
     pub transaction_hash: String,
@@ -130,7 +121,6 @@ pub struct GetTransactionInternalTxsParams {
 /// struct for passing parameters to the method [`get_transaction_logs`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTransactionLogsParams {
     /// Transaction hash
     pub transaction_hash: String,
@@ -139,7 +129,6 @@ pub struct GetTransactionLogsParams {
 /// struct for passing parameters to the method [`get_transaction_raw_trace`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTransactionRawTraceParams {
     /// Transaction hash
     pub transaction_hash: String,
@@ -148,7 +137,6 @@ pub struct GetTransactionRawTraceParams {
 /// struct for passing parameters to the method [`get_transaction_state_changes`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTransactionStateChangesParams {
     /// Transaction hash
     pub transaction_hash: String,
@@ -157,7 +145,6 @@ pub struct GetTransactionStateChangesParams {
 /// struct for passing parameters to the method [`get_transaction_summary`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTransactionSummaryParams {
     /// Transaction hash
     pub transaction_hash: String,
@@ -166,7 +153,6 @@ pub struct GetTransactionSummaryParams {
 /// struct for passing parameters to the method [`get_transaction_token_transfers`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTransactionTokenTransfersParams {
     /// Transaction hash
     pub transaction_hash: String,
@@ -177,7 +163,6 @@ pub struct GetTransactionTokenTransfersParams {
 /// struct for passing parameters to the method [`get_tx`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTxParams {
     /// Transaction hash
     pub transaction_hash: String,
@@ -186,7 +171,6 @@ pub struct GetTxParams {
 /// struct for passing parameters to the method [`get_txs`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct GetTxsParams {
     pub filter: Option<String>,
 

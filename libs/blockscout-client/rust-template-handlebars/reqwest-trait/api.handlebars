@@ -23,7 +23,7 @@ pub trait {{{classname}}}: Send + Sync {
     {{~#unless notes.empty}}
     ///
     /// {{{notes}}}
-    {{~/unless}}
+    {{~/unless~}}
 {{#if vendorExtensions.x-group-parameters}}
     async fn {{{operationId}}}(&self, {{#each allParams}}{{#if @first}} params: {{{operationIdCamelCase}}}Params {{/if}}{{/each}}) -> Result<{{#if supportMultipleResponses}}ResponseContent<{{{operationIdCamelCase}}}Success>{{/if}}{{#unless supportMultipleResponses}}{{#unless returnType}}(){{/unless}}{{{returnType}}}{{/unless}}, Error<{{{operationIdCamelCase}}}Error>>;
 {{/if}}
@@ -52,9 +52,9 @@ impl {{classname}}Client {
 {{#if @first}}
 /// struct for passing parameters to the method [`{{operationId}}`]
 #[derive(Clone, Debug)]
-{{#if useBonBuilder}}
+{{#if useBonBuilder~}}
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-{{/if}}
+{{/if~}}
 pub struct {{{operationIdCamelCase}}}Params {
 {{/if}}
     {{~#if description}}

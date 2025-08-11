@@ -29,7 +29,6 @@ pub trait WithdrawalsApi: Send + Sync {
     /// GET /api/v2/withdrawals
     ///
     ///
-
     async fn get_withdrawals(
         &self,
     ) -> Result<ResponseContent<GetWithdrawalsSuccess>, Error<GetWithdrawalsError>>;

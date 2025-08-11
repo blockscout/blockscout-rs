@@ -29,7 +29,6 @@ pub trait SearchApi: Send + Sync {
     /// GET /api/v2/search
     ///
     ///
-
     async fn search(
         &self,
         params: SearchParams,
@@ -38,7 +37,6 @@ pub trait SearchApi: Send + Sync {
     /// GET /api/v2/search/check-redirect
     ///
     ///
-
     async fn search_redirect(
         &self,
         params: SearchRedirectParams,
@@ -58,7 +56,6 @@ impl SearchApiClient {
 /// struct for passing parameters to the method [`search`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct SearchParams {
     pub q: Option<String>,
 }
@@ -66,7 +63,6 @@ pub struct SearchParams {
 /// struct for passing parameters to the method [`search_redirect`]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-
 pub struct SearchRedirectParams {
     pub q: Option<String>,
 }

@@ -55,14 +55,6 @@ const paths = [
     
     // Stats endpoints
     "/api/v2/stats",
-    
-    
-    // // Proxy endpoints
-    // "/api/v2/proxy/account-abstraction/status",
-    
-    // // Celestia Service endpoints
-    // "/api/v1/celestia/blob?height=123&commitment=commitment_value&skip_data=false",
-    
 ]
 
 
@@ -100,7 +92,8 @@ async function main(): Promise<any> {
                 }
             }
         };
-        const outputFileName = `${outputDir}/${baseName}/${path.replace(/\//g, '_')}.json`;
+        const sanitazedPath = path.replace(/\//g, '_').replace(/\?/g, '_');
+        const outputFileName = `${outputDir}/${baseName}/${sanitazedPath}.json`;
         await fs.ensureFile(outputFileName);
         await fs.writeFile(outputFileName, JSON.stringify(stubs, null, 2));
     }

@@ -29,7 +29,6 @@ pub trait TokenTransfersApi: Send + Sync {
     /// GET /api/v2/token-transfers
     ///
     ///
-
     async fn get_token_transfers(
         &self,
     ) -> Result<ResponseContent<GetTokenTransfersSuccess>, Error<GetTokenTransfersError>>;
