@@ -1,6 +1,6 @@
 [package]
 name = "blockscout-client"
-version = "0.2.0"
+version = "0.2.0-blockscout-9.0.0"
 
 authors = ["lymarenko.lev@blockscout.com"]
 

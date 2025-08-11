@@ -1,6 +1,6 @@
 {
   "packageName": "blockscout-client",
-  "packageVersion": "0.2.0",
+  "packageVersion": "0.2.0-blockscout-9.0.0",
   "supportMiddleware": true,
   "avoidBoxedModels": true,
   "topLevelApiClient": true,
