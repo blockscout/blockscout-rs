@@ -1,25 +1,27 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
-    charts::db_interaction::read::QueryFullIndexerTimestampRange, data_source::{
+    ChartKey, ChartProperties, Named,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
+    data_source::{
         kinds::{
             data_manipulation::{
                 map::{MapParseTo, MapToString, StripExt},
                 resolutions::sum::SumLowerResolution,
             },
             local_db::{
+                DirectVecLocalDbChartSource,
                 parameters::update::batching::parameters::{
                     Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                }, DirectVecLocalDbChartSource
+                },
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
         types::IndexerMigrations,
-    }, 
+    },
     define_and_impl_resolution_properties,
     types::timespans::{Month, Week, Year},
     utils::sql_with_range_filter_opt,
-    ChartKey, ChartProperties, Named,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -100,8 +102,7 @@ pub type NewTxnsMultichainMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewTxnsMultichainMonthlyInt =
-    MapParseTo<StripExt<NewTxnsMultichainMonthly>, i64>;
+pub type NewTxnsMultichainMonthlyInt = MapParseTo<StripExt<NewTxnsMultichainMonthly>, i64>;
 pub type NewTxnsMultichainYearly = DirectVecLocalDbChartSource<
     MapToString<SumLowerResolution<NewTxnsMultichainMonthlyInt, Year>>,
     Batch30Years,
@@ -110,64 +111,56 @@ pub type NewTxnsMultichainYearly = DirectVecLocalDbChartSource<
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
-    // use crate::tests::simple_test::simple_test_chart_with_migration_variants;
+    use super::*;
+    use crate::tests::simple_test::simple_test_chart_multichain;
 
-    // #[tokio::test]
-    // #[ignore = "needs database to run"]
-    // async fn update_native_coins_transfers() {
-    //     simple_test_chart_with_migration_variants::<NewTxnsMultichain>(
-    //         "update_new_txs_transfers",
-    //         vec![
-    //             ("2022-11-09", "2"),
-    //             ("2022-11-10", "4"),
-    //             ("2022-11-11", "4"),
-    //             ("2022-11-12", "2"),
-    //             ("2022-12-01", "2"),
-    //             ("2023-02-01", "2"),
-    //             ("2023-03-01", "1"),
-    //         ],
-    //     )
-    //     .await;
-    // }
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_txns_multichain() {
+        simple_test_chart_multichain::<NewTxnsMultichain>(
+            "update_new_txns_multichain",
+            vec![
+                ("2022-06-28", "66"),
+                ("2022-07-01", "10"),
+                ("2022-08-04", "25"),
+                ("2022-08-05", "49"),
+                ("2022-08-06", "60"),
+            ],
+        )
+        .await;
+    }
 
-    // #[tokio::test]
-    // #[ignore = "needs database to run"]
-    // async fn update_new_txs_weekly() {
-    //     simple_test_chart_with_migration_variants::<NewTxnsMultichainWeekly>(
-    //         "update_new_txs_weekly",
-    //         vec![
-    //             ("2022-11-07", "12"),
-    //             ("2022-11-28", "2"),
-    //             ("2023-01-30", "2"),
-    //             ("2023-02-27", "1"),
-    //         ],
-    //     )
-    //     .await;
-    // }
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_txs_multichain_weekly() {
+        simple_test_chart_multichain::<NewTxnsMultichainWeekly>(
+            "update_new_txs_multichain_weekly",
+            vec![("2022-06-27", "76"), ("2022-08-01", "134")],
+        )
+        .await;
+    }
 
-    // #[tokio::test]
-    // #[ignore = "needs database to run"]
-    // async fn update_new_txs_monthly() {
-    //     simple_test_chart_with_migration_variants::<NewTxnsMultichainMonthly>(
-    //         "update_new_txs_monthly",
-    //         vec![
-    //             ("2022-11-01", "12"),
-    //             ("2022-12-01", "2"),
-    //             ("2023-02-01", "2"),
-    //             ("2023-03-01", "1"),
-    //         ],
-    //     )
-    //     .await;
-    // }
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_txs_multichain_monthly() {
+        simple_test_chart_multichain::<NewTxnsMultichainMonthly>(
+            "update_new_txs_multichain_monthly",
+            vec![
+                ("2022-06-01", "66"),
+                ("2022-07-01", "10"),
+                ("2022-08-01", "134"),
+            ],
+        )
+        .await;
+    }
 
-    // #[tokio::test]
-    // #[ignore = "needs database to run"]
-    // async fn update_new_txs_yearly() {
-    //     simple_test_chart_with_migration_variants::<NewTxnsMultichainYearly>(
-    //         "update_new_txs_yearly",
-    //         vec![("2022-01-01", "14"), ("2023-01-01", "3")],
-    //     )
-    //     .await;
-    // }
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_txs_multichain_yearly() {
+        simple_test_chart_multichain::<NewTxnsMultichainYearly>(
+            "update_new_txs_multichain_yearly",
+            vec![("2022-01-01", "210")],
+        )
+        .await;
+    }
 }

@@ -1,6 +1,10 @@
-use crate::lines::multichain::new_txns_multichain::*;
-use crate::lines::multichain::new_txns_multichain_window::NewTxnsMultichainWindow;
-use crate::{construct_update_group, utils::singleton_groups};
+use crate::{
+    construct_update_group,
+    lines::multichain::{
+        new_txns_multichain::*, new_txns_multichain_window::NewTxnsMultichainWindow,
+    },
+    utils::singleton_groups,
+};
 
 use crate::counters::multichain::*;
 
@@ -21,7 +25,5 @@ construct_update_group!(NewTxnsMultichainGroup {
 });
 
 construct_update_group!(NewTxnsMultichainWindowGroup {
-    charts: [
-        NewTxnsMultichainWindow,
-    ],
+    charts: [NewTxnsMultichainWindow,],
 });

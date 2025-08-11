@@ -128,9 +128,10 @@ impl RemoteQueryBehaviour for NewBuilderAccountsQueryBehaviour {
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<DateValue<String>>, ChartError> {
-        let statement_range =
-            data_source_query_range_to_db_statement_range::<QueryFullIndexerTimestampRange>(cx, range)
-                .await?;
+        let statement_range = data_source_query_range_to_db_statement_range::<
+            QueryFullIndexerTimestampRange,
+        >(cx, range)
+        .await?;
         let statement = NewBuilderAccountsStatement::get_statement(
             statement_range.clone(),
             &cx.indexer_applied_migrations,

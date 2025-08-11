@@ -3,7 +3,10 @@
 use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime};
-use multichain_aggregator_entity::{addresses, block_ranges, chains, counters_global_imported, interop_messages, interop_messages_transfers};
+use multichain_aggregator_entity::{
+    addresses, block_ranges, chains, counters_global_imported, interop_messages,
+    interop_messages_transfers,
+};
 use sea_orm::{ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 
 pub async fn fill_mock_multichain_data(multichain: &DatabaseConnection, max_date: NaiveDate) {
@@ -59,7 +62,10 @@ fn mock_address(seed: i64) -> addresses::ActiveModel {
 fn mock_interop_messages_with_transfers(
     accounts: &[addresses::ActiveModel],
     max_date: NaiveDate,
-) -> (Vec<interop_messages::ActiveModel>, Vec<interop_messages_transfers::ActiveModel>) {
+) -> (
+    Vec<interop_messages::ActiveModel>,
+    Vec<interop_messages_transfers::ActiveModel>,
+) {
     let messages: Vec<interop_messages::ActiveModel> = vec![
         "2022-11-09T23:59:59",
         "2022-11-10T00:00:00",
@@ -154,33 +160,46 @@ fn mock_block_ranges() -> Vec<block_ranges::ActiveModel> {
         .collect()
 }
 
-fn mock_counters_global_imported(max_date: NaiveDate) -> Vec<counters_global_imported::ActiveModel> {
+fn mock_counters_global_imported(
+    max_date: NaiveDate,
+) -> Vec<counters_global_imported::ActiveModel> {
     // each tuple includes: (date, chain_id, daily_txns, total_txns, total_addresses)
     let dates_and_txns = vec![
         ("2022-08-06", 1, 10, 52, 50),
         ("2022-08-06", 2, 20, 30, 42),
         ("2022-08-06", 3, 30, 42, 66),
-
         ("2022-08-05", 1, 4, 48, 10),
         ("2022-08-05", 2, 7, 23, 20),
         ("2022-08-05", 3, 38, 4, 30),
-
         ("2022-08-04", 1, 18, 30, 1),
         ("2022-08-04", 2, 3, 20, 2),
         ("2022-08-04", 3, 4, 0, 3),
+        ("2022-07-01", 1, 3, 0, 0),
+        ("2022-07-01", 2, 3, 0, 0),
+        ("2022-07-01", 3, 4, 0, 0),
+        ("2022-06-28", 1, 11, 0, 0),
+        ("2022-06-28", 2, 22, 0, 0),
+        ("2022-06-28", 3, 33, 0, 0),
     ];
 
     dates_and_txns
         .into_iter()
-        .map(|(date_str, chain_id, daily_txns, total_txns, total_addresses)| {
-            let date = NaiveDate::from_str(date_str).unwrap();
-            if date <= max_date {
-                Some(mock_counter_global_imported(chain_id, date, daily_txns, total_txns, total_addresses))
-            } else {
-                None
-            }
-        })
-        .filter_map(|x| x)
+        .filter_map(
+            |(date_str, chain_id, daily_txns, total_txns, total_addresses)| {
+                let date = NaiveDate::from_str(date_str).unwrap();
+                if date <= max_date {
+                    Some(mock_counter_global_imported(
+                        chain_id,
+                        date,
+                        daily_txns,
+                        total_txns,
+                        total_addresses,
+                    ))
+                } else {
+                    None
+                }
+            },
+        )
         .collect()
 }
 
@@ -200,7 +219,15 @@ fn mock_counter_global_imported(
         total_addresses_number: Set(Some(total_addresses)),
         created_at: Set(Default::default()),
         updated_at: Set(Default::default()),
-        ..Default::default()
     }
 }
 
+pub async fn imitate_reindex_multichain(indexer: &DatabaseConnection) {
+    let counters_global_imported_new =
+        mock_counter_global_imported(1, NaiveDate::from_str("2022-08-15").unwrap(), 10, 62, 55);
+
+    counters_global_imported::Entity::insert_many([counters_global_imported_new])
+        .exec(indexer)
+        .await
+        .unwrap();
+}

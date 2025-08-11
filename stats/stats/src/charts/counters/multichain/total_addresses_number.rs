@@ -14,10 +14,14 @@ use crate::{
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use multichain_aggregator_entity::addresses;
-use sea_orm::{EntityTrait, PaginatorTrait, QuerySelect};
+use sea_orm::{DbBackend, FromQueryResult, Statement, prelude::BigDecimal};
 
 pub struct TotalAddressesNumberQueryBehaviour;
+
+#[derive(Debug, FromQueryResult)]
+struct SumResult {
+    sum_total: Option<BigDecimal>,
+}
 
 impl RemoteQueryBehaviour for TotalAddressesNumberQueryBehaviour {
     type Output = DateValue<String>;
@@ -29,15 +33,29 @@ impl RemoteQueryBehaviour for TotalAddressesNumberQueryBehaviour {
         let db = cx.indexer_db;
         let timespan = cx.time;
 
-        let value = addresses::Entity::find()
-            .select_only()
-            .count(db)
+        let stmt = Statement::from_string(
+            DbBackend::Postgres,
+            r#"
+            SELECT SUM(total_addresses_number) AS sum_total
+            FROM (
+                SELECT DISTINCT ON (chain_id) chain_id, total_addresses_number
+                FROM counters_global_imported
+                ORDER BY chain_id, date DESC
+            ) t
+            "#
+            .to_string(),
+        );
+
+        let result = SumResult::find_by_statement(stmt)
+            .one(db)
             .await
-            .map_err(ChartError::IndexerDB)?;
+            .map_err(ChartError::IndexerDB)?
+            .map(|r| r.sum_total.unwrap_or(BigDecimal::from(0)))
+            .unwrap_or(BigDecimal::from(0));
 
         let data = DateValue::<String> {
             timespan: timespan.date_naive(),
-            value: value.to_string(),
+            value: result.to_string(),
         };
         Ok(data)
     }
@@ -73,15 +91,15 @@ pub type TotalAddressesNumber =
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_counter_multichain;
+    use crate::tests::{point_construction::dt, simple_test::simple_test_counter_multichain};
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_total_addresses_number() {
         simple_test_counter_multichain::<TotalAddressesNumber>(
             "update_total_addresses_number",
-            "3",
-            None,
+            "158",
+            Some(dt("2022-08-06T00:00:00")),
         )
         .await;
     }

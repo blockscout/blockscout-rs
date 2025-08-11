@@ -38,7 +38,12 @@ impl StatementFromRange for ActivePaymastersStatement {
 }
 
 pub type ActivePaymastersRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<ActivePaymastersStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
+    PullAllWithAndSort<
+        ActivePaymastersStatement,
+        NaiveDate,
+        String,
+        QueryFullIndexerTimestampRange,
+    >,
 >;
 
 pub struct Properties;

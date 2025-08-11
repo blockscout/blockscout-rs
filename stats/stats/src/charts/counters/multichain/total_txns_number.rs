@@ -14,10 +14,14 @@ use crate::{
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use multichain_aggregator_entity::{hashes, sea_orm_active_enums::HashType};
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
+use sea_orm::{DbBackend, FromQueryResult, Statement, prelude::BigDecimal};
 
 pub struct TotalTxnsNumberQueryBehaviour;
+
+#[derive(Debug, FromQueryResult)]
+struct SumResult {
+    sum_total: Option<BigDecimal>,
+}
 
 impl RemoteQueryBehaviour for TotalTxnsNumberQueryBehaviour {
     type Output = DateValue<String>;
@@ -29,16 +33,29 @@ impl RemoteQueryBehaviour for TotalTxnsNumberQueryBehaviour {
         let db = cx.indexer_db;
         let timespan = cx.time;
 
-        let value = hashes::Entity::find()
-            .select_only()
-            .filter(hashes::Column::HashType.eq(HashType::Transaction))
-            .count(db)
+        let stmt = Statement::from_string(
+            DbBackend::Postgres,
+            r#"
+            SELECT SUM(total_transactions_number) AS sum_total
+            FROM (
+                SELECT DISTINCT ON (chain_id) chain_id, total_transactions_number
+                FROM counters_global_imported
+                ORDER BY chain_id, date DESC
+            ) t
+            "#
+            .to_string(),
+        );
+
+        let result = SumResult::find_by_statement(stmt)
+            .one(db)
             .await
-            .map_err(ChartError::IndexerDB)?;
+            .map_err(ChartError::IndexerDB)?
+            .map(|r| r.sum_total.unwrap_or(BigDecimal::from(0)))
+            .unwrap_or(BigDecimal::from(0));
 
         let data = DateValue::<String> {
             timespan: timespan.date_naive(),
-            value: value.to_string(),
+            value: result.to_string(),
         };
         Ok(data)
     }
@@ -68,8 +85,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type TotalTxnsNumber =
-    DirectPointLocalDbChartSource<TotalTxnsNumberRemote, Properties>;
+pub type TotalTxnsNumber = DirectPointLocalDbChartSource<TotalTxnsNumberRemote, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -81,7 +97,7 @@ mod tests {
     async fn update_total_txns_number() {
         simple_test_counter_multichain::<TotalTxnsNumber>(
             "update_total_txns_number",
-            "50",
+            "124",
             Some(dt("2022-08-06T00:00:00")),
         )
         .await;

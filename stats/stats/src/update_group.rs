@@ -219,7 +219,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///
 /// ```rust
 /// # use stats::{
-/// #     QueryAllBlockTimestampRange, construct_update_group,
+/// #     QueryFullIndexerTimestampRange, construct_update_group,
 /// #     types::timespans::DateValue, ChartProperties, Named, ChartError,
 /// #     ChartKey,
 /// # };
@@ -243,7 +243,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///     }
 /// }
 ///
-/// type DummyRemote = RemoteDatabaseSource<PullAllWithAndSort<DummyRemoteStatement, NaiveDate, String, QueryAllBlockTimestampRange>>;
+/// type DummyRemote = RemoteDatabaseSource<PullAllWithAndSort<DummyRemoteStatement, NaiveDate, String, QueryFullIndexerTimestampRange>>;
 ///
 /// struct DummyChartProperties;
 ///

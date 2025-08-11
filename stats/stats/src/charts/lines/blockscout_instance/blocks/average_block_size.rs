@@ -58,7 +58,12 @@ impl StatementFromRange for AverageBlockSizeStatement {
 }
 
 pub type AverageBlockSizeRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<AverageBlockSizeStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
+    PullAllWithAndSort<
+        AverageBlockSizeStatement,
+        NaiveDate,
+        String,
+        QueryFullIndexerTimestampRange,
+    >,
 >;
 
 pub struct Properties;

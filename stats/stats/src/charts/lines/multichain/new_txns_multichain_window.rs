@@ -101,130 +101,122 @@ pub type NewTxnsMultichainWindow = LocalDbChartSource<
     NewTxnsMultichainWindowRemote,
     (),
     DefaultCreate<Properties>,
-    ClearAllAndPassVec<
-        NewTxnsMultichainWindowRemote,
-        DefaultQueryVec<Properties>,
-        Properties,
-    >,
+    ClearAllAndPassVec<NewTxnsMultichainWindowRemote, DefaultQueryVec<Properties>, Properties>,
     DefaultQueryVec<Properties>,
     Properties,
 >;
 
-// #[cfg(test)]
-// mod tests {
-//     use pretty_assertions::assert_eq;
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
 
-//     use super::*;
-//     use crate::{
-//         data_source::{DataSource, UpdateParameters},
-//         query_dispatch::QuerySerialized,
-//         tests::{
-//             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
-//             point_construction::dt,
-//             simple_test::{chart_output_to_expected, map_str_tuple_to_owned, prepare_chart_test},
-//         },
-//     };
+    use super::*;
+    use crate::{
+        data_source::{DataSource, UpdateParameters},
+        query_dispatch::QuerySerialized,
+        tests::{
+            mock_multichain::{fill_mock_multichain_data, imitate_reindex_multichain},
+            point_construction::dt,
+            simple_test::{
+                chart_output_to_expected, map_str_tuple_to_owned, prepare_multichain_chart_test,
+            },
+        },
+    };
 
-//     #[tokio::test]
-//     #[ignore = "needs database to run"]
-//     async fn update_arbitrum_operational_txns_window_clears_and_overwrites() {
-//         let (init_time, db, blockscout) = prepare_chart_test::<ArbitrumNewOperationalTxnsWindow>(
-//             "update_arbitrum_operational_txns_window_clears_and_overwrites",
-//             None,
-//         )
-//         .await;
-//         {
-//             let current_date = init_time.date_naive();
-//             fill_mock_blockscout_data(&blockscout, current_date).await;
-//         }
-//         let current_time = dt("2022-12-01T00:00:00").and_utc();
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn update_new_txns_window_multichain_clears_and_overwrites() {
+        let (init_time, db, indexer) = prepare_multichain_chart_test::<NewTxnsMultichainWindow>(
+            "update_new_txns_window_multichain_clears_and_overwrites",
+            None,
+        )
+        .await;
+        {
+            let current_date = init_time.date_naive();
+            fill_mock_multichain_data(&indexer, current_date).await;
+        }
+        let current_time = dt("2022-08-06T00:00:00").and_utc();
 
-//         let mut parameters = UpdateParameters {
-//             stats_db: &db,
-//             is_multichain_mode: false,
-//             indexer_db: &blockscout,
-//             indexer_applied_migrations: IndexerMigrations::latest(),
-//             enabled_update_charts_recursive:
-//                 ArbitrumNewOperationalTxnsWindow::all_dependencies_chart_keys(),
-//             update_time_override: Some(current_time),
-//             force_full: false,
-//         };
-//         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-//         ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
-//             .await
-//             .unwrap();
-//         assert_eq!(
-//             &chart_output_to_expected(
-//                 ArbitrumNewOperationalTxnsWindow::query_data_static(
-//                     &cx,
-//                     UniversalRange::full(),
-//                     None,
-//                     false
-//                 )
-//                 .await
-//                 .unwrap()
-//             ),
-//             &map_str_tuple_to_owned(vec![
-//                 ("2022-11-09", "5"),
-//                 ("2022-11-10", "11"),
-//                 ("2022-11-11", "12"),
-//                 ("2022-11-12", "5"),
-//                 // update day is not included
-//             ]),
-//         );
+        let mut parameters = UpdateParameters {
+            stats_db: &db,
+            is_multichain_mode: true,
+            indexer_db: &indexer,
+            indexer_applied_migrations: IndexerMigrations::latest(),
+            enabled_update_charts_recursive: NewTxnsMultichainWindow::all_dependencies_chart_keys(),
+            update_time_override: Some(current_time),
+            force_full: false,
+        };
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        NewTxnsMultichainWindow::update_recursively(&cx)
+            .await
+            .unwrap();
+        assert_eq!(
+            &chart_output_to_expected(
+                NewTxnsMultichainWindow::query_data_static(
+                    &cx,
+                    UniversalRange::full(),
+                    None,
+                    false
+                )
+                .await
+                .unwrap()
+            ),
+            &map_str_tuple_to_owned(vec![
+                ("2022-08-04", "25"),
+                ("2022-08-05", "49"),
+                // update day is not included
+            ]),
+        );
 
-//         let current_time = dt("2022-12-10T00:00:00").and_utc();
-//         parameters.update_time_override = Some(current_time);
-//         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
-//         ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
-//             .await
-//             .unwrap();
-//         assert_eq!(
-//             &chart_output_to_expected(
-//                 ArbitrumNewOperationalTxnsWindow::query_data_static(
-//                     &cx,
-//                     UniversalRange::full(),
-//                     None,
-//                     false
-//                 )
-//                 .await
-//                 .unwrap()
-//             ),
-//             &map_str_tuple_to_owned(vec![
-//                 // values outside the window are removed
-//                 ("2022-11-10", "11"),
-//                 ("2022-11-11", "12"),
-//                 ("2022-11-12", "5"),
-//                 ("2022-12-01", "5"),
-//             ]),
-//         );
+        let current_time = dt("2022-09-04T00:00:00").and_utc();
+        parameters.update_time_override = Some(current_time);
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        NewTxnsMultichainWindow::update_recursively(&cx)
+            .await
+            .unwrap();
+        assert_eq!(
+            &chart_output_to_expected(
+                NewTxnsMultichainWindow::query_data_static(
+                    &cx,
+                    UniversalRange::full(),
+                    None,
+                    false
+                )
+                .await
+                .unwrap()
+            ),
+            &map_str_tuple_to_owned(vec![
+                // values outside the window are removed
+                ("2022-08-05", "49"),
+                ("2022-08-06", "60"),
+            ]),
+        );
 
-//         imitate_reindex(&blockscout, init_time.date_naive()).await;
+        imitate_reindex_multichain(&indexer).await;
 
-//         let current_time = dt("2022-12-11T00:00:00").and_utc();
-//         parameters.update_time_override = Some(current_time);
-//         let cx = UpdateContext::from_params_now_or_override(parameters);
-//         ArbitrumNewOperationalTxnsWindow::update_recursively(&cx)
-//             .await
-//             .unwrap();
-//         assert_eq!(
-//             &chart_output_to_expected(
-//                 ArbitrumNewOperationalTxnsWindow::query_data_static(
-//                     &cx,
-//                     UniversalRange::full(),
-//                     None,
-//                     false
-//                 )
-//                 .await
-//                 .unwrap()
-//             ),
-//             &map_str_tuple_to_owned(vec![
-//                 // values outside the window are removed
-//                 // new values within the window are added
-//                 ("2022-11-11", "16"),
-//                 ("2022-11-12", "5"),
-//                 ("2022-12-01", "5"),
-//             ]),
-//         );
-//     }
-// }
+        let current_time = dt("2022-09-05T00:00:00").and_utc();
+        parameters.update_time_override = Some(current_time);
+        let cx = UpdateContext::from_params_now_or_override(parameters);
+        NewTxnsMultichainWindow::update_recursively(&cx)
+            .await
+            .unwrap();
+        assert_eq!(
+            &chart_output_to_expected(
+                NewTxnsMultichainWindow::query_data_static(
+                    &cx,
+                    UniversalRange::full(),
+                    None,
+                    false
+                )
+                .await
+                .unwrap()
+            ),
+            &map_str_tuple_to_owned(vec![
+                // values outside the window are removed
+                // new values within the window are added
+                ("2022-08-06", "60"),
+                ("2022-08-15", "10"),
+            ]),
+        );
+    }
+}
