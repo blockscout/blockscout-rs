@@ -1,4 +1,7 @@
 openapi: 3.0.0
+tags:
+  - name: default
+  - name: CelestiaService
 servers:
   - url: https://{server}/
     variables:
@@ -16,6 +19,76 @@ info:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
 paths:
+  /api/v1/celestia/blob:
+    get:
+      operationId: CelestiaService_GetBlob
+      responses:
+        '200':
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1CelestiaBlob'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      parameters:
+        - name: height
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uint64
+        - name: commitment
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: skipData
+          in: query
+          required: false
+          schema:
+            type: boolean
+      tags:
+        - CelestiaService
+  /api/v1/celestia/l2BatchMetadata:
+    get:
+      operationId: CelestiaService_GetL2BatchMetadata
+      responses:
+        '200':
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1CelestiaL2BatchMetadata'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      parameters:
+        - name: height
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uint64
+        - name: namespace
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: commitment
+          in: query
+          required: false
+          schema:
+            type: string
+      tags:
+        - CelestiaService
   /api/v2/search:
     get:
       parameters:
@@ -50,7 +123,7 @@ paths:
                     example:
                       address_hash: '0x052Ad78E3aA0b0F2D3912FD3b50a9a289CF2f7Aa'
                       block_hash: null
-                      holder_count: 548
+                      holders_count: 548
                       inserted_at: '2021-12-07T08:39:01.062253Z'
                       item_type: token
                       items_count: 50
@@ -1081,7 +1154,7 @@ paths:
                     type: object
                     example:
                       contract_address_hash: '0x68749665ff8d2d112fa859aa293f07a622782f38'
-                      holder_count: 1011
+                      holders_count: 1011
                       is_name_null: false
                       items_count: 50
                       market_cap: '482534473.2170469'
@@ -1450,142 +1523,6 @@ paths:
           description: bad input parameter
       tags:
         - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/methods-read:
-    get:
-      summary: get verified smart-contract read methods
-      operationId: get_read_methods
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-        - in: query
-          name: is_custom_abi
-          schema:
-            type: string
-            example: 'true'
-        - in: query
-          name: from
-          schema:
-            type: string
-            example: '0xF61f5c4a3664501F499A9289AaEe76a709CE536e'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/ReadMethodWithValue'
-                    - $ref: '#/components/schemas/ReadMethodWithoutValue'
-        '400':
-          description: bad input parameter
-      tags:
-        - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/methods-read-proxy:
-    get:
-      summary: get verified smart-contract read methods proxy
-      operationId: get_read_methods_proxy
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-        - in: query
-          name: is_custom_abi
-          schema:
-            type: string
-            example: 'true'
-        - in: query
-          name: from
-          schema:
-            type: string
-            example: '0xF61f5c4a3664501F499A9289AaEe76a709CE536e'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/ReadMethodWithValue'
-                    - $ref: '#/components/schemas/ReadMethodWithoutValue'
-      tags:
-        - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/methods-write:
-    get:
-      summary: get verified smart-contract write methods
-      operationId: get_write_methods
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-        - in: query
-          name: is_custom_abi
-          schema:
-            type: string
-            example: 'true'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/WriteMethod'
-        '400':
-          description: bad input parameter
-      tags:
-        - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/methods-write-proxy:
-    get:
-      summary: get verified smart-contract write methods proxy
-      operationId: get_write_methods_proxy
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-        - in: query
-          name: is_custom_abi
-          schema:
-            type: string
-            example: 'true'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/WriteMethod'
-        '400':
-          description: bad input parameter
-      tags:
-        - smart-contracts
-  /api/v2/smart-contracts/{address_hash}/query-read-method:
-    post:
-      summary: query verified smart-contract read method
-      operationId: query_read_method
-      parameters:
-        - $ref: '#/components/parameters/addressHash'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReadMethodQueryBody'
-      responses:
-        '200':
-          description: smart contract
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  oneOf:
-                    - $ref: '#/components/schemas/ReadMethodResponse'
-        '400':
-          description: bad input parameter
-      tags:
-        - smart-contracts
   /api/v2/config/json-rpc-url:
     get:
       summary: get json rpc url
@@ -1646,6 +1583,33 @@ paths:
           description: unexpected error
       tags:
         - proxy
+  /api/v2/health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        '200':
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          schema:
+            type: string
+      tags:
+        - CelestiaService
 components:
   parameters:
     addressHash:
@@ -1710,7 +1674,7 @@ components:
         - state_root
         - timestamp
         - total_difficulty
-        - transaction_count
+        - transactions_count
         - transaction_fees
         - type
         - uncles_hashes
@@ -1776,7 +1740,7 @@ components:
         total_difficulty:
           type: string
           example: '58750003716598352816469'
-        transaction_count:
+        transactions_count:
           type: integer
           example: 120
         transaction_fees:
@@ -1799,8 +1763,6 @@ components:
         - block_hash
         - from
         - log_index
-        - method
-        - timestamp
         - to
         - token
         - total
@@ -1813,8 +1775,8 @@ components:
         from:
           $ref: '#/components/schemas/AddressParam'
         log_index:
-          type: string
-          example: '243'
+          type: integer
+          example: 16
         method:
           type: string
           example: transfer
@@ -1974,7 +1936,7 @@ components:
         - topics
         - transaction_hash
       properties:
-        address:
+        address_hash:
           $ref: '#/components/schemas/AddressParam'
         block_hash:
           type: string
@@ -2328,7 +2290,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WatchlistName'
-        address:
+        address_hash:
           type: string
           example: 0x123abc...
           description: Address
@@ -2435,7 +2397,7 @@ components:
         - type
         - volume_24h
       properties:
-        address:
+        address_hash:
           type: string
           example: '0xBEEF69Ac7870777598A04B2bd4771c71212E6aBc'
           description: Token Address
@@ -2451,7 +2413,7 @@ components:
           type: string
           example: '2890.96'
           description: Token exchange rate
-        holders:
+        holders_count:
           type: string
           example: '2999'
           description: Token holders amount
@@ -2660,21 +2622,7 @@ components:
           type: boolean
         has_beacon_chain_withdrawals:
           type: boolean
-        has_custom_methods_read:
-          type: boolean
-        has_custom_methods_write:
-          type: boolean
-        has_decompiled_code:
-          type: boolean
         has_logs:
-          type: boolean
-        has_methods_read:
-          type: boolean
-        has_methods_write:
-          type: boolean
-        has_methods_read_proxy:
-          type: boolean
-        has_methods_write_proxy:
           type: boolean
         has_token_transfers:
           type: boolean
@@ -2682,14 +2630,17 @@ components:
           type: boolean
         has_validated_blocks:
           type: boolean
+        creation_status:
+          type: string
+          example: selfdestructed | failed | success
     AddressWithTxCount:
       allOf:
         - $ref: '#/components/schemas/Address'
         - type: object
           required:
-            - transaction_count
+            - transactions_count
           properties:
-            transaction_count:
+            transactions_count:
               type: string
               example: '1234'
     Reward:
@@ -2819,13 +2770,13 @@ components:
         symbol:
           type: string
           example: USDT
-        address:
+        address_hash:
           type: string
           example: '0x394c399dbA25B99Ab7708EdB505d755B3aa29997'
         type:
           type: string
           example: ERC-20
-        holders:
+        holders_count:
           type: integer
           example: 837494234523
         exchange_rate:
@@ -2877,7 +2828,7 @@ components:
         - value
         - token
       properties:
-        address:
+        address_hash:
           $ref: '#/components/schemas/AddressParam'
         value:
           type: string
@@ -2885,8 +2836,6 @@ components:
         token_id:
           type: string
           example: '10000'
-        token:
-          $ref: '#/components/schemas/TokenInfo'
     NFTInstance:
       required:
         - is_unique
@@ -3099,10 +3048,6 @@ components:
           type: boolean
         is_verified_via_eth_bytecode_db:
           type: boolean
-        is_vyper_contract:
-          type: boolean
-        is_self_destructed:
-          type: boolean
         can_be_visualized_via_sol2uml:
           type: boolean
         minimal_proxy_address_hash:
@@ -3176,6 +3121,9 @@ components:
         language:
           type: string
           example: solidity | vyper | yul
+        creation_status:
+          type: string
+          example: selfdestructed | failed | success
     ExternalLibrary:
       required:
         - name
@@ -3232,13 +3180,13 @@ components:
         symbol:
           type: string
           example: USDT
-        address:
+        address_hash:
           type: string
           example: '0x394c399dbA25B99Ab7708EdB505d755B3aa29997'
         type:
           type: string
           example: ERC-20
-        holders:
+        holders_count:
           type: string
           example: '837494234523'
         exchange_rate:
@@ -3285,7 +3233,7 @@ components:
         - total_supply
         - type
       properties:
-        address:
+        address_hash:
           type: string
           example: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
         address_url:
@@ -3327,7 +3275,7 @@ components:
         - type
         - url
       properties:
-        address:
+        address_hash:
           type: string
           example: '0xe2FBdeADC82c71C1b8bFf9CA4f9E7666224A362c'
         is_smart_contract_verified:
@@ -3476,12 +3424,12 @@ components:
     TransactionChartItem:
       required:
         - date
-        - transaction_count
+        - transactions_count
       properties:
         date:
           type: string
           example: '2022-10-31'
-        transaction_count:
+        transactions_count:
           type: integer
           example: 622
     TokenCounters:
@@ -3579,7 +3527,7 @@ components:
           example: coin | token
         is_miner:
           type: boolean
-        address:
+        address_hash:
           $ref: '#/components/schemas/AddressParam'
         balance_before:
           type: string
@@ -3619,10 +3567,9 @@ components:
         - has_constructor_args
         - language
         - optimization_enabled
-        - transaction_count
         - verified_at
       properties:
-        address:
+        address_hash:
           $ref: '#/components/schemas/AddressParam'
         coin_balance:
           type: string
@@ -3637,7 +3584,7 @@ components:
           type: boolean
         optimization_enabled:
           type: boolean
-        transaction_count:
+        transactions_count:
           type: integer
         verified_at:
           type: string
@@ -3796,6 +3743,99 @@ components:
           type: boolean
         past_rpc_logs_indexing_finished:
           type: boolean
+    HealthCheckResponseServingStatus:
+      type: string
+      enum:
+        - UNKNOWN
+        - SERVING
+        - NOT_SERVING
+        - SERVICE_UNKNOWN
+      default: UNKNOWN
+      description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+    protobufAny:
+      type: object
+      properties:
+        '@type':
+          type: string
+      additionalProperties: {}
+    rpcStatus:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            $ref: '#/components/schemas/protobufAny'
+    v1CelestiaBlob:
+      type: object
+      properties:
+        height:
+          type: string
+          format: uint64
+        namespace:
+          type: string
+        commitment:
+          type: string
+        timestamp:
+          type: string
+          format: uint64
+        size:
+          type: string
+          format: uint64
+        data:
+          type: string
+    v1CelestiaBlobId:
+      type: object
+      properties:
+        height:
+          type: string
+          format: uint64
+        namespace:
+          type: string
+        commitment:
+          type: string
+    v1CelestiaL2BatchMetadata:
+      type: object
+      properties:
+        l2ChainId:
+          type: integer
+          format: int64
+        l2BatchId:
+          type: string
+        l2StartBlock:
+          type: string
+          format: uint64
+        l2EndBlock:
+          type: string
+          format: uint64
+        l2BatchTxCount:
+          type: integer
+          format: int64
+        l2BlockscoutUrl:
+          type: string
+        l1TxHash:
+          type: string
+        l1TxTimestamp:
+          type: string
+          format: uint64
+        l1ChainId:
+          type: integer
+          format: int64
+        relatedBlobs:
+          type: array
+          items:
+            type: object
+            $ref: '#/components/schemas/v1CelestiaBlobId'
+    v1HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthCheckResponseServingStatus'
   examples:
     TokenTransferLarge1155Batch:
       value:
@@ -3823,11 +3863,11 @@ components:
               public_tags: []
               watchlist_names: []
             token:
-              address: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+              address_hash: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
               circulating_market_cap: '83606435600.3635'
               decimals: '6'
               exchange_rate: '0.999487'
-              holders: '1149'
+              holders_count: '1149'
               icon_url: null
               name: Tether USD
               symbol: USDT
@@ -3869,11 +3909,11 @@ components:
               public_tags: []
               watchlist_names: []
             token:
-              address: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+              address_hash: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
               circulating_market_cap: '83606435600.3635'
               decimals: '6'
               exchange_rate: '0.999487'
-              holders: '1149'
+              holders_count: '1149'
               icon_url: null
               name: Tether USD
               symbol: USDT
@@ -3913,11 +3953,11 @@ components:
               public_tags: []
               watchlist_names: []
             token:
-              address: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+              address_hash: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
               circulating_market_cap: '83606435600.3635'
               decimals: '6'
               exchange_rate: '0.999487'
-              holders: '1149'
+              holders_count: '1149'
               icon_url: null
               name: Tether USD
               symbol: USDT

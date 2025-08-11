@@ -1,11 +1,3 @@
-openapi: 3.0.1
-info:
-  title: Blockscout v1
-  version: 1.0.0
-servers:
-  - url: /
-tags:
-  - name: Health
 paths:
   /api/health:
     get:
@@ -80,4 +72,3 @@ components:
           type: boolean
         data:
           $ref: '#/components/schemas/v1Data'
-x-original-swagger-version: "2.0"
