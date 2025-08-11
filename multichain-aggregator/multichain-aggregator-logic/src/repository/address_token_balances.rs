@@ -68,7 +68,7 @@ pub type ListAddressTokensPageToken = (Option<BigDecimal>, BigDecimal, i64);
 pub async fn list_by_address<C>(
     db: &C,
     address: alloy_primitives::Address,
-    token_type: Option<TokenType>,
+    token_types: Vec<TokenType>,
     chain_ids: Vec<i64>,
     page_size: u64,
     page_token: Option<ListAddressTokensPageToken>,
@@ -96,9 +96,10 @@ where
         .filter(Column::AddressHash.eq(address.as_slice()))
         .filter(Column::ChainId.is_in(chain_ids))
         .filter(Column::Value.gt(0))
-        .apply_if(token_type, |q, token_type| {
-            q.filter(tokens::Column::TokenType.eq(token_type))
-        })
+        .apply_if(
+            (!token_types.is_empty()).then_some(token_types),
+            |q, token_types| q.filter(tokens::Column::TokenType.is_in(token_types)),
+        )
         .apply_if(page_token, |q, page_token| {
             let (fiat_value, value, id) = page_token;
             // Handle pagination similar to how it's done in the Elixir backend

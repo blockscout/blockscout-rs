@@ -171,17 +171,10 @@ paths:
           required: true
           type: string
         - name: type
+          description: List of comma-separated token types to filter by. See `TokenType`.
           in: query
           required: false
           type: string
-          enum:
-            - TOKEN_TYPE_UNSPECIFIED
-            - TOKEN_TYPE_ERC_20
-            - TOKEN_TYPE_ERC_721
-            - TOKEN_TYPE_ERC_1155
-            - TOKEN_TYPE_ERC_404
-            - TOKEN_TYPE_ERC_7802
-          default: TOKEN_TYPE_UNSPECIFIED
         - name: page_size
           in: query
           required: false

@@ -131,7 +131,7 @@ impl Cluster {
         &self,
         db: &DatabaseConnection,
         address: AddressAlloy,
-        token_type: Option<TokenType>,
+        token_types: Vec<TokenType>,
         page_size: u64,
         page_token: Option<ListAddressTokensPageToken>,
     ) -> Result<
@@ -146,7 +146,7 @@ impl Cluster {
         let res = address_token_balances::list_by_address(
             db,
             address,
-            token_type,
+            token_types,
             cluster_chain_ids,
             page_size,
             page_token,

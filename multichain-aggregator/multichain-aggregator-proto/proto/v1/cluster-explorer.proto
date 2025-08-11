@@ -128,7 +128,8 @@ message GetAddressResponse {
 message ListAddressTokensRequest {
   string cluster_id = 1;
   string address_hash = 2;
-  blockscout.multichainAggregator.v1.TokenType type = 3;
+  // List of comma-separated token types to filter by. See `TokenType`.
+  string type = 3;
   optional uint32 page_size = 4;
   optional string page_token = 5;
 }
