@@ -3,6 +3,7 @@ use crate::{
     services::{CelestiaService, EigenDaService, HealthService},
     settings::Settings,
 };
+use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{launcher, launcher::LaunchSettings};
 
 use da_indexer_logic::celestia::l2_router::L2Router;
@@ -12,7 +13,8 @@ use da_indexer_proto::blockscout::da_indexer::v1::{
 };
 use sea_orm::DatabaseConnection;
 
-use std::sync::Arc;
+use da_indexer_logic::s3_storage::S3Storage;
+use std::{path::PathBuf, sync::Arc};
 
 const SERVICE_NAME: &str = "da_indexer";
 
@@ -21,6 +23,7 @@ struct Router {
     health: Arc<HealthService>,
     celestia: Arc<CelestiaService>,
     eigenda: Arc<EigenDaService>,
+    swagger_path: PathBuf,
 }
 
 impl Router {
@@ -37,22 +40,35 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_health(config, self.health.clone()));
         service_config.configure(|config| route_celestia_service(config, self.celestia.clone()));
         service_config.configure(|config| route_eigen_da_service(config, self.eigenda.clone()));
+        service_config.configure(|config| {
+            route_swagger(
+                config,
+                self.swagger_path.clone(),
+                "/api/v1/docs/swagger.yaml",
+            )
+        });
     }
 }
 
 pub async fn run(
     settings: Settings,
     database_connection: Option<DatabaseConnection>,
+    s3_storage: Option<S3Storage>,
     l2_router: Option<L2Router>,
 ) -> Result<(), anyhow::Error> {
     let health = Arc::new(HealthService::default());
-    let celestia = Arc::new(CelestiaService::new(database_connection.clone(), l2_router));
-    let eigenda = Arc::new(EigenDaService::new(database_connection.clone()));
+    let celestia = Arc::new(CelestiaService::new(
+        database_connection.clone(),
+        s3_storage.clone(),
+        l2_router,
+    ));
+    let eigenda = Arc::new(EigenDaService::new(database_connection.clone(), s3_storage));
 
     let router = Router {
         health,
         celestia,
         eigenda,
+        swagger_path: settings.swagger_path,
     };
 
     let grpc_router = router.grpc_router();
@@ -62,7 +78,8 @@ pub async fn run(
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: Default::default(),
     };
 
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(launch_settings, http_router, grpc_router).await
 }

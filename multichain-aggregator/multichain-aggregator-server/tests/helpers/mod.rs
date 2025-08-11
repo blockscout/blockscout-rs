@@ -1,10 +1,13 @@
 use blockscout_service_launcher::test_server;
-use multichain_aggregator_logic::types::api_keys::ApiKey;
+use multichain_aggregator_logic::{
+    repository::chains,
+    types::{api_keys::ApiKey, chains::Chain},
+};
 use multichain_aggregator_server::Settings;
 use reqwest::Url;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, DbErr, EntityTrait};
 
-pub async fn init_multichain_aggregator_server<F>(db_url: String, settings_setup: F) -> Url
+pub async fn init_server_with_setup<F>(db_url: String, settings_setup: F) -> Url
 where
     F: Fn(Settings) -> Settings,
 {
@@ -23,6 +26,10 @@ where
     base
 }
 
+pub async fn init_server(db_url: String) -> Url {
+    init_server_with_setup(db_url, |x| x).await
+}
+
 #[allow(dead_code)]
 pub async fn upsert_api_keys(db: &DatabaseConnection, api_keys: Vec<ApiKey>) -> Result<(), DbErr> {
     let api_keys = api_keys.into_iter().map(|k| entity::api_keys::ActiveModel {
@@ -36,4 +43,20 @@ pub async fn upsert_api_keys(db: &DatabaseConnection, api_keys: Vec<ApiKey>) -> 
         .await?;
 
     Ok(())
+}
+
+#[allow(dead_code)]
+pub async fn create_test_chains(db: &DatabaseConnection, n: usize) -> Vec<Chain> {
+    let chains: Vec<Chain> = (1..=n)
+        .map(|i| Chain {
+            id: i as i64,
+            name: Some(format!("Chain {i}")),
+            explorer_url: Some(format!("https://test{i}")),
+            icon_url: Some(format!("https://test{i}")),
+        })
+        .collect();
+
+    chains::upsert_many(db, chains.clone()).await.unwrap();
+
+    chains
 }

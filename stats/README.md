@@ -68,18 +68,22 @@ Some variables are hidden in a disclosure widget below the table.
 | Variable | Req&#x200B;uir&#x200B;ed | Description | Default value |
 | --- | --- | --- | --- |
 | `STATS__DB_URL` | | Postgres URL to stats db | `""` |
-| `STATS__BLOCKSCOUT_DB_URL` | | Postgres URL to blockscout db | `""` |
+| `STATS__MULTICHAIN_MODE` | | Run stats service in multichain mode; modifying some settings and disabling regular charts | `false` |
+| `STATS__INDEXER_DB_URL` | | Postgres URL to indexer db; renamed from `*_BLOCKSCOUT_DB_URL` | `null` |
+| `STATS__BLOCKSCOUT_DB_URL` | | Postgres URL to blockscout db. Renamed to `*_INDEXER_DB_URL` but left for backwards-compatibility | `null` |
 | `STATS__CREATE_DATABASE` | | Create database on start | `false` |
 | `STATS__RUN_MIGRATIONS` | | Run migrations on start | `false` |
 | `STATS__CHARTS_CONFIG` | | Path to config file for charts | `"config/charts.json"` |
 | `STATS__LAYOUT_CONFIG` | | Path to config file for chart layout | `"config/layout.json"` |
 | `STATS__UPDATE_GROUPS_CONFIG` | | Path to config file for update groups | `"config/update_groups.json"` |
-| `STATS__SWAGGER_FILE` | | Path of the swagger file to serve in the swagger endpoint | `"../stats-proto/swagger/stats.swagger.yaml"` |
+| `STATS__MULTICHAIN_CHARTS_CONFIG` | | Path to config file for multichain charts (less priority over regular config) | `config/multichain/charts.json` |
+| `STATS__MULTICHAIN_LAYOUT_CONFIG` | | Path to config file for multichain chart layout (less priority over regular config) | `config/multichain/layout.json` |
+| `STATS__MULTICHAIN_UPDATE_GROUPS_CONFIG` | | Path to config file for multichain update groups (less priority over regular config) | `config/multichain/update_groups.json` |
 | `STATS__FORCE_UPDATE_ON_START` | | Fully recalculate all charts on start | `false` |
 | `STATS__CONCURRENT_START_UPDATES` | | Amount of concurrent charts update on start | `3` |
 | `STATS__DEFAULT_SCHEDULE` | | Schedule used for update groups with no config | `"0 0 1 * * * *"` |
 | `STATS__LIMITS__REQUESTED_POINTS_LIMIT` | | Maximum allowed number of requested points | `182500` |
-| `STATS__BLOCKSCOUT_API_URL` | see descri​ption | URL to Blockscout API. Used for [conditional update start](#conditional-start). Required unless `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE`  is set to `true`. | `null` |
+| `STATS__BLOCKSCOUT_API_URL` | | URL to Blockscout API. Used for [conditional update start](#conditional-start). Required unless `STATS__IGNORE_BLOCKSCOUT_API_ABSENCE`  is set to `true`. | `null` |
 | `STATS__CONDITIONAL_START__CHECK_PERIOD_SECS` | | Base time between start condition checking | `5` |
 | `STATS__CONDITIONAL_START__BLOCKS_RATIO__ENABLED` | | Enable `blocks_ratio` threshold | `true` |
 | `STATS__CONDITIONAL_START__BLOCKS_RATIO__THRESHOLD` | | Value for `blocks_ratio` threshold | `0.98` |

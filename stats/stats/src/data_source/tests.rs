@@ -12,33 +12,33 @@ use super::{
             resolutions::last_value::LastValueLowerResolution,
         },
         local_db::{
+            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource, LocalDbChartSource,
             parameters::{
+                DefaultCreate, DefaultQueryVec,
                 update::batching::{
+                    BatchUpdate,
                     parameter_traits::BatchStepBehaviour,
                     parameters::{Batch30Days, Batch30Weeks, Batch30Years, Batch36Months},
-                    BatchUpdate,
                 },
-                DefaultCreate, DefaultQueryVec,
             },
-            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource, LocalDbChartSource,
         },
         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
     },
     types::UpdateParameters,
 };
 use crate::{
+    ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     construct_update_group,
     data_source::{
         kinds::local_db::parameters::update::batching::parameters::PassVecStep,
-        types::BlockscoutMigrations,
+        types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
     types::timespans::{DateValue, Month, Week, Year},
     update_group::{SyncUpdateGroup, UpdateGroup},
     utils::{produce_filter_and_values, sql_with_range_filter_opt},
-    ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
 };
 
 pub struct NewContractsQuery;
@@ -46,7 +46,7 @@ pub struct NewContractsQuery;
 impl StatementFromRange for NewContractsQuery {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
-        completed_migrations: &BlockscoutMigrations,
+        completed_migrations: &IndexerMigrations,
         _enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         // choose the statement based on migration progress
@@ -214,7 +214,7 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
         _db: &C,
         _chart_id: i32,
         _update_time: DateTime<Utc>,
-        _min_blockscout_block: i64,
+        _min_indexer_block: i64,
         _last_accurate_point: DateValue<String>,
         _main_data: Vec<DateValue<String>>,
         _resolution_data: (),
@@ -230,7 +230,7 @@ impl BatchStepBehaviour<NaiveDate, Vec<DateValue<String>>, ()>
             _db,
             _chart_id,
             _update_time,
-            _min_blockscout_block,
+            _min_indexer_block,
             _last_accurate_point,
             _main_data,
             _resolution_data,
@@ -296,9 +296,10 @@ async fn update_examples() {
     group.create_charts_sync(&db, None, &enabled).await.unwrap();
 
     let parameters = UpdateParameters {
-        db: &db,
-        blockscout: &blockscout,
-        blockscout_applied_migrations: BlockscoutMigrations::latest(),
+        stats_db: &db,
+        is_multichain_mode: false,
+        indexer_db: &blockscout,
+        indexer_applied_migrations: IndexerMigrations::latest(),
         enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
         update_time_override: None,
         force_full: true,

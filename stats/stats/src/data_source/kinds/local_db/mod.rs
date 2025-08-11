@@ -15,31 +15,33 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, SubsecRound, Utc};
 use parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour};
 use parameters::{
+    DefaultCreate, DefaultQueryLast, DefaultQueryVec, QueryLastWithEstimationFallback,
     update::{
         batching::{
-            parameters::{AddLastValueStep, Batch30Days, PassVecStep},
             BatchUpdate,
+            parameters::{AddLastValueStep, Batch30Days, PassVecStep},
         },
         point::PassPoint,
     },
-    DefaultCreate, DefaultQueryLast, DefaultQueryVec, QueryLastWithEstimationFallback,
 };
 use sea_orm::{DatabaseConnection, DbErr};
 
 use crate::{
+    ChartError, ChartKey, IndexingStatus,
     charts::{
-        chart_properties_portrait,
+        ChartProperties, Named, chart_properties_portrait,
         db_interaction::{
-            read::{get_chart_metadata, get_min_block_blockscout, last_accurate_point},
+            read::{
+                get_chart_metadata, get_min_block_blockscout, last_accurate_point,
+                multichain::get_min_block_multichain,
+            },
             write::set_last_updated_at,
         },
-        ChartProperties, Named,
     },
     data_source::{DataSource, UpdateContext},
     metrics,
     range::UniversalRange,
     utils::day_start,
-    ChartError, ChartKey, IndexingStatus,
 };
 
 use super::auxiliary::PartialCumulative;
@@ -146,7 +148,7 @@ where
         cx: &UpdateContext<'_>,
         dependency_data_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), ChartError> {
-        let metadata = get_chart_metadata(cx.db, &ChartProps::key()).await?;
+        let metadata = get_chart_metadata(cx.stats_db, &ChartProps::key()).await?;
         if let Some(last_updated_at) = metadata.last_updated_at {
             if postgres_timestamps_eq(cx.time, last_updated_at) {
                 // no need to perform update.
@@ -167,13 +169,19 @@ where
             }
         }
         let chart_id = metadata.id;
-        let min_blockscout_block = get_min_block_blockscout(cx.blockscout)
-            .await
-            .map_err(ChartError::BlockscoutDB)?;
+        let min_indexer_block = if cx.is_multichain_mode {
+            get_min_block_multichain(cx.indexer_db)
+                .await
+                .map_err(ChartError::IndexerDB)?
+        } else {
+            get_min_block_blockscout(cx.indexer_db)
+                .await
+                .map_err(ChartError::IndexerDB)?
+        };
         let last_accurate_point = last_accurate_point::<ChartProps, Query>(
             chart_id,
-            min_blockscout_block,
-            cx.db,
+            min_indexer_block,
+            cx.stats_db,
             cx.force_full,
             ChartProps::approximate_trailing_points(),
             ChartProps::missing_date_policy(),
@@ -184,12 +192,12 @@ where
             cx,
             chart_id,
             last_accurate_point,
-            min_blockscout_block,
+            min_indexer_block,
             dependency_data_fetch_timer,
         )
         .await?;
         tracing::info!(chart =% ChartProps::key(), "updating chart metadata");
-        Update::update_metadata(cx.db, chart_id, cx.time).await?;
+        Update::update_metadata(cx.stats_db, chart_id, cx.time).await?;
         Ok(())
     }
 
@@ -279,7 +287,11 @@ where
                     .map_err(ChartError::StatsDB)?;
             }
             Some(current_last_updated_at) => {
-                tracing::warn!("not setting `last_updated_at` because current value ({}) is less than requested ({})", current_last_updated_at, update_from)
+                tracing::warn!(
+                    "not setting `last_updated_at` because current value ({}) is less than requested ({})",
+                    current_last_updated_at,
+                    update_from
+                )
             }
             None => {
                 tracing::warn!(
@@ -336,7 +348,7 @@ where
 mod tests {
     use crate::{
         counters::TotalTxns,
-        data_source::{types::BlockscoutMigrations, UpdateParameters},
+        data_source::{UpdateParameters, types::IndexerMigrations},
         tests::{
             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
             point_construction::d,
@@ -356,9 +368,10 @@ mod tests {
 
         // Initial update and verify
         let parameters = UpdateParameters {
-            db: &db,
-            blockscout: &blockscout,
-            blockscout_applied_migrations: BlockscoutMigrations::latest(),
+            stats_db: &db,
+            is_multichain_mode: false,
+            indexer_db: &blockscout,
+            indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: TotalTxns::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),
             force_full: false,
@@ -397,22 +410,22 @@ mod tests {
         use tokio::sync::Mutex;
 
         use crate::{
+            ChartError, ChartProperties, Named,
             charts::db_interaction::write::insert_data_many,
             construct_update_group,
             data_source::{
+                DataSource, UpdateContext, UpdateParameters,
                 kinds::local_db::{
+                    DirectPointLocalDbChartSource, LocalDbChartSource,
                     parameter_traits::UpdateBehaviour,
                     parameters::{DefaultCreate, DefaultQueryLast},
-                    DirectPointLocalDbChartSource, LocalDbChartSource,
                 },
-                types::{BlockscoutMigrations, Get},
-                DataSource, UpdateContext, UpdateParameters,
+                types::{Get, IndexerMigrations},
             },
             gettable_const,
             tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
-            types::{timespans::DateValue, TimespanValue},
+            types::{TimespanValue, timespans::DateValue},
             update_group::{SyncUpdateGroup, UpdateGroup},
-            ChartError, ChartProperties, Named,
         };
 
         type WasTriggeredStorage = Arc<Mutex<bool>>;
@@ -449,7 +462,7 @@ mod tests {
                 cx: &UpdateContext<'_>,
                 chart_id: i32,
                 _last_accurate_point: Option<TimespanValue<Resolution, String>>,
-                min_blockscout_block: i64,
+                min_indexer_block: i64,
                 _dependency_data_fetch_timer: &mut AggregateTimer,
             ) -> Result<(), ChartError> {
                 Self::record_trigger().await;
@@ -458,8 +471,8 @@ mod tests {
                     timespan: cx.time.date_naive(),
                     value: "0".to_owned(),
                 };
-                let value = data.active_model(chart_id, Some(min_blockscout_block));
-                insert_data_many(cx.db, vec![value])
+                let value = data.active_model(chart_id, Some(min_indexer_block));
+                insert_data_many(cx.stats_db, vec![value])
                     .await
                     .map_err(ChartError::StatsDB)?;
                 Ok(())
@@ -538,9 +551,10 @@ mod tests {
 
             let next_time = current_time.checked_add_days(Days::new(1)).unwrap();
             let parameters = UpdateParameters {
-                db: &db,
-                blockscout: &blockscout,
-                blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                stats_db: &db,
+                is_multichain_mode: false,
+                indexer_db: &blockscout,
+                indexer_applied_migrations: IndexerMigrations::latest(),
                 enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(next_time),
                 force_full: true,
@@ -559,9 +573,10 @@ mod tests {
             // timestamp to the one provided
             let time = next_next_time + TimeDelta::nanoseconds(1);
             let parameters = UpdateParameters {
-                db: &db,
-                blockscout: &blockscout,
-                blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                stats_db: &db,
+                is_multichain_mode: false,
+                indexer_db: &blockscout,
+                indexer_applied_migrations: IndexerMigrations::latest(),
                 enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
@@ -576,9 +591,10 @@ mod tests {
             // also test if there is any rounding when inserting metadata
             let time = next_next_time + TimeDelta::nanoseconds(500);
             let parameters = UpdateParameters {
-                db: &db,
-                blockscout: &blockscout,
-                blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                stats_db: &db,
+                is_multichain_mode: false,
+                indexer_db: &blockscout,
+                indexer_applied_migrations: IndexerMigrations::latest(),
                 enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,
@@ -591,9 +607,10 @@ mod tests {
             // also test if there is any rounding when inserting metadata
             let time = next_next_time + TimeDelta::nanoseconds(999);
             let parameters = UpdateParameters {
-                db: &db,
-                blockscout: &blockscout,
-                blockscout_applied_migrations: BlockscoutMigrations::latest(),
+                stats_db: &db,
+                is_multichain_mode: false,
+                indexer_db: &blockscout,
+                indexer_applied_migrations: IndexerMigrations::latest(),
                 enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
                 update_time_override: Some(time),
                 force_full: true,

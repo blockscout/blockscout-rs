@@ -6,7 +6,7 @@
   "types": "./index.d.ts",
   "scripts": {
     "build": "npm run compile:proto && npm run compile:ts",
-    "compile:proto": "mkdir -p ./dist && protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt=exportCommonSymbols=false --ts_proto_opt=snakeToCamel=false --ts_proto_opt=stringEnums=true --ts_proto_opt=onlyTypes=true --ts_proto_opt=emitImportedFiles=false --proto_path=../ --proto_path=../../proto/ --ts_proto_out=./dist ../multichain-aggregator-proto/proto/v1/multichain-aggregator.proto",
+    "compile:proto": "mkdir -p ./dist && protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt=exportCommonSymbols=false --ts_proto_opt=snakeToCamel=false --ts_proto_opt=stringEnums=true --ts_proto_opt=onlyTypes=true --ts_proto_opt=emitImportedFiles=false --proto_path=../multichain-aggregator-proto/proto --proto_path=../../proto/ --ts_proto_out=./dist ../multichain-aggregator-proto/proto/v1/multichain-aggregator.proto ../multichain-aggregator-proto/proto/v1/cluster-explorer.proto",
     "compile:ts": "tsc --declaration ./index.ts"
   },
   "repository": {

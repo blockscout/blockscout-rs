@@ -579,8 +579,7 @@ mod tests {
         let domain = result.domain;
         assert!(
             domain.is_expired,
-            "expired domain has is_expired=false: {:?}",
-            domain
+            "expired domain has is_expired=false: {domain:?}"
         );
         // since no info in multicoin_addr_changed
         assert!(domain.other_addresses.is_empty());
@@ -597,8 +596,7 @@ mod tests {
             .expect("failed to get expired domain");
         assert!(
             result.is_none(),
-            "expired domain returned with only_active=true: {:?}",
-            result
+            "expired domain returned with only_active=true: {result:?}"
         );
     }
 
@@ -686,7 +684,7 @@ mod tests {
             .expect("failed to get 00-01 domains");
         assert_eq!(result.next_page_token, None);
         let result = result.items;
-        println!("result: {:?}", result);
+        println!("result: {result:?}");
         assert_eq!(
             vec![Some("00-01.eth")],
             result
@@ -711,7 +709,7 @@ mod tests {
             .expect("failed to get zt-c7c8172af17ab662.zkbtcnetwork domains");
         assert_eq!(result.next_page_token, None);
         let result = result.items;
-        println!("result: {:?}", result);
+        println!("result: {result:?}");
         assert_eq!(
             vec![Some("zt-c7c8172af17ab662.zkbtcnetwork.eth")],
             result
@@ -736,7 +734,7 @@ mod tests {
             .expect("failed to get ⌐◨-◨ domains");
         assert_eq!(result.next_page_token, None);
         let result = result.items;
-        println!("result: {:?}", result);
+        println!("result: {result:?}");
         assert_eq!(
             vec![Some("⌐◨-◨.eth")],
             result
@@ -761,7 +759,7 @@ mod tests {
             .expect("failed to get 😀😀😀😀😀😀 domains");
         assert_eq!(result.next_page_token, None);
         let result = result.items;
-        println!("result: {:?}", result);
+        println!("result: {result:?}");
         assert_eq!(
             vec![Some("😀😀😀😀😀😀.eth")],
             result

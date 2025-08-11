@@ -2,26 +2,27 @@ use std::{collections::HashMap, future::Future, path::PathBuf, sync::Arc, time::
 
 use crate::{
     auth::{ApiKey, AuthorizationProvider},
-    blockscout_waiter::{self, init_blockscout_api_client, IndexingStatusListener},
+    blockscout_waiter::{self, IndexingStatusListener, init_blockscout_api_client},
     config::{self, read_charts_config, read_layout_config, read_update_groups_config},
     health::HealthService,
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
     settings::{
+        Settings, apply_multichain_mode_settings, disable_all_non_multichain_charts,
         handle_disable_internal_transactions, handle_enable_all_arbitrum,
-        handle_enable_all_eip_7702, handle_enable_all_op_stack, Settings,
+        handle_enable_all_eip_7702, handle_enable_all_op_stack,
     },
     update_service::UpdateService,
 };
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use blockscout_endpoint_swagger::route_swagger;
 use blockscout_service_launcher::{
     database::{DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings},
     launcher::{self, GracefulShutdownHandler, LaunchSettings},
 };
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-use stats::{data_source::types::BlockscoutMigrations, lines::NewBuilderAccounts, metrics, Named};
+use stats::{Named, data_source::types::IndexerMigrations, lines::NewBuilderAccounts, metrics};
 use stats_proto::blockscout::stats::v1::{
     health_actix::route_health,
     health_server::HealthServer,
@@ -42,9 +43,9 @@ pub async fn stats(
         &settings.tracing,
         &settings.jaeger,
     )?;
-    let mut charts_config = read_charts_config(&settings.charts_config)?;
-    let layout_config = read_layout_config(&settings.layout_config)?;
-    let update_groups_config = read_update_groups_config(&settings.update_groups_config)?;
+    let mut charts_config = read_charts_config(&settings.charts_config_paths())?;
+    let layout_config = read_layout_config(&settings.layout_config_paths())?;
+    let update_groups_config = read_update_groups_config(&settings.update_groups_config_paths())?;
     handle_enable_all_arbitrum(settings.enable_all_arbitrum, &mut charts_config);
     handle_enable_all_op_stack(settings.enable_all_op_stack, &mut charts_config);
     handle_enable_all_eip_7702(settings.enable_all_eip_7702, &mut charts_config);
@@ -53,12 +54,16 @@ pub async fn stats(
         &mut settings.conditional_start,
         &mut charts_config,
     );
+    if settings.multichain_mode {
+        disable_all_non_multichain_charts(&mut charts_config);
+        apply_multichain_mode_settings(&mut settings);
+    }
 
     let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
     let db = init_stats_db(&settings).await?;
-    let blockscout = connect_to_blockscout_db(&settings).await?;
+    let indexer = connect_to_indexer_db(&settings).await?;
 
-    check_if_unsupported_charts_are_enabled(&charts, &blockscout).await?;
+    check_if_unsupported_charts_are_enabled(settings.multichain_mode, &charts, &indexer).await?;
     create_charts_if_needed(&db, &charts).await?;
 
     if settings.metrics.enabled {
@@ -76,9 +81,10 @@ pub async fn stats(
     let update_service = Arc::new(
         UpdateService::new(
             db.clone(),
-            blockscout.clone(),
+            indexer.clone(),
             charts.clone(),
             status_listener,
+            settings.multichain_mode,
         )
         .await?,
     );
@@ -97,7 +103,8 @@ pub async fn stats(
     let read_service = Arc::new(
         ReadService::new(
             db.clone(),
-            blockscout.clone(),
+            indexer.clone(),
+            settings.multichain_mode,
             charts,
             update_service,
             authorization,
@@ -110,7 +117,7 @@ pub async fn stats(
     let http_router = HttpRouter {
         stats: read_service,
         health: health.clone(),
-        swagger_path: settings.swagger_file,
+        swagger_path: settings.swagger_path,
     };
     let launch_settings = LaunchSettings {
         service_name: SERVICE_NAME.to_string(),
@@ -128,7 +135,7 @@ pub async fn stats(
     });
 
     let res = futures.join_next().await;
-    on_termination(&db, &blockscout, &shutdown, &mut futures).await;
+    on_termination(&db, &indexer, &shutdown, &mut futures).await;
     res.expect("task set is not empty")?
 }
 
@@ -148,8 +155,6 @@ impl<S: StatsService> launcher::HttpRouter for HttpRouter<S> {
                 route_swagger(
                     config,
                     self.swagger_path.clone(),
-                    // it's ok to not have this endpoint in swagger, as it is
-                    // the swagger itself
                     "/api/v1/docs/swagger.yaml",
                 )
             });
@@ -199,8 +204,13 @@ async fn init_stats_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnec
     Ok(db)
 }
 
-async fn connect_to_blockscout_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnection>> {
-    let mut opt = ConnectOptions::new(settings.blockscout_db_url.clone());
+async fn connect_to_indexer_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnection>> {
+    let url = settings
+        .indexer_db_url
+        .clone()
+        .or_else(|| settings.blockscout_db_url.clone())
+        .ok_or(anyhow!("Indexer DB URL is not set"))?;
+    let mut opt = ConnectOptions::new(url);
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     // we'd like to have each batch to resolve in under 1 hour
     // as it seems to be the middleground between too many steps & occupying DB for too long
@@ -208,7 +218,7 @@ async fn connect_to_blockscout_db(settings: &Settings) -> anyhow::Result<Arc<Dat
         tracing::log::LevelFilter::Warn,
         Duration::from_secs(3600),
     );
-    let conn = Arc::new(Database::connect(opt).await.context("blockscout DB")?);
+    let conn = Arc::new(Database::connect(opt).await.context("indexer DB")?);
     Ok(conn)
 }
 
@@ -222,10 +232,11 @@ fn init_runtime_setup(
 }
 
 async fn check_if_unsupported_charts_are_enabled(
+    is_multichain: bool,
     setup: &RuntimeSetup,
-    blockscout_db: &DatabaseConnection,
+    indexer_db: &DatabaseConnection,
 ) -> anyhow::Result<()> {
-    let migrations = BlockscoutMigrations::query_from_db(blockscout_db).await?;
+    let migrations = IndexerMigrations::query_from_db(is_multichain, indexer_db).await?;
     if !migrations.denormalization {
         let charts_without_normalization = &[NewBuilderAccounts::name()];
         let mut all_enabled_charts_with_deps = setup.update_groups.values().flat_map(|g| {
@@ -262,7 +273,7 @@ async fn create_charts_if_needed(
 fn init_waiter(
     settings: &Settings,
 ) -> anyhow::Result<(
-    Option<impl Future<Output = anyhow::Result<()>>>,
+    Option<impl Future<Output = anyhow::Result<()>> + use<>>,
     Option<IndexingStatusListener>,
 )> {
     let blockscout_api_config = init_blockscout_api_client(settings)?;
@@ -283,7 +294,9 @@ fn init_waiter(
 
 fn init_authorization(api_keys: HashMap<String, String>) -> Arc<AuthorizationProvider> {
     if api_keys.is_empty() {
-        tracing::warn!("No api keys found in settings, provide them to make use of authorization-protected endpoints")
+        tracing::warn!(
+            "No api keys found in settings, provide them to make use of authorization-protected endpoints"
+        )
     }
     let api_keys = api_keys
         .into_iter()
@@ -294,15 +307,15 @@ fn init_authorization(api_keys: HashMap<String, String>) -> Arc<AuthorizationPro
 
 async fn on_termination(
     db: &DatabaseConnection,
-    blockscout: &DatabaseConnection,
+    indexer: &DatabaseConnection,
     shutdown: &GracefulShutdownHandler,
     futures: &mut JoinSet<anyhow::Result<()>>,
 ) {
     if let Err(e) = db.close_by_ref().await {
         tracing::error!("Failed to close stats db connection upon termination: {e:?}");
     }
-    if let Err(e) = blockscout.close_by_ref().await {
-        tracing::error!("Failed to close blockscout db connection upon termination: {e:?}");
+    if let Err(e) = indexer.close_by_ref().await {
+        tracing::error!("Failed to close indexer db connection upon termination: {e:?}");
     }
     shutdown.shutdown_token.cancel();
     futures.abort_all();

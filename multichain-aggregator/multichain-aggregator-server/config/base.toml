@@ -2,7 +2,20 @@
 enabled = true
 addr = "0.0.0.0:8050"
 
+[database.connect]
+url = "postgres://postgres:admin@localhost:9433/multichain_aggregator"
+
 [database]
-connect.url = "postgres://postgres:postgres@localhost:5432/multichain_aggregator"
 create_database = true
 run_migrations = true
+
+[service.token_info_client]
+url = "https://contracts-info.services.blockscout.com"
+[service.dapp_client]
+url = "https://admin-rs.services.blockscout.com"
+[service.bens_client]
+url = "https://bens.services.blockscout.com"
+
+[service]
+quick_search_chains="1,8453,42161,10,57073,1868,100,130,80094,534352,324,42220,81457,11155111"
+fetch_chains=true

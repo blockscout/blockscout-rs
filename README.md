@@ -61,7 +61,11 @@ A set of services used by [Blockscout](https://blockscout.com/) blockchain explo
 9. [user-ops-indexer](user-ops-indexer) - service designed to index, decode and serve user operations as per the ERC-4337 standard
 
 10. [visualizer](visualizer/) - service for evm visualization such as:
-   1. Solidity contract visualization using [sol2uml](https://www.npmjs.com/package/sol2uml)
+   
+   * Solidity contract visualization using [sol2uml](https://www.npmjs.com/package/sol2uml)
+
+11. [multichain-aggregator](multichain-aggregator/) - service to store and index data from multiple blockscout instances. Also contains logic with [interop messages](https://docs.optimism.io/interop/message-passing)
+
 
 ## Running and configuring services
 

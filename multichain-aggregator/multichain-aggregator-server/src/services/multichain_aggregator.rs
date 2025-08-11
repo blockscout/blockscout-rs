@@ -1,44 +1,53 @@
 use crate::{
     proto::{multichain_aggregator_service_server::MultichainAggregatorService, *},
+    services::utils::{PageTokenExtractor, page_token_to_proto, parse_query},
     settings::ApiSettings,
 };
+use actix_phoenix_channel::ChannelBroadcaster;
 use api_client_framework::HttpApiClient;
 use blockscout_service_launcher::database::ReadWriteRepo;
 use multichain_aggregator_logic::{
     clients::dapp,
     error::{ParseError, ServiceError},
-    repository::interop_messages,
-    services::{api_key_manager::ApiKeyManager, chains, import, search},
+    services::{
+        api_key_manager::ApiKeyManager,
+        chains, import,
+        search::{self, DomainSearchCache, SearchContext},
+    },
     types,
 };
-use std::{collections::HashSet, str::FromStr};
+use std::{collections::HashSet, sync::Arc};
 use tonic::{Request, Response, Status};
 
 pub struct MultichainAggregator {
-    repo: ReadWriteRepo,
+    repo: Arc<ReadWriteRepo>,
     api_key_manager: ApiKeyManager,
     dapp_client: HttpApiClient,
     token_info_client: HttpApiClient,
     bens_client: HttpApiClient,
     api_settings: ApiSettings,
     quick_search_chains: Vec<types::ChainId>,
-    bens_protocols: Option<Vec<String>>,
+    bens_protocols: Option<&'static [String]>,
     domain_primary_chain_id: types::ChainId,
     marketplace_enabled_cache: chains::MarketplaceEnabledCache,
+    channel_broadcaster: ChannelBroadcaster,
+    domain_search_cache: Option<DomainSearchCache>,
 }
 
 impl MultichainAggregator {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        repo: ReadWriteRepo,
+        repo: Arc<ReadWriteRepo>,
         dapp_client: HttpApiClient,
         token_info_client: HttpApiClient,
         bens_client: HttpApiClient,
         api_settings: ApiSettings,
         quick_search_chains: Vec<types::ChainId>,
-        bens_protocols: Option<Vec<String>>,
+        bens_protocols: Option<&'static [String]>,
         domain_primary_chain_id: types::ChainId,
         marketplace_enabled_cache: chains::MarketplaceEnabledCache,
+        channel_broadcaster: ChannelBroadcaster,
+        domain_search_cache: Option<DomainSearchCache>,
     ) -> Self {
         Self {
             api_key_manager: ApiKeyManager::new(repo.main_db().clone()),
@@ -51,6 +60,8 @@ impl MultichainAggregator {
             bens_protocols,
             domain_primary_chain_id,
             marketplace_enabled_cache,
+            channel_broadcaster,
+            domain_search_cache,
         }
     }
 
@@ -94,25 +105,6 @@ impl MultichainAggregator {
 
         Ok(chain_ids)
     }
-
-    async fn filter_marketplace_enabled_chains<T>(
-        &self,
-        items: impl IntoIterator<Item = T>,
-        get_chain_id: impl Fn(&T) -> types::ChainId,
-    ) -> Vec<T> {
-        let cache = self.marketplace_enabled_cache.read().await;
-        items
-            .into_iter()
-            .filter_map(|c| {
-                let is_enabled = *cache.get(&get_chain_id(&c)).unwrap_or(&false);
-                if is_enabled {
-                    Some(c)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-    }
 }
 
 #[async_trait::async_trait]
@@ -131,11 +123,15 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let import_request: types::batch_import_request::BatchImportRequest = inner.try_into()?;
 
-        import::batch_import(self.repo.main_db(), import_request)
-            .await
-            .inspect_err(|err| {
-                tracing::error!(error = ?err, "failed to batch import");
-            })?;
+        import::batch_import(
+            self.repo.main_db(),
+            import_request,
+            self.channel_broadcaster.clone(),
+        )
+        .await
+        .inspect_err(|err| {
+            tracing::error!(error = ?err, "failed to batch import");
+        })?;
 
         Ok(Response::new(BatchImportResponse {
             status: "ok".to_string(),
@@ -167,7 +163,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -175,12 +171,12 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
-            &self.bens_client,
+            self.bens_client.clone(),
+            self.domain_search_cache.as_ref(),
             search::AddressSearchConfig::GeneralSearch {
-                bens_protocols: self.bens_protocols.as_deref(),
+                bens_protocols: self.bens_protocols,
                 domain_primary_chain_id: self.domain_primary_chain_id,
-                // NOTE: resolve to a primary domain. Multi-TLD resolution is not supported yet.
-                bens_domain_lookup_limit: 1,
+                bens_domain_lookup_limit: self.api_settings.default_page_size,
             },
             inner.q,
             chain_ids,
@@ -195,10 +191,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListAddressesResponse {
             items: addresses.into_iter().map(|a| a.into()).collect(),
-            next_page_params: next_page_token.map(|(a, c)| Pagination {
-                page_token: format!("{},{}", a.to_checksum(None), c),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -210,7 +203,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query_2).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -218,7 +211,8 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let (addresses, next_page_token) = search::search_addresses(
             self.repo.read_db(),
-            &self.bens_client,
+            self.bens_client.clone(),
+            None, // domain cache is not needed for nft search
             search::AddressSearchConfig::NFTSearch {
                 domain_primary_chain_id: self.domain_primary_chain_id,
             },
@@ -235,10 +229,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListNftsResponse {
             items: addresses.into_iter().map(|a| a.into()).collect(),
-            next_page_params: next_page_token.map(|(a, c)| Pagination {
-                page_token: format!("{},{}", a.to_checksum(None), c),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -250,7 +241,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         let chain_id = inner.chain_id.map(parse_query).transpose()?;
         let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query).transpose()?;
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self
             .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
@@ -272,10 +263,74 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListTransactionsResponse {
             items: transactions.into_iter().map(|t| t.into()).collect(),
-            next_page_params: next_page_token.map(|c| Pagination {
-                page_token: format!("{}", c),
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
+        }))
+    }
+
+    async fn list_blocks(
+        &self,
+        request: Request<ListBlocksRequest>,
+    ) -> Result<Response<ListBlocksResponse>, Status> {
+        let inner = request.into_inner();
+
+        let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
+
+        let chain_ids = self
+            .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
+            .await?;
+
+        let (blocks, next_page_token) = search::search_hashes(
+            self.repo.read_db(),
+            inner.q,
+            Some(types::hashes::HashType::Block),
+            chain_ids,
+            page_size as u64,
+            page_token,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error = ?err, "failed to list blocks");
+            Status::internal("failed to list blocks")
+        })?;
+
+        Ok(Response::new(ListBlocksResponse {
+            items: blocks.into_iter().map(|t| t.into()).collect(),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
+        }))
+    }
+
+    async fn list_block_numbers(
+        &self,
+        request: Request<ListBlockNumbersRequest>,
+    ) -> Result<Response<ListBlockNumbersResponse>, Status> {
+        let inner = request.into_inner();
+
+        let chain_id = inner.chain_id.map(parse_query).transpose()?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
+
+        let chain_ids = self
+            .validate_and_prepare_chain_ids(chain_id.map(|v| vec![v]).unwrap_or_default())
+            .await?;
+
+        let (block_numbers, next_page_token) = search::search_block_numbers(
+            self.repo.read_db(),
+            inner.q,
+            chain_ids,
+            page_size as u64,
+            page_token,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error = ?err, "failed to list block numbers");
+            Status::internal("failed to list block numbers")
+        })?;
+
+        Ok(Response::new(ListBlockNumbersResponse {
+            items: block_numbers.into_iter().map(|b| b.into()).collect(),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -285,20 +340,22 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<QuickSearchResponse>, Status> {
         let inner = request.into_inner();
 
-        let results = search::quick_search(
-            self.repo.read_db(),
-            &self.dapp_client,
-            &self.token_info_client,
-            &self.bens_client,
-            inner.q,
-            &self.quick_search_chains,
-            self.bens_protocols.as_deref(),
-            self.domain_primary_chain_id,
-        )
-        .await
-        .inspect_err(|err| {
-            tracing::error!(error = ?err, "failed to quick search");
-        })?;
+        let context = SearchContext {
+            db: Arc::clone(&self.repo),
+            dapp_client: &self.dapp_client,
+            token_info_client: &self.token_info_client,
+            bens_client: &self.bens_client,
+            bens_protocols: self.bens_protocols,
+            domain_primary_chain_id: self.domain_primary_chain_id,
+            marketplace_enabled_cache: &self.marketplace_enabled_cache,
+            domain_search_cache: self.domain_search_cache.as_ref(),
+        };
+
+        let results = search::quick_search(inner.q, &self.quick_search_chains, &context)
+            .await
+            .inspect_err(|err| {
+                tracing::error!(error = ?err, "failed to quick search");
+            })?;
 
         Ok(Response::new(results.into()))
     }
@@ -330,10 +387,7 @@ impl MultichainAggregatorService for MultichainAggregator {
 
         Ok(Response::new(ListTokensResponse {
             items: tokens.into_iter().map(|t| t.into()).collect(),
-            next_page_params: next_page_token.map(|page_token| Pagination {
-                page_token,
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
 
@@ -343,15 +397,33 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<ListDappsResponse>, Status> {
         let inner = request.into_inner();
 
-        let chain_ids = inner
-            .chain_ids
+        let chain_ids = if inner.chain_ids.is_empty() {
+            chains::list_active_chains_cached(
+                self.repo.read_db(),
+                &[chains::ChainSource::Dapp {
+                    dapp_client: &self.dapp_client,
+                }],
+            )
+            .await?
             .into_iter()
-            .map(parse_query)
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|c| c.id)
+            .collect()
+        } else {
+            inner
+                .chain_ids
+                .into_iter()
+                .map(parse_query)
+                .collect::<Result<Vec<_>, _>>()?
+        };
 
         let chain_ids = self
+            .marketplace_enabled_cache
             .filter_marketplace_enabled_chains(chain_ids, |id| *id)
             .await;
+
+        if chain_ids.is_empty() {
+            return Ok(Response::new(ListDappsResponse { items: vec![] }));
+        }
 
         let dapps =
             search::search_dapps(&self.dapp_client, inner.q, inner.categories, chain_ids).await?;
@@ -374,6 +446,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         .await?;
 
         let items = self
+            .marketplace_enabled_cache
             .filter_marketplace_enabled_chains(items, |c| c.id)
             .await
             .into_iter()
@@ -405,99 +478,22 @@ impl MultichainAggregatorService for MultichainAggregator {
         let inner = request.into_inner();
 
         let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
 
-        let (domains, next_page_token) = search::search_domains(
-            &self.bens_client,
+        let (domains, next_page_token) = search::search_domains_cached(
+            self.domain_search_cache.as_ref(),
+            self.bens_client.clone(),
             inner.q,
-            self.bens_protocols.as_deref(),
+            self.bens_protocols,
             self.domain_primary_chain_id,
             page_size,
-            inner.page_token,
+            page_token,
         )
         .await?;
 
         Ok(Response::new(ListDomainsResponse {
             items: domains.into_iter().map(|d| d.into()).collect(),
-            next_page_params: next_page_token.map(|page_token| Pagination {
-                page_token,
-                page_size,
-            }),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
-    }
-
-    async fn list_interop_messages(
-        &self,
-        request: Request<ListInteropMessagesRequest>,
-    ) -> Result<Response<ListInteropMessagesResponse>, Status> {
-        let inner = request.into_inner();
-
-        let init_chain_id = inner.init_chain_id.map(parse_query).transpose()?;
-        let relay_chain_id = inner.relay_chain_id.map(parse_query).transpose()?;
-        let address = inner.address.map(parse_query).transpose()?;
-        let direction = inner.direction.map(parse_query).transpose()?;
-
-        let page_size = self.normalize_page_size(inner.page_size);
-        let page_token = inner.page_token.map(parse_query_2).transpose()?;
-
-        let (interop_messages, next_page_token) = search::search_interop_messages(
-            self.repo.read_db(),
-            init_chain_id,
-            relay_chain_id,
-            address,
-            direction,
-            inner.nonce,
-            page_size as u64,
-            page_token,
-        )
-        .await?;
-
-        Ok(Response::new(ListInteropMessagesResponse {
-            items: interop_messages.into_iter().map(|i| i.into()).collect(),
-            next_page_params: next_page_token.map(|(t, h)| Pagination {
-                page_token: format!("{},{}", t, h),
-                page_size,
-            }),
-        }))
-    }
-
-    async fn count_interop_messages(
-        &self,
-        request: Request<CountInteropMessagesRequest>,
-    ) -> Result<Response<CountInteropMessagesResponse>, Status> {
-        let inner = request.into_inner();
-
-        let chain_id = parse_query(inner.chain_id)?;
-
-        let count = interop_messages::count(self.repo.read_db(), chain_id)
-            .await
-            .map_err(ServiceError::from)?;
-
-        Ok(Response::new(CountInteropMessagesResponse { count }))
-    }
-}
-
-#[allow(clippy::result_large_err)]
-#[inline]
-fn parse_query<T: FromStr>(input: String) -> Result<T, Status>
-where
-    <T as FromStr>::Err: std::fmt::Display,
-{
-    T::from_str(&input)
-        .map_err(|e| Status::invalid_argument(format!("invalid value {}: {e}", input)))
-}
-
-#[allow(clippy::result_large_err)]
-#[inline]
-fn parse_query_2<T1: FromStr, T2: FromStr>(input: String) -> Result<(T1, T2), Status>
-where
-    <T1 as FromStr>::Err: std::fmt::Display,
-    <T2 as FromStr>::Err: std::fmt::Display,
-{
-    match input.split(',').collect::<Vec<&str>>().as_slice() {
-        [v1, v2] => Ok((
-            parse_query::<T1>(v1.to_string())?,
-            parse_query::<T2>(v2.to_string())?,
-        )),
-        _ => Err(Status::invalid_argument("invalid page_token format")),
     }
 }

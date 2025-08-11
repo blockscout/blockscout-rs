@@ -27,6 +27,13 @@ impl StylusSdkRsVerifierService {
                 semver::Version::new(0, 5, 3),
                 semver::Version::new(0, 5, 5),
                 semver::Version::new(0, 5, 6),
+                semver::Version::new(0, 5, 7),
+                semver::Version::new(0, 5, 8),
+                semver::Version::new(0, 5, 10),
+                semver::Version::new(0, 5, 11),
+                semver::Version::new(0, 5, 12),
+                semver::Version::new(0, 6, 0),
+                semver::Version::new(0, 6, 1),
             ],
         }
     }
@@ -74,6 +81,8 @@ impl StylusSdkRsVerifier for StylusSdkRsVerifierService {
     }
 }
 
+// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
+#[allow(clippy::result_large_err)]
 fn process_verify_result(
     result: Result<stylus_sdk_rs::Success, stylus_sdk_rs::Error>,
 ) -> Result<Response<VerifyResponse>, Status> {
@@ -90,6 +99,8 @@ fn process_verify_result(
     }
 }
 
+// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
+#[allow(clippy::result_large_err)]
 fn process_error(error: stylus_sdk_rs::Error) -> Result<Response<VerifyResponse>, Status> {
     let verify_response = match error {
         stylus_sdk_rs::Error::VerificationFailed(_)
@@ -103,7 +114,7 @@ fn process_error(error: stylus_sdk_rs::Error) -> Result<Response<VerifyResponse>
             })
         }
         stylus_sdk_rs::Error::BadRequest(_) => {
-            return Err(Status::invalid_argument(error.to_string()))
+            return Err(Status::invalid_argument(error.to_string()));
         }
         stylus_sdk_rs::Error::Internal(_) => return Err(Status::internal(error.to_string())),
     };

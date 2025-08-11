@@ -3,9 +3,15 @@
 
 TODO: this is codegenerated text, change it and provide description of service
 
+## Envs
+
+[anchor]: <> (anchors.envs.start)
+[anchor]: <> (anchors.envs.end)
+
 ## Dev
 
 + Install [just](https://github.com/casey/just) cli. Just is like make but better.
++ Install [dotenv-cli](https://www.npmjs.com/package/dotenv-cli)
 + Execute `just` to see avaliable dev commands
 
 ```bash
@@ -27,22 +33,26 @@ just start-postgres
 just new-migration <name>
 ```
 + Apply migration by just typing:
-
-```bash
-just migrate-up
-```
+    ```bash
+    just migrate-up
+    ```
 {% endif -%}
 {% if entity %}
 + Generate ORM codegen by just typing:
 
-```bash
-just generate-entities
-```
+    ```bash
+    just generate-entities
+    ```
 {% endif -%}
+
 + Now you ready to start API server! Just run it:
-```
-just run
-```
+    ```
+    just run
+    ```
+or run with ENVs from .env current
+    ```
+    just run-dev
+    ```
 
 ## Troubleshooting
 

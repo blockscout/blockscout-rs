@@ -5,25 +5,31 @@ use crate::{
         token_info::search_token_infos,
     },
     error::{ParseError, ServiceError},
-    repository::{addresses, block_ranges, hashes, interop_messages},
+    repository::{addresses, block_ranges, hashes},
+    services::chains,
     types::{
-        addresses::{Address, DomainInfo, TokenType},
+        ChainId,
+        addresses::{Address, TokenType},
         block_ranges::ChainBlockNumber,
         dapp::MarketplaceDapp,
-        domains::Domain,
+        domains::{Domain, DomainInfo},
         hashes::{Hash, HashType},
-        interop_messages::{InteropMessage, MessageDirection},
         search_results::QuickSearchResult,
         token_info::Token,
-        ChainId,
     },
 };
-use alloy_primitives::{Address as AddressAlloy, TxHash};
+use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
+use blockscout_service_launcher::database::ReadWriteRepo;
+use recache::{handler::CacheHandler, stores::redis::RedisStore};
 use regex::Regex;
-use sea_orm::{prelude::DateTime, DatabaseConnection};
-use std::{collections::HashSet, str::FromStr, sync::OnceLock};
+use sea_orm::DatabaseConnection;
+use std::{
+    collections::HashSet,
+    str::FromStr,
+    sync::{Arc, OnceLock},
+};
 use tracing::instrument;
 
 const MIN_QUERY_LENGTH: usize = 3;
@@ -35,18 +41,33 @@ fn domain_name_with_tld_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"\b[\p{L}\p{N}\p{Emoji}_-]{3,63}\.eth\b").unwrap())
 }
 
-pub enum AddressSearchConfig<'a> {
+macro_rules! maybe_cache_lookup {
+    ($cache:expr, $key:expr, $get:expr) => {
+        if let Some(cache) = $cache {
+            cache
+                .default_request()
+                .key($key)
+                .execute($get)
+                .await
+                .map_err(|err| err.into())
+        } else {
+            $get().await
+        }
+    };
+}
+
+pub enum AddressSearchConfig {
     NFTSearch {
         domain_primary_chain_id: ChainId,
     },
     GeneralSearch {
-        bens_protocols: Option<&'a [String]>,
+        bens_protocols: Option<&'static [String]>,
         bens_domain_lookup_limit: u32,
         domain_primary_chain_id: ChainId,
     },
 }
 
-impl AddressSearchConfig<'_> {
+impl AddressSearchConfig {
     pub fn token_types(&self) -> Option<Vec<TokenType>> {
         match self {
             AddressSearchConfig::NFTSearch { .. } => {
@@ -70,12 +91,13 @@ impl AddressSearchConfig<'_> {
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn search_addresses(
     db: &DatabaseConnection,
-    bens_client: &HttpApiClient,
-    config: AddressSearchConfig<'_>,
+    bens_client: HttpApiClient,
+    domain_search_cache: Option<&DomainSearchCache>,
+    config: AddressSearchConfig,
     query: String,
     chain_ids: Vec<ChainId>,
     page_size: u64,
@@ -100,8 +122,9 @@ pub async fn search_addresses(
             if let Ok(address) = alloy_primitives::Address::from_str(&query) {
                 (vec![address], None)
             } else if domain_name_with_tld_regex().is_match(&query) {
-                let domains = search_domains(
-                    bens_client,
+                let domains = search_domains_cached(
+                    domain_search_cache,
+                    bens_client.clone(),
                     query.clone(),
                     bens_protocols,
                     domain_primary_chain_id,
@@ -120,7 +143,7 @@ pub async fn search_addresses(
 
                 let addresses = domains
                     .iter()
-                    .map(|d| d.address)
+                    .filter_map(|d| d.address)
                     .collect::<HashSet<_>>()
                     .into_iter()
                     .collect::<Vec<_>>();
@@ -160,7 +183,7 @@ pub async fn search_addresses(
         .collect::<Result<Vec<_>, _>>()?;
 
     let domain_primary_chain_id = config.domain_primary_chain_id();
-    let addresses = preload_domain_info(bens_client, domain_primary_chain_id, addresses).await;
+    let addresses = preload_domain_info(&bens_client, domain_primary_chain_id, addresses).await;
 
     Ok((addresses, page_token))
 }
@@ -193,23 +216,9 @@ pub async fn preload_domain_info(
                 );
             });
 
-        if let Ok(bens_proto::GetAddressResponse {
-            domain:
-                Some(bens_proto::DetailedDomain {
-                    name,
-                    resolved_address: Some(resolved_address),
-                    expiry_date,
-                    ..
-                }),
-            resolved_domains_count,
-        }) = res
+        if let Ok(res) = res
+            && let Ok(domain_info) = DomainInfo::try_from(res)
         {
-            let domain_info = DomainInfo {
-                address: resolved_address.hash,
-                name,
-                expiry_date,
-                names_count: resolved_domains_count as u32,
-            };
             address.domain_info = Some(domain_info);
         }
 
@@ -244,36 +253,36 @@ pub async fn search_hashes(
     ))
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn search_interop_messages(
+pub async fn search_block_numbers(
     db: &DatabaseConnection,
-    init_chain_id: Option<ChainId>,
-    relay_chain_id: Option<ChainId>,
-    address: Option<AddressAlloy>,
-    direction: Option<MessageDirection>,
-    nonce: Option<i64>,
+    query: String,
+    chain_ids: Vec<ChainId>,
     page_size: u64,
-    page_token: Option<(DateTime, TxHash)>,
-) -> Result<(Vec<InteropMessage>, Option<(DateTime, TxHash)>), ServiceError> {
-    let (interop_messages, next_page_token) = interop_messages::list(
+    page_token: Option<ChainId>,
+) -> Result<(Vec<ChainBlockNumber>, Option<ChainId>), ServiceError> {
+    let block_number = match alloy_primitives::BlockNumber::from_str(&query) {
+        Ok(block_number) => block_number,
+        Err(_) => return Ok((vec![], None)),
+    };
+
+    let (block_ranges, page_token) = block_ranges::list_matching_block_ranges_paginated(
         db,
-        init_chain_id,
-        relay_chain_id,
-        address,
-        direction,
-        nonce,
+        block_number,
+        chain_ids,
         page_size,
         page_token,
     )
     .await?;
 
-    Ok((
-        interop_messages
-            .into_iter()
-            .map(InteropMessage::try_from)
-            .collect::<Result<Vec<_>, _>>()?,
-        next_page_token,
-    ))
+    let block_numbers: Vec<_> = block_ranges
+        .into_iter()
+        .map(|r| ChainBlockNumber {
+            chain_id: r.chain_id,
+            block_number,
+        })
+        .collect::<Vec<_>>();
+
+    Ok((block_numbers, page_token))
 }
 
 pub async fn search_tokens(
@@ -351,9 +360,9 @@ pub async fn search_dapps(
 }
 
 pub async fn search_domains(
-    bens_client: &HttpApiClient,
+    bens_client: HttpApiClient,
     query: String,
-    protocols: Option<&[String]>,
+    protocols: Option<&'static [String]>,
     primary_chain_id: ChainId,
     page_size: u32,
     page_token: Option<String>,
@@ -387,35 +396,54 @@ pub async fn search_domains(
     Ok((domains, next_page_token))
 }
 
+pub async fn search_domains_cached(
+    cache: Option<&DomainSearchCache>,
+    bens_client: HttpApiClient,
+    query: String,
+    protocols: Option<&'static [String]>,
+    primary_chain_id: ChainId,
+    page_size: u32,
+    page_token: Option<String>,
+) -> Result<(Vec<Domain>, Option<String>), ServiceError> {
+    let key = format!(
+        "{}:{}:{}:{}:{}",
+        query,
+        protocols.as_ref().map(|p| p.join(",")).unwrap_or_default(),
+        primary_chain_id,
+        page_size,
+        page_token.clone().unwrap_or_default(),
+    );
+    let get = move || {
+        search_domains(
+            bens_client,
+            query.clone(),
+            protocols,
+            primary_chain_id,
+            page_size,
+            page_token,
+        )
+    };
+
+    let (domains, next_page_token) = maybe_cache_lookup!(cache, key, get)?;
+
+    Ok((domains, next_page_token))
+}
+
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip_all, level = "info", fields(query = query))]
 pub async fn quick_search(
-    db: &DatabaseConnection,
-    dapp_client: &HttpApiClient,
-    token_info_client: &HttpApiClient,
-    bens_client: &HttpApiClient,
     query: String,
-    chain_ids: &[ChainId],
-    bens_protocols: Option<&[String]>,
-    domain_primary_chain_id: ChainId,
+    priority_chain_ids: &[ChainId],
+    search_context: &SearchContext<'_>,
 ) -> Result<QuickSearchResult, ServiceError> {
     let raw_query = query.trim();
 
     let terms = parse_search_terms(raw_query);
-    let context = SearchContext {
-        db,
-        dapp_client,
-        token_info_client,
-        bens_client,
-        chain_ids,
-        bens_protocols,
-        domain_primary_chain_id,
-    };
 
     // Each search term produces its own `SearchResults` struct.
     // E.g. `SearchTerm::Dapp` job populates only the `dapps` field of its result.
     // We need to merge all of them into a single `SearchResults` struct.
-    let jobs = terms.into_iter().map(|t| t.search(&context));
+    let jobs = terms.into_iter().map(|t| t.search(search_context));
 
     let mut results = futures::future::join_all(jobs)
         .await
@@ -426,11 +454,24 @@ pub async fn quick_search(
             }
             acc
         })
-        .filter_and_sort_entities_by_priority(chain_ids);
+        .filter_and_sort_entities_by_priority(priority_chain_ids);
 
     results.balance_entities(QUICK_SEARCH_NUM_ITEMS as usize, QUICK_SEARCH_ENTITY_LIMIT);
 
     Ok(results)
+}
+
+pub type DomainSearchCache = CacheHandler<RedisStore, String, (Vec<Domain>, Option<String>)>;
+
+pub struct SearchContext<'a> {
+    pub db: Arc<ReadWriteRepo>,
+    pub dapp_client: &'a HttpApiClient,
+    pub token_info_client: &'a HttpApiClient,
+    pub bens_client: &'a HttpApiClient,
+    pub bens_protocols: Option<&'static [String]>,
+    pub domain_primary_chain_id: ChainId,
+    pub marketplace_enabled_cache: &'a chains::MarketplaceEnabledCache,
+    pub domain_search_cache: Option<&'a DomainSearchCache>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -440,18 +481,7 @@ pub enum SearchTerm {
     BlockNumber(alloy_primitives::BlockNumber),
     Dapp(String),
     TokenInfo(String),
-    ContractName(String),
     Domain(String),
-}
-
-struct SearchContext<'a> {
-    db: &'a DatabaseConnection,
-    dapp_client: &'a HttpApiClient,
-    token_info_client: &'a HttpApiClient,
-    bens_client: &'a HttpApiClient,
-    chain_ids: &'a [ChainId],
-    bens_protocols: Option<&'a [String]>,
-    domain_primary_chain_id: ChainId,
 }
 
 impl SearchTerm {
@@ -462,19 +492,14 @@ impl SearchTerm {
     ) -> Result<QuickSearchResult, ServiceError> {
         let mut results = QuickSearchResult::default();
 
-        let db = search_context.db;
+        let db = search_context.db.read_db();
+
+        let num_active_chains = chains::list_repo_chains_cached(db, true).await?.len() as u64;
 
         match self {
             SearchTerm::Hash(hash) => {
-                let (hashes, _) = hashes::list(
-                    db,
-                    hash,
-                    None,
-                    search_context.chain_ids.to_vec(),
-                    QUICK_SEARCH_NUM_ITEMS,
-                    None,
-                )
-                .await?;
+                let (hashes, _) =
+                    hashes::list(db, hash, None, vec![], num_active_chains, None).await?;
                 let hashes = hashes
                     .into_iter()
                     .map(Hash::try_from)
@@ -492,9 +517,9 @@ impl SearchTerm {
                     db,
                     vec![address],
                     None,
-                    search_context.chain_ids.to_vec(),
+                    vec![],
                     None,
-                    QUICK_SEARCH_NUM_ITEMS,
+                    num_active_chains,
                     None,
                 )
                 .await?;
@@ -510,6 +535,12 @@ impl SearchTerm {
                 )
                 .await;
 
+                let domains = addresses
+                    .iter()
+                    .filter_map(|a| a.domain_info.clone())
+                    .map(Domain::from)
+                    .collect::<Vec<_>>();
+
                 let nfts = addresses
                     .iter()
                     .filter(|a| {
@@ -521,6 +552,7 @@ impl SearchTerm {
                     .cloned()
                     .collect::<Vec<_>>();
 
+                results.domains.extend(domains);
                 results.addresses.extend(addresses);
                 results.nfts.extend(nfts);
             }
@@ -528,8 +560,8 @@ impl SearchTerm {
                 let (block_ranges, _) = block_ranges::list_matching_block_ranges_paginated(
                     db,
                     block_number,
-                    Some(search_context.chain_ids.to_vec()),
-                    QUICK_SEARCH_NUM_ITEMS,
+                    vec![],
+                    num_active_chains,
                     None,
                 )
                 .await?;
@@ -544,22 +576,36 @@ impl SearchTerm {
                 results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
-                let dapps = search_dapps(
-                    search_context.dapp_client,
-                    Some(query),
-                    None,
-                    search_context.chain_ids.to_vec(),
+                let dapp_chains = chains::list_active_chains_cached(
+                    db,
+                    &[chains::ChainSource::Dapp {
+                        dapp_client: search_context.dapp_client,
+                    }],
                 )
-                .await?;
+                .await?
+                .into_iter()
+                .map(|c| c.id)
+                .collect::<Vec<_>>();
 
-                results.dapps.extend(dapps);
+                let chain_ids = search_context
+                    .marketplace_enabled_cache
+                    .filter_marketplace_enabled_chains(dapp_chains, |id| *id)
+                    .await;
+
+                if !chain_ids.is_empty() {
+                    let dapps =
+                        search_dapps(search_context.dapp_client, Some(query), None, chain_ids)
+                            .await?;
+
+                    results.dapps.extend(dapps);
+                }
             }
             SearchTerm::TokenInfo(query) => {
                 let (tokens, _) = search_tokens(
-                    search_context.db,
+                    db,
                     search_context.token_info_client,
                     query,
-                    search_context.chain_ids.to_vec(),
+                    vec![],
                     // TODO: temporary increase number of tokens to improve search quality
                     // until we have a dedicated endpoint for quick search which returns
                     // only one token per chain_id.
@@ -570,23 +616,10 @@ impl SearchTerm {
 
                 results.tokens.extend(tokens);
             }
-            SearchTerm::ContractName(query) => {
-                let addresses = addresses::uniform_chain_search(
-                    db,
-                    query,
-                    Some(vec![]),
-                    search_context.chain_ids.to_vec(),
-                )
-                .await?
-                .into_iter()
-                .map(Address::try_from)
-                .collect::<Result<Vec<_>, _>>()?;
-
-                results.addresses.extend(addresses);
-            }
             SearchTerm::Domain(query) => {
-                let (domains, _) = search_domains(
-                    search_context.bens_client,
+                let (domains, _) = search_domains_cached(
+                    search_context.domain_search_cache,
+                    search_context.bens_client.clone(),
                     query,
                     search_context.bens_protocols,
                     search_context.domain_primary_chain_id,
@@ -595,14 +628,14 @@ impl SearchTerm {
                 )
                 .await?;
 
-                let addresses = domains.iter().map(|d| d.address).collect::<Vec<_>>();
+                let addresses = domains.iter().filter_map(|d| d.address).collect::<Vec<_>>();
                 if !addresses.is_empty() {
                     // Lookup only non-token addresses
                     let (addresses, _) = addresses::list(
                         db,
                         addresses,
                         None,
-                        search_context.chain_ids.to_vec(),
+                        vec![],
                         Some(vec![]),
                         QUICK_SEARCH_NUM_ITEMS,
                         None,
@@ -652,7 +685,6 @@ pub fn parse_search_terms(query: &str) -> Vec<SearchTerm> {
 
     if query.len() >= MIN_QUERY_LENGTH {
         terms.push(SearchTerm::TokenInfo(query.to_string()));
-        terms.push(SearchTerm::ContractName(query.to_string()));
         terms.push(SearchTerm::Domain(query.to_string()));
     }
 
@@ -693,7 +725,6 @@ mod tests {
             parse_search_terms("0x00"),
             vec![
                 SearchTerm::TokenInfo("0x00".to_string()),
-                SearchTerm::ContractName("0x00".to_string()),
                 SearchTerm::Domain("0x00".to_string()),
                 SearchTerm::Dapp("0x00".to_string()),
             ]
@@ -704,7 +735,6 @@ mod tests {
             vec![
                 SearchTerm::BlockNumber(1234),
                 SearchTerm::TokenInfo("1234".to_string()),
-                SearchTerm::ContractName("1234".to_string()),
                 SearchTerm::Domain("1234".to_string()),
                 SearchTerm::Dapp("1234".to_string()),
             ]
@@ -714,7 +744,6 @@ mod tests {
             parse_search_terms("test.domain"),
             vec![
                 SearchTerm::TokenInfo("test.domain".to_string()),
-                SearchTerm::ContractName("test.domain".to_string()),
                 SearchTerm::Domain("test.domain".to_string()),
                 SearchTerm::Dapp("test.domain".to_string()),
             ]

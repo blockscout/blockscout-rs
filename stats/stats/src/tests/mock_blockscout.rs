@@ -10,11 +10,11 @@ use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
 use hex_literal::hex;
 use itertools::Itertools;
 use rand::{Rng, SeedableRng};
-use sea_orm::{prelude::Decimal, ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
+use sea_orm::{ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set, prelude::Decimal};
 use std::str::FromStr;
 use wiremock::{
-    matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
 };
 
 use crate::lines::{ATTRIBUTES_DEPOSITED_FROM_HASH, ATTRIBUTES_DEPOSITED_TO_HASH};
@@ -540,13 +540,16 @@ fn mock_transaction(
     let from_address_hash = address_list[address_index].hash.as_ref().to_vec();
     let address_index = (block_number as usize + 1) % address_list.len();
     let to_address_hash = address_list[address_index].hash.as_ref().to_vec();
-    let input = tx_type
-        .needs_input()
-        .then(|| vec![60u8, 80u8])
-        .unwrap_or_default();
-    let value = (tx_type.needs_value())
-        .then_some(1_000_000_000_000)
-        .unwrap_or_default();
+    let input = if tx_type.needs_input() {
+        vec![60u8, 80u8]
+    } else {
+        vec![]
+    };
+    let value = if tx_type.needs_value() {
+        1_000_000_000_000
+    } else {
+        0
+    };
     let created_contract_code_indexed_at = match &tx_type {
         TxType::ContractCreation(_) => Some(
             block

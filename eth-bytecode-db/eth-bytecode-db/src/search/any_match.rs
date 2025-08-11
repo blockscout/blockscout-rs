@@ -3,9 +3,14 @@ use super::{
     types::{BytecodeRemote, BytecodeType},
     MatchContract,
 };
-use crate::{metrics, verification::MatchType};
+use crate::{
+    metrics,
+    search::geas_predeployes::{GeasPredeploy, GeasPredeployDetails},
+    verification::MatchType,
+};
 use entity::sea_orm_active_enums;
 use sea_orm::{ConnectionTrait, TransactionTrait};
+use strum::IntoEnumIterator;
 use verification_common::blueprint_contracts;
 
 pub async fn find_contract<C>(
@@ -16,6 +21,10 @@ pub async fn find_contract<C>(
 where
     C: ConnectionTrait + TransactionTrait,
 {
+    if let Some(details) = is_geas_predeploy(code_type.clone(), code.clone()) {
+        return Ok(vec![MatchContract::from(details)]);
+    }
+
     let mut remote = BytecodeRemote {
         bytecode_type: code_type.into(),
         data: code,
@@ -82,4 +91,25 @@ where
         );
 
     Ok(matches)
+}
+
+fn is_geas_predeploy(
+    code_type: sea_orm_active_enums::BytecodeType,
+    code: bytes::Bytes,
+) -> Option<GeasPredeployDetails> {
+    for predeploy in GeasPredeploy::iter() {
+        let details = GeasPredeployDetails::from(predeploy);
+        match code_type {
+            sea_orm_active_enums::BytecodeType::CreationInput if code == details.creation_code => {
+                return Some(details);
+            }
+            sea_orm_active_enums::BytecodeType::DeployedBytecode
+                if code == details.runtime_code =>
+            {
+                return Some(details);
+            }
+            _ => {}
+        }
+    }
+    None
 }

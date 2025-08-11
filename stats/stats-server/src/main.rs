@@ -1,5 +1,5 @@
 use blockscout_service_launcher::launcher::ConfigSettings;
-use stats_server::{stats, Settings};
+use stats_server::{Settings, stats};
 use tracing::log;
 
 fn log_error(err: anyhow::Error) -> anyhow::Error {

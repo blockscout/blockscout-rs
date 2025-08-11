@@ -42,3 +42,4 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 uuid = "1.7.0"
 wiremock = "0.6"
+blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "4a755c5" }

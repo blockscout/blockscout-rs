@@ -281,8 +281,7 @@ async fn not_override_partial_matches() {
     .map_err(|err| {
         assert!(
             err.to_string().contains("is not better than existing"),
-            "unexpected error: {}",
-            err
+            "unexpected error: {err}"
         )
     })
     .expect_err("error expected while inserting another partially verified contract");

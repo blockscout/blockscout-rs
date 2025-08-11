@@ -28,7 +28,6 @@ fn compile(
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
         .type_attribute(".google.protobuf", "#[derive(serde::Serialize,serde::Deserialize)]")
         // Rename token_type enum values
-        .field_attribute(".blockscout.multichainAggregator.v1.BatchImportRequest.AddressImport.token_type", "#[serde(default)]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_20", "#[serde(rename = \"ERC-20\")]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_721", "#[serde(rename = \"ERC-721\")]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_1155", "#[serde(rename = \"ERC-1155\")]")
@@ -46,6 +45,12 @@ fn compile(
         .field_attribute("BatchImportRequest.block_ranges", "#[serde(default)]")
         .field_attribute("BatchImportRequest.hashes", "#[serde(default)]")
         .field_attribute("BatchImportRequest.interop_messages", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.address_coin_balances", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.address_token_balances", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.tokens", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.AddressImport.token_type", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.TokenImport.Metadata.token_type", "#[serde(default)]")
+        .field_attribute("ListAddressTokensRequest.type", "#[serde(default)]")
         .extern_path(".google.protobuf", "::prost-wkt-types");
     config.compile_protos(protos, includes)?;
 
@@ -69,6 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     compile(
         &[
             "proto/v1/multichain-aggregator.proto",
+            "proto/v1/cluster-explorer.proto",
             "proto/v1/health.proto",
         ],
         &["proto"],

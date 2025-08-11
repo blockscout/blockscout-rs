@@ -1,24 +1,28 @@
 use super::paginate_cursor;
-use crate::types::{block_ranges::BlockRange, ChainId};
-use entity::block_ranges::{ActiveModel, Column, Entity, Model};
+use crate::types::{ChainId, block_ranges::BlockRange};
+use entity::block_ranges::{Column, Entity, Model};
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr,
-    EntityTrait, QueryFilter, QueryTrait,
+    ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IntoActiveModel,
+    QueryFilter, QueryTrait, prelude::Expr, sea_query::OnConflict,
 };
 
-pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> Result<(), DbErr>
+pub async fn upsert_many<C>(db: &C, block_ranges: Vec<BlockRange>) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait,
 {
+    if block_ranges.is_empty() {
+        return Ok(vec![]);
+    }
+
     let block_ranges = block_ranges.into_iter().map(|block_range| {
         let model: Model = block_range.into();
-        let mut active: ActiveModel = model.into();
+        let mut active = model.into_active_model();
         active.created_at = NotSet;
         active.updated_at = NotSet;
         active
     });
 
-    Entity::insert_many(block_ranges)
+    let models = Entity::insert_many(block_ranges)
         .on_conflict(
             OnConflict::column(Column::ChainId)
                 .values([
@@ -46,17 +50,16 @@ where
                 ])
                 .to_owned(),
         )
-        .do_nothing()
-        .exec_without_returning(db)
+        .exec_with_returning_many(db)
         .await?;
 
-    Ok(())
+    Ok(models)
 }
 
 pub async fn list_matching_block_ranges_paginated<C>(
     db: &C,
     block_number: u64,
-    chain_ids: Option<Vec<ChainId>>,
+    chain_ids: Vec<ChainId>,
     page_size: u64,
     page_token: Option<ChainId>,
 ) -> Result<(Vec<Model>, Option<ChainId>), DbErr>
@@ -64,13 +67,10 @@ where
     C: ConnectionTrait,
 {
     let c = Entity::find()
-        .apply_if(chain_ids, |q, chain_ids| {
-            if !chain_ids.is_empty() {
-                q.filter(Column::ChainId.is_in(chain_ids))
-            } else {
-                q
-            }
-        })
+        .apply_if(
+            (!chain_ids.is_empty()).then_some(chain_ids),
+            |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
+        )
         .filter(Column::MinBlockNumber.lte(block_number))
         .filter(Column::MaxBlockNumber.gte(block_number))
         .cursor_by(Column::ChainId);

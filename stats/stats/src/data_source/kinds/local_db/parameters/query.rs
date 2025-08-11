@@ -4,11 +4,11 @@ use chrono::{DateTime, Utc};
 use sea_orm::DatabaseConnection;
 
 use crate::{
-    charts::db_interaction::read::{get_counter_data, get_line_chart_data},
-    data_source::{kinds::local_db::parameter_traits::QueryBehaviour, UpdateContext},
-    range::UniversalRange,
-    types::{timespans::DateValue, ExtendedTimespanValue, Timespan},
     ChartError, ChartProperties, RequestedPointsLimit,
+    charts::db_interaction::read::{get_counter_data, get_line_chart_data},
+    data_source::{UpdateContext, kinds::local_db::parameter_traits::QueryBehaviour},
+    range::UniversalRange,
+    types::{ExtendedTimespanValue, Timespan, timespans::DateValue},
 };
 
 /// Usually the choice for line charts
@@ -48,7 +48,7 @@ where
         let start = start.map(|s| C::Resolution::from_date(s.date_naive()));
         let end = end.map(|e| C::Resolution::from_date(e.date_naive()));
         let values = get_line_chart_data::<C::Resolution>(
-            cx.db,
+            cx.stats_db,
             &C::name(),
             start,
             end,
@@ -75,7 +75,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
         _fill_missing_dates: bool,
     ) -> Result<Self::Output, ChartError> {
         let value = get_counter_data(
-            cx.db,
+            cx.stats_db,
             &C::name(),
             Some(cx.time.date_naive()),
             C::missing_date_policy(),
@@ -88,7 +88,7 @@ impl<C: ChartProperties> QueryBehaviour for DefaultQueryLast<C> {
 
 #[trait_variant::make(Send)]
 pub trait ValueEstimation {
-    async fn estimate(blockscout: &DatabaseConnection) -> Result<DateValue<String>, ChartError>;
+    async fn estimate(indexer: &DatabaseConnection) -> Result<DateValue<String>, ChartError>;
 }
 
 pub struct QueryLastWithEstimationFallback<E, C>(PhantomData<(E, C)>)
@@ -110,7 +110,7 @@ where
         _fill_missing_dates: bool,
     ) -> Result<Self::Output, ChartError> {
         let value = match get_counter_data(
-            cx.db,
+            cx.stats_db,
             &C::name(),
             Some(cx.time.date_naive()),
             C::missing_date_policy(),
@@ -118,7 +118,7 @@ where
         .await?
         {
             Some(v) => v,
-            None => E::estimate(cx.blockscout).await?,
+            None => E::estimate(cx.indexer_db).await?,
         };
         Ok(value)
     }
@@ -136,10 +136,10 @@ mod tests {
     use super::*;
 
     use crate::{
-        data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
+        ChartError, MissingDatePolicy, Named,
+        data_source::{UpdateContext, UpdateParameters, types::IndexerMigrations},
         tests::init_db::init_db_all,
         types::timespans::DateValue,
-        ChartError, MissingDatePolicy, Named,
     };
 
     #[tokio::test]
@@ -151,8 +151,9 @@ mod tests {
 
         let parameters = UpdateParameters::query_parameters(
             &db,
+            false,
             &blockscout,
-            BlockscoutMigrations::latest(),
+            IndexerMigrations::latest(),
             Some(current_time),
         );
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
@@ -168,7 +169,7 @@ mod tests {
 
         impl ValueEstimation for TestFallback {
             async fn estimate(
-                _blockscout: &DatabaseConnection,
+                _indexer: &DatabaseConnection,
             ) -> Result<DateValue<String>, ChartError> {
                 Ok(expected_estimate())
             }

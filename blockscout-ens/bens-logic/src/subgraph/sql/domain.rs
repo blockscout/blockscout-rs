@@ -135,9 +135,11 @@ pub async fn get_domain(
     domain_name: &DomainNameOnProtocol<'_>,
     only_active: bool,
 ) -> Result<Option<DetailedDomain>, DbErr> {
-    let only_active_clause = only_active
-        .then(|| format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}"))
-        .unwrap_or_default();
+    let only_active_clause = if only_active {
+        format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}")
+    } else {
+        String::new()
+    };
     let schema = &domain_name.deployed_protocol.protocol.subgraph_schema;
     let protocol_slug = &domain_name.deployed_protocol.protocol.info.slug;
     let maybe_domain = sqlx::query_as(&format!(

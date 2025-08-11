@@ -360,14 +360,13 @@ impl Client {
             .get_contract_creation_transaction(contract_address.clone())
             .await
             .context(format!(
-                "get_contract_creation_transaction({})",
-                contract_address
+                "get_contract_creation_transaction({contract_address})",
             ))?;
         let creation_input = self
             .blockscout_client
             .get_transaction_input(creation_tx_hash.clone())
             .await
-            .context(format!("get_transaction_input({})", creation_tx_hash))?;
+            .context(format!("get_transaction_input({creation_tx_hash})",))?;
 
         contract_addresses::ActiveModel {
             contract_address: Set(contract_address.to_vec()),
@@ -398,8 +397,7 @@ impl Client {
         .update(self.db_client.as_ref())
         .await
         .context(format!(
-            "saving success details failed for the contract {}",
-            contract_address,
+            "saving success details failed for the contract {contract_address}",
         ))?;
 
         Ok(())

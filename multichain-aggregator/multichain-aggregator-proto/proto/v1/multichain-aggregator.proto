@@ -20,10 +20,9 @@ service MultichainAggregatorService {
   rpc ListDappCategories(ListDappCategoriesRequest)
       returns (ListDappCategoriesResponse) {}
   rpc ListDomains(ListDomainsRequest) returns (ListDomainsResponse) {}
-  rpc ListInteropMessages(ListInteropMessagesRequest)
-      returns (ListInteropMessagesResponse) {}
-  rpc CountInteropMessages(CountInteropMessagesRequest)
-      returns (CountInteropMessagesResponse) {}
+  rpc ListBlockNumbers(ListBlockNumbersRequest)
+      returns (ListBlockNumbersResponse) {}
+  rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse) {}
 }
 
 enum TokenType {
@@ -32,6 +31,7 @@ enum TokenType {
   TOKEN_TYPE_ERC_721 = 2;
   TOKEN_TYPE_ERC_1155 = 3;
   TOKEN_TYPE_ERC_404 = 4;
+  TOKEN_TYPE_ERC_7802 = 5;
 }
 
 enum HashType {
@@ -93,30 +93,15 @@ message Token {
 }
 
 message Domain {
-  string address = 1;
+  optional string address = 1;
   string name = 2;
   optional string expiry_date = 3;
   google.protobuf.Struct protocol = 4;
 }
 
-message InteropMessage {
-  enum Status {
-    STATUS_PENDING = 0;
-    STATUS_FAILED = 1;
-    STATUS_SUCCESS = 2;
-  }
-
-  optional string sender_address_hash = 1;
-  optional string target_address_hash = 2;
-  int64 nonce = 3;
-  string init_chain_id = 4;
-  optional string init_transaction_hash = 5;
-  optional string timestamp = 6;
-  string relay_chain_id = 7;
-  optional string relay_transaction_hash = 8;
-  optional string payload = 9;
-  optional bool failed = 10;
-  Status status = 11;
+message ChainBlockNumber {
+  int64 chain_id = 1;
+  uint64 block_number = 2;
 }
 
 message BatchImportRequest {
@@ -171,12 +156,66 @@ message BatchImportRequest {
     }
   }
 
+  message AddressCoinBalanceImport {
+    string address_hash = 1;
+    string value = 2;
+  }
+
+  message AddressTokenBalanceImport {
+    string address_hash = 1;
+    string token_address_hash = 2;
+    optional string token_id = 3;
+    optional string value = 4;
+  }
+  
+  message CountersImport {
+    message GlobalCounters {
+      optional uint64 daily_transactions_number = 1;
+      optional uint64 total_transactions_number = 2;
+      optional uint64 total_addresses_number = 3;
+    }
+
+    int64 timestamp = 1;
+    optional GlobalCounters global_counters = 2;
+  }
+
+  message TokenImport {
+    message Metadata {
+      optional string name = 1;
+      optional string symbol = 2;
+      optional int32 decimals = 3;
+      TokenType token_type = 4;
+      optional string icon_url = 5;
+      optional string total_supply = 6;
+    }
+
+    message Counters {
+      optional string holders_count = 1;
+      optional string transfers_count = 2;
+    }
+
+    message PriceData {
+      optional string fiat_value = 1;
+      optional string circulating_market_cap = 2;
+    }
+
+    string address_hash = 1;
+
+    optional Metadata metadata = 2;
+    optional PriceData price_data = 3;
+    optional Counters counters = 4;
+  }
+
   string chain_id = 1;
   repeated AddressImport addresses = 2;
   repeated BlockRangeImport block_ranges = 3;
   repeated HashImport hashes = 4;
   repeated InteropMessageImport interop_messages = 5;
-  string api_key = 6;
+  repeated AddressCoinBalanceImport address_coin_balances = 6;
+  repeated AddressTokenBalanceImport address_token_balances = 7;
+  optional CountersImport counters = 8;
+  repeated TokenImport tokens = 9;
+  string api_key = 10;
 }
 
 message BatchImportResponse { string status = 1; }
@@ -184,11 +223,6 @@ message BatchImportResponse { string status = 1; }
 message QuickSearchRequest { string q = 1; }
 
 message QuickSearchResponse {
-  message ChainBlockNumber {
-    int64 chain_id = 1;
-    uint64 block_number = 2;
-  }
-
   repeated Address addresses = 1;
   repeated Hash blocks = 2;
   repeated Hash transactions = 3;
@@ -285,23 +319,26 @@ message ListDomainsResponse {
   Pagination next_page_params = 2;
 }
 
-message ListInteropMessagesRequest {
-  optional string init_chain_id = 1;
-  optional string relay_chain_id = 2;
-  optional int64 nonce = 3;
-  // Address of the sender or receiver.
-  optional string address = 4;
-  // Message direction: "from" or "to". Valid only when address is provided.
-  optional string direction = 5;
-  optional uint32 page_size = 6;
-  optional string page_token = 7;
+message ListBlockNumbersRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
 }
 
-message ListInteropMessagesResponse {
-  repeated InteropMessage items = 1;
+message ListBlockNumbersResponse {
+  repeated ChainBlockNumber items = 1;
   Pagination next_page_params = 2;
 }
 
-message CountInteropMessagesRequest { string chain_id = 1; }
+message ListBlocksRequest {
+  string q = 1;
+  optional string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
+}
 
-message CountInteropMessagesResponse { uint64 count = 1; }
+message ListBlocksResponse {
+  repeated Hash items = 1;
+  Pagination next_page_params = 2;
+}

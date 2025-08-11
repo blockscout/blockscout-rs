@@ -1,18 +1,20 @@
 use super::ChainId;
-use crate::{error::ParseError, proto};
-use entity::addresses::Model;
+use crate::{error::ParseError, proto, types::domains::DomainInfo};
+use bigdecimal::BigDecimal;
+use entity::{
+    address_coin_balances,
+    addresses::{Column, Entity, Model},
+};
+use sea_orm::{
+    DerivePartialModel, FromJsonQueryResult, IntoSimpleExpr,
+    prelude::Expr,
+    sea_query::{Func, SimpleExpr},
+};
+use serde::{Deserialize, Serialize};
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
 
-#[derive(Debug, Clone)]
-pub struct DomainInfo {
-    pub address: String,
-    pub name: String,
-    pub expiry_date: Option<String>,
-    pub names_count: u32,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Address {
     pub chain_id: ChainId,
     pub hash: alloy_primitives::Address,
@@ -61,17 +63,6 @@ impl TryFrom<Model> for Address {
     }
 }
 
-impl From<DomainInfo> for proto::DomainInfo {
-    fn from(v: DomainInfo) -> Self {
-        Self {
-            address: v.address,
-            name: v.name,
-            expiry_date: v.expiry_date,
-            names_count: v.names_count,
-        }
-    }
-}
-
 impl From<Address> for proto::Address {
     fn from(v: Address) -> Self {
         Self {
@@ -92,12 +83,88 @@ impl From<Address> for proto::Address {
     }
 }
 
+fn chain_infos_query() -> SimpleExpr {
+    Expr::cust_with_exprs(
+        "json_agg(json_build_object('chain_id',$1,'coin_balance',$2,'is_contract',$3,'is_verified',$4))",
+        vec![
+            Column::ChainId.into_simple_expr(),
+            Func::coalesce([
+                address_coin_balances::Column::Value.into_simple_expr(),
+                Expr::value(0),
+            ])
+            .into(),
+            Column::IsContract.into_simple_expr(),
+            Column::IsVerifiedContract.into_simple_expr(),
+        ],
+    )
+    .into_simple_expr()
+}
+
+#[derive(DerivePartialModel)]
+#[sea_orm(entity = "Entity", from_query_result)]
+pub struct AddressInfo {
+    pub hash: Vec<u8>,
+    #[sea_orm(from_expr = r#"chain_infos_query()"#)]
+    pub chain_infos: Vec<ChainInfo>,
+    #[sea_orm(skip)]
+    pub has_tokens: bool,
+    #[sea_orm(skip)]
+    pub has_interop_message_transfers: bool,
+}
+
+impl AddressInfo {
+    pub fn default(hash: Vec<u8>) -> Self {
+        Self {
+            hash,
+            chain_infos: vec![],
+            has_tokens: false,
+            has_interop_message_transfers: false,
+        }
+    }
+}
+
+impl TryFrom<AddressInfo> for proto::GetAddressResponse {
+    type Error = ParseError;
+
+    fn try_from(v: AddressInfo) -> Result<Self, Self::Error> {
+        Ok(Self {
+            hash: alloy_primitives::Address::try_from(v.hash.as_slice())?.to_string(),
+            chain_infos: v
+                .chain_infos
+                .into_iter()
+                .map(|c| (c.chain_id.to_string(), c.into()))
+                .collect(),
+            has_tokens: false,
+            has_interop_message_transfers: false,
+        })
+    }
+}
+
+#[derive(Debug, FromJsonQueryResult, Serialize, Deserialize)]
+pub struct ChainInfo {
+    chain_id: ChainId,
+    coin_balance: BigDecimal,
+    is_contract: bool,
+    is_verified: bool,
+}
+
+impl From<ChainInfo> for proto::get_address_response::ChainInfo {
+    fn from(v: ChainInfo) -> Self {
+        Self {
+            coin_balance: v.coin_balance.to_string(),
+            is_contract: v.is_contract,
+            is_verified: v.is_verified,
+        }
+    }
+}
+
 pub fn proto_token_type_to_db_token_type(token_type: proto::TokenType) -> Option<TokenType> {
     match token_type {
         proto::TokenType::Erc20 => Some(TokenType::Erc20),
         proto::TokenType::Erc1155 => Some(TokenType::Erc1155),
         proto::TokenType::Erc721 => Some(TokenType::Erc721),
         proto::TokenType::Erc404 => Some(TokenType::Erc404),
+        proto::TokenType::Erc7802 => Some(TokenType::Erc7802),
         proto::TokenType::Unspecified => None,
     }
 }
@@ -108,5 +175,6 @@ pub fn db_token_type_to_proto_token_type(token_type: TokenType) -> proto::TokenT
         TokenType::Erc1155 => proto::TokenType::Erc1155,
         TokenType::Erc721 => proto::TokenType::Erc721,
         TokenType::Erc404 => proto::TokenType::Erc404,
+        TokenType::Erc7802 => proto::TokenType::Erc7802,
     }
 }

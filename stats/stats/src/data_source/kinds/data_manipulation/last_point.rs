@@ -8,11 +8,11 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::{DateTime, Utc};
 
 use crate::{
-    data_source::{kinds::AdapterDataSource, source::DataSource, UpdateContext},
+    ChartError,
+    data_source::{UpdateContext, kinds::AdapterDataSource, source::DataSource},
     range::UniversalRange,
     types::{Timespan, TimespanValue, ZeroTimespanValue},
     utils::day_start,
-    ChartError,
 };
 
 pub struct LastPoint<DS>(PhantomData<DS>)

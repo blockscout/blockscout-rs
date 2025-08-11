@@ -1,11 +1,11 @@
-use crate::types::chains::Chain;
+use crate::types::{ChainId, chains::Chain};
 use entity::{
     api_keys,
     chains::{ActiveModel, Column, Entity, Model},
 };
 use sea_orm::{
-    prelude::Expr, sea_query::OnConflict, ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait,
-    QueryOrder, QuerySelect,
+    ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, prelude::Expr, sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(db: &C, chains: Vec<Chain>) -> Result<(), DbErr>
@@ -38,7 +38,21 @@ where
     Ok(())
 }
 
-pub async fn list_chains<C>(db: &C, with_active_api_keys: bool) -> Result<Vec<Model>, DbErr>
+pub async fn list_by_ids<C>(db: &C, ids: Vec<ChainId>) -> Result<Vec<Model>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    Entity::find()
+        .order_by_asc(Column::Id)
+        .filter(Column::Id.is_in(ids))
+        .all(db)
+        .await
+}
+
+pub async fn list_by_active_api_keys<C>(
+    db: &C,
+    with_active_api_keys: bool,
+) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait,
 {

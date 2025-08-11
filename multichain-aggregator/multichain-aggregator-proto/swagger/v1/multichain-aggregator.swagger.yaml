@@ -4,6 +4,7 @@ info:
   version: version not set
 tags:
   - name: MultichainAggregatorService
+  - name: ClusterExplorerService
   - name: Health
 consumes:
   - application/json
@@ -18,6 +19,70 @@ paths:
           description: A successful response.
           schema:
             $ref: '#/definitions/v1ListAddressesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/block-numbers:
+    get:
+      operationId: MultichainAggregatorService_ListBlockNumbers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlockNumbersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - MultichainAggregatorService
+  /api/v1/blocks:
+    get:
+      operationId: MultichainAggregatorService_ListBlocks
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlocksResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -61,6 +126,166 @@ paths:
           type: boolean
       tags:
         - MultichainAggregatorService
+  /api/v1/clusters/{cluster_id}/addresses/{address_hash}:
+    get:
+      operationId: ClusterExplorerService_GetAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: address_hash
+          in: path
+          required: true
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/addresses/{address_hash}/tokens:
+    get:
+      operationId: ClusterExplorerService_ListAddressTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListAddressTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: address_hash
+          in: path
+          required: true
+          type: string
+        - name: type
+          in: query
+          required: false
+          type: string
+          enum:
+            - TOKEN_TYPE_UNSPECIFIED
+            - TOKEN_TYPE_ERC_20
+            - TOKEN_TYPE_ERC_721
+            - TOKEN_TYPE_ERC_1155
+            - TOKEN_TYPE_ERC_404
+            - TOKEN_TYPE_ERC_7802
+          default: TOKEN_TYPE_UNSPECIFIED
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/chains:
+    get:
+      operationId: ClusterExplorerService_ListClusterChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListClusterChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/messages:
+    get:
+      operationId: ClusterExplorerService_ListInteropMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListInteropMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: init_chain_id
+          in: query
+          required: false
+          type: string
+        - name: relay_chain_id
+          in: query
+          required: false
+          type: string
+        - name: nonce
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: address
+          description: Address of the sender or receiver.
+          in: query
+          required: false
+          type: string
+        - name: direction
+          description: 'Message direction: "from" or "to". Valid only when address is provided.'
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/messages/count:
+    get:
+      operationId: ClusterExplorerService_CountInteropMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CountInteropMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
   /api/v1/dapps:
     get:
       operationId: MultichainAggregatorService_ListDapps
@@ -165,72 +390,6 @@ paths:
           required: true
           schema:
             $ref: '#/definitions/v1BatchImportRequest'
-      tags:
-        - MultichainAggregatorService
-  /api/v1/interop/messages:
-    get:
-      operationId: MultichainAggregatorService_ListInteropMessages
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1ListInteropMessagesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: init_chain_id
-          in: query
-          required: false
-          type: string
-        - name: relay_chain_id
-          in: query
-          required: false
-          type: string
-        - name: nonce
-          in: query
-          required: false
-          type: string
-          format: int64
-        - name: address
-          description: Address of the sender or receiver.
-          in: query
-          required: false
-          type: string
-        - name: direction
-          description: 'Message direction: "from" or "to". Valid only when address is provided.'
-          in: query
-          required: false
-          type: string
-        - name: page_size
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: page_token
-          in: query
-          required: false
-          type: string
-      tags:
-        - MultichainAggregatorService
-  /api/v1/interop/messages/count:
-    get:
-      operationId: MultichainAggregatorService_CountInteropMessages
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1CountInteropMessagesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: chain_id
-          in: query
-          required: false
-          type: string
       tags:
         - MultichainAggregatorService
   /api/v1/nfts:
@@ -374,6 +533,13 @@ paths:
       tags:
         - Health
 definitions:
+  BatchImportRequestAddressCoinBalanceImport:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      value:
+        type: string
   BatchImportRequestAddressImport:
     type: object
     properties:
@@ -393,6 +559,17 @@ definitions:
         type: boolean
       is_token:
         type: boolean
+  BatchImportRequestAddressTokenBalanceImport:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      token_address_hash:
+        type: string
+      token_id:
+        type: string
+      value:
+        type: string
   BatchImportRequestBlockRangeImport:
     type: object
     properties:
@@ -402,6 +579,14 @@ definitions:
       max_block_number:
         type: string
         format: uint64
+  BatchImportRequestCountersImport:
+    type: object
+    properties:
+      timestamp:
+        type: string
+        format: int64
+      global_counters:
+        $ref: '#/definitions/CountersImportGlobalCounters'
   BatchImportRequestHashImport:
     type: object
     properties:
@@ -416,6 +601,39 @@ definitions:
         $ref: '#/definitions/InteropMessageImportInit'
       relay:
         $ref: '#/definitions/InteropMessageImportRelay'
+  BatchImportRequestTokenImport:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      metadata:
+        $ref: '#/definitions/TokenImportMetadata'
+      price_data:
+        $ref: '#/definitions/TokenImportPriceData'
+      counters:
+        $ref: '#/definitions/TokenImportCounters'
+  CountersImportGlobalCounters:
+    type: object
+    properties:
+      daily_transactions_number:
+        type: string
+        format: uint64
+      total_transactions_number:
+        type: string
+        format: uint64
+      total_addresses_number:
+        type: string
+        format: uint64
+  GetAddressResponseChainInfo:
+    type: object
+    properties:
+      coin_balance:
+        type: string
+      is_contract:
+        type: boolean
+      is_verified:
+        type: boolean
+    description: Chain-specific information.
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -468,15 +686,66 @@ definitions:
         type: string
       failed:
         type: boolean
-  QuickSearchResponseChainBlockNumber:
+  InteropMessageInteropMessageTransfer:
     type: object
     properties:
-      chain_id:
+      token:
+        $ref: '#/definitions/InteropMessageTokenDetails'
+      from:
+        $ref: '#/definitions/v1AddressHash'
+      to:
+        $ref: '#/definitions/v1AddressHash'
+      total:
+        $ref: '#/definitions/InteropMessageTransferTotal'
+  InteropMessageTokenDetails:
+    type: object
+    properties:
+      address_hash:
         type: string
-        format: int64
-      block_number:
+  InteropMessageTransferTotal:
+    type: object
+    properties:
+      value:
         type: string
-        format: uint64
+  ListAddressTokensResponseTokenBalanceInfo:
+    type: object
+    properties:
+      token:
+        $ref: '#/definitions/v1TokenInfo'
+      token_id:
+        type: string
+      value:
+        type: string
+  TokenImportCounters:
+    type: object
+    properties:
+      holders_count:
+        type: string
+      transfers_count:
+        type: string
+  TokenImportMetadata:
+    type: object
+    properties:
+      name:
+        type: string
+      symbol:
+        type: string
+      decimals:
+        type: integer
+        format: int32
+      token_type:
+        $ref: '#/definitions/v1TokenType'
+      icon_url:
+        type: string
+      total_supply:
+        type: string
+  TokenImportPriceData:
+    type: object
+    properties:
+      fiat_value:
+        type: string
+      circulating_market_cap:
+        type: string
   googlerpcStatus:
     type: object
     properties:
@@ -529,6 +798,11 @@ definitions:
         type: boolean
       chain_id:
         type: string
+  v1AddressHash:
+    type: object
+    properties:
+      hash:
+        type: string
   v1BatchImportRequest:
     type: object
     properties:
@@ -554,6 +828,23 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/BatchImportRequestInteropMessageImport'
+      address_coin_balances:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestAddressCoinBalanceImport'
+      address_token_balances:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestAddressTokenBalanceImport'
+      counters:
+        $ref: '#/definitions/BatchImportRequestCountersImport'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestTokenImport'
       api_key:
         type: string
   v1BatchImportResponse:
@@ -572,6 +863,15 @@ definitions:
         type: string
       icon_url:
         type: string
+  v1ChainBlockNumber:
+    type: object
+    properties:
+      chain_id:
+        type: string
+        format: int64
+      block_number:
+        type: string
+        format: uint64
   v1CountInteropMessagesResponse:
     type: object
     properties:
@@ -601,6 +901,20 @@ definitions:
       names_count:
         type: integer
         format: int64
+  v1GetAddressResponse:
+    type: object
+    properties:
+      hash:
+        type: string
+      chain_infos:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/GetAddressResponseChainInfo'
+        description: Map of chain id to chain-specific information.
+      has_tokens:
+        type: boolean
+      has_interop_message_transfers:
+        type: boolean
   v1Hash:
     type: object
     properties:
@@ -624,10 +938,10 @@ definitions:
   v1InteropMessage:
     type: object
     properties:
-      sender_address_hash:
-        type: string
-      target_address_hash:
-        type: string
+      sender:
+        $ref: '#/definitions/v1AddressHash'
+      target:
+        $ref: '#/definitions/v1AddressHash'
       nonce:
         type: string
         format: int64
@@ -643,17 +957,32 @@ definitions:
         type: string
       payload:
         type: string
-      failed:
-        type: boolean
       status:
         $ref: '#/definitions/v1InteropMessageStatus'
+      transfer:
+        $ref: '#/definitions/InteropMessageInteropMessageTransfer'
+      message_type:
+        type: string
+      method:
+        type: string
   v1InteropMessageStatus:
     type: string
     enum:
-      - STATUS_PENDING
-      - STATUS_FAILED
-      - STATUS_SUCCESS
-    default: STATUS_PENDING
+      - PENDING
+      - FAILED
+      - SUCCESS
+      - EXPIRED
+    default: PENDING
+  v1ListAddressTokensResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ListAddressTokensResponseTokenBalanceInfo'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListAddressesResponse:
     type: object
     properties:
@@ -664,7 +993,35 @@ definitions:
           $ref: '#/definitions/v1Address'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
+  v1ListBlockNumbersResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainBlockNumber'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1ListBlocksResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListChainsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Chain'
+  v1ListClusterChainsResponse:
     type: object
     properties:
       items:
@@ -788,7 +1145,7 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/QuickSearchResponseChainBlockNumber'
+          $ref: '#/definitions/v1ChainBlockNumber'
       dapps:
         type: array
         items:
@@ -824,6 +1181,29 @@ definitions:
         type: string
       is_verified_contract:
         type: boolean
+  v1TokenInfo:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      circulating_market_cap:
+        type: string
+      decimals:
+        type: string
+      holders_count:
+        type: string
+      icon_url:
+        type: string
+      name:
+        type: string
+      symbol:
+        type: string
+      total_supply:
+        type: string
+      type:
+        $ref: '#/definitions/v1TokenType'
+      exchange_rate:
+        type: string
   v1TokenType:
     type: string
     enum:
@@ -832,4 +1212,5 @@ definitions:
       - TOKEN_TYPE_ERC_721
       - TOKEN_TYPE_ERC_1155
       - TOKEN_TYPE_ERC_404
+      - TOKEN_TYPE_ERC_7802
     default: TOKEN_TYPE_UNSPECIFIED

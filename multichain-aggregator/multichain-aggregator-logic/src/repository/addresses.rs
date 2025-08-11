@@ -1,19 +1,23 @@
-use crate::types::{addresses::Address, ChainId};
+use crate::types::{
+    ChainId,
+    addresses::{Address, AddressInfo},
+};
 use alloy_primitives::Address as AddressAlloy;
 use entity::{
-    addresses::{ActiveModel, Column, Entity, Model},
+    address_coin_balances,
+    addresses::{Column, Entity, Model},
     sea_orm_active_enums as db_enum,
 };
 use regex::Regex;
 use sea_orm::{
+    ActiveValue::NotSet,
+    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
+    IntoSimpleExpr, Iterable, JoinType, Order, QueryFilter, QuerySelect, QueryTrait,
     prelude::Expr,
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
         WithClause,
     },
-    ActiveValue::NotSet,
-    ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoSimpleExpr,
-    Iterable, Order, QueryFilter, QuerySelect,
 };
 use std::{collections::HashMap, sync::OnceLock};
 
@@ -29,7 +33,7 @@ where
     addresses.sort_by(|a, b| (a.hash, a.chain_id).cmp(&(b.hash, b.chain_id)));
     let addresses = addresses.into_iter().map(|address| {
         let model: Model = address.into();
-        let mut active: ActiveModel = model.into();
+        let mut active = model.into_active_model();
         active.created_at = NotSet;
         active.updated_at = NotSet;
         active
@@ -85,12 +89,12 @@ pub async fn uniform_chain_search<C>(
     db: &C,
     contract_name_query: String,
     token_types: Option<Vec<db_enum::TokenType>>,
-    chain_ids: Vec<ChainId>,
+    limit: u64,
 ) -> Result<Vec<Model>, DbErr>
 where
     C: ConnectionTrait,
 {
-    if chain_ids.is_empty() {
+    if limit == 0 {
         return Ok(vec![]);
     }
 
@@ -118,7 +122,6 @@ where
                     Alias::new("rn"),
                 )
                 .from(addresses_cte_iden.clone())
-                .and_where(Column::ChainId.is_in(chain_ids.clone()))
                 .apply_if(token_types, |q, token_types| {
                     if !token_types.is_empty() {
                         q.and_where(Column::TokenType.is_in(token_types));
@@ -131,18 +134,10 @@ where
         .table_name(ranked_addresses_iden.clone())
         .to_owned();
 
-    let limit = chain_ids.len() as u64;
     let base_select = Query::select()
         .column(ColumnRef::Asterisk)
         .from(ranked_addresses_iden)
         .and_where(Expr::col(Alias::new("rn")).eq(1))
-        .order_by_expr(
-            Expr::cust_with_exprs(
-                "array_position($1, $2)",
-                [chain_ids.into(), Expr::col(Column::ChainId).into()],
-            ),
-            Order::Asc,
-        )
         .limit(limit)
         .to_owned();
 
@@ -274,6 +269,36 @@ where
         )),
         None => Ok((addresses, None)),
     }
+}
+
+pub async fn get_address_info<C>(
+    db: &C,
+    address: AddressAlloy,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+) -> Result<Option<AddressInfo>, DbErr>
+where
+    C: ConnectionTrait,
+{
+    let coin_balances_rel = Entity::belongs_to(address_coin_balances::Entity)
+        .from((Column::Hash, Column::ChainId))
+        .to((
+            address_coin_balances::Column::AddressHash,
+            address_coin_balances::Column::ChainId,
+        ))
+        .into();
+
+    let address_info = Entity::find()
+        .join(JoinType::LeftJoin, coin_balances_rel)
+        .filter(Column::Hash.eq(address.as_slice()))
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(Column::ChainId.is_in(cluster_chain_ids))
+        })
+        .group_by(Column::Hash)
+        .into_partial_model::<AddressInfo>()
+        .one(db)
+        .await?;
+
+    Ok(address_info)
 }
 
 fn parse_db_address(hash: &[u8]) -> AddressAlloy {

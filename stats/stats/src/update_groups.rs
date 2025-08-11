@@ -3,19 +3,7 @@
 //! update of other lighter charts to perform simultaneously
 //! and reuse the heavy query data.
 
-use crate::{construct_update_group, counters::*, lines::*};
-
-macro_rules! singleton_groups {
-    ($($chart: ident),+ $(,)?) => {
-        $(
-            ::paste::paste!(
-                construct_update_group!([< $chart Group >] {
-                    charts: [$chart]
-                });
-            );
-        )+
-    };
-}
+use crate::{construct_update_group, counters::*, lines::*, utils::singleton_groups};
 
 // Mostly counters because they don't have resolutions
 // Group for chart `Name` is called `NameGroup`

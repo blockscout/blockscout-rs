@@ -1,7 +1,9 @@
-use crate::types::{api_keys::ApiKeyError, ChainId};
+use crate::types::{ChainId, api_keys::ApiKeyError};
 use alloy_primitives::hex::FromHexError;
-use sea_orm::{sqlx::types::uuid, DbErr};
-use std::num::ParseIntError;
+use bigdecimal::ParseBigDecimalError;
+use recache::{handler::CacheRequestError, stores::redis::RedisStoreError};
+use sea_orm::{DbErr, sqlx::types::uuid};
+use std::num::{ParseIntError, TryFromIntError};
 use thiserror::Error;
 use tonic::Code;
 
@@ -19,6 +21,10 @@ pub enum ServiceError {
     Db(#[from] DbErr),
     #[error("not found: {0}")]
     NotFound(String),
+    #[error("cache error: {0}")]
+    Cache(#[from] CacheRequestError<RedisStoreError>),
+    #[error("invalid cluster chain id: {0}")]
+    InvalidClusterChainId(ChainId),
 }
 
 #[derive(Error, Debug)]
@@ -31,6 +37,8 @@ pub enum ParseError {
     ParseUuid(#[from] uuid::Error),
     #[error("parse error: invalid slice")]
     TryFromSlice(#[from] core::array::TryFromSliceError),
+    #[error("parse error: invalid integer")]
+    TryFromInt(#[from] TryFromIntError),
     #[error("parse error: invalid url")]
     ParseUrl(#[from] url::ParseError),
     #[error("parse error: invalid json")]
@@ -39,6 +47,10 @@ pub enum ParseError {
     ChainIdMismatch { expected: ChainId, actual: ChainId },
     #[error("parse error: {0}")]
     Custom(String),
+    #[error("parse error: invalid decimal")]
+    ParseBigDecimal(#[from] ParseBigDecimalError),
+    #[error("parse error: invalid decimal")]
+    ParseDecimal(#[from] rust_decimal::Error),
 }
 
 impl From<ServiceError> for tonic::Status {
@@ -48,8 +60,10 @@ impl From<ServiceError> for tonic::Status {
             ServiceError::Convert(_) => Code::InvalidArgument,
             ServiceError::Internal(_) => Code::Internal,
             ServiceError::NotFound(_) => Code::NotFound,
+            ServiceError::InvalidClusterChainId(_) => Code::InvalidArgument,
             ServiceError::Db(_) => Code::Internal,
             ServiceError::ExternalApi(_) => Code::Internal,
+            ServiceError::Cache(_) => Code::Internal,
         };
         tonic::Status::new(code, err.to_string())
     }

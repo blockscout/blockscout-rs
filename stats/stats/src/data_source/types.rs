@@ -11,14 +11,17 @@ use sea_orm::{
 use tokio::sync::Mutex;
 use tracing::warn;
 
-use crate::{counters::TxnsStatsValue, types::new_txns::NewTxnsCombinedPoint, ChartKey};
+use crate::{ChartKey, counters::TxnsStatsValue, types::new_txns::NewTxnsCombinedPoint};
 
 #[derive(Clone)]
 pub struct UpdateParameters<'a> {
-    pub db: &'a DatabaseConnection,
-    /// Blockscout database
-    pub blockscout: &'a DatabaseConnection,
-    pub blockscout_applied_migrations: BlockscoutMigrations,
+    pub stats_db: &'a DatabaseConnection,
+    /// `true` - the connection is to multichain indexer DB;
+    /// `false` - the connection is to usual (per-instance) blockscout DB.
+    pub is_multichain_mode: bool,
+    /// Indexer database (blockscout or multichain)
+    pub indexer_db: &'a DatabaseConnection,
+    pub indexer_applied_migrations: IndexerMigrations,
     /// Charts engaged in the current (group) update.
     /// Includes recursively affected charts.
     pub enabled_update_charts_recursive: HashSet<ChartKey>,
@@ -33,14 +36,16 @@ impl<'a> UpdateParameters<'a> {
     /// Parameter builder for just querying data (if no updates are expected)
     pub fn query_parameters(
         db: &'a DatabaseConnection,
-        blockscout: &'a DatabaseConnection,
-        blockscout_applied_migrations: BlockscoutMigrations,
+        is_multichain_mode: bool,
+        indexer: &'a DatabaseConnection,
+        indexer_applied_migrations: IndexerMigrations,
         query_time_override: Option<chrono::DateTime<Utc>>,
     ) -> Self {
         Self {
-            db,
-            blockscout,
-            blockscout_applied_migrations,
+            stats_db: db,
+            is_multichain_mode,
+            indexer_db: indexer,
+            indexer_applied_migrations,
             update_time_override: query_time_override,
             // not an update, therefore empty.
             // also it's used for reusing queries, but
@@ -55,9 +60,11 @@ impl<'a> UpdateParameters<'a> {
 
 #[derive(Clone)]
 pub struct UpdateContext<'a> {
-    pub db: &'a DatabaseConnection,
-    pub blockscout: &'a DatabaseConnection,
-    pub blockscout_applied_migrations: BlockscoutMigrations,
+    pub stats_db: &'a DatabaseConnection,
+    pub is_multichain_mode: bool,
+    /// Indexer database (blockscout or multichain depending on `is_multichain_mode`)
+    pub indexer_db: &'a DatabaseConnection,
+    pub indexer_applied_migrations: IndexerMigrations,
     pub cache: UpdateCache,
     /// Charts engaged in the current (group) update.
     /// Includes recursively affected charts.
@@ -70,9 +77,10 @@ pub struct UpdateContext<'a> {
 impl<'a> UpdateContext<'a> {
     pub fn from_params_now_or_override(value: UpdateParameters<'a>) -> Self {
         Self {
-            db: value.db,
-            blockscout: value.blockscout,
-            blockscout_applied_migrations: value.blockscout_applied_migrations,
+            stats_db: value.stats_db,
+            is_multichain_mode: value.is_multichain_mode,
+            indexer_db: value.indexer_db,
+            indexer_applied_migrations: value.indexer_applied_migrations,
             cache: UpdateCache::new(),
             enabled_update_charts_recursive: value.enabled_update_charts_recursive,
             time: value.update_time_override.unwrap_or_else(Utc::now),
@@ -83,22 +91,35 @@ impl<'a> UpdateContext<'a> {
 
 /// if a migratoion is active, the corresponding field is `true`.
 #[derive(Clone)]
-pub struct BlockscoutMigrations {
+pub struct IndexerMigrations {
     pub denormalization: bool,
 }
 
-impl BlockscoutMigrations {
-    pub async fn query_from_db(blockscout: &DatabaseConnection) -> Result<Self, DbErr> {
+impl IndexerMigrations {
+    pub async fn query_from_db(
+        is_multichain: bool,
+        indexer: &DatabaseConnection,
+    ) -> Result<Self, DbErr> {
+        if is_multichain {
+            Ok(Self::empty())
+        } else {
+            Self::query_from_blockscout_db(indexer).await
+        }
+    }
+
+    pub async fn query_from_blockscout_db(indexer: &DatabaseConnection) -> Result<Self, DbErr> {
         let mut result = Self::empty();
-        if !Self::migrations_table_exists_and_available(blockscout).await? {
-            warn!("No `migrations_status` table in blockscout DB was found. It's possible in pre v6.0.0 blockscout, but otherwise is a bug. \
+        if !Self::blockscout_migrations_table_exists_and_available(indexer).await? {
+            warn!(
+                "No `migrations_status` table in blockscout DB was found. It's possible in pre v6.0.0 blockscout, but otherwise is a bug. \
                 Check permissions if the table actually exists. The service should work fine, but some optimizations won't be applied and \
-                support for older versions is likely to be dropped in the future.");
+                support for older versions is likely to be dropped in the future."
+            );
             return Ok(Self::empty());
         }
         let migrations = migrations_status::Entity::find()
             .order_by_asc(migrations_status::Column::UpdatedAt)
-            .all(blockscout)
+            .all(indexer)
             .await?;
         for migrations_status::Model {
             migration_name,
@@ -123,7 +144,7 @@ impl BlockscoutMigrations {
         Ok(result)
     }
 
-    async fn migrations_table_exists_and_available(
+    async fn blockscout_migrations_table_exists_and_available(
         blockscout: &DatabaseConnection,
     ) -> Result<bool, DbErr> {
         #[derive(FromQueryResult, Debug)]
@@ -158,14 +179,14 @@ impl BlockscoutMigrations {
     }
 
     pub const fn empty() -> Self {
-        BlockscoutMigrations {
+        IndexerMigrations {
             denormalization: false,
         }
     }
 
     /// All known migrations are applied
     pub const fn latest() -> Self {
-        BlockscoutMigrations {
+        IndexerMigrations {
             denormalization: true,
         }
     }

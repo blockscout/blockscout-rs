@@ -1,14 +1,17 @@
+#![allow(dead_code)]
 mod helpers;
 mod test_db;
 
 use alloy_primitives::Address;
 use blockscout_service_launcher::{database, test_server};
+use multichain_aggregator_logic::types::api_keys::ApiKey;
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1 as proto;
 use reqwest::StatusCode;
+use sea_orm::prelude::Uuid;
 use serde_json::json;
 use wiremock::{
-    matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
 };
 
 #[tokio::test]
@@ -16,12 +19,26 @@ use wiremock::{
 async fn test_quick_search() {
     let db = database!(test_db::TestMigrator);
 
+    let chains = helpers::create_test_chains(&db, 5).await;
+    helpers::upsert_api_keys(
+        &db,
+        chains
+            .iter()
+            .map(|c| ApiKey {
+                key: Uuid::new_v4(),
+                chain_id: c.id,
+            })
+            .collect(),
+    )
+    .await
+    .unwrap();
+
     let quick_search_chains = vec![5, 3, 2, 1];
 
     let token_info_server = mock_token_info_server().await;
     let dapp_server = mock_dapp_server().await;
     let bens_server = mock_bens_server().await;
-    let base = helpers::init_multichain_aggregator_server(db.db_url(), |mut x| {
+    let base = helpers::init_server_with_setup(db.db_url(), |mut x| {
         x.service.dapp_client.url = dapp_server.uri().parse().unwrap();
         x.service.token_info_client.url = token_info_server.uri().parse().unwrap();
         x.service.bens_client.url = bens_server.uri().parse().unwrap();
@@ -33,17 +50,10 @@ async fn test_quick_search() {
     let response: proto::QuickSearchResponse =
         test_server::send_get_request(&base, "/api/v1/search:quick?q=test").await;
 
-    assert_eq!(
-        response
-            .addresses
-            .into_iter()
-            .map(|a| a.chain_id.parse::<i64>().unwrap())
-            .collect::<Vec<_>>(),
-        quick_search_chains
-    );
-    assert_eq!(response.tokens.len(), 1);
+    assert_eq!(response.addresses.len(), 0);
+    assert_eq!(response.tokens.len(), 2);
     assert!(response.tokens[0].is_verified_contract);
-    assert_eq!(response.dapps.len(), 1);
+    assert_eq!(response.dapps.len(), 0);
     assert_eq!(response.domains.len(), 1);
 
     let response: proto::QuickSearchResponse =
@@ -170,6 +180,14 @@ async fn mock_bens_server() -> MockServer {
                 "other_addresses": {},
                 "stored_offchain": false,
                 "resolved_with_wildcard": false,
+                "protocol": {
+                    "id": "ens",
+                    "short_name": "ENS",
+                    "title": "Ethereum Name Service",
+                    "description": "",
+                    "deployment_blockscout_base_url": "",
+                    "tld_list": ["eth"],
+                }
             },
             "resolved_domains_count": 1
         })))

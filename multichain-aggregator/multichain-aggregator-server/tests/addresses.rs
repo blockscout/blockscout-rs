@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod helpers;
 mod test_db;
 
@@ -11,7 +12,7 @@ use sea_orm::prelude::Uuid;
 async fn test_list_addresses() {
     let db = database!(test_db::TestMigrator);
 
-    let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
+    let base = helpers::init_server(db.db_url()).await;
 
     helpers::upsert_api_keys(
         db.client().as_ref(),
@@ -32,10 +33,7 @@ async fn test_list_addresses() {
     let page_token = response.next_page_params.unwrap().page_token;
     let response: proto::ListAddressesResponse = test_server::send_get_request(
         &base,
-        &format!(
-            "/api/v1/addresses?q=test&chain_id=1&page_size=50&page_token={}",
-            page_token
-        ),
+        &format!("/api/v1/addresses?q=test&chain_id=1&page_size=50&page_token={page_token}"),
     )
     .await;
 
@@ -48,7 +46,7 @@ async fn test_list_addresses() {
 async fn test_list_nfts() {
     let db = database!(test_db::TestMigrator);
 
-    let base = helpers::init_multichain_aggregator_server(db.db_url(), |x| x).await;
+    let base = helpers::init_server(db.db_url()).await;
 
     helpers::upsert_api_keys(
         db.client().as_ref(),
@@ -76,10 +74,7 @@ async fn test_list_nfts() {
     let page_token = response.next_page_params.unwrap().page_token;
     let response: proto::ListNftsResponse = test_server::send_get_request(
         &base,
-        &format!(
-            "/api/v1/nfts?q=test&chain_id=1&page_size=20&page_token={}",
-            page_token
-        ),
+        &format!("/api/v1/nfts?q=test&chain_id=1&page_size=20&page_token={page_token}"),
     )
     .await;
 

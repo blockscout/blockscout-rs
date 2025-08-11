@@ -8,18 +8,19 @@ use tokio::sync::Mutex;
 
 use sea_orm::DatabaseConnection;
 
+use super::{client::Client, job::EigenDAJob, settings::IndexerSettings};
 use crate::{
     common::{eth_provider::EthProvider, types::gap::Gap},
     eigenda::repository::{batches, blobs},
     indexer::{Job, DA},
+    s3_storage::S3Storage,
 };
-
-use super::{client::Client, job::EigenDAJob, settings::IndexerSettings};
 
 pub struct EigenDA {
     settings: IndexerSettings,
 
     db: Arc<DatabaseConnection>,
+    s3_storage: Option<S3Storage>,
     client: Client,
     provider: EthProvider,
 
@@ -28,9 +29,18 @@ pub struct EigenDA {
 }
 
 impl EigenDA {
-    pub async fn new(db: Arc<DatabaseConnection>, settings: IndexerSettings) -> Result<Self> {
+    pub async fn new(
+        db: Arc<DatabaseConnection>,
+        s3_storage: Option<S3Storage>,
+        settings: IndexerSettings,
+    ) -> Result<Self> {
         let provider = EthProvider::new(&settings.rpc.url).await?;
-        let client = Client::new(&settings.disperser_url, vec![5, 15, 30]).await?;
+        let client = Client::new(
+            &settings.disperser_url,
+            settings.disperser_max_decoding_message_size,
+            vec![5, 15, 30],
+        )
+        .await?;
         let start_from = settings
             .start_block
             .unwrap_or(provider.get_block_number().await?);
@@ -39,6 +49,7 @@ impl EigenDA {
         Ok(Self {
             settings,
             db,
+            s3_storage,
             client,
             provider,
             last_known_block: AtomicU64::new(start_from.saturating_sub(1)),
@@ -92,6 +103,7 @@ impl DA for EigenDA {
             if blobs.len() == self.settings.save_batch_size as usize {
                 blobs::upsert_many(
                     self.db.as_ref(),
+                    self.s3_storage.as_ref(),
                     blob_index as i32 - blobs.len() as i32,
                     &job.batch_header_hash,
                     blobs,
@@ -104,6 +116,7 @@ impl DA for EigenDA {
         if !blobs.is_empty() {
             blobs::upsert_many(
                 self.db.as_ref(),
+                self.s3_storage.as_ref(),
                 blob_index as i32 - blobs.len() as i32,
                 &job.batch_header_hash,
                 blobs,

@@ -1,29 +1,33 @@
-use super::{interop_message_transfers, paginate_cursor};
+use super::{interop_message_transfers, macros::update_if_not_null, paginate_cursor};
 use crate::types::{
+    ChainId,
     interop_message_transfers::InteropMessageTransfer,
     interop_messages::{InteropMessage, MessageDirection},
-    ChainId,
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
-use entity::interop_messages::{ActiveModel, Column, Entity, Model};
+use entity::{
+    interop_messages::{ActiveModel, Column, Entity, Model},
+    interop_messages_transfers,
+};
 use sea_orm::{
-    prelude::{DateTime, Expr},
-    sea_query::OnConflict,
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, PaginatorTrait, QueryFilter,
     QueryTrait, TransactionError, TransactionTrait,
+    prelude::{DateTime, Expr},
+    sea_query::OnConflict,
 };
+use std::collections::HashMap;
 
 pub async fn upsert_many_with_transfers<C>(
     db: &C,
     mut interop_messages: Vec<(InteropMessage, Option<InteropMessageTransfer>)>,
-) -> Result<(), DbErr>
+) -> Result<Vec<(Model, Option<interop_messages_transfers::Model>)>, DbErr>
 where
     C: ConnectionTrait + TransactionTrait,
 {
     // Return early because we don't use `.do_nothing()` for messages batch insert
     // to avoid pattern matching on `TryInsertResult`
     if interop_messages.is_empty() {
-        return Ok(());
+        return Ok(vec![]);
     }
 
     interop_messages
@@ -34,24 +38,9 @@ where
         .map(|(m, t)| (ActiveModel::from(m), t))
         .unzip();
 
-    macro_rules! update_if_not_null {
-        ($column:expr) => {
-            (
-                $column,
-                Expr::cust_with_exprs(
-                    "COALESCE($1, $2)",
-                    [
-                        Expr::cust(format!("EXCLUDED.{}", $column.as_str())),
-                        $column.into_expr().into(),
-                    ],
-                ),
-            )
-        };
-    }
-
     db.transaction(|tx| {
         Box::pin(async move {
-            let message_ids = Entity::insert_many(interop_messages)
+            let messages = Entity::insert_many(interop_messages)
                 .on_conflict(
                     OnConflict::columns([Column::Nonce, Column::InitChainId])
                         .values([
@@ -67,28 +56,37 @@ where
                         .value(Column::UpdatedAt, Expr::current_timestamp())
                         .to_owned(),
                 )
-                .exec_with_returning_keys(tx)
+                .exec_with_returning_many(tx)
                 .await?;
 
             // Set interop_message_id for each corresponding transfer after all messages are inserted
-            let transfers = message_ids
-                .into_iter()
+            let transfers = messages
+                .iter()
                 .zip(transfers)
-                .filter_map(|(id, transfer)| transfer.map(|t| (t, id)))
+                .filter_map(|(m, t)| t.map(|t| (t, m.id)))
                 .collect();
 
-            interop_message_transfers::upsert_many(tx, transfers).await?;
+            let transfers = interop_message_transfers::upsert_many(tx, transfers).await?;
 
-            Ok(())
+            let mut id_to_transfer = transfers
+                .into_iter()
+                .map(|t| (t.interop_message_id, t))
+                .collect::<HashMap<_, _>>();
+
+            Ok(messages
+                .into_iter()
+                .map(|m| {
+                    let t = id_to_transfer.remove(&m.id);
+                    (m, t)
+                })
+                .collect())
         })
     })
     .await
     .map_err(|err| match err {
         TransactionError::Connection(e) => e,
         TransactionError::Transaction(e) => e,
-    })?;
-
-    Ok(())
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -99,14 +97,28 @@ pub async fn list<C>(
     address: Option<AddressAlloy>,
     direction: Option<MessageDirection>,
     nonce: Option<i64>,
+    cluster_chain_ids: Option<Vec<ChainId>>,
     page_size: u64,
     page_token: Option<(DateTime, TxHash)>,
-) -> Result<(Vec<Model>, Option<(DateTime, TxHash)>), DbErr>
+) -> Result<
+    (
+        Vec<(Model, Option<interop_messages_transfers::Model>)>,
+        Option<(DateTime, TxHash)>,
+    ),
+    DbErr,
+>
 where
     C: ConnectionTrait,
 {
     let mut c = Entity::find()
         .filter(Column::InitTransactionHash.is_not_null())
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(
+                Column::InitChainId
+                    .is_in(cluster_chain_ids.clone())
+                    .and(Column::RelayChainId.is_in(cluster_chain_ids)),
+            )
+        })
         .apply_if(init_chain_id, |q, init_chain_id| {
             q.filter(Column::InitChainId.eq(init_chain_id))
         })
@@ -124,12 +136,13 @@ where
             }
         })
         .apply_if(nonce, |q, nonce| q.filter(Column::Nonce.eq(nonce)))
+        .find_also_related(interop_messages_transfers::Entity)
         .cursor_by((Column::Timestamp, Column::InitTransactionHash));
     c.desc();
 
     let page_token = page_token.map(|(t, h)| (t, h.to_vec()));
 
-    paginate_cursor(db, c, page_size, page_token, |u| {
+    paginate_cursor(db, c, page_size, page_token, |(u, _)| {
         let init_transaction_hash = u
             .init_transaction_hash
             .as_ref()
@@ -143,12 +156,23 @@ where
     .await
 }
 
-pub async fn count<C>(db: &C, chain_id: ChainId) -> Result<u64, DbErr>
+pub async fn count<C>(
+    db: &C,
+    chain_id: ChainId,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+) -> Result<u64, DbErr>
 where
     C: ConnectionTrait,
 {
     Entity::find()
         .filter(Column::InitTransactionHash.is_not_null())
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(
+                Column::InitChainId
+                    .is_in(cluster_chain_ids.clone())
+                    .and(Column::RelayChainId.is_in(cluster_chain_ids)),
+            )
+        })
         .filter(
             Column::InitChainId
                 .eq(chain_id)

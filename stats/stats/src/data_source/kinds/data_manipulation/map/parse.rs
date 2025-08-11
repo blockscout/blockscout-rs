@@ -1,7 +1,7 @@
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use crate::{
-    data_source::kinds::data_manipulation::map::MapFunction, types::TimespanValue, ChartError,
+    ChartError, data_source::kinds::data_manipulation::map::MapFunction, types::TimespanValue,
 };
 
 use super::Map;

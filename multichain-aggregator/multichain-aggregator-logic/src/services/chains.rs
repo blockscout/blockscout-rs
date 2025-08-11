@@ -2,12 +2,12 @@ use crate::{
     clients::{dapp, token_info},
     error::ServiceError,
     repository,
-    types::{chains::Chain, ChainId},
+    types::{ChainId, chains::Chain},
 };
 use api_client_framework::HttpApiClient;
 use blockscout_chains::BlockscoutChainsClient;
 use cached::proc_macro::{cached, once};
-use futures::{stream, StreamExt};
+use futures::{StreamExt, stream};
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use std::{
@@ -16,7 +16,7 @@ use std::{
 };
 use tokio::{
     sync::RwLock,
-    time::{interval, Duration, Instant},
+    time::{Duration, Instant, interval},
 };
 use url::Url;
 
@@ -30,7 +30,7 @@ pub async fn list_repo_chains_cached(
     db: &DatabaseConnection,
     with_active_api_keys: bool,
 ) -> Result<Vec<Chain>, ServiceError> {
-    let chains = repository::chains::list_chains(db, with_active_api_keys)
+    let chains = repository::chains::list_by_active_api_keys(db, with_active_api_keys)
         .await?
         .into_iter()
         .map(|c| c.into())
@@ -138,82 +138,102 @@ pub async fn fetch_and_upsert_blockscout_chains(
     Ok(())
 }
 
-pub type MarketplaceEnabledCache = Arc<RwLock<HashMap<ChainId, bool>>>;
+#[derive(Clone, Default)]
+pub struct MarketplaceEnabledCache(Arc<RwLock<HashMap<ChainId, bool>>>);
 
-pub fn start_marketplace_enabled_cache_updater(
-    db: DatabaseConnection,
-    dapp_client: HttpApiClient,
-    cache: MarketplaceEnabledCache,
-    update_interval: Duration,
-    concurrency: usize,
-) {
-    let mut interval = interval(update_interval);
+impl MarketplaceEnabledCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    tokio::spawn(async move {
-        loop {
-            interval.tick().await;
-            let now = Instant::now();
-            if let Err(err) =
-                update_marketplace_enabled_cache(&db, &dapp_client, &cache, concurrency).await
-            {
-                tracing::error!(err = ?err, "failed to update marketplace enabled cache");
-            }
-            let elapsed = now.elapsed();
-            tracing::info!(
-                elapsed_secs = elapsed.as_secs_f32(),
-                "marketplace enabled cache updated"
-            );
-        }
-    });
-}
+    pub fn start_updater(
+        self,
+        db: DatabaseConnection,
+        dapp_client: HttpApiClient,
+        update_interval: Duration,
+        concurrency: usize,
+    ) {
+        let mut interval = interval(update_interval);
 
-async fn update_marketplace_enabled_cache(
-    db: &DatabaseConnection,
-    dapp_client: &HttpApiClient,
-    cache: &MarketplaceEnabledCache,
-    concurrency: usize,
-) -> Result<(), ServiceError> {
-    // Get chains that have at least one active dapp
-    let chains = list_active_chains_cached(db, &[ChainSource::Dapp { dapp_client }]).await?;
-
-    let res = chains.into_iter().map(|c| async move {
-        let explorer_url = c.explorer_url?;
-        let url = Url::parse(&explorer_url)
-            .inspect_err(|err| {
-                tracing::warn!(
-                    explorer_url = explorer_url,
-                    chain_id = c.id,
-                    err = ?err,
-                    "failed to parse explorer url",
-                )
-            })
-            .ok()?;
-        fetch_marketplace_enabled(&url)
-            .await
-            .inspect_err(|err| {
-                tracing::warn!(
-                    explorer_url = explorer_url,
-                    chain_id = c.id,
-                    err = ?err,
-                    "failed to fetch chain marketplace info",
+        tokio::spawn(async move {
+            loop {
+                interval.tick().await;
+                let now = Instant::now();
+                if let Err(err) = self.update(&db, &dapp_client, concurrency).await {
+                    tracing::error!(err = ?err, "failed to update marketplace enabled cache");
+                }
+                let elapsed = now.elapsed();
+                tracing::info!(
+                    elapsed_secs = elapsed.as_secs_f32(),
+                    "marketplace enabled cache updated"
                 );
+            }
+        });
+    }
+
+    async fn update(
+        &self,
+        db: &DatabaseConnection,
+        dapp_client: &HttpApiClient,
+        concurrency: usize,
+    ) -> Result<(), ServiceError> {
+        // Get chains that have at least one active dapp
+        let chains = list_active_chains_cached(db, &[ChainSource::Dapp { dapp_client }]).await?;
+
+        let res = chains.into_iter().map(|c| async move {
+            let explorer_url = c.explorer_url?;
+            let url = Url::parse(&explorer_url)
+                .inspect_err(|err| {
+                    tracing::warn!(
+                        explorer_url = explorer_url,
+                        chain_id = c.id,
+                        err = ?err,
+                        "failed to parse explorer url",
+                    )
+                })
+                .ok()?;
+            fetch_marketplace_enabled(&url)
+                .await
+                .inspect_err(|err| {
+                    tracing::warn!(
+                        explorer_url = explorer_url,
+                        chain_id = c.id,
+                        err = ?err,
+                        "failed to fetch chain marketplace info",
+                    );
+                })
+                .ok()
+                .map(|is_enabled| (c.id, is_enabled))
+        });
+
+        // Limit the number of concurrent requests to prevent congestion
+        let new_cache = stream::iter(res)
+            .buffer_unordered(concurrency)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .flatten()
+            .collect::<HashMap<_, _>>();
+
+        *self.0.write().await = new_cache;
+
+        Ok(())
+    }
+
+    pub async fn filter_marketplace_enabled_chains<T>(
+        &self,
+        items: impl IntoIterator<Item = T>,
+        get_chain_id: impl Fn(&T) -> ChainId,
+    ) -> Vec<T> {
+        let cache = self.0.read().await;
+        items
+            .into_iter()
+            .filter_map(|c| {
+                let is_enabled = *cache.get(&get_chain_id(&c)).unwrap_or(&false);
+                if is_enabled { Some(c) } else { None }
             })
-            .ok()
-            .map(|is_enabled| (c.id, is_enabled))
-    });
-
-    // Limit the number of concurrent requests to prevent congestion
-    let new_cache = stream::iter(res)
-        .buffer_unordered(concurrency)
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<HashMap<_, _>>();
-
-    *cache.write().await = new_cache;
-
-    Ok(())
+            .collect::<Vec<_>>()
+    }
 }
 
 async fn fetch_marketplace_enabled(explorer_url: &Url) -> Result<bool, ServiceError> {

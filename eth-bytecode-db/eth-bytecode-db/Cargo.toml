@@ -31,6 +31,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 smart-contract-verifier-proto = { workspace = true, features = ["http-client"] }
 solidity-metadata = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
@@ -43,7 +44,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"], optional = t
 
 [dev-dependencies]
 async-trait = { workspace = true }
-blockscout-service-launcher = { workspace = true, features = [ "test-database" ] }
+blockscout-service-launcher = { workspace = true, features = ["test-database"] }
 migration = { workspace = true }
 pretty_assertions = { workspace = true }
 rstest = { workspace = true }
@@ -57,7 +58,7 @@ url = { workspace = true }
 test-utils = [
     "dep:tokio",
     "dep:tracing-subscriber",
-    "tokio-rt"
+    "tokio-rt",
 ]
 tokio-rt = ["tokio/rt-multi-thread"]
 

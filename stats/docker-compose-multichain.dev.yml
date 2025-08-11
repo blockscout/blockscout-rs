@@ -1,0 +1,138 @@
+services:
+  db-init:
+    image: postgres:17
+    volumes:
+      - ./data/multichain/indexer-db:/var/lib/postgresql/data:z
+    entrypoint:
+      - sh
+      - -c
+      - |
+        chown -R 2000:2000 /var/lib/postgresql/data
+
+  db-populate:
+    depends_on:
+      db:
+        condition: service_healthy
+    image: postgres:17
+    # pg_dump -h localhost -p 5432 -U postgres multichain_aggregator -t interop_messages -t block_ranges > multichain_db.sql
+    # + added drop tables so that it doesn't complain
+    volumes:
+      - ./data/multichain/indexer_data.sql:/data.sql
+    entrypoint:
+      - sh
+      - -c
+      - |
+        PGPASSWORD=ceWb1MeLBEeOIfk65gU8EjF8 psql -X -h db -U multichain_aggregator -d multichain_aggregator < /data.sql
+
+  db:
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    image: postgres:17
+    user: 2000:2000
+    shm_size: 256m
+    restart: always
+    container_name: 'db'
+    command: postgres -c 'max_connections=200' -c 'client_connection_check_interval=60000'
+    environment:
+      POSTGRES_DB: 'multichain_aggregator'
+      POSTGRES_USER: 'multichain_aggregator'
+      POSTGRES_PASSWORD: 'ceWb1MeLBEeOIfk65gU8EjF8'
+    ports:
+      - target: 5432
+        published: 7432
+    volumes:
+      - ./data/multichain/indexer-db:/var/lib/postgresql/data:z
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U multichain_aggregator -d multichain_aggregator" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # TODO: change to multichain service ?
+  # backend:
+  #   depends_on:
+  #     - db
+  #   image: blockscout/blockscout:6.8.0
+  #   links:
+  #     - db:database
+  #   environment:
+  #     DATABASE_URL: postgresql://blockscout:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/blockscout
+  #     ETHEREUM_JSONRPC_VARIANT: erigon
+  #     # set to some working ethereum node
+  #     ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:8545/
+  #     ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:8545/
+  #     # preferrably set to some relatively recent block (e.g. few days before running)
+  #     # for quicker start and less disk usage
+  #     FIRST_BLOCK: 6153000
+  #     ECTO_USE_SSL: false
+  #     PORT: 4000
+  #   ports:
+  #     - 80:4000
+  #   command: [ "/bin/sh", "-c", "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start" ]
+
+  stats-db-init:
+    image: postgres:17
+    volumes:
+      - ./data/multichain/stats-db:/var/lib/postgresql/data
+    entrypoint:
+      - sh
+      - -c
+      - |
+        chown -R 2000:2000 /var/lib/postgresql/data
+
+  stats-db:
+    depends_on:
+      stats-db-init:
+        condition: service_completed_successfully
+    image: postgres:17
+    user: 2000:2000
+    shm_size: 256m
+    restart: always
+    container_name: 'stats-db'
+    command: postgres -c 'max_connections=200'
+    environment:
+      POSTGRES_DB: 'stats'
+      POSTGRES_USER: 'stats'
+      POSTGRES_PASSWORD: 'n0uejXPl61ci6ldCuE2gQU5Y'
+    ports:
+      - target: 5432
+        published: 7433
+    volumes:
+      - ./data/multichain/stats-db:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U stats -d stats" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  stats:
+    depends_on:
+      stats-db:
+        condition: service_healthy
+      db-populate:
+        condition: service_completed_successfully
+    build:
+      context: .
+      additional_contexts:
+        - proto=../proto
+      tags:
+        - stats:local-build
+    pull_policy: always
+    platform: linux/amd64
+    restart: always
+    container_name: 'stats'
+    environment:
+      - STATS__MULTICHAIN_MODE=true
+      - STATS__DB_URL=postgres://stats:n0uejXPl61ci6ldCuE2gQU5Y@stats-db:5432/stats
+      - STATS__INDEXER_DB_URL=${STATS__BLOCKSCOUT_DB_URL:-postgresql://multichain_aggregator:ceWb1MeLBEeOIfk65gU8EjF8@db:5432/multichain_aggregator}
+      - STATS__CREATE_DATABASE=true
+      - STATS__RUN_MIGRATIONS=true
+      - STATS__SERVER__HTTP__ENABLED=true
+      - STATS__SERVER__HTTP__ADDR=0.0.0.0:8050
+      - STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152
+      - RUST_BACKTRACE=1
+    ports:
+      - 8080:8050

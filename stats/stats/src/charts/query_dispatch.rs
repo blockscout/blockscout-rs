@@ -5,20 +5,20 @@ use entity::sea_orm_active_enums::ChartType;
 use stats_proto::blockscout::stats::v1::Point;
 
 use crate::{
-    data_source::{
-        kinds::local_db::{
-            parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour},
-            LocalDbChartSource,
-        },
-        DataSource, UpdateContext,
-    },
-    range::{exclusive_range_to_inclusive, UniversalRange},
     RequestedPointsLimit,
+    data_source::{
+        DataSource, UpdateContext,
+        kinds::local_db::{
+            LocalDbChartSource,
+            parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour},
+        },
+    },
+    range::{UniversalRange, exclusive_range_to_inclusive},
 };
 
 use super::{
-    types::{ExtendedTimespanValue, Timespan, TimespanValue},
     ChartError, ChartProperties,
+    types::{ExtendedTimespanValue, Timespan, TimespanValue},
 };
 
 /// Data query trait with unified data format (for external use)

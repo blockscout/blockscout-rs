@@ -207,7 +207,7 @@ impl TestCase {
             .one(database_connection)
             .await
             .expect("error while retrieving code value")
-            .unwrap_or_else(|| panic!("code hash does not exist in the database: {:?}", code_hash));
+            .unwrap_or_else(|| panic!("code hash does not exist in the database: {code_hash:?}"));
 
         let expected_code_hash_keccak = Keccak256::digest(&code).to_vec();
         assert_eq!(

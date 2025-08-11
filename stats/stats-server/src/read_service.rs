@@ -1,6 +1,7 @@
 use std::{clone::Clone, collections::BTreeMap, fmt::Debug, str::FromStr, sync::Arc};
 
 use crate::{
+    UpdateService,
     auth::AuthorizationProvider,
     config::{
         layout::placed_items_according_to_layout,
@@ -9,15 +10,15 @@ use crate::{
     runtime_setup::{EnabledChartEntry, RuntimeSetup},
     settings::LimitsSettings,
     update_service::OnDemandReupdateError,
-    UpdateService,
 };
 
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
-use futures::{stream::FuturesOrdered, StreamExt};
+use futures::{StreamExt, stream::FuturesOrdered};
 use proto_v1::stats_service_server::StatsService;
 use sea_orm::{DatabaseConnection, DbErr};
 use stats::{
+    ChartError, ChartKey, Named, RequestedPointsLimit, ResolutionKind,
     counters::{
         ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
         ArbitrumYesterdayOperationalTxns, AverageBlockTime, AverageTxnFee24h, NewContracts24h,
@@ -26,16 +27,15 @@ use stats::{
         TotalAddresses, TotalBlocks, TotalContracts, TotalTxns, TotalVerifiedContracts, TxnsFee24h,
         YesterdayTxns,
     },
-    data_source::{types::BlockscoutMigrations, UpdateContext, UpdateParameters},
+    data_source::{UpdateContext, UpdateParameters, types::IndexerMigrations},
     lines::{
-        ArbitrumNewOperationalTxnsWindow, NewTxnsWindow, OpStackNewOperationalTxnsWindow,
-        NEW_TXNS_WINDOW_RANGE,
+        ArbitrumNewOperationalTxnsWindow, NEW_TXNS_WINDOW_RANGE, NewTxnsWindow,
+        OpStackNewOperationalTxnsWindow,
     },
     query_dispatch::{CounterHandle, LineHandle, QuerySerializedDyn},
     range::UniversalRange,
     types::{Timespan, TimespanDuration},
     utils::day_start,
-    ChartError, ChartKey, Named, RequestedPointsLimit, ResolutionKind,
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use tokio::join;
@@ -44,7 +44,8 @@ use tonic::{Request, Response, Status};
 #[derive(Clone)]
 pub struct ReadService {
     db: Arc<DatabaseConnection>,
-    blockscout: Arc<DatabaseConnection>,
+    indexer: Arc<DatabaseConnection>,
+    multichain_mode: bool,
     charts: Arc<RuntimeSetup>,
     authorization: Arc<AuthorizationProvider>,
     update_service: Arc<UpdateService>,
@@ -54,7 +55,8 @@ pub struct ReadService {
 impl ReadService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
-        blockscout: Arc<DatabaseConnection>,
+        indexer: Arc<DatabaseConnection>,
+        multichain_mode: bool,
         charts: Arc<RuntimeSetup>,
         update_service: Arc<UpdateService>,
         authorization: Arc<AuthorizationProvider>,
@@ -62,7 +64,8 @@ impl ReadService {
     ) -> Result<Self, DbErr> {
         Ok(Self {
             db,
-            blockscout,
+            indexer,
+            multichain_mode,
             charts,
             update_service,
             authorization,
@@ -235,13 +238,14 @@ impl ReadService {
         points_limit: Option<RequestedPointsLimit>,
         query_time: DateTime<Utc>,
     ) -> Result<Data, ChartError> {
-        let migrations = BlockscoutMigrations::query_from_db(&self.blockscout)
+        let migrations = IndexerMigrations::query_from_db(self.multichain_mode, &self.indexer)
             .await
-            .map_err(ChartError::BlockscoutDB)?;
+            .map_err(ChartError::IndexerDB)?;
         let context =
             UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
                 &self.db,
-                &self.blockscout,
+                false,
+                &self.indexer,
                 migrations,
                 Some(query_time),
             ));
@@ -329,9 +333,10 @@ impl ReadService {
         points_limit: Option<RequestedPointsLimit>,
         query_time: DateTime<Utc>,
     ) -> Result<proto_v1::LineChart, Status> {
-        let chart_entry = self.charts.charts_info.get(&name).ok_or_else(|| {
-            Status::not_found(format!("chart with name '{}' was not found", name))
-        })?;
+        let chart_entry =
+            self.charts.charts_info.get(&name).ok_or_else(|| {
+                Status::not_found(format!("chart with name '{name}' was not found"))
+            })?;
         let query_handle =
             get_line_chart_query_handle(chart_entry, resolution).ok_or_else(|| {
                 Status::not_found(format!(
@@ -631,15 +636,14 @@ impl StatsService for ReadService {
             .from
             .map(|s| NaiveDate::from_str(&s))
             .transpose()
-            .map_err(|e| Status::invalid_argument(format!("`from` should be a valid date: {}", e)))?
+            .map_err(|e| Status::invalid_argument(format!("`from` should be a valid date: {e}")))?
             .map(|update_from| {
                 let current_date = Utc::now().date_naive();
                 if update_from <= current_date {
                     Ok(update_from)
                 } else {
                     Err(Status::invalid_argument(format!(
-                        "`from` should not be from a future; current date: {}",
-                        current_date
+                        "`from` should not be from a future; current date: {current_date}"
                     )))
                 }
             })

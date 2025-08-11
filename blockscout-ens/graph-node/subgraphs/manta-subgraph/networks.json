@@ -1,0 +1,38 @@
+{
+  "manta-mainnet": {
+    "Registry": {
+      "address": "0x5dc881dda4e4a8d312be3544ad13118d1a04cb17",
+      "startBlock": 884843
+    },
+    "Resolver": {
+      "startBlock": 884843
+    },
+    "RegistrarController": {
+      "address": "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7",
+      "startBlock": 884843
+    },
+    "Base": {
+      "address": "0xc492a2565f95dd20c304150b229a6cd21dddd629",
+      "startBlock": 884843
+    },
+    "": ""
+  },
+  "manta-faucet": {
+    "Registry": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Resolver": {
+      "startBlock": 0
+    },
+    "RegistrarController": {
+      "address": "",
+      "startBlock": 0
+    },
+    "Base": {
+      "address": "",
+      "startBlock": 0
+    },
+    "": ""
+  }
+}

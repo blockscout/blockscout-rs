@@ -8,8 +8,8 @@ use blockscout_service_launcher::{
 use reqwest::{RequestBuilder, Response};
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use stats_server::{
-    auth::{ApiKey, API_KEY_NAME},
     Settings,
+    auth::{API_KEY_NAME, ApiKey},
 };
 use tokio::{
     task::JoinSet,
@@ -112,11 +112,12 @@ pub fn get_test_stats_settings(
     settings.layout_config = PathBuf::from_str("../config/layout.json").unwrap();
     settings.update_groups_config = PathBuf::from_str("../config/update_groups.json").unwrap();
     settings.db_url = stats_db.db_url();
-    settings.blockscout_db_url = blockscout_db.db_url();
+    settings.indexer_db_url = Some(blockscout_db.db_url());
     settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());
     settings.enable_all_arbitrum = true;
     settings.enable_all_op_stack = true;
     settings.enable_all_eip_7702 = true;
+    settings.multichain_mode = false;
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;
     // initialized separately to prevent errors (with `try_init`)
@@ -203,9 +204,9 @@ pub async fn run_consolidated_tests(mut tests: JoinSet<()>, log_prefix: &str) {
     let passed = total - failed;
     let msg = format!("[{log_prefix}]: {passed}/{total} consolidated tests passed");
     if failed > 0 {
-        panic!("{}", msg)
+        panic!("{msg}")
     } else {
-        println!("{}", msg)
+        println!("{msg}")
     }
 }
 

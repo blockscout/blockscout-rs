@@ -6,7 +6,7 @@
 
 use std::fmt::Display;
 
-use crate::{types::Timespan, ReadError};
+use crate::{ReadError, types::Timespan};
 use chrono::{DateTime, Utc};
 use entity::sea_orm_active_enums::{ChartResolution, ChartType};
 use sea_orm::prelude::*;
@@ -20,8 +20,8 @@ use super::{
 
 #[derive(Error, Debug)]
 pub enum ChartError {
-    #[error("blockscout database error: {0}")]
-    BlockscoutDB(DbErr),
+    #[error("indexer database error: {0}")]
+    IndexerDB(DbErr),
     #[error("stats database error: {0}")]
     StatsDB(DbErr),
     #[error("chart {0} not found")]

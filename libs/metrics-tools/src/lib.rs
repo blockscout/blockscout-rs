@@ -21,7 +21,7 @@ impl AggregateTimer {
         }
     }
 
-    pub fn start_interval(&mut self) -> Interval {
+    pub fn start_interval(&mut self) -> Interval<'_> {
         Interval {
             start_time: Instant::now(),
             recorder: self,

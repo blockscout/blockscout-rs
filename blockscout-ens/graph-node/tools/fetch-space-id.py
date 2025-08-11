@@ -31,7 +31,8 @@ def get_identifier(rpc_url, contract_address):
         "id": 1
     }
 
-    response = requests.post(rpc_url, data=json.dumps(data))
+    headers = {"Content-Type": "application/json"}
+    response = requests.post(rpc_url, data=json.dumps(data), headers=headers)
     if response.ok:
         return response.json()["result"]
     else:

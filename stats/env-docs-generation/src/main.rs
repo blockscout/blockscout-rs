@@ -1,5 +1,5 @@
-use env_collector::{run_env_collector_cli, PrefixFilter};
-use stats_server::{config_env, Settings};
+use env_collector::{PrefixFilter, run_env_collector_cli};
+use stats_server::{Settings, config_env};
 
 fn main() {
     run_env_collector_cli::<Settings>(
@@ -13,6 +13,7 @@ fn main() {
             "STATS__TRACING",
             "STATS__JAEGER",
             "STATS__METRICS",
+            "STATS__SWAGGER_PATH",
         ]),
         Some("service"),
     );

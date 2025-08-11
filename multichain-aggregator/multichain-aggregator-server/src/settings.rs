@@ -4,8 +4,8 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::{Deserialize, Serialize};
-use serde_with::{formats::CommaSeparator, serde_as, StringWithSeparator};
-use std::time;
+use serde_with::{StringWithSeparator, formats::CommaSeparator, serde_as};
+use std::{collections::HashMap, time};
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,6 +24,33 @@ pub struct Settings {
     #[serde(default)]
     pub replica_database: Option<ReplicaDatabaseSettings>,
     pub service: ServiceSettings,
+    pub cache: Option<CacheSettings>,
+    #[serde(default)]
+    pub cluster_explorer: ClusterExplorerSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CacheSettings {
+    pub redis: RedisSettings,
+    #[serde(default = "default_domain_search_cache")]
+    pub domain_search_cache: CacheEntrySettings,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CacheEntrySettings {
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    pub ttl: time::Duration,
+    #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
+    pub refresh_ahead: Option<time::Duration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RedisSettings {
+    pub url: Url,
 }
 
 #[serde_as]
@@ -36,6 +63,8 @@ pub struct ServiceSettings {
     #[serde(default)]
     pub api: ApiSettings,
     // Chains that will be used for quick search (ordered by priority).
+    // NOTE: entities from other chains may still appear in the final result,
+    // but only if we can't find enough entries from the chains in the list.
     #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
     #[serde(default = "default_quick_search_chains")]
     pub quick_search_chains: Vec<i64>,
@@ -50,6 +79,18 @@ pub struct ServiceSettings {
     pub marketplace_enabled_cache_update_interval: time::Duration,
     #[serde(default = "default_marketplace_enabled_cache_fetch_concurrency")]
     pub marketplace_enabled_cache_fetch_concurrency: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ClusterExplorerSettings {
+    pub clusters: HashMap<String, ClusterSettings>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ClusterSettings {
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, i64>")]
+    pub chain_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -117,6 +158,8 @@ impl Settings {
                 marketplace_enabled_cache_fetch_concurrency:
                     default_marketplace_enabled_cache_fetch_concurrency(),
             },
+            cache: None,
+            cluster_explorer: Default::default(),
         }
     }
 }
@@ -149,4 +192,14 @@ fn default_marketplace_enabled_cache_update_interval() -> time::Duration {
 
 fn default_marketplace_enabled_cache_fetch_concurrency() -> usize {
     10
+}
+
+fn default_domain_search_cache() -> CacheEntrySettings {
+    let hour = 60 * 60;
+    let ttl = time::Duration::from_secs(6 * hour);
+    let refresh_ahead = ttl / 5; // 20% of ttl
+    CacheEntrySettings {
+        ttl,
+        refresh_ahead: Some(refresh_ahead),
+    }
 }

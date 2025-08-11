@@ -35,8 +35,11 @@ USER app
 COPY ./config/charts.json ./config/charts.json
 COPY ./config/layout.json ./config/layout.json
 COPY ./config/update_groups.json ./config/update_groups.json
+COPY ./config/multichain/charts.json ./config/multichain/charts.json
+COPY ./config/multichain/layout.json ./config/multichain/layout.json
+COPY ./config/multichain/update_groups.json ./config/multichain/update_groups.json
 
-ENV STATS__SWAGGER_FILE=/app/static/stats.swagger.yaml
-COPY ./stats-proto/swagger/stats.swagger.yaml $STATS__SWAGGER_FILE
+ENV STATS__SWAGGER_PATH=/app/static/stats.swagger.yaml
+COPY ./stats-proto/swagger/stats.swagger.yaml $STATS__SWAGGER_PATH
 
 CMD ["./stats-server"]

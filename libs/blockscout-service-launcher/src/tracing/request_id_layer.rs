@@ -37,7 +37,7 @@ impl<S: Subscriber + for<'lookup> LookupSpan<'lookup>> Layer<S> for RequestIdSto
                         extensions.insert(fields);
                     } else {
                         eprintln!(
-                            "[tracing-subscriber] Unable to format the following event, ignoring: {attrs:?}",
+                            "[tracing-subscriber] Unable to format the following event, ignoring: {attrs:?}"
                         );
                     }
                 }
