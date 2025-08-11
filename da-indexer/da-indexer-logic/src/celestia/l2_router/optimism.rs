@@ -18,11 +18,15 @@ struct Blob {
 pub struct L2BatchOptimism {
     batch_data_container: String,
     blobs: Vec<Blob>,
+    #[serde(rename = "number", alias = "internal_id")]
     internal_id: u64,
     l1_timestamp: String,
     l1_transaction_hashes: Vec<String>,
+    #[serde(rename = "l2_start_block_number", alias = "l2_block_start")]
     l2_block_start: u64,
+    #[serde(rename = "l2_end_block_number", alias = "l2_block_end")]
     l2_block_end: u64,
+    #[serde(rename = "transactions_count", alias = "transaction_count")]
     transaction_count: u64,
 }
 

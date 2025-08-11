@@ -137,15 +137,15 @@ async fn create_blockscout_mock() -> MockServer {
                     "namespace": "0x00000000000000000000000000000000000000000008e5f679bf7116cb"
                   }
                 ],
-                "internal_id": 5,
+                "number": 5,
                 "l1_timestamp": "2023-12-20T10:17:24.000000Z",
                 "l1_transaction_hashes": [
                   "0xf41211e966ec23032dde713d1f775ae5cb07dc5e15951281e6844d74cc02a930",
                   "0x9abc0df13890e8c0818b448b15056ecd96368dc2b4f625c1232285e05e5b3826"
                 ],
-                "l2_block_start": 29996,
-                "l2_block_end": 33082,
-                "transaction_count": 1
+                "l2_start_block_number": 29996,
+                "l2_end_block_number": 33082,
+                "transactions_count": 1
               }
         )))
         .mount(&mock_server)
@@ -168,9 +168,9 @@ async fn create_blockscout_mock() -> MockServer {
                     "tx_commitment": "0x5f4dece44a8b054de4fd1837c2fc0aef0e68b2f39d55ec0658bfb659ba7bb8e9",
                     "height": 2282948
                 },
-                "end_block":217962052,
+                "end_block_number":217962052,
                 "number":610699,
-                "start_block":217961563,
+                "start_block_number":217961563,
                 "transactions_count":3061
             }
         )))
