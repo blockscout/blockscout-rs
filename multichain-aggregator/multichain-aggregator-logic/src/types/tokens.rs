@@ -1,8 +1,9 @@
 use super::ChainId;
-use entity::tokens::ActiveModel;
+use crate::{error::ParseError, proto, types::addresses::db_token_type_to_proto_token_type};
+use entity::tokens::{ActiveModel, Entity};
 use sea_orm::{
     ActiveValue::{NotSet, Set, Unchanged},
-    DeriveIntoActiveModel, IntoActiveModel, IntoActiveValue,
+    DeriveIntoActiveModel, DerivePartialModel, IntoActiveModel, IntoActiveValue,
     prelude::{BigDecimal, Decimal},
 };
 
@@ -82,5 +83,42 @@ impl IntoActiveModel<ActiveModel> for UpdateTokenType {
             token_type: Set(self.token_type),
             ..Default::default()
         }
+    }
+}
+
+#[derive(DerivePartialModel, Clone, Debug)]
+#[sea_orm(entity = "Entity", from_query_result)]
+pub struct Token {
+    pub address_hash: Vec<u8>,
+    pub chain_id: ChainId,
+    pub name: Option<String>,
+    pub symbol: Option<String>,
+    pub decimals: Option<i16>,
+    pub token_type: TokenType,
+    pub icon_url: Option<String>,
+    pub fiat_value: Option<Decimal>,
+    pub circulating_market_cap: Option<Decimal>,
+    pub total_supply: Option<BigDecimal>,
+    pub holders_count: Option<i64>,
+    pub transfers_count: Option<i64>,
+}
+
+impl TryFrom<Token> for proto::TokenInfo {
+    type Error = ParseError;
+
+    fn try_from(value: Token) -> Result<Self, Self::Error> {
+        Ok(Self {
+            address_hash: alloy_primitives::Address::try_from(value.address_hash.as_slice())?
+                .to_string(),
+            circulating_market_cap: value.circulating_market_cap.map(|c| c.to_string()),
+            decimals: value.decimals.map(|d| d.to_string()),
+            holders_count: value.holders_count.map(|h| h.to_string()),
+            icon_url: value.icon_url,
+            name: value.name,
+            symbol: value.symbol,
+            total_supply: value.total_supply.map(|t| t.to_plain_string()),
+            r#type: db_token_type_to_proto_token_type(value.token_type).into(),
+            exchange_rate: value.fiat_value.map(|f| f.to_string()),
+        })
     }
 }

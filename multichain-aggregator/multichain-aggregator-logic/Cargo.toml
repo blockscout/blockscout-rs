@@ -11,6 +11,7 @@ actix-phoenix-channel = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 api-client-framework = { workspace = true }
+base64 = { workspace = true }
 blockscout-chains = { workspace = true }
 blockscout-service-launcher = { workspace = true }
 bigdecimal = { workspace = true }

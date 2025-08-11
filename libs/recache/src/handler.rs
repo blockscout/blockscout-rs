@@ -14,7 +14,7 @@ type InflightRequest<K, V, C> =
     SharedFuture<V, CacheRequestError<<C as AsyncCacheStore<K, V>>::Error>>;
 type InflightMap<K, V, C> = DashMap<K, InflightRequest<K, V, C>>;
 
-#[derive(Builder)]
+#[derive(Builder, Clone)]
 pub struct CacheHandler<C, K, V>
 where
     C: AsyncCacheStore<K, V>,

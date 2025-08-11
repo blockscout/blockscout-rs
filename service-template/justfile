@@ -34,22 +34,48 @@ stop-test-postgres:
 {% endraw %}
 run:
     {% if database -%}
-    {{crate_name| upcase}}__DATABASE__CONNECT__URL={% raw %}{{DATABASE_URL}}{% endraw %} \
+    {{CRATE_NAME}}__DATABASE__CONNECT__URL={% raw %}{{DATABASE_URL}}{% endraw %} \
     {% endif -%}
     cargo run --bin {{project-name}}-server
 
+run-dev:
+    dotenv -f .env run just run
+
 {% if entity -%}
-generate-entities:
-    sea-orm-cli generate entity --lib -o {{project-name}}-entity/src
+generate-entities *args:
+    sea-orm-cli generate entity -o {{project-name}}-entity/src/codegen {{args}}
+    cargo fmt --all -- --config imports_granularity=Crate
 {% endif %}
 {% if migrations -%}
 new-migration name:
-    sea-orm-cli migrate generate -d {{project-name}}-migration {% raw %}{{name}}{% endraw %}
+    ./scripts/update_migration.sh {% raw %}{{name}}{% endraw %}
 
 migrate-up:
     sea-orm-cli migrate -d {{project-name}}-migration up
 
 migrate-down:
     sea-orm-cli migrate -d {{project-name}}-migration down
+
+# rollback and reapply all migrations
+migrate-refresh:
+    sea-orm-cli migrate -d {{project-name}}-migration refresh
+
+# drop all tables and reapply all migrations
+migrate-fresh:
+    sea-orm-cli migrate -d {{project-name}}-migration fresh
+
+migrate-fresh-generate-entities *args:
+    just migrate-fresh
+    just generate-entities {% raw %}{{args}}{% endraw %}
+
+
+insert-test-data:
+    {% raw %} docker exec -i {{docker-name}} psql -U {{db-user}} -d {{db-name}} {% endraw %}< {{project-name}}-migration/src/mock_data/test_data.sql
+    
 {% endif %}
 
+check-envs:
+    cargo run --bin check-envs -- --validate-only
+
+generate-envs:
+    cargo run --bin check-envs

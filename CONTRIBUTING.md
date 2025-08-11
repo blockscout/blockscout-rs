@@ -48,7 +48,10 @@ If you want to help us improve the project, you can contribute code. To do so, f
 * Write code to implement features or fix bugs. Make sure your code is well-tested
 * Commit your changes. Commit messages **SHOULD** follow our [commit message conventions](#commit-messages-guidelines) format.
 * Create a pull request. The title of the pull request **MUST** follow the [commit message conventions](#commit-messages-guidelines) format.
+ 
+### Rust Code Style Guide
 
+For more details see [RUST_CODE_STYLE_GUIDE.md](./RUST_CODE_STYLE_GUIDE.md)
 
 ### Commit Messages Guidelines
 

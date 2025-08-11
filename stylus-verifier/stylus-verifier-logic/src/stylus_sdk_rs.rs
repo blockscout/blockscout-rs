@@ -22,8 +22,7 @@ pub const TOOLCHAIN_FILE_NAME: &str = "rust-toolchain.toml";
 pub const PACKAGE_FILE_NAME: &str = "Cargo.toml";
 
 /// The last line to be expected from the `cargo stylus verify` command when the contract is verified.
-pub const CONTRACT_VERIFIED_MESSAGE: &str =
-    "Verified - contract matches local project's file hashes";
+pub const CONTRACT_VERIFIED_MESSAGE: &str = "contract matches local project's file hashes";
 
 /// The line to be expected from the `cargo stylus verify` command when the contract verification fails.
 pub const VERIFICATION_FAILED_MESSAGE: &str =
@@ -106,15 +105,20 @@ pub async fn verify_github_repository(
 
     // TODO: What if rust toolchain would be invalid (non-existent)?
 
-    if verify_output.lines().last().map(|v| v.trim()) != Some(CONTRACT_VERIFIED_MESSAGE) {
-        let fail_message_details = verify_output
-            .lines()
-            .skip_while(|&line| !line.contains(VERIFICATION_FAILED_MESSAGE))
-            .skip(1)
-            .collect::<Vec<_>>()
-            .join("\n");
+    match verify_output.lines().last().map(|v| v.trim()) {
+        Some(message)
+            if message.to_lowercase().contains("verified")
+                && message.contains(CONTRACT_VERIFIED_MESSAGE) => {}
+        _ => {
+            let fail_message_details = verify_output
+                .lines()
+                .skip_while(|&line| !line.contains(VERIFICATION_FAILED_MESSAGE))
+                .skip(1)
+                .collect::<Vec<_>>()
+                .join("\n");
 
-        return Err(Error::VerificationFailed(fail_message_details));
+            return Err(Error::VerificationFailed(fail_message_details));
+        }
     }
 
     let export_abi_output = docker::run_reproducible(

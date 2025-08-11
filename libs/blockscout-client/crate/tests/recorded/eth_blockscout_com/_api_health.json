@@ -5,7 +5,7 @@
   },
   "response": {
     "status": 200,
-    "body": "{\"metadata\":{\"latest_block\":{\"cache\":{\"timestamp\":\"2025-03-05 09:45:11.000000Z\",\"number\":\"21979873\"},\"db\":{\"timestamp\":\"2025-03-05 09:45:11.000000Z\",\"number\":\"21979873\"}}},\"healthy\":true}",
+    "body": "{\"error\":null,\"metadata\":{\"blocks\":{\"healthy\":true,\"latest_block\":{\"node\":{\"number\":\"23116935\"},\"cache\":{\"timestamp\":\"2025-08-11 09:32:59Z\",\"number\":\"23116935\"},\"db\":{\"timestamp\":\"2025-08-11 09:32:59Z\",\"number\":\"23116935\"}}},\"latest_block\":{\"cache\":{\"timestamp\":\"2025-08-11 09:32:59Z\",\"number\":\"23116935\"},\"db\":{\"timestamp\":\"2025-08-11 09:32:59Z\",\"number\":\"23116935\"}}},\"healthy\":true}",
     "headers": {
       "Content-Type": "application/json"
     }
