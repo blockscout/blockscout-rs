@@ -34,12 +34,14 @@ pub struct TokenInfo {
     #[serde(default)]
     pub symbol: Option<String>,
 
-    pub address: String,
+    #[serde(default)]
+    pub address_hash: Option<String>,
+
     #[serde(default)]
     pub r#type: Option<String>,
 
     #[serde(default)]
-    pub holders: Option<String>,
+    pub holders_count: Option<String>,
 
     #[serde(default)]
     pub exchange_rate: Option<String>,

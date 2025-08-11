@@ -24,7 +24,9 @@ pub struct StateChange {
 
     pub r#type: String,
     pub is_miner: bool,
-    pub address: models::AddressParam,
+    #[serde(default)]
+    pub address_hash: Option<models::AddressParam>,
+
     #[serde(default)]
     pub balance_before: Option<String>,
 

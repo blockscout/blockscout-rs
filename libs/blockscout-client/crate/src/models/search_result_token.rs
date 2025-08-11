@@ -19,7 +19,9 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct SearchResultToken {
-    pub address: String,
+    #[serde(default)]
+    pub address_hash: Option<String>,
+
     pub address_url: String,
     #[serde(default)]
     pub exchange_rate: Option<String>,

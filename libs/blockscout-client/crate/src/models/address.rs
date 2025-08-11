@@ -76,4 +76,7 @@ pub struct Address {
 
     #[serde(default)]
     pub has_validated_blocks: Option<bool>,
+
+    #[serde(default)]
+    pub creation_status: Option<String>,
 }

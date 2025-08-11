@@ -41,9 +41,6 @@ pub struct SmartContract {
     pub is_verified_via_eth_bytecode_db: Option<bool>,
 
     #[serde(default)]
-    pub is_self_destructed: Option<bool>,
-
-    #[serde(default)]
     pub can_be_visualized_via_sol2uml: Option<bool>,
 
     #[serde(default)]
@@ -104,5 +101,5 @@ pub struct SmartContract {
     pub language: Option<String>,
 
     #[serde(default)]
-    pub status: Option<String>,
+    pub creation_status: Option<String>,
 }

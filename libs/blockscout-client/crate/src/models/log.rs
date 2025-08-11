@@ -19,7 +19,9 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct Log {
-    pub address: models::AddressParam,
+    #[serde(default)]
+    pub address_hash: Option<models::AddressParam>,
+
     #[serde(default)]
     pub block_hash: Option<String>,
 

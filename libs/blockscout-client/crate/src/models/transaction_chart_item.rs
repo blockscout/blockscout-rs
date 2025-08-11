@@ -20,5 +20,5 @@ use serde_aux::prelude::*;
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct TransactionChartItem {
     pub date: String,
-    pub transaction_count: Decimal,
+    pub transactions_count: Decimal,
 }

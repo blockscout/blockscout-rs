@@ -19,7 +19,9 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct SearchResultAddressOrContract {
-    pub address: String,
+    #[serde(default)]
+    pub address_hash: Option<String>,
+
     #[serde(default)]
     pub is_smart_contract_verified: Option<bool>,
 

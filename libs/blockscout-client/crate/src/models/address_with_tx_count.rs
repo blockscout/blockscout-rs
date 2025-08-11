@@ -77,5 +77,8 @@ pub struct AddressWithTxCount {
     #[serde(default)]
     pub has_validated_blocks: Option<bool>,
 
-    pub transaction_count: String,
+    #[serde(default)]
+    pub creation_status: Option<String>,
+
+    pub transactions_count: String,
 }

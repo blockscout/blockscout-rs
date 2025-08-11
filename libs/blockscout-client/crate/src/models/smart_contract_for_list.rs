@@ -19,7 +19,9 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct SmartContractForList {
-    pub address: models::AddressParam,
+    #[serde(default)]
+    pub address_hash: Option<models::AddressParam>,
+
     #[serde(default)]
     pub coin_balance: Option<String>,
 
@@ -28,9 +30,12 @@ pub struct SmartContractForList {
     pub has_constructor_args: bool,
     pub optimization_enabled: bool,
     #[serde(default)]
-    pub transaction_count: Option<Decimal>,
+    pub transactions_count: Option<Decimal>,
 
     pub verified_at: String,
     #[serde(default)]
     pub market_cap: Option<Decimal>,
+
+    #[serde(default)]
+    pub transaction_count: Option<serde_json::Value>,
 }

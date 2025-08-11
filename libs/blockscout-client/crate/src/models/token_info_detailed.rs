@@ -20,7 +20,10 @@ use serde_aux::prelude::*;
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct TokenInfoDetailed {
     /// Token Address
-    pub address: String,
+
+    #[serde(default)]
+    pub address_hash: Option<String>,
+
     /// Token circulating market cap
 
     #[serde(default)]
@@ -39,7 +42,7 @@ pub struct TokenInfoDetailed {
     /// Token holders amount
 
     #[serde(default)]
-    pub holders: Option<String>,
+    pub holders_count: Option<String>,
 
     /// Token image URL
 

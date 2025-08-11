@@ -74,7 +74,7 @@ pub struct Block {
     pub total_difficulty: Option<String>,
 
     #[serde(default)]
-    pub transaction_count: Option<Decimal>,
+    pub transactions_count: Option<Decimal>,
 
     #[serde(default)]
     pub transaction_fees: Option<String>,

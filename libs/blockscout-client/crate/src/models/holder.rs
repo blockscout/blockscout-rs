@@ -19,7 +19,9 @@ use serde_aux::prelude::*;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, derive_new::new)]
 pub struct Holder {
-    pub address: models::AddressParam,
+    #[serde(default)]
+    pub address_hash: Option<models::AddressParam>,
+
     pub value: String,
     #[serde(default)]
     pub token_id: Option<String>,

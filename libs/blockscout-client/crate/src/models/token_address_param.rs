@@ -30,5 +30,5 @@ pub struct TokenAddressParam {
     /// Address
 
     #[serde(default)]
-    pub address: Option<String>,
+    pub address_hash: Option<String>,
 }

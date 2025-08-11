@@ -28,12 +28,14 @@ pub struct Token {
     #[serde(default)]
     pub symbol: Option<String>,
 
-    pub address: String,
+    #[serde(default)]
+    pub address_hash: Option<String>,
+
     #[serde(default)]
     pub r#type: Option<String>,
 
     #[serde(default)]
-    pub holders: Option<Decimal>,
+    pub holders_count: Option<Decimal>,
 
     #[serde(default)]
     pub exchange_rate: Option<String>,
