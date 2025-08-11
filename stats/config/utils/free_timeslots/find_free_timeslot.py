@@ -25,6 +25,11 @@ class CronVisualizerGUI:
         self.canvas_width = 1000
         self.canvas_height = 200
         self.hour_width = self.canvas_width // 24
+        # Zoom settings
+        self.zoom_scale = 1.0
+        self.min_zoom = 1.0
+        self.max_zoom = 16.0
+        self.base_hour_width = self.canvas_width // 24
         self.selected_date = datetime.now()
 
         self.default_duration = 20  # Duration in minutes
@@ -131,9 +136,28 @@ class CronVisualizerGUI:
             canvas_frame, width=self.canvas_width, height=self.canvas_height, bg="white"
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
+        # Horizontal scrollbar for timeline
+        h_scroll = ttk.Scrollbar(
+            canvas_frame, orient=tk.HORIZONTAL, command=self.canvas.xview
+        )
+        h_scroll.pack(fill=tk.X, side=tk.BOTTOM)
+        self.canvas.configure(xscrollcommand=h_scroll.set)
 
         # Bind mouse motion for hover effect
         self.canvas.bind("<Motion>", self.on_hover)
+
+        # Zoom controls
+        zoom_frame = ttk.Frame(next_left_top_frame)
+        zoom_frame.pack(side=tk.TOP, pady=(10, 0), fill="x")
+        ttk.Button(zoom_frame, text="Zoom In", command=self.zoom_in).pack(side=tk.LEFT)
+        ttk.Button(zoom_frame, text="Zoom Out", command=self.zoom_out).pack(
+            side=tk.LEFT, padx=(5, 0)
+        )
+        ttk.Button(zoom_frame, text="Reset", command=self.zoom_reset).pack(
+            side=tk.LEFT, padx=(5, 10)
+        )
+        self.zoom_label_var = tk.StringVar(value="Zoom: 1.0x")
+        ttk.Label(zoom_frame, textvariable=self.zoom_label_var).pack(side=tk.LEFT)
 
         # Schedule list
         list_frame = ttk.Frame(self.root, padding="10")
@@ -248,15 +272,23 @@ class CronVisualizerGUI:
         return timeline
 
     def update_visualization(self):
+        # preserve current horizontal view position (as a fraction)
+        try:
+            start_view = self.canvas.xview()[0]
+        except Exception:
+            start_view = 0.0
         self.canvas.delete("all")
+        hour_width = max(1, int(self.base_hour_width * self.zoom_scale))
+        # update scrollable region to accommodate zoomed content
+        self.canvas.configure(scrollregion=(0, 0, hour_width * 24, self.canvas_height))
 
         # Draw hour lines and labels
         for hour in range(25):
-            x = hour * self.hour_width
+            x = hour * hour_width
             self.canvas.create_line(x, 0, x, self.canvas_height, fill="gray")
             if hour < 24:
                 self.canvas.create_text(
-                    x + self.hour_width / 2,
+                    x + hour_width / 2,
                     self.canvas_height - 20,
                     text=f"{hour:02d}:00",
                 )
@@ -270,12 +302,12 @@ class CronVisualizerGUI:
             hour = minute // 60
             minute_in_hour = minute % 60
 
-            x = hour * self.hour_width + (minute_in_hour * self.hour_width / 60)
+            x = hour * hour_width + (minute_in_hour * hour_width / 60)
             count = len(timeline[minute])
 
             if count > 0:
                 color = self.get_color(count, max_overlaps)
-                x2 = x + self.hour_width / 60
+                x2 = x + hour_width / 60
 
                 self.canvas.create_rectangle(
                     x,
@@ -293,6 +325,8 @@ class CronVisualizerGUI:
                 )
 
         self.status_var.set(f"Maximum concurrent tasks: {max_overlaps}")
+        # restore view position
+        self.canvas.xview_moveto(start_view)
 
     def update_schedule_list(self):
         self.schedule_list.delete(*self.schedule_list.get_children())
@@ -309,11 +343,14 @@ class CronVisualizerGUI:
         self.update_schedule_list()
 
     def on_hover(self, event):
-        x, y = event.x, event.y
+        # translate to canvas coordinates to respect horizontal scrolling
+        x = self.canvas.canvasx(event.x)
+        y = event.y
 
         if 20 <= y <= self.canvas_height - 40:
-            hour = int(x // self.hour_width)
-            minute_in_hour = int((x % self.hour_width) / (self.hour_width / 60))
+            hour_width = max(1, int(self.base_hour_width * self.zoom_scale))
+            hour = int(x // hour_width)
+            minute_in_hour = int((x % hour_width) / (hour_width / 60))
             minute_index = hour * 60 + minute_in_hour
 
             if 0 <= minute_index < 24 * 60:
@@ -340,6 +377,27 @@ class CronVisualizerGUI:
                             break
                 else:
                     self.status_var.set(f"Time: {time_str} - No tasks")
+
+    def update_zoom_label(self):
+        self.zoom_label_var.set(f"Zoom: {self.zoom_scale:.1f}x")
+
+    def zoom_in(self):
+        if self.zoom_scale < self.max_zoom:
+            self.zoom_scale = min(self.max_zoom, self.zoom_scale * 2)
+            self.update_zoom_label()
+            self.update_visualization()
+
+    def zoom_out(self):
+        if self.zoom_scale > self.min_zoom:
+            self.zoom_scale = max(self.min_zoom, self.zoom_scale / 2)
+            self.update_zoom_label()
+            self.update_visualization()
+
+    def zoom_reset(self):
+        if self.zoom_scale != 1.0:
+            self.zoom_scale = 1.0
+            self.update_zoom_label()
+            self.update_visualization()
 
 
 if __name__ == "__main__":
