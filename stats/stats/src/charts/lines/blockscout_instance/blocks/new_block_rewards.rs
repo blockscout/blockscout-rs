@@ -21,8 +21,7 @@ use crate::{
         },
         types::IndexerMigrations,
     },
-    define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
+    types::timespans::Month,
     utils::sql_with_range_filter_opt,
 };
 
@@ -77,15 +76,6 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
 }
-
-define_and_impl_resolution_properties!(
-    define_and_impl: {
-        WeeklyProperties: Week,
-        MonthlyProperties: Month,
-        YearlyProperties: Year,
-    },
-    base_impl: Properties
-);
 
 pub type NewBlockRewards =
     DirectVecLocalDbChartSource<NewBlockRewardsRemote, Batch30Days, Properties>;
