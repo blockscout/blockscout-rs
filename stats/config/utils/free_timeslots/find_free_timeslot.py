@@ -68,9 +68,9 @@ class CronVisualizerGUI:
         next_left_top_frame = ttk.Frame(top_frame, padding="10")
         next_left_top_frame.pack(side=tk.LEFT)
 
-        ttk.Button(left_top_frame, text="Load JSON File", command=self.load_json).pack(
-            side=tk.TOP, fill="x"
-        )
+        ttk.Button(
+            left_top_frame, text="Load schedules from JSON", command=self.load_json
+        ).pack(side=tk.TOP, fill="x")
         ttk.Button(
             left_top_frame, text="Update", command=self.update_visualization
         ).pack(side=tk.TOP, fill="x")
@@ -231,6 +231,9 @@ class CronVisualizerGUI:
             if self.duration_choice.get() == DurationMenu.CONFIG.value:
                 duration = self.task_durations.get(name, manual_duration)
             else:
+                print(
+                    f"Missing duration for {name} from JSON, using manually-set value"
+                )
                 duration = manual_duration
 
             for start_time in start_times:
