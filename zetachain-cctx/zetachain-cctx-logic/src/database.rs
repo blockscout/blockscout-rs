@@ -718,37 +718,7 @@ impl ZetachainCctxDatabase {
         polling_interval: u64,
     ) -> anyhow::Result<Vec<CctxShort>> {
         // Optimized query that pre-calculates the backoff intervals to avoid complex expressions in WHERE clause
-        let statement = format!(
-            r#"
-        WITH cctxs AS (
-            SELECT cctx.id
-            FROM cross_chain_tx cctx
-            JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
-            WHERE cctx.processing_status = 'Unlocked'::processing_status
-            AND cctx.last_status_update_timestamp +
-                CASE
-                    WHEN cctx.retries_number = 0 THEN INTERVAL '0 milliseconds'
-                    WHEN cctx.retries_number = 1 THEN INTERVAL '$1 milliseconds'
-                    WHEN cctx.retries_number = 2 THEN INTERVAL '$1 milliseconds' * 3
-                    WHEN cctx.retries_number = 3 THEN INTERVAL '$1 milliseconds' * 7
-                    WHEN cctx.retries_number = 4 THEN INTERVAL '$1 milliseconds' * 15
-                    WHEN cctx.retries_number = 5 THEN INTERVAL '$1 milliseconds' * 31
-                    WHEN cctx.retries_number = 6 THEN INTERVAL '$1 milliseconds' * 63
-                    WHEN cctx.retries_number = 7 THEN INTERVAL '$1 milliseconds' * 127
-                    WHEN cctx.retries_number = 8 THEN INTERVAL '$1 milliseconds' * 255
-                    WHEN cctx.retries_number = 9 THEN INTERVAL '$1 milliseconds' * 511
-                    ELSE INTERVAL '$1 milliseconds' * 1023
-                END < NOW()
-            ORDER BY cs.last_update_timestamp DESC
-            LIMIT $2
-            FOR UPDATE SKIP LOCKED
-        )
-        UPDATE cross_chain_tx cctx
-        SET processing_status = 'Locked'::processing_status, last_status_update_timestamp = NOW(), retries_number = retries_number + 1
-        WHERE id IN (SELECT id FROM cctxs)
-        RETURNING id, index, root_id, depth, retries_number
-        "#
-        );
+        let statement = include_str!("query_for_update.sql").to_string();
 
         let statement = Statement::from_sql_and_values(
             DbBackend::Postgres,
