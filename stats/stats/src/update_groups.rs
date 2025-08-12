@@ -325,6 +325,19 @@ construct_update_group!(NewBuilderAccountsGroup {
     ],
 });
 
+construct_update_group!(ZetachainCrossChainTxnsGroup {
+    charts: [
+        NewZetachainCrossChainTxns,
+        NewZetachainCrossChainTxnsWeekly,
+        NewZetachainCrossChainTxnsMonthly,
+        NewZetachainCrossChainTxnsYearly,
+        ZetachainCrossChainTxnsGrowth,
+        ZetachainCrossChainTxnsGrowthWeekly,
+        ZetachainCrossChainTxnsGrowthMonthly,
+        ZetachainCrossChainTxnsGrowthYearly,
+    ],
+});
+
 // Charts returned in contracts endpoint.
 //
 // They don't depend on each other, but single group

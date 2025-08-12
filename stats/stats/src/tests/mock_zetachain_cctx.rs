@@ -46,6 +46,7 @@ pub async fn fill_watermark(db: &DatabaseConnection, timestamp: DateTime<Utc>) {
 pub async fn fill_mock_zetachain_cctx_data(
     zetachain_cctx: &DatabaseConnection,
     max_date: NaiveDate,
+    set_watermark: bool,
 ) {
     let (cctxs, statuses): (Vec<_>, Vec<_>) = mock_cctxs(max_date).into_iter().unzip();
     cross_chain_tx::Entity::insert_many(cctxs.clone())
@@ -56,6 +57,9 @@ pub async fn fill_mock_zetachain_cctx_data(
         .exec(zetachain_cctx)
         .await
         .unwrap();
+    if set_watermark {
+        fill_watermark(zetachain_cctx, Utc::now()).await;
+    }
 }
 
 fn mock_cctxs(max_date: NaiveDate) -> Vec<(cross_chain_tx::ActiveModel, cctx_status::ActiveModel)> {

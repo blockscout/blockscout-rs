@@ -52,6 +52,8 @@
                 "op_stack_operational_txns_growth",
                 "new_operational_txns",
                 "operational_txns_growth",
+                "new_zetachain_cross_chain_txns",
+                "zetachain_cross_chain_txns_growth",
                 "txns_success_rate",
                 "new_eip_7702_auths",
                 "eip_7702_auths_growth"

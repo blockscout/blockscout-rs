@@ -95,6 +95,10 @@ pub use builder_accounts_growth::{
     BuilderAccountsGrowth, BuilderAccountsGrowthMonthly, BuilderAccountsGrowthWeekly,
     BuilderAccountsGrowthYearly,
 };
+pub use cc_txns_growth::{
+    ZetachainCrossChainTxnsGrowth, ZetachainCrossChainTxnsGrowthMonthly,
+    ZetachainCrossChainTxnsGrowthWeekly, ZetachainCrossChainTxnsGrowthYearly,
+};
 pub use contracts_growth::{
     ContractsGrowth, ContractsGrowthMonthly, ContractsGrowthWeekly, ContractsGrowthYearly,
 };
@@ -121,6 +125,10 @@ pub use new_blocks::{NewBlocks, NewBlocksMonthly, NewBlocksWeekly, NewBlocksYear
 pub use new_builder_accounts::{
     NewBuilderAccounts, NewBuilderAccountsMonthly, NewBuilderAccountsWeekly,
     NewBuilderAccountsYearly,
+};
+pub use new_cc_txns::{
+    NewZetachainCrossChainTxns, NewZetachainCrossChainTxnsMonthly,
+    NewZetachainCrossChainTxnsWeekly, NewZetachainCrossChainTxnsYearly,
 };
 pub use new_contracts::{
     NewContracts, NewContractsMonthly, NewContractsWeekly, NewContractsYearly,

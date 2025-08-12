@@ -369,6 +369,8 @@ impl RuntimeSetup {
             Arc::new(TxnsStats24hGroup),
             Arc::new(NewBuilderAccountsGroup),
             Arc::new(VerifiedContractsPageGroup),
+            // zetachain cross chain txns
+            Arc::new(ZetachainCrossChainTxnsGroup),
             // multichain
             Arc::new(TotalInteropMessagesGroup),
         ]

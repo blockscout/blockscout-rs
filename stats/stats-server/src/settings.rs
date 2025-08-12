@@ -19,7 +19,8 @@ use stats::{
     lines::{
         ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
         ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
-        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
+        NewZetachainCrossChainTxns, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow,
+        OpStackOperationalTxnsGrowth, ZetachainCrossChainTxnsGrowth,
     },
 };
 use std::{
@@ -64,12 +65,11 @@ pub struct Settings {
     pub enable_all_op_stack: bool,
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
-    /// Enable stats for per-instance CCTX data. Requires `second_indexer_db_url` to be set.
-    /// Currently, charts are for data from `zetachain-cctx` service.
+    /// Enable stats for zetachain CCTX data. Requires `second_indexer_db_url` to be set.
     ///
     /// Note: it's not a interop/multichain CCTX stats, therefore it's not compatible with
     /// `multichain_mode`.
-    pub enable_all_local_cctx: bool,
+    pub enable_zetachain_cctx: bool,
     /// Enable multichain mode.
     ///
     /// This will run stats service for a multichain explorer.
@@ -150,7 +150,7 @@ impl Default for Settings {
             enable_all_arbitrum: false,
             enable_all_op_stack: false,
             enable_all_eip_7702: false,
-            enable_all_local_cctx: false,
+            enable_zetachain_cctx: false,
             multichain_mode: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
@@ -322,27 +322,31 @@ pub fn handle_enable_all_eip_7702(
     }
 }
 
-pub fn handle_enable_all_zetachain_cctx(
-    multichain_mode: bool,
-    enable_all: bool,
+pub fn handle_enable_zetachain_cctx(
+    settings: &mut Settings,
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
-    if enable_all {
-        if multichain_mode {
-            panic!(
-                "Multichain mode is not compatible with enabling local cross chain transactions stats"
-            );
-        }
-        enable_charts(
-            &[
-                // TODO: uncomment!
-                // NewCrossChainTxns::key().name(),
-                // CrossChainTxnsGrowth::key().name(),
-            ],
-            charts,
-            "eip-7702",
-        )
+    if !settings.enable_zetachain_cctx {
+        return;
     }
+    if settings.multichain_mode {
+        panic!(
+            "Multichain mode is not compatible with enabling local cross chain transactions stats"
+        );
+    }
+    enable_charts(
+        &[
+            NewZetachainCrossChainTxns::key().name(),
+            ZetachainCrossChainTxnsGrowth::key().name(),
+            // todo: add new charts as well
+        ],
+        charts,
+        "zetachain-cctx",
+    );
+    settings
+        .conditional_start
+        .zetachain_indexed_until_today
+        .enabled = true;
 }
 
 pub fn disable_all_non_multichain_charts(charts: &mut config::charts::Config<AllChartSettings>) {
@@ -400,6 +404,7 @@ pub struct StartConditionSettings {
     pub blocks_ratio: ToggleableThreshold,
     pub internal_transactions_ratio: ToggleableThreshold,
     pub user_ops_past_indexing_finished: ToggleableCheck,
+    #[serde(default = "ToggleableCheck::disabled")]
     pub zetachain_indexed_until_today: ToggleableCheck,
     pub check_period_secs: u32,
 }
@@ -411,7 +416,7 @@ impl Default for StartConditionSettings {
             blocks_ratio: ToggleableThreshold::default(),
             internal_transactions_ratio: ToggleableThreshold::default(),
             user_ops_past_indexing_finished: ToggleableCheck::default(),
-            zetachain_indexed_until_today: ToggleableCheck::default(),
+            zetachain_indexed_until_today: ToggleableCheck::disabled(),
             check_period_secs: 5,
         }
     }
@@ -472,6 +477,12 @@ impl Default for ToggleableThreshold {
 #[serde(default, deny_unknown_fields)]
 pub struct ToggleableCheck {
     pub enabled: bool,
+}
+
+impl ToggleableCheck {
+    pub fn disabled() -> Self {
+        Self { enabled: false }
+    }
 }
 
 impl Default for ToggleableCheck {

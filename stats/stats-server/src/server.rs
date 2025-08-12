@@ -10,7 +10,7 @@ use crate::{
     settings::{
         Settings, apply_multichain_mode_settings, disable_all_non_multichain_charts,
         handle_disable_internal_transactions, handle_enable_all_arbitrum,
-        handle_enable_all_eip_7702, handle_enable_all_op_stack, handle_enable_all_zetachain_cctx,
+        handle_enable_all_eip_7702, handle_enable_all_op_stack, handle_enable_zetachain_cctx,
     },
     update_service::UpdateService,
 };
@@ -54,11 +54,7 @@ pub async fn stats(
         &mut settings.conditional_start,
         &mut charts_config,
     );
-    handle_enable_all_zetachain_cctx(
-        settings.multichain_mode,
-        settings.enable_all_local_cctx,
-        &mut charts_config,
-    );
+    handle_enable_zetachain_cctx(&mut settings, &mut charts_config);
     if settings.multichain_mode {
         disable_all_non_multichain_charts(&mut charts_config);
         apply_multichain_mode_settings(&mut settings);
@@ -244,7 +240,7 @@ async fn connect_to_main_indexer_db(
 async fn connect_to_second_indexer_db(
     settings: &Settings,
 ) -> anyhow::Result<Option<Arc<DatabaseConnection>>> {
-    let connection = if settings.enable_all_local_cctx {
+    let connection = if settings.enable_zetachain_cctx {
         Some(
             connect_to_indexer_db_common(
                 settings

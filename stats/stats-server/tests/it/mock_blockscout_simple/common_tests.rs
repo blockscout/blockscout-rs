@@ -17,7 +17,12 @@ use crate::{
     common::{enabled_resolutions, sorted_vec},
 };
 
-pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed: bool) {
+pub async fn test_lines_ok(
+    base: Url,
+    blockscout_indexed: bool,
+    user_ops_indexed: bool,
+    zetachain_indexed: bool,
+) {
     let line_charts: stats_proto::blockscout::stats::v1::LineCharts =
         send_get_request(&base, "/api/v1/lines").await;
 
@@ -87,6 +92,12 @@ pub async fn test_lines_ok(base: Url, blockscout_indexed: bool, user_ops_indexed
             "activeAccountAbstractionWallets",
             "activeBundlers",
             "activePaymasters",
+        ]);
+    }
+    if zetachain_indexed {
+        expected_lines.extend([
+            "newZetachainCrossChainTxns",
+            "zetachainCrossChainTxnsGrowth",
         ]);
     }
 

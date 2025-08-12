@@ -488,7 +488,7 @@ async fn prepare_simple_any_test<C: DataSource + ChartProperties>(
         fill_mock_blockscout_data(&indexer, max_date).await;
     }
     if let Some(zetachain_cctx) = &zetachain_cctx {
-        fill_mock_zetachain_cctx_data(zetachain_cctx, max_date).await;
+        fill_mock_zetachain_cctx_data(zetachain_cctx, max_date, true).await;
     }
 
     (init_time, db, indexer, zetachain_cctx)

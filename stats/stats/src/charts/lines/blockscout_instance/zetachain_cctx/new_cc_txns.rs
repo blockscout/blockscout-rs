@@ -76,7 +76,7 @@ impl StatementFromRange for NewZetachainCrossChainTxnsStatement {
     }
 }
 
-pub(crate) struct NewZetachainCrossChainTxnsRemoteQuery;
+pub struct NewZetachainCrossChainTxnsRemoteQuery;
 impl RemoteQueryBehaviour for NewZetachainCrossChainTxnsRemoteQuery {
     type Output = Vec<TimespanValue<NaiveDate, String>>;
 

@@ -5,12 +5,15 @@ use std::{
 
 use stats::{
     ChartKey, IndexingStatus,
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
+    indexing_status::{
+        BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
+        ZetachainCctxIndexingStatus,
+    },
 };
 use stats_proto::blockscout::stats::v1 as proto_v1;
 use tokio::sync::Mutex;
 
-/// Tracks and reports progress of inital updates
+/// Tracks and reports progress of inital updates;
 pub struct InitialUpdateTracker {
     inner: Arc<Mutex<InitialUpdateTrackerInner>>,
 }
@@ -102,6 +105,7 @@ struct InitialUpdateTrackerInner {
     blocks_dependent: UpdateChartSubsetTracker,
     internal_transactions_dependent: UpdateChartSubsetTracker,
     user_ops_dependent: UpdateChartSubsetTracker,
+    zetachain_indexer_dependent: UpdateChartSubsetTracker,
 }
 
 impl InitialUpdateTrackerInner {
@@ -132,12 +136,16 @@ impl InitialUpdateTrackerInner {
             // therefore we set blockscout to be as indexed as possible
             .with_blockscout(BlockscoutIndexingStatus::MAX)
             .with_user_ops(UserOpsIndexingStatus::PastOperationsIndexed);
+        let zetachain_indexed_status = IndexingStatus::MIN
+            .with_zetachain_cctx(ZetachainCctxIndexingStatus::IndexedHistoricalData);
 
         let independent = charts_satisfied_by_status(charts, &nothing_indexed_status);
         let blocks_dependent = charts_satisfied_by_status(charts, &only_blocks_indexed_status);
         let internal_transactions_dependent =
             charts_satisfied_by_status(charts, &internal_indexed_status);
         let user_ops_dependent = charts_satisfied_by_status(charts, &user_ops_indexed_status);
+        let zetachain_indexer_dependent =
+            charts_satisfied_by_status(charts, &zetachain_indexed_status);
         Self::verify_tracking_all_charts(
             charts,
             &[
@@ -145,6 +153,7 @@ impl InitialUpdateTrackerInner {
                 &blocks_dependent,
                 &internal_transactions_dependent,
                 &user_ops_dependent,
+                &zetachain_indexer_dependent,
             ],
         );
         InitialUpdateTrackerInner {
@@ -154,6 +163,7 @@ impl InitialUpdateTrackerInner {
                 internal_transactions_dependent,
             ),
             user_ops_dependent: UpdateChartSubsetTracker::new(user_ops_dependent),
+            zetachain_indexer_dependent: UpdateChartSubsetTracker::new(zetachain_indexer_dependent),
         }
     }
 
@@ -166,6 +176,7 @@ impl InitialUpdateTrackerInner {
             &self.blocks_dependent,
             &self.internal_transactions_dependent,
             &self.user_ops_dependent,
+            &self.zetachain_indexer_dependent,
         ];
         all_trackers
             .into_iter()
@@ -203,6 +214,8 @@ impl InitialUpdateTrackerInner {
                 .track_status_change(chart, status.clone());
             self.user_ops_dependent
                 .track_status_change(chart, status.clone());
+            self.zetachain_indexer_dependent
+                .track_status_change(chart, status.clone());
         }
     }
 
@@ -213,6 +226,7 @@ impl InitialUpdateTrackerInner {
             &self.blocks_dependent,
             &self.internal_transactions_dependent,
             &self.user_ops_dependent,
+            &self.zetachain_indexer_dependent,
         ] {
             let next_counts = subset.counts();
             for (c, n) in counts.iter_mut().zip(next_counts) {
@@ -234,6 +248,7 @@ impl InitialUpdateTrackerInner {
             self.blocks_dependent.get_status(),
             self.internal_transactions_dependent.get_status(),
             self.user_ops_dependent.get_status(),
+            self.zetachain_indexer_dependent.get_status(),
         ])
     }
 
@@ -248,12 +263,14 @@ impl InitialUpdateTrackerInner {
         let internal_transactions_dependent_status =
             self.internal_transactions_dependent.get_status();
         let user_ops_dependent_status = self.user_ops_dependent.get_status();
+        let zetachain_indexer_dependent_status = self.zetachain_indexer_dependent.get_status();
         let all_status = self.get_all_status();
         tracing::info!(
             independent_status =? independent_status,
             blocks_dependent_status =? blocks_dependent_status,
             internal_transactions_dependent_status =? internal_transactions_dependent_status,
             user_ops_dependent_status =? user_ops_dependent_status,
+            zetachain_indexer_dependent_status =? zetachain_indexer_dependent_status,
             all_status =? all_status,
             "update status report: {log_string}"
         );
