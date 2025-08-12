@@ -16,6 +16,7 @@
 //! [types in `local_db`](`crate::data_source::kinds::local_db`) is largely
 //! helpful.
 
+pub mod db_choice;
 pub mod query;
 
 use std::{

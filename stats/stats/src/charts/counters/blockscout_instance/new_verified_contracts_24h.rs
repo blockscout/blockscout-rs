@@ -1,5 +1,6 @@
 use crate::{
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    chart_prelude::*,
     charts::db_interaction::utils::interval_24h_filter,
     data_source::{
         kinds::{
@@ -19,6 +20,7 @@ use migration::{Asterisk, Func, IntoColumnRef};
 use sea_orm::{DbBackend, IntoSimpleExpr, QuerySelect, QueryTrait, prelude::*};
 
 pub struct NewVerifiedContracts24hStatement;
+impl_db_choice!(NewVerifiedContracts24hStatement, UseBlockscoutDB);
 
 impl StatementFromUpdateTime for NewVerifiedContracts24hStatement {
     fn get_statement(

@@ -1,10 +1,10 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
-    ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
-    charts::db_interaction::read::{find_all_points, zetachain_cctx::QueryAllCctxTimetsampRange},
+    ChartKey, ChartProperties, IndexingStatus, Named,
+    chart_prelude::PullAllWithAndSort,
+    charts::db_interaction::read::zetachain_cctx::QueryAllCctxTimetsampRange,
     data_source::{
-        UpdateContext,
         kinds::{
             data_manipulation::{
                 map::{MapParseTo, MapToString, StripExt},
@@ -17,19 +17,15 @@ use crate::{
                 },
             },
             remote_db::{
-                RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange,
-                query::prepare_range_query_statement,
+                RemoteDatabaseSource, StatementFromRange,
+                db_choice::{UseZetachainCctxDB, impl_db_choice},
             },
         },
         types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     indexing_status::{IndexingStatusTrait, ZetachainCctxIndexingStatus},
-    range::UniversalRange,
-    types::{
-        TimespanValue,
-        timespans::{Month, Week, Year},
-    },
+    types::timespans::{Month, Week, Year},
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -41,6 +37,7 @@ use sea_orm::{
 };
 
 pub struct NewZetachainCrossChainTxnsStatement;
+impl_db_choice!(NewZetachainCrossChainTxnsStatement, UseZetachainCctxDB);
 
 impl StatementFromRange for NewZetachainCrossChainTxnsStatement {
     fn get_statement(
@@ -76,28 +73,14 @@ impl StatementFromRange for NewZetachainCrossChainTxnsStatement {
     }
 }
 
-pub struct NewZetachainCrossChainTxnsRemoteQuery;
-impl RemoteQueryBehaviour for NewZetachainCrossChainTxnsRemoteQuery {
-    type Output = Vec<TimespanValue<NaiveDate, String>>;
-
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Vec<TimespanValue<NaiveDate, String>>, ChartError> {
-        let statement = prepare_range_query_statement::<
-            NewZetachainCrossChainTxnsStatement,
-            QueryAllCctxTimetsampRange,
-        >(cx, range)
-        .await?;
-        let Some(zeta_cctx_db) = cx.second_indexer_db else {
-            return Err(ChartError::Internal("Cannot query zetachain crosschain transactions: zetachain indexer DB is not connected".to_string()));
-        };
-        find_all_points(zeta_cctx_db, statement).await
-    }
-}
-
-pub type NewZetachainCrossChainTxnsRemote =
-    RemoteDatabaseSource<NewZetachainCrossChainTxnsRemoteQuery>;
+pub type NewZetachainCrossChainTxnsRemote = RemoteDatabaseSource<
+    PullAllWithAndSort<
+        NewZetachainCrossChainTxnsStatement,
+        NaiveDate,
+        String,
+        QueryAllCctxTimetsampRange,
+    >,
+>;
 
 pub struct Properties;
 

@@ -11,14 +11,14 @@ use crate::{
     ChartError, ChartKey,
     charts::db_interaction::read::{cached::find_all_cached, find_all_points},
     data_source::{
-        kinds::remote_db::RemoteQueryBehaviour,
+        kinds::remote_db::{RemoteQueryBehaviour, db_choice::DatabaseChoice},
         types::{Cacheable, IndexerMigrations, UpdateContext},
     },
     range::{UniversalRange, data_source_query_range_to_db_statement_range},
     types::{TimespanTrait, TimespanValue},
 };
 
-pub trait StatementFromRange {
+pub trait StatementFromRange: DatabaseChoice {
     /// `completed_migrations` and `enabled_update_charts_recursive`
     /// can be used for selecting more optimal query
     fn get_statement(
@@ -60,7 +60,7 @@ where
         range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<TimespanValue<Resolution, Value>>, ChartError> {
         let statement = prepare_range_query_statement::<S, AllRangeSource>(cx, range).await?;
-        find_all_points(cx.indexer_db, statement).await
+        find_all_points(S::get_db(cx)?, statement).await
     }
 }
 /// Pull data from remote (blockscout) db according to statement
@@ -93,7 +93,7 @@ where
         range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<Point>, ChartError> {
         let statement = prepare_range_query_statement::<S, AllRangeSource>(cx, range).await?;
-        find_all_cached(&cx.cache, cx.indexer_db, statement).await
+        find_all_cached(&cx.cache, S::get_db(cx)?, statement).await
     }
 }
 

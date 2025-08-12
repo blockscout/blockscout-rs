@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::{read::QueryAllBlockTimestampRange, utils::datetime_range_filter},
     data_source::{
         kinds::{
@@ -36,6 +37,7 @@ use sea_orm::{
 };
 
 pub struct NewUserOpsStatement;
+impl_db_choice!(NewUserOpsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewUserOpsStatement {
     fn get_statement(

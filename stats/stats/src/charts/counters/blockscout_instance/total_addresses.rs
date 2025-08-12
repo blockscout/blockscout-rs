@@ -1,5 +1,6 @@
 use crate::{
     ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    chart_prelude::*,
     charts::db_interaction::read::query_estimated_table_rows,
     data_source::{
         kinds::{
@@ -17,6 +18,7 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DatabaseConnection, DbBackend, EntityName, Statement};
 
 pub struct TotalAddressesStatement;
+impl_db_choice!(TotalAddressesStatement, UseBlockscoutDB);
 
 impl StatementForOne for TotalAddressesStatement {
     fn get_statement(_: &IndexerMigrations) -> Statement {

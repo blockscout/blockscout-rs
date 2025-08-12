@@ -4,6 +4,7 @@ use std::{marker::PhantomData, ops::Range};
 
 use crate::{
     ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -17,7 +18,10 @@ use crate::{
                     Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
                 },
             },
-            remote_db::{PullEachWith, RemoteDatabaseSource, StatementFromTimespan},
+            remote_db::{
+                PullEachWith, RemoteDatabaseSource, StatementFromTimespan,
+                db_choice::DatabaseChoice,
+            },
         },
         types::{Get, IndexerMigrations},
     },
@@ -31,6 +35,9 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
 pub struct ActiveRecurringAccountsStatement<Recurrence>(PhantomData<Recurrence>);
+impl<Recurrence> DatabaseChoice for ActiveRecurringAccountsStatement<Recurrence> {
+    type DB = UseBlockscoutDB;
+}
 
 impl<Recurrence: RecurrencePeriod> StatementFromTimespan
     for ActiveRecurringAccountsStatement<Recurrence>

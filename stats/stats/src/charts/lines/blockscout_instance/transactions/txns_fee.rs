@@ -4,6 +4,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -33,6 +34,7 @@ use sea_orm::{DbBackend, Statement};
 const ETHER: i64 = i64::pow(10, 18);
 
 pub struct TxnsFeeStatement;
+impl_db_choice!(TxnsFeeStatement, UseBlockscoutDB);
 
 impl StatementFromRange for TxnsFeeStatement {
     fn get_statement(

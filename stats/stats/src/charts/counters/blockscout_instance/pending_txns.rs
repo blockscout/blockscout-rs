@@ -1,5 +1,6 @@
 use crate::{
     ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    chart_prelude::*,
     charts::db_interaction::read::find_one_value,
     data_source::{
         UpdateContext,
@@ -22,6 +23,7 @@ use sea_orm::{
 };
 
 pub struct PendingTxnsStatement;
+impl_db_choice!(PendingTxnsStatement, UseBlockscoutDB);
 
 impl PendingTxnsStatement {
     fn get_statement(inserted_from: DateTime<Utc>) -> Statement {
@@ -54,7 +56,7 @@ impl RemoteQueryBehaviour for PendingTxns30mQuery {
                 .checked_sub_signed(TimeDelta::minutes(30))
                 .unwrap_or(DateTime::<Utc>::MIN_UTC),
         );
-        let data = find_one_value::<Value>(cx, statement)
+        let data = find_one_value::<_, Value>(cx.indexer_db, statement)
             .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
         Ok(TimespanValue {

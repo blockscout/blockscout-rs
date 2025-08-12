@@ -3,8 +3,7 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
-    ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    chart_prelude::*,
     data_source::{
         kinds::{
             local_db::{
@@ -28,6 +27,7 @@ use sea_orm::Statement;
 use super::count_distinct_in_user_ops;
 
 pub struct ActiveAccountAbstractionWalletsStatement;
+impl_db_choice!(ActiveAccountAbstractionWalletsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for ActiveAccountAbstractionWalletsStatement {
     fn get_statement(

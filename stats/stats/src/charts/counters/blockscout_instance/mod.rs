@@ -26,6 +26,7 @@ mod total_user_ops;
 mod total_verified_contracts;
 mod txns_stats_24h;
 mod yesterday_txns;
+mod zetachain_cctx;
 
 pub use arbitrum_new_operational_txns_24h::ArbitrumNewOperationalTxns24h;
 pub use arbitrum_total_operational_txns::ArbitrumTotalOperationalTxns;

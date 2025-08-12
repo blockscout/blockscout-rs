@@ -4,6 +4,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -28,6 +29,7 @@ use sea_orm::Statement;
 use super::count_distinct_in_user_ops;
 
 pub struct ActiveBundlersStatement;
+impl_db_choice!(ActiveBundlersStatement, UseBlockscoutDB);
 
 impl StatementFromRange for ActiveBundlersStatement {
     fn get_statement(

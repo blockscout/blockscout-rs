@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -32,6 +33,7 @@ use sea_orm::{DbBackend, Statement};
 const GWEI: i64 = 1_000_000_000;
 
 pub struct AverageGasPriceStatement;
+impl_db_choice!(AverageGasPriceStatement, UseBlockscoutDB);
 
 impl StatementFromRange for AverageGasPriceStatement {
     fn get_statement(

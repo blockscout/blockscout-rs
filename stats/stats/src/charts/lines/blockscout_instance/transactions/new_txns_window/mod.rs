@@ -5,6 +5,7 @@ use sea_orm::Statement;
 
 use crate::{
     ChartError, ChartKey,
+    chart_prelude::*,
     charts::db_interaction::read::cached::find_all_cached,
     data_source::{
         UpdateContext,

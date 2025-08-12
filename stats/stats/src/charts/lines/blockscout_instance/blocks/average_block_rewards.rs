@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -31,9 +32,10 @@ use sea_orm::{DbBackend, Statement};
 
 const ETH: i64 = 1_000_000_000_000_000_000;
 
-pub struct AverageBlockRewardsQuery;
+pub struct AverageBlockRewardsStatement;
+impl_db_choice!(AverageBlockRewardsStatement, UseBlockscoutDB);
 
-impl StatementFromRange for AverageBlockRewardsQuery {
+impl StatementFromRange for AverageBlockRewardsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         _: &IndexerMigrations,
@@ -60,7 +62,7 @@ impl StatementFromRange for AverageBlockRewardsQuery {
 }
 
 pub type AverageBlockRewardsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<AverageBlockRewardsQuery, NaiveDate, f64, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<AverageBlockRewardsStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
 >;
 
 pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;

@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -30,6 +31,7 @@ use rust_decimal::Decimal;
 use sea_orm::{DbBackend, Statement};
 
 pub struct GasUsedPartialStatement;
+impl_db_choice!(GasUsedPartialStatement, UseBlockscoutDB);
 
 impl StatementFromRange for GasUsedPartialStatement {
     fn get_statement(

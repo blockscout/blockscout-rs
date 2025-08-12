@@ -28,3 +28,6 @@ pub use charts::{
     indexing_status::IndexingStatus,
     lines, query_dispatch, types,
 };
+
+mod preludes;
+pub use preludes::*;

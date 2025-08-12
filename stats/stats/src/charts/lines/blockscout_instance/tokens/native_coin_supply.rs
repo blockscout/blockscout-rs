@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -30,6 +31,7 @@ use sea_orm::{DbBackend, Statement};
 const ETH: i64 = 1_000_000_000_000_000_000;
 
 pub struct NativeCoinSupplyStatement;
+impl_db_choice!(NativeCoinSupplyStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NativeCoinSupplyStatement {
     fn get_statement(

@@ -1,5 +1,6 @@
 use crate::{
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    chart_prelude::*,
     charts::db_interaction::utils::interval_24h_filter,
     data_source::{
         kinds::{
@@ -23,6 +24,7 @@ use sea_orm::{
 use super::{CalculateOperationalTxns, NewTxns24hInt};
 
 pub struct NewBlocks24hStatement;
+impl_db_choice!(NewBlocks24hStatement, UseBlockscoutDB);
 
 impl StatementFromUpdateTime for NewBlocks24hStatement {
     fn get_statement(

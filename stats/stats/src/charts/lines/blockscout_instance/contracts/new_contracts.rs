@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, IndexingStatus, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -30,6 +31,7 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
 pub struct NewContractsStatement;
+impl_db_choice!(NewContractsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewContractsStatement {
     fn get_statement(

@@ -7,7 +7,7 @@ use crate::{
     ChartError,
     charts::db_interaction::read::{cached::find_one_value_cached, find_one_value},
     data_source::{
-        kinds::remote_db::RemoteQueryBehaviour,
+        kinds::remote_db::{RemoteQueryBehaviour, db_choice::DatabaseChoice},
         types::{Cacheable, IndexerMigrations, UpdateContext, WrappedValue},
     },
     range::{UniversalRange, inclusive_range_to_exclusive},
@@ -16,7 +16,7 @@ use crate::{
 
 use super::StatementFromRange;
 
-pub trait StatementForOne {
+pub trait StatementForOne: DatabaseChoice {
     fn get_statement(completed_migrations: &IndexerMigrations) -> Statement;
 }
 
@@ -43,14 +43,14 @@ where
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Value, ChartError> {
         let statement = S::get_statement(&cx.indexer_applied_migrations);
-        let data = find_one_value::<Value>(cx, statement)
+        let data = find_one_value::<_, Value>(S::get_db(cx)?, statement)
             .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
         Ok(data)
     }
 }
 
-pub trait StatementFromUpdateTime {
+pub trait StatementFromUpdateTime: DatabaseChoice {
     fn get_statement(
         update_time: DateTime<Utc>,
         completed_migrations: &IndexerMigrations,
@@ -78,7 +78,7 @@ where
     ) -> Result<TimespanValue<Resolution, Value>, ChartError> {
         let statement = S::get_statement(cx.time, &cx.indexer_applied_migrations);
         let timespan = Resolution::from_date(cx.time.date_naive());
-        let value = find_one_value::<WrappedValue<Value>>(cx, statement)
+        let value = find_one_value::<_, WrappedValue<Value>>(S::get_db(cx)?, statement)
             .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?
             .value;
@@ -114,7 +114,7 @@ where
             &cx.enabled_update_charts_recursive,
         );
 
-        let value = find_one_value_cached(cx, query)
+        let value = find_one_value_cached(S::get_db(cx)?, &cx.cache, query)
             .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
 
@@ -140,7 +140,10 @@ mod test {
         ChartKey,
         data_source::{
             UpdateContext, UpdateParameters,
-            kinds::remote_db::{RemoteQueryBehaviour, StatementFromRange},
+            kinds::remote_db::{
+                RemoteQueryBehaviour, StatementFromRange,
+                db_choice::{DatabaseChoice, UseBlockscoutDB},
+            },
             types::{IndexerMigrations, WrappedValue},
         },
         range::UniversalRange,
@@ -151,6 +154,9 @@ mod test {
     use super::PullOne24hCached;
 
     struct TestStatement;
+    impl DatabaseChoice for TestStatement {
+        type DB = UseBlockscoutDB;
+    }
     impl StatementFromRange for TestStatement {
         fn get_statement(
             _range: Option<Range<DateTime<Utc>>>,

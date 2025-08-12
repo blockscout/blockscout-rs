@@ -1,5 +1,6 @@
 use crate::{
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    chart_prelude::*,
     data_source::{
         kinds::{
             local_db::DirectPointLocalDbChartSource,
@@ -16,6 +17,7 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
 pub struct TotalTokensStatement;
+impl_db_choice!(TotalTokensStatement, UseBlockscoutDB);
 
 impl StatementForOne for TotalTokensStatement {
     fn get_statement(_: &IndexerMigrations) -> Statement {

@@ -7,6 +7,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -31,6 +32,7 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
 pub struct NewBlockRewardsStatement;
+impl_db_choice!(NewBlockRewardsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewBlockRewardsStatement {
     fn get_statement(

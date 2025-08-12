@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
+    chart_prelude::*,
     charts::{
         db_interaction::read::{QueryAllBlockTimestampRange, find_all_points},
         types::timespans::DateValue,
@@ -35,6 +36,7 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
 pub struct NewBuilderAccountsStatement;
+impl_db_choice!(NewBuilderAccountsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewBuilderAccountsStatement {
     fn get_statement(

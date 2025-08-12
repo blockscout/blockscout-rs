@@ -1,5 +1,6 @@
 use crate::{
     ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    chart_prelude::*,
     data_source::{
         kinds::{
             data_manipulation::map::MapToString,
@@ -20,6 +21,7 @@ use sea_orm::{
 };
 
 pub struct TotalVerifiedContractsStatement;
+impl_db_choice!(TotalVerifiedContractsStatement, UseBlockscoutDB);
 
 impl StatementFromUpdateTime for TotalVerifiedContractsStatement {
     fn get_statement(

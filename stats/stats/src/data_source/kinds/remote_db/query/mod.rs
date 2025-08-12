@@ -27,7 +27,7 @@ pub(crate) async fn query_yesterday_data<DailyDataStatement: StatementFromRange>
 ) -> Result<TimespanValue<NaiveDate, String>, ChartError> {
     let yesterday = calculate_yesterday(today)?;
     let query_statement = yesterday_statement::<DailyDataStatement>(cx, yesterday)?;
-    let mut data = find_one_value::<DateValue<String>>(cx, query_statement)
+    let mut data = find_one_value::<_, DateValue<String>>(cx.indexer_db, query_statement)
         .await?
         // no data for yesterday
         .unwrap_or(TimespanValue::with_zero_value(yesterday));
@@ -48,7 +48,7 @@ where
 {
     let yesterday = calculate_yesterday(today)?;
     let query_statement = yesterday_statement::<DailyDataStatement>(cx, yesterday)?;
-    let data = find_one_value_cached::<Value>(cx, query_statement)
+    let data = find_one_value_cached::<_, Value>(cx.indexer_db, &cx.cache, query_statement)
         .await?
         .map(|mut data| {
             // today's value is the number from the day before.

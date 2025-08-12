@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -30,6 +31,7 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
 pub struct NewEip7702AuthsStatement;
+impl_db_choice!(NewEip7702AuthsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewEip7702AuthsStatement {
     fn get_statement(

@@ -12,6 +12,7 @@ use sea_query::{Expr, Func};
 
 use crate::{
     ChartKey, ChartProperties, QueryAllBlockTimestampRange,
+    chart_prelude::*,
     charts::db_interaction::utils::datetime_range_filter,
     counters::OpStackYesterdayOperationalTxns,
     data_source::{
@@ -29,6 +30,7 @@ pub use all_new_txns::{
 };
 
 pub struct NewTxnsCombinedStatement;
+impl_db_choice!(NewTxnsCombinedStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewTxnsCombinedStatement {
     fn get_statement(

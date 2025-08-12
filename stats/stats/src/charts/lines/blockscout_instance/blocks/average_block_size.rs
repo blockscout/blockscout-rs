@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
+    chart_prelude::*,
     charts::db_interaction::read::QueryAllBlockTimestampRange,
     data_source::{
         kinds::{
@@ -31,6 +32,7 @@ use sea_orm::{DbBackend, Statement};
 use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
 pub struct AverageBlockSizeStatement;
+impl_db_choice!(AverageBlockSizeStatement, UseBlockscoutDB);
 
 impl StatementFromRange for AverageBlockSizeStatement {
     fn get_statement(

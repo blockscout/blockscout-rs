@@ -2,6 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey,
+    chart_prelude::*,
     charts::db_interaction::utils::datetime_range_filter,
     data_source::{
         kinds::remote_db::{PullOne24hCached, RemoteDatabaseSource, StatementFromRange},
@@ -22,6 +23,7 @@ pub mod txns_fee_24h;
 const ETHER: i64 = i64::pow(10, 18);
 
 pub struct TxnsStatsStatement;
+impl_db_choice!(TxnsStatsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for TxnsStatsStatement {
     fn get_statement(

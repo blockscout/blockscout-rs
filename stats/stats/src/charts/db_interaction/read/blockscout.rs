@@ -16,15 +16,13 @@ use crate::{
     types::TimespanTrait,
 };
 
-pub async fn find_one_value<Value>(
-    cx: &UpdateContext<'_>,
-    query: Statement,
-) -> Result<Option<Value>, ChartError>
+pub async fn find_one_value<C, Value>(db: &C, query: Statement) -> Result<Option<Value>, ChartError>
 where
+    C: ConnectionTrait,
     Value: FromQueryResult,
 {
     Value::find_by_statement(query)
-        .one(cx.indexer_db)
+        .one(db)
         .await
         .map_err(ChartError::IndexerDB)
 }
