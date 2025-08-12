@@ -6,10 +6,11 @@ use entity::{
 };
 use sea_orm::{
     ActiveValue::Set,
-    DerivePartialModel, IntoSimpleExpr,
+    DerivePartialModel, FromJsonQueryResult, IntoSimpleExpr,
     prelude::{BigDecimal, Expr},
     sea_query::SimpleExpr,
 };
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct AddressTokenBalance {
@@ -72,16 +73,52 @@ pub struct ExtendedAddressTokenBalance {
     pub fiat_balance: Option<BigDecimal>,
 }
 
-impl TryFrom<ExtendedAddressTokenBalance>
-    for proto::list_address_tokens_response::TokenBalanceInfo
+pub fn chain_values_expr() -> SimpleExpr {
+    Expr::cust_with_exprs(
+        "jsonb_build_object('chain_id',$1,'value',$2)",
+        [
+            Expr::col("token_chain_id").into_simple_expr(),
+            Expr::col("value").into_simple_expr(),
+        ],
+    )
+}
+
+#[derive(DerivePartialModel, Clone, Debug)]
+#[sea_orm(entity = "Entity", from_query_result)]
+pub struct AggregatedAddressTokenBalance {
+    pub id: i64,
+    pub address_hash: Vec<u8>,
+    pub value: BigDecimal,
+    pub token_id: Option<BigDecimal>,
+    #[sea_orm(nested)]
+    pub token: types::tokens::AggregatedToken,
+    #[sea_orm(from_expr = r#"fiat_balance_query()"#)]
+    pub fiat_balance: Option<BigDecimal>,
+    #[sea_orm(from_expr = r#"Expr::cust_with_expr("jsonb_agg($1)", chain_values_expr())"#)]
+    pub chain_values: Vec<ChainValue>,
+}
+
+#[derive(Debug, FromJsonQueryResult, Serialize, Deserialize, Clone)]
+pub struct ChainValue {
+    pub chain_id: ChainId,
+    pub value: BigDecimal,
+}
+
+impl TryFrom<AggregatedAddressTokenBalance>
+    for proto::list_address_tokens_response::AggregatedTokenBalanceInfo
 {
     type Error = ParseError;
 
-    fn try_from(v: ExtendedAddressTokenBalance) -> Result<Self, Self::Error> {
+    fn try_from(v: AggregatedAddressTokenBalance) -> Result<Self, Self::Error> {
         Ok(Self {
             token: Some(v.token.try_into()?),
             token_id: v.token_id.map(|t| t.to_string()),
             value: v.value.to_plain_string(),
+            chain_values: v
+                .chain_values
+                .into_iter()
+                .map(|c| (c.chain_id.to_string(), c.value.to_plain_string()))
+                .collect(),
         })
     }
 }

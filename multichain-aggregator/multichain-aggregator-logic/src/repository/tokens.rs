@@ -1,17 +1,22 @@
 use crate::{
     repository::{
         batch_update::batch_update,
-        macros::{is_distinct_from, update_if_not_null},
+        macros::{col, expr_as, is_distinct_from, map_col, update_if_not_null},
     },
     types::tokens::{
-        TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData,
-        UpdateTokenType,
+        TokenType, TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData,
+        UpdateTokenType, token_chain_infos_expr,
     },
 };
 use entity::tokens::{Column, Entity};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, IntoActiveModel,
-    TransactionError, TransactionTrait, prelude::Expr, sea_query::OnConflict,
+    TransactionError, TransactionTrait,
+    prelude::Expr,
+    sea_query::{
+        IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SelectExpr, SelectStatement,
+        SimpleExpr,
+    },
 };
 
 pub async fn upsert_many<C>(db: &C, tokens: Vec<TokenUpdate>) -> Result<(), DbErr>
@@ -168,4 +173,63 @@ where
     batch_update(db, active_models).await?;
 
     Ok(())
+}
+
+// Select query for `AggregatedToken` struct
+// This query aggregates multiple `ERC-7802` token instances into a single struct.
+// NOTE: `name`, `symbol`, `decimals` are assumed to be the same
+pub fn aggregated_tokens_query(from: impl IntoTableRef) -> SelectStatement {
+    Query::select()
+        .exprs([
+            col!("token_address_hash"),
+            col!("token_name"),
+            col!("token_symbol"),
+            col!("token_decimals"),
+            expr_as!(Expr::val(TokenType::Erc7802), "token_token_type"),
+            map_col!("MAX($1)", "token_icon_url"),
+            map_col!("AVG($1)", "token_fiat_value"),
+            map_col!("AVG($1)", "token_circulating_market_cap"),
+            map_col!("SUM($1)", "token_total_supply"),
+            map_col!("SUM($1)", "token_holders_count"),
+            map_col!("SUM($1)", "token_transfers_count"),
+            expr_as!(
+                Expr::cust_with_expr("jsonb_agg($1)", token_chain_infos_expr()),
+                "token_chain_infos"
+            ),
+        ])
+        .from(from)
+        .and_where(Expr::col("token_token_type").eq(TokenType::Erc7802))
+        .group_by_columns([
+            "token_address_hash",
+            "token_name",
+            "token_symbol",
+            "token_decimals",
+        ])
+        .to_owned()
+}
+
+// Select query for nested `AggregatedToken` struct
+// This query converts a single-chain token into a multichain format
+pub fn normal_tokens_query(from: impl IntoTableRef) -> SelectStatement {
+    Query::select()
+        .exprs([
+            col!("token_address_hash"),
+            col!("token_name"),
+            col!("token_symbol"),
+            col!("token_decimals"),
+            col!("token_token_type"),
+            col!("token_icon_url"),
+            col!("token_fiat_value"),
+            col!("token_circulating_market_cap"),
+            col!("token_total_supply"),
+            col!("token_holders_count"),
+            col!("token_transfers_count"),
+            expr_as!(
+                Expr::cust_with_expr("jsonb_build_array($1)", token_chain_infos_expr()),
+                "token_chain_infos"
+            ),
+        ])
+        .from(from)
+        .and_where(Expr::col("token_token_type").ne(TokenType::Erc7802))
+        .to_owned()
 }

@@ -1,7 +1,14 @@
-use crate::types::{
-    ChainId,
-    address_token_balances::{
-        AddressTokenBalance, ExtendedAddressTokenBalance, fiat_balance_query,
+use crate::{
+    repository::{
+        macros::{col, expr_as, map_col},
+        tokens::{aggregated_tokens_query, normal_tokens_query},
+    },
+    types::{
+        ChainId,
+        address_token_balances::{
+            AddressTokenBalance, AggregatedAddressTokenBalance, ExtendedAddressTokenBalance,
+            chain_values_expr,
+        },
     },
 };
 use bigdecimal::BigDecimal;
@@ -11,10 +18,13 @@ use entity::{
     tokens,
 };
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IntoSimpleExpr, JoinType, Order, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult, JoinType, Order,
+    PartialModelTrait, QueryFilter, QuerySelect, QueryTrait,
     prelude::Expr,
-    sea_query::{Alias, Iden, NullOrdering, OnConflict, Query},
+    sea_query::{
+        self, ColumnRef, CommonTableExpression, IntoColumnRef, IntoIden, Keyword, NullOrdering,
+        OnConflict, Query, SelectExpr, SelectStatement, SimpleExpr, WithClause,
+    },
 };
 
 pub async fn upsert_many<C>(
@@ -74,7 +84,7 @@ pub async fn list_by_address<C>(
     page_token: Option<ListAddressTokensPageToken>,
 ) -> Result<
     (
-        Vec<ExtendedAddressTokenBalance>,
+        Vec<AggregatedAddressTokenBalance>,
         Option<ListAddressTokensPageToken>,
     ),
     DbErr,
@@ -87,11 +97,7 @@ where
         .to((tokens::Column::AddressHash, tokens::Column::ChainId))
         .into();
 
-    let fiat_balance_iden = Alias::new("fiat_balance");
-    let fiat_balance_col = Expr::col(fiat_balance_iden.clone());
-
-    let balances = Entity::find()
-        .expr_as(fiat_balance_query(), fiat_balance_iden.to_string())
+    let base_query = Entity::find()
         .join(JoinType::InnerJoin, tokens_rel)
         .filter(Column::AddressHash.eq(address.as_slice()))
         .filter(Column::ChainId.is_in(chain_ids))
@@ -99,42 +105,104 @@ where
         .apply_if(
             (!token_types.is_empty()).then_some(token_types),
             |q, token_types| q.filter(tokens::Column::TokenType.is_in(token_types)),
+        );
+
+    let base_query = ExtendedAddressTokenBalance::select_cols(base_query.select_only())
+        .as_query()
+        .to_owned();
+
+    let base_cte = CommonTableExpression::new()
+        .query(base_query)
+        .table_name("base")
+        .to_owned();
+
+    let mut normal_tokens_query = normal_tokens_query("base")
+        // Extend base query with `AddressTokenBalances` columns
+        .exprs([
+            col!("id"),
+            expr_as!(Expr::val(address.as_slice()), "address_hash"),
+            col!("value"),
+            expr_as!(
+                Expr::cust_with_expr("jsonb_build_array($1)", chain_values_expr()),
+                "chain_values"
+            ),
+            col!("token_id"),
+            col!("fiat_balance"),
+        ])
+        .to_owned();
+
+    let aggregated_tokens_query = aggregated_tokens_query("base")
+        // Extend base query with `AddressTokenBalances` columns
+        .exprs([
+            map_col!("MIN($1)", "id"),
+            expr_as!(Expr::val(address.as_slice()), "address_hash"),
+            map_col!("SUM($1)", "value"),
+            expr_as!(
+                Expr::cust_with_expr("jsonb_agg($1)", chain_values_expr()),
+                "chain_values"
+            ),
+            expr_as!(Keyword::Null, "token_id"),
+            map_col!("AVG($1)", "fiat_balance"),
+        ])
+        .to_owned();
+
+    let union_cte = CommonTableExpression::new()
+        .query(
+            normal_tokens_query
+                .union(sea_query::UnionType::All, aggregated_tokens_query)
+                .to_owned(),
         )
-        .apply_if(page_token, |q, page_token| {
+        .table_name("tokens")
+        .to_owned();
+
+    let apply_pagination = move |q: &mut SelectStatement| {
+        q.apply_if(page_token, |q, page_token| {
             let (fiat_value, value, id) = page_token;
             // Handle pagination similar to how it's done in the Elixir backend
             // https://github.com/blockscout/blockscout/blob/dff7814bb06327a9f80d0850470e8798e48301fe/apps/explorer/lib/explorer/chain.ex#L2882-L2917
             match fiat_value {
-                None => q.filter(Expr::cust_with_exprs(
+                None => q.and_where(Expr::cust_with_exprs(
                     "$1 IS NULL AND ($2 < $3 OR ($2 = $3 AND $4 < $5))",
                     [
-                        fiat_balance_query(),
-                        Column::Value.into_simple_expr(),
+                        Expr::col("fiat_balance").into(),
+                        Expr::col("value").into(),
                         Expr::value(value),
-                        Column::Id.into_simple_expr(),
+                        Expr::col("id").into(),
                         Expr::value(id),
                     ],
                 )),
-                Some(fiat_value) => q.filter(Expr::cust_with_exprs(
+                Some(fiat_value) => q.and_where(Expr::cust_with_exprs(
                     "$1 < $2 OR $1 IS NULL OR ($1 = $2 AND ($3 < $4 OR ($3 = $4 AND $5 < $6)))",
                     [
-                        fiat_balance_query(),
+                        Expr::col("fiat_balance").into(),
                         Expr::value(fiat_value),
-                        Column::Value.into_simple_expr(),
+                        Expr::col("value").into(),
                         Expr::value(value),
-                        Column::Id.into_simple_expr(),
+                        Expr::col("id").into(),
                         Expr::value(id),
                     ],
                 )),
-            }
+            };
         })
-        .order_by_with_nulls(fiat_balance_col, Order::Desc, NullOrdering::Last)
-        .order_by_desc(Column::Value)
-        .order_by_desc(Column::Id)
+        .order_by_with_nulls("fiat_balance", Order::Desc, NullOrdering::Last)
+        .order_by(Column::Value, Order::Desc)
+        .order_by(Column::Id, Order::Desc)
         .limit(page_size + 1)
-        .into_partial_model::<ExtendedAddressTokenBalance>()
-        .all(db)
-        .await?;
+        .to_owned()
+    };
+
+    let query = WithClause::new()
+        .cte(base_cte)
+        .cte(union_cte)
+        .to_owned()
+        .query(apply_pagination(
+            Query::select().column(ColumnRef::Asterisk).from("tokens"),
+        ));
+
+    let balances =
+        AggregatedAddressTokenBalance::find_by_statement(db.get_database_backend().build(&query))
+            .all(db)
+            .await?;
 
     if balances.len() as u64 > page_size {
         Ok((

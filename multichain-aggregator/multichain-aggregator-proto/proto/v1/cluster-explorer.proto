@@ -92,7 +92,12 @@ message CountInteropMessagesRequest {
 
 message CountInteropMessagesResponse { uint64 count = 1; }
 
-message TokenInfo {
+message AggregatedTokenInfo {
+  message ChainInfo {
+    optional string holders_count = 1;
+    optional string total_supply = 2;
+  }
+
   string address_hash = 1;
   optional string circulating_market_cap = 2;
   optional string decimals = 3;
@@ -103,6 +108,8 @@ message TokenInfo {
   optional string total_supply = 8;
   blockscout.multichainAggregator.v1.TokenType type = 9;
   optional string exchange_rate = 10;
+  // Map of chain id to chain-specific information.
+  map<string, ChainInfo> chain_infos = 11;
 }
 
 message GetAddressRequest {
@@ -129,18 +136,19 @@ message ListAddressTokensRequest {
   string cluster_id = 1;
   string address_hash = 2;
   // List of comma-separated token types to filter by. See `TokenType`.
-  string type = 3;
+  optional string type = 3;
   optional uint32 page_size = 4;
   optional string page_token = 5;
 }
 
 message ListAddressTokensResponse {
-  message TokenBalanceInfo {
-    TokenInfo token = 1;
+  message AggregatedTokenBalanceInfo {
+    AggregatedTokenInfo token = 1;
     optional string token_id = 2;
     string value = 3;
+    map<string, string> chain_values = 4;
   }
 
-  repeated TokenBalanceInfo items = 1;
+  repeated AggregatedTokenBalanceInfo items = 1;
   blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
 }

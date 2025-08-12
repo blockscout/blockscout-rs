@@ -134,7 +134,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let inner = request.into_inner();
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let token_types = parse_map_result(&inner.r#type, |v| {
+        let token_types = parse_map_result(&inner.r#type.unwrap_or_default(), |v| {
             let val = serde_json::Value::String(v.to_string());
             serde_json::from_value(val)
         })?

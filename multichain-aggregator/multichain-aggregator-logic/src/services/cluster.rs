@@ -6,7 +6,7 @@ use crate::{
     },
     types::{
         ChainId,
-        address_token_balances::ExtendedAddressTokenBalance,
+        address_token_balances::AggregatedAddressTokenBalance,
         addresses::AddressInfo,
         chains::Chain,
         interop_messages::{InteropMessage, MessageDirection},
@@ -136,7 +136,7 @@ impl Cluster {
         page_token: Option<ListAddressTokensPageToken>,
     ) -> Result<
         (
-            Vec<ExtendedAddressTokenBalance>,
+            Vec<AggregatedAddressTokenBalance>,
             Option<ListAddressTokensPageToken>,
         ),
         ServiceError,
