@@ -140,8 +140,6 @@ pub struct ChainInfo {
     pub chain_id: ChainId,
     pub holders_count: Option<BigDecimal>,
     pub total_supply: Option<BigDecimal>,
-    pub fiat_value: Option<Decimal>,
-    pub circulating_market_cap: Option<Decimal>,
 }
 
 impl From<ChainInfo> for proto::aggregated_token_info::ChainInfo {
