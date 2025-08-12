@@ -20,7 +20,6 @@ use zetachain_cctx_entity::sea_orm_active_enums::{
 };
 use zetachain_cctx_entity::{cross_chain_tx, sea_orm_active_enums::Kind, watermark};
 use zetachain_cctx_logic::events::NoOpBroadcaster;
-use zetachain_cctx_logic::models::{CrossChainTx, Token};
 
 use crate::helpers::{
     dummy_cctx_with_pagination_response, dummy_cross_chain_tx, dummy_related_cctxs_response,

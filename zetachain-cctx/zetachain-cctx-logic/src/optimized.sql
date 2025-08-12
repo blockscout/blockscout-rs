@@ -1,7 +1,6 @@
--- explain analyze
 SELECT
     cctx.index,
-    cs.status::text as status,
+    cs.status :: text,
     cs.last_update_timestamp,
     ip.amount,
     ip.sender_chain_id,
@@ -25,15 +24,12 @@ SELECT
     ) as status_reduced,
     t.symbol as token_symbol,
     t.zrc20_contract_address,
-    t.decimals,
-    cctx.id,
-    cctx.token_id,
-    cctx.receiver_chain_id,
-    cctx.receiver
+    t.decimals
 FROM
     cross_chain_tx cctx
-    INNER JOIN token t on t.id = cctx.token_id
-    INNER JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
-    INNER JOIN inbound_params ip ON cctx.id = ip.cross_chain_tx_id
+    join cctx_status cs on cs.cross_chain_tx_id = cctx.id
+    INNER JOIN inbound_params ip ON cs.cross_chain_tx_id = ip.cross_chain_tx_id
+    join token t on t.id = cctx.token_id
 WHERE
-    1 = 1
+    1=1
+

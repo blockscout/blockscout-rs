@@ -1215,7 +1215,6 @@ impl ZetachainCctxDatabase {
             .all(self.db.as_ref())
             .await?;
 
-
         Ok(SyncProgress {
             historical_watermark_timestamp,
             pending_status_updates_count: 0,
@@ -1553,46 +1552,7 @@ impl ZetachainCctxDatabase {
             });
         }
 
-        let related_sql = r#"
-            select
-            related_cctx.related_index, --0
-            related_cctx.depth, --1
-            ip.sender_chain_id as chain_id, --2
-            cs.status::text as status, --3
-            cs.created_timestamp, --4
-            related_cctx.parent_index, --5
-            COALESCE(erc20.name, gas.name) as name, --6
-            COALESCE(erc20.symbol, gas.symbol) as symbol, --7
-            COALESCE(erc20.decimals, gas.decimals) as decimals, --8
-            COALESCE(erc20.zrc20_contract_address, gas.zrc20_contract_address) as zrc20_contract_address, --9
-            COALESCE(erc20.icon_url, gas.icon_url) as icon_url, --10
-            ip.amount, --11
-            ip.coin_type::text, --12
-            ip.asset, --13
-            related_cctx.id --14
-            from
-                (
-                    select
-                        related.depth,
-                        cctx.index as cctx_index,
-                        related.index related_index,
-                        related.id id,
-                        parent.index as parent_index
-                    from
-                        cross_chain_tx cctx
-                        join cross_chain_tx root on COALESCE(cctx.root_id, cctx.id) = root.id
-                        join cross_chain_tx related on COALESCE(related.root_id, related.id) = root.id
-                        -- and related.id != cctx.id
-                        left join cross_chain_tx parent on related.parent_id = parent.id
-                ) as related_cctx
-                join inbound_params ip on related_cctx.id = ip.cross_chain_tx_id
-                join cctx_status cs on related_cctx.id = cs.cross_chain_tx_id
-                left join token erc20 on ip.asset = erc20.asset and erc20.coin_type::text = 'Erc20'
-                left join token gas on ip.sender_chain_id = gas.foreign_chain_id and gas.coin_type::text in ( 'Gas', 'Zeta' ) and ip.coin_type = gas.coin_type
-            where
-                cctx_index = $1
-            order by related_cctx.depth asc;
-"#;
+        let related_sql = include_str!("related.sql").to_string();
 
         let related_statement = Statement::from_sql_and_values(
             DbBackend::Postgres,
@@ -1609,7 +1569,7 @@ impl ZetachainCctxDatabase {
 
         for related_row in related_rows {
             let related_id: i32 = related_row
-                .try_get_by_index(14)
+                .try_get_by_index(13)
                 .map_err(|e| anyhow::anyhow!("related_row related_id: {}", e))?;
             let outbound_params = OutboundParamsEntity::Entity::find()
                 .filter(OutboundParamsEntity::Column::CrossChainTxId.eq(related_id))
@@ -1647,40 +1607,39 @@ impl ZetachainCctxDatabase {
                 created_timestamp: related_row
                     .try_get_by_index::<i64>(4)
                     .map_err(|e| anyhow::anyhow!("related_row created_timestamp: {}", e))?,
-                parent_index: related_row
-                    .try_get_by_index::<Option<String>>(5)
-                    .map_err(|e| anyhow::anyhow!("related_row parent_index: {}", e))?,
-                token_name: related_row
-                    .try_get_by_index::<Option<String>>(6)
-                    .map_err(|e| anyhow::anyhow!("related_row token_name: {}", e))?,
-                token_symbol: related_row
-                    .try_get_by_index::<Option<String>>(7)
-                    .map_err(|e| anyhow::anyhow!("related_row token_symbol: {}", e))?,
-                token_decimals: related_row
-                    .try_get_by_index::<Option<i32>>(8)
-                    .map_err(|e| anyhow::anyhow!("related_row token_decimals: {}", e))?,
-                token_zrc20_contract_address: related_row
-                    .try_get_by_index::<Option<String>>(9)
-                    .map_err(|e| {
-                        anyhow::anyhow!("related_row token_zrc20_contract_address: {}", e)
-                    })?,
-                token_icon_url: related_row
-                    .try_get_by_index::<Option<String>>(10)
-                    .map_err(|e| anyhow::anyhow!("related_row token_icon_url: {}", e))?,
+                parent_index: None,
                 inbound_amount: related_row
-                    .try_get_by_index::<String>(11)
+                    .try_get_by_index::<String>(5)
                     .map_err(|e| anyhow::anyhow!("related_row inbound_amount: {}", e))?,
                 inbound_coin_type: CoinTypeProto::from_str_name(
                     related_row
-                        .try_get_by_index::<String>(12)
+                        .try_get_by_index::<String>(6)
                         .map_err(|e| anyhow::anyhow!("related_row inbound_coin_type: {}", e))?
                         .as_str(),
                 )
                 .ok_or(anyhow::anyhow!("Invalid coin_type"))?
                 .into(),
                 inbound_asset: related_row
-                    .try_get_by_index::<Option<String>>(13)
+                    .try_get_by_index::<Option<String>>(7)
                     .map_err(|e| anyhow::anyhow!("related_row inbound_asset: {}", e))?,
+                token_name: related_row
+                    .try_get_by_index::<Option<String>>(8)
+                    .map_err(|e| anyhow::anyhow!("related_row token_name: {}", e))?,
+                token_symbol: related_row
+                    .try_get_by_index::<Option<String>>(9)
+                    .map_err(|e| anyhow::anyhow!("related_row token_symbol: {}", e))?,
+                token_decimals: related_row
+                    .try_get_by_index::<Option<i32>>(10)
+                    .map_err(|e| anyhow::anyhow!("related_row token_decimals: {}", e))?,
+                token_zrc20_contract_address: related_row
+                    .try_get_by_index::<Option<String>>(11)
+                    .map_err(|e| {
+                        anyhow::anyhow!("related_row token_zrc20_contract_address: {}", e)
+                    })?,
+                token_icon_url: related_row
+                    .try_get_by_index::<Option<String>>(12)
+                    .map_err(|e| anyhow::anyhow!("related_row token_icon_url: {}", e))?,
+
                 outbound_params,
             });
         }
@@ -1711,6 +1670,32 @@ impl ZetachainCctxDatabase {
         }))
     }
 
+    async fn prefetch_token_ids(&self, token_symbols: Vec<String>) -> anyhow::Result<Vec<i32>> {
+        let token_ids = TokenEntity::Entity::find()
+            .filter(TokenEntity::Column::Symbol.is_in(token_symbols))
+            .all(self.db.as_ref())
+            .await?;
+        Ok(token_ids.into_iter().map(|x| x.id).collect())
+    }
+
+    fn get_status_by_reduced_status(&self, status_reduced: &str) -> Vec<String> {
+        match status_reduced {
+            "Pending" => vec!["PendingOutbound", "PendingInbound", "PendingRevert"]
+                .into_iter()
+                .map(|x| x.to_string())
+                .collect(),
+            "Success" => vec!["OutboundMined"]
+                .into_iter()
+                .map(|x| x.to_string())
+                .collect(),
+            "Failed" => vec!["Aborted", "Reverted"]
+                .into_iter()
+                .map(|x| x.to_string())
+                .collect(),
+            _ => vec![],
+        }
+    }
+
     #[instrument(level = "info", skip_all)]
     pub async fn list_cctxs(
         &self,
@@ -1726,13 +1711,18 @@ impl ZetachainCctxDatabase {
 
         if !filters.status_reduced.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND status_reduced = ANY(${})", param_count));
+            sql.push_str(&format!(
+                " AND cs.status = ANY(${}::cctx_status_status[])",
+                param_count
+            ));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
                     filters
                         .status_reduced
                         .into_iter()
+                        .map(|s| self.get_status_by_reduced_status(&s))
+                        .flatten()
                         .map(|s| sea_orm::Value::String(Some(Box::new(s))))
                         .collect::<Vec<_>>(),
                 )),
@@ -1741,7 +1731,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.sender_address.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND sender_address = ANY(${})", param_count));
+            sql.push_str(&format!(" AND ip.sender = ANY(${})", param_count));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
@@ -1756,7 +1746,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.receiver_address.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND receiver_address = ANY(${})", param_count));
+            sql.push_str(&format!(" AND cctx.receiver = ANY(${})", param_count));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
@@ -1771,7 +1761,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.asset.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND asset = ANY(${})", param_count));
+            sql.push_str(&format!(" AND ip.asset = ANY(${})", param_count));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
@@ -1786,7 +1776,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.coin_type.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND coin_type::text = ANY(${})", param_count));
+            sql.push_str(&format!(" AND ip.coin_type::text = ANY(${})", param_count));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
@@ -1801,7 +1791,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.source_chain_id.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND sender_chain_id = ANY(${})", param_count));
+            sql.push_str(&format!(" AND ip.sender_chain_id = ANY(${})", param_count));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::Int,
                 Some(Box::new(
@@ -1816,7 +1806,10 @@ impl ZetachainCctxDatabase {
 
         if !filters.target_chain_id.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND receiver_chain_id = ANY(${})", param_count));
+            sql.push_str(&format!(
+                " AND cctx.receiver_chain_id = ANY(${})",
+                param_count
+            ));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::Int,
                 Some(Box::new(
@@ -1831,13 +1824,13 @@ impl ZetachainCctxDatabase {
 
         if let Some(start_timestamp) = filters.start_timestamp {
             param_count += 1;
-            sql.push_str(&format!(" AND created_timestamp >= ${}", param_count));
+            sql.push_str(&format!(" AND cs.created_timestamp >= ${}", param_count));
             params.push(sea_orm::Value::BigInt(Some(start_timestamp)));
         }
 
         if let Some(end_timestamp) = filters.end_timestamp {
             param_count += 1;
-            sql.push_str(&format!(" AND created_timestamp <= ${}", param_count));
+            sql.push_str(&format!(" AND cs.created_timestamp <= ${}", param_count));
             params.push(sea_orm::Value::BigInt(Some(end_timestamp)));
         }
 
@@ -1856,14 +1849,16 @@ impl ZetachainCctxDatabase {
 
         if !filters.token_symbol.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND token_symbol = ANY(${})", param_count));
+            let token_ids = self
+                .prefetch_token_ids(filters.token_symbol.clone())
+                .await?;
+            sql.push_str(&format!(" AND cctx.token_id = ANY(${})", param_count));
             params.push(sea_orm::Value::Array(
-                sea_orm::sea_query::ArrayType::String,
+                sea_orm::sea_query::ArrayType::Int,
                 Some(Box::new(
-                    filters
-                        .token_symbol
+                    token_ids
                         .into_iter()
-                        .map(|s| sea_orm::Value::String(Some(Box::new(s))))
+                        .map(|s| sea_orm::Value::Int(Some(s)))
                         .collect::<Vec<_>>(),
                 )),
             ));
@@ -1875,7 +1870,7 @@ impl ZetachainCctxDatabase {
         // Add ordering and pagination
         param_count += 1;
         sql.push_str(&format!(
-            " ORDER BY last_update_timestamp {} LIMIT ${}",
+            " ORDER BY cs.last_update_timestamp {} LIMIT ${}",
             direction.as_str_name(),
             param_count
         ));
@@ -2095,7 +2090,6 @@ impl ZetachainCctxDatabase {
                 id: ActiveValue::NotSet,
                 creator: ActiveValue::Set(cctx.creator.clone()),
                 index: ActiveValue::Set(cctx.index.clone()),
-                retries_number: ActiveValue::Set(0),
                 processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
                 token_id: ActiveValue::Set(token_id),
                 zeta_fees: ActiveValue::Set(cctx.zeta_fees.clone()),
@@ -2112,10 +2106,8 @@ impl ZetachainCctxDatabase {
                         .map_err(|e| anyhow::anyhow!(e))?,
                 ),
                 last_status_update_timestamp: ActiveValue::Set(Utc::now().naive_utc()),
-                root_id: ActiveValue::Set(None),
-                parent_id: ActiveValue::Set(None),
-                depth: ActiveValue::Set(0),
                 updated_by: ActiveValue::Set(job_id.to_string()),
+                ..Default::default()
             };
             models.push(model);
         }
