@@ -1,5 +1,5 @@
 restart_on_error = true
-restart_interval = 1000
+restart_interval = 10000
 
 [tracing]
 enabled = true
@@ -19,21 +19,24 @@ create_database = true
 run_migrations = true
 
 [indexer]
-enabled = false
+zetachain_id = 7000
+enabled = true
 polling_interval = 2000
-concurrency=10
-historical_batch_size=1
-status_update_batch_size = 5
-realtime_fetch_batch_size = 10
+concurrency = 10
+historical_batch_size = 100
+status_update_batch_size = 50
+realtime_fetch_batch_size = 100
 retry_threshold = 10
-failed_cctxs_polling_interval = 10000
-realtime_threshold = 10000
-realtime_polling_interval = 10000
-token_polling_interval = 10000
+failed_cctxs_polling_interval = 100000000
+realtime_threshold = 100000
+realtime_polling_interval = 1000
+token_polling_interval = 2000000
 token_batch_size = 100
+token_sync_enabled = true
 
 [rpc]
-url = "https://zetachain-athens.g.allthatnode.com/archive/rest/API_KEY/zeta-chain/"
-request_per_second = 10
-num_of_retries=30
-retry_delay_ms=500
+url = "https://zetachain-athens.g.allthatnode.com/archive/rest/YOUR_API_KEY/"
+blockscout_instance_url = "https://zetachain.blockscout.com/"
+request_per_second = 20
+num_of_retries = 30
+retry_delay_ms = 500

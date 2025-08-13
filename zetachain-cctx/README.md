@@ -84,5 +84,8 @@ Retries: every failed job increments a counter and is re-queued until retry_thre
 | `ZETACHAIN_CCTX__RESTART_INTERVAL` | | e.g. `1000` | `0` |
 | `ZETACHAIN_CCTX__RESTART_ON_ERROR` | | e.g. `true` | `false` |
 | `ZETACHAIN_CCTX__WEBSOCKET__ENABLED` | | | `true` |
+| `ZETACHAIN_CCTX__INDEXER__TOKEN_SYNC_ENABLED` | true | e.g. `true` | |
+| `ZETACHAIN_CCTX__INDEXER__ZETACHAIN_ID` | true | e.g. `7001` | |
+| `ZETACHAIN_CCTX__RPC__BLOCKSCOUT_INSTANCE_URL` | true | e.g. `https://zetachain.blockscout.com/` | |
 
 [anchor]: <> (anchors.envs.end)
