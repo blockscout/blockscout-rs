@@ -1806,9 +1806,8 @@ impl ZetachainCctxDatabase {
             sql.push_str(&format!(
                 " AND (ip.observed_hash = ${} OR ip.ballot_index = ${})",
                 param_count,
-                param_count + 1
+                param_count
             ));
-            params.push(sea_orm::Value::String(Some(Box::new(hash.clone()))));
             params.push(sea_orm::Value::String(Some(Box::new(hash))));
         }
 
@@ -1825,7 +1824,7 @@ impl ZetachainCctxDatabase {
         params.push(sea_orm::Value::BigInt(Some(limit + 1)));
 
         let statement = Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params);
-        tracing::info!("statement: {}", statement.to_string());
+        tracing::debug!("statement: {}", statement.to_string());
         let rows = self
             .db
             .query_all(statement)
