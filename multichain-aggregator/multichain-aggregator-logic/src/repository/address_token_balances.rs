@@ -275,8 +275,7 @@ mod tests {
             prepare_list_by_address_query(address, token_types, chain_ids, page_size, page_token);
 
         let sql = query.to_string(PostgresQueryBuilder);
-        let expected = format!(
-            r#"
+        let expected = r#"
             WITH "base" AS (SELECT
                     "address_token_balances"."id" AS "id",
                     "address_token_balances"."address_hash" AS "address_hash",
@@ -355,9 +354,8 @@ mod tests {
             "value" DESC,
             "id" DESC
             LIMIT 11
-            "#
-        );
+            "#;
 
-        assert_eq!(normalize_sql(&expected), normalize_sql(&sql));
+        assert_eq!(normalize_sql(expected), normalize_sql(&sql));
     }
 }
