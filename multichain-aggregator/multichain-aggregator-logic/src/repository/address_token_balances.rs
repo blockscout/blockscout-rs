@@ -75,23 +75,13 @@ where
 
 pub type ListAddressTokensPageToken = (Option<BigDecimal>, BigDecimal, i64);
 
-pub async fn list_by_address<C>(
-    db: &C,
+fn prepare_list_by_address_query(
     address: alloy_primitives::Address,
     token_types: Vec<TokenType>,
     chain_ids: Vec<i64>,
     page_size: u64,
     page_token: Option<ListAddressTokensPageToken>,
-) -> Result<
-    (
-        Vec<AggregatedAddressTokenBalance>,
-        Option<ListAddressTokensPageToken>,
-    ),
-    DbErr,
->
-where
-    C: ConnectionTrait,
-{
+) -> SelectStatement {
     let tokens_rel = Entity::belongs_to(tokens::Entity)
         .from((Column::TokenAddressHash, Column::ChainId))
         .to((tokens::Column::AddressHash, tokens::Column::ChainId))
@@ -191,13 +181,34 @@ where
         .to_owned()
     };
 
-    let query = WithClause::new()
-        .cte(base_cte)
-        .cte(union_cte)
-        .to_owned()
-        .query(apply_pagination(
-            Query::select().column(ColumnRef::Asterisk).from("tokens"),
-        ));
+    let mut query = SelectStatement::new()
+        .with_cte(WithClause::new().cte(base_cte).cte(union_cte).to_owned())
+        .column(ColumnRef::Asterisk)
+        .from("tokens")
+        .to_owned();
+
+    apply_pagination(&mut query)
+}
+
+pub async fn list_by_address<C>(
+    db: &C,
+    address: alloy_primitives::Address,
+    token_types: Vec<TokenType>,
+    chain_ids: Vec<i64>,
+    page_size: u64,
+    page_token: Option<ListAddressTokensPageToken>,
+) -> Result<
+    (
+        Vec<AggregatedAddressTokenBalance>,
+        Option<ListAddressTokensPageToken>,
+    ),
+    DbErr,
+>
+where
+    C: ConnectionTrait,
+{
+    let query =
+        prepare_list_by_address_query(address, token_types, chain_ids, page_size, page_token);
 
     let balances =
         AggregatedAddressTokenBalance::find_by_statement(db.get_database_backend().build(&query))
@@ -239,4 +250,114 @@ where
         .await?
         .expect("expr should be present")
         .try_get_by_index(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::sea_query::PostgresQueryBuilder;
+
+    pub fn normalize_sql(statement: &str) -> String {
+        statement.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    #[tokio::test]
+    async fn statements_are_correct() {
+        let address = "0x0000000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        let token_types = vec![TokenType::Erc7802];
+        let chain_ids = vec![1, 2, 3];
+        let page_size = 10;
+        let page_token = None;
+
+        let query =
+            prepare_list_by_address_query(address, token_types, chain_ids, page_size, page_token);
+
+        let sql = query.to_string(PostgresQueryBuilder);
+        let expected = format!(
+            r#"
+            WITH "base" AS (SELECT
+                    "address_token_balances"."id" AS "id",
+                    "address_token_balances"."address_hash" AS "address_hash",
+                    "address_token_balances"."value" AS "value",
+                    "address_token_balances"."token_id" AS "token_id",
+                    "tokens"."address_hash" AS "token_address_hash",
+                    "tokens"."chain_id" AS "token_chain_id",
+                    "tokens"."name" AS "token_name",
+                    "tokens"."symbol" AS "token_symbol",
+                    "tokens"."decimals" AS "token_decimals",
+                    CAST("tokens"."token_type" AS "text") AS "token_token_type",
+                    "tokens"."icon_url" AS "token_icon_url",
+                    "tokens"."fiat_value" AS "token_fiat_value",
+                    "tokens"."circulating_market_cap" AS "token_circulating_market_cap",
+                    "tokens"."total_supply" AS "token_total_supply",
+                    "tokens"."holders_count" AS "token_holders_count",
+                    "tokens"."transfers_count" AS "token_transfers_count",
+                    ("address_token_balances"."value" * "tokens"."fiat_value") / (POWER(10,"tokens"."decimals")::numeric) AS "fiat_balance"
+                FROM "address_token_balances"
+                    INNER JOIN "tokens" ON "address_token_balances"."token_address_hash" = "tokens"."address_hash"
+                    AND "address_token_balances"."chain_id" = "tokens"."chain_id"
+                WHERE "address_token_balances"."address_hash" = '\x0000000000000000000000000000000000000000'
+                    AND "address_token_balances"."chain_id" IN (1, 2, 3)
+                    AND "address_token_balances"."value" > 0
+                    AND "tokens"."token_type" IN (CAST('ERC-7802' AS "token_type"))) ,
+            "tokens" AS (SELECT
+                    "token_address_hash",
+                    "token_name",
+                    "token_symbol",
+                    "token_decimals",
+                    "token_token_type",
+                    "token_icon_url",
+                    "token_fiat_value",
+                    "token_circulating_market_cap",
+                    "token_total_supply",
+                    "token_holders_count",
+                    "token_transfers_count",
+                    jsonb_build_array(jsonb_build_object('chain_id',"token_chain_id",'holders_count',"token_holders_count",'total_supply',"token_total_supply")) AS "token_chain_infos",
+                    "id",
+                    '\x0000000000000000000000000000000000000000' AS "address_hash",
+                    "value",
+                    jsonb_build_array(jsonb_build_object('chain_id',"token_chain_id",'value',"value")) AS "chain_values",
+                    "token_id",
+                    "fiat_balance"
+                FROM "base"
+                WHERE "token_token_type" <> 'ERC-7802'
+                UNION ALL
+                (SELECT "token_address_hash",
+                    "token_name",
+                    "token_symbol",
+                    "token_decimals",
+                    'ERC-7802' AS "token_token_type",
+                    MAX("token_icon_url") AS "token_icon_url",
+                    AVG("token_fiat_value") AS "token_fiat_value",
+                    AVG("token_circulating_market_cap") AS "token_circulating_market_cap",
+                    SUM("token_total_supply") AS "token_total_supply",
+                    SUM("token_holders_count") AS "token_holders_count",
+                    SUM("token_transfers_count") AS "token_transfers_count",
+                    jsonb_agg(jsonb_build_object('chain_id',"token_chain_id",'holders_count',"token_holders_count",'total_supply',"token_total_supply")) AS "token_chain_infos",
+                    MIN("id") AS "id",
+                    '\x0000000000000000000000000000000000000000' AS "address_hash",
+                    SUM("value") AS "value",
+                    jsonb_agg(jsonb_build_object('chain_id',"token_chain_id",'value',"value")) AS "chain_values",
+                    NULL AS "token_id",
+                    AVG("fiat_balance") AS "fiat_balance"
+                    FROM "base"
+                    WHERE "token_token_type" = 'ERC-7802'
+                    GROUP BY 
+                        "token_address_hash",
+                        "token_name",
+                        "token_symbol",
+                        "token_decimals"))
+            SELECT *
+            FROM "tokens"
+            ORDER BY "fiat_balance" DESC NULLS LAST,
+            "value" DESC,
+            "id" DESC
+            LIMIT 11
+            "#
+        );
+
+        assert_eq!(normalize_sql(&expected), normalize_sql(&sql));
+    }
 }
