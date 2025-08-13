@@ -87,7 +87,7 @@ fn mock_cross_chain_tx(index: usize, ts: NaiveDateTime) -> cross_chain_tx::Activ
     cross_chain_tx::ActiveModel {
         id: Set(index as i32),
         creator: Set("me".to_string()),
-        index: Set(format!("{}", index)),
+        index: Set(format!("{index}")),
         zeta_fees: Set("0".to_string()),
         retries_number: Set(0),
         processing_status: Set(ProcessingStatus::Done),

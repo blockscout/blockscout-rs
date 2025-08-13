@@ -1,19 +1,7 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey,
-    chart_prelude::*,
-    charts::db_interaction::utils::datetime_range_filter,
-    data_source::{
-        kinds::remote_db::{PullOne24hCached, RemoteDatabaseSource, StatementFromRange},
-        types::IndexerMigrations,
-    },
-    lines::op_stack_operational_transactions_filter,
-};
+use crate::{chart_prelude::*, lines::op_stack_operational_transactions_filter};
 use blockscout_db::entity::{blocks, transactions};
-use chrono::{DateTime, Utc};
-use sea_query::{Alias, Func};
-use sea_orm::{DbBackend, FromQueryResult, IntoSimpleExpr, QuerySelect, QueryTrait, Statement};
 
 pub mod average_txn_fee_24h;
 pub mod new_txns_24h;

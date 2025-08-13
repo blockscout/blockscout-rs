@@ -1,40 +1,8 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey, ChartProperties, Named,
-    chart_prelude::*,
-    charts::db_interaction::{read::QueryAllBlockTimestampRange, utils::datetime_range_filter},
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
-    indexing_status::{
-        BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
-    },
-    types::timespans::{Month, Week, Year},
-};
+use crate::chart_prelude::*;
 
 use blockscout_db::entity::{blocks, user_operations};
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_query::{Alias, Asterisk, Expr, Func, IntoColumnRef, IntoIden, SimpleExpr};
-use sea_orm::{
-    ColumnTrait, EntityTrait, IntoIdentity, IntoSimpleExpr, Order, QueryFilter, QueryOrder,
-    QuerySelect, QueryTrait, Statement,
-};
 
 pub struct NewUserOpsStatement;
 impl_db_choice!(NewUserOpsStatement, UseBlockscoutDB);

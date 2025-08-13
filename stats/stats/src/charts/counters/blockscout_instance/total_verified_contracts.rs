@@ -1,24 +1,5 @@
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    chart_prelude::*,
-    data_source::{
-        kinds::{
-            data_manipulation::map::MapToString,
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::IndexingStatusTrait,
-};
-
+use crate::chart_prelude::*;
 use blockscout_db::entity::smart_contracts;
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{
-    ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, QueryTrait, Statement,
-    sea_query::{Asterisk, Func, IntoColumnRef},
-};
 
 pub struct TotalVerifiedContractsStatement;
 impl_db_choice!(TotalVerifiedContractsStatement, UseBlockscoutDB);

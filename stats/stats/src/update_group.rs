@@ -219,22 +219,8 @@ pub trait UpdateGroup: core::fmt::Debug {
 ///
 /// ```rust
 /// # use stats::chart_prelude::*;
-/// # use stats::{
-/// #     QueryAllBlockTimestampRange, construct_update_group,
-/// #     types::timespans::DateValue, ChartProperties, Named, ChartError,
-/// #     ChartKey,
-/// # };
-/// # use stats::data_source::{
-/// #     kinds::{
-/// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
-/// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-/// #     },
-/// #     types::{UpdateContext, UpdateParameters, IndexerMigrations},
-/// # };
-/// # use chrono::{NaiveDate, DateTime, Utc};
-/// # use entity::sea_orm_active_enums::ChartType;
+/// # use stats::construct_update_group;
 /// # use std::{ops::Range, collections::HashSet};
-/// # use sea_orm::Statement;
 ///
 /// struct DummyRemoteStatement;
 /// impl_db_choice!(DummyRemoteStatement, UseBlockscoutDB);

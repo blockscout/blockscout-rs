@@ -1,21 +1,6 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, NaiveDate, Utc};
-use sea_orm::Statement;
-
-use crate::{
-    ChartError, ChartKey,
-    chart_prelude::*,
-    charts::db_interaction::read::cached::find_all_cached,
-    data_source::{
-        UpdateContext,
-        kinds::remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
-        types::IndexerMigrations,
-    },
-    range::UniversalRange,
-    types::{Timespan, TimespanDuration, new_txns::NewTxnsCombinedPoint},
-    utils::day_start,
-};
+use crate::{chart_prelude::*, types::new_txns::NewTxnsCombinedPoint};
 
 pub mod all_new_txns_window;
 pub mod op_stack_operational;

@@ -1,18 +1,8 @@
 use std::marker::PhantomData;
 
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    data_source::kinds::{
-        data_manipulation::map::{Map, MapFunction},
-        local_db::DirectPointLocalDbChartSource,
-    },
-    indexing_status::IndexingStatusTrait,
-    types::TimespanValue,
-};
+use crate::chart_prelude::*;
 use std::fmt::Debug;
 
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
 use tracing::warn;
 
 use super::{TotalBlocksInt, TotalTxnsInt};

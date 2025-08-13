@@ -7,32 +7,9 @@
 use std::collections::HashSet;
 
 use crate::{
-    ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
-    charts::db_interaction::read::find_all_points,
-    data_source::{
-        UpdateContext,
-        kinds::{
-            data_manipulation::map::{Map, MapParseTo},
-            local_db::{
-                LocalDbChartSource,
-                parameters::{
-                    DefaultCreate, DefaultQueryVec, update::clear_and_query_all::ClearAllAndPassVec,
-                },
-            },
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::IndexingStatusTrait,
+    chart_prelude::*,
     lines::{NEW_TXNS_WINDOW_RANGE, NewBlocksStatement, NewTxnsWindowInt},
-    range::UniversalRange,
-    types::{Timespan, TimespanDuration, TimespanValue, timespans::DateValue},
-    utils::day_start,
 };
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::Statement;
 
 use super::arbitrum_new_operational_txns::ArbitrumCalculateOperationalTxnsVec;
 

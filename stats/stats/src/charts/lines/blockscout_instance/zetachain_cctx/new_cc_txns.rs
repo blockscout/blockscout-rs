@@ -1,39 +1,6 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey, ChartProperties, IndexingStatus, Named,
-    chart_prelude::PullAllWithAndSort,
-    charts::db_interaction::read::zetachain_cctx::QueryAllCctxTimetsampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
-    indexing_status::{IndexingStatusTrait, ZetachainCctxIndexingStatus},
-    preludes::chart_prelude::*,
-    range::UniversalRange,
-    types::timespans::{Month, Week, Year},
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{
-    ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, QueryTrait, Statement,
-    sea_query::{Alias, Asterisk, Expr, ExprTrait, Func, SimpleExpr},
-};
-use sea_query::IntoColumnRef;
+use crate::chart_prelude::*;
 
 pub struct NewZetachainCrossChainTxnsStatement;
 impl_db_choice!(NewZetachainCrossChainTxnsStatement, UseZetachainCctxDB);

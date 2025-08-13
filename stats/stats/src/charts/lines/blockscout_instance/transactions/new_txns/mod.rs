@@ -1,26 +1,13 @@
 use std::{collections::HashSet, ops::Range};
 
-use blockscout_db::entity::{blocks, transactions};
-use chrono::{DateTime, Utc};
-use op_stack_operational::OpStackNewOperationalTxns;
-use sea_orm::{
-    ColumnTrait, DatabaseBackend, EntityName, EntityTrait, IntoIdentity, IntoSimpleExpr,
-    QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, sea_query,
-};
-use sea_query::{Alias, Expr, ExprTrait, Func, IntoIden};
-
 use crate::{
-    ChartKey, ChartProperties, QueryAllBlockTimestampRange,
-    chart_prelude::*,
-    charts::db_interaction::utils::datetime_range_filter,
-    counters::OpStackYesterdayOperationalTxns,
-    data_source::{
-        kinds::remote_db::{PullAllWithAndSortCached, RemoteDatabaseSource, StatementFromRange},
-        types::IndexerMigrations,
-    },
-    lines::OpStackNewOperationalTxnsWindow,
-    types::new_txns::NewTxnsCombinedPoint,
+    chart_prelude::*, counters::OpStackYesterdayOperationalTxns,
+    lines::OpStackNewOperationalTxnsWindow, types::new_txns::NewTxnsCombinedPoint,
 };
+
+use blockscout_db::entity::{blocks, transactions};
+use op_stack_operational::OpStackNewOperationalTxns;
+use sea_orm::prelude::*;
 
 pub mod all_new_txns;
 pub mod op_stack_operational;
@@ -33,7 +20,7 @@ impl_db_choice!(NewTxnsCombinedStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewTxnsCombinedStatement {
     fn get_statement(
-        range: Option<Range<DateTime<Utc>>>,
+        range: Option<Range<DateTimeUtc>>,
         completed_migrations: &IndexerMigrations,
         enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {

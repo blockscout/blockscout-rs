@@ -1,26 +1,4 @@
-use crate::{
-    ChartProperties, Named,
-    data_source::kinds::{
-        data_manipulation::{
-            map::{Map, MapParseTo, MapToString, StripExt},
-            resolutions::sum::SumLowerResolution,
-        },
-        local_db::{
-            DirectVecLocalDbChartSource,
-            parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-            },
-        },
-    },
-    define_and_impl_resolution_properties,
-    types::{
-        new_txns::ExtractOpStackTxns,
-        timespans::{Month, Week, Year},
-    },
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
+use crate::{chart_prelude::*, types::new_txns::ExtractOpStackTxns};
 
 use super::NewTxnsCombinedRemote;
 

@@ -1,14 +1,4 @@
-use crate::{
-    ChartProperties, Named,
-    data_source::kinds::{
-        data_manipulation::{last_point::LastPoint, map::StripExt},
-        local_db::DirectPointLocalDbChartSource,
-    },
-    lines::NewContracts,
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
+use crate::{chart_prelude::*, lines::NewContracts};
 
 pub struct Properties;
 

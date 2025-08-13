@@ -1,26 +1,6 @@
-use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    chart_prelude::*,
-    charts::db_interaction::read::find_one_value,
-    data_source::{
-        UpdateContext,
-        kinds::{
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
-        },
-    },
-    indexing_status::IndexingStatusTrait,
-    range::UniversalRange,
-    types::TimespanValue,
-};
+use crate::chart_prelude::*;
 
 use blockscout_db::entity::transactions;
-use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{
-    ColumnTrait, DbBackend, EntityTrait, FromQueryResult, QueryFilter, QuerySelect, QueryTrait,
-    Statement,
-};
 
 pub struct PendingTxnsStatement;
 impl_db_choice!(PendingTxnsStatement, UseBlockscoutDB);

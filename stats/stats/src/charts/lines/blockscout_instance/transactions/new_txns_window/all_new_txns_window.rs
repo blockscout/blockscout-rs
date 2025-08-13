@@ -5,23 +5,7 @@
 //!
 //! Does not include last day, even as incomplete day.
 
-use crate::{
-    ChartProperties, IndexingStatus, Named,
-    data_source::kinds::{
-        data_manipulation::map::{Map, MapParseTo, StripExt},
-        local_db::{
-            LocalDbChartSource,
-            parameters::{
-                DefaultCreate, DefaultQueryVec, update::clear_and_query_all::ClearAllAndPassVec,
-            },
-        },
-    },
-    indexing_status::IndexingStatusTrait,
-    types::new_txns::ExtractAllTxns,
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
+use crate::chart_prelude::*;
 
 use super::NewTxnsWindowCombinedRemote;
 

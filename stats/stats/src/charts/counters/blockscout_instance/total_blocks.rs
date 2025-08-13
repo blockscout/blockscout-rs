@@ -1,23 +1,5 @@
-use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    charts::db_interaction::read::query_estimated_table_rows,
-    data_source::{
-        kinds::{
-            data_manipulation::map::MapParseTo,
-            local_db::{DirectPointLocalDbChartSourceWithEstimate, parameters::ValueEstimation},
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
-        },
-        types::UpdateContext,
-    },
-    indexing_status::IndexingStatusTrait,
-    range::UniversalRange,
-    types::timespans::DateValue,
-};
-
+use crate::chart_prelude::*;
 use blockscout_db::entity::blocks;
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{FromQueryResult, QuerySelect, prelude::*, sea_query::Expr};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {

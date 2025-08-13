@@ -1,25 +1,5 @@
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    chart_prelude::*,
-    charts::db_interaction::utils::interval_24h_filter,
-    data_source::{
-        kinds::{
-            data_manipulation::map::Map,
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::IndexingStatusTrait,
-};
+use crate::chart_prelude::*;
 use blockscout_db::entity::blocks;
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{
-    ColumnTrait, DbBackend, EntityTrait, IntoSimpleExpr, QueryFilter, QuerySelect, QueryTrait,
-    Statement,
-};
-use sea_query::{Asterisk, Func, IntoColumnRef};
 
 use super::{CalculateOperationalTxns, NewTxns24hInt};
 

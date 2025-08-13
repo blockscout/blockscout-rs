@@ -13,13 +13,9 @@ pub mod user_ops_growth;
 
 use std::ops::Range;
 
+use crate::sea_orm_prelude::*;
 use blockscout_db::entity::{blocks, user_operations};
 use chrono::{DateTime, Utc};
-use sea_query::{Alias, Expr, Func, IntoIden, SimpleExpr};
-use sea_orm::{
-    ColumnTrait, EntityTrait, IntoIdentity, IntoSimpleExpr, Order, QueryFilter, QueryOrder,
-    QuerySelect, QueryTrait, Statement,
-};
 
 use crate::charts::db_interaction::utils::datetime_range_filter;
 

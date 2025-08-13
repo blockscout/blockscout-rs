@@ -1,21 +1,5 @@
-use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    chart_prelude::*,
-    charts::db_interaction::read::query_estimated_table_rows,
-    data_source::{
-        kinds::{
-            local_db::{DirectPointLocalDbChartSourceWithEstimate, parameters::ValueEstimation},
-            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::IndexingStatusTrait,
-    types::{TimespanValue, timespans::DateValue},
-};
+use crate::chart_prelude::*;
 use blockscout_db::entity::addresses;
-use chrono::{NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DatabaseConnection, DbBackend, EntityName, Statement};
 
 pub struct TotalAddressesStatement;
 impl_db_choice!(TotalAddressesStatement, UseBlockscoutDB);

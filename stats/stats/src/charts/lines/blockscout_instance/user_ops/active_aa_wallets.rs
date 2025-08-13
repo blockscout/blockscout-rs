@@ -2,27 +2,9 @@
 
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    chart_prelude::*,
-    data_source::{
-        kinds::{
-            local_db::{
-                DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days,
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::{
-        BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
-    },
-};
+use crate::chart_prelude::*;
 
 use blockscout_db::entity::user_operations;
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_query::IntoColumnRef;
-use sea_orm::Statement;
 
 use super::count_distinct_in_user_ops;
 

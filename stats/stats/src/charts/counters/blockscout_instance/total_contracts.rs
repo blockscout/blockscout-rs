@@ -1,21 +1,5 @@
-use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    data_source::{
-        UpdateContext,
-        kinds::{
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
-        },
-    },
-    indexing_status::IndexingStatusTrait,
-    range::UniversalRange,
-    types::timespans::DateValue,
-};
-
+use crate::chart_prelude::*;
 use blockscout_db::entity::addresses;
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{QuerySelect, prelude::*};
 
 pub struct TotalContractsQueryBehaviour;
 

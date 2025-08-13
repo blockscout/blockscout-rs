@@ -1,34 +1,9 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
-    ChartKey, ChartProperties, Named,
     chart_prelude::*,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::average::AverageLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
     lines::{NewTxnsInt, NewTxnsMonthlyInt},
-    types::timespans::{Month, Week, Year},
-    utils::{produce_filter_and_values, sql_with_range_filter_opt},
 };
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
 
 const GWEI: i64 = 1_000_000_000;
 

@@ -1,25 +1,7 @@
 use std::ops::Bound;
 
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    chart_prelude::*,
-    data_source::{
-        kinds::{
-            data_manipulation::map::MapToString,
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::{IndexingStatusTrait, ZetachainCctxIndexingStatus},
-    lines::zetachain_cctx_datetime_range_filter,
-    range::UniversalRange,
-};
+use crate::{chart_prelude::*, lines::zetachain_cctx_datetime_range_filter};
 
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, QuerySelect, QueryTrait, prelude::*};
-use sea_query::{Asterisk, Func, IntoColumnRef};
 use zetachain_cctx_entity::sea_orm_active_enums::CctxStatusStatus;
 
 pub struct PendingZetachainCrossChainTxnsStatement;
