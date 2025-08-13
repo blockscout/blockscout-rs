@@ -1484,6 +1484,7 @@ name = "entity"
 version = "0.1.0"
 dependencies = [
  "sea-orm",
+ "sea-query",
 ]
 
 [[package]]
@@ -4668,6 +4669,7 @@ dependencies = [
  "rust_decimal",
  "rust_decimal_macros",
  "sea-orm",
+ "sea-query",
  "serde_json",
  "stats-proto",
  "syn 2.0.98",
@@ -4724,6 +4726,7 @@ dependencies = [
  "reqwest",
  "rstest",
  "sea-orm",
+ "sea-query",
  "serde",
  "serde_json",
  "serde_with",

@@ -15,7 +15,7 @@ use std::ops::Range;
 
 use blockscout_db::entity::{blocks, user_operations};
 use chrono::{DateTime, Utc};
-use migration::{Alias, Expr, Func, IntoIden, SimpleExpr};
+use sea_query::{Alias, Expr, Func, IntoIden, SimpleExpr};
 use sea_orm::{
     ColumnTrait, EntityTrait, IntoIdentity, IntoSimpleExpr, Order, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait, Statement,

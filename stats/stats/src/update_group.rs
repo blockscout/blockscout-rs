@@ -218,6 +218,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// ## Example
 ///
 /// ```rust
+/// # use stats::chart_prelude::*;
 /// # use stats::{
 /// #     QueryAllBlockTimestampRange, construct_update_group,
 /// #     types::timespans::DateValue, ChartProperties, Named, ChartError,
@@ -236,6 +237,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # use sea_orm::Statement;
 ///
 /// struct DummyRemoteStatement;
+/// impl_db_choice!(DummyRemoteStatement, UseBlockscoutDB);
 ///
 /// impl StatementFromRange for DummyRemoteStatement {
 ///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &IndexerMigrations, _: &HashSet<ChartKey>) -> Statement {

@@ -16,8 +16,8 @@ use crate::{
 use blockscout_db::entity::smart_contracts;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use migration::{Asterisk, Func, IntoColumnRef};
 use sea_orm::{DbBackend, IntoSimpleExpr, QuerySelect, QueryTrait, prelude::*};
+use sea_query::{Asterisk, Func, IntoColumnRef};
 
 pub struct NewVerifiedContracts24hStatement;
 impl_db_choice!(NewVerifiedContracts24hStatement, UseBlockscoutDB);

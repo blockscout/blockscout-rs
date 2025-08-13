@@ -12,7 +12,7 @@ use crate::{
 };
 use blockscout_db::entity::{blocks, transactions};
 use chrono::{DateTime, Utc};
-use migration::{Alias, Func};
+use sea_query::{Alias, Func};
 use sea_orm::{DbBackend, FromQueryResult, IntoSimpleExpr, QuerySelect, QueryTrait, Statement};
 
 pub mod average_txn_fee_24h;

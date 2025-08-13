@@ -15,6 +15,7 @@ sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
 ] }
+sea-query = { workspace = true }
 tokio = "1"
 thiserror = "1.0"
 chrono = "0.4"

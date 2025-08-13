@@ -105,10 +105,15 @@ fn mock_cross_chain_tx(index: usize, ts: NaiveDateTime) -> cross_chain_tx::Activ
 }
 
 fn mock_cctx_status(index: usize, ts: NaiveDateTime) -> cctx_status::ActiveModel {
+    let status = if index % 2 == 0 {
+        CctxStatusStatus::OutboundMined
+    } else {
+        CctxStatusStatus::PendingRevert
+    };
     cctx_status::ActiveModel {
         id: Set(index as i32),
         cross_chain_tx_id: Set(index as i32),
-        status: Set(CctxStatusStatus::OutboundMined),
+        status: Set(status),
         status_message: Set(None),
         error_message: Set(None),
         last_update_timestamp: Set(ts),

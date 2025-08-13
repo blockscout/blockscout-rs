@@ -16,25 +16,24 @@ use crate::{
                     Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
                 },
             },
-            remote_db::{
-                RemoteDatabaseSource, StatementFromRange,
-                db_choice::{UseZetachainCctxDB, impl_db_choice},
-            },
+            remote_db::{RemoteDatabaseSource, StatementFromRange},
         },
         types::IndexerMigrations,
     },
     define_and_impl_resolution_properties,
     indexing_status::{IndexingStatusTrait, ZetachainCctxIndexingStatus},
+    preludes::chart_prelude::*,
+    range::UniversalRange,
     types::timespans::{Month, Week, Year},
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use migration::IntoColumnRef;
 use sea_orm::{
     ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, QueryTrait, Statement,
-    sea_query::{Alias, Asterisk, Expr, ExprTrait, Func},
+    sea_query::{Alias, Asterisk, Expr, ExprTrait, Func, SimpleExpr},
 };
+use sea_query::IntoColumnRef;
 
 pub struct NewZetachainCrossChainTxnsStatement;
 impl_db_choice!(NewZetachainCrossChainTxnsStatement, UseZetachainCctxDB);
@@ -59,17 +58,24 @@ impl StatementFromRange for NewZetachainCrossChainTxnsStatement {
                 "value",
             )
             .left_join(zetachain_cctx_entity::cctx_status::Entity)
-            .apply_if(range, |query, range| {
-                let timestamp_col =
-                    zetachain_cctx_entity::cctx_status::Column::CreatedTimestamp.into_expr();
-                let start = Expr::cust_with_values("extract(epoch from $1)", [range.start]);
-                let end = Expr::cust_with_values("extract(epoch from $1)", [range.end]);
-                query
-                    .filter(timestamp_col.clone().lt(end))
-                    .filter(timestamp_col.gte(start))
+            .apply_if(range, |query, range: Range<DateTime<Utc>>| {
+                query.filter(zetachain_cctx_datetime_range_filter(range.into()))
             })
             .group_by(Expr::col(Alias::new(date_col)))
             .build(DbBackend::Postgres)
+    }
+}
+
+pub fn zetachain_cctx_datetime_range_filter(range: UniversalRange<DateTime<Utc>>) -> SimpleExpr {
+    let timestamp_col = zetachain_cctx_entity::cctx_status::Column::CreatedTimestamp.into_expr();
+    let (start_bound, end_bound) = range.into_inclusive_pair();
+    let start_expr = start_bound.map(|s| Expr::cust_with_values("extract(epoch from $1)", [s]));
+    let end_expr = end_bound.map(|e| Expr::cust_with_values("extract(epoch from $1)", [e]));
+    match (start_expr, end_expr) {
+        (Some(start), Some(end)) => timestamp_col.clone().lte(end).and(timestamp_col.gte(start)),
+        (Some(start), None) => timestamp_col.gte(start),
+        (None, Some(end)) => timestamp_col.lte(end),
+        (None, None) => SimpleExpr::Constant(true.into()),
     }
 }
 
@@ -156,7 +162,7 @@ mod tests {
                 CAST(COUNT(*) AS TEXT) AS "value"
             FROM "cross_chain_tx"
             LEFT JOIN "cctx_status" ON "cross_chain_tx"."id" = "cctx_status"."cross_chain_tx_id"
-            WHERE "cctx_status"."created_timestamp" < (extract(epoch from '2025-01-02 00:00:00.000000 +00:00'))
+            WHERE "cctx_status"."created_timestamp" <= (extract(epoch from '2025-01-01 23:59:59.999999 +00:00'))
                 AND "cctx_status"."created_timestamp" >= (extract(epoch from '2025-01-01 00:00:00.000000 +00:00'))
             GROUP BY "date"
         "#;

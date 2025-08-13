@@ -2,13 +2,12 @@ use std::{collections::HashSet, ops::Range};
 
 use blockscout_db::entity::{blocks, transactions};
 use chrono::{DateTime, Utc};
-use migration::{Alias, ExprTrait, IntoIden};
 use op_stack_operational::OpStackNewOperationalTxns;
 use sea_orm::{
     ColumnTrait, DatabaseBackend, EntityName, EntityTrait, IntoIdentity, IntoSimpleExpr,
     QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, sea_query,
 };
-use sea_query::{Expr, Func};
+use sea_query::{Alias, Expr, ExprTrait, Func, IntoIden};
 
 use crate::{
     ChartKey, ChartProperties, QueryAllBlockTimestampRange,

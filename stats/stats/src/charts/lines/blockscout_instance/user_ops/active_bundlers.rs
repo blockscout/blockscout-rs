@@ -23,7 +23,7 @@ use crate::{
 use blockscout_db::entity::user_operations;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use migration::IntoColumnRef;
+use sea_query::IntoColumnRef;
 use sea_orm::Statement;
 
 use super::count_distinct_in_user_ops;

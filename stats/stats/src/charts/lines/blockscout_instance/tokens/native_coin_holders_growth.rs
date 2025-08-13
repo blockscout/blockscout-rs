@@ -29,7 +29,7 @@ use blockscout_metrics_tools::AggregateTimer;
 use chrono::{NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
-use migration::OnConflict;
+use sea_query::OnConflict;
 use sea_orm::{
     ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
     prelude::*,

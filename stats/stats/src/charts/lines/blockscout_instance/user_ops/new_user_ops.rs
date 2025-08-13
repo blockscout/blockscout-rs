@@ -30,7 +30,7 @@ use crate::{
 use blockscout_db::entity::{blocks, user_operations};
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use migration::{Alias, Asterisk, Expr, Func, IntoColumnRef, IntoIden, SimpleExpr};
+use sea_query::{Alias, Asterisk, Expr, Func, IntoColumnRef, IntoIden, SimpleExpr};
 use sea_orm::{
     ColumnTrait, EntityTrait, IntoIdentity, IntoSimpleExpr, Order, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait, Statement,

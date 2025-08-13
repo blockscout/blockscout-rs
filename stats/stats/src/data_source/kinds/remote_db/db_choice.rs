@@ -2,7 +2,7 @@ use sea_orm::DatabaseConnection;
 
 use crate::{ChartError, data_source::UpdateContext};
 
-trait DBChoiceInner {
+pub trait DBChoiceInner {
     fn select_db<'a>(cx: &'a UpdateContext<'_>) -> Result<&'a DatabaseConnection, ChartError>;
 }
 
@@ -33,6 +33,7 @@ pub trait DatabaseChoice {
     }
 }
 
+#[macro_export]
 macro_rules! impl_db_choice {
     ($name:ident, $choice:path) => {
         impl $crate::data_source::kinds::remote_db::db_choice::DatabaseChoice for $name {
@@ -41,4 +42,4 @@ macro_rules! impl_db_choice {
     };
 }
 
-pub(crate) use impl_db_choice;
+pub use impl_db_choice;

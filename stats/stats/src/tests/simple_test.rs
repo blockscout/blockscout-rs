@@ -315,6 +315,7 @@ pub async fn simple_test_counter<C>(
         update_time,
         IndexerMigrations::latest(),
         false,
+        false,
     )
     .await
 }
@@ -332,6 +333,26 @@ pub async fn simple_test_counter_multichain<C>(
         expected,
         update_time,
         IndexerMigrations::latest(),
+        true,
+        false,
+    )
+    .await
+}
+
+/// `test_name` must be unique to avoid db clashes
+pub async fn simple_test_counter_with_zetachain_cctx<C>(
+    test_name: &str,
+    expected: &str,
+    update_time: Option<NaiveDateTime>,
+) where
+    C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
+{
+    simple_test_counter_inner::<C>(
+        test_name,
+        expected,
+        update_time,
+        IndexerMigrations::latest(),
+        false,
         true,
     )
     .await
@@ -353,7 +374,8 @@ pub async fn simple_test_counter_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations, false).await
+        simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations, false, false)
+            .await
     }
 }
 
@@ -363,13 +385,19 @@ async fn simple_test_counter_inner<C>(
     update_time: Option<NaiveDateTime>,
     migrations: IndexerMigrations,
     multichain_mode: bool,
+    connect_zetachain_cctx: bool,
 ) where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
 {
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
-    let (init_time, db, indexer, _) =
-        prepare_simple_any_test::<C>(test_name, update_time, max_time, multichain_mode, false)
-            .await;
+    let (init_time, db, indexer, zetachain_cctx) = prepare_simple_any_test::<C>(
+        test_name,
+        update_time,
+        max_time,
+        multichain_mode,
+        connect_zetachain_cctx,
+    )
+    .await;
 
     let mut parameters = UpdateParameters {
         stats_db: &db,
@@ -377,7 +405,7 @@ async fn simple_test_counter_inner<C>(
         indexer_db: &indexer,
         indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
-        second_indexer_db: None,
+        second_indexer_db: zetachain_cctx.as_deref(),
         update_time_override: Some(init_time),
         force_full: true,
     };

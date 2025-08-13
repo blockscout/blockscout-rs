@@ -337,7 +337,7 @@ where
 
     if let Some(from) = from {
         let from = from.into_date();
-        let custom_where = Expr::cust_with_values::<_, sea_orm::sea_query::Value, _>(
+        let custom_where = Expr::cust_with_values::<_, sea_query::Value, _>(
             "date >= (SELECT COALESCE(MAX(date), '1900-01-01'::date) FROM chart_data WHERE chart_id = $1 AND date <= $2)",
             [chart_id.into(), from.into()],
         );
@@ -345,7 +345,7 @@ where
     }
     if let Some(to) = to {
         let to = to.into_date();
-        let custom_where = Expr::cust_with_values::<_, sea_orm::sea_query::Value, _>(
+        let custom_where = Expr::cust_with_values::<_, sea_query::Value, _>(
             "date <= (SELECT COALESCE(MIN(date), '9999-12-31'::date) FROM chart_data WHERE chart_id = $1 AND date >= $2)",
             [chart_id.into(), to.into()],
         );

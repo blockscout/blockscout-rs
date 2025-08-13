@@ -1,6 +1,6 @@
 use std::marker::{PhantomData, Send};
 
-use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use sea_orm::{FromQueryResult, Statement, TryGetable};
 
 use crate::{
@@ -12,6 +12,7 @@ use crate::{
     },
     range::{UniversalRange, inclusive_range_to_exclusive},
     types::{Timespan, TimespanValue},
+    utils::interval_24h,
 };
 
 use super::StatementFromRange;
@@ -105,9 +106,7 @@ where
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<TimespanValue<NaiveDate, Value>, ChartError> {
         let update_time = cx.time;
-        let range_24h = update_time
-            .checked_sub_signed(TimeDelta::hours(24))
-            .unwrap_or(DateTime::<Utc>::MIN_UTC)..=update_time;
+        let range_24h = interval_24h(update_time);
         let query = S::get_statement(
             Some(inclusive_range_to_exclusive(range_24h)),
             &cx.indexer_applied_migrations,

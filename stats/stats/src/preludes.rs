@@ -16,10 +16,9 @@
 //     pub use super::common_prelude::*;
 // }
 
-pub(crate) mod chart_prelude {
+pub mod chart_prelude {
     // pub use super::common_prelude::*;
 
-    pub(crate) use crate::data_source::kinds::remote_db::db_choice::impl_db_choice;
     pub use crate::{
         ChartKey, ChartProperties, MissingDatePolicy, Named,
         charts::db_interaction::read::QueryAllBlockTimestampRange,
@@ -32,7 +31,7 @@ pub(crate) mod chart_prelude {
                 },
                 remote_db::{
                     PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange,
-                    db_choice::UseBlockscoutDB,
+                    db_choice::{UseBlockscoutDB, UseZetachainCctxDB, impl_db_choice},
                 },
             },
             types::IndexerMigrations,

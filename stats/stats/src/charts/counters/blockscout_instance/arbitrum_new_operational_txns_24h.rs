@@ -15,11 +15,11 @@ use crate::{
 use blockscout_db::entity::blocks;
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use migration::{Asterisk, Func, IntoColumnRef};
 use sea_orm::{
     ColumnTrait, DbBackend, EntityTrait, IntoSimpleExpr, QueryFilter, QuerySelect, QueryTrait,
     Statement,
 };
+use sea_query::{Asterisk, Func, IntoColumnRef};
 
 use super::{CalculateOperationalTxns, NewTxns24hInt};
 
