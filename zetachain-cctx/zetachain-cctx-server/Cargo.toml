@@ -33,6 +33,7 @@ actix-web-actors = "4.0"
 actix = "0.13"
 uuid = { version = "1.13", features = ["v4"] }
 chrono = "0.4"
+actix-phoenix-channel = "0.1"
 
 # # Uncomment if needed
 # ethers = "2.0.0"

@@ -19,7 +19,7 @@ impl MigrationTrait for Migration {
         // Covering index for cross_chain_tx_id → index-only for joins + selected cols
         db.execute_unprepared(
             r#"
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cctx_unlocked_due
+            CREATE INDEX IF NOT EXISTS idx_cctx_unlocked_due
              ON cross_chain_tx (last_status_update_timestamp, retries_number) WHERE processing_status = 'Unlocked';
             "#,
         )

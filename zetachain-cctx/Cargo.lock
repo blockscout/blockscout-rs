@@ -109,6 +109,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-phoenix-channel"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58d7616c766f65e35f9045b51658c9c7c112c463780384739cc30a7b040455cf"
+dependencies = [
+ "actix-web",
+ "actix-ws",
+ "async-broadcast",
+ "async-channel 2.5.0",
+ "async-trait",
+ "dashmap 6.1.0",
+ "fastrand",
+ "futures-lite",
+ "futures-util",
+ "pin-project-lite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "actix-prost"
 version = "0.2.0"
 source = "git+https://github.com/blockscout/actix-prost#98f156c9e8dc0d7d32775f3a212d290e7e511f61"
@@ -293,6 +315,20 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "prometheus",
+]
+
+[[package]]
+name = "actix-ws"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3a1fb4f9f2794b0aadaf2ba5f14a6f034c7e86957b458c506a8cb75953f2d99"
+dependencies = [
+ "actix-codec",
+ "actix-http",
+ "actix-web",
+ "bytestring",
+ "futures-core",
+ "tokio",
 ]
 
 [[package]]
@@ -481,6 +517,18 @@ checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
 dependencies = [
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "async-broadcast"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "435a87a52755b8f27fcf321ac4f04b2802e337c8c4872923137471ec39c37532"
+dependencies = [
+ "event-listener 5.4.0",
+ "event-listener-strategy",
+ "futures-core",
+ "pin-project-lite",
 ]
 
 [[package]]
@@ -5871,6 +5919,7 @@ name = "zetachain-cctx-server"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "actix-phoenix-channel",
  "actix-web",
  "actix-web-actors",
  "anyhow",

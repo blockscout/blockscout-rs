@@ -12,6 +12,8 @@ mod m20250807_000009_add_cctx_status_indices;
 mod m20250807_000010_tree_indices;
 mod m20250810_000011_root_id_default;
 mod m20250810_000012_inbound_params_idx;
+mod m20250810_000013_cctx_status_indices;
+mod m20250810_000014_cctx_next_poll;
 
 pub struct Migrator;
 
@@ -31,6 +33,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250807_000010_tree_indices::Migration),
             Box::new(m20250810_000011_root_id_default::Migration),
             Box::new(m20250810_000012_inbound_params_idx::Migration),
+            Box::new(m20250810_000013_cctx_status_indices::Migration),
+            Box::new(m20250810_000014_cctx_next_poll::Migration),
         ]
     }
 }

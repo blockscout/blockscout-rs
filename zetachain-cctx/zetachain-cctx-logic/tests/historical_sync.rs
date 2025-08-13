@@ -235,19 +235,24 @@ async fn test_historical_sync_updates_pointer() {
         assert!(revert.is_some());
     }
 
-    let (_, status) = cross_chain_tx::Entity::find()
+    let cctxs_with_status = cross_chain_tx::Entity::find()
         .find_also_related(cctx_status::Entity)
-        .filter(cross_chain_tx::Column::Index.eq("page_3_index_2"))
-        .one(db_conn.as_ref())
+        .filter(cross_chain_tx::Column::Index.is_in(vec![
+            "page_1_index_1",
+            "page_1_index_2",
+            "page_2_index_1",
+            "page_2_index_2",
+            "page_3_index_1",
+            "page_3_index_2",
+        ]))
+        .all(db_conn.as_ref())
         .await
-        .unwrap()
         .unwrap();
-
-    let status = status.unwrap();
-
+    let max_timestamp = cctxs_with_status.iter().map(|c| c.1.as_ref().unwrap().last_update_timestamp).max().unwrap();
     let watermark_timestamp = final_watermark.upper_bound_timestamp.unwrap();
+    assert_eq!(max_timestamp, watermark_timestamp);
 
-    assert_eq!(status.last_update_timestamp, watermark_timestamp);
+
 }
 
 #[tokio::test]
@@ -285,6 +290,7 @@ async fn test_database_processes_one_off_watermark() {
             )],
             "ONE_OFF",
             one_off_watermark.id,
+            None,
         )
         .await
         .unwrap();

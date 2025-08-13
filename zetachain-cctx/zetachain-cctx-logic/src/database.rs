@@ -536,29 +536,31 @@ impl ZetachainCctxDatabase {
         cctxs: Vec<CrossChainTx>,
         next_key: &str,
         watermark_id: i32,
+        current_upper_bound_timestamp: Option<NaiveDateTime>,
     ) -> anyhow::Result<Vec<CctxListItemProto>> {
         let tx = self.db.begin().await?;
-        let upper_bound_timestamp: i64 = cctxs
-            .last()
-            .unwrap()
-            .cctx_status
-            .last_update_timestamp
-            .parse::<i64>()
+        let new_upper_bound_timstamp: i64 = cctxs
+            .iter()
+            .map(|cctx| cctx.cctx_status.last_update_timestamp.parse::<i64>().unwrap_or_default())
+            .max()
             .unwrap_or_default();
-        let upper_bound_timestamp = DateTime::<Utc>::from_timestamp(upper_bound_timestamp, 0)
+        let new_upper_bound_timestamp = DateTime::<Utc>::from_timestamp(new_upper_bound_timstamp, 0)
             .unwrap()
             .naive_utc();
+        let new_upper_bound_timestamp = new_upper_bound_timestamp.max(current_upper_bound_timestamp.unwrap_or_default());
         let imported = self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
+        
         //Watermark with id 1 is the main historic sync thread, all others are one-offs that might be manually added to the db
         let new_status = if watermark_id != 1 {
             ProcessingStatus::Done
         } else {
             ProcessingStatus::Unlocked
         };
+        tracing::debug!("updating watermark : {:?} to pointer: {:?} and upper bound timestamp: {:?}", watermark_id, next_key, new_upper_bound_timestamp);
         self.update_watermark(
             watermark_id,
             next_key,
-            Some(upper_bound_timestamp),
+            Some(new_upper_bound_timestamp),
             new_status,
             &tx,
         )
@@ -631,26 +633,17 @@ impl ZetachainCctxDatabase {
     }
 
     #[instrument(,level="trace",skip(self),fields(batch_id = %batch_id))]
-    pub async fn query_failed_cctxs(&self, batch_id: Uuid) -> anyhow::Result<Vec<CctxShort>> {
-        let statement = format!(
-            r#"
-        WITH cctxs AS (
-            SELECT cctx.id
-            FROM cross_chain_tx cctx
-            JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
-            WHERE cctx.processing_status = 'Failed'::processing_status
-            AND cctx.last_status_update_timestamp + INTERVAL '1 hour' * POWER(2, cctx.retries_number) < NOW()
-            ORDER BY cctx.last_status_update_timestamp ASC,cs.created_timestamp DESC
-            LIMIT 100
-        )
-        UPDATE cross_chain_tx cctx
-        SET processing_status = 'Locked'::processing_status, last_status_update_timestamp = NOW(), retries_number = retries_number + 1
-        WHERE id IN (SELECT id FROM cctxs)
-        RETURNING id, index, root_id, depth, retries_number
-        "#
-        );
+    pub async fn query_failed_cctxs(&self, batch_id: Uuid, batch_size: u32, polling_interval: u64) -> anyhow::Result<Vec<CctxShort>> {
+        let statement = include_str!("query_for_update.sql").to_string();
 
-        let statement = Statement::from_sql_and_values(DbBackend::Postgres, statement, vec![]);
+        let statement = Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            statement,
+            vec![sea_orm::Value::String(Some(Box::new("Failed".to_string()))),
+                sea_orm::Value::Int(Some(100 as i32)),
+                sea_orm::Value::BigInt(Some(3600000 as i64)),
+            ],
+        );
 
         let cctxs: Result<Vec<CctxShort>, sea_orm::DbErr> = self
             .db
@@ -675,16 +668,16 @@ impl ZetachainCctxDatabase {
     pub async fn get_unlocked_watermarks(
         &self,
         kind: Kind,
-    ) -> anyhow::Result<Vec<(i32, String, i32)>> {
+    ) -> anyhow::Result<Vec<(i32, String, i32, Option<NaiveDateTime>)>> {
         let query_statement = r#"
             WITH unlocked_watermarks AS (
-                SELECT * FROM watermark WHERE kind::text = $1 AND processing_status::text = 'Unlocked'
+                SELECT id, pointer, retries_number, upper_bound_timestamp FROM watermark WHERE kind::text = $1 AND processing_status::text = 'Unlocked'
                 FOR UPDATE SKIP LOCKED
             )
             UPDATE watermark
             SET processing_status = 'Locked' ,updated_at = NOW()
             WHERE id IN (SELECT id FROM unlocked_watermarks)
-            RETURNING id, pointer, retries_number
+            RETURNING id, pointer, retries_number, upper_bound_timestamp
             "#;
 
         let query_statement = Statement::from_sql_and_values(
@@ -693,7 +686,7 @@ impl ZetachainCctxDatabase {
             vec![kind.to_string().into()],
         );
 
-        let watermarks: Result<Vec<(i32, String, i32)>, sea_orm::DbErr> = self
+        let watermarks: Result<Vec<(i32, String, i32, Option<NaiveDateTime>)>, sea_orm::DbErr> = self
             .db
             .query_all(query_statement)
             .await?
@@ -703,9 +696,10 @@ impl ZetachainCctxDatabase {
                     r.try_get_by_index(0)?,
                     r.try_get_by_index(1)?,
                     r.try_get_by_index(2)?,
+                    r.try_get_by_index(3)?,
                 ))
             })
-            .collect::<Result<Vec<(i32, String, i32)>, sea_orm::DbErr>>();
+            .collect::<Result<Vec<(i32, String, i32, Option<NaiveDateTime>)>, sea_orm::DbErr>>();
 
         watermarks.map_err(|e| anyhow::anyhow!(e))
     }
@@ -723,7 +717,11 @@ impl ZetachainCctxDatabase {
         let statement = Statement::from_sql_and_values(
             DbBackend::Postgres,
             statement,
-            vec![polling_interval.into(), batch_size.into()],
+            vec![
+                sea_orm::Value::String(Some(Box::new("Unlocked".to_string()))),
+                sea_orm::Value::Int(Some(batch_size as i32)),
+                sea_orm::Value::BigInt(Some(polling_interval as i64)),
+            ],
         );
 
         let cctxs: Result<Vec<CctxShort>, sea_orm::DbErr> = self
@@ -1198,7 +1196,7 @@ impl ZetachainCctxDatabase {
         &self,
         index: String,
     ) -> anyhow::Result<Option<CrossChainTxProto>> {
-        // Single query to get all data with JOINs
+        
         let sql = include_str!("complete_cctx.sql");
 
         let statement = Statement::from_sql_and_values(
@@ -1213,40 +1211,9 @@ impl ZetachainCctxDatabase {
             return Ok(None);
         }
 
-        // Get the first row for main CCTX, status, inbound, and revert data
+        
         let cctx_row = &cctx_rows[0];
 
-        // Check if required entities exist
-        let status_id: Option<i32> = cctx_row
-            .try_get_by_index(13)
-            .map_err(|e| anyhow::anyhow!("cctx_row status_id: {}", e))?;
-        let inbound_id: Option<i32> = cctx_row
-            .try_get_by_index(23)
-            .map_err(|e| anyhow::anyhow!("cctx_row inbound_id: {}", e))?;
-        let revert_id: Option<i32> = cctx_row
-            .try_get_by_index(39)
-            .map_err(|e| anyhow::anyhow!("cctx_row revert_id: {}", e))?;
-
-        if status_id.is_none() {
-            return Err(anyhow::anyhow!(
-                "CCTX status not found for index: {}",
-                index
-            ));
-        }
-        if inbound_id.is_none() {
-            return Err(anyhow::anyhow!(
-                "Inbound params not found for index: {}",
-                index
-            ));
-        }
-        if revert_id.is_none() {
-            return Err(anyhow::anyhow!(
-                "Revert options not found for index: {}",
-                index
-            ));
-        }
-
-        // Build CrossChainTx
 
         let id: i32 = cctx_row
             .try_get_by_index(0)

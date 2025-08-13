@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Ok;
+use chrono::NaiveDateTime;
 use futures::future::join;
 
 use crate::database::ZetachainCctxDatabase;
@@ -16,7 +17,7 @@ use tracing::instrument;
 use uuid::Uuid;
 use zetachain_cctx_entity::sea_orm_active_enums::{Kind, ProcessingStatus};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem as CctxListItemProto;
-
+use base64::Engine;
 pub struct Indexer {
     pub settings: IndexerSettings,
     pub client: Arc<Client>,
@@ -27,7 +28,7 @@ pub struct Indexer {
 enum IndexerJob {
     StatusUpdate(CctxShort, Uuid),        //cctx index and id to be updated
     LevelDataGap(i32, String, i32, Uuid), // Watermark (pointer) to the next page of cctxs to be fetched
-    HistoricalDataFetch(i32, String, Uuid), // Watermark (pointer) to the next page of cctxs to be fetched
+    HistoricalDataFetch(i32, String, Option<NaiveDateTime>, Uuid), // Watermark (pointer) to the next page of cctxs to be fetched
     TokenSync(Uuid),                        // Token synchronization job
 }
 
@@ -84,6 +85,7 @@ async fn historical_sync(
     client: &Client,
     watermark_id: i32,
     watermark_pointer: &str,
+    watermark_upper_bound_timestamp: Option<NaiveDateTime>,
     job_id: Uuid,
     batch_size: u32,
 ) -> anyhow::Result<()> {
@@ -97,10 +99,13 @@ async fn historical_sync(
     let next_key = response
         .pagination
         .next_key
-        .ok_or(anyhow::anyhow!("next_key is None"))?;
+        .unwrap_or(
+            //base64 of the index of the last cctx in the response
+            base64::engine::general_purpose::STANDARD.encode(cross_chain_txs.last().unwrap().index.as_bytes())
+        );
     //atomically insert cctxs and update watermark
     let imported = database
-        .import_cctxs(job_id, cross_chain_txs, &next_key, watermark_id)
+        .import_cctxs(job_id, cross_chain_txs, &next_key, watermark_id, watermark_upper_bound_timestamp)
         .await?;
 
     tracing::debug!(
@@ -318,7 +323,7 @@ impl Indexer {
             loop {
                 match self.database.get_unlocked_watermarks(Kind::Realtime).await {
                     std::result::Result::Ok(watermarks) => {
-                        for (id,pointer,retries_number) in watermarks.into_iter() {
+                        for (id,pointer,retries_number, _upper_bound_timestamp) in watermarks.into_iter() {
                             yield IndexerJob::LevelDataGap(id,pointer, retries_number, Uuid::new_v4());
                         }
                     }
@@ -335,8 +340,8 @@ impl Indexer {
                 let job_id = Uuid::new_v4();
                 match self.database.get_unlocked_watermarks(Kind::Historical).await {
                     std::result::Result::Ok(watermarks) => {
-                        for (id,pointer,_retries_number) in watermarks.into_iter() {
-                            yield IndexerJob::HistoricalDataFetch(id,pointer, job_id);
+                        for (id,pointer,_retries_number, upper_bound_timestamp) in watermarks.into_iter() {
+                            yield IndexerJob::HistoricalDataFetch(id,pointer, upper_bound_timestamp, job_id);
                         }
                     }
                     Err(e) => {
@@ -348,9 +353,11 @@ impl Indexer {
         });
 
         let failed_cctxs_stream = Box::pin(async_stream::stream! {
+            let batch_size = self.settings.status_update_batch_size;
+            let polling_interval = self.settings.failed_cctxs_polling_interval;
             loop {
                 let batch_id = Uuid::new_v4();
-                match self.database.query_failed_cctxs(batch_id).await {
+                match self.database.query_failed_cctxs(batch_id, batch_size, polling_interval).await {
                     std::result::Result::Ok(cctxs) => {
                         for cctx in cctxs {
                             let job_id = Uuid::new_v4();
@@ -440,8 +447,8 @@ impl Indexer {
                          }
                         }
 
-                        IndexerJob::HistoricalDataFetch(id,pointer, job_id) => {
-                            if let Err(e) = historical_sync(database.clone(), &client, id, &pointer, job_id, historical_batch_size).await {
+                        IndexerJob::HistoricalDataFetch(id,pointer, upper_bound_timestamp, job_id) => {
+                            if let Err(e) = historical_sync(database.clone(), &client, id, &pointer, upper_bound_timestamp, job_id, historical_batch_size).await {
                                 tracing::warn!(error = %e, job_id = %job_id, watermark_id = %id, watermark_pointer = %pointer, "Failed to sync historical data");
                                 database.unlock_watermark(id,job_id).await.unwrap();
                             }

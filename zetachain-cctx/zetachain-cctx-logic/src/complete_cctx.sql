@@ -56,8 +56,8 @@ SELECT
         t.name as token_name--50
 
         FROM cross_chain_tx cctx
-        LEFT JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
-        LEFT JOIN inbound_params ip ON cctx.id = ip.cross_chain_tx_id
-        LEFT JOIN revert_options ro ON cctx.id = ro.cross_chain_tx_id
+        JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
+        JOIN inbound_params ip ON cctx.id = ip.cross_chain_tx_id
+        JOIN revert_options ro ON cctx.id = ro.cross_chain_tx_id
         JOIN token t ON t.id = cctx.token_id
         WHERE cctx.index = $1

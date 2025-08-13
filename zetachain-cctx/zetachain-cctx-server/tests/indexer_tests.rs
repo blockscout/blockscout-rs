@@ -316,7 +316,7 @@ async fn test_status_update_links_related() {
     assert_eq!(
         root.processing_status,
         ProcessingStatus::Done,
-        "root cctx has not processed"
+        "root cctx was not processed"
     );
 
     //child_1 must be synced at this point by status update
