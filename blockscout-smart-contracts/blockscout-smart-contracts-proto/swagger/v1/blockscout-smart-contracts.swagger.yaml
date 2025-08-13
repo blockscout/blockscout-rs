@@ -1,0 +1,151 @@
+swagger: "2.0"
+info:
+  title: Blockscout Smart Contracts service
+  version: 0.1.1
+  contact:
+    name: Blockscout
+    url: https://blockscout.com
+    email: support@blockscout.com
+tags:
+  - name: SmartContractService
+  - name: Health
+host: blockscout-smart-contracts.services.blockscout.com
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /api/v1/chains/{chain_id}/smart-contracts/{address}:
+    get:
+      operationId: SmartContractService_SmartContractServiceGet
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SmartContractServiceGetResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: string
+        - name: address
+          in: path
+          required: true
+          type: string
+      tags:
+        - SmartContractService
+  /api/v1/smart_contract_service:
+    post:
+      operationId: SmartContractService_SmartContractServiceCreate
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SmartContractServiceCreateResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1SmartContractServiceCreateRequest'
+      tags:
+        - SmartContractService
+  /health:
+    get:
+      summary: |-
+        If the requested service is unknown, the call will fail with status
+        NOT_FOUND.
+      operationId: Health_Check
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1HealthCheckResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: service
+          in: query
+          required: false
+          type: string
+      tags:
+        - Health
+definitions:
+  HealthCheckResponseServingStatus:
+    type: string
+    enum:
+      - UNKNOWN
+      - SERVING
+      - NOT_SERVING
+      - SERVICE_UNKNOWN
+    default: UNKNOWN
+    description: ' - SERVICE_UNKNOWN: Used only by the Watch method.'
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1HealthCheckResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/HealthCheckResponseServingStatus'
+  v1SmartContract:
+    type: object
+    properties:
+      chain_id:
+        type: string
+      address:
+        type: string
+      blockscout_url:
+        type: string
+      sources:
+        type: object
+        additionalProperties:
+          type: string
+  v1SmartContractServiceCreateRequest:
+    type: object
+    properties:
+      contract:
+        $ref: '#/definitions/v1SmartContract'
+  v1SmartContractServiceCreateResponse:
+    type: object
+  v1SmartContractServiceGetResponse:
+    type: object
+    properties:
+      contract:
+        $ref: '#/definitions/v1SmartContract'
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    name: x-api-key
+    in: header
+externalDocs:
+  description: More about blockscout microservices
+  url: https://github.com/blockscout/blockscout-rs

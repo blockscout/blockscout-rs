@@ -1,0 +1,48 @@
+[package]
+name = "blockscout-smart-contracts-logic"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+blockscout-smart-contracts-entity = { workspace = true }
+anyhow = { workspace = true }
+blockscout-display-bytes = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+tonic = { workspace = true }
+
+sea-orm = { workspace = true, features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "macros",
+    "postgres-array",
+] }
+
+
+## Uncomment this if needed
+#ethabi = { workspace = true }
+#ethers-core = { workspace = true }
+#futures = { workspace = true }
+#hex = { workspace = true }
+#keccak-hash = { workspace = true }
+#lazy_static = { workspace = true }
+#mismatch = { workspace = true }
+#prometheus = { workspace = true }
+#reqwest = { workspace = true }
+#semver = { workspace = true }
+#serde = { workspace = true }
+#serde_json = { workspace = true }
+#tokio = { workspace = true }
+#tonic = { workspace = true, features = ["tls-roots"] }
+#tracing-subscriber = { workspace = true, features = ["env-filter"]}
+
+[dev-dependencies]
+blockscout-service-launcher = { workspace = true, features = [ 
+    
+    "test-database", "database-1"
+    
+] }
+pretty_assertions = { workspace = true }
+rstest = { workspace = true }
+blockscout-smart-contracts-migration = { workspace = true }
