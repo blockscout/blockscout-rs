@@ -1801,6 +1801,17 @@ impl ZetachainCctxDatabase {
             ));
         }
 
+        if let Some(hash) = filters.hash {
+            param_count += 1;
+            sql.push_str(&format!(
+                " AND (ip.observed_hash = ${} OR ip.ballot_index = ${})",
+                param_count,
+                param_count + 1
+            ));
+            params.push(sea_orm::Value::String(Some(Box::new(hash.clone()))));
+            params.push(sea_orm::Value::String(Some(Box::new(hash))));
+        }
+
         // No need to group since we're only getting the last outbound_params row per CCTX
         sql.push_str(" ");
 

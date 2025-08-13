@@ -184,6 +184,7 @@ pub struct Filters {
     pub start_timestamp: Option<i64>,
     pub end_timestamp: Option<i64>,
     pub token_symbol: Vec<String>,
+    pub hash: Option<String>,
 }
 
 impl Default for Filters {
@@ -199,6 +200,7 @@ impl Default for Filters {
             start_timestamp: None,
             end_timestamp: None,
             token_symbol: vec![],
+            hash: None,
         }
     }
 }

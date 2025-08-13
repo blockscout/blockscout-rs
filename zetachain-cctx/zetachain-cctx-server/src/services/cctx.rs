@@ -191,6 +191,7 @@ impl CctxInfo for CctxService {
             token_symbol: parse_comma_separated(request.token_symbol),
             start_timestamp: request.start_timestamp,
             end_timestamp: request.end_timestamp,
+            hash: None
         };
 
         let direction = Direction::try_from(request.direction).map_err(|e| Status::invalid_argument(e.to_string()))?;

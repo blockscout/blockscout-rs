@@ -39,6 +39,7 @@ message ListCctxsRequest {
   optional string token_symbol = 11;       // "ETH,BTC,USDC"
   optional int64 start_timestamp = 12;
   optional int64 end_timestamp = 13;
+  optional string hash = 14; // hash of the inbound tx or cctx hash
 }
 
 message ListCctxsResponse {

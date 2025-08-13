@@ -115,6 +115,11 @@ paths:
           required: false
           type: string
           format: int64
+        - name: hash
+          description: hash of the inbound tx or cctx hash
+          in: query
+          required: false
+          type: string
       tags:
         - CctxInfo
   /api/v1/Stats:getSyncProgress:

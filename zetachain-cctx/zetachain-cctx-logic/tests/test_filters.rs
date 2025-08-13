@@ -93,6 +93,7 @@ async fn query_cctxs_with_filters() {
                 start_timestamp: None,
                 end_timestamp: None,
                 token_symbol: vec![],
+                hash: None,
             },
             Direction::Desc,
         )
@@ -116,6 +117,7 @@ async fn query_cctxs_with_filters() {
                 start_timestamp: None,
                 end_timestamp: None,
                 token_symbol: vec![],
+                hash: None,
             },
             Direction::Desc,
         )
@@ -192,6 +194,7 @@ async fn query_cctxs_with_token_symbol_filter() {
                 start_timestamp: None,
                 end_timestamp: None,
                 token_symbol: vec!["ETH".to_string()],
+                hash: None,
             },
             Direction::Desc,
         )
@@ -215,6 +218,7 @@ async fn query_cctxs_with_token_symbol_filter() {
                 start_timestamp: None,
                 end_timestamp: None,
                 token_symbol: vec!["USDC".to_string()],
+                hash: None,
             },
             Direction::Desc,
         )
