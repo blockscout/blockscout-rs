@@ -45,7 +45,7 @@ FROM
   cross_chain_tx child
   JOIN roots r ON child.root_id = r.root_id
   JOIN inbound_params ip on child.id = ip.cross_chain_tx_id
-  JOIN token t on t.id = child.token_id
+  LEFT JOIN token t on t.id = child.token_id
   JOIN cctx_status cs on child.id = cs.cross_chain_tx_id
 ORDER BY
   child.root_id,
