@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 mod helpers;
 
+use actix_phoenix_channel::ChannelCentral;
 use pretty_assertions::assert_eq;
 use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 use sea_orm::PaginatorTrait;
@@ -14,9 +15,9 @@ use wiremock::{
 
 use zetachain_cctx_entity::sea_orm_active_enums::ProcessingStatus;
 use zetachain_cctx_entity::{sea_orm_active_enums::Kind, watermark, token};
+use zetachain_cctx_logic::channel::Channel;
 use zetachain_cctx_logic::client::{Client, RpcSettings};
 use zetachain_cctx_logic::database::ZetachainCctxDatabase;
-use zetachain_cctx_logic::events::NoOpBroadcaster;
 use zetachain_cctx_logic::indexer::Indexer;
 use zetachain_cctx_logic::settings::IndexerSettings;
 
@@ -154,6 +155,8 @@ async fn test_token_sync_stream_works() {
         .unwrap();
 
     // Create indexer with fast token polling
+    let channel = Arc::new(ChannelCentral::new(Channel));
+
     let indexer = Indexer::new(
         IndexerSettings {
             polling_interval: 100,
@@ -165,7 +168,7 @@ async fn test_token_sync_stream_works() {
         },
         Arc::new(client),
         Arc::new(ZetachainCctxDatabase::new(db_conn.clone(),7001)),
-        Arc::new(NoOpBroadcaster{}),
+        Arc::new(channel.channel_broadcaster()),
     );
 
     // Run indexer for a short time to process token data
@@ -361,7 +364,9 @@ async fn test_token_sync_pagination() {
 
     let db_conn = db.client();
 
-    // Create indexer with fast token polling
+    let channel = Arc::new(ChannelCentral::new(Channel));
+
+    
     let indexer = Indexer::new(
         IndexerSettings {
             polling_interval: 100,
@@ -373,7 +378,7 @@ async fn test_token_sync_pagination() {
         },
         Arc::new(client),
         Arc::new(ZetachainCctxDatabase::new(db_conn.clone(),7001)),
-        Arc::new(NoOpBroadcaster{}),
+        Arc::new(channel.channel_broadcaster()),
     );
 
     // Run indexer for a short time to process token data

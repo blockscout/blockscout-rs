@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
+use actix_phoenix_channel::ChannelCentral;
 use pretty_assertions::assert_eq;
 use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 use sea_orm::PaginatorTrait;
@@ -14,7 +15,7 @@ use zetachain_cctx_entity::{cross_chain_tx, sea_orm_active_enums::Kind, watermar
 
 mod helpers;
 
-use zetachain_cctx_logic::events::NoOpBroadcaster;
+use zetachain_cctx_logic::channel::Channel;
 use zetachain_cctx_logic::{
     client::{Client, RpcSettings},
     database::ZetachainCctxDatabase,
@@ -130,6 +131,7 @@ async fn test_level_data_gap() {
         ..Default::default()
     });
 
+    let channel = Arc::new(ChannelCentral::new(Channel));
     let indexer = Indexer::new(
         IndexerSettings {
             polling_interval: 100, // Fast polling for tests
@@ -140,7 +142,7 @@ async fn test_level_data_gap() {
         },
         Arc::new(rpc_client),
         Arc::new(database),
-        Arc::new(NoOpBroadcaster{}),
+        Arc::new(channel.channel_broadcaster()),
     );
 
     // Run indexer for a short time to process realtime data

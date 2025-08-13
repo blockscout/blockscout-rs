@@ -42,6 +42,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 async-stream = { workspace = true }
 zetachain-cctx-proto = { path = "../zetachain-cctx-proto" }
+actix-phoenix-channel = "0.1"
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = [
 

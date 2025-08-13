@@ -3,15 +3,15 @@ use std::time::Duration;
 
 mod helpers;
 
+use actix_phoenix_channel::ChannelCentral;
 use pretty_assertions::assert_eq;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use wiremock::{matchers::{method, path, path_regex}, Mock, MockServer, ResponseTemplate};
 use serde_json::json;
 
 use zetachain_cctx_entity::token;
-use zetachain_cctx_logic::client::{Client, RpcSettings};
+use zetachain_cctx_logic::{channel::Channel, client::{Client, RpcSettings}};
 use zetachain_cctx_logic::database::ZetachainCctxDatabase;
-use zetachain_cctx_logic::events::NoOpBroadcaster;
 use zetachain_cctx_logic::indexer::Indexer;
 use zetachain_cctx_logic::settings::IndexerSettings;
 
@@ -76,6 +76,7 @@ async fn test_icon_url_synced() {
     let database = ZetachainCctxDatabase::new(db.client(),7001);
     database.setup_db().await.unwrap();
 
+    let channel = Arc::new(ChannelCentral::new(Channel));
     let indexer = Indexer::new(
         IndexerSettings {
             polling_interval: 50,
@@ -87,7 +88,7 @@ async fn test_icon_url_synced() {
         },
         Arc::new(client),
         Arc::new(database),
-        Arc::new(NoOpBroadcaster{}),
+        Arc::new(channel.channel_broadcaster()),
     );
 
     // Run indexer briefly

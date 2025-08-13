@@ -6,8 +6,8 @@ use anyhow::Ok;
 use chrono::NaiveDateTime;
 use futures::future::join;
 
+use crate::channel::NEW_CCTXS_TOPIC;
 use crate::database::ZetachainCctxDatabase;
-use crate::events::EventBroadcaster;
 use crate::models::{CctxShort, PagedCCTXResponse};
 use crate::{client::Client, settings::IndexerSettings};
 use futures::stream::{select_with_strategy, PollNext};
@@ -17,12 +17,13 @@ use tracing::instrument;
 use uuid::Uuid;
 use zetachain_cctx_entity::sea_orm_active_enums::{Kind, ProcessingStatus};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem as CctxListItemProto;
+use actix_phoenix_channel::{ChannelBroadcaster, ChannelEvent};
 use base64::Engine;
 pub struct Indexer {
     pub settings: IndexerSettings,
     pub client: Arc<Client>,
     pub database: Arc<ZetachainCctxDatabase>,
-    pub broadcaster: Arc<dyn EventBroadcaster>,
+    pub channel_broadcaster: Arc<ChannelBroadcaster>,
 }
 
 enum IndexerJob {
@@ -244,13 +245,13 @@ impl Indexer {
         settings: IndexerSettings,
         client: Arc<Client>,
         database: Arc<ZetachainCctxDatabase>,
-        broadcaster: Arc<dyn EventBroadcaster>,
+        channel_broadcaster: Arc<ChannelBroadcaster>,
     ) -> Self {
         Self {
             settings,
             client,
             database,
-            broadcaster,
+            channel_broadcaster,
         }
     }
 
@@ -260,7 +261,7 @@ impl Indexer {
         let client = self.client.clone();
         let database = self.database.clone();
         let batch_size = self.settings.realtime_fetch_batch_size;
-        let broadcaster = self.broadcaster.clone();
+        let broadcaster = self.channel_broadcaster.clone();
         tokio::spawn(async move {
             loop {
                 let job_id = Uuid::new_v4();
@@ -275,7 +276,7 @@ impl Indexer {
                                     .map(|c| c.index.clone())
                                     .collect::<Vec<String>>()
                             );
-                            broadcaster.broadcast_new_cctxs(inserted).await;
+                            broadcaster.broadcast(ChannelEvent::new(NEW_CCTXS_TOPIC, "new_cctxs", &inserted));
                         } else {
                             tracing::info!(
                                 "realtime_fetch_handler job_id: {} no new cctxs found",

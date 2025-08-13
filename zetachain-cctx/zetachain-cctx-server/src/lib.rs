@@ -2,7 +2,6 @@ mod proto;
 mod server;
 mod services;
 mod settings;
-mod websocket;
 
 
 pub use server::run;

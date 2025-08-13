@@ -5866,6 +5866,7 @@ dependencies = [
 name = "zetachain-cctx-logic"
 version = "0.1.0"
 dependencies = [
+ "actix-phoenix-channel",
  "anyhow",
  "async-stream",
  "async-trait",
