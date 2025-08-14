@@ -8,6 +8,7 @@ import os
 from tkcalendar import Calendar
 from typing import Dict, List, Tuple
 from enum import Enum
+import math
 
 
 class DurationMenu(Enum):
@@ -31,6 +32,8 @@ class CronVisualizerGUI:
         self.max_zoom = 16.0
         self.base_hour_width = self.canvas_width // 24
         self.selected_date = datetime.now()
+        # View override used to preserve focus while zooming
+        self._override_view: float | None = None
 
         self.default_duration = 20  # Duration in minutes
         self.task_durations = {}  # Will store durations from config
@@ -145,6 +148,29 @@ class CronVisualizerGUI:
 
         # Bind mouse motion for hover effect
         self.canvas.bind("<Motion>", self.on_hover)
+
+        self.canvas.bind("<TouchpadScroll>", self.on_trackpad)
+        self.canvas.bind("<Control-TouchpadScroll>", self.on_trackpad)
+        self.canvas.bind("<Command-TouchpadScroll>", self.on_zoom_trackpad)
+        # Touchpad/Mouse scrolling (horizontal)
+        self.canvas.bind_all("<MouseWheel>", self.on_mousewheel)
+        # Linux wheel buttons fallback
+        self.canvas.bind(
+            "<Button-4>", lambda e: self.on_mousewheel_linux(e, direction=-1)
+        )
+        self.canvas.bind(
+            "<Button-5>", lambda e: self.on_mousewheel_linux(e, direction=1)
+        )
+
+        # Pinch-like zoom via modifier + wheel
+        self.canvas.bind("<Control-MouseWheel>", self.on_zoom_wheel)
+        # macOS Command key
+        self.canvas.bind("<Command-MouseWheel>", self.on_zoom_wheel)
+
+        # Keyboard zoom shortcuts
+        self.root.bind_all("<plus>", lambda e: self.zoom_by(2))
+        self.root.bind_all("<equal>", lambda e: self.zoom_by(2))  # '=' key
+        self.root.bind_all("<minus>", lambda e: self.zoom_by(1 / 2))
 
         # Zoom controls
         zoom_frame = ttk.Frame(next_left_top_frame)
@@ -325,8 +351,6 @@ class CronVisualizerGUI:
                 )
 
         self.status_var.set(f"Maximum concurrent tasks: {max_overlaps}")
-        # restore view position
-        self.canvas.xview_moveto(start_view)
 
     def update_schedule_list(self):
         self.schedule_list.delete(*self.schedule_list.get_children())
@@ -398,6 +422,47 @@ class CronVisualizerGUI:
             self.zoom_scale = 1.0
             self.update_zoom_label()
             self.update_visualization()
+
+    def on_trackpad(self, event):
+        self.canvas.config(xscrollincrement=1)
+        # Normalize scroll delta
+        delta = -event.delta / 65536
+        self.canvas.xview_scroll(delta, "units")
+
+    def on_zoom_trackpad(self, event):
+        delta = -event.delta / 65536
+        delta /= 1000
+        zoom_factor = math.e**delta
+        self.zoom_by(zoom_factor, focus_x=event.x)
+
+    def on_mousewheel(self, event):
+        self.canvas.config(xscrollincrement=10)
+        # Normalize wheel delta across platforms
+        delta = event.delta
+        if delta == 0:
+            return
+        # On Windows/mac delta is often multiples of 120/1; determine step direction
+        step = -1 if delta > 0 else 1
+        self.canvas.xview_scroll(step, "units")
+
+    def on_mousewheel_linux(self, _event, direction: int):
+        self.canvas.config(xscrollincrement=10)
+        # direction: -1 for up, +1 for down
+        self.canvas.xview_scroll(direction, "units")
+
+    def on_zoom_wheel(self, event):
+        # Determine zoom factor based on wheel direction
+        factor = 1.1 if event.delta > 0 else (1 / 1.1)
+        self.zoom_by(factor, focus_x=event.x)
+
+    def zoom_by(self, factor: float, focus_x: int | None = None):
+        new_scale = max(self.min_zoom, min(self.max_zoom, self.zoom_scale * factor))
+        if abs(new_scale - self.zoom_scale) < 1e-6:
+            return
+
+        self.zoom_scale = new_scale
+        self.update_zoom_label()
+        self.update_visualization()
 
 
 if __name__ == "__main__":
