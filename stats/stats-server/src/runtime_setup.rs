@@ -28,7 +28,7 @@ use stats::{
     update_group::{ArcUpdateGroup, SyncUpdateGroup},
 };
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, btree_map::Entry},
+    collections::{BTreeMap, HashMap, HashSet, btree_map::Entry, hash_map},
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -462,7 +462,19 @@ impl RuntimeSetup {
                 allowed_missing.into_iter().map(|s| s.to_string()).collect(),
             )
         })
-        .into();
+        .into_iter()
+        // combine sets for the same key (group name)
+        .fold(HashMap::new(), |mut acc, (group_name, allowed_missing)| {
+            match acc.entry(group_name) {
+                hash_map::Entry::Vacant(v) => {
+                    v.insert(allowed_missing);
+                }
+                hash_map::Entry::Occupied(mut o) => {
+                    o.get_mut().extend(allowed_missing);
+                }
+            }
+            acc
+        });
 
         for (name, group) in groups {
             let sync_dependencies: HashSet<String> = group
