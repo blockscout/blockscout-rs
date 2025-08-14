@@ -112,7 +112,7 @@ impl Display for ResolutionKind {
 }
 
 pub trait Named {
-    /// Name of this data source that represents its contents
+    /// **Unique** name of this data source that represents its contents
     fn name() -> String;
 }
 
