@@ -15,7 +15,7 @@ blockscout-service-launcher = { version = "0.19.0" }
 # todo: update to tag >1.6.0 once released (can't compile for some reason)
 multichain-aggregator-entity = { git = "https://github.com/blockscout/blockscout-rs/", rev = "096c4c140375e5a1802413e9a037c35f84aeaa42", package = "multichain-aggregator-entity" }
 multichain-aggregator-migration = { git = "https://github.com/blockscout/blockscout-rs/", rev = "096c4c140375e5a1802413e9a037c35f84aeaa42", package = "multichain-aggregator-migration" }
-# todo: set to tag once released / update as eneded
+# todo: set to tag once released / update as needed
 zetachain-cctx-entity = { git = "https://github.com/blockscout/blockscout-rs/", rev = "9cf47cf81d64e7268812ae5ffcd8d516b7f7a67c", package = "zetachain-cctx-entity" }
 zetachain-cctx-migration = { git = "https://github.com/blockscout/blockscout-rs/", rev = "9cf47cf81d64e7268812ae5ffcd8d516b7f7a67c", package = "zetachain-cctx-migration" }
 rstest = "0.23.0"

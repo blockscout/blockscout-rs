@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 stats-server = { path = "../stats-server" }
-env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "26eed65" }
+env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "431b6bafe498d7a8b1bb1495d92a0bda7f05d006" } # latest main

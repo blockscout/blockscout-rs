@@ -346,10 +346,13 @@ pub fn handle_enable_zetachain_cctx(
         charts,
         "zetachain-cctx",
     );
-    settings
+    let check_enabled = &mut settings
         .conditional_start
         .zetachain_indexed_until_today
-        .enabled = true;
+        .enabled;
+    if check_enabled.is_none() {
+        *check_enabled = Some(true);
+    }
 }
 
 pub fn disable_all_non_multichain_charts(charts: &mut config::charts::Config<AllChartSettings>) {
@@ -407,8 +410,7 @@ pub struct StartConditionSettings {
     pub blocks_ratio: ToggleableThreshold,
     pub internal_transactions_ratio: ToggleableThreshold,
     pub user_ops_past_indexing_finished: ToggleableCheck,
-    #[serde(default = "ToggleableCheck::disabled")]
-    pub zetachain_indexed_until_today: ToggleableCheck,
+    pub zetachain_indexed_until_today: ToggleableOptionalCheck,
     pub check_period_secs: u32,
 }
 
@@ -419,7 +421,7 @@ impl Default for StartConditionSettings {
             blocks_ratio: ToggleableThreshold::default(),
             internal_transactions_ratio: ToggleableThreshold::default(),
             user_ops_past_indexing_finished: ToggleableCheck::default(),
-            zetachain_indexed_until_today: ToggleableCheck::disabled(),
+            zetachain_indexed_until_today: ToggleableOptionalCheck::default(),
             check_period_secs: 5,
         }
     }
@@ -433,7 +435,7 @@ impl StartConditionSettings {
         self.user_ops_past_indexing_finished.enabled
     }
     pub fn zetachain_checks_enabled(&self) -> bool {
-        self.zetachain_indexed_until_today.enabled
+        self.zetachain_indexed_until_today.enabled.unwrap_or(false)
     }
 }
 
@@ -482,15 +484,21 @@ pub struct ToggleableCheck {
     pub enabled: bool,
 }
 
-impl ToggleableCheck {
-    pub fn disabled() -> Self {
-        Self { enabled: false }
-    }
-}
-
 impl Default for ToggleableCheck {
     fn default() -> Self {
         Self { enabled: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ToggleableOptionalCheck {
+    pub enabled: Option<bool>,
+}
+
+impl Default for ToggleableOptionalCheck {
+    fn default() -> Self {
+        Self { enabled: None }
     }
 }
 

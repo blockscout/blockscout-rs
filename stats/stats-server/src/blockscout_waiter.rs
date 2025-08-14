@@ -86,7 +86,7 @@ impl IndexingStatusAggregator {
         indexed_until: Option<DateTime<Utc>>,
         wait_config: &StartConditionSettings,
     ) -> ZetachainCctxIndexingStatus {
-        if !wait_config.zetachain_indexed_until_today.enabled {
+        if !wait_config.zetachain_checks_enabled() {
             return ZetachainCctxIndexingStatus::IndexedHistoricalData;
         }
         let today = day_start(&chrono::Utc::now().date_naive());
@@ -347,7 +347,7 @@ pub fn init(
     } else {
         UserOpsIndexingStatus::PastOperationsIndexed
     };
-    let zetachain_cctx_init_value = if wait_config.zetachain_indexed_until_today.enabled {
+    let zetachain_cctx_init_value = if wait_config.zetachain_checks_enabled() {
         ZetachainCctxIndexingStatus::CatchingUp
     } else {
         ZetachainCctxIndexingStatus::IndexedHistoricalData
@@ -410,7 +410,7 @@ mod tests {
     use url::Url;
     use wiremock::ResponseTemplate;
 
-    use crate::settings::ToggleableCheck;
+    use crate::settings::{ToggleableCheck, ToggleableOptionalCheck};
 
     use super::*;
 
@@ -492,8 +492,8 @@ mod tests {
             user_ops_past_indexing_finished: ToggleableCheck {
                 enabled: user_ops_check_enabled,
             },
-            zetachain_indexed_until_today: ToggleableCheck {
-                enabled: zetachain_check_enabled,
+            zetachain_indexed_until_today: ToggleableOptionalCheck {
+                enabled: Some(zetachain_check_enabled),
             },
             check_period_secs,
         }
@@ -816,21 +816,27 @@ mod tests {
             blocks_ratio: ToggleableThreshold::disabled(),
             internal_transactions_ratio: ToggleableThreshold::disabled(),
             user_ops_past_indexing_finished: ToggleableCheck { enabled: true },
-            zetachain_indexed_until_today: ToggleableCheck { enabled: true },
+            zetachain_indexed_until_today: ToggleableOptionalCheck {
+                enabled: Some(true),
+            },
             check_period_secs: 1,
         };
         let config_u_off = StartConditionSettings {
             blocks_ratio: ToggleableThreshold::default(),
             internal_transactions_ratio: ToggleableThreshold::default(),
             user_ops_past_indexing_finished: ToggleableCheck { enabled: false },
-            zetachain_indexed_until_today: ToggleableCheck { enabled: true },
+            zetachain_indexed_until_today: ToggleableOptionalCheck {
+                enabled: Some(true),
+            },
             check_period_secs: 1,
         };
         let config_z_off = StartConditionSettings {
             blocks_ratio: ToggleableThreshold::default(),
             internal_transactions_ratio: ToggleableThreshold::default(),
             user_ops_past_indexing_finished: ToggleableCheck { enabled: true },
-            zetachain_indexed_until_today: ToggleableCheck { enabled: false },
+            zetachain_indexed_until_today: ToggleableOptionalCheck {
+                enabled: Some(false),
+            },
             check_period_secs: 1,
         };
         let mut tests = JoinSet::from_iter(
