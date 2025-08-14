@@ -149,7 +149,12 @@ pub async fn test_lines_ok(
     assert_eq!(enabled_resolutions, HashMap::new());
 }
 
-pub async fn test_counters_ok(base: Url, blockscout_indexed: bool, user_ops_indexed: bool) {
+pub async fn test_counters_ok(
+    base: Url,
+    blockscout_indexed: bool,
+    user_ops_indexed: bool,
+    zetachain_indexed: bool,
+) {
     let counters: Counters = send_get_request(&base, "/api/v1/counters").await;
     for counter in counters.counters.iter() {
         assert!(!counter.description.is_empty());
@@ -209,6 +214,13 @@ pub async fn test_counters_ok(base: Url, blockscout_indexed: bool, user_ops_inde
         expected_counter_names.extend(["totalUserOps", "totalAccountAbstractionWallets"]);
     }
 
+    if zetachain_indexed {
+        expected_counter_names.extend([
+            "totalZetachainCrossChainTxns",
+            "newZetachainCrossChainTxns24h",
+            "pendingZetachainCrossChainTxns",
+        ]);
+    }
     assert_eq!(
         sorted_vec(counter_names),
         sorted_vec(expected_counter_names)
@@ -274,7 +286,11 @@ pub async fn test_main_page_ok(base: Url, expect_chain_specific: bool, blockscou
     }
 }
 
-pub async fn test_transactions_page_ok(base: Url, expect_chain_specific: bool) {
+pub async fn test_transactions_page_ok(
+    base: Url,
+    expect_chain_specific: bool,
+    zetachain_indexed: bool,
+) {
     let TransactionsPageStats {
         pending_transactions_30m,
         transactions_fee_24h,
@@ -282,6 +298,9 @@ pub async fn test_transactions_page_ok(base: Url, expect_chain_specific: bool) {
         transactions_24h,
         operational_transactions_24h,
         op_stack_operational_transactions_24h,
+        total_zetachain_cross_chain_txns,
+        new_zetachain_cross_chain_txns_24h,
+        pending_zetachain_cross_chain_txns,
     } = send_get_request(&base, "/api/v1/pages/transactions").await;
     let mut counters = array_of_variables_with_names!([
         pending_transactions_30m,
@@ -293,8 +312,15 @@ pub async fn test_transactions_page_ok(base: Url, expect_chain_specific: bool) {
     if expect_chain_specific {
         counters.extend(array_of_variables_with_names!([
             operational_transactions_24h,
-            op_stack_operational_transactions_24h
+            op_stack_operational_transactions_24h,
         ]));
+        if zetachain_indexed {
+            counters.extend(array_of_variables_with_names!([
+                total_zetachain_cross_chain_txns,
+                new_zetachain_cross_chain_txns_24h,
+                pending_zetachain_cross_chain_txns,
+            ]));
+        }
     }
     for (name, counter) in counters {
         let counter =

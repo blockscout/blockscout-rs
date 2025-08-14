@@ -28,6 +28,8 @@ mod txns_stats_24h;
 mod yesterday_txns;
 mod zetachain_cctx;
 
+use zetachain_cctx::*;
+
 pub use arbitrum_new_operational_txns_24h::ArbitrumNewOperationalTxns24h;
 pub use arbitrum_total_operational_txns::ArbitrumTotalOperationalTxns;
 pub use arbitrum_yesterday_operational_txns::ArbitrumYesterdayOperationalTxns;
@@ -35,15 +37,18 @@ pub use average_block_time::AverageBlockTime;
 pub use completed_txns::CompletedTxns;
 pub use last_new_contracts::LastNewContracts;
 pub use last_new_verified_contracts::LastNewVerifiedContracts;
+pub use new_cc_txns_24h::NewZetachainCrossChainTxns24h;
 pub use new_contracts_24h::NewContracts24h;
 pub use new_verified_contracts_24h::NewVerifiedContracts24h;
 pub use op_stack_total_operational_txns::OpStackTotalOperationalTxns;
+pub use pending_cc_txns::PendingZetachainCrossChainTxns;
 pub use pending_txns::PendingTxns30m;
 pub use total_aa_wallets::TotalAccountAbstractionWallets;
 pub use total_accounts::TotalAccounts;
 pub use total_addresses::TotalAddresses;
 pub use total_blocks::TotalBlocks;
 pub use total_builders::TotalBuilderAccounts;
+pub use total_cc_txns::TotalZetachainCrossChainTxns;
 pub use total_contracts::TotalContracts;
 pub use total_native_coin_holders::TotalNativeCoinHolders;
 pub use total_native_coin_transfers::TotalNativeCoinTransfers;

@@ -72,7 +72,7 @@ pub async fn run_tests_with_nothing_indexed() {
     // these pages must be available right away to display users
     let tests: JoinSet<_> = [
         test_main_page_ok(base.clone(), true, blockscout_indexed).boxed(),
-        test_transactions_page_ok(base.clone(), true).boxed(),
+        test_transactions_page_ok(base.clone(), true, zetachain_indexed).boxed(),
         test_contracts_page_ok(base.clone()).boxed(),
         test_lines_ok(
             base.clone(),
@@ -81,7 +81,13 @@ pub async fn run_tests_with_nothing_indexed() {
             zetachain_indexed,
         )
         .boxed(),
-        test_counters_ok(base.clone(), blockscout_indexed, user_ops_indexed).boxed(),
+        test_counters_ok(
+            base.clone(),
+            blockscout_indexed,
+            user_ops_indexed,
+            zetachain_indexed,
+        )
+        .boxed(),
         test_swagger_ok(base.clone()).boxed(),
     ]
     .into_iter()
@@ -131,7 +137,13 @@ pub async fn run_tests_with_user_ops_not_indexed() {
             zetachain_indexed,
         )
         .boxed(),
-        test_counters_ok(base.clone(), blockscout_indexed, user_ops_indexed).boxed(),
+        test_counters_ok(
+            base.clone(),
+            blockscout_indexed,
+            user_ops_indexed,
+            zetachain_indexed,
+        )
+        .boxed(),
     ]
     .into_iter()
     .collect();

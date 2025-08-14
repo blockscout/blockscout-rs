@@ -20,17 +20,17 @@
         },
         "new_txns_24h": {
             "title": "Transactions (24h)",
-            "description": "Number of new transactions within last 24 hours"
+            "description": "Number of new transactions within the last 24 hours"
         },
         "op_stack_new_operational_txns_24h": {
             "enabled": false,
             "title": "Operational transactions (24h)",
-            "description": "Number of new transactions within last 24 hours without attributes deposited transactions"
+            "description": "Number of new transactions within the last 24 hours without attributes deposited transactions"
         },
         "new_operational_txns_24h": {
             "enabled": false,
             "title": "Operational transactions (24h)",
-            "description": "Number of new transactions within last 24 hours without block creation transactions"
+            "description": "Number of new transactions within the last 24 hours without block creation transactions"
         },
         "pending_txns_30m": {
             "title": "Pending transactions (30m)",
@@ -38,12 +38,12 @@
         },
         "txns_fee_24h": {
             "title": "Transactions fees (24h)",
-            "description": "Sum of {{native_coin_symbol}} spent on gas fees within last 24 hours",
+            "description": "Sum of {{native_coin_symbol}} spent on gas fees within the last 24 hours",
             "units": "{{native_coin_symbol}}"
         },
         "average_txn_fee_24h": {
             "title": "Avg. transaction fee (24h)",
-            "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction within last 24 hours",
+            "description": "Average amount of {{native_coin_symbol}} spent on gas fees per transaction within the last 24 hours",
             "units": "{{native_coin_symbol}}"
         },
         "completed_txns": {
@@ -131,6 +131,21 @@
             "enabled": false,
             "title": "Total {{native_coin_symbol}} holders",
             "description": "Number of accounts with {{native_coin_symbol}}"
+        },
+        "new_zetachain_cross_chain_txns_24h": {
+            "enabled": false,
+            "title": "Cross chain transactions (24h)",
+            "description": "Number of new Zetachain cross-chain transactions within the last 24 hours"
+        },
+        "pending_zetachain_cross_chain_txns": {
+            "enabled": false,
+            "title": "Pending CCTXs",
+            "description": "Total number of pending Zetachain cross-chain transactions"
+        },
+        "total_zetachain_cross_chain_txns": {
+            "enabled": false,
+            "title": "Total CCTXs",
+            "description": "Number of Zetachain cross-chain transactions"
         }
     },
     "line_charts": {

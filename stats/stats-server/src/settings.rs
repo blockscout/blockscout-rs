@@ -11,8 +11,9 @@ use stats::{
     ChartProperties, Named,
     counters::{
         ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
-        ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
-        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
+        ArbitrumYesterdayOperationalTxns, NewZetachainCrossChainTxns24h,
+        OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
+        PendingZetachainCrossChainTxns, TotalZetachainCrossChainTxns,
         multichain::TotalInteropMessages,
     },
     indexing_status::BlockscoutIndexingStatus,
@@ -338,7 +339,9 @@ pub fn handle_enable_zetachain_cctx(
         &[
             NewZetachainCrossChainTxns::key().name(),
             ZetachainCrossChainTxnsGrowth::key().name(),
-            // todo: add new charts as well
+            NewZetachainCrossChainTxns24h::key().name(),
+            PendingZetachainCrossChainTxns::key().name(),
+            TotalZetachainCrossChainTxns::key().name(),
         ],
         charts,
         "zetachain-cctx",

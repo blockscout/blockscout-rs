@@ -27,6 +27,7 @@ pub async fn run_chart_pages_tests_with_disabled_chain_specific() {
     let blockscout_api = default_mock_blockscout_api().await;
     let zetachain_cctx_db = get_mock_zetachain_cctx().await;
     let blockscout_indexed = true;
+    let zetachain_indexed = true;
     let (mut settings, base) = get_test_stats_settings(
         &stats_db,
         blockscout_db,
@@ -44,7 +45,7 @@ pub async fn run_chart_pages_tests_with_disabled_chain_specific() {
 
     let tests: JoinSet<_> = [
         test_main_page_ok(base.clone(), false, blockscout_indexed).boxed(),
-        test_transactions_page_ok(base, false).boxed(),
+        test_transactions_page_ok(base, false, zetachain_indexed).boxed(),
     ]
     .into_iter()
     .collect();

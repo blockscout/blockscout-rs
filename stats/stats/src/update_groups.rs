@@ -338,6 +338,15 @@ construct_update_group!(ZetachainCrossChainTxnsGroup {
     ],
 });
 
+// Zetachain cctx charts returned in transactions page.
+construct_update_group!(ZetachainCrossChainTxnsPageGroup {
+    charts: [
+        NewZetachainCrossChainTxns24h,
+        PendingZetachainCrossChainTxns,
+        TotalZetachainCrossChainTxns,
+    ],
+});
+
 // Charts returned in contracts endpoint.
 //
 // They don't depend on each other, but single group
