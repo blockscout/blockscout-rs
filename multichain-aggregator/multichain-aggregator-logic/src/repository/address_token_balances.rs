@@ -75,6 +75,68 @@ where
 
 pub type ListAddressTokensPageToken = (Option<BigDecimal>, BigDecimal, i64);
 
+pub async fn list_by_address<C>(
+    db: &C,
+    address: alloy_primitives::Address,
+    token_types: Vec<TokenType>,
+    chain_ids: Vec<i64>,
+    page_size: u64,
+    page_token: Option<ListAddressTokensPageToken>,
+) -> Result<
+    (
+        Vec<AggregatedAddressTokenBalance>,
+        Option<ListAddressTokensPageToken>,
+    ),
+    DbErr,
+>
+where
+    C: ConnectionTrait,
+{
+    let query =
+        prepare_list_by_address_query(address, token_types, chain_ids, page_size, page_token);
+
+    let balances =
+        AggregatedAddressTokenBalance::find_by_statement(db.get_database_backend().build(&query))
+            .all(db)
+            .await?;
+
+    if balances.len() as u64 > page_size {
+        Ok((
+            balances[..page_size as usize].to_vec(),
+            balances
+                .get(page_size as usize - 1)
+                .map(|a| (a.fiat_balance.clone(), a.value.clone(), a.id)),
+        ))
+    } else {
+        Ok((balances, None))
+    }
+}
+
+pub async fn check_if_tokens_at_address<C>(
+    db: &C,
+    address: alloy_primitives::Address,
+    cluster_chain_ids: Vec<ChainId>,
+) -> Result<bool, DbErr>
+where
+    C: ConnectionTrait,
+{
+    let query = Query::select()
+        .expr(Expr::exists(
+            Query::select()
+                .column(Column::Id)
+                .from(Entity)
+                .and_where(Column::AddressHash.eq(address.as_slice()))
+                .and_where(Column::ChainId.is_in(cluster_chain_ids))
+                .to_owned(),
+        ))
+        .to_owned();
+
+    db.query_one(db.get_database_backend().build(&query))
+        .await?
+        .expect("expr should be present")
+        .try_get_by_index(0)
+}
+
 fn prepare_list_by_address_query(
     address: alloy_primitives::Address,
     token_types: Vec<TokenType>,
@@ -188,68 +250,6 @@ fn prepare_list_by_address_query(
         .to_owned();
 
     apply_pagination(&mut query)
-}
-
-pub async fn list_by_address<C>(
-    db: &C,
-    address: alloy_primitives::Address,
-    token_types: Vec<TokenType>,
-    chain_ids: Vec<i64>,
-    page_size: u64,
-    page_token: Option<ListAddressTokensPageToken>,
-) -> Result<
-    (
-        Vec<AggregatedAddressTokenBalance>,
-        Option<ListAddressTokensPageToken>,
-    ),
-    DbErr,
->
-where
-    C: ConnectionTrait,
-{
-    let query =
-        prepare_list_by_address_query(address, token_types, chain_ids, page_size, page_token);
-
-    let balances =
-        AggregatedAddressTokenBalance::find_by_statement(db.get_database_backend().build(&query))
-            .all(db)
-            .await?;
-
-    if balances.len() as u64 > page_size {
-        Ok((
-            balances[..page_size as usize].to_vec(),
-            balances
-                .get(page_size as usize - 1)
-                .map(|a| (a.fiat_balance.clone(), a.value.clone(), a.id)),
-        ))
-    } else {
-        Ok((balances, None))
-    }
-}
-
-pub async fn check_if_tokens_at_address<C>(
-    db: &C,
-    address: alloy_primitives::Address,
-    cluster_chain_ids: Vec<ChainId>,
-) -> Result<bool, DbErr>
-where
-    C: ConnectionTrait,
-{
-    let query = Query::select()
-        .expr(Expr::exists(
-            Query::select()
-                .column(Column::Id)
-                .from(Entity)
-                .and_where(Column::AddressHash.eq(address.as_slice()))
-                .and_where(Column::ChainId.is_in(cluster_chain_ids))
-                .to_owned(),
-        ))
-        .to_owned();
-
-    db.query_one(db.get_database_backend().build(&query))
-        .await?
-        .expect("expr should be present")
-        .try_get_by_index(0)
 }
 
 #[cfg(test)]
