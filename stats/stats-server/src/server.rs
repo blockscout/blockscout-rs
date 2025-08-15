@@ -353,10 +353,10 @@ async fn on_termination(
     if let Err(e) = indexer.close_by_ref().await {
         tracing::error!("Failed to close indexer db connection upon termination: {e:?}");
     }
-    if let Some(cctx_indexer) = cctx_indexer {
-        if let Err(e) = cctx_indexer.close_by_ref().await {
-            tracing::error!("Failed to close CCTX indexer db connection upon termination: {e:?}");
-        }
+    if let Some(cctx_indexer) = cctx_indexer
+        && let Err(e) = cctx_indexer.close_by_ref().await
+    {
+        tracing::error!("Failed to close CCTX indexer db connection upon termination: {e:?}");
     }
     shutdown.shutdown_token.cancel();
     futures.abort_all();

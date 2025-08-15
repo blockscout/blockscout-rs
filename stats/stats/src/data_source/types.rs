@@ -22,7 +22,6 @@ pub struct UpdateParameters<'a> {
     /// Indexer database (blockscout or multichain)
     pub indexer_db: &'a DatabaseConnection,
     pub indexer_applied_migrations: IndexerMigrations,
-    // todo: maybe enum if some other kinds of "second indexer" will be supported??
     /// Second indexer database (CCTX indexer currently)
     pub second_indexer_db: Option<&'a DatabaseConnection>,
     /// Charts engaged in the current (group) update.

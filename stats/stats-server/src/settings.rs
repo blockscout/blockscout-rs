@@ -490,16 +490,10 @@ impl Default for ToggleableCheck {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ToggleableOptionalCheck {
     pub enabled: Option<bool>,
-}
-
-impl Default for ToggleableOptionalCheck {
-    fn default() -> Self {
-        Self { enabled: None }
-    }
 }
 
 #[cfg(test)]

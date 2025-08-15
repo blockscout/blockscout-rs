@@ -56,15 +56,6 @@ impl ChartProperties for Properties {
     }
 }
 
-define_and_impl_resolution_properties!(
-    define_and_impl: {
-        WeeklyProperties: Week,
-        MonthlyProperties: Month,
-        YearlyProperties: Year,
-    },
-    base_impl: Properties
-);
-
 pub type NewBlockRewards =
     DirectVecLocalDbChartSource<NewBlockRewardsRemote, Batch30Days, Properties>;
 pub type NewBlockRewardsInt = MapParseTo<StripExt<NewBlockRewards>, i64>;

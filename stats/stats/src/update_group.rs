@@ -513,7 +513,7 @@ impl SyncUpdateGroup {
         result
     }
 
-    async fn lock_in_order(&self, mut to_lock: HashSet<String>) -> Vec<MutexGuard<()>> {
+    async fn lock_in_order(&self, mut to_lock: HashSet<String>) -> Vec<MutexGuard<'_, ()>> {
         let mut guards = vec![];
         // .iter() is ordered by key, so order is followed
         for (name, mutex) in self.dependencies_mutexes.iter() {
@@ -570,7 +570,7 @@ impl SyncUpdateGroup {
     async fn lock_enabled_and_dependencies(
         &self,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> ChartsMutexGuards {
+    ) -> ChartsMutexGuards<'_> {
         let (enabled_members, enabled_members_with_deps) =
             self.get_enabled_members_with_deps(enabled_charts);
         // order is very important to prevent deadlocks
