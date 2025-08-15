@@ -372,8 +372,8 @@ impl RuntimeSetup {
             // multichain: singletons
             Arc::new(TotalInteropMessagesGroup),
             Arc::new(TotalInteropTransfersGroup),
-            Arc::new(TotalAddressesNumberGroup),
-            Arc::new(TotalTxnsNumberGroup),
+            Arc::new(TotalMultichainAddressesGroup),
+            Arc::new(TotalMultichainTxnsGroup),
             // multichain: groups
             Arc::new(NewTxnsMultichainGroup),
             Arc::new(NewTxnsMultichainWindowGroup),

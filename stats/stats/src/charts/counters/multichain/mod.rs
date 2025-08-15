@@ -1,9 +1,9 @@
-mod total_addresses_number;
+mod total_multichain_addresses;
 mod total_interop_messages;
 mod total_interop_transfers;
-mod total_txns_number;
+mod total_multichain_txns;
 
-pub use total_addresses_number::TotalAddressesNumber;
+pub use total_multichain_addresses::TotalMultichainAddresses;
 pub use total_interop_messages::TotalInteropMessages;
 pub use total_interop_transfers::TotalInteropTransfers;
-pub use total_txns_number::TotalTxnsNumber;
+pub use total_multichain_txns::TotalMultichainTxns;

@@ -9,11 +9,11 @@
             "title": "Total interop transfers",
             "description": "Number of interop transfers over all time"
         },
-        "total_txns_number": {
+        "total_multichain_txns": {
             "title": "Total transactions",
             "description": "Number of transactions across all chains in the cluster"
         },
-        "total_addresses_number": {
+        "total_multichain_addresses": {
             "title": "Total addresses",
             "description": "Number of addresses across all chains in the cluster"
         }

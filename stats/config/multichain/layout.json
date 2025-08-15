@@ -2,8 +2,8 @@
     "counters_order": [
         "total_interop_messages",
         "total_interop_transfers",
-        "total_txns_number",
-        "total_addresses_number"
+        "total_multichain_txns",
+        "total_multichain_addresses"
     ],
     "line_chart_categories": [
         {

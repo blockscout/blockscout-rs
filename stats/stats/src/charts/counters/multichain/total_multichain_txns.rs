@@ -16,14 +16,14 @@ use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, FromQueryResult, Statement, prelude::BigDecimal};
 
-pub struct TotalTxnsNumberQueryBehaviour;
+pub struct TotalMultichainTxnsQueryBehaviour;
 
 #[derive(Debug, FromQueryResult)]
 struct SumResult {
     sum_total: Option<BigDecimal>,
 }
 
-impl RemoteQueryBehaviour for TotalTxnsNumberQueryBehaviour {
+impl RemoteQueryBehaviour for TotalMultichainTxnsQueryBehaviour {
     type Output = DateValue<String>;
 
     async fn query_data(
@@ -61,13 +61,13 @@ impl RemoteQueryBehaviour for TotalTxnsNumberQueryBehaviour {
     }
 }
 
-pub type TotalTxnsNumberRemote = RemoteDatabaseSource<TotalTxnsNumberQueryBehaviour>;
+pub type TotalMultichainTxnsRemote = RemoteDatabaseSource<TotalMultichainTxnsQueryBehaviour>;
 
 pub struct Properties;
 
 impl Named for Properties {
     fn name() -> String {
-        "totalTxnsNumber".into()
+        "totalMultichainTxns".into()
     }
 }
 
@@ -85,7 +85,7 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type TotalTxnsNumber = DirectPointLocalDbChartSource<TotalTxnsNumberRemote, Properties>;
+pub type TotalMultichainTxns = DirectPointLocalDbChartSource<TotalMultichainTxnsRemote, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -94,9 +94,9 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_total_txns_number() {
-        simple_test_counter_multichain::<TotalTxnsNumber>(
-            "update_total_txns_number",
+    async fn update_total_multichain_txns() {
+        simple_test_counter_multichain::<TotalMultichainTxns>(
+            "update_total_multichain_txns",
             "124",
             Some(dt("2022-08-06T00:00:00")),
         )

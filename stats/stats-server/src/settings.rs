@@ -8,25 +8,16 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 use stats::{
-    ChartProperties, Named,
     counters::{
-        ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
-        ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
-        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
         multichain::{
-            TotalAddressesNumber, TotalInteropMessages, TotalInteropTransfers, TotalTxnsNumber,
-        },
-    },
-    indexing_status::BlockscoutIndexingStatus,
-    lines::{
-        ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
-        ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
-        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
+            TotalInteropMessages, TotalInteropTransfers, TotalMultichainAddresses, TotalMultichainTxns
+        }, ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns, ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns
+    }, indexing_status::BlockscoutIndexingStatus, lines::{
         multichain::{
             new_txns_multichain::NewTxnsMultichain,
             new_txns_multichain_window::NewTxnsMultichainWindow,
-        },
-    },
+        }, ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow, ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth
+    }, ChartProperties, Named
 };
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
@@ -325,8 +316,8 @@ pub fn disable_all_non_multichain_charts(charts: &mut config::charts::Config<All
     let multichain_charts = HashSet::from([
         TotalInteropMessages::name(),
         TotalInteropTransfers::name(),
-        TotalAddressesNumber::name(),
-        TotalTxnsNumber::name(),
+        TotalMultichainAddresses::name(),
+        TotalMultichainTxns::name(),
         NewTxnsMultichain::name(),
         NewTxnsMultichainWindow::name(),
     ]);

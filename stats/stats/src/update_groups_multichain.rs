@@ -11,8 +11,8 @@ use crate::counters::multichain::*;
 singleton_groups!(
     TotalInteropMessages,
     TotalInteropTransfers,
-    TotalAddressesNumber,
-    TotalTxnsNumber,
+    TotalMultichainAddresses,
+    TotalMultichainTxns,
 );
 
 construct_update_group!(NewTxnsMultichainGroup {
