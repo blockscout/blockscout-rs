@@ -103,7 +103,7 @@ fn mock_interop_message(
     let to_address_hash = accounts[account_index].hash.as_ref().to_vec();
 
     interop_messages::ActiveModel {
-        id: Set(index as i64 + 1), // для моков задаём id вручную
+        id: Set(index as i64 + 1),
         sender_address_hash: Set(Some(from_address_hash)),
         target_address_hash: Set(Some(to_address_hash)),
         nonce: Set(index as i64),
