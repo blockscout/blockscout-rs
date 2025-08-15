@@ -29,7 +29,6 @@ use entity::sea_orm_active_enums::ChartType;
 use sea_orm::Statement;
 
 use super::new_txns_multichain::NewTxnsMultichainStatement;
-//use super::arbitrum_new_operational_txns::ArbitrumCalculateOperationalTxnsVec;
 
 fn new_txns_multichain_window_statement(
     update_day: NaiveDate,
