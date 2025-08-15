@@ -994,6 +994,7 @@ dependencies = [
 name = "blockscout-smart-contracts-logic"
 version = "0.1.0"
 dependencies = [
+ "alloy-primitives",
  "anyhow",
  "blockscout-display-bytes",
  "blockscout-service-launcher",
@@ -1003,6 +1004,7 @@ dependencies = [
  "rstest",
  "sea-orm",
  "thiserror 2.0.14",
+ "tokio",
  "tonic",
  "tracing",
 ]
