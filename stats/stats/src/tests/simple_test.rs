@@ -40,7 +40,18 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
-    simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest()).await
+    simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest(), false).await
+}
+
+pub async fn simple_test_chart_multichain<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+) -> (TestDbGuard, TestDbGuard)
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest(), true).await
 }
 
 /// tests all statement kinds for different migrations combinations.
@@ -59,7 +70,7 @@ pub async fn simple_test_chart_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations).await;
+        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations, false).await;
     }
 }
 
@@ -71,20 +82,28 @@ async fn simple_test_chart_inner<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
     migrations: IndexerMigrations,
+    multichain_mode: bool,
 ) -> (TestDbGuard, TestDbGuard)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
-    let (current_time, db, blockscout) = prepare_chart_test::<C>(test_name, None).await;
     let expected = map_str_tuple_to_owned(expected);
-    let current_date = current_time.date_naive();
-    fill_mock_blockscout_data(&blockscout, current_date).await;
+
+    let (current_time, db, indexer) = if multichain_mode {
+        let (t, db, multichain) = prepare_multichain_chart_test::<C>(test_name, None).await;
+        fill_mock_multichain_data(&multichain, t.date_naive()).await;
+        (t, db, multichain)
+    } else {
+        let (t, db, blockscout) = prepare_chart_test::<C>(test_name, None).await;
+        fill_mock_blockscout_data(&blockscout, t.date_naive()).await;
+        (t, db, blockscout)
+    };
 
     let mut parameters = UpdateParameters {
         stats_db: &db,
-        is_multichain_mode: false,
-        indexer_db: &blockscout,
+        is_multichain_mode: multichain_mode,
+        indexer_db: &indexer,
         indexer_applied_migrations: migrations,
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
         update_time_override: Some(current_time),
@@ -112,7 +131,7 @@ where
         ),
         &expected
     );
-    (db, blockscout)
+    (db, indexer)
 }
 
 /// Expects to have `test_name` db's initialized (e.g. by [`simple_test_chart`]).

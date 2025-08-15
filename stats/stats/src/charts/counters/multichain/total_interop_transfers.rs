@@ -14,12 +14,12 @@ use crate::{
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use multichain_aggregator_entity::interop_messages;
+use multichain_aggregator_entity::interop_messages_transfers;
 use sea_orm::{EntityTrait, PaginatorTrait, QuerySelect};
 
-pub struct TotalInteropMessagesQueryBehaviour;
+pub struct TotalInteropTransfersQueryBehaviour;
 
-impl RemoteQueryBehaviour for TotalInteropMessagesQueryBehaviour {
+impl RemoteQueryBehaviour for TotalInteropTransfersQueryBehaviour {
     type Output = DateValue<String>;
 
     async fn query_data(
@@ -29,7 +29,7 @@ impl RemoteQueryBehaviour for TotalInteropMessagesQueryBehaviour {
         let db = cx.indexer_db;
         let timespan = cx.time;
 
-        let value = interop_messages::Entity::find()
+        let value = interop_messages_transfers::Entity::find()
             .select_only()
             .count(db)
             .await
@@ -43,13 +43,13 @@ impl RemoteQueryBehaviour for TotalInteropMessagesQueryBehaviour {
     }
 }
 
-pub type TotalInteropMessagesRemote = RemoteDatabaseSource<TotalInteropMessagesQueryBehaviour>;
+pub type TotalInteropTransfersRemote = RemoteDatabaseSource<TotalInteropTransfersQueryBehaviour>;
 
 pub struct Properties;
 
 impl Named for Properties {
     fn name() -> String {
-        "totalInteropMessages".into()
+        "totalInteropTransfers".into()
     }
 }
 
@@ -67,8 +67,8 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type TotalInteropMessages =
-    DirectPointLocalDbChartSource<TotalInteropMessagesRemote, Properties>;
+pub type TotalInteropTransfers =
+    DirectPointLocalDbChartSource<TotalInteropTransfersRemote, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -77,10 +77,10 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_total_interop_messages() {
-        simple_test_counter_multichain::<TotalInteropMessages>(
-            "update_total_interop_messages",
-            "6",
+    async fn update_total_interop_transfers() {
+        simple_test_counter_multichain::<TotalInteropTransfers>(
+            "update_total_interop_transfers",
+            "3",
             Some(dt("2022-08-06T00:00:00")),
         )
         .await;

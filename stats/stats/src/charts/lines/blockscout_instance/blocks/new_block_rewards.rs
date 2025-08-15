@@ -7,7 +7,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -21,8 +21,7 @@ use crate::{
         },
         types::IndexerMigrations,
     },
-    define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
+    types::timespans::Month,
     utils::sql_with_range_filter_opt,
 };
 
@@ -59,7 +58,7 @@ impl StatementFromRange for NewBlockRewardsStatement {
 }
 
 pub type NewBlockRewardsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<NewBlockRewardsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<NewBlockRewardsStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct Properties;
@@ -77,15 +76,6 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
 }
-
-define_and_impl_resolution_properties!(
-    define_and_impl: {
-        WeeklyProperties: Week,
-        MonthlyProperties: Month,
-        YearlyProperties: Year,
-    },
-    base_impl: Properties
-);
 
 pub type NewBlockRewards =
     DirectVecLocalDbChartSource<NewBlockRewardsRemote, Batch30Days, Properties>;

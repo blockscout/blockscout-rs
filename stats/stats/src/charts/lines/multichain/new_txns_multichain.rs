@@ -28,9 +28,9 @@ use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use sea_orm::{DbBackend, Statement};
 
-pub struct NewVerifiedContractsStatement;
+pub struct NewTxnsMultichainStatement;
 
-impl StatementFromRange for NewVerifiedContractsStatement {
+impl StatementFromRange for NewTxnsMultichainStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         _: &IndexerMigrations,
@@ -40,22 +40,24 @@ impl StatementFromRange for NewVerifiedContractsStatement {
             DbBackend::Postgres,
             r#"
                 SELECT
-                    DATE(smart_contracts.inserted_at) as date,
-                    COUNT(*)::TEXT as value
-                FROM smart_contracts
-                WHERE TRUE {filter}
-                GROUP BY DATE(smart_contracts.inserted_at)
+                    c.date,
+                    SUM(c.daily_transactions_number)::TEXT AS value
+                FROM counters_global_imported as c
+                WHERE
+                    c.daily_transactions_number IS NOT NULL
+                    {filter}
+                GROUP BY date
             "#,
             [],
-            "smart_contracts.inserted_at",
+            "c.date::timestamp",
             range
         )
     }
 }
 
-pub type NewVerifiedContractsRemote = RemoteDatabaseSource<
+pub type NewTxnsMultichainRemote = RemoteDatabaseSource<
     PullAllWithAndSort<
-        NewVerifiedContractsStatement,
+        NewTxnsMultichainStatement,
         NaiveDate,
         String,
         QueryFullIndexerTimestampRange,
@@ -66,7 +68,7 @@ pub struct Properties;
 
 impl Named for Properties {
     fn name() -> String {
-        "newVerifiedContracts".into()
+        "newTxnsMultichain".into()
     }
 }
 
@@ -87,22 +89,22 @@ define_and_impl_resolution_properties!(
     base_impl: Properties
 );
 
-pub type NewVerifiedContracts =
-    DirectVecLocalDbChartSource<NewVerifiedContractsRemote, Batch30Days, Properties>;
-pub type NewVerifiedContractsInt = MapParseTo<StripExt<NewVerifiedContracts>, i64>;
-pub type NewVerifiedContractsWeekly = DirectVecLocalDbChartSource<
-    MapToString<SumLowerResolution<NewVerifiedContractsInt, Week>>,
+pub type NewTxnsMultichain =
+    DirectVecLocalDbChartSource<NewTxnsMultichainRemote, Batch30Days, Properties>;
+pub type NewTxnsMultichainInt = MapParseTo<StripExt<NewTxnsMultichain>, i64>;
+pub type NewTxnsMultichainWeekly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewTxnsMultichainInt, Week>>,
     Batch30Weeks,
     WeeklyProperties,
 >;
-pub type NewVerifiedContractsMonthly = DirectVecLocalDbChartSource<
-    MapToString<SumLowerResolution<NewVerifiedContractsInt, Month>>,
+pub type NewTxnsMultichainMonthly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewTxnsMultichainInt, Month>>,
     Batch36Months,
     MonthlyProperties,
 >;
-pub type NewVerifiedContractsMonthlyInt = MapParseTo<StripExt<NewVerifiedContractsMonthly>, i64>;
-pub type NewVerifiedContractsYearly = DirectVecLocalDbChartSource<
-    MapToString<SumLowerResolution<NewVerifiedContractsMonthlyInt, Year>>,
+pub type NewTxnsMultichainMonthlyInt = MapParseTo<StripExt<NewTxnsMultichainMonthly>, i64>;
+pub type NewTxnsMultichainYearly = DirectVecLocalDbChartSource<
+    MapToString<SumLowerResolution<NewTxnsMultichainMonthlyInt, Year>>,
     Batch30Years,
     YearlyProperties,
 >;
@@ -110,17 +112,19 @@ pub type NewVerifiedContractsYearly = DirectVecLocalDbChartSource<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::simple_test::simple_test_chart;
+    use crate::tests::simple_test::simple_test_chart_multichain;
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_new_verified_contracts() {
-        simple_test_chart::<NewVerifiedContracts>(
-            "update_new_verified_contracts",
+    async fn update_new_txns_multichain() {
+        simple_test_chart_multichain::<NewTxnsMultichain>(
+            "update_new_txns_multichain",
             vec![
-                ("2022-11-14", "1"),
-                ("2022-11-15", "1"),
-                ("2022-11-16", "1"),
+                ("2022-06-28", "66"),
+                ("2022-07-01", "10"),
+                ("2022-08-04", "25"),
+                ("2022-08-05", "49"),
+                ("2022-08-06", "60"),
             ],
         )
         .await;
@@ -128,30 +132,34 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_new_verified_contracts_weekly() {
-        simple_test_chart::<NewVerifiedContractsWeekly>(
-            "update_new_verified_contracts_weekly",
-            vec![("2022-11-14", "3")],
+    async fn update_new_txs_multichain_weekly() {
+        simple_test_chart_multichain::<NewTxnsMultichainWeekly>(
+            "update_new_txs_multichain_weekly",
+            vec![("2022-06-27", "76"), ("2022-08-01", "134")],
         )
         .await;
     }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_new_verified_contracts_monthly() {
-        simple_test_chart::<NewVerifiedContractsMonthly>(
-            "update_new_verified_contracts_monthly",
-            vec![("2022-11-01", "3")],
+    async fn update_new_txs_multichain_monthly() {
+        simple_test_chart_multichain::<NewTxnsMultichainMonthly>(
+            "update_new_txs_multichain_monthly",
+            vec![
+                ("2022-06-01", "66"),
+                ("2022-07-01", "10"),
+                ("2022-08-01", "134"),
+            ],
         )
         .await;
     }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn update_new_verified_contracts_yearly() {
-        simple_test_chart::<NewVerifiedContractsYearly>(
-            "update_new_verified_contracts_yearly",
-            vec![("2022-01-01", "3")],
+    async fn update_new_txs_multichain_yearly() {
+        simple_test_chart_multichain::<NewTxnsMultichainYearly>(
+            "update_new_txs_multichain_yearly",
+            vec![("2022-01-01", "210")],
         )
         .await;
     }

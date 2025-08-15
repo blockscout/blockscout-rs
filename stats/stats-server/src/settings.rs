@@ -8,19 +8,16 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 use stats::{
-    ChartProperties, Named,
     counters::{
-        ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
-        ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
-        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
-        multichain::TotalInteropMessages,
-    },
-    indexing_status::BlockscoutIndexingStatus,
-    lines::{
-        ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
-        ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
-        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
-    },
+        multichain::{
+            TotalInteropMessages, TotalInteropTransfers, TotalMultichainAddresses, TotalMultichainTxns
+        }, ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns, ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns
+    }, indexing_status::BlockscoutIndexingStatus, lines::{
+        multichain::{
+            new_txns_multichain::NewTxnsMultichain,
+            new_txns_multichain_window::NewTxnsMultichainWindow,
+        }, ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow, ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth
+    }, ChartProperties, Named
 };
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
@@ -120,9 +117,12 @@ impl Default for Settings {
             concurrent_start_updates: 3,
             limits: Default::default(),
             conditional_start: Default::default(),
-            charts_config: PathBuf::from_str("config/charts.json").unwrap(),
-            layout_config: PathBuf::from_str("config/layout.json").unwrap(),
-            update_groups_config: PathBuf::from_str("config/update_groups.json").unwrap(),
+            charts_config: PathBuf::from_str("config/blockscout_instance/charts.json").unwrap(),
+            layout_config: PathBuf::from_str("config/blockscout_instance/layout.json").unwrap(),
+            update_groups_config: PathBuf::from_str(
+                "config/blockscout_instance/update_groups.json",
+            )
+            .unwrap(),
             multichain_charts_config: Some(
                 PathBuf::from_str("config/multichain/charts.json").unwrap(),
             ),
@@ -313,7 +313,14 @@ pub fn handle_enable_all_eip_7702(
 }
 
 pub fn disable_all_non_multichain_charts(charts: &mut config::charts::Config<AllChartSettings>) {
-    let multichain_charts = HashSet::from([TotalInteropMessages::name()]);
+    let multichain_charts = HashSet::from([
+        TotalInteropMessages::name(),
+        TotalInteropTransfers::name(),
+        TotalMultichainAddresses::name(),
+        TotalMultichainTxns::name(),
+        NewTxnsMultichain::name(),
+        NewTxnsMultichainWindow::name(),
+    ]);
     for (name, settings) in charts.lines.iter_mut() {
         if !multichain_charts.contains(name) {
             settings.enabled = false;

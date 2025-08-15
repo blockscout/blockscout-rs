@@ -28,7 +28,7 @@ use super::{
 };
 use crate::{
     ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
     construct_update_group,
     data_source::{
         kinds::local_db::parameters::update::batching::parameters::PassVecStep,
@@ -130,7 +130,7 @@ impl StatementFromRange for NewContractsQuery {
 }
 
 pub type NewContractsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<NewContractsQuery, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<NewContractsQuery, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct NewContractsChartProperties;

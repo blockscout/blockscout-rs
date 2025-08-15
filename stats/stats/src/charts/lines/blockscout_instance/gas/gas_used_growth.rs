@@ -2,7 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -58,7 +58,7 @@ impl StatementFromRange for GasUsedPartialStatement {
 }
 
 pub type GasUsedPartialRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<GasUsedPartialStatement, NaiveDate, Decimal, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<GasUsedPartialStatement, NaiveDate, Decimal, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct IncrementsFromPartialSum;

@@ -2,7 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
-    charts::db_interaction::{read::QueryAllBlockTimestampRange, utils::datetime_range_filter},
+    charts::db_interaction::{read::QueryFullIndexerTimestampRange, utils::datetime_range_filter},
     data_source::{
         kinds::{
             data_manipulation::{
@@ -73,7 +73,7 @@ impl StatementFromRange for NewUserOpsStatement {
 }
 
 pub type NewUserOpsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<NewUserOpsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<NewUserOpsStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct Properties;

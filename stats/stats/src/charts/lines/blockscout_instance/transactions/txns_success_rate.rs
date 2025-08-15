@@ -2,7 +2,7 @@ use std::{collections::HashSet, ops::Range};
 
 use crate::{
     ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -84,7 +84,7 @@ impl StatementFromRange for TxnsSuccessRateStatement {
 }
 
 pub type TxnsSuccessRateRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<TxnsSuccessRateStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<TxnsSuccessRateStatement, NaiveDate, f64, QueryFullIndexerTimestampRange>,
 >;
 
 pub type TxnsSuccessRateRemoteString = MapToString<TxnsSuccessRateRemote>;

@@ -35,19 +35,17 @@ where
         }
         MissingDatePolicy::FillPrevious => {
             // preserve the point before the range (if needed)
-            if let Some(from) = from {
-                if let Some(last_point_before) =
+            if let Some(from) = from
+                && let Some(last_point_before) =
                     data.iter().take_while(|p| p.timespan < from).last()
-                {
-                    if let Err(insert_idx) = data.binary_search_by_key(&&from, |p| &p.timespan) {
-                        // `data` does not contain point for `from`, need to insert by `FillPrevious` logic
-                        let new_point = TimespanValue {
-                            timespan: from,
-                            value: last_point_before.value.clone(),
-                        };
-                        data.insert(insert_idx, new_point);
-                    }
-                }
+                && let Err(insert_idx) = data.binary_search_by_key(&&from, |p| &p.timespan)
+            {
+                // `data` does not contain point for `from`, need to insert by `FillPrevious` logic
+                let new_point = TimespanValue {
+                    timespan: from,
+                    value: last_point_before.value.clone(),
+                };
+                data.insert(insert_idx, new_point);
             }
             trim_out_of_range_sorted(&mut data, trim_range);
             data
@@ -87,17 +85,17 @@ where
 {
     let retrieved_count = data.len();
     let data_filled = fill_missing_points(data, policy, from.clone(), to.clone(), point_limit)?;
-    if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count) {
-        if filled_count > 0 {
-            tracing::debug!(policy = ?policy, "{} missing points were filled", filled_count);
-        }
+    if let Some(filled_count) = data_filled.len().checked_sub(retrieved_count)
+        && filled_count > 0
+    {
+        tracing::debug!(policy = ?policy, "{} missing points were filled", filled_count);
     }
     let filled_len = data_filled.len();
     let data_filtered = filter_within_range(data_filled, from.clone(), to.clone());
-    if let Some(filtered) = filled_len.checked_sub(data_filtered.len()) {
-        if filtered > 0 {
-            tracing::debug!(range_inclusive = ?(from, to), "{} points outside of range were removed", filtered);
-        }
+    if let Some(filtered) = filled_len.checked_sub(data_filtered.len())
+        && filtered > 0
+    {
+        tracing::debug!(range_inclusive = ?(from, to), "{} points outside of range were removed", filtered);
     }
     Ok(data_filtered)
 }
@@ -130,12 +128,11 @@ where
         _ => return Ok(data),
     };
 
-    if let Some(points_limit) = points_limit {
-        if let Some(limit_to_report) = points_limit.approx_limit() {
-            if !points_limit.fits_in_limit(&from, &to) {
-                return Err(ReadError::IntervalTooLarge(limit_to_report));
-            }
-        }
+    if let Some(points_limit) = points_limit
+        && let Some(limit_to_report) = points_limit.approx_limit()
+        && !points_limit.fits_in_limit(&from, &to)
+    {
+        return Err(ReadError::IntervalTooLarge(limit_to_report));
     }
 
     Ok(match policy {
@@ -218,15 +215,15 @@ where
     T: Ord,
 {
     let is_within_range = |v: &TimespanValue<T, V>| -> bool {
-        if let Some(from) = &maybe_from {
-            if &v.timespan < from {
-                return false;
-            }
+        if let Some(from) = &maybe_from
+            && &v.timespan < from
+        {
+            return false;
         }
-        if let Some(to) = &maybe_to {
-            if &v.timespan > to {
-                return false;
-            }
+        if let Some(to) = &maybe_to
+            && &v.timespan > to
+        {
+            return false;
         }
         true
     };

@@ -4,7 +4,7 @@ use std::{marker::PhantomData, ops::Range};
 
 use crate::{
     ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
     data_source::{
         kinds::{
             data_manipulation::{
@@ -134,7 +134,7 @@ pub type ActiveRecurringAccountsRemote<Recurrence, Resolution> = RemoteDatabaseS
         ActiveRecurringAccountsStatement<Recurrence>,
         Resolution,
         String,
-        QueryAllBlockTimestampRange,
+        QueryFullIndexerTimestampRange,
     >,
 >;
 

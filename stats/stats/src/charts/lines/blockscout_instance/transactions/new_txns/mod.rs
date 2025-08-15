@@ -11,7 +11,7 @@ use sea_orm::{
 use sea_query::{Expr, Func};
 
 use crate::{
-    ChartKey, ChartProperties, QueryAllBlockTimestampRange,
+    ChartKey, ChartProperties, QueryFullIndexerTimestampRange,
     charts::db_interaction::utils::datetime_range_filter,
     counters::OpStackYesterdayOperationalTxns,
     data_source::{
@@ -118,7 +118,7 @@ pub type NewTxnsCombinedRemote = RemoteDatabaseSource<
     PullAllWithAndSortCached<
         NewTxnsCombinedStatement,
         NewTxnsCombinedPoint,
-        QueryAllBlockTimestampRange,
+        QueryFullIndexerTimestampRange,
     >,
 >;
 
