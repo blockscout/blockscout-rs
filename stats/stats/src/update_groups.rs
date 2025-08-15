@@ -335,12 +335,7 @@ construct_update_group!(ZetachainCrossChainTxnsGroup {
         ZetachainCrossChainTxnsGrowthWeekly,
         ZetachainCrossChainTxnsGrowthMonthly,
         ZetachainCrossChainTxnsGrowthYearly,
-    ],
-});
-
-// Zetachain cctx charts returned in transactions page.
-construct_update_group!(ZetachainCrossChainTxnsPageGroup {
-    charts: [
+        // Zetachain cctx charts returned in transactions page.
         NewZetachainCrossChainTxns24h,
         PendingZetachainCrossChainTxns,
         TotalZetachainCrossChainTxns,
