@@ -1,23 +1,4 @@
-// mod common_prelude {
-//     pub use crate::charts::{
-//         ChartError, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject,
-//         MissingDatePolicy, Named, ResolutionKind, counters,
-//         db_interaction::read::{
-//             ApproxUnsignedDiff, QueryAllBlockTimestampRange, ReadError, RequestedPointsLimit,
-//             zetachain_cctx::query_zetachain_cctx_indexed_until,
-//         },
-//         indexing_status,
-//         indexing_status::IndexingStatus,
-//         lines, query_dispatch, types,
-//     };
-// }
-
-// pub mod prelude {
-//     pub use super::common_prelude::*;
-// }
-
 pub mod sea_orm_prelude {
-
     pub use sea_orm::{
         ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, DbBackend, EntityName,
         EntityTrait, FromQueryResult, IntoIdentity, IntoSimpleExpr, Order, PaginatorTrait,

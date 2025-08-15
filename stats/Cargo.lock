@@ -4822,7 +4822,6 @@ dependencies = [
  "sea-query",
  "serde_json",
  "stats-proto",
- "syn 2.0.98",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
