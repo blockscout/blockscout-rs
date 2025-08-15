@@ -36,8 +36,6 @@ async fn test_reupdate_works() {
     let blockscout_api = default_mock_blockscout_api().await;
     let (mut settings, base) =
         get_test_stats_settings(&stats_db, &blockscout_db, &blockscout_api, None);
-    // it's enough to test reindex in blockscout db
-    settings.enable_zetachain_cctx = false;
     // obviously don't use this anywhere except tests
     let api_key = ApiKey::from_str_infallible("123");
     setup_single_key(&mut settings, api_key.clone());

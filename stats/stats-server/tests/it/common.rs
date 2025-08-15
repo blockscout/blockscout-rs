@@ -119,7 +119,7 @@ pub fn get_test_stats_settings(
     settings.enable_all_arbitrum = true;
     settings.enable_all_op_stack = true;
     settings.enable_all_eip_7702 = true;
-    settings.enable_zetachain_cctx = true;
+    settings.enable_zetachain_cctx = zetachain_cctx_db.is_some();
     settings.multichain_mode = false;
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;
