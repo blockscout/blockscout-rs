@@ -36,7 +36,7 @@ impl RemoteQueryBehaviour for PendingTxns30mQuery {
                 .checked_sub_signed(TimeDelta::minutes(30))
                 .unwrap_or(DateTime::<Utc>::MIN_UTC),
         );
-        let data = find_one_value::<_, Value>(cx.indexer_db, statement)
+        let data = find_one_value::<_, Value>(PendingTxnsStatement::get_db(cx)?, statement)
             .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
         Ok(TimespanValue {

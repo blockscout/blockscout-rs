@@ -60,7 +60,11 @@ impl RemoteQueryBehaviour for NewAccountAbstractionWalletsQueryBehaviour {
             &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        let mut data = find_all_points::<_, DateValue<String>>(cx.indexer_db, statement).await?;
+        let mut data = find_all_points::<_, DateValue<String>>(
+            NewAccountAbstractionWalletsStatement::get_db(cx)?,
+            statement,
+        )
+        .await?;
         if let Some(range) = statement_range {
             let range = range.start.date_naive()..=range.end.date_naive();
             trim_out_of_range_sorted(&mut data, range);

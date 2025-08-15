@@ -27,10 +27,11 @@ pub(crate) async fn query_yesterday_data<DailyDataStatement: StatementFromRange>
 ) -> Result<TimespanValue<NaiveDate, String>, ChartError> {
     let yesterday = calculate_yesterday(today)?;
     let query_statement = yesterday_statement::<DailyDataStatement>(cx, yesterday)?;
-    let mut data = find_one_value::<_, DateValue<String>>(cx.indexer_db, query_statement)
-        .await?
-        // no data for yesterday
-        .unwrap_or(TimespanValue::with_zero_value(yesterday));
+    let mut data =
+        find_one_value::<_, DateValue<String>>(DailyDataStatement::get_db(cx)?, query_statement)
+            .await?
+            // no data for yesterday
+            .unwrap_or(TimespanValue::with_zero_value(yesterday));
     // today's value is the number from the day before.
     // still a value is considered to be "for today" (technically)
     data.timespan = today;
@@ -48,14 +49,18 @@ where
 {
     let yesterday = calculate_yesterday(today)?;
     let query_statement = yesterday_statement::<DailyDataStatement>(cx, yesterday)?;
-    let data = find_one_value_cached::<_, Value>(cx.indexer_db, &cx.cache, query_statement)
-        .await?
-        .map(|mut data| {
-            // today's value is the number from the day before.
-            // still a value is considered to be "for today" (technically)
-            *data.timespan_mut() = today;
-            data
-        });
+    let data = find_one_value_cached::<_, Value>(
+        DailyDataStatement::get_db(cx)?,
+        &cx.cache,
+        query_statement,
+    )
+    .await?
+    .map(|mut data| {
+        // today's value is the number from the day before.
+        // still a value is considered to be "for today" (technically)
+        *data.timespan_mut() = today;
+        data
+    });
     Ok(data)
 }
 

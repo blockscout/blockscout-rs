@@ -47,7 +47,7 @@ impl RemoteQueryBehaviour for NewBlocksWindowQuery {
             &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        find_all_points::<_, DateValue<String>>(cx.indexer_db, statement).await
+        find_all_points::<_, DateValue<String>>(NewBlocksStatement::get_db(cx)?, statement).await
     }
 }
 

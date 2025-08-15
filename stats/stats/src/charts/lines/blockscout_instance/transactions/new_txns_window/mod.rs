@@ -43,8 +43,12 @@ impl RemoteQueryBehaviour for NewTxnsWindowCombinedQuery {
             &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        let data =
-            find_all_cached::<_, NewTxnsCombinedPoint>(&cx.cache, cx.indexer_db, query).await?;
+        let data = find_all_cached::<_, NewTxnsCombinedPoint>(
+            &cx.cache,
+            NewTxnsCombinedStatement::get_db(cx)?,
+            query,
+        )
+        .await?;
         Ok(data)
     }
 }
