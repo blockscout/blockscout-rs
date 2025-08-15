@@ -121,9 +121,7 @@ mod tests {
 
     use crate::{
         MissingDatePolicy,
-        data_source::{
-            UpdateParameters, kinds::data_manipulation::map::MapParseTo, types::IndexerMigrations,
-        },
+        data_source::{UpdateParameters, kinds::data_manipulation::map::MapParseTo},
         gettable_const,
         lines::{PredefinedMockSource, PseudoRandomMockRetrieve},
         tests::point_construction::{d, d_v_double, d_v_int, dt, w_v_double, week_of},
@@ -183,13 +181,13 @@ mod tests {
         // db is not used in mock
         let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
         let output: Vec<WeekValue<f64>> = <TestedAverageSource as DataSource>::query_data(
-            &UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
-                &db,
-                false,
-                &db,
-                IndexerMigrations::latest(),
-                Some(dt("2024-07-15T09:00:00").and_utc()),
-            )),
+            &UpdateContext::from_params_now_or_override(
+                UpdateParameters::default_test_query_parameters(
+                    &db,
+                    &db,
+                    Some(dt("2024-07-15T09:00:00").and_utc()),
+                ),
+            ),
             (dt("2024-07-08T09:00:00").and_utc()..dt("2024-07-15T00:00:01").and_utc()).into(),
             &mut AggregateTimer::new(),
         )
@@ -231,14 +229,13 @@ mod tests {
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
-        let context =
-            UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+        let context = UpdateContext::from_params_now_or_override(
+            UpdateParameters::default_test_query_parameters(
                 &empty_db,
-                false,
                 &empty_db,
-                IndexerMigrations::latest(),
                 Some(dt("2024-07-30T09:00:00").and_utc()),
-            ));
+            ),
+        );
         let week_1_average = (5.0 * 100.0 + 34.2 * 2.0 + 10.3 * 12.0) / (100.0 + 2.0 + 12.0);
         assert_eq!(
             <TestedAverageSource as DataSource>::query_data(
@@ -282,14 +279,13 @@ mod tests {
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
-        let context =
-            UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+        let context = UpdateContext::from_params_now_or_override(
+            UpdateParameters::default_test_query_parameters(
                 &empty_db,
-                false,
                 &empty_db,
-                IndexerMigrations::latest(),
                 Some(dt("2023-03-30T09:00:00").and_utc()),
-            ));
+            ),
+        );
         assert_eq!(
             <TestedAverageSource as DataSource>::query_data(
                 &context,
@@ -329,14 +325,13 @@ mod tests {
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
-        let context =
-            UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+        let context = UpdateContext::from_params_now_or_override(
+            UpdateParameters::default_test_query_parameters(
                 &empty_db,
-                false,
                 &empty_db,
-                IndexerMigrations::latest(),
                 Some(dt("2023-03-30T09:00:00").and_utc()),
-            ));
+            ),
+        );
         assert_eq!(
             <TestedAverageSource as DataSource>::query_data(
                 &context,

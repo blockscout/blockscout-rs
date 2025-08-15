@@ -104,6 +104,7 @@ pub fn get_test_stats_settings(
     stats_db: &TestDbGuard,
     blockscout_db: &TestDbGuard,
     blockscout_api: &MockServer,
+    zetachain_cctx_db: Option<&TestDbGuard>,
 ) -> (Settings, Url) {
     let mut settings = Settings::build().expect("Failed to build settings");
     let (server_settings, base) = get_test_server_settings();
@@ -114,9 +115,11 @@ pub fn get_test_stats_settings(
     settings.db_url = stats_db.db_url();
     settings.indexer_db_url = Some(blockscout_db.db_url());
     settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());
+    settings.second_indexer_db_url = zetachain_cctx_db.map(|db| db.db_url());
     settings.enable_all_arbitrum = true;
     settings.enable_all_op_stack = true;
     settings.enable_all_eip_7702 = true;
+    settings.enable_zetachain_cctx = zetachain_cctx_db.is_some();
     settings.multichain_mode = false;
     settings.metrics.enabled = false;
     settings.jaeger.enabled = false;

@@ -2,42 +2,10 @@
 //! but for account abstraction wallets.
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartError, ChartKey, ChartProperties, Named,
-    charts::{
-        db_interaction::read::{QueryAllBlockTimestampRange, find_all_points},
-        types::timespans::DateValue,
-    },
-    data_source::{
-        UpdateContext,
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Weeks, Batch30Years, Batch36Months, BatchMaxDays,
-                },
-            },
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
-    missing_date::trim_out_of_range_sorted,
-    range::{UniversalRange, data_source_query_range_to_db_statement_range},
-    types::timespans::{Month, Week, Year},
-    utils::sql_with_range_filter_opt,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct NewAccountAbstractionWalletsStatement;
+impl_db_choice!(NewAccountAbstractionWalletsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewAccountAbstractionWalletsStatement {
     fn get_statement(
@@ -92,7 +60,11 @@ impl RemoteQueryBehaviour for NewAccountAbstractionWalletsQueryBehaviour {
             &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        let mut data = find_all_points::<DateValue<String>>(cx, statement).await?;
+        let mut data = find_all_points::<_, DateValue<String>>(
+            NewAccountAbstractionWalletsStatement::get_db(cx)?,
+            statement,
+        )
+        .await?;
         if let Some(range) = statement_range {
             let range = range.start.date_naive()..=range.end.date_naive();
             trim_out_of_range_sorted(&mut data, range);
@@ -124,10 +96,9 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
+            .with_user_ops(UserOpsIndexingStatus::PastOperationsIndexed)
     }
 }
 

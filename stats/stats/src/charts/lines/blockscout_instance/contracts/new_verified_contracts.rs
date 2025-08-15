@@ -1,34 +1,9 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
-    utils::sql_with_range_filter_opt,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct NewVerifiedContractsStatement;
+impl_db_choice!(NewVerifiedContractsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewVerifiedContractsStatement {
     fn get_statement(

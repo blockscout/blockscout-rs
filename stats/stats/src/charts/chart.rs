@@ -14,7 +14,10 @@ use thiserror::Error;
 
 use super::{
     db_interaction::read::ApproxUnsignedDiff,
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
+    indexing_status::{
+        BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
+        ZetachainCctxIndexingStatus,
+    },
     query_dispatch::{ChartTypeSpecifics, QuerySerialized, QuerySerializedDyn},
 };
 
@@ -109,7 +112,7 @@ impl Display for ResolutionKind {
 }
 
 pub trait Named {
-    /// Name of this data source that represents its contents
+    /// **Unique** name of this data source that represents its contents
     fn name() -> String;
 }
 
@@ -196,7 +199,9 @@ pub trait ChartProperties: Sync + Named {
             // most of the charts need indexed blocks
             blockscout: BlockscoutIndexingStatus::BlocksIndexed,
             // most of the charts don't depend on user ops
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
+            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+            // most of the charts don't depend on zetachain cctx
+            zetachain_cctx: ZetachainCctxIndexingStatus::LEAST_RESTRICTIVE,
         }
     }
 

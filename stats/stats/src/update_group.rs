@@ -218,24 +218,12 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// ## Example
 ///
 /// ```rust
-/// # use stats::{
-/// #     QueryAllBlockTimestampRange, construct_update_group,
-/// #     types::timespans::DateValue, ChartProperties, Named, ChartError,
-/// #     ChartKey,
-/// # };
-/// # use stats::data_source::{
-/// #     kinds::{
-/// #         local_db::{DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days},
-/// #         remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-/// #     },
-/// #     types::{UpdateContext, UpdateParameters, IndexerMigrations},
-/// # };
-/// # use chrono::{NaiveDate, DateTime, Utc};
-/// # use entity::sea_orm_active_enums::ChartType;
+/// # use stats::chart_prelude::*;
+/// # use stats::construct_update_group;
 /// # use std::{ops::Range, collections::HashSet};
-/// # use sea_orm::Statement;
 ///
 /// struct DummyRemoteStatement;
+/// impl_db_choice!(DummyRemoteStatement, UseBlockscoutDB);
 ///
 /// impl StatementFromRange for DummyRemoteStatement {
 ///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &IndexerMigrations, _: &HashSet<ChartKey>) -> Statement {
@@ -525,7 +513,7 @@ impl SyncUpdateGroup {
         result
     }
 
-    async fn lock_in_order(&self, mut to_lock: HashSet<String>) -> Vec<MutexGuard<()>> {
+    async fn lock_in_order(&self, mut to_lock: HashSet<String>) -> Vec<MutexGuard<'_, ()>> {
         let mut guards = vec![];
         // .iter() is ordered by key, so order is followed
         for (name, mutex) in self.dependencies_mutexes.iter() {
@@ -582,7 +570,7 @@ impl SyncUpdateGroup {
     async fn lock_enabled_and_dependencies(
         &self,
         enabled_charts: &HashSet<ChartKey>,
-    ) -> ChartsMutexGuards {
+    ) -> ChartsMutexGuards<'_> {
         let (enabled_members, enabled_members_with_deps) =
             self.get_enabled_members_with_deps(enabled_charts);
         // order is very important to prevent deadlocks

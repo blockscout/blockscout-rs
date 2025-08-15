@@ -22,6 +22,8 @@ pub struct UpdateParameters<'a> {
     /// Indexer database (blockscout or multichain)
     pub indexer_db: &'a DatabaseConnection,
     pub indexer_applied_migrations: IndexerMigrations,
+    /// Second indexer database (CCTX indexer currently)
+    pub second_indexer_db: Option<&'a DatabaseConnection>,
     /// Charts engaged in the current (group) update.
     /// Includes recursively affected charts.
     pub enabled_update_charts_recursive: HashSet<ChartKey>,
@@ -39,6 +41,7 @@ impl<'a> UpdateParameters<'a> {
         is_multichain_mode: bool,
         indexer: &'a DatabaseConnection,
         indexer_applied_migrations: IndexerMigrations,
+        second_indexer: Option<&'a DatabaseConnection>,
         query_time_override: Option<chrono::DateTime<Utc>>,
     ) -> Self {
         Self {
@@ -46,6 +49,7 @@ impl<'a> UpdateParameters<'a> {
             is_multichain_mode,
             indexer_db: indexer,
             indexer_applied_migrations,
+            second_indexer_db: second_indexer,
             update_time_override: query_time_override,
             // not an update, therefore empty.
             // also it's used for reusing queries, but
@@ -58,6 +62,49 @@ impl<'a> UpdateParameters<'a> {
     }
 }
 
+#[cfg(test)]
+impl<'a> UpdateParameters<'a> {
+    /// Default parameters for blockscout stats & latest migrations
+    pub fn default_test_parameters(
+        db: &'a DatabaseConnection,
+        indexer: &'a DatabaseConnection,
+        enabled_charts_recursive: HashSet<ChartKey>,
+        time_override: Option<chrono::DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            stats_db: db,
+            is_multichain_mode: false,
+            indexer_db: indexer,
+            indexer_applied_migrations: IndexerMigrations::latest(),
+            second_indexer_db: None,
+            update_time_override: time_override,
+            enabled_update_charts_recursive: enabled_charts_recursive,
+            force_full: false,
+        }
+    }
+
+    /// Default parameters for querying blockscout stats (w/ latest migrations)
+    pub fn default_test_query_parameters(
+        db: &'a DatabaseConnection,
+        indexer: &'a DatabaseConnection,
+        time_override: Option<chrono::DateTime<Utc>>,
+    ) -> Self {
+        UpdateParameters::query_parameters(
+            db,
+            false,
+            indexer,
+            IndexerMigrations::latest(),
+            None,
+            time_override,
+        )
+    }
+
+    pub fn with_force_full(mut self) -> Self {
+        self.force_full = true;
+        self
+    }
+}
+
 #[derive(Clone)]
 pub struct UpdateContext<'a> {
     pub stats_db: &'a DatabaseConnection,
@@ -65,6 +112,7 @@ pub struct UpdateContext<'a> {
     /// Indexer database (blockscout or multichain depending on `is_multichain_mode`)
     pub indexer_db: &'a DatabaseConnection,
     pub indexer_applied_migrations: IndexerMigrations,
+    pub second_indexer_db: Option<&'a DatabaseConnection>,
     pub cache: UpdateCache,
     /// Charts engaged in the current (group) update.
     /// Includes recursively affected charts.
@@ -81,6 +129,7 @@ impl<'a> UpdateContext<'a> {
             is_multichain_mode: value.is_multichain_mode,
             indexer_db: value.indexer_db,
             indexer_applied_migrations: value.indexer_applied_migrations,
+            second_indexer_db: value.second_indexer_db,
             cache: UpdateCache::new(),
             enabled_update_charts_recursive: value.enabled_update_charts_recursive,
             time: value.update_time_override.unwrap_or_else(Utc::now),

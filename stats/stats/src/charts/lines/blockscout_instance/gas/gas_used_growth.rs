@@ -1,35 +1,11 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{Map, MapFunction, MapParseTo, StripExt},
-                resolutions::last_value::LastValueLowerResolution,
-            },
-            local_db::{
-                DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
-    types::timespans::{DateValue, Month, Week, Year},
-    utils::sql_with_range_filter_opt,
-};
+use crate::chart_prelude::*;
 
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
 use rust_decimal::Decimal;
-use sea_orm::{DbBackend, Statement};
 
 pub struct GasUsedPartialStatement;
+impl_db_choice!(GasUsedPartialStatement, UseBlockscoutDB);
 
 impl StatementFromRange for GasUsedPartialStatement {
     fn get_statement(

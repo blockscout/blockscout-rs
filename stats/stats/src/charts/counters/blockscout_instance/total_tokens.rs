@@ -1,21 +1,7 @@
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    data_source::{
-        kinds::{
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    types::TimespanValue,
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct TotalTokensStatement;
+impl_db_choice!(TotalTokensStatement, UseBlockscoutDB);
 
 impl StatementForOne for TotalTokensStatement {
     fn get_statement(_: &IndexerMigrations) -> Statement {
@@ -58,10 +44,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

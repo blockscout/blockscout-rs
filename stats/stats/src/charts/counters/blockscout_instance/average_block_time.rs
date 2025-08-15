@@ -1,26 +1,9 @@
 use std::cmp::Reverse;
 
-use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    data_source::{
-        UpdateContext,
-        kinds::{
-            data_manipulation::map::MapToString,
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
-        },
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    range::UniversalRange,
-    types::TimespanValue,
-    utils::NANOS_PER_SEC,
-};
+use crate::{chart_prelude::*, utils::NANOS_PER_SEC};
 
 use blockscout_db::entity::blocks;
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
-use sea_orm::{DbBackend, FromQueryResult, QueryOrder, QuerySelect, Statement, prelude::*};
 
 pub const LIMIT_BLOCKS: u64 = 100;
 pub const OFFSET_BLOCKS: u64 = 100;
@@ -134,10 +117,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 
@@ -149,10 +129,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateParameters, types::IndexerMigrations},
+        data_source::{DataSource, UpdateParameters},
         tests::{
             mock_blockscout::fill_many_blocks,
-            simple_test::{get_counter, prepare_chart_test, simple_test_counter},
+            simple_test::{get_counter, prepare_blockscout_chart_test, simple_test_counter},
         },
     };
 
@@ -163,7 +143,8 @@ mod tests {
         // and at least `OFFSET_BLOCKS + LIMIT_BLOCKS` blocks to test the limit
 
         let (current_time, db, blockscout) =
-            prepare_chart_test::<AverageBlockTime>("update_average_block_time", None).await;
+            prepare_blockscout_chart_test::<AverageBlockTime>("update_average_block_time", None)
+                .await;
 
         let times_generator = [100u64, 200, 300];
         let block_times = std::iter::repeat_n(1, 2)
@@ -198,15 +179,13 @@ mod tests {
             total_sum as f64 / limit_block_times as f64
         };
         fill_many_blocks(&blockscout, current_time.naive_utc(), &block_times).await;
-        let mut parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: AverageBlockTime::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: true,
-        };
+        let mut parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            AverageBlockTime::all_dependencies_chart_keys(),
+            Some(current_time),
+        )
+        .with_force_full();
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         AverageBlockTime::update_recursively(&cx).await.unwrap();
         assert_eq!(

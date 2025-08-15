@@ -2,35 +2,12 @@
 
 use std::{marker::PhantomData, ops::Range};
 
-use crate::{
-    ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                filter_deducible::FilterDeducible,
-                map::{MapParseTo, MapToString},
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{PullEachWith, RemoteDatabaseSource, StatementFromTimespan},
-        },
-        types::{Get, IndexerMigrations},
-    },
-    define_and_impl_resolution_properties, gettable_const,
-    types::timespans::{Month, Week, Year},
-    utils::produce_filter_and_values,
-};
-
-use chrono::{DateTime, Duration, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct ActiveRecurringAccountsStatement<Recurrence>(PhantomData<Recurrence>);
+impl<Recurrence> DatabaseChoice for ActiveRecurringAccountsStatement<Recurrence> {
+    type DB = UseBlockscoutDB;
+}
 
 impl<Recurrence: RecurrencePeriod> StatementFromTimespan
     for ActiveRecurringAccountsStatement<Recurrence>

@@ -1,8 +1,8 @@
 //! Common utilities used across statistics
 
-use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, TimeDelta, Utc};
 use sea_orm::Value;
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 // this const is not public in `chrono` for some reason
 pub const NANOS_PER_SEC: i32 = 1_000_000_000;
@@ -10,6 +10,12 @@ pub const NANOS_PER_SEC: i32 = 1_000_000_000;
 pub fn day_start(date: &NaiveDate) -> DateTime<Utc> {
     date.and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("correct time"))
         .and_utc()
+}
+
+pub fn interval_24h(until: DateTime<Utc>) -> RangeInclusive<DateTime<Utc>> {
+    until
+        .checked_sub_signed(TimeDelta::hours(24))
+        .unwrap_or(DateTime::<Utc>::MIN_UTC)..=until
 }
 
 /// Used inside [`sql_with_range_filter_opt`]
@@ -106,6 +112,22 @@ macro_rules! singleton_groups {
 }
 
 pub(crate) use singleton_groups;
+
+macro_rules! derive_setters {
+    ($t: ident, [$($field: ident: $field_t: ident),* $(,)?]) => {
+        $(
+            impl $t {
+                ::paste::paste! {
+                    pub fn [< with_ $field >](self, $field: $field_t) -> Self {
+                        Self { $field, ..self }
+                    }
+                }
+            }
+        )*
+    };
+}
+
+pub(crate) use derive_setters;
 
 #[cfg(test)]
 mod test {

@@ -26,3 +26,8 @@ pub async fn init_db_multichain(name: &str) -> TestDbGuard {
     )
     .await
 }
+
+pub async fn init_db_zetachain_cctx(name: &str) -> TestDbGuard {
+    TestDbGuard::new::<zetachain_cctx_migration::Migrator>(&(name.to_owned() + "_zetachain_cctx"))
+        .await
+}

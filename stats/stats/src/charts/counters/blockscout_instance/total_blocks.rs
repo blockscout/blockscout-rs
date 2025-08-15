@@ -1,23 +1,5 @@
-use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    charts::db_interaction::read::query_estimated_table_rows,
-    data_source::{
-        kinds::{
-            data_manipulation::map::MapParseTo,
-            local_db::{DirectPointLocalDbChartSourceWithEstimate, parameters::ValueEstimation},
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
-        },
-        types::UpdateContext,
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    range::UniversalRange,
-    types::timespans::DateValue,
-};
-
+use crate::chart_prelude::*;
 use blockscout_db::entity::blocks;
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{FromQueryResult, QuerySelect, prelude::*, sea_query::Expr};
 
 #[derive(FromQueryResult)]
 struct TotalBlocksData {
@@ -73,10 +55,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 
@@ -110,7 +89,7 @@ pub type TotalBlocksInt = MapParseTo<TotalBlocks, i64>;
 mod tests {
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters},
         tests::{
             init_db::init_db_all,
             mock_blockscout::fill_mock_blockscout_data,
@@ -147,15 +126,13 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        let parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: true,
-        };
+        let parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            TotalBlocks::all_dependencies_chart_keys(),
+            Some(current_time),
+        )
+        .with_force_full();
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_counter::<TotalBlocks>(&cx).await;
@@ -176,15 +153,13 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        let parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: true,
-        };
+        let parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            TotalBlocks::all_dependencies_chart_keys(),
+            Some(current_time),
+        )
+        .with_force_full();
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_counter::<TotalBlocks>(&cx).await;
@@ -215,15 +190,13 @@ mod tests {
 
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        let parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: true,
-        };
+        let parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            TotalBlocks::all_dependencies_chart_keys(),
+            Some(current_time),
+        )
+        .with_force_full();
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalBlocks::update_recursively(&cx).await.unwrap();
         let data = get_counter::<TotalBlocks>(&cx).await;

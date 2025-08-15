@@ -1,18 +1,7 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey,
-    charts::db_interaction::utils::datetime_range_filter,
-    data_source::{
-        kinds::remote_db::{PullOne24hCached, RemoteDatabaseSource, StatementFromRange},
-        types::IndexerMigrations,
-    },
-    lines::op_stack_operational_transactions_filter,
-};
+use crate::{chart_prelude::*, lines::op_stack_operational_transactions_filter};
 use blockscout_db::entity::{blocks, transactions};
-use chrono::{DateTime, Utc};
-use migration::{Alias, Func};
-use sea_orm::{DbBackend, FromQueryResult, IntoSimpleExpr, QuerySelect, QueryTrait, Statement};
 
 pub mod average_txn_fee_24h;
 pub mod new_txns_24h;
@@ -22,6 +11,7 @@ pub mod txns_fee_24h;
 const ETHER: i64 = i64::pow(10, 18);
 
 pub struct TxnsStatsStatement;
+impl_db_choice!(TxnsStatsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for TxnsStatsStatement {
     fn get_statement(
@@ -119,10 +109,10 @@ mod tests {
                 CAST((AVG((COALESCE("transactions"."gas_price", "blocks"."base_fee_per_gas" + LEAST("transactions"."max_priority_fee_per_gas", "transactions"."max_fee_per_gas" - "blocks"."base_fee_per_gas"))) * "transactions"."gas_used") / 1000000000000000000) AS FLOAT) AS "fee_average"
             FROM "blocks"
             INNER JOIN "transactions" ON "blocks"."hash" = "transactions"."block_hash"
-            WHERE "transactions"."block_timestamp" < '2025-01-02 00:00:00 +00:00'
-                AND "transactions"."block_timestamp" >= '2025-01-01 00:00:00 +00:00'
-                AND "blocks"."timestamp" < '2025-01-02 00:00:00 +00:00'
-                AND "blocks"."timestamp" >= '2025-01-01 00:00:00 +00:00'
+            WHERE "transactions"."block_timestamp" < '2025-01-02 00:00:00.000000 +00:00'
+                AND "transactions"."block_timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
+                AND "blocks"."timestamp" < '2025-01-02 00:00:00.000000 +00:00'
+                AND "blocks"."timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
         "#;
         assert_eq!(normalize_sql(expected), normalize_sql(&actual.to_string()))
     }

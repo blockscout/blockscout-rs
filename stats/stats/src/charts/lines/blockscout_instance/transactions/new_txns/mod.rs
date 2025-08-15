@@ -1,26 +1,13 @@
 use std::{collections::HashSet, ops::Range};
 
-use blockscout_db::entity::{blocks, transactions};
-use chrono::{DateTime, Utc};
-use migration::{Alias, ExprTrait, IntoIden};
-use op_stack_operational::OpStackNewOperationalTxns;
-use sea_orm::{
-    ColumnTrait, DatabaseBackend, EntityName, EntityTrait, IntoIdentity, IntoSimpleExpr,
-    QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, sea_query,
-};
-use sea_query::{Expr, Func};
-
 use crate::{
-    ChartKey, ChartProperties, QueryAllBlockTimestampRange,
-    charts::db_interaction::utils::datetime_range_filter,
-    counters::OpStackYesterdayOperationalTxns,
-    data_source::{
-        kinds::remote_db::{PullAllWithAndSortCached, RemoteDatabaseSource, StatementFromRange},
-        types::IndexerMigrations,
-    },
-    lines::OpStackNewOperationalTxnsWindow,
-    types::new_txns::NewTxnsCombinedPoint,
+    chart_prelude::*, counters::OpStackYesterdayOperationalTxns,
+    lines::OpStackNewOperationalTxnsWindow, types::new_txns::NewTxnsCombinedPoint,
 };
+
+use blockscout_db::entity::{blocks, transactions};
+use op_stack_operational::OpStackNewOperationalTxns;
+use sea_orm::prelude::*;
 
 pub mod all_new_txns;
 pub mod op_stack_operational;
@@ -29,10 +16,11 @@ pub use all_new_txns::{
 };
 
 pub struct NewTxnsCombinedStatement;
+impl_db_choice!(NewTxnsCombinedStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewTxnsCombinedStatement {
     fn get_statement(
-        range: Option<Range<DateTime<Utc>>>,
+        range: Option<Range<DateTimeUtc>>,
         completed_migrations: &IndexerMigrations,
         enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
@@ -160,8 +148,8 @@ mod tests {
                 FROM "transactions"
                 WHERE
                     "transactions"."block_consensus" = TRUE AND
-                    "transactions"."block_timestamp" < '2025-01-02 00:00:00 +00:00' AND
-                    "transactions"."block_timestamp" >= '2025-01-01 00:00:00 +00:00'
+                    "transactions"."block_timestamp" < '2025-01-02 00:00:00.000000 +00:00' AND
+                    "transactions"."block_timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
                 GROUP BY "date"
                 ORDER BY "date" ASC
             "#,
@@ -190,8 +178,8 @@ mod tests {
                 INNER JOIN "blocks" ON "transactions"."block_hash" = "blocks"."hash"
                 WHERE
                     "blocks"."consensus" = TRUE AND
-                    "blocks"."timestamp" < '2025-01-02 00:00:00 +00:00' AND
-                    "blocks"."timestamp" >= '2025-01-01 00:00:00 +00:00'
+                    "blocks"."timestamp" < '2025-01-02 00:00:00.000000 +00:00' AND
+                    "blocks"."timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
                 GROUP BY "date"
                 ORDER BY "date" ASC
             "#,
@@ -214,8 +202,8 @@ mod tests {
             FROM "transactions"
             WHERE
                 "transactions"."block_consensus" = TRUE AND
-                "transactions"."block_timestamp" < '2025-01-02 00:00:00 +00:00' AND
-                "transactions"."block_timestamp" >= '2025-01-01 00:00:00 +00:00'
+                "transactions"."block_timestamp" < '2025-01-02 00:00:00.000000 +00:00' AND
+                "transactions"."block_timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
             GROUP BY "date"
             ORDER BY "date" ASC
         "#

@@ -337,7 +337,7 @@ where
 
     if let Some(from) = from {
         let from = from.into_date();
-        let custom_where = Expr::cust_with_values::<_, sea_orm::sea_query::Value, _>(
+        let custom_where = Expr::cust_with_values::<_, sea_query::Value, _>(
             "date >= (SELECT COALESCE(MAX(date), '1900-01-01'::date) FROM chart_data WHERE chart_id = $1 AND date <= $2)",
             [chart_id.into(), from.into()],
         );
@@ -345,7 +345,7 @@ where
     }
     if let Some(to) = to {
         let to = to.into_date();
-        let custom_where = Expr::cust_with_values::<_, sea_orm::sea_query::Value, _>(
+        let custom_where = Expr::cust_with_values::<_, sea_query::Value, _>(
             "date <= (SELECT COALESCE(MIN(date), '9999-12-31'::date) FROM chart_data WHERE chart_id = $1 AND date >= $2)",
             [chart_id.into(), to.into()],
         );
@@ -586,7 +586,7 @@ mod tests {
         counters::TotalBlocks,
         data_source::{
             DataSource, UpdateContext, UpdateParameters,
-            kinds::local_db::parameters::DefaultQueryVec, types::IndexerMigrations,
+            kinds::local_db::parameters::DefaultQueryVec,
         },
         lines::{AccountsGrowth, ActiveAccounts, NewTxns, TxnsGrowth, TxnsGrowthMonthly},
         tests::{
@@ -835,16 +835,14 @@ mod tests {
         insert_mock_data(&db).await;
         let current_time = dt("2022-11-12T08:08:08").and_utc();
         let date = current_time.date_naive();
-        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            // shouldn't use this because mock data contains total blocks value
-            indexer_db: &db,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: TotalBlocks::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: false,
-        });
+        let cx =
+            UpdateContext::from_params_now_or_override(UpdateParameters::default_test_parameters(
+                &db,
+                // shouldn't use this because mock data contains total blocks value
+                &db,
+                TotalBlocks::all_dependencies_chart_keys(),
+                Some(current_time),
+            ));
         assert_eq!(
             value(&date.to_string(), "1000"),
             get_counter::<TotalBlocks>(&cx).await

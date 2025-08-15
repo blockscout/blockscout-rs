@@ -12,7 +12,7 @@ use crate::{
     common::{
         ChartSubset, get_test_stats_settings, run_consolidated_tests, wait_for_subset_to_update,
     },
-    it::mock_blockscout_simple::get_mock_blockscout,
+    it::mock_blockscout_simple::{get_mock_blockscout, get_mock_zetachain_cctx},
 };
 
 use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
@@ -25,10 +25,18 @@ pub async fn run_chart_pages_tests_with_disabled_chain_specific() {
     let stats_db = init_db(test_name).await;
     let blockscout_db = get_mock_blockscout().await;
     let blockscout_api = default_mock_blockscout_api().await;
+    let zetachain_cctx_db = get_mock_zetachain_cctx().await;
     let blockscout_indexed = true;
-    let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
+    let zetachain_indexed = true;
+    let (mut settings, base) = get_test_stats_settings(
+        &stats_db,
+        blockscout_db,
+        &blockscout_api,
+        Some(zetachain_cctx_db),
+    );
     settings.enable_all_arbitrum = false;
     settings.enable_all_op_stack = false;
+    settings.enable_zetachain_cctx = false;
     let shutdown = GracefulShutdownHandler::new();
     let shutdown_cloned = shutdown.clone();
     init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
@@ -37,7 +45,7 @@ pub async fn run_chart_pages_tests_with_disabled_chain_specific() {
 
     let tests: JoinSet<_> = [
         test_main_page_ok(base.clone(), false, blockscout_indexed).boxed(),
-        test_transactions_page_ok(base, false).boxed(),
+        test_transactions_page_ok(base, false, zetachain_indexed).boxed(),
     ]
     .into_iter()
     .collect();

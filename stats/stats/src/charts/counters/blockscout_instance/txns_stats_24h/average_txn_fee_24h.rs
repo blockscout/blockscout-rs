@@ -1,15 +1,4 @@
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    data_source::kinds::{
-        data_manipulation::map::{Map, MapFunction, MapToString, UnwrapOr},
-        local_db::DirectPointLocalDbChartSource,
-    },
-    gettable_const,
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    types::TimespanValue,
-};
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
+use crate::{chart_prelude::*, gettable_const};
 
 use super::{Txns24hStats, TxnsStatsValue};
 
@@ -48,10 +37,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillZero
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

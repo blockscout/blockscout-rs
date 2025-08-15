@@ -46,6 +46,7 @@
         "new_native_coin_transfers_group": "0 0 3,13 * * * *",
         "txns_stats_24h_group": "0 30 * * * * *",
         "new_builder_accounts_group": "0 45 7 * * * *",
-        "verified_contracts_page_group": "0 15,45 * * * * *"
+        "verified_contracts_page_group": "0 15,45 * * * * *",
+        "zetachain_cross_chain_txns_group": "0 36 2 * * * *"
     }
 }

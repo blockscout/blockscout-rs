@@ -348,11 +348,11 @@ where
 mod tests {
     use crate::{
         counters::TotalTxns,
-        data_source::{UpdateParameters, types::IndexerMigrations},
+        data_source::UpdateParameters,
         tests::{
             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
             point_construction::d,
-            simple_test::{get_counter, prepare_chart_test},
+            simple_test::{get_counter, prepare_blockscout_chart_test},
         },
     };
 
@@ -362,20 +362,18 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_total_txns_with_reindex() {
         let test_name = "update_total_txns_with_reindex";
-        let (current_time, db, blockscout) = prepare_chart_test::<TotalTxns>(test_name, None).await;
+        let (current_time, db, blockscout) =
+            prepare_blockscout_chart_test::<TotalTxns>(test_name, None).await;
         let current_date = current_time.date_naive();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
         // Initial update and verify
-        let parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: TotalTxns::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: false,
-        };
+        let parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            TotalTxns::all_dependencies_chart_keys(),
+            Some(current_time),
+        );
 
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         TotalTxns::update_recursively(&cx).await.unwrap();
@@ -420,7 +418,7 @@ mod tests {
                     parameter_traits::UpdateBehaviour,
                     parameters::{DefaultCreate, DefaultQueryLast},
                 },
-                types::{Get, IndexerMigrations},
+                types::Get,
             },
             gettable_const,
             tests::{init_db::init_db_all, mock_blockscout::fill_mock_blockscout_data},
@@ -550,15 +548,13 @@ mod tests {
                 .unwrap();
 
             let next_time = current_time.checked_add_days(Days::new(1)).unwrap();
-            let parameters = UpdateParameters {
-                stats_db: &db,
-                is_multichain_mode: false,
-                indexer_db: &blockscout,
-                indexer_applied_migrations: IndexerMigrations::latest(),
-                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
-                update_time_override: Some(next_time),
-                force_full: true,
-            };
+            let parameters = UpdateParameters::default_test_parameters(
+                &db,
+                &blockscout,
+                group.enabled_members_with_deps(&enabled),
+                Some(next_time),
+            )
+            .with_force_full();
             group
                 .update_charts_sync(parameters, &enabled)
                 .await
@@ -572,15 +568,13 @@ mod tests {
             // regression: had a bug where due to postgres having resolution of 1 microsecond stored a different
             // timestamp to the one provided
             let time = next_next_time + TimeDelta::nanoseconds(1);
-            let parameters = UpdateParameters {
-                stats_db: &db,
-                is_multichain_mode: false,
-                indexer_db: &blockscout,
-                indexer_applied_migrations: IndexerMigrations::latest(),
-                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
-                update_time_override: Some(time),
-                force_full: true,
-            };
+            let parameters = UpdateParameters::default_test_parameters(
+                &db,
+                &blockscout,
+                group.enabled_members_with_deps(&enabled),
+                Some(time),
+            )
+            .with_force_full();
             group
                 .update_charts_sync(parameters, &enabled)
                 .await
@@ -590,15 +584,13 @@ mod tests {
 
             // also test if there is any rounding when inserting metadata
             let time = next_next_time + TimeDelta::nanoseconds(500);
-            let parameters = UpdateParameters {
-                stats_db: &db,
-                is_multichain_mode: false,
-                indexer_db: &blockscout,
-                indexer_applied_migrations: IndexerMigrations::latest(),
-                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
-                update_time_override: Some(time),
-                force_full: true,
-            };
+            let parameters = UpdateParameters::default_test_parameters(
+                &db,
+                &blockscout,
+                group.enabled_members_with_deps(&enabled),
+                Some(time),
+            )
+            .with_force_full();
             group
                 .update_charts_sync(parameters, &enabled)
                 .await
@@ -606,15 +598,13 @@ mod tests {
 
             // also test if there is any rounding when inserting metadata
             let time = next_next_time + TimeDelta::nanoseconds(999);
-            let parameters = UpdateParameters {
-                stats_db: &db,
-                is_multichain_mode: false,
-                indexer_db: &blockscout,
-                indexer_applied_migrations: IndexerMigrations::latest(),
-                enabled_update_charts_recursive: group.enabled_members_with_deps(&enabled),
-                update_time_override: Some(time),
-                force_full: true,
-            };
+            let parameters = UpdateParameters::default_test_parameters(
+                &db,
+                &blockscout,
+                group.enabled_members_with_deps(&enabled),
+                Some(time),
+            )
+            .with_force_full();
             group
                 .update_charts_sync(parameters, &enabled)
                 .await

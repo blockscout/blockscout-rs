@@ -6,30 +6,10 @@
 use std::fmt::Debug;
 
 use crate::{
-    ChartProperties, MissingDatePolicy, Named,
-    data_processing::zip_same_timespan,
-    data_source::kinds::{
-        data_manipulation::{
-            map::{Map, MapFunction, MapParseTo, MapToString, StripExt},
-            resolutions::sum::SumLowerResolution,
-        },
-        local_db::{
-            DirectVecLocalDbChartSource,
-            parameters::update::batching::parameters::{
-                Batch30Weeks, Batch30Years, Batch36Months, BatchMaxDays,
-            },
-        },
-    },
-    define_and_impl_resolution_properties,
+    chart_prelude::*,
     lines::{NewBlocksInt, NewTxnsInt},
-    types::{
-        Timespan, TimespanValue,
-        timespans::{Month, Week, Year},
-    },
 };
 
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
 
 pub struct Properties;

@@ -1,3 +1,7 @@
+use crate::utils::derive_setters;
+
+/// Types implementing this trait are used to both represent
+/// current status and requirement for a status.
 pub trait IndexingStatusTrait {
     // constants for status itself
 
@@ -22,46 +26,63 @@ pub trait IndexingStatusTrait {
 pub struct IndexingStatus {
     pub blockscout: BlockscoutIndexingStatus,
     pub user_ops: UserOpsIndexingStatus,
+    pub zetachain_cctx: ZetachainCctxIndexingStatus,
 }
+
+derive_setters!(IndexingStatus, [
+    blockscout: BlockscoutIndexingStatus,
+    user_ops: UserOpsIndexingStatus,
+    zetachain_cctx: ZetachainCctxIndexingStatus,
+]);
 
 impl IndexingStatusTrait for IndexingStatus {
     const MIN: Self = Self {
         blockscout: BlockscoutIndexingStatus::MIN,
         user_ops: UserOpsIndexingStatus::MIN,
+        zetachain_cctx: ZetachainCctxIndexingStatus::MIN,
     };
     const MAX: Self = Self {
         blockscout: BlockscoutIndexingStatus::MAX,
         user_ops: UserOpsIndexingStatus::MAX,
+        zetachain_cctx: ZetachainCctxIndexingStatus::MAX,
     };
     const LEAST_RESTRICTIVE: Self = Self {
         blockscout: BlockscoutIndexingStatus::LEAST_RESTRICTIVE,
         user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
+        zetachain_cctx: ZetachainCctxIndexingStatus::LEAST_RESTRICTIVE,
     };
     const MOST_RESTRICTIVE: Self = Self {
         blockscout: BlockscoutIndexingStatus::MOST_RESTRICTIVE,
         user_ops: UserOpsIndexingStatus::MOST_RESTRICTIVE,
+        zetachain_cctx: ZetachainCctxIndexingStatus::MOST_RESTRICTIVE,
     };
 
     fn is_requirement_satisfied(&self, requirement: &Self) -> bool {
-        let blockscout_satisfied = self
-            .blockscout
-            .is_requirement_satisfied(&requirement.blockscout);
-        let user_ops_satisfied = self
-            .user_ops
-            .is_requirement_satisfied(&requirement.user_ops);
-        blockscout_satisfied && user_ops_satisfied
+        let Self {
+            blockscout,
+            user_ops,
+            zetachain_cctx,
+        } = self;
+        let blockscout_satisfied = blockscout.is_requirement_satisfied(&requirement.blockscout);
+        let user_ops_satisfied = user_ops.is_requirement_satisfied(&requirement.user_ops);
+        let zetachain_cctx_satisfied =
+            zetachain_cctx.is_requirement_satisfied(&requirement.zetachain_cctx);
+        blockscout_satisfied && user_ops_satisfied && zetachain_cctx_satisfied
     }
 
     fn most_restrictive_from(requirements: impl Iterator<Item = Self> + Clone) -> Self {
-        let blockscout_requirements = requirements.clone().map(|r| r.blockscout);
-        let user_ops_requirements = requirements.map(|r| r.user_ops);
-        let blockscout_most_restrictive =
-            BlockscoutIndexingStatus::most_restrictive_from(blockscout_requirements);
-        let user_ops_most_restrictive =
-            UserOpsIndexingStatus::most_restrictive_from(user_ops_requirements);
+        let (blockscout_reqs, (user_ops_reqs, zetachain_cctx_reqs)): (Vec<_>, (Vec<_>, Vec<_>)) =
+            requirements
+                .map(|r| (r.blockscout, (r.user_ops, r.zetachain_cctx)))
+                .unzip();
         Self {
-            blockscout: blockscout_most_restrictive,
-            user_ops: user_ops_most_restrictive,
+            blockscout: BlockscoutIndexingStatus::most_restrictive_from(
+                blockscout_reqs.into_iter(),
+            ),
+            user_ops: UserOpsIndexingStatus::most_restrictive_from(user_ops_reqs.into_iter()),
+            zetachain_cctx: ZetachainCctxIndexingStatus::most_restrictive_from(
+                zetachain_cctx_reqs.into_iter(),
+            ),
         }
     }
 }
@@ -92,7 +113,6 @@ impl IndexingStatusTrait for BlockscoutIndexingStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum UserOpsIndexingStatus {
-    //todo: rename to be more acruate
     IndexingPastOperations,
     PastOperationsIndexed,
 }
@@ -113,6 +133,28 @@ impl IndexingStatusTrait for UserOpsIndexingStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ZetachainCctxIndexingStatus {
+    CatchingUp,
+    IndexedHistoricalData,
+}
+
+impl IndexingStatusTrait for ZetachainCctxIndexingStatus {
+    const MIN: Self = Self::CatchingUp;
+    const MAX: Self = Self::IndexedHistoricalData;
+
+    const LEAST_RESTRICTIVE: Self = Self::MIN;
+    const MOST_RESTRICTIVE: Self = Self::MAX;
+
+    fn is_requirement_satisfied(&self, requirement: &ZetachainCctxIndexingStatus) -> bool {
+        self >= requirement
+    }
+
+    fn most_restrictive_from(requirements: impl Iterator<Item = Self> + Clone) -> Self {
+        requirements.max().unwrap_or(Self::LEAST_RESTRICTIVE)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,18 +166,21 @@ mod tests {
                 vec![
                     IndexingStatus {
                         blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-                        user_ops: UserOpsIndexingStatus::IndexingPastOperations
+                        user_ops: UserOpsIndexingStatus::IndexingPastOperations,
+                        zetachain_cctx: ZetachainCctxIndexingStatus::CatchingUp
                     },
                     IndexingStatus {
                         blockscout: BlockscoutIndexingStatus::NoneIndexed,
-                        user_ops: UserOpsIndexingStatus::IndexingPastOperations
+                        user_ops: UserOpsIndexingStatus::IndexingPastOperations,
+                        zetachain_cctx: ZetachainCctxIndexingStatus::CatchingUp
                     }
                 ]
                 .into_iter()
             ),
             IndexingStatus {
                 blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-                user_ops: UserOpsIndexingStatus::IndexingPastOperations
+                user_ops: UserOpsIndexingStatus::IndexingPastOperations,
+                zetachain_cctx: ZetachainCctxIndexingStatus::CatchingUp
             },
         );
 
@@ -144,18 +189,21 @@ mod tests {
                 vec![
                     IndexingStatus {
                         blockscout: BlockscoutIndexingStatus::NoneIndexed,
-                        user_ops: UserOpsIndexingStatus::IndexingPastOperations
+                        user_ops: UserOpsIndexingStatus::IndexingPastOperations,
+                        zetachain_cctx: ZetachainCctxIndexingStatus::IndexedHistoricalData,
                     },
                     IndexingStatus {
                         blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-                        user_ops: UserOpsIndexingStatus::PastOperationsIndexed
+                        user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+                        zetachain_cctx: ZetachainCctxIndexingStatus::CatchingUp
                     }
                 ]
                 .into_iter()
             ),
             IndexingStatus {
                 blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-                user_ops: UserOpsIndexingStatus::PastOperationsIndexed
+                user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+                zetachain_cctx: ZetachainCctxIndexingStatus::IndexedHistoricalData,
             },
         );
 
@@ -164,18 +212,21 @@ mod tests {
                 vec![
                     IndexingStatus {
                         blockscout: BlockscoutIndexingStatus::NoneIndexed,
-                        user_ops: UserOpsIndexingStatus::PastOperationsIndexed
+                        user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+                        zetachain_cctx: ZetachainCctxIndexingStatus::IndexedHistoricalData
                     },
                     IndexingStatus {
                         blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
-                        user_ops: UserOpsIndexingStatus::IndexingPastOperations
+                        user_ops: UserOpsIndexingStatus::IndexingPastOperations,
+                        zetachain_cctx: ZetachainCctxIndexingStatus::IndexedHistoricalData
                     }
                 ]
                 .into_iter()
             ),
             IndexingStatus {
                 blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
-                user_ops: UserOpsIndexingStatus::PastOperationsIndexed
+                user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+                zetachain_cctx: ZetachainCctxIndexingStatus::IndexedHistoricalData
             },
         );
 
@@ -184,18 +235,21 @@ mod tests {
                 vec![
                     IndexingStatus {
                         blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
-                        user_ops: UserOpsIndexingStatus::PastOperationsIndexed
+                        user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+                        zetachain_cctx: ZetachainCctxIndexingStatus::IndexedHistoricalData
                     },
                     IndexingStatus {
                         blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
-                        user_ops: UserOpsIndexingStatus::PastOperationsIndexed
+                        user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+                        zetachain_cctx: ZetachainCctxIndexingStatus::IndexedHistoricalData
                     }
                 ]
                 .into_iter()
             ),
             IndexingStatus {
                 blockscout: BlockscoutIndexingStatus::InternalTransactionsIndexed,
-                user_ops: UserOpsIndexingStatus::PastOperationsIndexed
+                user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
+                zetachain_cctx: ZetachainCctxIndexingStatus::IndexedHistoricalData
             },
         );
 

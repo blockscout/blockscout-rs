@@ -1,19 +1,4 @@
-use crate::{
-    ChartProperties, MissingDatePolicy, Named,
-    data_source::kinds::{
-        data_manipulation::{map::StripExt, resolutions::last_value::LastValueLowerResolution},
-        local_db::{
-            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
-            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
-        },
-    },
-    define_and_impl_resolution_properties,
-    lines::NewContractsInt,
-    types::timespans::{Month, Week, Year},
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
+use crate::{chart_prelude::*, lines::NewContractsInt};
 
 pub struct Properties;
 

@@ -11,14 +11,14 @@ use crate::{
     ChartError,
     charts::db_interaction::read::find_one_value,
     data_source::{
-        kinds::remote_db::RemoteQueryBehaviour,
+        kinds::remote_db::{RemoteQueryBehaviour, db_choice::DatabaseChoice},
         types::{IndexerMigrations, UpdateContext},
     },
     range::{UniversalRange, exclusive_range_to_inclusive},
     types::{Timespan, TimespanValue},
 };
 
-pub trait StatementFromTimespan {
+pub trait StatementFromTimespan: DatabaseChoice {
     fn get_statement(
         point: Range<DateTime<Utc>>,
         completed_migrations: &IndexerMigrations,
@@ -63,7 +63,8 @@ where
         let mut collected_data = Vec::with_capacity(points.len());
         for point_range in points {
             let statement = S::get_statement(point_range.clone(), &cx.indexer_applied_migrations);
-            let point_value = find_one_value::<ValueWrapper<Value>>(cx, statement).await?;
+            let point_value =
+                find_one_value::<_, ValueWrapper<Value>>(S::get_db(cx)?, statement).await?;
             if let Some(ValueWrapper { value }) = point_value {
                 let timespan = resolution_from_range(point_range);
                 collected_data.push(TimespanValue { timespan, value });
