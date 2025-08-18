@@ -279,6 +279,34 @@ paths:
           type: string
       tags:
         - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/messages/{init_chain_id}/{nonce}:
+    get:
+      operationId: ClusterExplorerService_GetInteropMessage
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetInteropMessageResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: init_chain_id
+          in: path
+          required: true
+          type: string
+        - name: nonce
+          in: path
+          required: true
+          type: string
+          format: int64
+      tags:
+        - ClusterExplorerService
   /api/v1/dapps:
     get:
       operationId: MultichainAggregatorService_ListDapps
@@ -947,6 +975,11 @@ definitions:
       is_verified:
         type: boolean
     description: Chain-specific information.
+  v1GetInteropMessageResponse:
+    type: object
+    properties:
+      message:
+        $ref: '#/definitions/v1InteropMessage'
   v1Hash:
     type: object
     properties:
@@ -997,6 +1030,8 @@ definitions:
         type: string
       method:
         type: string
+      decoded_payload:
+        type: object
   v1InteropMessageStatus:
     type: string
     enum:

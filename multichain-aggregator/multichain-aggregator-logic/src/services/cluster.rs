@@ -1,46 +1,100 @@
 use crate::{
+    clients::blockscout,
     error::ServiceError,
     repository::{
         address_token_balances::{self, ListAddressTokensPageToken},
         addresses, chains, interop_message_transfers, interop_messages,
     },
+    services::macros::maybe_cache_lookup,
     types::{
         ChainId,
         address_token_balances::AggregatedAddressTokenBalance,
         addresses::AddressInfo,
         chains::Chain,
-        interop_messages::{InteropMessage, MessageDirection},
+        interop_messages::{ExtendedInteropMessage, MessageDirection},
         tokens::TokenType,
     },
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
+use api_client_framework::HttpApiClient;
+use recache::{handler::CacheHandler, stores::redis::RedisStore};
 use sea_orm::{DatabaseConnection, prelude::DateTime};
-use std::collections::HashSet;
+use std::{collections::BTreeMap, sync::Arc};
 
-#[derive(Debug, Clone)]
+pub type DecodedCalldataCache = CacheHandler<RedisStore, String, serde_json::Value>;
+type BlockscoutClients = BTreeMap<ChainId, Arc<HttpApiClient>>;
+
 pub struct Cluster {
-    chain_ids: HashSet<ChainId>,
+    blockscout_clients: BlockscoutClients,
+    decoded_calldata_cache: Option<DecodedCalldataCache>,
 }
 
 impl Cluster {
-    pub fn new(chain_ids: HashSet<ChainId>) -> Self {
-        Self { chain_ids }
+    pub fn new(
+        blockscout_clients: BlockscoutClients,
+        decoded_calldata_cache: Option<DecodedCalldataCache>,
+    ) -> Self {
+        Self {
+            blockscout_clients,
+            decoded_calldata_cache,
+        }
     }
 
     pub fn validate_chain_id(&self, chain_id: ChainId) -> Result<(), ServiceError> {
-        if !self.chain_ids.contains(&chain_id) {
+        if !self.blockscout_clients.contains_key(&chain_id) {
             return Err(ServiceError::InvalidClusterChainId(chain_id));
         }
         Ok(())
     }
 
     pub fn chain_ids(&self) -> Vec<ChainId> {
-        self.chain_ids.iter().cloned().collect()
+        self.blockscout_clients.keys().cloned().collect()
     }
 
     pub async fn list_chains(&self, db: &DatabaseConnection) -> Result<Vec<Chain>, ServiceError> {
         let chains = chains::list_by_ids(db, self.chain_ids()).await?;
         Ok(chains.into_iter().map(|c| c.into()).collect())
+    }
+
+    pub async fn get_interop_message(
+        &self,
+        db: &DatabaseConnection,
+        init_chain_id: ChainId,
+        nonce: i64,
+    ) -> Result<ExtendedInteropMessage, ServiceError> {
+        self.validate_chain_id(init_chain_id)?;
+
+        let message = interop_messages::get(db, init_chain_id, nonce)
+            .await?
+            .ok_or_else(|| {
+                ServiceError::NotFound(format!(
+                    "interop message: init_chain_id={init_chain_id}, nonce={nonce}"
+                ))
+            })?;
+
+        let decoded_payload = if let (Some(payload), Some(target_address_hash)) =
+            (&message.payload, &message.target_address_hash)
+        {
+            self.fetch_decoded_calldata_cached(
+                payload,
+                target_address_hash.to_string(),
+                init_chain_id,
+            )
+            .await
+            .inspect_err(|e| {
+                tracing::error!("failed to fetch decoded calldata: {e}");
+            })
+            .ok()
+        } else {
+            None
+        };
+
+        let extended_message = ExtendedInteropMessage {
+            message,
+            decoded_payload,
+        };
+
+        Ok(extended_message)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -54,7 +108,7 @@ impl Cluster {
         nonce: Option<i64>,
         page_size: u64,
         page_token: Option<(DateTime, TxHash)>,
-    ) -> Result<(Vec<InteropMessage>, Option<(DateTime, TxHash)>), ServiceError> {
+    ) -> Result<(Vec<ExtendedInteropMessage>, Option<(DateTime, TxHash)>), ServiceError> {
         if let Some(init_chain_id) = init_chain_id {
             self.validate_chain_id(init_chain_id)?;
         }
@@ -63,7 +117,8 @@ impl Cluster {
         }
 
         let cluster_chain_ids = self.chain_ids();
-        let (interop_messages, next_page_token) = interop_messages::list(
+
+        let (messages, next_page_token) = interop_messages::list(
             db,
             init_chain_id,
             relay_chain_id,
@@ -76,13 +131,15 @@ impl Cluster {
         )
         .await?;
 
-        Ok((
-            interop_messages
-                .into_iter()
-                .map(InteropMessage::try_from)
-                .collect::<Result<Vec<_>, _>>()?,
-            next_page_token,
-        ))
+        let messages = messages
+            .into_iter()
+            .map(|m| ExtendedInteropMessage {
+                message: m,
+                decoded_payload: None,
+            })
+            .collect();
+
+        Ok((messages, next_page_token))
     }
 
     pub async fn count_interop_messages(
@@ -154,5 +211,38 @@ impl Cluster {
         .await?;
 
         Ok(res)
+    }
+
+    async fn fetch_decoded_calldata_cached(
+        &self,
+        calldata: &alloy_primitives::Bytes,
+        address_hash: String,
+        chain_id: ChainId,
+    ) -> Result<serde_json::Value, ServiceError> {
+        let blockscout_client = self
+            .blockscout_clients
+            .get(&chain_id)
+            .expect("chain id should be validated")
+            .clone();
+
+        let calldata_hash = alloy_primitives::keccak256(calldata).to_string();
+        let calldata = calldata.to_string();
+
+        let key = format!("decoded_calldata:{chain_id}:{address_hash}:{calldata_hash}");
+
+        let get_decoded_payload = || async move {
+            blockscout_client
+                .request(&blockscout::decode_calldata::DecodeCalldata {
+                    params: blockscout::decode_calldata::DecodeCalldataParams {
+                        calldata,
+                        address_hash,
+                    },
+                })
+                .await
+                .map(|r| r.result)
+                .map_err(ServiceError::from)
+        };
+
+        maybe_cache_lookup!(&self.decoded_calldata_cache, key, get_decoded_payload)
     }
 }

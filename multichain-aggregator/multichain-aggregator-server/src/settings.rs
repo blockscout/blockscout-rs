@@ -35,12 +35,16 @@ pub struct CacheSettings {
     pub redis: RedisSettings,
     #[serde(default = "default_domain_search_cache")]
     pub domain_search_cache: CacheEntrySettings,
+    #[serde(default = "default_decoded_calldata_cache")]
+    pub decoded_calldata_cache: CacheEntrySettings,
 }
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct CacheEntrySettings {
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub ttl: time::Duration,
     #[serde_as(as = "Option<serde_with::DurationSeconds<u64>>")]
@@ -194,11 +198,26 @@ fn default_marketplace_enabled_cache_fetch_concurrency() -> usize {
     10
 }
 
+fn default_enabled() -> bool {
+    true
+}
+
+fn default_decoded_calldata_cache() -> CacheEntrySettings {
+    let hour = 60 * 60;
+    let ttl = time::Duration::from_secs(hour);
+    CacheEntrySettings {
+        enabled: default_enabled(),
+        ttl,
+        refresh_ahead: None,
+    }
+}
+
 fn default_domain_search_cache() -> CacheEntrySettings {
     let hour = 60 * 60;
     let ttl = time::Duration::from_secs(6 * hour);
     let refresh_ahead = ttl / 5; // 20% of ttl
     CacheEntrySettings {
+        enabled: default_enabled(),
         ttl,
         refresh_ahead: Some(refresh_ahead),
     }

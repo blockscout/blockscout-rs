@@ -63,6 +63,26 @@ impl ClusterExplorerService for ClusterExplorer {
         Ok(Response::new(ListClusterChainsResponse { items }))
     }
 
+    async fn get_interop_message(
+        &self,
+        request: Request<GetInteropMessageRequest>,
+    ) -> Result<Response<GetInteropMessageResponse>, Status> {
+        let inner = request.into_inner();
+
+        let init_chain_id = parse_query(inner.init_chain_id)?;
+        let nonce = inner.nonce;
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let message = cluster
+            .get_interop_message(&self.db, init_chain_id, nonce)
+            .await?
+            .into();
+
+        Ok(Response::new(GetInteropMessageResponse {
+            message: Some(message),
+        }))
+    }
+
     async fn list_interop_messages(
         &self,
         request: Request<ListInteropMessagesRequest>,

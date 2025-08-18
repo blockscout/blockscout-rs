@@ -2,32 +2,40 @@ use super::ChainId;
 use crate::{
     error::ParseError,
     proto,
-    types::{interop_message_transfers::InteropMessageTransfer, proto_address_hash_from_alloy},
+    types::{
+        interop_message_transfers::InteropMessageTransfer,
+        proto_address_hash_from_alloy,
+        sea_orm_wrappers::{SeaOrmAddress, SeaOrmB256, SeaOrmBytes},
+    },
 };
 use alloy_primitives::{Address, Bytes, TxHash};
 use chrono::{Duration, Utc};
-use entity::{
-    interop_messages::{ActiveModel, Model},
-    interop_messages_transfers,
-};
-use sea_orm::{ActiveValue::Set, prelude::DateTime};
+use entity::interop_messages::{ActiveModel, Entity, Model};
+use sea_orm::{ActiveValue::Set, DerivePartialModel, prelude::DateTime};
 use std::str::FromStr;
 
 const SEVEN_DAYS: Duration = Duration::days(7);
 
-#[derive(Debug, Clone)]
+#[derive(DerivePartialModel, Debug, Clone)]
+#[sea_orm(entity = "Entity", from_query_result)]
 pub struct InteropMessage {
-    pub sender_address_hash: Option<Address>,
-    pub target_address_hash: Option<Address>,
+    pub sender_address_hash: Option<SeaOrmAddress>,
+    pub target_address_hash: Option<SeaOrmAddress>,
     pub nonce: i64,
     pub init_chain_id: ChainId,
-    pub init_transaction_hash: Option<TxHash>,
+    pub init_transaction_hash: Option<SeaOrmB256>,
     pub timestamp: Option<DateTime>,
     pub relay_chain_id: ChainId,
-    pub relay_transaction_hash: Option<TxHash>,
-    pub payload: Option<Bytes>,
+    pub relay_transaction_hash: Option<SeaOrmB256>,
+    pub payload: Option<SeaOrmBytes>,
     pub failed: Option<bool>,
+    #[sea_orm(nested)]
     pub transfer: Option<InteropMessageTransfer>,
+}
+
+pub struct ExtendedInteropMessage {
+    pub message: InteropMessage,
+    pub decoded_payload: Option<serde_json::Value>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -68,7 +76,7 @@ impl InteropMessage {
     }
 
     pub fn status(&self) -> Status {
-        match (self.relay_transaction_hash, self.failed) {
+        match (&self.relay_transaction_hash, self.failed) {
             (None, _) => {
                 let now = Utc::now().naive_utc();
                 let is_expired = self
@@ -124,68 +132,90 @@ impl From<InteropMessage> for ActiveModel {
     }
 }
 
-impl TryFrom<(Model, Option<interop_messages_transfers::Model>)> for InteropMessage {
+impl TryFrom<Model> for InteropMessage {
     type Error = ParseError;
 
-    fn try_from(
-        (v, transfer): (Model, Option<interop_messages_transfers::Model>),
-    ) -> Result<Self, Self::Error> {
+    fn try_from(v: Model) -> Result<Self, Self::Error> {
         Ok(Self {
             sender_address_hash: v
                 .sender_address_hash
                 .map(|a| Address::try_from(a.as_slice()))
-                .transpose()?,
+                .transpose()?
+                .map(Into::into),
             target_address_hash: v
                 .target_address_hash
                 .map(|a| Address::try_from(a.as_slice()))
-                .transpose()?,
+                .transpose()?
+                .map(Into::into),
             nonce: v.nonce,
             init_chain_id: v.init_chain_id,
             init_transaction_hash: v
                 .init_transaction_hash
                 .map(|h| TxHash::try_from(h.as_slice()))
-                .transpose()?,
+                .transpose()?
+                .map(Into::into),
             timestamp: v.timestamp,
             relay_chain_id: v.relay_chain_id,
             relay_transaction_hash: v
                 .relay_transaction_hash
                 .map(|h| TxHash::try_from(h.as_slice()))
-                .transpose()?,
-            payload: v.payload.map(Bytes::from),
+                .transpose()?
+                .map(Into::into),
+            payload: v.payload.map(Bytes::from).map(Into::into),
             failed: v.failed,
-            transfer: transfer.map(InteropMessageTransfer::try_from).transpose()?,
+            transfer: None,
         })
     }
 }
 
 impl From<InteropMessage> for proto::InteropMessage {
-    fn from(v: InteropMessage) -> Self {
-        let status = proto::interop_message::Status::from(v.status()).into();
-        let message_type = v.message_type().into();
-        let method = v.method().into();
+    fn from(m: InteropMessage) -> Self {
+        ExtendedInteropMessage {
+            message: m,
+            decoded_payload: None,
+        }
+        .into()
+    }
+}
+
+impl From<ExtendedInteropMessage> for proto::InteropMessage {
+    fn from(m: ExtendedInteropMessage) -> Self {
+        let decoded_payload = m.decoded_payload.and_then(|p| {
+            serde_json::from_value(p)
+                .inspect_err(|_| {
+                    tracing::error!("failed to deserialize protocol");
+                })
+                .ok()
+        });
+        let m = m.message;
+
+        let status = proto::interop_message::Status::from(m.status()).into();
+        let message_type = m.message_type().into();
+        let method = m.method().into();
         Self {
-            sender: v
+            sender: m
                 .sender_address_hash
                 .map(|a| proto_address_hash_from_alloy(&a)),
-            target: v
+            target: m
                 .target_address_hash
                 .map(|a| proto_address_hash_from_alloy(&a)),
-            nonce: v.nonce,
-            init_chain_id: v.init_chain_id.to_string(),
-            init_transaction_hash: v.init_transaction_hash.map(|h| h.to_string()),
-            timestamp: v.timestamp.map(|t| {
+            nonce: m.nonce,
+            init_chain_id: m.init_chain_id.to_string(),
+            init_transaction_hash: m.init_transaction_hash.map(|h| h.to_string()),
+            timestamp: m.timestamp.map(|t| {
                 t.and_utc()
                     .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
             }),
-            relay_chain_id: v.relay_chain_id.to_string(),
-            relay_transaction_hash: v.relay_transaction_hash.map(|h| h.to_string()),
-            payload: v.payload.map(|p| p.to_string()),
+            relay_chain_id: m.relay_chain_id.to_string(),
+            relay_transaction_hash: m.relay_transaction_hash.map(|h| h.to_string()),
+            payload: m.payload.map(|p| p.to_string()),
             status,
-            transfer: v
+            transfer: m
                 .transfer
                 .map(proto::interop_message::InteropMessageTransfer::from),
             message_type,
             method,
+            decoded_payload,
         }
     }
 }
@@ -273,7 +303,7 @@ mod tests {
         message.timestamp = Some(Utc::now().naive_utc());
         assert_eq!(message.status(), Status::Pending);
 
-        message.relay_transaction_hash = Some(TxHash::repeat_byte(0));
+        message.relay_transaction_hash = Some(TxHash::repeat_byte(0).into());
         assert_eq!(message.status(), Status::Success);
 
         message.failed = Some(true);

@@ -12,8 +12,6 @@ use sea_orm::prelude::Uuid;
 async fn test_list_addresses() {
     let db = database!(test_db::TestMigrator);
 
-    let base = helpers::init_server(db.db_url()).await;
-
     helpers::upsert_api_keys(
         db.client().as_ref(),
         vec![ApiKey {
@@ -23,6 +21,8 @@ async fn test_list_addresses() {
     )
     .await
     .unwrap();
+
+    let base = helpers::init_server(db.db_url()).await;
 
     let response: proto::ListAddressesResponse =
         test_server::send_get_request(&base, "/api/v1/addresses?q=test&chain_id=1&page_size=50")
@@ -46,8 +46,6 @@ async fn test_list_addresses() {
 async fn test_list_nfts() {
     let db = database!(test_db::TestMigrator);
 
-    let base = helpers::init_server(db.db_url()).await;
-
     helpers::upsert_api_keys(
         db.client().as_ref(),
         vec![ApiKey {
@@ -57,6 +55,8 @@ async fn test_list_nfts() {
     )
     .await
     .unwrap();
+
+    let base = helpers::init_server(db.db_url()).await;
 
     let validate_nft = |item: &proto::Address| {
         matches!(
