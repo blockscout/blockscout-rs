@@ -171,17 +171,10 @@ paths:
           required: true
           type: string
         - name: type
+          description: List of comma-separated token types to filter by. See `TokenType`.
           in: query
           required: false
           type: string
-          enum:
-            - TOKEN_TYPE_UNSPECIFIED
-            - TOKEN_TYPE_ERC_20
-            - TOKEN_TYPE_ERC_721
-            - TOKEN_TYPE_ERC_1155
-            - TOKEN_TYPE_ERC_404
-            - TOKEN_TYPE_ERC_7802
-          default: TOKEN_TYPE_UNSPECIFIED
         - name: page_size
           in: query
           required: false
@@ -624,16 +617,6 @@ definitions:
       total_addresses_number:
         type: string
         format: uint64
-  GetAddressResponseChainInfo:
-    type: object
-    properties:
-      coin_balance:
-        type: string
-      is_contract:
-        type: boolean
-      is_verified:
-        type: boolean
-    description: Chain-specific information.
   HealthCheckResponseServingStatus:
     type: string
     enum:
@@ -707,15 +690,19 @@ definitions:
     properties:
       value:
         type: string
-  ListAddressTokensResponseTokenBalanceInfo:
+  ListAddressTokensResponseAggregatedTokenBalanceInfo:
     type: object
     properties:
       token:
-        $ref: '#/definitions/v1TokenInfo'
+        $ref: '#/definitions/v1AggregatedTokenInfo'
       token_id:
         type: string
       value:
         type: string
+      chain_values:
+        type: object
+        additionalProperties:
+          type: string
   TokenImportCounters:
     type: object
     properties:
@@ -802,6 +789,41 @@ definitions:
     type: object
     properties:
       hash:
+        type: string
+  v1AggregatedTokenInfo:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      circulating_market_cap:
+        type: string
+      decimals:
+        type: string
+      holders_count:
+        type: string
+      icon_url:
+        type: string
+      name:
+        type: string
+      symbol:
+        type: string
+      total_supply:
+        type: string
+      type:
+        $ref: '#/definitions/v1TokenType'
+      exchange_rate:
+        type: string
+      chain_infos:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/v1AggregatedTokenInfoChainInfo'
+        description: Map of chain id to chain-specific information.
+  v1AggregatedTokenInfoChainInfo:
+    type: object
+    properties:
+      holders_count:
+        type: string
+      total_supply:
         type: string
   v1BatchImportRequest:
     type: object
@@ -909,12 +931,22 @@ definitions:
       chain_infos:
         type: object
         additionalProperties:
-          $ref: '#/definitions/GetAddressResponseChainInfo'
+          $ref: '#/definitions/v1GetAddressResponseChainInfo'
         description: Map of chain id to chain-specific information.
       has_tokens:
         type: boolean
       has_interop_message_transfers:
         type: boolean
+  v1GetAddressResponseChainInfo:
+    type: object
+    properties:
+      coin_balance:
+        type: string
+      is_contract:
+        type: boolean
+      is_verified:
+        type: boolean
+    description: Chain-specific information.
   v1Hash:
     type: object
     properties:
@@ -980,7 +1012,7 @@ definitions:
         type: array
         items:
           type: object
-          $ref: '#/definitions/ListAddressTokensResponseTokenBalanceInfo'
+          $ref: '#/definitions/ListAddressTokensResponseAggregatedTokenBalanceInfo'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListAddressesResponse:
@@ -1181,29 +1213,6 @@ definitions:
         type: string
       is_verified_contract:
         type: boolean
-  v1TokenInfo:
-    type: object
-    properties:
-      address_hash:
-        type: string
-      circulating_market_cap:
-        type: string
-      decimals:
-        type: string
-      holders_count:
-        type: string
-      icon_url:
-        type: string
-      name:
-        type: string
-      symbol:
-        type: string
-      total_supply:
-        type: string
-      type:
-        $ref: '#/definitions/v1TokenType'
-      exchange_rate:
-        type: string
   v1TokenType:
     type: string
     enum:

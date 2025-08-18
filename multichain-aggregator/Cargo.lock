@@ -3327,6 +3327,7 @@ dependencies = [
  "blockscout-service-launcher",
  "config 0.13.4",
  "env-collector",
+ "itertools 0.14.0",
  "multichain-aggregator-entity",
  "multichain-aggregator-logic",
  "multichain-aggregator-migration",

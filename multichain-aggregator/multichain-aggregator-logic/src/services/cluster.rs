@@ -6,7 +6,7 @@ use crate::{
     },
     types::{
         ChainId,
-        address_token_balances::ExtendedAddressTokenBalance,
+        address_token_balances::AggregatedAddressTokenBalance,
         addresses::AddressInfo,
         chains::Chain,
         interop_messages::{InteropMessage, MessageDirection},
@@ -131,12 +131,12 @@ impl Cluster {
         &self,
         db: &DatabaseConnection,
         address: AddressAlloy,
-        token_type: Option<TokenType>,
+        token_types: Vec<TokenType>,
         page_size: u64,
         page_token: Option<ListAddressTokensPageToken>,
     ) -> Result<
         (
-            Vec<ExtendedAddressTokenBalance>,
+            Vec<AggregatedAddressTokenBalance>,
             Option<ListAddressTokensPageToken>,
         ),
         ServiceError,
@@ -146,7 +146,7 @@ impl Cluster {
         let res = address_token_balances::list_by_address(
             db,
             address,
-            token_type,
+            token_types,
             cluster_chain_ids,
             page_size,
             page_token,

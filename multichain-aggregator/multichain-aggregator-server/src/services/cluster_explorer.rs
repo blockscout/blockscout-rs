@@ -1,8 +1,9 @@
 use crate::{
     proto::{cluster_explorer_service_server::ClusterExplorerService, *},
-    services::utils::{PageTokenExtractor, page_token_to_proto, parse_query},
+    services::utils::{PageTokenExtractor, page_token_to_proto, parse_map_result, parse_query},
     settings::ApiSettings,
 };
+use itertools::Itertools;
 use multichain_aggregator_logic::{
     error::ServiceError, services::cluster::Cluster,
     types::addresses::proto_token_type_to_db_token_type,
@@ -133,14 +134,21 @@ impl ClusterExplorerService for ClusterExplorer {
         let inner = request.into_inner();
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let token_type = proto_token_type_to_db_token_type(inner.r#type());
+        let token_types = parse_map_result(&inner.r#type.unwrap_or_default(), |v| {
+            let val = serde_json::Value::String(v.to_string());
+            serde_json::from_value(val)
+        })?
+        .into_iter()
+        .unique()
+        .filter_map(proto_token_type_to_db_token_type)
+        .collect();
         let address = parse_query(inner.address_hash)?;
 
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.extract_page_token()?;
 
         let (tokens, next_page_token) = cluster
-            .list_address_tokens(&self.db, address, token_type, page_size as u64, page_token)
+            .list_address_tokens(&self.db, address, token_types, page_size as u64, page_token)
             .await?;
 
         let items = tokens
