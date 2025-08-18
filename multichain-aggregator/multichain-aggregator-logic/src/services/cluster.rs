@@ -58,7 +58,7 @@ impl Cluster {
     ) -> Result<ExtendedInteropMessage, ServiceError> {
         self.validate_chain_id(init_chain_id)?;
 
-        let mut message = interop_messages::get(db, init_chain_id, nonce)
+        let message = interop_messages::get(db, init_chain_id, nonce)
             .await?
             .ok_or_else(|| {
                 ServiceError::NotFound(format!(
@@ -66,7 +66,7 @@ impl Cluster {
                 ))
             })?;
 
-        if let (Some(payload), Some(target_address_hash)) =
+        let decoded_payload = if let (Some(payload), Some(target_address_hash)) =
             (&message.payload, &message.target_address_hash)
         {
             let blockscout_client = self
@@ -86,12 +86,17 @@ impl Cluster {
                 tracing::error!("failed to fetch decoded calldata: {e}");
             });
 
-            if let Ok(decoded_payload) = decoded_payload {
-                message.decoded_payload = Some(decoded_payload);
-            }
-        }
+            decoded_payload.ok()
+        } else {
+            None
+        };
 
-        Ok(message)
+        let extended_message = ExtendedInteropMessage {
+            message,
+            decoded_payload,
+        };
+
+        Ok(extended_message)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -115,7 +120,7 @@ impl Cluster {
 
         let cluster_chain_ids = self.chain_ids();
 
-        let res = interop_messages::list(
+        let (messages, next_page_token) = interop_messages::list(
             db,
             init_chain_id,
             relay_chain_id,
@@ -128,7 +133,15 @@ impl Cluster {
         )
         .await?;
 
-        Ok(res)
+        let messages = messages
+            .into_iter()
+            .map(|m| ExtendedInteropMessage {
+                message: m,
+                decoded_payload: None,
+            })
+            .collect();
+
+        Ok((messages, next_page_token))
     }
 
     pub async fn count_interop_messages(

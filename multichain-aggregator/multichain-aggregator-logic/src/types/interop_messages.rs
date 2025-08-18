@@ -18,7 +18,7 @@ const SEVEN_DAYS: Duration = Duration::days(7);
 
 #[derive(DerivePartialModel, Debug, Clone)]
 #[sea_orm(entity = "Entity", from_query_result)]
-pub struct ExtendedInteropMessage {
+pub struct InteropMessage {
     pub sender_address_hash: Option<SeaOrmAddress>,
     pub target_address_hash: Option<SeaOrmAddress>,
     pub nonce: i64,
@@ -31,7 +31,10 @@ pub struct ExtendedInteropMessage {
     pub failed: Option<bool>,
     #[sea_orm(nested)]
     pub transfer: Option<InteropMessageTransfer>,
-    #[sea_orm(skip)]
+}
+
+pub struct ExtendedInteropMessage {
+    pub message: InteropMessage,
     pub decoded_payload: Option<serde_json::Value>,
 }
 
@@ -54,7 +57,7 @@ impl From<Status> for proto::interop_message::Status {
     }
 }
 
-impl ExtendedInteropMessage {
+impl InteropMessage {
     pub fn base(nonce: i64, init_chain_id: ChainId, relay_chain_id: ChainId) -> Self {
         Self {
             nonce,
@@ -69,7 +72,6 @@ impl ExtendedInteropMessage {
             payload: None,
             failed: None,
             transfer: None,
-            decoded_payload: None,
         }
     }
 
@@ -112,8 +114,8 @@ impl ExtendedInteropMessage {
     }
 }
 
-impl From<ExtendedInteropMessage> for ActiveModel {
-    fn from(v: ExtendedInteropMessage) -> Self {
+impl From<InteropMessage> for ActiveModel {
+    fn from(v: InteropMessage) -> Self {
         Self {
             sender_address_hash: Set(v.sender_address_hash.map(|a| a.to_vec())),
             target_address_hash: Set(v.target_address_hash.map(|a| a.to_vec())),
@@ -130,7 +132,7 @@ impl From<ExtendedInteropMessage> for ActiveModel {
     }
 }
 
-impl TryFrom<Model> for ExtendedInteropMessage {
+impl TryFrom<Model> for InteropMessage {
     type Error = ParseError;
 
     fn try_from(v: Model) -> Result<Self, Self::Error> {
@@ -162,46 +164,58 @@ impl TryFrom<Model> for ExtendedInteropMessage {
             payload: v.payload.map(Bytes::from).map(Into::into),
             failed: v.failed,
             transfer: None,
-            decoded_payload: None,
         })
     }
 }
 
+impl From<InteropMessage> for proto::InteropMessage {
+    fn from(m: InteropMessage) -> Self {
+        ExtendedInteropMessage {
+            message: m,
+            decoded_payload: None,
+        }
+        .into()
+    }
+}
+
 impl From<ExtendedInteropMessage> for proto::InteropMessage {
-    fn from(v: ExtendedInteropMessage) -> Self {
-        let status = proto::interop_message::Status::from(v.status()).into();
-        let message_type = v.message_type().into();
-        let method = v.method().into();
+    fn from(m: ExtendedInteropMessage) -> Self {
+        let decoded_payload = m.decoded_payload.and_then(|p| {
+            serde_json::from_value(p)
+                .inspect_err(|_| {
+                    tracing::error!("failed to deserialize protocol");
+                })
+                .ok()
+        });
+        let m = m.message;
+
+        let status = proto::interop_message::Status::from(m.status()).into();
+        let message_type = m.message_type().into();
+        let method = m.method().into();
         Self {
-            sender: v
+            sender: m
                 .sender_address_hash
                 .map(|a| proto_address_hash_from_alloy(&a)),
-            target: v
+            target: m
                 .target_address_hash
                 .map(|a| proto_address_hash_from_alloy(&a)),
-            nonce: v.nonce,
-            init_chain_id: v.init_chain_id.to_string(),
-            init_transaction_hash: v.init_transaction_hash.map(|h| h.to_string()),
-            timestamp: v.timestamp.map(|t| {
+            nonce: m.nonce,
+            init_chain_id: m.init_chain_id.to_string(),
+            init_transaction_hash: m.init_transaction_hash.map(|h| h.to_string()),
+            timestamp: m.timestamp.map(|t| {
                 t.and_utc()
                     .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
             }),
-            relay_chain_id: v.relay_chain_id.to_string(),
-            relay_transaction_hash: v.relay_transaction_hash.map(|h| h.to_string()),
-            payload: v.payload.map(|p| p.to_string()),
+            relay_chain_id: m.relay_chain_id.to_string(),
+            relay_transaction_hash: m.relay_transaction_hash.map(|h| h.to_string()),
+            payload: m.payload.map(|p| p.to_string()),
             status,
-            transfer: v
+            transfer: m
                 .transfer
                 .map(proto::interop_message::InteropMessageTransfer::from),
             message_type,
             method,
-            decoded_payload: v.decoded_payload.and_then(|p| {
-                serde_json::from_value(p)
-                    .inspect_err(|_| {
-                        tracing::error!("failed to deserialize protocol");
-                    })
-                    .ok()
-            }),
+            decoded_payload,
         }
     }
 }
@@ -277,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_interop_message_status() {
-        let mut message = ExtendedInteropMessage::base(
+        let mut message = InteropMessage::base(
             1,
             ChainId::from_str("1").unwrap(),
             ChainId::from_str("2").unwrap(),

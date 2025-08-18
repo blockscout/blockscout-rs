@@ -3,7 +3,7 @@ use crate::{
     error::ParseError,
     types::{
         ChainId,
-        interop_messages::{ExtendedInteropMessage, MessageDirection},
+        interop_messages::{InteropMessage, MessageDirection},
     },
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
@@ -21,8 +21,8 @@ use std::collections::HashMap;
 
 pub async fn upsert_many_with_transfers<C>(
     db: &C,
-    mut interop_messages: Vec<ExtendedInteropMessage>,
-) -> Result<Vec<ExtendedInteropMessage>, DbErr>
+    mut interop_messages: Vec<InteropMessage>,
+) -> Result<Vec<InteropMessage>, DbErr>
 where
     C: ConnectionTrait + TransactionTrait,
 {
@@ -85,7 +85,7 @@ where
                         .map(TryFrom::try_from)
                         .transpose()?;
 
-                    let mut message = ExtendedInteropMessage::try_from(m)?;
+                    let mut message = InteropMessage::try_from(m)?;
                     message.transfer = transfer;
 
                     Ok::<_, ParseError>(message)
@@ -105,7 +105,7 @@ pub async fn get<C>(
     db: &C,
     init_chain_id: ChainId,
     nonce: i64,
-) -> Result<Option<ExtendedInteropMessage>, DbErr>
+) -> Result<Option<InteropMessage>, DbErr>
 where
     C: ConnectionTrait,
 {
@@ -113,7 +113,7 @@ where
         .filter(Column::InitChainId.eq(init_chain_id))
         .filter(Column::Nonce.eq(nonce))
         .left_join(interop_messages_transfers::Entity)
-        .into_partial_model::<ExtendedInteropMessage>()
+        .into_partial_model::<InteropMessage>()
         .one(db)
         .await
 }
@@ -129,7 +129,7 @@ pub async fn list<C>(
     cluster_chain_ids: Option<Vec<ChainId>>,
     page_size: u64,
     page_token: Option<(DateTime, TxHash)>,
-) -> Result<(Vec<ExtendedInteropMessage>, Option<(DateTime, TxHash)>), DbErr>
+) -> Result<(Vec<InteropMessage>, Option<(DateTime, TxHash)>), DbErr>
 where
     C: ConnectionTrait,
 {
@@ -161,7 +161,7 @@ where
         .apply_if(nonce, |q, nonce| q.filter(Column::Nonce.eq(nonce)))
         .left_join(interop_messages_transfers::Entity)
         .cursor_by((Column::Timestamp, Column::InitTransactionHash))
-        .into_partial_model::<ExtendedInteropMessage>();
+        .into_partial_model::<InteropMessage>();
     c.desc();
 
     let page_token = page_token.map(|(t, h)| (t, h.to_vec()));

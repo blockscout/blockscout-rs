@@ -4,7 +4,7 @@ use crate::{
     services::channel::{LatestBlockUpdateMessage, NEW_BLOCKS_TOPIC, NEW_INTEROP_MESSAGES_TOPIC},
     types::{
         batch_import_request::BatchImportRequest,
-        interop_messages::ExtendedInteropMessage,
+        interop_messages::InteropMessage,
         tokens::{TokenType, TokenUpdate, UpdateTokenType},
     },
 };
@@ -60,14 +60,14 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert tokens");
         })?;
-    if let Some(counters) = request.counters {
-        if let Some(global) = counters.global {
-            repository::counters::upsert_chain_counters(&tx, global)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(error = ?e, "failed to upsert chain counters");
-                })?;
-        }
+    if let Some(counters) = request.counters
+        && let Some(global) = counters.global
+    {
+        repository::counters::upsert_chain_counters(&tx, global)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, "failed to upsert chain counters");
+            })?;
     }
 
     tx.commit().await?;
@@ -95,9 +95,7 @@ pub async fn batch_import(
     Ok(())
 }
 
-fn prepare_erc_7802_token_updates(
-    messages_with_transfers: &[ExtendedInteropMessage],
-) -> Vec<TokenUpdate> {
+fn prepare_erc_7802_token_updates(messages_with_transfers: &[InteropMessage]) -> Vec<TokenUpdate> {
     messages_with_transfers
         .iter()
         .filter_map(|message| {
