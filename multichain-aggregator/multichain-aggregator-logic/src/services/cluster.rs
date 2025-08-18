@@ -75,24 +75,16 @@ impl Cluster {
         let decoded_payload = if let (Some(payload), Some(target_address_hash)) =
             (&message.payload, &message.target_address_hash)
         {
-            let blockscout_client = self
-                .blockscout_clients
-                .get(&init_chain_id)
-                .expect("chain id should be validated")
-                .clone();
-
-            let decoded_payload = fetch_decoded_calldata_cached(
-                &self.decoded_calldata_cache,
-                blockscout_client,
+            self.fetch_decoded_calldata_cached(
                 payload,
                 target_address_hash.to_string(),
+                init_chain_id,
             )
             .await
             .inspect_err(|e| {
                 tracing::error!("failed to fetch decoded calldata: {e}");
-            });
-
-            decoded_payload.ok()
+            })
+            .ok()
         } else {
             None
         };
@@ -220,32 +212,37 @@ impl Cluster {
 
         Ok(res)
     }
-}
 
-pub async fn fetch_decoded_calldata_cached(
-    cache: &Option<DecodedCalldataCache>,
-    blockscout_client: Arc<HttpApiClient>,
-    calldata: &alloy_primitives::Bytes,
-    address_hash: String,
-) -> Result<serde_json::Value, ServiceError> {
-    let calldata_hash = alloy_primitives::keccak256(calldata).to_string();
-    let calldata = calldata.to_string();
+    async fn fetch_decoded_calldata_cached(
+        &self,
+        calldata: &alloy_primitives::Bytes,
+        address_hash: String,
+        chain_id: ChainId,
+    ) -> Result<serde_json::Value, ServiceError> {
+        let blockscout_client = self
+            .blockscout_clients
+            .get(&chain_id)
+            .expect("chain id should be validated")
+            .clone();
 
-    // address_hash is not part of the key, because it does not affect the decoded calldata
-    let key = format!("decoded_calldata:{calldata_hash}");
+        let calldata_hash = alloy_primitives::keccak256(calldata).to_string();
+        let calldata = calldata.to_string();
 
-    let get_decoded_payload = || async move {
-        blockscout_client
-            .request(&blockscout::decode_calldata::DecodeCalldata {
-                params: blockscout::decode_calldata::DecodeCalldataParams {
-                    calldata,
-                    address_hash,
-                },
-            })
-            .await
-            .map(|r| r.result)
-            .map_err(ServiceError::from)
-    };
+        let key = format!("decoded_calldata:{chain_id}:{address_hash}:{calldata_hash}");
 
-    maybe_cache_lookup!(cache, key, get_decoded_payload)
+        let get_decoded_payload = || async move {
+            blockscout_client
+                .request(&blockscout::decode_calldata::DecodeCalldata {
+                    params: blockscout::decode_calldata::DecodeCalldataParams {
+                        calldata,
+                        address_hash,
+                    },
+                })
+                .await
+                .map(|r| r.result)
+                .map_err(ServiceError::from)
+        };
+
+        maybe_cache_lookup!(&self.decoded_calldata_cache, key, get_decoded_payload)
+    }
 }
