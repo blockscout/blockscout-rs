@@ -337,7 +337,7 @@ async fn test_api_works(
     );
     let mock_server =
         create_blockscout_mock(&blockscout_request_path, blockscout_response_body).await;
-    let l2_router = create_test_router(mock_server);
+    let l2_router = create_test_router(&mock_server);
 
     let batch_metadata = l2_router
         .get_l2_batch_metadata(
@@ -364,7 +364,7 @@ async fn create_blockscout_mock(
     mock_server
 }
 
-fn create_test_router(blockscout_mock_server: MockServer) -> L2Router {
+fn create_test_router(blockscout_mock_server: &MockServer) -> L2Router {
     let mut routes: HashMap<String, L2Config> = HashMap::new();
     routes.insert(
         TestL2Type::Optimism.namespace(),
