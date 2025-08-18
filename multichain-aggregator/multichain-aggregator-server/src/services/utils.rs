@@ -1,4 +1,6 @@
-use std::str::FromStr;
+use multichain_aggregator_logic::page_token::PageTokenFormat;
+use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::Pagination;
+use std::{fmt::Display, str::FromStr};
 use tonic::Status;
 
 #[allow(clippy::result_large_err)]
@@ -12,16 +14,39 @@ where
 
 #[allow(clippy::result_large_err)]
 #[inline]
-pub fn parse_query_2<T1: FromStr, T2: FromStr>(input: String) -> Result<(T1, T2), Status>
+pub fn parse_map_result<'a, E, T, F>(input: &'a str, f: F) -> Result<Vec<T>, Status>
 where
-    <T1 as FromStr>::Err: std::fmt::Display,
-    <T2 as FromStr>::Err: std::fmt::Display,
+    E: Display,
+    F: FnMut(&'a str) -> Result<T, E>,
 {
-    match input.split(',').collect::<Vec<&str>>().as_slice() {
-        [v1, v2] => Ok((
-            parse_query::<T1>(v1.to_string())?,
-            parse_query::<T2>(v2.to_string())?,
-        )),
-        _ => Err(Status::invalid_argument("invalid page_token format")),
+    input
+        .split(',')
+        .map(f)
+        .collect::<Result<Vec<T>, _>>()
+        .map_err(|e| Status::invalid_argument(format!("invalid argument {input}: {e}")))
+}
+
+pub trait PageTokenExtractor<T: PageTokenFormat> {
+    #[allow(clippy::result_large_err)]
+    fn extract_page_token(self) -> Result<Option<T>, Status>;
+}
+
+impl<T: PageTokenFormat> PageTokenExtractor<T> for Option<String> {
+    fn extract_page_token(self) -> Result<Option<T>, Status> {
+        self.map(|s| {
+            T::parse_page_token(s.clone())
+                .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))
+        })
+        .transpose()
     }
+}
+
+pub fn page_token_to_proto<T: PageTokenFormat>(
+    page_token: Option<T>,
+    page_size: u32,
+) -> Option<Pagination> {
+    page_token.map(|pt| Pagination {
+        page_token: pt.format_page_token(),
+        page_size,
+    })
 }

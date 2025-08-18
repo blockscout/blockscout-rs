@@ -5,32 +5,10 @@
 
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days,
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
-    utils::sql_with_range_filter_opt,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct NewBlockRewardsStatement;
+impl_db_choice!(NewBlockRewardsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewBlockRewardsStatement {
     fn get_statement(
@@ -78,15 +56,6 @@ impl ChartProperties for Properties {
     }
 }
 
-define_and_impl_resolution_properties!(
-    define_and_impl: {
-        WeeklyProperties: Week,
-        MonthlyProperties: Month,
-        YearlyProperties: Year,
-    },
-    base_impl: Properties
-);
-
 pub type NewBlockRewards =
     DirectVecLocalDbChartSource<NewBlockRewardsRemote, Batch30Days, Properties>;
 pub type NewBlockRewardsInt = MapParseTo<StripExt<NewBlockRewards>, i64>;
@@ -101,7 +70,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters},
         range::UniversalRange,
         tests::{
             init_db::init_db_all,
@@ -149,16 +118,12 @@ mod tests {
             .unwrap();
         fill_mock_blockscout_data(&blockscout, current_date).await;
 
-        let parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: NewBlockRewardsMonthlyInt::all_dependencies_chart_keys(
-            ),
-            update_time_override: Some(current_time),
-            force_full: false,
-        };
+        let parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            NewBlockRewardsMonthlyInt::all_dependencies_chart_keys(),
+            Some(current_time),
+        );
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         NewBlockRewardsMonthlyInt::update_recursively(&cx)
             .await

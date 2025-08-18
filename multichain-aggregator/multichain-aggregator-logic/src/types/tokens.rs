@@ -1,10 +1,14 @@
 use super::ChainId;
-use entity::tokens::ActiveModel;
+use crate::{error::ParseError, proto, types::addresses::db_token_type_to_proto_token_type};
+use entity::tokens::{ActiveModel, Entity};
 use sea_orm::{
     ActiveValue::{NotSet, Set, Unchanged},
-    DeriveIntoActiveModel, IntoActiveModel, IntoActiveValue,
-    prelude::{BigDecimal, Decimal},
+    DeriveIntoActiveModel, DerivePartialModel, FromJsonQueryResult, IntoActiveModel,
+    IntoActiveValue, IntoSimpleExpr,
+    prelude::{BigDecimal, Decimal, Expr},
+    sea_query::SimpleExpr,
 };
+use serde::{Deserialize, Serialize};
 
 pub type TokenType = entity::sea_orm_active_enums::TokenType;
 
@@ -82,5 +86,92 @@ impl IntoActiveModel<ActiveModel> for UpdateTokenType {
             token_type: Set(self.token_type),
             ..Default::default()
         }
+    }
+}
+
+#[derive(DerivePartialModel, Clone, Debug)]
+#[sea_orm(entity = "Entity", from_query_result)]
+pub struct Token {
+    pub address_hash: Vec<u8>,
+    pub chain_id: ChainId,
+    pub name: Option<String>,
+    pub symbol: Option<String>,
+    pub decimals: Option<i16>,
+    pub token_type: TokenType,
+    pub icon_url: Option<String>,
+    pub fiat_value: Option<Decimal>,
+    pub circulating_market_cap: Option<Decimal>,
+    pub total_supply: Option<BigDecimal>,
+    pub holders_count: Option<i64>,
+    pub transfers_count: Option<i64>,
+}
+
+pub fn token_chain_infos_expr() -> SimpleExpr {
+    Expr::cust_with_exprs(
+        "jsonb_build_object('chain_id',$1,'holders_count',$2,'total_supply',$3)",
+        [
+            Expr::col("token_chain_id").into_simple_expr(),
+            Expr::col("token_holders_count").into_simple_expr(),
+            Expr::col("token_total_supply").into_simple_expr(),
+        ],
+    )
+}
+
+#[derive(Debug, Clone, DerivePartialModel)]
+#[sea_orm(entity = "Entity", from_query_result)]
+pub struct AggregatedToken {
+    pub address_hash: Vec<u8>,
+    pub name: Option<String>,
+    pub symbol: Option<String>,
+    pub decimals: Option<i16>,
+    pub token_type: TokenType,
+    pub icon_url: Option<String>,
+    pub fiat_value: Option<Decimal>,
+    pub circulating_market_cap: Option<Decimal>,
+    pub total_supply: Option<BigDecimal>,
+    pub holders_count: Option<BigDecimal>,
+    pub transfers_count: Option<BigDecimal>,
+    #[sea_orm(from_expr = r#"Expr::cust_with_expr("jsonb_agg($1)", token_chain_infos_expr())"#)]
+    pub chain_infos: Vec<ChainInfo>,
+}
+
+#[derive(Debug, Clone, FromJsonQueryResult, Serialize, Deserialize)]
+pub struct ChainInfo {
+    pub chain_id: ChainId,
+    pub holders_count: Option<BigDecimal>,
+    pub total_supply: Option<BigDecimal>,
+}
+
+impl From<ChainInfo> for proto::aggregated_token_info::ChainInfo {
+    fn from(value: ChainInfo) -> Self {
+        Self {
+            holders_count: value.holders_count.map(|h| h.to_string()),
+            total_supply: value.total_supply.map(|t| t.to_plain_string()),
+        }
+    }
+}
+
+impl TryFrom<AggregatedToken> for proto::AggregatedTokenInfo {
+    type Error = ParseError;
+
+    fn try_from(value: AggregatedToken) -> Result<Self, Self::Error> {
+        Ok(Self {
+            address_hash: alloy_primitives::Address::try_from(value.address_hash.as_slice())?
+                .to_string(),
+            circulating_market_cap: value.circulating_market_cap.map(|c| c.to_string()),
+            decimals: value.decimals.map(|d| d.to_string()),
+            icon_url: value.icon_url,
+            name: value.name,
+            symbol: value.symbol,
+            r#type: db_token_type_to_proto_token_type(value.token_type).into(),
+            exchange_rate: value.fiat_value.map(|f| f.to_string()),
+            holders_count: value.holders_count.map(|h| h.to_string()),
+            total_supply: value.total_supply.map(|t| t.to_plain_string()),
+            chain_infos: value
+                .chain_infos
+                .into_iter()
+                .map(|c| (c.chain_id.to_string(), c.into()))
+                .collect(),
+        })
     }
 }

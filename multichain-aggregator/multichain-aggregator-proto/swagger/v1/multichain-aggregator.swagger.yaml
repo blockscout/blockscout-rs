@@ -126,6 +126,66 @@ paths:
           type: boolean
       tags:
         - MultichainAggregatorService
+  /api/v1/clusters/{cluster_id}/addresses/{address_hash}:
+    get:
+      operationId: ClusterExplorerService_GetAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAddressResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: address_hash
+          in: path
+          required: true
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/addresses/{address_hash}/tokens:
+    get:
+      operationId: ClusterExplorerService_ListAddressTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListAddressTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: address_hash
+          in: path
+          required: true
+          type: string
+        - name: type
+          description: List of comma-separated token types to filter by. See `TokenType`.
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/chains:
     get:
       operationId: ClusterExplorerService_ListClusterChains
@@ -658,6 +718,19 @@ definitions:
     properties:
       value:
         type: string
+  ListAddressTokensResponseAggregatedTokenBalanceInfo:
+    type: object
+    properties:
+      token:
+        $ref: '#/definitions/v1AggregatedTokenInfo'
+      token_id:
+        type: string
+      value:
+        type: string
+      chain_values:
+        type: object
+        additionalProperties:
+          type: string
   TokenImportCounters:
     type: object
     properties:
@@ -744,6 +817,41 @@ definitions:
     type: object
     properties:
       hash:
+        type: string
+  v1AggregatedTokenInfo:
+    type: object
+    properties:
+      address_hash:
+        type: string
+      circulating_market_cap:
+        type: string
+      decimals:
+        type: string
+      holders_count:
+        type: string
+      icon_url:
+        type: string
+      name:
+        type: string
+      symbol:
+        type: string
+      total_supply:
+        type: string
+      type:
+        $ref: '#/definitions/v1TokenType'
+      exchange_rate:
+        type: string
+      chain_infos:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/v1AggregatedTokenInfoChainInfo'
+        description: Map of chain id to chain-specific information.
+  v1AggregatedTokenInfoChainInfo:
+    type: object
+    properties:
+      holders_count:
+        type: string
+      total_supply:
         type: string
   v1BatchImportRequest:
     type: object
@@ -843,6 +951,30 @@ definitions:
       names_count:
         type: integer
         format: int64
+  v1GetAddressResponse:
+    type: object
+    properties:
+      hash:
+        type: string
+      chain_infos:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/v1GetAddressResponseChainInfo'
+        description: Map of chain id to chain-specific information.
+      has_tokens:
+        type: boolean
+      has_interop_message_transfers:
+        type: boolean
+  v1GetAddressResponseChainInfo:
+    type: object
+    properties:
+      coin_balance:
+        type: string
+      is_contract:
+        type: boolean
+      is_verified:
+        type: boolean
+    description: Chain-specific information.
   v1GetInteropMessageResponse:
     type: object
     properties:
@@ -908,6 +1040,16 @@ definitions:
       - SUCCESS
       - EXPIRED
     default: PENDING
+  v1ListAddressTokensResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/ListAddressTokensResponseAggregatedTokenBalanceInfo'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListAddressesResponse:
     type: object
     properties:

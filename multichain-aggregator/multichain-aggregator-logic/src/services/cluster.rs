@@ -1,12 +1,18 @@
 use crate::{
     clients::blockscout,
     error::ServiceError,
-    repository::{chains, interop_messages},
+    repository::{
+        address_token_balances::{self, ListAddressTokensPageToken},
+        addresses, chains, interop_message_transfers, interop_messages,
+    },
     services::macros::maybe_cache_lookup,
     types::{
         ChainId,
+        address_token_balances::AggregatedAddressTokenBalance,
+        addresses::AddressInfo,
         chains::Chain,
         interop_messages::{ExtendedInteropMessage, MessageDirection},
+        tokens::TokenType,
     },
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
@@ -154,6 +160,65 @@ impl Cluster {
         let cluster_chain_ids = self.chain_ids();
         let count = interop_messages::count(db, chain_id, Some(cluster_chain_ids)).await?;
         Ok(count)
+    }
+
+    pub async fn get_address_info(
+        &self,
+        db: &DatabaseConnection,
+        address: AddressAlloy,
+    ) -> Result<AddressInfo, ServiceError> {
+        let cluster_chain_ids = self.chain_ids();
+        let mut address_info =
+            addresses::get_address_info(db, address, Some(cluster_chain_ids.clone()))
+                .await?
+                .unwrap_or_else(|| AddressInfo::default(address.to_vec()));
+
+        let (has_tokens, has_interop_message_transfers) = futures::join!(
+            address_token_balances::check_if_tokens_at_address(
+                db,
+                address,
+                cluster_chain_ids.clone()
+            ),
+            interop_message_transfers::check_if_interop_message_transfers_at_address(
+                db,
+                address,
+                cluster_chain_ids,
+            )
+        );
+
+        address_info.has_tokens = has_tokens?;
+        address_info.has_interop_message_transfers = has_interop_message_transfers?;
+
+        Ok(address_info)
+    }
+
+    pub async fn list_address_tokens(
+        &self,
+        db: &DatabaseConnection,
+        address: AddressAlloy,
+        token_types: Vec<TokenType>,
+        page_size: u64,
+        page_token: Option<ListAddressTokensPageToken>,
+    ) -> Result<
+        (
+            Vec<AggregatedAddressTokenBalance>,
+            Option<ListAddressTokensPageToken>,
+        ),
+        ServiceError,
+    > {
+        let cluster_chain_ids = self.chain_ids();
+
+        let res = address_token_balances::list_by_address(
+            db,
+            address,
+            token_types,
+            cluster_chain_ids,
+            page_size,
+            page_token,
+        )
+        .await?;
+
+        Ok(res)
     }
 }
 

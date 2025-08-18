@@ -1,20 +1,6 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, NaiveDate, Utc};
-use sea_orm::Statement;
-
-use crate::{
-    ChartError, ChartKey,
-    charts::db_interaction::read::cached::find_all_cached,
-    data_source::{
-        UpdateContext,
-        kinds::remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
-        types::IndexerMigrations,
-    },
-    range::UniversalRange,
-    types::{Timespan, TimespanDuration, new_txns::NewTxnsCombinedPoint},
-    utils::day_start,
-};
+use crate::{chart_prelude::*, types::new_txns::NewTxnsCombinedPoint};
 
 pub mod all_new_txns_window;
 pub mod op_stack_operational;
@@ -57,7 +43,12 @@ impl RemoteQueryBehaviour for NewTxnsWindowCombinedQuery {
             &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        let data = find_all_cached::<NewTxnsCombinedPoint>(cx, query).await?;
+        let data = find_all_cached::<_, NewTxnsCombinedPoint>(
+            &cx.cache,
+            NewTxnsCombinedStatement::get_db(cx)?,
+            query,
+        )
+        .await?;
         Ok(data)
     }
 }

@@ -71,6 +71,35 @@ pub mod macros {
         };
     }
 
+    macro_rules! col {
+        ($expr:expr) => {
+            SelectExpr {
+                expr: SimpleExpr::Column($expr.into_column_ref()),
+                alias: None,
+                window: None,
+            }
+        };
+    }
+
+    macro_rules! map_col {
+        ($agg:expr, $col:expr) => {
+            expr_as!(Expr::cust_with_expr($agg, Expr::col($col)), $col)
+        };
+    }
+
+    macro_rules! expr_as {
+        ($expr:expr, $alias:expr) => {
+            SelectExpr {
+                expr: $expr.into(),
+                alias: Some($alias.into_iden()),
+                window: None,
+            }
+        };
+    }
+
+    pub(crate) use col;
+    pub(crate) use expr_as;
     pub(crate) use is_distinct_from;
+    pub(crate) use map_col;
     pub(crate) use update_if_not_null;
 }

@@ -32,12 +32,12 @@ tonic = "0.12"
 tonic-build = "0.12"
 
 # db
-sea-orm = { version = "1.1.7", features = [
+sea-orm = { version = "1.1.14", features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
     "macros",
 ] }
-sea-orm-migration = { version = "1.1.7", features = [
+sea-orm-migration = { version = "1.1.14", features = [
     "runtime-tokio-rustls",
     "sqlx-postgres",
 ] }
@@ -58,12 +58,14 @@ anyhow = "1.0"
 api-client-framework = { git = "https://github.com/blockscout/blockscout-rs", rev = "d60c1d8" }
 async-std = { version = "1", features = ["attributes", "tokio1"] }
 async-trait = "0.1"
+base64 = "0.22"
 bigdecimal = "0.4"
 blockscout-chains = { git = "https://github.com/blockscout/blockscout-rs", version = "0.3.0" }
 cached = { version = "0.55", default-features = false }
 config = "0.13"
 chrono = "0.4.38"
 env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.3.0" }
+itertools = "0.14"
 regex = "1.10"
 reqwest = "0.12"
 rust_decimal = "1.37"

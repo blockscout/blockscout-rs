@@ -30,7 +30,9 @@ pub fn extract_csrf_token(metadata: &MetadataMap) -> Result<String, Error> {
         .ok_or_else(|| Error::InvalidCsrfToken("csrf not found".into()))
 }
 
-fn get_cookies(metadata: &MetadataMap) -> Result<std::collections::HashMap<String, Cookie>, Error> {
+fn get_cookies(
+    metadata: &MetadataMap,
+) -> Result<std::collections::HashMap<String, Cookie<'_>>, Error> {
     let raw = metadata
         .get(HEADER_COOKIE_NAME)
         .and_then(|v| v.to_str().ok())

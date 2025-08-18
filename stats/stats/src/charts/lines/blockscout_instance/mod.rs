@@ -5,6 +5,7 @@ mod gas;
 mod tokens;
 mod transactions;
 mod user_ops;
+mod zetachain_cctx;
 
 use accounts::*;
 use blocks::*;
@@ -13,6 +14,7 @@ use gas::*;
 use tokens::*;
 use transactions::*;
 use user_ops::*;
+use zetachain_cctx::*;
 
 #[cfg(test)]
 mod mock;
@@ -93,6 +95,10 @@ pub use builder_accounts_growth::{
     BuilderAccountsGrowth, BuilderAccountsGrowthMonthly, BuilderAccountsGrowthWeekly,
     BuilderAccountsGrowthYearly,
 };
+pub use cc_txns_growth::{
+    ZetachainCrossChainTxnsGrowth, ZetachainCrossChainTxnsGrowthMonthly,
+    ZetachainCrossChainTxnsGrowthWeekly, ZetachainCrossChainTxnsGrowthYearly,
+};
 pub use contracts_growth::{
     ContractsGrowth, ContractsGrowthMonthly, ContractsGrowthWeekly, ContractsGrowthYearly,
 };
@@ -119,6 +125,10 @@ pub use new_blocks::{NewBlocks, NewBlocksMonthly, NewBlocksWeekly, NewBlocksYear
 pub use new_builder_accounts::{
     NewBuilderAccounts, NewBuilderAccountsMonthly, NewBuilderAccountsWeekly,
     NewBuilderAccountsYearly,
+};
+pub use new_cc_txns::{
+    NewZetachainCrossChainTxns, NewZetachainCrossChainTxnsMonthly,
+    NewZetachainCrossChainTxnsWeekly, NewZetachainCrossChainTxnsYearly,
 };
 pub use new_contracts::{
     NewContracts, NewContractsMonthly, NewContractsWeekly, NewContractsYearly,
@@ -159,6 +169,7 @@ pub use verified_contracts_growth::{
 pub(crate) use native_coin_holders_growth::NativeCoinHoldersGrowthInt;
 pub(crate) use new_block_rewards::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt};
 pub(crate) use new_blocks::{NewBlocksInt, NewBlocksMonthlyInt, NewBlocksStatement};
+pub(crate) use new_cc_txns::zetachain_cctx_datetime_range_filter;
 pub(crate) use new_contracts::NewContractsInt;
 pub(crate) use new_native_coin_transfers::NewNativeCoinTransfersInt;
 pub(crate) use new_txns::{

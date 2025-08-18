@@ -25,6 +25,7 @@ sea-orm = { workspace = true, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
 ] }
+sea-query = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 blockscout-service-launcher = { workspace = true, features = ["database-1"] }
 blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "4a755c5" }

@@ -1,20 +1,4 @@
-use crate::{
-    IndexingStatus, MissingDatePolicy, Named,
-    charts::chart::ChartProperties,
-    data_source::kinds::{
-        data_manipulation::{map::StripExt, resolutions::last_value::LastValueLowerResolution},
-        local_db::{
-            DailyCumulativeLocalDbChartSource, DirectVecLocalDbChartSource,
-            parameters::update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
-        },
-    },
-    define_and_impl_resolution_properties,
-    indexing_status::{BlockscoutIndexingStatus, UserOpsIndexingStatus},
-    types::timespans::{Month, Week, Year},
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
+use crate::chart_prelude::*;
 
 use super::new_eip_7702_auths::NewEip7702AuthsInt;
 
@@ -38,10 +22,7 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE.with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
     }
 }
 

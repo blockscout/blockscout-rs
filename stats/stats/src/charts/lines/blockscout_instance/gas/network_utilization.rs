@@ -1,20 +1,4 @@
-use crate::{
-    ChartProperties, Named,
-    data_source::kinds::{
-        data_manipulation::map::{MapDivide, MapToString},
-        local_db::{
-            DirectVecLocalDbChartSource,
-            parameters::update::batching::parameters::{
-                Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-            },
-        },
-    },
-    define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
+use crate::chart_prelude::*;
 
 use super::{
     average_gas_limit::{

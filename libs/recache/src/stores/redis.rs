@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 
+#[derive(Clone)]
 pub struct RedisStore {
     connection: redis::aio::ConnectionManager,
     prefix: String,

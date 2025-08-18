@@ -1,26 +1,5 @@
-use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    charts::db_interaction::read::query_estimated_table_rows,
-    data_source::{
-        UpdateContext,
-        kinds::{
-            data_manipulation::map::MapParseTo,
-            local_db::{DirectPointLocalDbChartSourceWithEstimate, parameters::ValueEstimation},
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
-        },
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    range::UniversalRange,
-    types::timespans::DateValue,
-};
-
+use crate::chart_prelude::*;
 use blockscout_db::entity::{blocks, transactions};
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityName, EntityTrait, PaginatorTrait, QueryFilter,
-    QuerySelect, prelude::Expr,
-};
 
 pub struct TotalTxnsQueryBehaviour;
 
@@ -76,10 +55,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

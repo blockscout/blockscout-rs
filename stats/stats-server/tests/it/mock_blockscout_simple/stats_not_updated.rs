@@ -23,7 +23,7 @@ use wiremock::ResponseTemplate;
 
 use crate::{
     common::{enabled_resolutions, get_test_stats_settings, send_arbitrary_request},
-    it::mock_blockscout_simple::get_mock_blockscout,
+    it::mock_blockscout_simple::{get_mock_blockscout, get_mock_zetachain_cctx},
 };
 
 #[tokio::test]
@@ -43,7 +43,13 @@ pub async fn run_tests_with_charts_not_updated() {
         Some(ResponseTemplate::new(200).set_body_json(user_ops_status_response_json(false))),
     )
     .await;
-    let (mut settings, base) = get_test_stats_settings(&stats_db, blockscout_db, &blockscout_api);
+    let zetachain_cctx_db = get_mock_zetachain_cctx().await;
+    let (mut settings, base) = get_test_stats_settings(
+        &stats_db,
+        blockscout_db,
+        &blockscout_api,
+        Some(zetachain_cctx_db),
+    );
     // will not update at all
     settings.force_update_on_start = None;
     let shutdown = GracefulShutdownHandler::new();

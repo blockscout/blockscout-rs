@@ -25,7 +25,7 @@ use multichain_aggregator_logic::{
         },
         channel::Channel,
         cluster::{Cluster, DecodedCalldataCache},
-        search::UniformChainSearchCache,
+        search::DomainSearchCache,
     },
 };
 use recache::stores::redis::RedisStore;
@@ -143,14 +143,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         None
     };
 
-    let uniform_chain_search_cache = if let Some(cache_settings) = &settings.cache
-        && cache_settings.uniform_chain_search_cache.enabled
+    let domain_search_cache = if let Some(cache_settings) = &settings.cache
+        && cache_settings.domain_search_cache.enabled
         && let Some(redis_cache) = &redis_cache
     {
-        let cache_name = "uniform_chain_search";
-        let cache_builder = UniformChainSearchCache::builder(Arc::clone(redis_cache))
-            .default_ttl(cache_settings.uniform_chain_search_cache.ttl)
-            .maybe_default_refresh_ahead(cache_settings.uniform_chain_search_cache.refresh_ahead);
+        let cache_name = "domain_search";
+        let cache_builder = DomainSearchCache::builder(Arc::clone(redis_cache))
+            .default_ttl(cache_settings.domain_search_cache.ttl)
+            .maybe_default_refresh_ahead(cache_settings.domain_search_cache.refresh_ahead);
         let cache = add_cache_metrics!(cache_builder, cache_name).build();
         Some(cache)
     } else {
@@ -212,6 +212,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         settings.service.api.clone(),
     ));
 
+    let bens_protocols = settings.service.bens_protocols.map(|p| &*p.leak());
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
         Arc::new(repo),
         dapp_client,
@@ -219,11 +220,11 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bens_client,
         settings.service.api,
         settings.service.quick_search_chains,
-        settings.service.bens_protocols,
+        bens_protocols,
         settings.service.domain_primary_chain_id,
         marketplace_enabled_cache,
         channel.channel_broadcaster(),
-        uniform_chain_search_cache,
+        domain_search_cache,
     ));
 
     let router = Router {

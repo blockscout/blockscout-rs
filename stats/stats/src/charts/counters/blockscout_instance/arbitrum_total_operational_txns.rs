@@ -1,18 +1,8 @@
 use std::marker::PhantomData;
 
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    data_source::kinds::{
-        data_manipulation::map::{Map, MapFunction},
-        local_db::DirectPointLocalDbChartSource,
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    types::TimespanValue,
-};
+use crate::chart_prelude::*;
 use std::fmt::Debug;
 
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
 use tracing::warn;
 
 use super::{TotalBlocksInt, TotalTxnsInt};
@@ -37,10 +27,7 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

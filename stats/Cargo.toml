@@ -12,14 +12,21 @@ members = [
 [workspace.dependencies]
 blockscout-client = { git = "https://github.com/blockscout/blockscout-rs/", rev = "d02877c" }
 blockscout-service-launcher = { version = "0.19.0" }
-# todo: update to tag 1.5.2+ once released
-multichain-aggregator-entity = { git = "https://github.com/blockscout/blockscout-rs/", rev = "3ff537ef1f1f8287edeb876b6899d316c25a1401", package = "multichain-aggregator-entity" }
-multichain-aggregator-migration = { git = "https://github.com/blockscout/blockscout-rs/", rev = "3ff537ef1f1f8287edeb876b6899d316c25a1401", package = "multichain-aggregator-migration" }
+# todo: update to tag >1.6.0 once released (can't compile for some reason)
+multichain-aggregator-entity = { git = "https://github.com/blockscout/blockscout-rs/", rev = "096c4c140375e5a1802413e9a037c35f84aeaa42", package = "multichain-aggregator-entity" }
+multichain-aggregator-migration = { git = "https://github.com/blockscout/blockscout-rs/", rev = "096c4c140375e5a1802413e9a037c35f84aeaa42", package = "multichain-aggregator-migration" }
+# todo: set to tag once released / update as needed
+zetachain-cctx-entity = { git = "https://github.com/blockscout/blockscout-rs/", rev = "9cf47cf81d64e7268812ae5ffcd8d516b7f7a67c", package = "zetachain-cctx-entity" }
+zetachain-cctx-migration = { git = "https://github.com/blockscout/blockscout-rs/", rev = "9cf47cf81d64e7268812ae5ffcd8d516b7f7a67c", package = "zetachain-cctx-migration" }
 rstest = "0.23.0"
 trait-variant = "0.1.2"
 wiremock = "0.6.2"
-sea-orm = "1.1.7"
-sea-orm-migration = "1.1.7"
 serde_json = "1.0"
 hex = "0.4.3"
 num-traits = "0.2"
+syn = "2.0"
+
+# update together to matching versions
+sea-orm = "1.1.14"
+sea-orm-migration = "1.1.14"
+sea-query = "0.32.5"

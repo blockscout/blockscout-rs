@@ -1,34 +1,9 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryAllBlockTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
-    utils::sql_with_range_filter_opt,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct NewBlocksStatement;
+impl_db_choice!(NewBlocksStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewBlocksStatement {
     fn get_statement(
@@ -108,7 +83,7 @@ mod tests {
     use super::*;
     use crate::{
         charts::db_interaction::read::get_min_block_blockscout,
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters},
         query_dispatch::{QuerySerialized, serialize_line_points},
         range::UniversalRange,
         tests::{
@@ -170,15 +145,13 @@ mod tests {
 
         // Note that update is not full, therefore there is no entry with date `2022-11-09` and
         // wrong value is kept
-        let mut cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            update_time_override: Some(current_time),
-            enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
-            force_full: false,
-        });
+        let mut cx =
+            UpdateContext::from_params_now_or_override(UpdateParameters::default_test_parameters(
+                &db,
+                &blockscout,
+                NewBlocks::all_dependencies_chart_keys(),
+                Some(current_time),
+            ));
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
             .await
@@ -248,15 +221,15 @@ mod tests {
             .await
             .unwrap();
 
-        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: true,
-        });
+        let cx = UpdateContext::from_params_now_or_override(
+            UpdateParameters::default_test_parameters(
+                &db,
+                &blockscout,
+                NewBlocks::all_dependencies_chart_keys(),
+                Some(current_time),
+            )
+            .with_force_full(),
+        );
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
             .await
@@ -345,15 +318,13 @@ mod tests {
         .await
         .unwrap();
 
-        let cx = UpdateContext::from_params_now_or_override(UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: NewBlocks::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: false,
-        });
+        let cx =
+            UpdateContext::from_params_now_or_override(UpdateParameters::default_test_parameters(
+                &db,
+                &blockscout,
+                NewBlocks::all_dependencies_chart_keys(),
+                Some(current_time),
+            ));
         NewBlocks::update_recursively(&cx).await.unwrap();
         let data = NewBlocks::query_data_static(&cx, UniversalRange::full(), None, false)
             .await

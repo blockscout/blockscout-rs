@@ -5,23 +5,7 @@
 //!
 //! Does not include last day, even as incomplete day.
 
-use crate::{
-    ChartProperties, IndexingStatus, Named,
-    data_source::kinds::{
-        data_manipulation::map::{Map, MapParseTo, StripExt},
-        local_db::{
-            LocalDbChartSource,
-            parameters::{
-                DefaultCreate, DefaultQueryVec, update::clear_and_query_all::ClearAllAndPassVec,
-            },
-        },
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    types::new_txns::ExtractAllTxns,
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
+use crate::chart_prelude::*;
 
 use super::NewTxnsWindowCombinedRemote;
 
@@ -42,10 +26,7 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 
@@ -65,37 +46,38 @@ mod tests {
 
     use super::*;
     use crate::{
-        data_source::{DataSource, UpdateContext, UpdateParameters, types::IndexerMigrations},
+        data_source::{DataSource, UpdateContext, UpdateParameters},
         query_dispatch::QuerySerialized,
         range::UniversalRange,
         tests::{
             mock_blockscout::{fill_mock_blockscout_data, imitate_reindex},
             point_construction::dt,
-            simple_test::{chart_output_to_expected, map_str_tuple_to_owned, prepare_chart_test},
+            simple_test::{
+                chart_output_to_expected, map_str_tuple_to_owned, prepare_blockscout_chart_test,
+            },
         },
     };
 
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_txns_window_clears_and_overwrites() {
-        let (init_time, db, blockscout) =
-            prepare_chart_test::<NewTxnsWindow>("update_txns_window_clears_and_overwrites", None)
-                .await;
+        let (init_time, db, blockscout) = prepare_blockscout_chart_test::<NewTxnsWindow>(
+            "update_txns_window_clears_and_overwrites",
+            None,
+        )
+        .await;
         {
             let current_date = init_time.date_naive();
             fill_mock_blockscout_data(&blockscout, current_date).await;
         }
         let current_time = dt("2022-12-01T00:00:00").and_utc();
 
-        let mut parameters = UpdateParameters {
-            stats_db: &db,
-            is_multichain_mode: false,
-            indexer_db: &blockscout,
-            indexer_applied_migrations: IndexerMigrations::latest(),
-            enabled_update_charts_recursive: NewTxnsWindow::all_dependencies_chart_keys(),
-            update_time_override: Some(current_time),
-            force_full: false,
-        };
+        let mut parameters = UpdateParameters::default_test_parameters(
+            &db,
+            &blockscout,
+            NewTxnsWindow::all_dependencies_chart_keys(),
+            Some(current_time),
+        );
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         NewTxnsWindow::update_recursively(&cx).await.unwrap();
         assert_eq!(

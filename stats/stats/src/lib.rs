@@ -22,8 +22,12 @@ pub use charts::{
     Named, ResolutionKind, counters,
     db_interaction::read::{
         ApproxUnsignedDiff, QueryAllBlockTimestampRange, ReadError, RequestedPointsLimit,
+        zetachain_cctx::query_zetachain_cctx_indexed_until,
     },
     indexing_status,
     indexing_status::IndexingStatus,
     lines, query_dispatch, types,
 };
+
+mod preludes;
+pub use preludes::*;
