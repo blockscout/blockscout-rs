@@ -8,11 +8,13 @@ use tonic::{transport::Channel, Status};
 
 mod disperser {
     #![allow(clippy::all)]
+    #![allow(dead_code)]
     tonic::include_proto!("disperser");
 }
 
 mod common {
     #![allow(clippy::all)]
+    #![allow(dead_code)]
     tonic::include_proto!("common");
 }
 
