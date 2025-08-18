@@ -17,10 +17,10 @@ struct CommitmentTransaction {
 #[derive(Deserialize, Debug)]
 struct L2BatchArbitrum {
     commitment_transaction: CommitmentTransaction,
-    #[serde(rename = "end_block_number", alias = "end_block")]
+    #[serde(rename = "end_block_number")]
     end_block: u64,
     number: u64,
-    #[serde(rename = "start_block_number", alias = "start_block")]
+    #[serde(rename = "start_block_number")]
     start_block: u64,
     transactions_count: u64,
 }
