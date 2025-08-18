@@ -10,7 +10,15 @@
             "id": "transactions",
             "title": "Transactions",
             "charts_order": [
-                "new_txns_multichain"
+                "new_txns_multichain",
+                "txns_growth_multichain"
+            ]
+        },
+        {
+            "id": "accounts",
+            "title": "Accounts",
+            "charts_order": [
+                "accounts_growth_multichain"
             ]
         }
     ]

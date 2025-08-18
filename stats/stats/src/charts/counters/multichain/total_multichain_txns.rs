@@ -97,7 +97,7 @@ mod tests {
     async fn update_total_multichain_txns() {
         simple_test_counter_multichain::<TotalMultichainTxns>(
             "update_total_multichain_txns",
-            "124",
+            "210",
             Some(dt("2022-08-06T00:00:00")),
         )
         .await;

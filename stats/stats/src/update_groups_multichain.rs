@@ -1,7 +1,10 @@
 use crate::{
     construct_update_group,
     lines::multichain::{
-        new_txns_multichain::*, new_txns_multichain_window::NewTxnsMultichainWindow,
+        new_txns_multichain::*,
+        new_txns_multichain_window::NewTxnsMultichainWindow,
+        txns_growth_multichain::*,
+        accounts_growth_multichain::*,
     },
     utils::singleton_groups,
 };
@@ -26,4 +29,22 @@ construct_update_group!(NewTxnsMultichainGroup {
 
 construct_update_group!(NewTxnsMultichainWindowGroup {
     charts: [NewTxnsMultichainWindow,],
+});
+
+construct_update_group!(TxnsGrowthMultichainGroup {
+    charts: [
+        TxnsGrowthMultichain,
+        TxnsGrowthMultichainWeekly,
+        TxnsGrowthMultichainMonthly,
+        TxnsGrowthMultichainYearly,
+    ],
+});
+
+construct_update_group!(AccountsGrowthMultichainGroup {
+    charts: [
+        AccountsGrowthMultichain,
+        AccountsGrowthMultichainWeekly,
+        AccountsGrowthMultichainMonthly,
+        AccountsGrowthMultichainYearly,
+    ],
 });

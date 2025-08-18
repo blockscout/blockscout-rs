@@ -165,21 +165,21 @@ fn mock_counters_global_imported(
 ) -> Vec<counters_global_imported::ActiveModel> {
     // each tuple includes: (date, chain_id, daily_txns, total_txns, total_addresses)
     let dates_and_txns = vec![
-        ("2022-08-06", 1, 10, 52, 50),
-        ("2022-08-06", 2, 20, 30, 42),
-        ("2022-08-06", 3, 30, 42, 66),
-        ("2022-08-05", 1, 4, 48, 10),
-        ("2022-08-05", 2, 7, 23, 20),
-        ("2022-08-05", 3, 38, 4, 30),
-        ("2022-08-04", 1, 18, 30, 1),
-        ("2022-08-04", 2, 3, 20, 2),
-        ("2022-08-04", 3, 4, 0, 3),
-        ("2022-07-01", 1, 3, 0, 0),
-        ("2022-07-01", 2, 3, 0, 0),
-        ("2022-07-01", 3, 4, 0, 0),
-        ("2022-06-28", 1, 11, 0, 0),
-        ("2022-06-28", 2, 22, 0, 0),
-        ("2022-06-28", 3, 33, 0, 0),
+        ("2022-08-06", 1, 10, 46, 170),
+        ("2022-08-06", 2, 20, 55, 300),
+        ("2022-08-06", 3, 30, 109, 450),
+        ("2022-08-05", 1, 4, 36, 160),
+        ("2022-08-05", 2, 7, 35, 290),
+        ("2022-08-05", 3, 38, 79, 422),
+        ("2022-08-04", 1, 18, 32, 155),
+        ("2022-08-04", 2, 3, 28, 250),
+        ("2022-08-04", 3, 4, 41, 420),
+        ("2022-07-01", 1, 3, 14, 150),
+        ("2022-07-01", 2, 3, 25, 250),
+        ("2022-07-01", 3, 4, 37, 350),
+        ("2022-06-28", 1, 11, 11, 111),
+        ("2022-06-28", 2, 22, 22, 222),
+        ("2022-06-28", 3, 33, 33, 333),
     ];
 
     dates_and_txns
@@ -224,7 +224,7 @@ fn mock_counter_global_imported(
 
 pub async fn imitate_reindex_multichain(indexer: &DatabaseConnection) {
     let counters_global_imported_new =
-        mock_counter_global_imported(1, NaiveDate::from_str("2022-08-15").unwrap(), 10, 62, 55);
+        mock_counter_global_imported(1, NaiveDate::from_str("2022-08-15").unwrap(), 10, 189, 1234);
 
     counters_global_imported::Entity::insert_many([counters_global_imported_new])
         .exec(indexer)

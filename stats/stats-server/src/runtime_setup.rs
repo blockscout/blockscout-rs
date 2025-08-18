@@ -377,6 +377,8 @@ impl RuntimeSetup {
             // multichain: groups
             Arc::new(NewTxnsMultichainGroup),
             Arc::new(NewTxnsMultichainWindowGroup),
+            Arc::new(TxnsGrowthMultichainGroup),
+            Arc::new(AccountsGrowthMultichainGroup),
         ]
     }
 

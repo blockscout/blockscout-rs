@@ -98,7 +98,7 @@ mod tests {
     async fn update_total_multichain_addresses() {
         simple_test_counter_multichain::<TotalMultichainAddresses>(
             "update_total_multichain_addresses",
-            "158",
+            "920",
             Some(dt("2022-08-06T00:00:00")),
         )
         .await;

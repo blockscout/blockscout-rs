@@ -5,6 +5,8 @@
         "total_multichain_txns_group": "0 10 0 * * * *",
         "total_multichain_addresses_group": "0 10 0 * * * *",
         "new_txns_multichain_group": "0 10 0 * * * *",
-        "new_txns_multichain_window_group": "0 10 0 * * * *"
+        "new_txns_multichain_window_group": "0 10 0 * * * *",
+        "txns_growth_multichain_group": "0 10 0 * * * *",
+        "accounts_growth_multichain_group": "0 10 0 * * * *"
     }
 }

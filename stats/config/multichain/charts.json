@@ -26,6 +26,14 @@
         "new_txns_multichain_window": {
             "title": "Daily transactions",
             "description": "The chart displays daily transactions across all chains for the past 30 days"
+        },
+        "txns_growth_multichain": {
+            "title": "Number of transactions",
+            "description": "Cumulative transaction growth over time across all chains"
+        },
+        "accounts_growth_multichain": {
+            "title": "Number of accounts",
+            "description": "Cumulative account growth over time across all chains"
         }
     }
 }

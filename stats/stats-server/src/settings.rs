@@ -14,8 +14,7 @@ use stats::{
         }, ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns, ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns
     }, indexing_status::BlockscoutIndexingStatus, lines::{
         multichain::{
-            new_txns_multichain::NewTxnsMultichain,
-            new_txns_multichain_window::NewTxnsMultichainWindow,
+            accounts_growth_multichain::AccountsGrowthMultichain, new_txns_multichain::NewTxnsMultichain, new_txns_multichain_window::NewTxnsMultichainWindow, txns_growth_multichain::TxnsGrowthMultichain
         }, ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow, ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth
     }, ChartProperties, Named
 };
@@ -320,6 +319,8 @@ pub fn disable_all_non_multichain_charts(charts: &mut config::charts::Config<All
         TotalMultichainTxns::name(),
         NewTxnsMultichain::name(),
         NewTxnsMultichainWindow::name(),
+        TxnsGrowthMultichain::name(),
+        AccountsGrowthMultichain::name(),
     ]);
     for (name, settings) in charts.lines.iter_mut() {
         if !multichain_charts.contains(name) {
