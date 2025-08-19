@@ -7,7 +7,7 @@ members = [
     {% if entity -%}
     "{{project-name}}-entity",
     {% endif -%}
-    {% if migrations -%}
+    {% if database -%}
     "{{project-name}}-migration",
     {% endif -%}
     "{{project-name}}-proto",
@@ -21,7 +21,7 @@ members = [
 {% if logic -%}
 {{project-name}}-logic = { path = "./{{project-name}}-logic" }
 {% endif -%}
-{% if migrations -%}
+{% if database -%}
 {{project-name}}-migration = { path = "./{{project-name}}-migration" }
 {% endif -%}
 {{project-name}}-proto = { path = "./{{project-name}}-proto" }

@@ -46,7 +46,7 @@ generate-entities *args:
     sea-orm-cli generate entity -o {{project-name}}-entity/src/codegen {{args}}
     cargo fmt --all -- --config imports_granularity=Crate
 {% endif %}
-{% if migrations -%}
+{% if database -%}
 new-migration name:
     ./scripts/update_migration.sh {% raw %}{{name}}{% endraw %}
 
