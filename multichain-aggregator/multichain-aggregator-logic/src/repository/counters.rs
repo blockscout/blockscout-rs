@@ -1,4 +1,4 @@
-use crate::types::counters::ChainCounters;
+use crate::types::counters::Counters;
 use entity::counters_global_imported::{
     ActiveModel as GlobalCountersActiveModel, Column as GlobalCountersColumn,
     Entity as GlobalCountersEntity, Model as GlobalCountersModel,
@@ -7,26 +7,41 @@ use sea_orm::{
     ActiveValue::NotSet, ConnectionTrait, DbErr, EntityTrait, prelude::Expr, sea_query::OnConflict,
 };
 
-pub async fn upsert_chain_counters<C>(db: &C, data: ChainCounters) -> Result<(), DbErr>
+pub async fn upsert_many<C>(db: &C, counters: Vec<Counters>) -> Result<(), DbErr>
 where
     C: ConnectionTrait,
 {
-    let model: GlobalCountersModel = data.into();
-    let affected_columns = get_affected_columns(&model);
+    let models: Vec<GlobalCountersModel> = counters
+        .into_iter()
+        .filter_map(|c| c.global)
+        .map(Into::into)
+        .collect();
 
-    let mut active_model: GlobalCountersActiveModel = model.into();
-    active_model.id = NotSet;
-    active_model.created_at = NotSet;
-    active_model.updated_at = NotSet;
+    if models.is_empty() {
+        return Ok(());
+    }
 
-    GlobalCountersEntity::insert(active_model)
+    // assume the affected column set is the same for each entry in case of bulk import
+    let affected_columns = get_affected_columns(&models[0]);
+
+    let active_models: Vec<GlobalCountersActiveModel> = models
+        .into_iter()
+        .map(|m| {
+            let mut active: GlobalCountersActiveModel = m.into();
+            active.id = NotSet;
+            active.created_at = NotSet;
+            active.updated_at = NotSet;
+            active
+        })
+        .collect();
+
+    GlobalCountersEntity::insert_many(active_models)
         .on_conflict(
             OnConflict::columns([GlobalCountersColumn::ChainId, GlobalCountersColumn::Date])
                 .update_columns(affected_columns)
                 .value(GlobalCountersColumn::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
         )
-        .do_nothing()
         .exec_without_returning(db)
         .await?;
 

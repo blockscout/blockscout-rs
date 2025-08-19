@@ -28,7 +28,7 @@ pub struct BatchImportRequest {
     pub address_coin_balances: Vec<AddressCoinBalance>,
     pub address_token_balances: Vec<AddressTokenBalance>,
     pub tokens: Vec<TokenUpdate>,
-    pub counters: Option<Counters>,
+    pub counters: Vec<Counters>,
 }
 
 macro_rules! opt_parse {
@@ -153,8 +153,9 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
                 .collect::<Result<Vec<_>, _>>()?,
             counters: value
                 .counters
+                .into_iter()
                 .map(|c| Counters::try_from((chain_id, c)))
-                .transpose()?,
+                .collect::<Result<Vec<_>, _>>()?,
         })
     }
 }

@@ -889,7 +889,10 @@ definitions:
           type: object
           $ref: '#/definitions/BatchImportRequestAddressTokenBalanceImport'
       counters:
-        $ref: '#/definitions/BatchImportRequestCountersImport'
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/BatchImportRequestCountersImport'
       tokens:
         type: array
         items:
