@@ -68,7 +68,7 @@ pub struct Properties;
 
 impl Named for Properties {
     fn name() -> String {
-        "AccountsGrowthMultichain".into()
+        "accountsGrowthMultichain".into()
     }
 }
 

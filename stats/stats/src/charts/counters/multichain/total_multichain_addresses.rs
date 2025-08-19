@@ -99,7 +99,7 @@ mod tests {
         simple_test_counter_multichain::<TotalMultichainAddresses>(
             "update_total_multichain_addresses",
             "920",
-            Some(dt("2022-08-06T00:00:00")),
+            Some(dt("2023-02-06T00:00:00")),
         )
         .await;
     }

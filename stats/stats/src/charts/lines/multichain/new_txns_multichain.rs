@@ -120,11 +120,11 @@ mod tests {
         simple_test_chart_multichain::<NewTxnsMultichain>(
             "update_new_txns_multichain",
             vec![
-                ("2022-06-28", "66"),
-                ("2022-07-01", "10"),
-                ("2022-08-04", "25"),
-                ("2022-08-05", "49"),
-                ("2022-08-06", "60"),
+                ("2022-12-28", "66"),
+                ("2023-01-01", "10"),
+                ("2023-02-02", "25"),
+                ("2023-02-03", "49"),
+                ("2023-02-04", "60"),
             ],
         )
         .await;
@@ -135,7 +135,7 @@ mod tests {
     async fn update_new_txs_multichain_weekly() {
         simple_test_chart_multichain::<NewTxnsMultichainWeekly>(
             "update_new_txs_multichain_weekly",
-            vec![("2022-06-27", "76"), ("2022-08-01", "134")],
+            vec![("2022-12-26", "76"), ("2023-01-30", "134")],
         )
         .await;
     }
@@ -146,9 +146,9 @@ mod tests {
         simple_test_chart_multichain::<NewTxnsMultichainMonthly>(
             "update_new_txs_multichain_monthly",
             vec![
-                ("2022-06-01", "66"),
-                ("2022-07-01", "10"),
-                ("2022-08-01", "134"),
+                ("2022-12-01", "66"),
+                ("2023-01-01", "10"),
+                ("2023-02-01", "134"),
             ],
         )
         .await;
@@ -159,7 +159,7 @@ mod tests {
     async fn update_new_txs_multichain_yearly() {
         simple_test_chart_multichain::<NewTxnsMultichainYearly>(
             "update_new_txs_multichain_yearly",
-            vec![("2022-01-01", "210")],
+            vec![("2022-01-01", "66"), ("2023-01-01", "144")],
         )
         .await;
     }

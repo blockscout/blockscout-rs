@@ -134,7 +134,7 @@ mod tests {
             let current_date = init_time.date_naive();
             fill_mock_multichain_data(&indexer, current_date).await;
         }
-        let current_time = dt("2022-08-06T00:00:00").and_utc();
+        let current_time = dt("2023-02-04T00:00:00").and_utc();
 
         let mut parameters = UpdateParameters {
             stats_db: &db,
@@ -161,13 +161,13 @@ mod tests {
                 .unwrap()
             ),
             &map_str_tuple_to_owned(vec![
-                ("2022-08-04", "25"),
-                ("2022-08-05", "49"),
+                ("2023-02-02", "25"),
+                ("2023-02-03", "49"),
                 // update day is not included
             ]),
         );
 
-        let current_time = dt("2022-09-04T00:00:00").and_utc();
+        let current_time = dt("2023-03-04T00:00:00").and_utc();
         parameters.update_time_override = Some(current_time);
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
         NewTxnsMultichainWindow::update_recursively(&cx)
@@ -186,14 +186,14 @@ mod tests {
             ),
             &map_str_tuple_to_owned(vec![
                 // values outside the window are removed
-                ("2022-08-05", "49"),
-                ("2022-08-06", "60"),
+                ("2023-02-03", "49"),
+                ("2023-02-04", "60"),
             ]),
         );
 
         imitate_reindex_multichain(&indexer).await;
 
-        let current_time = dt("2022-09-05T00:00:00").and_utc();
+        let current_time = dt("2023-03-05T00:00:00").and_utc();
         parameters.update_time_override = Some(current_time);
         let cx = UpdateContext::from_params_now_or_override(parameters);
         NewTxnsMultichainWindow::update_recursively(&cx)
@@ -213,8 +213,8 @@ mod tests {
             &map_str_tuple_to_owned(vec![
                 // values outside the window are removed
                 // new values within the window are added
-                ("2022-08-06", "60"),
-                ("2022-08-15", "10"),
+                ("2023-02-04", "60"),
+                ("2023-02-15", "10"),
             ]),
         );
     }
