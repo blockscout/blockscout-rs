@@ -12,7 +12,7 @@ use blockscout_service_launcher::{
     database,
     {% endif -%}
     launcher, launcher::LaunchSettings, tracing};
-{% if migrations -%}
+{% if database -%}
 use migration::Migrator;
 {% endif -%}
 use std::sync::Arc;
@@ -57,7 +57,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
 
     let health = Arc::new(HealthService::default());
 
-    {% if database and migrations -%}
+    {% if database -%}
     let db = Arc::new(database::initialize_postgres::<Migrator>(&settings.database).await?);
     {% endif -%}
 

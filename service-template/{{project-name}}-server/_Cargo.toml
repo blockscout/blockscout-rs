@@ -9,7 +9,7 @@ edition = "2024"
 {% if logic -%}
 {{project-name}}-logic = { workspace = true }
 {% endif -%}
-{% if migrations -%}
+{% if database -%}
 {{project-name}}-migration = { workspace = true }
 {% endif -%}
 
