@@ -60,15 +60,11 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert tokens");
         })?;
-    if let Some(counters) = request.counters
-        && let Some(global) = counters.global
-    {
-        repository::counters::upsert_chain_counters(&tx, global)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error = ?e, "failed to upsert chain counters");
-            })?;
-    }
+    repository::counters::upsert_many(&tx, request.counters)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error = ?e, "failed to upsert chain counters");
+        })?;
 
     tx.commit().await?;
 

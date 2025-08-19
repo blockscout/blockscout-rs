@@ -48,6 +48,7 @@ fn compile(
         .field_attribute("BatchImportRequest.interop_messages", "#[serde(default)]")
         .field_attribute("BatchImportRequest.address_coin_balances", "#[serde(default)]")
         .field_attribute("BatchImportRequest.address_token_balances", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.counters", "#[serde(default)]")
         .field_attribute("BatchImportRequest.tokens", "#[serde(default)]")
         .field_attribute("BatchImportRequest.AddressImport.token_type", "#[serde(default)]")
         .field_attribute("BatchImportRequest.TokenImport.Metadata.token_type", "#[serde(default)]")

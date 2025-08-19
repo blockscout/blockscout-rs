@@ -213,7 +213,7 @@ message BatchImportRequest {
   repeated InteropMessageImport interop_messages = 5;
   repeated AddressCoinBalanceImport address_coin_balances = 6;
   repeated AddressTokenBalanceImport address_token_balances = 7;
-  optional CountersImport counters = 8;
+  repeated CountersImport counters = 8;
   repeated TokenImport tokens = 9;
   string api_key = 10;
 }
