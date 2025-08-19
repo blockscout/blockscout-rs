@@ -42,6 +42,7 @@ where
                 .value(GlobalCountersColumn::UpdatedAt, Expr::current_timestamp())
                 .to_owned(),
         )
+        .do_nothing()
         .exec_without_returning(db)
         .await?;
 
