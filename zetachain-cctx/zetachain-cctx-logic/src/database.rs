@@ -1828,7 +1828,7 @@ impl ZetachainCctxDatabase {
         let query_started_at = std::time::Instant::now();
         let rows = self
             .db
-            .query_all(statement)
+            .query_all(statement.clone())
             .await
             .map_err(|e| anyhow::anyhow!("statement returned error: {}", e))?;
         let db_query_ms = query_started_at.elapsed().as_millis();
