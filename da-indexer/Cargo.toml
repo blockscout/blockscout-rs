@@ -29,7 +29,7 @@ blockscout-display-bytes = { version = "1.0" }
 blockscout-endpoint-swagger = { git = "https://github.com/blockscout/blockscout-rs", rev = "4a755c5" }
 blockscout-service-launcher = { version = "0.20.0", features = ["database-1"] }
 celestia-rpc = { version = "0.11.0" }
-celestia-types = { version = "0.12.0" }
+celestia-types = { version = "0.13.0" }
 chrono = { version = "0.4" }
 ethabi = { version = "18.0" }
 ethers = { version = "2.0.11", features = ["ws"] }
