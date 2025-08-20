@@ -11,6 +11,7 @@ pub mod interop_messages;
 pub mod tokens;
 
 mod batch_update;
+pub mod pagination;
 
 use sea_orm::{ConnectionTrait, Cursor, DbErr, SelectorTrait, sea_query::IntoValueTuple};
 
