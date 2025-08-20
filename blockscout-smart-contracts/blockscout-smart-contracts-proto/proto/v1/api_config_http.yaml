@@ -1,0 +1,18 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    
+    - selector: blockscout.blockscoutSmartContracts.v1.SmartContractService.SmartContractServiceCreate
+      post: /api/v1/smart_contract_service
+      body: "*"
+
+    - selector: blockscout.blockscoutSmartContracts.v1.SmartContractService.SmartContractServiceGet
+      get: /api/v1/chains/{chain_id}/smart-contracts/{address}
+    
+    #################### Health ####################
+
+    - selector: blockscout.blockscoutSmartContracts.v1.Health.Check
+      get: /health
+
