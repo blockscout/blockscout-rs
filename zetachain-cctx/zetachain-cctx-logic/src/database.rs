@@ -1823,7 +1823,7 @@ impl ZetachainCctxDatabase {
         ));
         params.push(sea_orm::Value::BigInt(Some(limit + 1)));
 
-        let statement = Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params);
+        let statement = Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params.clone());
         
         let query_started_at = std::time::Instant::now();
         let rows = self
@@ -1835,6 +1835,19 @@ impl ZetachainCctxDatabase {
         tracing::info!(db_query_ms = %db_query_ms, row_count = rows.len(), "list_cctxs query completed");
         if db_query_ms > 500 {
             tracing::info!("statement: {}", statement.to_string());
+            let sql = format!("explain analyze {}", statement.to_string());
+            let rows = self
+                .db
+                .query_all(Statement::from_sql_and_values(DbBackend::Postgres, sql, params))
+                .await
+                .map_err(|e| anyhow::anyhow!("statement returned error: {}", e))?;
+            
+            let rows = rows.iter().map(|row| {
+                row.try_get_by_index::<String>(1)
+                    .map_err(|e| anyhow::anyhow!("explain analyze returned error: {}", e)).unwrap_or_default()
+                    .clone()
+            }).collect::<Vec<String>>();
+            tracing::info!("explain analyze: {}", rows.join("\n"));
         }
         let next_page_items_len = rows.len() - std::cmp::min(limit as usize, rows.len());
         let truncated = rows.iter().take(limit as usize);
