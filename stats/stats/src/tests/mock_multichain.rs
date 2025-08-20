@@ -222,9 +222,8 @@ fn mock_counter_global_imported(
     }
 }
 
-pub async fn imitate_reindex_multichain(indexer: &DatabaseConnection) {
-    let counters_global_imported_new =
-        mock_counter_global_imported(1, NaiveDate::from_str("2023-02-15").unwrap(), 10, 189, 1234);
+pub async fn add_mock_multichain_data(indexer: &DatabaseConnection, at_date: NaiveDate) {
+    let counters_global_imported_new = mock_counter_global_imported(1, at_date, 10, 189, 1234);
 
     counters_global_imported::Entity::insert_many([counters_global_imported_new])
         .exec(indexer)

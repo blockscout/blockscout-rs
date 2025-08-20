@@ -107,6 +107,8 @@ pub type NewTxnsMultichainWindow = LocalDbChartSource<
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -114,7 +116,7 @@ mod tests {
         data_source::{DataSource, UpdateParameters},
         query_dispatch::QuerySerialized,
         tests::{
-            mock_multichain::{fill_mock_multichain_data, imitate_reindex_multichain},
+            mock_multichain::{add_mock_multichain_data, fill_mock_multichain_data},
             point_construction::dt,
             simple_test::{
                 chart_output_to_expected, map_str_tuple_to_owned, prepare_multichain_chart_test,
@@ -191,7 +193,7 @@ mod tests {
             ]),
         );
 
-        imitate_reindex_multichain(&indexer).await;
+        add_mock_multichain_data(&indexer, NaiveDate::from_str("2023-02-15").unwrap()).await;
 
         let current_time = dt("2023-03-05T00:00:00").and_utc();
         parameters.update_time_override = Some(current_time);
