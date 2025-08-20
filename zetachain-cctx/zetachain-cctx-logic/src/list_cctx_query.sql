@@ -1,4 +1,3 @@
--- explain analyze
 SELECT
     cctx.index,
     cs.status::text as status,
@@ -27,9 +26,7 @@ SELECT
     t.zrc20_contract_address,
     t.decimals,
     cctx.id,
-    cctx.token_id,
-    cctx.receiver_chain_id,
-    cctx.receiver
+    cctx.token_id
 FROM
     cross_chain_tx cctx
     INNER JOIN token t on t.id = cctx.token_id

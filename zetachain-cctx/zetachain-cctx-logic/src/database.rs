@@ -1824,12 +1824,18 @@ impl ZetachainCctxDatabase {
         params.push(sea_orm::Value::BigInt(Some(limit + 1)));
 
         let statement = Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params);
-        tracing::debug!("statement: {}", statement.to_string());
+        
+        let query_started_at = std::time::Instant::now();
         let rows = self
             .db
             .query_all(statement)
             .await
             .map_err(|e| anyhow::anyhow!("statement returned error: {}", e))?;
+        let db_query_ms = query_started_at.elapsed().as_millis();
+        tracing::info!(db_query_ms = %db_query_ms, row_count = rows.len(), "list_cctxs query completed");
+        if db_query_ms > 500 {
+            tracing::info!("statement: {}", statement.to_string());
+        }
         let next_page_items_len = rows.len() - std::cmp::min(limit as usize, rows.len());
         let truncated = rows.iter().take(limit as usize);
         let timestamps = truncated.clone().map(|row| {
