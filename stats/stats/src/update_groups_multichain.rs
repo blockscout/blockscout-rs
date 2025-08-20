@@ -1,10 +1,8 @@
 use crate::{
     construct_update_group,
     lines::multichain::{
-        new_txns_multichain::*,
-        new_txns_multichain_window::NewTxnsMultichainWindow,
-        txns_growth_multichain::*,
-        accounts_growth_multichain::*,
+        accounts_growth_multichain::*, new_txns_multichain::*,
+        new_txns_multichain_window::NewTxnsMultichainWindow, txns_growth_multichain::*,
     },
     utils::singleton_groups,
 };

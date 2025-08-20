@@ -8,15 +8,28 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 use stats::{
+    ChartProperties, Named,
     counters::{
+        ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
+        ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
+        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
         multichain::{
-            TotalInteropMessages, TotalInteropTransfers, TotalMultichainAddresses, TotalMultichainTxns
-        }, ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns, ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns
-    }, indexing_status::BlockscoutIndexingStatus, lines::{
+            TotalInteropMessages, TotalInteropTransfers, TotalMultichainAddresses,
+            TotalMultichainTxns,
+        },
+    },
+    indexing_status::BlockscoutIndexingStatus,
+    lines::{
+        ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
+        ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
+        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
         multichain::{
-            accounts_growth_multichain::AccountsGrowthMultichain, new_txns_multichain::NewTxnsMultichain, new_txns_multichain_window::NewTxnsMultichainWindow, txns_growth_multichain::TxnsGrowthMultichain
-        }, ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow, ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth
-    }, ChartProperties, Named
+            accounts_growth_multichain::AccountsGrowthMultichain,
+            new_txns_multichain::NewTxnsMultichain,
+            new_txns_multichain_window::NewTxnsMultichainWindow,
+            txns_growth_multichain::TxnsGrowthMultichain,
+        },
+    },
 };
 use std::{
     collections::{BTreeSet, HashMap, HashSet},

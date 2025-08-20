@@ -1,67 +1,46 @@
 use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::{
-        UpdateContext,
         kinds::{
+            data_manipulation::map::MapToString,
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
+            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
         },
+        types::IndexerMigrations,
     },
     indexing_status::IndexingStatusTrait,
-    range::UniversalRange,
-    types::timespans::DateValue,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, FromQueryResult, Statement, prelude::BigDecimal};
+use sea_orm::{DbBackend, Statement};
 
-pub struct TotalMultichainTxnsQueryBehaviour;
+pub struct TotalMultichainTxnsStatement;
 
-#[derive(Debug, FromQueryResult)]
-struct SumResult {
-    sum_total: Option<BigDecimal>,
-}
-
-impl RemoteQueryBehaviour for TotalMultichainTxnsQueryBehaviour {
-    type Output = DateValue<String>;
-
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, ChartError> {
-        let db = cx.indexer_db;
-        let timespan = cx.time;
-
-        let stmt = Statement::from_string(
+impl StatementFromUpdateTime for TotalMultichainTxnsStatement {
+    fn get_statement(
+        update_time: DateTime<Utc>,
+        _completed_migrations: &IndexerMigrations,
+    ) -> sea_orm::Statement {
+        Statement::from_sql_and_values(
             DbBackend::Postgres,
             r#"
-            SELECT SUM(total_transactions_number) AS sum_total
+            SELECT COALESCE(SUM(total_transactions_number), 0)::bigint AS value
             FROM (
                 SELECT DISTINCT ON (chain_id) chain_id, total_transactions_number
                 FROM counters_global_imported
+                WHERE date <= $1
                 ORDER BY chain_id, date DESC
             ) t
             "#
             .to_string(),
-        );
-
-        let result = SumResult::find_by_statement(stmt)
-            .one(db)
-            .await
-            .map_err(ChartError::IndexerDB)?
-            .map(|r| r.sum_total.unwrap_or(BigDecimal::from(0)))
-            .unwrap_or(BigDecimal::from(0));
-
-        let data = DateValue::<String> {
-            timespan: timespan.date_naive(),
-            value: result.to_string(),
-        };
-        Ok(data)
+            vec![update_time.into()],
+        )
     }
 }
 
-pub type TotalMultichainTxnsRemote = RemoteDatabaseSource<TotalMultichainTxnsQueryBehaviour>;
+pub type TotalMultichainTxnsRemote =
+    RemoteDatabaseSource<PullOneNowValue<TotalMultichainTxnsStatement, NaiveDate, i64>>;
 
 pub struct Properties;
 
@@ -85,7 +64,8 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type TotalMultichainTxns = DirectPointLocalDbChartSource<TotalMultichainTxnsRemote, Properties>;
+pub type TotalMultichainTxns =
+    DirectPointLocalDbChartSource<MapToString<TotalMultichainTxnsRemote>, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -98,7 +78,14 @@ mod tests {
         simple_test_counter_multichain::<TotalMultichainTxns>(
             "update_total_multichain_txns",
             "210",
-            Some(dt("2023-02-06T00:00:00")),
+            None,
+        )
+        .await;
+
+        simple_test_counter_multichain::<TotalMultichainTxns>(
+            "update_total_multichain_txns",
+            "101",
+            Some(dt("2023-02-02T00:00:00")),
         )
         .await;
     }

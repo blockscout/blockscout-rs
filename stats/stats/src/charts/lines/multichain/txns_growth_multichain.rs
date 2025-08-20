@@ -1,21 +1,26 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
-    charts::db_interaction::read::QueryFullIndexerTimestampRange, data_source::{
+    ChartKey, ChartProperties, Named,
+    charts::db_interaction::read::QueryFullIndexerTimestampRange,
+    data_source::{
         kinds::{
             data_manipulation::{
                 map::{MapParseTo, MapToString, StripExt},
                 resolutions::last_value::LastValueLowerResolution,
             },
             local_db::{
+                DirectVecLocalDbChartSource,
                 parameters::update::batching::parameters::{
                     Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                }, DirectVecLocalDbChartSource
+                },
             },
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
         types::IndexerMigrations,
-    }, define_and_impl_resolution_properties, types::timespans::{Month, Week, Year}, ChartKey, ChartProperties, Named
+    },
+    define_and_impl_resolution_properties,
+    types::timespans::{Month, Week, Year},
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -30,25 +35,23 @@ impl StatementFromRange for TxnsGrowthMultichainStatement {
         _: &IndexerMigrations,
         _: &HashSet<ChartKey>,
     ) -> Statement {
-        
         let to_timestamp = range.map(|r| r.end).unwrap_or_else(Utc::now);
-        let sql = format!(
-            r#"
-                SELECT
-                    $1::date AS date,
-                    COALESCE(SUM(sub.total_transactions_number), 0)::TEXT AS value
-                FROM (
-                    SELECT DISTINCT ON (c.chain_id)
-                        c.chain_id,
-                        c.total_transactions_number
-                    FROM counters_global_imported c
-                    WHERE
-                        c.date < $1
-                        AND c.total_transactions_number IS NOT NULL
-                    ORDER BY c.chain_id, c.date DESC
-                ) sub;
-            "#,
-        );
+        let sql = r#"
+            SELECT
+                $1::date AS date,
+                COALESCE(SUM(sub.total_transactions_number), 0)::TEXT AS value
+            FROM (
+                SELECT DISTINCT ON (c.chain_id)
+                    c.chain_id,
+                    c.total_transactions_number
+                FROM counters_global_imported c
+                WHERE
+                    c.date < $1
+                    AND c.total_transactions_number IS NOT NULL
+                ORDER BY c.chain_id, c.date DESC
+            ) sub;
+        "#
+        .to_string();
         Statement::from_sql_and_values(DbBackend::Postgres, sql, vec![to_timestamp.into()])
     }
 }

@@ -102,7 +102,8 @@ pub type AccountsGrowthMultichainMonthly = DirectVecLocalDbChartSource<
     Batch36Months,
     MonthlyProperties,
 >;
-pub type AccountsGrowthMultichainMonthlyInt = MapParseTo<StripExt<AccountsGrowthMultichainMonthly>, i64>;
+pub type AccountsGrowthMultichainMonthlyInt =
+    MapParseTo<StripExt<AccountsGrowthMultichainMonthly>, i64>;
 pub type AccountsGrowthMultichainYearly = DirectVecLocalDbChartSource<
     MapToString<LastValueLowerResolution<AccountsGrowthMultichainMonthlyInt, Year>>,
     Batch30Years,

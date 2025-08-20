@@ -1,9 +1,10 @@
-use chrono::{NaiveDate, NaiveDateTime, Utc};
-use multichain_aggregator_entity::{block_ranges};
+use chrono::{NaiveDateTime, Utc};
+use multichain_aggregator_entity::block_ranges;
 use num_traits::ToPrimitive;
 use rust_decimal::Decimal;
 use sea_orm::{
-    sea_query::Expr, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, Statement
+    DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, Statement,
+    sea_query::Expr,
 };
 
 #[derive(FromQueryResult, Debug)]

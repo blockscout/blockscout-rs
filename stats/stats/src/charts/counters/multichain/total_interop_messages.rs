@@ -1,49 +1,39 @@
 use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
+    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
     data_source::{
-        UpdateContext,
         kinds::{
+            data_manipulation::map::MapToString,
             local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
+            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
         },
+        types::IndexerMigrations,
     },
     indexing_status::IndexingStatusTrait,
-    range::UniversalRange,
-    types::timespans::DateValue,
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
+use migration::{Asterisk, Func, IntoColumnRef};
 use multichain_aggregator_entity::interop_messages;
-use sea_orm::{EntityTrait, PaginatorTrait, QuerySelect};
+use sea_orm::{ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, QueryTrait};
 
-pub struct TotalInteropMessagesQueryBehaviour;
+pub struct TotalInteropMessagesStatement;
 
-impl RemoteQueryBehaviour for TotalInteropMessagesQueryBehaviour {
-    type Output = DateValue<String>;
-
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, ChartError> {
-        let db = cx.indexer_db;
-        let timespan = cx.time;
-
-        let value = interop_messages::Entity::find()
+impl StatementFromUpdateTime for TotalInteropMessagesStatement {
+    fn get_statement(
+        update_time: DateTime<Utc>,
+        _completed_migrations: &IndexerMigrations,
+    ) -> sea_orm::Statement {
+        interop_messages::Entity::find()
             .select_only()
-            .count(db)
-            .await
-            .map_err(ChartError::IndexerDB)?;
-
-        let data = DateValue::<String> {
-            timespan: timespan.date_naive(),
-            value: value.to_string(),
-        };
-        Ok(data)
+            .filter(interop_messages::Column::Timestamp.lte(update_time))
+            .expr_as(Func::count(Asterisk.into_column_ref()), "value")
+            .build(DbBackend::Postgres)
     }
 }
 
-pub type TotalInteropMessagesRemote = RemoteDatabaseSource<TotalInteropMessagesQueryBehaviour>;
+pub type TotalInteropMessagesRemote =
+    RemoteDatabaseSource<PullOneNowValue<TotalInteropMessagesStatement, NaiveDate, i64>>;
 
 pub struct Properties;
 
@@ -68,7 +58,7 @@ impl ChartProperties for Properties {
 }
 
 pub type TotalInteropMessages =
-    DirectPointLocalDbChartSource<TotalInteropMessagesRemote, Properties>;
+    DirectPointLocalDbChartSource<MapToString<TotalInteropMessagesRemote>, Properties>;
 
 #[cfg(test)]
 mod tests {
@@ -81,7 +71,14 @@ mod tests {
         simple_test_counter_multichain::<TotalInteropMessages>(
             "update_total_interop_messages",
             "6",
-            Some(dt("2022-08-06T00:00:00")),
+            None,
+        )
+        .await;
+
+        simple_test_counter_multichain::<TotalInteropMessages>(
+            "update_total_interop_messages",
+            "4",
+            Some(dt("2022-11-15T12:00:00")),
         )
         .await;
     }
