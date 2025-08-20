@@ -15,12 +15,12 @@ use crate::{
             remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
         },
         types::IndexerMigrations,
-    }, define_and_impl_resolution_properties, types::timespans::{Month, Week, Year}, utils::{produce_filter_and_values, sql_with_range_filter_opt}, ChartKey, ChartProperties, Named
+    }, define_and_impl_resolution_properties, types::timespans::{Month, Week, Year}, ChartKey, ChartProperties, Named
 };
 
 use chrono::{DateTime, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DatabaseBackend, DbBackend, Statement};
+use sea_orm::{DbBackend, Statement};
 
 pub struct TxnsGrowthMultichainStatement;
 

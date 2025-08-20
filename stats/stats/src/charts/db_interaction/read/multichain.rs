@@ -1,9 +1,9 @@
 use chrono::{NaiveDate, NaiveDateTime, Utc};
-use multichain_aggregator_entity::{block_ranges, counters_global_imported};
+use multichain_aggregator_entity::{block_ranges};
 use num_traits::ToPrimitive;
 use rust_decimal::Decimal;
 use sea_orm::{
-    DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, sea_query::Expr,
+    sea_query::Expr, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, Statement
 };
 
 #[derive(FromQueryResult, Debug)]
@@ -40,31 +40,31 @@ pub async fn get_min_block_multichain(multichain: &DatabaseConnection) -> Result
 }
 
 #[derive(FromQueryResult, Debug)]
-struct MinDate {
-    date: Option<NaiveDate>,
+struct MinTimestamp {
+    min_timestamp: Option<NaiveDateTime>,
 }
 
-// Getting the earliest date when the cluster's counters are available
+// Fetching the earliest import date for the cluster’s counters or interop messages.
 pub async fn get_min_date_multichain(
     multichain: &DatabaseConnection,
 ) -> Result<NaiveDateTime, DbErr> {
-    let min_date = counters_global_imported::Entity::find()
-        .select_only()
-        .column_as(
-            Expr::col(counters_global_imported::Column::Date).min(),
-            "date",
-        )
-        .into_model::<MinDate>()
-        .one(multichain)
-        .await?;
+    let query = r#"
+        SELECT MIN(dt) as min_timestamp
+        FROM (
+            SELECT date::timestamp as dt FROM counters_global_imported
+            UNION ALL
+            SELECT timestamp as dt FROM interop_messages
+        ) t
+    "#;
 
-    let naive_date = min_date
-        .and_then(|r| r.date)
-        .unwrap_or_else(|| Utc::now().date_naive());
+    let result = MinTimestamp::find_by_statement(Statement::from_string(
+        sea_orm::DatabaseBackend::Postgres,
+        query.to_owned(),
+    ))
+    .one(multichain)
+    .await?
+    .and_then(|r| r.min_timestamp)
+    .unwrap_or_else(|| Utc::now().naive_utc());
 
-    let naive_datetime = naive_date
-        .and_hms_opt(0, 0, 0)
-        .ok_or_else(|| DbErr::Custom("Invalid time: 00:00:00".into()))?;
-
-    Ok(naive_datetime)
+    Ok(result)
 }
