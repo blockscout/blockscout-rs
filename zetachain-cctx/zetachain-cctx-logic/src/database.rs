@@ -1843,7 +1843,7 @@ impl ZetachainCctxDatabase {
                 .map_err(|e| anyhow::anyhow!("statement returned error: {}", e))?;
             
             let rows = rows.iter().map(|row| {
-                row.try_get_by_index::<String>(1)
+                row.try_get_by_index::<String>(0)
                     .map_err(|e| anyhow::anyhow!("explain analyze returned error: {}", e)).unwrap_or_default()
                     .clone()
             }).collect::<Vec<String>>();
