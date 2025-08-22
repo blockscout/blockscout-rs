@@ -14,7 +14,7 @@ impl MigrationTrait for Migration {
                 name ASC NULLS LAST,
                 address_hash ASC NULLS LAST,
                 chain_id ASC NULLS LAST
-            ) WHERE token_type <> 'ERC-7802'::token_type;
+            );
         "#;
         crate::from_sql(manager, sql).await
     }
