@@ -1825,37 +1825,12 @@ impl ZetachainCctxDatabase {
 
         let statement = Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params.clone());
 
-        // Split acquisition vs execution time; also force a custom plan for this parameterized query
-        let acquire_started_at = std::time::Instant::now();
-        let txn = self
-            .db
-            .begin()
-            .await
-            .map_err(|e| anyhow::anyhow!("begin tx error: {}", e))?;
-        let acquire_ms = acquire_started_at.elapsed().as_millis();
-
-        txn.execute(Statement::from_string(
-            DbBackend::Postgres,
-            "SET LOCAL plan_cache_mode = force_custom_plan".to_string(),
-        ))
-        .await
-        .map_err(|e| anyhow::anyhow!("set local plan_cache_mode error: {}", e))?;
-
-        let query_started_at = std::time::Instant::now();
-        let rows = txn
+        let rows = self
+        .db
             .query_all(statement.clone())
             .await
             .map_err(|e| anyhow::anyhow!("statement returned error: {}", e))?;
-        let query_ms = query_started_at.elapsed().as_millis();
-        txn.rollback()
-            .await
-            .map_err(|e| anyhow::anyhow!("rollback tx error: {}", e))?;
 
-        tracing::info!(acquire_ms = %acquire_ms, query_ms = %query_ms, row_count = rows.len(), "list_cctxs query completed");
-        if acquire_ms + query_ms > 500 {
-            tracing::info!("statement: {}", statement.to_string());
-            
-        }
         let next_page_items_len = rows.len() - std::cmp::min(limit as usize, rows.len());
         let truncated = rows.iter().take(limit as usize);
         let timestamps = truncated.clone().map(|row| {
