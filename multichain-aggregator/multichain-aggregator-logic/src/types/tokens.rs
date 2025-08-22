@@ -1,6 +1,10 @@
 use super::ChainId;
-use crate::{error::ParseError, proto, types::addresses::db_token_type_to_proto_token_type};
-use entity::tokens::{ActiveModel, Entity};
+use crate::{
+    error::ParseError,
+    proto,
+    types::{addresses::db_token_type_to_proto_token_type, sea_orm_wrappers::SeaOrmAddress},
+};
+use entity::tokens::{ActiveModel, Column, Entity};
 use sea_orm::{
     ActiveValue::{NotSet, Set, Unchanged},
     DeriveIntoActiveModel, DerivePartialModel, FromJsonQueryResult, IntoActiveModel,
@@ -110,9 +114,9 @@ pub fn token_chain_infos_expr() -> SimpleExpr {
     Expr::cust_with_exprs(
         "jsonb_build_object('chain_id',$1,'holders_count',$2,'total_supply',$3)",
         [
-            Expr::col("token_chain_id").into_simple_expr(),
-            Expr::col("token_holders_count").into_simple_expr(),
-            Expr::col("token_total_supply").into_simple_expr(),
+            Column::ChainId.into_simple_expr(),
+            Column::HoldersCount.into_simple_expr(),
+            Column::TotalSupply.into_simple_expr(),
         ],
     )
 }
@@ -120,7 +124,8 @@ pub fn token_chain_infos_expr() -> SimpleExpr {
 #[derive(Debug, Clone, DerivePartialModel)]
 #[sea_orm(entity = "Entity", from_query_result)]
 pub struct AggregatedToken {
-    pub address_hash: Vec<u8>,
+    pub address_hash: SeaOrmAddress,
+    pub chain_id: ChainId,
     pub name: Option<String>,
     pub symbol: Option<String>,
     pub decimals: Option<i16>,
@@ -129,9 +134,11 @@ pub struct AggregatedToken {
     pub fiat_value: Option<Decimal>,
     pub circulating_market_cap: Option<Decimal>,
     pub total_supply: Option<BigDecimal>,
-    pub holders_count: Option<BigDecimal>,
-    pub transfers_count: Option<BigDecimal>,
-    #[sea_orm(from_expr = r#"Expr::cust_with_expr("jsonb_agg($1)", token_chain_infos_expr())"#)]
+    pub holders_count: Option<i64>,
+    pub transfers_count: Option<i64>,
+    #[sea_orm(
+        from_expr = r#"Expr::cust_with_expr("jsonb_build_array($1)", token_chain_infos_expr())"#
+    )]
     pub chain_infos: Vec<ChainInfo>,
 }
 

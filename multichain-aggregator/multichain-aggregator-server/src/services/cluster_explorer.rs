@@ -5,8 +5,9 @@ use crate::{
 };
 use itertools::Itertools;
 use multichain_aggregator_logic::{
-    error::ServiceError, services::cluster::Cluster,
-    types::addresses::proto_token_type_to_db_token_type,
+    error::ServiceError,
+    services::cluster::Cluster,
+    types::{addresses::proto_token_type_to_db_token_type, tokens::TokenType},
 };
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
@@ -154,14 +155,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let inner = request.into_inner();
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let token_types = parse_map_result(&inner.r#type.unwrap_or_default(), |v| {
-            let val = serde_json::Value::String(v.to_string());
-            serde_json::from_value(val)
-        })?
-        .into_iter()
-        .unique()
-        .filter_map(proto_token_type_to_db_token_type)
-        .collect();
+        let token_types = parse_token_types(inner.r#type)?;
         let address = parse_query(inner.address_hash)?;
 
         let page_size = self.normalize_page_size(inner.page_size);
@@ -181,4 +175,67 @@ impl ClusterExplorerService for ClusterExplorer {
             next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
     }
+
+    async fn list_cluster_tokens(
+        &self,
+        request: Request<ListClusterTokensRequest>,
+    ) -> Result<Response<ListClusterTokensResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let token_types = parse_token_types(inner.r#type)?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
+
+        let (tokens, next_page_token) = cluster
+            .list_cluster_tokens(&self.db, token_types, page_size as u64, page_token)
+            .await?;
+
+        Ok(Response::new(ListClusterTokensResponse {
+            items: tokens
+                .into_iter()
+                .map(|t| t.try_into().map_err(ServiceError::from))
+                .collect::<Result<Vec<_>, _>>()?,
+            next_page_params: page_token_to_proto(next_page_token, page_size),
+        }))
+    }
+
+    async fn get_aggregated_token(
+        &self,
+        request: Request<GetAggregatedTokenRequest>,
+    ) -> Result<Response<GetAggregatedTokenResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let address = parse_query(inner.address_hash)?;
+        let chain_id = parse_query(inner.chain_id)?;
+
+        let token = cluster
+            .get_aggregated_token(&self.db, address, chain_id)
+            .await?;
+
+        Ok(Response::new(GetAggregatedTokenResponse {
+            token: token
+                .map(|t| t.try_into().map_err(ServiceError::from))
+                .transpose()?,
+        }))
+    }
+}
+
+#[allow(clippy::result_large_err)]
+fn parse_token_types(types: Option<String>) -> Result<Vec<TokenType>, Status> {
+    let types = if let Some(types) = types {
+        parse_map_result(&types, |v| {
+            let val = serde_json::Value::String(v.to_string());
+            serde_json::from_value(val)
+        })?
+        .into_iter()
+        .unique()
+        .filter_map(proto_token_type_to_db_token_type)
+        .collect()
+    } else {
+        vec![]
+    };
+
+    Ok(types)
 }

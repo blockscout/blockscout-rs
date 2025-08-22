@@ -4,6 +4,7 @@ use crate::{
     repository::{
         address_token_balances::{self, ListAddressTokensPageToken},
         addresses, chains, interop_message_transfers, interop_messages,
+        tokens::{self, ListClusterTokensPageToken},
     },
     services::macros::maybe_cache_lookup,
     types::{
@@ -12,7 +13,7 @@ use crate::{
         addresses::AddressInfo,
         chains::Chain,
         interop_messages::{ExtendedInteropMessage, MessageDirection},
-        tokens::TokenType,
+        tokens::{AggregatedToken, TokenType},
     },
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
@@ -199,7 +200,6 @@ impl Cluster {
         ServiceError,
     > {
         let cluster_chain_ids = self.chain_ids();
-
         let res = address_token_balances::list_by_address(
             db,
             address,
@@ -211,6 +211,38 @@ impl Cluster {
         .await?;
 
         Ok(res)
+    }
+
+    pub async fn list_cluster_tokens(
+        &self,
+        db: &DatabaseConnection,
+        token_types: Vec<TokenType>,
+        page_size: u64,
+        page_token: Option<ListClusterTokensPageToken>,
+    ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
+        let cluster_chain_ids = self.chain_ids();
+        let res = tokens::list_aggregated_tokens(
+            db,
+            cluster_chain_ids,
+            token_types,
+            page_size,
+            page_token,
+        )
+        .await?;
+
+        Ok(res)
+    }
+
+    pub async fn get_aggregated_token(
+        &self,
+        db: &DatabaseConnection,
+        address: AddressAlloy,
+        chain_id: ChainId,
+    ) -> Result<Option<AggregatedToken>, ServiceError> {
+        self.validate_chain_id(chain_id)?;
+        let token = tokens::get_aggregated_token(db, address, chain_id).await?;
+
+        Ok(token)
     }
 
     async fn fetch_decoded_calldata_cached(

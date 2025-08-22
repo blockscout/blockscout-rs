@@ -1,6 +1,6 @@
 use sea_orm::{
-    EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect, Select, Value,
-    sea_query::{ExprTrait, IntoValueTuple, NullOrdering, SimpleExpr, ValueTuple},
+    Order, Value,
+    sea_query::{ExprTrait, IntoValueTuple, NullOrdering, SelectStatement, SimpleExpr, ValueTuple},
 };
 
 #[derive(Debug, Clone)]
@@ -17,22 +17,16 @@ impl Cursor {
         }
     }
 
-    pub fn apply_pagination<E: EntityTrait>(
-        &self,
-        base: Select<E>,
-        opts: PageOptions,
-    ) -> Select<E> {
-        let mut q = base;
-
+    pub fn apply_pagination(&self, q: &mut SelectStatement, opts: PageOptions) {
         if let Some(expr) = self.build_where_expr() {
-            q = q.filter(expr);
+            q.and_where(expr);
         };
 
         for k in self.specs.iter() {
-            q = push_order_for_key_with_nulls(q, k.expr.clone(), k.dir.clone(), k.nulls);
+            push_order_for_key_with_nulls(q, k.expr.clone(), k.dir.clone(), k.nulls);
         }
 
-        q.limit(opts.limit)
+        q.limit(opts.page_size);
     }
 
     pub fn build_where_expr(&self) -> Option<SimpleExpr> {
@@ -54,7 +48,7 @@ impl Cursor {
 }
 
 pub struct PageOptions {
-    pub limit: u64,
+    pub page_size: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -75,9 +69,20 @@ impl KeySpec {
         }
     }
 
-    pub fn nullable(mut self) -> Self {
-        self.nullable = true;
-        self
+    pub fn desc(expr: SimpleExpr) -> Self {
+        Self::new(expr, Ordering::Desc, NullOrdering::First)
+    }
+
+    pub fn desc_nulls_last(expr: SimpleExpr) -> Self {
+        Self::new(expr, Ordering::Desc, NullOrdering::Last).nullable()
+    }
+
+    pub fn asc(expr: SimpleExpr) -> Self {
+        Self::new(expr, Ordering::Asc, NullOrdering::Last)
+    }
+
+    pub fn asc_nulls_first(expr: SimpleExpr) -> Self {
+        Self::new(expr, Ordering::Asc, NullOrdering::First).nullable()
     }
 
     pub fn reversed(&self) -> Self {
@@ -94,6 +99,11 @@ impl KeySpec {
             nulls,
             ..self.clone()
         }
+    }
+
+    fn nullable(mut self) -> Self {
+        self.nullable = true;
+        self
     }
 }
 
@@ -112,14 +122,14 @@ impl From<Ordering> for Order {
     }
 }
 
-fn push_order_for_key_with_nulls<E: sea_orm::EntityTrait>(
-    sel: sea_orm::Select<E>,
+fn push_order_for_key_with_nulls(
+    sel: &mut SelectStatement,
     expr: SimpleExpr,
     dir: Ordering,
     nulls: NullOrdering,
-) -> sea_orm::Select<E> {
+) {
     let order = dir.into();
-    sel.order_by_with_nulls(expr, order, nulls)
+    sel.order_by_expr_with_nulls(expr, order, nulls);
 }
 
 fn fold_key(k: &KeySpec, v: &Value, suffix: SimpleExpr) -> SimpleExpr {
@@ -218,9 +228,10 @@ mod tests {
             specs,
         );
 
-        let select = cursor.apply_pagination(Entity::find(), PageOptions { limit: 50 });
+        let mut query = Entity::find().as_query().to_owned();
+        cursor.apply_pagination(&mut query, PageOptions { page_size: 50 });
 
-        let sql = select.as_query().to_string(PostgresQueryBuilder);
+        let sql = query.to_string(PostgresQueryBuilder);
         let expected = r#"
             SELECT test_model.id,
               test_model.f_1,
