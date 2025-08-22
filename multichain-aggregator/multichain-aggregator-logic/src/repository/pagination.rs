@@ -233,44 +233,28 @@ mod tests {
 
         let sql = query.to_string(PostgresQueryBuilder);
         let expected = r#"
-            SELECT test_model.id,
-              test_model.f_1,
-              test_model.f_2,
-              test_model.f_3,
-              test_model.f_4
-            FROM test_model
-            WHERE test_model.f_1 < 123
-              OR (
-                test_model.f_1 = 123
-                AND (
-                  test_model.f_2 < ARRAY [1,2,3]
-                  OR (
-                    test_model.f_2 = ARRAY [1,2,3]
-                    AND (
-                      test_model.f_3 IS NULL
-                      AND (
-                        test_model.f_4 IS NULL
-                        OR test_model.f_4 > 'test'
-                        OR (
-                          test_model.f_4 = 'test'
-                          AND (
-                            test_model.id < 42
-                            OR (
-                              test_model.id = 42
-                              AND FALSE
-                            )
-                          )
-                        )
-                      )
-                    )
-                  )
-                )
-              )
-            ORDER BY test_model.f_1 DESC NULLS LAST,
-              test_model.f_2 DESC NULLS LAST,
-              test_model.f_3 ASC NULLS LAST,
-              test_model.f_4 ASC NULLS LAST,
-              test_model.id DESC NULLS FIRST
+            SELECT "test_model"."id",
+              "test_model"."f_1",
+              "test_model"."f_2",
+              "test_model"."f_3",
+              "test_model"."f_4"
+            FROM "test_model"
+            WHERE "test_model"."f_1" < 123
+              OR ("test_model"."f_1" = 123
+                AND ("test_model"."f_2" < ARRAY [1,2,3]
+                  OR ("test_model"."f_2" = ARRAY [1,2,3]
+                    AND ("test_model"."f_3" IS NULL
+                      AND ("test_model"."f_4" IS NULL
+                        OR "test_model"."f_4" > 'test'
+                        OR ("test_model"."f_4" = 'test'
+                          AND ("test_model"."id" < 42
+                            OR ("test_model"."id" = 42
+                              AND FALSE))))))))
+            ORDER BY "test_model"."f_1" DESC NULLS LAST,
+              "test_model"."f_2" DESC NULLS LAST,
+              "test_model"."f_3" ASC NULLS LAST,
+              "test_model"."f_4" ASC NULLS LAST,
+              "test_model"."id" DESC NULLS FIRST
             LIMIT 50
         "#;
 
