@@ -175,6 +175,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false
@@ -333,7 +341,10 @@ paths:
           description: Comma-separated list of chain ids to filter by.
           in: query
           required: false
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false

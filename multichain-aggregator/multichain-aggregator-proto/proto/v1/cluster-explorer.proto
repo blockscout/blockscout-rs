@@ -151,8 +151,10 @@ message ListAddressTokensRequest {
   string address_hash = 2;
   // List of comma-separated token types to filter by. See `TokenType`.
   optional string type = 3;
-  optional uint32 page_size = 4;
-  optional string page_token = 5;
+  // Comma-separated list of chain ids to filter by.
+  repeated string chain_id = 4;
+  optional uint32 page_size = 5;
+  optional string page_token = 6;
 }
 
 message ListAddressTokensResponse {
@@ -172,7 +174,7 @@ message ListClusterTokensRequest {
   // Comma-separated token types to filter by. See `TokenType`.
   optional string type = 2;
   // Comma-separated list of chain ids to filter by.
-  optional string chain_id = 3;
+  repeated string chain_id = 3;
   optional uint32 page_size = 4;
   optional string page_token = 5;
 }

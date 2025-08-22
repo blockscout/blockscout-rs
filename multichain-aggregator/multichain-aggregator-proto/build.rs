@@ -41,6 +41,14 @@ fn compile(
         .type_attribute("ListTokensRequest", "#[serde_with::serde_as]")
         .field_attribute("ListTokensRequest.chain_id", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
         .field_attribute("ListTokensRequest.chain_id", "#[serde(default)]")
+        // Comma separator for ListClusterTokensRequest.chain_id
+        .type_attribute("ListClusterTokensRequest", "#[serde_with::serde_as]")
+        .field_attribute("ListClusterTokensRequest.chain_id", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
+        .field_attribute("ListClusterTokensRequest.chain_id", "#[serde(default)]")
+        // Comma separator for ListAddressTokensRequest.chain_id
+        .type_attribute("ListAddressTokensRequest", "#[serde_with::serde_as]")
+        .field_attribute("ListAddressTokensRequest.chain_id", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
+        .field_attribute("ListAddressTokensRequest.chain_id", "#[serde(default)]")
         // Make import fields optional
         .field_attribute("BatchImportRequest.addresses", "#[serde(default)]")
         .field_attribute("BatchImportRequest.block_ranges", "#[serde(default)]")

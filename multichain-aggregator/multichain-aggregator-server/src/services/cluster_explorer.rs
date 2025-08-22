@@ -157,12 +157,23 @@ impl ClusterExplorerService for ClusterExplorer {
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let token_types = parse_token_types(inner.r#type)?;
         let address = parse_query(inner.address_hash)?;
-
+        let chain_ids = inner
+            .chain_id
+            .into_iter()
+            .map(parse_query)
+            .collect::<Result<Vec<_>, _>>()?;
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.extract_page_token()?;
 
         let (tokens, next_page_token) = cluster
-            .list_address_tokens(&self.db, address, token_types, page_size as u64, page_token)
+            .list_address_tokens(
+                &self.db,
+                address,
+                token_types,
+                chain_ids,
+                page_size as u64,
+                page_token,
+            )
             .await?;
 
         let items = tokens
@@ -184,11 +195,22 @@ impl ClusterExplorerService for ClusterExplorer {
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let token_types = parse_token_types(inner.r#type)?;
+        let chain_ids = inner
+            .chain_id
+            .into_iter()
+            .map(parse_query)
+            .collect::<Result<Vec<_>, _>>()?;
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.extract_page_token()?;
 
         let (tokens, next_page_token) = cluster
-            .list_cluster_tokens(&self.db, token_types, page_size as u64, page_token)
+            .list_cluster_tokens(
+                &self.db,
+                token_types,
+                chain_ids,
+                page_size as u64,
+                page_token,
+            )
             .await?;
 
         Ok(Response::new(ListClusterTokensResponse {

@@ -52,6 +52,23 @@ impl Cluster {
         self.blockscout_clients.keys().cloned().collect()
     }
 
+    pub fn validate_and_prepare_chain_ids(
+        &self,
+        chain_ids: Vec<ChainId>,
+    ) -> Result<Vec<ChainId>, ServiceError> {
+        let chain_ids = if chain_ids.is_empty() {
+            self.chain_ids()
+        } else {
+            chain_ids
+                .iter()
+                .map(|c| self.validate_chain_id(*c))
+                .collect::<Result<Vec<_>, _>>()?;
+            chain_ids
+        };
+
+        Ok(chain_ids)
+    }
+
     pub async fn list_chains(&self, db: &DatabaseConnection) -> Result<Vec<Chain>, ServiceError> {
         let chains = chains::list_by_ids(db, self.chain_ids()).await?;
         Ok(chains.into_iter().map(|c| c.into()).collect())
@@ -190,6 +207,7 @@ impl Cluster {
         db: &DatabaseConnection,
         address: AddressAlloy,
         token_types: Vec<TokenType>,
+        chain_ids: Vec<ChainId>,
         page_size: u64,
         page_token: Option<ListAddressTokensPageToken>,
     ) -> Result<
@@ -199,12 +217,12 @@ impl Cluster {
         ),
         ServiceError,
     > {
-        let cluster_chain_ids = self.chain_ids();
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids)?;
         let res = address_token_balances::list_by_address(
             db,
             address,
             token_types,
-            cluster_chain_ids,
+            chain_ids,
             page_size,
             page_token,
         )
@@ -217,18 +235,13 @@ impl Cluster {
         &self,
         db: &DatabaseConnection,
         token_types: Vec<TokenType>,
+        chain_ids: Vec<ChainId>,
         page_size: u64,
         page_token: Option<ListClusterTokensPageToken>,
     ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
-        let cluster_chain_ids = self.chain_ids();
-        let res = tokens::list_aggregated_tokens(
-            db,
-            cluster_chain_ids,
-            token_types,
-            page_size,
-            page_token,
-        )
-        .await?;
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids)?;
+        let res = tokens::list_aggregated_tokens(db, chain_ids, token_types, page_size, page_token)
+            .await?;
 
         Ok(res)
     }
