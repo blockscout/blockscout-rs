@@ -124,7 +124,7 @@ async fn incoming_cctx_gas_token() {
         .unwrap()
         .unwrap()
         .id;
-    let token_id = database.calculate_token_id(&cctx).await.unwrap();
+    let token = database.calculate_token(&cctx).await.unwrap();
 
-    assert_eq!(token_id, Some(expected_token_id));
+    assert_eq!(token.as_ref().map(|t| t.id), Some(expected_token_id));
 }

@@ -6,7 +6,7 @@ use anyhow::Ok;
 use chrono::NaiveDateTime;
 use futures::future::join;
 
-use crate::channel::NEW_CCTXS_TOPIC;
+use crate::channel::{CCTX_STATUS_UPDATE_TOPIC, NEW_CCTXS_TOPIC};
 use crate::database::ZetachainCctxDatabase;
 use crate::models::{CctxShort, PagedCCTXResponse};
 use crate::{client::Client, settings::IndexerSettings};
@@ -45,16 +45,16 @@ async fn refresh_cctx_status(
     database: Arc<ZetachainCctxDatabase>,
     client: &Client,
     cctx: &CctxShort,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<CctxListItemProto>> {
     let fetched_cctx = client
         .fetch_cctx(&cctx.index)
         .await
         .map_err(|e| anyhow::anyhow!(format!("Failed to fetch cctx: {}", e)))?;
-    database
+    let updated = database
         .update_cctx_status(cctx.id, fetched_cctx)
         .await
         .map_err(|e| anyhow::anyhow!(format!("Failed to update cctx status: {}", e)))?;
-    Ok(())
+    Ok(updated)
 }
 
 #[instrument(,level="info",skip_all, fields(job_id = %job_id, watermark_id = %watermark_id, watermark_pointer = %watermark_pointer))]
@@ -156,10 +156,13 @@ async fn refresh_status_and_link_related(
     client: &Client,
     cctx: &CctxShort,
     job_id: Uuid,
+    channel_broadcaster: &ChannelBroadcaster,
 ) -> anyhow::Result<()> {
-    refresh_cctx_status(database.clone(), client, cctx)
+    if let Some(updated) = refresh_cctx_status(database.clone(), client, cctx)
         .await
-        .map_err(|e| anyhow::format_err!("Failed to refresh cctx status: {}", e))?;
+        .map_err(|e| anyhow::format_err!("Failed to refresh cctx status: {}", e))? {
+            channel_broadcaster.broadcast(ChannelEvent::new(CCTX_STATUS_UPDATE_TOPIC,  updated.index.clone(), &updated));
+        }
     update_cctx_relations(database.clone(), client, cctx, job_id)
         .await
         .map_err(|e| anyhow::format_err!("Failed to update cctx relations: {}", e))?;
@@ -423,6 +426,7 @@ impl Indexer {
             .for_each_concurrent(Some(self.settings.concurrency as usize), |job| {
                 let client = self.client.clone();
                 let database = self.database.clone();
+                let channel_broadcaster = self.channel_broadcaster.clone();
                 let historical_batch_size = self.settings.historical_batch_size;
                 let level_data_gap_batch_size = self.settings.realtime_fetch_batch_size;
                 let retry_threshold = self.settings.retry_threshold;
@@ -431,7 +435,7 @@ impl Indexer {
                 tokio::spawn(async move {
                     match job {
                         IndexerJob::StatusUpdate(cctx, job_id) => {
-                            if let Err(e) =  refresh_status_and_link_related(database.clone(), &client, &cctx, job_id).await {
+                            if let Err(e) =  refresh_status_and_link_related(database.clone(), &client, &cctx, job_id, &channel_broadcaster).await {
                                 tracing::warn!(error = %e, job_id = %job_id, index = %cctx.index, "Failed to refresh status and link related cctx");
                                 if cctx.retries_number == retry_threshold as i32 {
                                     let _ = database.mark_cctx_as_failed(&cctx).await.map_err(|e| anyhow::anyhow!(format!("Failed to mark cctx as failed: {}", e)));
@@ -444,7 +448,12 @@ impl Indexer {
 
                             match level_data_gap(job_id, database.clone(), &client, id, pointer, level_data_gap_batch_size, realtime_threshold)
                              .await {
-                             std::result::Result::Ok((ProcessingStatus::Done, _inserted)) =>  database.mark_watermark_as_done(id,job_id).await.unwrap(),
+                             std::result::Result::Ok((ProcessingStatus::Done, inserted)) =>  {
+                                database.mark_watermark_as_done(id,job_id).await.unwrap();
+                                if !inserted.is_empty() {
+                                    channel_broadcaster.broadcast(ChannelEvent::new(NEW_CCTXS_TOPIC, "new_cctxs", &inserted));
+                                }
+                             },
                              std::result::Result::Err(e) => {
                                 tracing::warn!(error = %e, job_id = %job_id, "Failed to level data gap");
                                  if retries_number == retry_threshold as i32 {

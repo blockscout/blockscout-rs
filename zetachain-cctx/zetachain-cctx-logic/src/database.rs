@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::models::{self, CctxShort, CrossChainTx, Filters, SyncProgress, Token};
@@ -50,6 +51,8 @@ pub struct UnlockedWatermark {
     pub upper_bound_timestamp: Option<NaiveDateTime>,
     pub pointer: String,
 }
+
+pub type NeedUpdate = HashMap<i32, models::CrossChainTx>;
 
 /// Sanitizes strings by removing null bytes and replacing invalid UTF-8 sequences
 /// PostgreSQL UTF-8 encoding doesn't allow null bytes (0x00)
@@ -119,12 +122,12 @@ impl ZetachainCctxDatabase {
         parent_id: i32,
         root_id: i32,
         tx: &DatabaseTransaction,
-    ) -> anyhow::Result<(Vec<models::CrossChainTx>, Vec<i32>)> {
+    ) -> anyhow::Result<(Vec<models::CrossChainTx>, NeedUpdate)> {
         if fetched_cctxs.is_empty() {
-            return Ok((Vec::new(), Vec::new()));
+            return Ok((Vec::new(), HashMap::new()));
         }
         let mut need_to_import = Vec::new();
-        let mut need_to_update_ids = Vec::new();
+        let mut need_to_update_ids = HashMap::new();
 
         for fetched_cctx in fetched_cctxs {
             let cctx = CrossChainTxEntity::Entity::find()
@@ -134,7 +137,7 @@ impl ZetachainCctxDatabase {
             if cctx.is_some() {
                 let cctx = cctx.unwrap();
                 if cctx.parent_id != Some(parent_id) || cctx.root_id != Some(root_id) {
-                    need_to_update_ids.push(cctx.id);
+                    need_to_update_ids.insert(cctx.id, fetched_cctx);
                 }
             } else {
                 need_to_import.push(fetched_cctx);
@@ -221,7 +224,7 @@ impl ZetachainCctxDatabase {
         let cctx_status = self.get_cctx_status(cctx.id).await?;
         let root_id = cctx.root_id.unwrap_or(cctx.id);
         let tx = self.db.begin().await?;
-        let (need_to_import, need_to_update_ids) = self
+        let (need_to_import, need_to_update) = self
             .find_outdated_children_by_index(children_cctxs, cctx.id, root_id, &tx)
             .await?;
 
@@ -229,6 +232,8 @@ impl ZetachainCctxDatabase {
             self.import_related_cctx(new_cctx, job_id, root_id, cctx.id, cctx.depth + 1, &tx)
                 .await?;
         }
+        
+        let need_to_update_ids = need_to_update.keys().cloned().collect::<Vec<_>>();
         //First we update parent_id for the direct descendants
         //The root_id for both direct and indirect descendants will be inside the loop
         CrossChainTxEntity::Entity::update_many()
@@ -818,19 +823,18 @@ impl ZetachainCctxDatabase {
         Ok(())
     }
 
-    async fn get_unknown_token_id(&self) -> anyhow::Result<i32> {
-        let unknown_token_id = TokenEntity::Entity::find()
+    async fn get_unknown_token(&self) -> anyhow::Result<TokenEntity::Model> {
+        let unknown_token = TokenEntity::Entity::find()
             .filter(TokenEntity::Column::Zrc20ContractAddress.eq("UNKNOWN"))
             .one(self.db.as_ref())
             .await?
-            .map(|t| t.id)
             .ok_or(anyhow::anyhow!("fallback token is absent"))?;
-        Ok(unknown_token_id)
+        Ok(unknown_token)
     }
 
     #[instrument(,level="trace",skip_all,fields(cctx_id = %cctx.index))]
-    pub async fn calculate_token_id(&self, cctx: &CrossChainTx) -> anyhow::Result<Option<i32>> {
-        let unknown_token_id = self.get_unknown_token_id().await?;
+    pub async fn calculate_token(&self, cctx: &CrossChainTx) -> anyhow::Result<Option<TokenEntity::Model>> {
+        let unknown_token = self.get_unknown_token().await?;
 
         match cctx.inbound_params.coin_type {
             models::CoinType::NoAssetCall | models::CoinType::Cmd => return Ok(None),
@@ -839,19 +843,17 @@ impl ZetachainCctxDatabase {
                     .filter(TokenEntity::Column::CoinType.eq(DBCoinType::Zeta))
                     .one(self.db.as_ref())
                     .await?
-                    .map(|t| t.id)
-                    .unwrap_or(unknown_token_id);
+                    .unwrap_or(unknown_token);
 
                 return Ok(Some(token));
             }
             models::CoinType::ERC20 => {
-                let token_id = TokenEntity::Entity::find()
+                let token = TokenEntity::Entity::find()
                     .filter(TokenEntity::Column::Asset.eq(&cctx.inbound_params.asset))
                     .one(self.db.as_ref())
                     .await?
-                    .map(|t| t.id)
-                    .unwrap_or(unknown_token_id);
-                return Ok(Some(token_id));
+                    .unwrap_or(unknown_token);
+                return Ok(Some(token));
             }
             models::CoinType::Gas => {
                 let chain_id = if cctx
@@ -866,14 +868,13 @@ impl ZetachainCctxDatabase {
                     &cctx.inbound_params.sender_chain_id
                 };
                 let chain_id = chain_id.parse::<i32>().unwrap_or_default();
-                let token_id = TokenEntity::Entity::find()
+                let token = TokenEntity::Entity::find()
                     .filter(TokenEntity::Column::CoinType.eq(DBCoinType::Gas))
                     .filter(TokenEntity::Column::ForeignChainId.eq(chain_id))
                     .one(self.db.as_ref())
                     .await?
-                    .map(|t| t.id)
-                    .unwrap_or(unknown_token_id);
-                return Ok(Some(token_id));
+                    .unwrap_or(unknown_token);
+                return Ok(Some(token));
             }
         }
     }
@@ -883,49 +884,19 @@ impl ZetachainCctxDatabase {
         &self,
         cctx_id: i32,
         fetched_cctx: CrossChainTx,
-    ) -> anyhow::Result<()> {
-        let outbound_params = fetched_cctx.outbound_params;
-
+    ) -> anyhow::Result<Option<CctxListItemProto>> {
+        let mut cctx_list_item:Option<CctxListItemProto> =None;
         let tx = self.db.begin().await?;
-        for outbound_params in outbound_params {
-            if let Some(record) = OutboundParamsEntity::Entity::find()
-                .filter(OutboundParamsEntity::Column::CrossChainTxId.eq(Some(cctx_id)))
-                .filter(OutboundParamsEntity::Column::Receiver.eq(outbound_params.receiver))
-                .one(self.db.as_ref())
-                .await
-                .unwrap()
-            {
-                OutboundParamsEntity::Entity::update(OutboundParamsEntity::ActiveModel {
-                    id: ActiveValue::Set(record.id),
-                    tx_finalization_status: ActiveValue::Set(
-                        TxFinalizationStatus::try_from(outbound_params.tx_finalization_status)
-                            .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                    gas_used: ActiveValue::Set(outbound_params.gas_used.parse::<i64>()?),
-                    effective_gas_price: ActiveValue::Set(outbound_params.effective_gas_price),
-                    effective_gas_limit: ActiveValue::Set(
-                        outbound_params.effective_gas_limit.parse::<i64>()?,
-                    ),
-                    tss_nonce: ActiveValue::Set(outbound_params.tss_nonce),
-                    ..Default::default()
-                })
-                .filter(OutboundParamsEntity::Column::Id.eq(record.id))
-                .exec(self.db.as_ref())
-                .await?;
-            }
-        }
-
         if let Some(cctx_status_row) = cctx_status::Entity::find()
             .filter(cctx_status::Column::CrossChainTxId.eq(cctx_id))
             .one(self.db.as_ref())
             .await?
         {
+            let new_status = CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status)
+                .unwrap();
             cctx_status::Entity::update(cctx_status::ActiveModel {
                 id: ActiveValue::Set(cctx_status_row.id),
-                status: ActiveValue::Set(
-                    CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                ),
+                status: ActiveValue::Set(CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone()).map_err(|e| anyhow::anyhow!(e))?),
                 last_update_timestamp: ActiveValue::Set(
                     chrono::DateTime::from_timestamp(
                         fetched_cctx
@@ -943,22 +914,34 @@ impl ZetachainCctxDatabase {
             .filter(cctx_status::Column::Id.eq(cctx_status_row.id))
             .exec(self.db.as_ref())
             .await?;
+    
+            let first_outbound_params = fetched_cctx.outbound_params.first().unwrap();
+            let token = self.calculate_token(&fetched_cctx).await?;
+            
+            cctx_list_item = Some(CctxListItemProto {
+                index: fetched_cctx.index,
+                status: new_status.into(),
+                status_reduced: reduce_status(new_status).into(),
+                amount: fetched_cctx.inbound_params.amount,
+                created_timestamp: fetched_cctx.cctx_status.created_timestamp.parse::<i64>()?,
+                last_update_timestamp: fetched_cctx.cctx_status.last_update_timestamp.parse::<i64>()?,
+                source_chain_id: fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
+                target_chain_id: first_outbound_params.receiver_chain_id.parse::<i32>()?,
+                sender_address: fetched_cctx.inbound_params.sender,
+                receiver_address: first_outbound_params.receiver.clone(),
+                asset: fetched_cctx.inbound_params.asset,
+                coin_type: token.as_ref().map(|t| t.coin_type.clone().into()).unwrap_or_default(),
+                token_symbol: token.as_ref().map(|t|t.symbol.clone()),
+                zrc20_contract_address: token.as_ref().map(|t| t.zrc20_contract_address.clone()),
+                decimals: token.as_ref().map(|t| t.decimals as i64),
+            });
         }
 
-        //unlock cctx
-        CrossChainTxEntity::Entity::update(CrossChainTxEntity::ActiveModel {
-            id: ActiveValue::Set(cctx_id),
-            processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
-            ..Default::default()
-        })
-        .filter(CrossChainTxEntity::Column::Id.eq(cctx_id))
-        .exec(&tx)
-        .await?;
 
         //commit transaction
         tx.commit().await?;
 
-        Ok(())
+        Ok(cctx_list_item)
     }
     #[instrument(,level="debug",skip(self, cctx, tx),fields(index = %cctx.index, job_id = %job_id, root_id = %root_id, parent_id = %parent_id, depth = %depth))]
     pub async fn import_related_cctx(
@@ -972,13 +955,13 @@ impl ZetachainCctxDatabase {
     ) -> anyhow::Result<()> {
         // Insert main cross_chain_tx record
         let index = cctx.index.clone();
-        let token_id = self.calculate_token_id(&cctx).await?;
+        let token = self.calculate_token(&cctx).await?;
         let cctx_model = CrossChainTxEntity::ActiveModel {
             id: ActiveValue::NotSet,
             creator: ActiveValue::Set(cctx.creator),
             index: ActiveValue::Set(cctx.index),
             retries_number: ActiveValue::Set(0),
-            token_id: ActiveValue::Set(token_id),
+            token_id: ActiveValue::Set(token.as_ref().map(|t| t.id)),
             receiver: ActiveValue::Set(Some(cctx.outbound_params[0].receiver.clone())),
             receiver_chain_id: ActiveValue::Set(Some(
                 cctx.outbound_params[0]
@@ -2044,7 +2027,7 @@ impl ZetachainCctxDatabase {
         for cctx in cctxs {
             //if calculcate_token_id fails, we skip this cctx
             //if we fail insertion, the whole batch would be lost, which is not desired
-            let token_id = match self.calculate_token_id(cctx).await {
+            let token = match self.calculate_token(cctx).await {
                 std::result::Result::Ok(value) => value,
                 Err(e) => {
                     tracing::error!(
@@ -2060,7 +2043,7 @@ impl ZetachainCctxDatabase {
                 creator: ActiveValue::Set(cctx.creator.clone()),
                 index: ActiveValue::Set(cctx.index.clone()),
                 processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
-                token_id: ActiveValue::Set(token_id),
+                token_id: ActiveValue::Set(token.map(|t| t.id)),
                 zeta_fees: ActiveValue::Set(cctx.zeta_fees.clone()),
                 receiver: ActiveValue::Set(Some(cctx.outbound_params[0].receiver.clone())),
                 receiver_chain_id: ActiveValue::Set(Some(
@@ -2310,13 +2293,13 @@ impl ZetachainCctxDatabase {
                         ),
                     });
 
+                let status = CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status)
+                .unwrap();
                 // Prepare proto list item
                 child_entities.cctx_list_items.push(CctxListItemProto {
                     index: cctx.index.clone(),
-                    status: CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status)
-                        .unwrap()
-                        .into(),
-                    status_reduced: 0,
+                    status: status.into(),
+                    status_reduced: reduce_status(status).into(),
                     amount: fetched_cctx.inbound_params.amount.clone(),
                     last_update_timestamp: fetched_cctx
                         .cctx_status
