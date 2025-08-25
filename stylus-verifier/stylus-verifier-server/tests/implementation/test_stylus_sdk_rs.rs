@@ -46,6 +46,8 @@ mod verify_github_repository {
     #[case::zero_five_twelve("0.5.12")]
     #[case::zero_six_zero("0.6.0")]
     #[case::zero_six_one("0.6.1")]
+    #[case::zero_six_two("0.6.2")]
+    #[case::zero_six_three("0.6.3")]
     async fn with_prefix(#[case] stylus_version: &str) {
         test(&format!(
             "verify_github_repository_single_call_with_prefix_{stylus_version}"
