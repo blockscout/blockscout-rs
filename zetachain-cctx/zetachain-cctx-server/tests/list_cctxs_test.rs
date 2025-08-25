@@ -83,10 +83,10 @@ async fn list_cctx_timestamp_pagination() {
     let database = ZetachainCctxDatabase::new(db.client(), 7001);
     let cctx_count: usize = 10;
     let limit: usize = 3;
-    
+
     // Create a base timestamp and add incremental seconds to ensure distinct timestamps
     let base_timestamp = Utc::now().timestamp() - 1000; // Start 1000 seconds ago
-    
+
     let cctxs: Vec<_> = (0..cctx_count)
         .map(|i| {
             let index_str = i.to_string();
@@ -120,27 +120,32 @@ async fn list_cctx_timestamp_pagination() {
         .iter()
         .map(|item| item.last_update_timestamp)
         .collect();
-    
+
     // Verify DESC ordering (timestamps should be decreasing)
     for i in 1..first_page_timestamps.len() {
         assert!(
-            first_page_timestamps[i-1] > first_page_timestamps[i],
+            first_page_timestamps[i - 1] > first_page_timestamps[i],
             "DESC ordering failed: {} should be > {}",
-            first_page_timestamps[i-1],
+            first_page_timestamps[i - 1],
             first_page_timestamps[i]
         );
     }
 
     // Test pagination with page_key (using the minimum timestamp from first page)
     let page_key_desc = first_page_desc.next_page_params.as_ref().unwrap().page_key;
-    
+
     let second_page_desc = database
-        .list_cctxs(limit as i64, Some(page_key_desc), Filters::default(), Direction::Desc)
+        .list_cctxs(
+            limit as i64,
+            Some(page_key_desc),
+            Filters::default(),
+            Direction::Desc,
+        )
         .await
         .unwrap();
 
     assert_eq!(second_page_desc.items.len(), limit);
-    
+
     // Verify that all timestamps in second page are less than the page_key
     for item in &second_page_desc.items {
         assert!(
@@ -163,27 +168,32 @@ async fn list_cctx_timestamp_pagination() {
         .iter()
         .map(|item| item.last_update_timestamp)
         .collect();
-    
+
     // Verify ASC ordering (timestamps should be increasing)
     for i in 1..first_page_timestamps_asc.len() {
         assert!(
-            first_page_timestamps_asc[i-1] < first_page_timestamps_asc[i],
+            first_page_timestamps_asc[i - 1] < first_page_timestamps_asc[i],
             "ASC ordering failed: {} should be < {}",
-            first_page_timestamps_asc[i-1],
+            first_page_timestamps_asc[i - 1],
             first_page_timestamps_asc[i]
         );
     }
 
     // Test pagination with page_key for ASC
     let page_key_asc = first_page_asc.next_page_params.as_ref().unwrap().page_key;
-    
+
     let second_page_asc = database
-        .list_cctxs(limit as i64, Some(page_key_asc), Filters::default(), Direction::Asc)
+        .list_cctxs(
+            limit as i64,
+            Some(page_key_asc),
+            Filters::default(),
+            Direction::Asc,
+        )
         .await
         .unwrap();
 
     assert_eq!(second_page_asc.items.len(), limit);
-    
+
     // Verify that all timestamps in second page are greater than the page_key
     for item in &second_page_asc.items {
         assert!(
@@ -197,10 +207,15 @@ async fn list_cctx_timestamp_pagination() {
     // Test edge case: Using a timestamp that doesn't exist
     let non_existent_timestamp = base_timestamp + 50; // Between first two records
     let edge_case_result = database
-        .list_cctxs(limit as i64, Some(non_existent_timestamp), Filters::default(), Direction::Desc)
+        .list_cctxs(
+            limit as i64,
+            Some(non_existent_timestamp),
+            Filters::default(),
+            Direction::Desc,
+        )
         .await
         .unwrap();
-    
+
     // Should return records with timestamps less than the non-existent one
     for item in &edge_case_result.items {
         assert!(
@@ -214,20 +229,30 @@ async fn list_cctx_timestamp_pagination() {
     // Test edge case: Very old timestamp (should return all records for DESC)
     let very_old_timestamp = base_timestamp - 1000;
     let old_timestamp_result = database
-        .list_cctxs(limit as i64, Some(very_old_timestamp), Filters::default(), Direction::Desc)
+        .list_cctxs(
+            limit as i64,
+            Some(very_old_timestamp),
+            Filters::default(),
+            Direction::Desc,
+        )
         .await
         .unwrap();
-    
+
     // Should return empty results since no records are older than this
     assert_eq!(old_timestamp_result.items.len(), 0);
 
     // Test edge case: Very future timestamp (should return all records for ASC)
     let future_timestamp = base_timestamp + 10000;
     let future_timestamp_result = database
-        .list_cctxs(limit as i64, Some(future_timestamp), Filters::default(), Direction::Asc)
+        .list_cctxs(
+            limit as i64,
+            Some(future_timestamp),
+            Filters::default(),
+            Direction::Asc,
+        )
         .await
         .unwrap();
-    
+
     // Should return empty results since no records are newer than this
     assert_eq!(future_timestamp_result.items.len(), 0);
 }
@@ -240,21 +265,21 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
     }
     let db = init_db("test", "list_cctx_timestamp_conversion_edge_cases").await;
     let database = ZetachainCctxDatabase::new(db.client(), 7001);
-    
+
     // Test with specific edge case timestamps that might cause conversion issues
-    let edge_case_timestamps = vec![
-        0i64,                       // Unix epoch
-        1i64,                       // Very early timestamp
-        946684800i64,               // Year 2000 timestamp
-        1577836800i64,              // Year 2020 timestamp  
-        2147483647i64,              // Max 32-bit signed int (Year 2038 problem)
+    let edge_case_timestamps = [
+        0i64,          // Unix epoch
+        1i64,          // Very early timestamp
+        946684800i64,  // Year 2000 timestamp
+        1577836800i64, // Year 2020 timestamp
+        2147483647i64, // Max 32-bit signed int (Year 2038 problem)
     ];
-    
+
     let cctxs: Vec<_> = edge_case_timestamps
         .iter()
         .enumerate()
         .map(|(i, &timestamp)| {
-            let index_str = format!("edge_case_{}", i);
+            let index_str = format!("edge_case_{i}");
             let mut cctx = helpers::dummy_cross_chain_tx(&index_str, "OutboundMined");
             cctx.cctx_status.last_update_timestamp = timestamp.to_string();
             cctx.inbound_params.ballot_index = index_str.clone();
@@ -275,9 +300,14 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
     for (i, &test_timestamp) in edge_case_timestamps.iter().enumerate() {
         // Test DESC direction
         let result_desc = database
-            .list_cctxs(10, Some(test_timestamp), Filters::default(), Direction::Desc)
+            .list_cctxs(
+                10,
+                Some(test_timestamp),
+                Filters::default(),
+                Direction::Desc,
+            )
             .await;
-        
+
         assert!(
             result_desc.is_ok(),
             "Failed to query with timestamp {} (index {}): {:?}",
@@ -301,7 +331,7 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
         let result_asc = database
             .list_cctxs(10, Some(test_timestamp), Filters::default(), Direction::Asc)
             .await;
-        
+
         assert!(
             result_asc.is_ok(),
             "Failed to query with timestamp {} (index {}) in ASC: {:?}",
@@ -325,9 +355,14 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
     // Test with negative timestamp (should fail gracefully or be handled)
     let negative_timestamp = -1i64;
     let negative_result = database
-        .list_cctxs(10, Some(negative_timestamp), Filters::default(), Direction::Desc)
+        .list_cctxs(
+            10,
+            Some(negative_timestamp),
+            Filters::default(),
+            Direction::Desc,
+        )
         .await;
-    
+
     // The query should either succeed with no results or fail gracefully
     // (depending on how DateTime::from_timestamp handles negative values)
     match negative_result {
@@ -345,10 +380,15 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
     // Test with very large timestamp (far future)
     let far_future_timestamp = 4102444800i64; // Year 2100
     let future_result = database
-        .list_cctxs(10, Some(far_future_timestamp), Filters::default(), Direction::Desc)
+        .list_cctxs(
+            10,
+            Some(far_future_timestamp),
+            Filters::default(),
+            Direction::Desc,
+        )
         .await
         .unwrap();
-    
+
     // Should return all records since they're all before this future timestamp
     assert!(
         future_result.items.len() >= edge_case_timestamps.len(),
@@ -361,12 +401,12 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
         .iter()
         .map(|item| item.last_update_timestamp)
         .collect();
-    
+
     for i in 1..timestamps.len() {
         assert!(
-            timestamps[i-1] >= timestamps[i],
+            timestamps[i - 1] >= timestamps[i],
             "Timestamps should be in DESC order: {} >= {}",
-            timestamps[i-1],
+            timestamps[i - 1],
             timestamps[i]
         );
     }
@@ -406,7 +446,7 @@ async fn test_list_cctxs_endpoint() {
         zrc20_contract_address: Uuid::new_v4().to_string(),
     };
 
-    let dummy_cctxs: Vec<CrossChainTx> = vec!["test_list_cctxs_endpoint_1"]
+    let dummy_cctxs: Vec<CrossChainTx> = ["test_list_cctxs_endpoint_1"]
         .iter()
         .map(|x| {
             let mut cctx = crate::helpers::dummy_cross_chain_tx(x, "PendingOutbound");
@@ -493,14 +533,14 @@ async fn test_list_cctxs_with_status_filter() {
         .sync_tokens(Uuid::new_v4(), vec![token.clone()])
         .await
         .unwrap();
-    let dummy_cctxs: Vec<CrossChainTx> = vec![
+    let dummy_cctxs: Vec<CrossChainTx> = [
         "test_list_cctxs_with_status_filter_1",
         "test_list_cctxs_with_status_filter_2",
     ]
     .iter()
     .map(|x| crate::helpers::dummy_cross_chain_tx(x, "OutboundMined"))
     .chain(
-        vec![
+        [
             "test_list_cctxs_with_status_filter_3",
             "test_list_cctxs_with_status_filter_4",
             "test_list_cctxs_with_status_filter_5",
@@ -595,7 +635,7 @@ async fn test_list_cctxs_with_filters() {
     let receiver_address = "0xa4dc1ebdcca3351f8d356910e7f17594c17f1747";
     let asset = "0x0000000000000000000000000000000000000000";
     let coin_type = CoinType::ERC20;
-    let source_chain_ids = vec!["7001", "7002"];
+    let source_chain_ids = ["7001", "7002"];
     let target_chain_id_1 = "97";
     let target_chain_id_2 = "96";
     let start_timestamp = "1752859110";
@@ -671,7 +711,7 @@ async fn test_list_cctxs_with_filters() {
     tx.commit().await.unwrap();
 
     let source_chain_id = source_chain_ids[0].to_string();
-    let target_chain_id = format!("{},{}", target_chain_id_1, target_chain_id_2);
+    let target_chain_id = format!("{target_chain_id_1},{target_chain_id_2}");
     let status_reduced = "Pending";
     let coin_type = coin_type.to_string();
     let mut path = "/api/v1/CctxInfo:list?".to_string();
@@ -690,7 +730,7 @@ async fn test_list_cctxs_with_filters() {
     ];
 
     for (key, value) in filters {
-        path.push_str(&format!("{}={}&", key, value));
+        path.push_str(&format!("{key}={value}&"));
     }
 
     path.pop();
@@ -764,7 +804,7 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     };
 
     // Create CCTXs with different statuses that should map to the same reduced status
-    let pending_cctxs: Vec<CrossChainTx> = vec![
+    let pending_cctxs: Vec<CrossChainTx> = [
         "test_status_reduced_pending_1",
         "test_status_reduced_pending_2",
         "test_status_reduced_pending_3",
@@ -772,15 +812,12 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     .iter()
     .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingInbound"))
     .chain(
-        vec![
-            "test_status_reduced_pending_4",
-            "test_status_reduced_pending_5",
-        ]
+        ["test_status_reduced_pending_4", "test_status_reduced_pending_5"]
         .iter()
         .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingOutbound")),
     )
     .chain(
-        vec!["test_status_reduced_pending_6"]
+        ["test_status_reduced_pending_6"]
             .iter()
             .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingRevert")),
     )
@@ -793,7 +830,7 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     })
     .collect();
 
-    let success_cctxs: Vec<CrossChainTx> = vec![
+    let success_cctxs: Vec<CrossChainTx> = [
         "test_status_reduced_success_1",
         "test_status_reduced_success_2",
     ]
@@ -801,18 +838,20 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     .map(|x| crate::helpers::dummy_cross_chain_tx(x, "OutboundMined"))
     .collect();
 
-    let failed_cctxs: Vec<CrossChainTx> = vec![
+    let aborted_cctxs: Vec<CrossChainTx> = [
         "test_status_reduced_failed_1",
         "test_status_reduced_failed_2",
     ]
     .iter()
     .map(|x| crate::helpers::dummy_cross_chain_tx(x, "Aborted"))
-    .chain(
-        vec!["test_status_reduced_failed_3"]
-            .iter()
-            .map(|x| crate::helpers::dummy_cross_chain_tx(x, "Reverted")),
-    )
     .collect();
+    let reverted_cctxs: CrossChainTx =
+        crate::helpers::dummy_cross_chain_tx("test_status_reduced_failed_3", "Reverted");
+
+    let failed_cctxs: Vec<CrossChainTx> = aborted_cctxs
+        .into_iter()
+        .chain(vec![reverted_cctxs].into_iter())
+        .collect();
 
     let all_cctxs: Vec<CrossChainTx> = pending_cctxs
         .into_iter()

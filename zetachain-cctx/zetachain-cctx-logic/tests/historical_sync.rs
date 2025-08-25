@@ -153,7 +153,7 @@ async fn test_historical_sync_updates_pointer() {
         })
         .await
         .unwrap_or_else(|_| {
-            // Timeout is expected as we want to stop after processing
+            tracing::info!("Indexer timed out");
         });
     });
 
@@ -199,7 +199,7 @@ async fn test_historical_sync_updates_pointer() {
             .one(db_conn.as_ref())
             .await
             .unwrap();
-        assert!(cctx.is_some(), "cctx not found for index: {}", index);
+        assert!(cctx.is_some(), "cctx not found for index: {index}");
         let cctx = cctx.unwrap();
         let cctx_id = cctx.id;
         let inbound = inbound_params::Entity::find()
@@ -209,8 +209,7 @@ async fn test_historical_sync_updates_pointer() {
             .unwrap();
         assert!(
             inbound.is_some(),
-            "inbound params not found for cctx: {}",
-            index
+            "inbound params not found for cctx: {index}"
         );
         let outbound = outbound_params::Entity::find()
             .filter(outbound_params::Column::CrossChainTxId.eq(cctx_id))
@@ -219,15 +218,14 @@ async fn test_historical_sync_updates_pointer() {
             .unwrap();
         assert!(
             outbound.is_some(),
-            "outbound params not found for cctx: {}",
-            index
+            "outbound params not found for cctx: {index}"
         );
         let status = CctxStatusEntity::find()
             .filter(CctxStatusColumn::CrossChainTxId.eq(cctx_id))
             .one(db_conn.as_ref())
             .await
             .unwrap();
-        assert!(status.is_some(), "status not found for cctx: {}", index);
+        assert!(status.is_some(), "status not found for cctx: {index}");
         let revert = revert_options::Entity::find()
             .filter(revert_options::Column::CrossChainTxId.eq(cctx_id))
             .one(db_conn.as_ref())

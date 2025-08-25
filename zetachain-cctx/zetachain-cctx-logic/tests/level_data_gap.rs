@@ -154,7 +154,7 @@ async fn test_level_data_gap() {
         })
         .await
         .unwrap_or_else(|_| {
-            // Timeout is expected as we want to stop after processing
+            tracing::info!("Indexer timed out");
         });
     });
 
@@ -177,7 +177,7 @@ async fn test_level_data_gap() {
             .one(db.client().as_ref())
             .await
             .unwrap();
-        assert!(cctx.is_some(), "CCTX with index {} not found", index);
+        assert!(cctx.is_some(), "CCTX with index {index} not found");
         
     }
 

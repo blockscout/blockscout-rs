@@ -62,7 +62,7 @@ async fn test_token_api_get_token_info() {
     // Test successful token retrieval
     
 
-    let token_info: TokenProto = test_server::send_get_request(&server, &format!("/api/v1/TokenInfo:get?asset={}", asset)).await;
+    let token_info: TokenProto = test_server::send_get_request(&server, &format!("/api/v1/TokenInfo:get?asset={asset}")).await;
     
 
     // Verify the response matches the inserted token

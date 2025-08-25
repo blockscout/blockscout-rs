@@ -19,23 +19,24 @@ use zetachain_cctx_logic::channel::Channel;
 use zetachain_cctx_logic::client::{Client, RpcSettings};
 use zetachain_cctx_logic::database::ZetachainCctxDatabase;
 use zetachain_cctx_logic::indexer::Indexer;
+use zetachain_cctx_logic::models::Token;
 use zetachain_cctx_logic::settings::IndexerSettings;
 
-fn dummy_token_response(tokens: &[(&str, &str, &str, i32, &str, &str, &str, &str, bool, &str)], next_key: Option<&str>) -> serde_json::Value {
+fn dummy_token_response(tokens: &[Token], next_key: Option<&str>) -> serde_json::Value {
     let foreign_coins: Vec<serde_json::Value> = tokens
         .iter()
-        .map(|(zrc20_address, asset, chain_id, decimals, name, symbol, coin_type, gas_limit, paused, liquidity_cap)| {
+        .map(|token| {
             json!({
-                "zrc20_contract_address": zrc20_address,
-                "asset": asset,
-                "foreign_chain_id": chain_id,
-                "decimals": decimals,
-                "name": name,
-                "symbol": symbol,
-                "coin_type": coin_type,
-                "gas_limit": gas_limit,
-                "paused": paused,
-                "liquidity_cap": liquidity_cap
+                "zrc20_contract_address": token.zrc20_contract_address,
+                "asset": token.asset,
+                "foreign_chain_id": token.foreign_chain_id,
+                "decimals": token.decimals,
+                "name": token.name,
+                "symbol": token.symbol,
+                "coin_type": token.coin_type,
+                "gas_limit": token.gas_limit,
+                "paused": token.paused,
+                "liquidity_cap": token.liquidity_cap
             })
         })
         .collect();
@@ -98,30 +99,32 @@ async fn test_token_sync_stream_works() {
         .and(path("/zeta-chain/fungible/foreign_coins"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
             &[
-                (
-                    "0x0327f0660525b15Cdb8f1f5FBF0dD7Cd5Ba182aD",
-                    "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-                    "42161",
-                    6,
-                    "ZetaChain ZRC20 USDC on Arbitrum One",
-                    "USDC.ARB",
-                    "ERC20",
-                    "100000",
-                    false,
-                    "750000000000"
-                ),
-                (
-                    "0x1234567890123456789012345678901234567890",
-                    "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
-                    "1",
-                    8,
-                    "ZetaChain ZRC20 WBTC on Ethereum Mainnet",
-                    "WBTC.ETH",
-                    "ERC20",
-                    "80000",
-                    false,
-                    "100000000000"
-                ),
+                Token {
+                    zrc20_contract_address: "0x0327f0660525b15Cdb8f1f5FBF0dD7Cd5Ba182aD".to_string(),
+                    asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831".to_string(),
+                    foreign_chain_id: "42161".to_string(),
+                    decimals: 6,
+                    name: "ZetaChain ZRC20 USDC on Arbitrum One".to_string(),
+                    symbol: "USDC.ARB".to_string(),
+                    coin_type: zetachain_cctx_logic::models::CoinType::ERC20,
+                    gas_limit: "100000".to_string(),
+                    paused: false,
+                    liquidity_cap: "750000000000".to_string(),
+                    icon_url: None
+                },
+                Token {
+                    zrc20_contract_address: "0x1234567890123456789012345678901234567890".to_string(),
+                    asset: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599".to_string(),
+                    foreign_chain_id: "1".to_string(),
+                    decimals: 8,
+                    name: "ZetaChain ZRC20 WBTC on Ethereum Mainnet".to_string(),
+                    symbol: "WBTC.ETH".to_string(),
+                    coin_type: zetachain_cctx_logic::models::CoinType::ERC20,
+                    gas_limit: "80000".to_string(),
+                    paused: false,
+                    liquidity_cap: "100000000000".to_string(),
+                    icon_url: None
+                },
             ],
             None, // No next page
         )))
@@ -179,7 +182,7 @@ async fn test_token_sync_stream_works() {
         })
         .await
         .unwrap_or_else(|_| {
-            // Timeout is expected
+            tracing::info!("Timeout occurred");
         });
     });
 
@@ -277,18 +280,19 @@ async fn test_token_sync_pagination() {
         .and(query_param("pagination.key", "page2key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
             &[
-                (
-                    "0x3333333333333333333333333333333333333333",
-                    "0xpage2asset1",
-                    "42161",
-                    6,
-                    "Page 2 Token 1",
-                    "P2T1",
-                    "ERC20",
-                    "80000",
-                    false,
-                    "3000000000"
-                ),
+                Token {
+                    zrc20_contract_address: "0x3333333333333333333333333333333333333333".to_string(),
+                    asset: "0xpage2asset1".to_string(),
+                    foreign_chain_id: "42161".to_string(),
+                    decimals: 6,
+                    name: "Page 2 Token 1".to_string(),
+                    symbol: "P2T1".to_string(),
+                    coin_type: zetachain_cctx_logic::models::CoinType::ERC20,
+                    gas_limit: "80000".to_string(),
+                    paused: false,
+                    liquidity_cap: "3000000000".to_string(),
+                    icon_url: None
+                },
             ],
             Some("page3key"), // Has next page
         )))
@@ -301,18 +305,19 @@ async fn test_token_sync_pagination() {
         .and(query_param("pagination.key", "page3key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
             &[
-                (
-                    "0x4444444444444444444444444444444444444444",
-                    "0xpage3asset1",
-                    "137",
-                    8,
-                    "Page 3 Token 1",
-                    "P3T1",
-                    "ERC20",
-                    "120000",
-                    true,
-                    "4000000000"
-                ),
+                Token {
+                    zrc20_contract_address: "0x4444444444444444444444444444444444444444".to_string(),
+                    asset: "0xpage3asset1".to_string(),
+                    foreign_chain_id: "137".to_string(),
+                    decimals: 8,
+                    name: "Page 3 Token 1".to_string(),
+                    symbol: "P3T1".to_string(),
+                    coin_type: zetachain_cctx_logic::models::CoinType::ERC20,
+                    gas_limit: "120000".to_string(),
+                    paused: true,
+                    liquidity_cap: "4000000000".to_string(),
+                    icon_url: None
+                },
             ],
             None, // No next page
         )))
@@ -323,30 +328,32 @@ async fn test_token_sync_pagination() {
         .and(query_param("pagination.limit", "100"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response(
             &[
-                (
-                    "0x1111111111111111111111111111111111111111",
-                    "0xpage1asset1",
-                    "1",
-                    18,
-                    "Page 1 Token 1",
-                    "P1T1",
-                    "ERC20",
-                    "100000",
-                    false,
-                    "1000000000"
-                ),
-                (
-                    "0x2222222222222222222222222222222222222222",
-                    "0xpage1asset2",
-                    "1", 
-                    18,
-                    "Page 1 Token 2",
-                    "P1T2",
-                    "ERC20",
-                    "100000",
-                    false,
-                    "2000000000"
-                ),
+                Token {
+                    zrc20_contract_address: "0x1111111111111111111111111111111111111111".to_string(),
+                    asset: "0xpage1asset1".to_string(),
+                    foreign_chain_id: "1".to_string(),
+                    decimals: 18,
+                    name: "Page 1 Token 1".to_string(),
+                    symbol: "P1T1".to_string(),
+                    coin_type: zetachain_cctx_logic::models::CoinType::ERC20,
+                    gas_limit: "100000".to_string(),
+                    paused: false,
+                    liquidity_cap: "1000000000".to_string(),
+                    icon_url: None
+                },
+                Token {
+                    zrc20_contract_address: "0x2222222222222222222222222222222222222222".to_string(),
+                    asset: "0xpage1asset2".to_string(),
+                    foreign_chain_id: "1".to_string(),
+                    decimals: 18,
+                    name: "Page 1 Token 2".to_string(),
+                    symbol: "P1T2".to_string(),
+                    coin_type: zetachain_cctx_logic::models::CoinType::ERC20,
+                    gas_limit: "100000".to_string(),
+                    paused: false,
+                    liquidity_cap: "2000000000".to_string(),
+                    icon_url: None
+                },
             ],
             Some("page2key"), // Has next page
         )))
@@ -389,7 +396,7 @@ async fn test_token_sync_pagination() {
         })
         .await
         .unwrap_or_else(|_| {
-            // Timeout is expected
+            tracing::info!("Timeout occurred");
         });
     });
 

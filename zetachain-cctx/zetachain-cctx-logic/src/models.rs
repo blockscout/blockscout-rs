@@ -172,7 +172,7 @@ pub struct CrossChainTx {
     pub protocol_contract_version: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Filters {
     pub status_reduced: Vec<String>,
     pub sender_address: Vec<String>,
@@ -185,24 +185,6 @@ pub struct Filters {
     pub end_timestamp: Option<i64>,
     pub token_symbol: Vec<String>,
     pub hash: Option<String>,
-}
-
-impl Default for Filters {
-    fn default() -> Self {
-        Self {
-            status_reduced: vec![],
-            sender_address: vec![],
-            receiver_address: vec![],
-            asset: vec![],
-            coin_type: vec![],
-            source_chain_id: vec![],
-            target_chain_id: vec![],
-            start_timestamp: None,
-            end_timestamp: None,
-            token_symbol: vec![],
-            hash: None,
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

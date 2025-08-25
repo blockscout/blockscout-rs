@@ -98,7 +98,7 @@ impl Client {
     ) -> Result<PagedCCTXResponse, Error> {
         let mut url: Url = self.settings.url.parse().unwrap();
         let path = url.path();
-        url.set_path(&format!("{}zeta-chain/crosschain/cctx", path));
+        url.set_path(&format!("{path}zeta-chain/crosschain/cctx"));
         url.query_pairs_mut()
             .append_pair("pagination.limit", &batch_size.to_string())
             .append_pair("unordered", &unordered.to_string())
@@ -129,7 +129,7 @@ impl Client {
     ) -> Result<InboundHashToCctxResponse, Error> {
         let mut url: Url = self.settings.url.parse().unwrap();
         let path = url.path();
-        url.set_path(&format!("{}zeta-chain/crosschain/inboundHashToCctxData/{}", path, cctx_index));
+        url.set_path(&format!("{path}zeta-chain/crosschain/inboundHashToCctxData/{cctx_index}"));
 
         let request = Request::new(Method::GET, url.clone());
         let response = self
@@ -157,7 +157,7 @@ impl Client {
         // Build URL: {blockscout_instance_url}/api/v2/tokens/{zrc20_contract_address}
         let mut url: Url = self.settings.blockscout_instance_url.parse()?;
         let base_path = url.path().to_string();
-        url.set_path(&format!("{}api/v2/tokens/{}", base_path, contract_address));
+        url.set_path(&format!("{base_path}api/v2/tokens/{contract_address}"));
 
         let req = Request::new(Method::GET, url);
         let resp = self.make_request(req).await?;
@@ -180,7 +180,7 @@ impl Client {
     ) -> Result<PagedTokenResponse, Error> {
         let mut url: Url = self.settings.url.parse().unwrap();
         let path = url.path();
-        url.set_path(&format!("{}zeta-chain/fungible/foreign_coins", path));
+        url.set_path(&format!("{path}zeta-chain/fungible/foreign_coins"));
         url.query_pairs_mut()
             .append_pair("pagination.limit", &batch_size.to_string())
             .finish();

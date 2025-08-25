@@ -36,6 +36,21 @@ pub struct ZetachainCctxDatabase {
     zetachain_id: i32,
 }
 
+struct ChildEntities {
+    inbound_params: Vec<InboundParamsEntity::ActiveModel>,
+    outbound_params: Vec<OutboundParamsEntity::ActiveModel>,
+    revert_options: Vec<RevertOptionsEntity::ActiveModel>,
+    status: Vec<cctx_status::ActiveModel>,
+    cctx_list_items: Vec<CctxListItemProto>,
+}
+
+pub struct UnlockedWatermark {
+    pub watermark_id: i32,
+    pub retries_number: i32,
+    pub upper_bound_timestamp: Option<NaiveDateTime>,
+    pub pointer: String,
+}
+
 /// Sanitizes strings by removing null bytes and replacing invalid UTF-8 sequences
 /// PostgreSQL UTF-8 encoding doesn't allow null bytes (0x00)
 fn sanitize_string(input: String) -> String {
@@ -541,22 +556,34 @@ impl ZetachainCctxDatabase {
         let tx = self.db.begin().await?;
         let new_upper_bound_timstamp: i64 = cctxs
             .iter()
-            .map(|cctx| cctx.cctx_status.last_update_timestamp.parse::<i64>().unwrap_or_default())
+            .map(|cctx| {
+                cctx.cctx_status
+                    .last_update_timestamp
+                    .parse::<i64>()
+                    .unwrap_or_default()
+            })
             .max()
             .unwrap_or_default();
-        let new_upper_bound_timestamp = DateTime::<Utc>::from_timestamp(new_upper_bound_timstamp, 0)
-            .unwrap()
-            .naive_utc();
-        let new_upper_bound_timestamp = new_upper_bound_timestamp.max(current_upper_bound_timestamp.unwrap_or_default());
+        let new_upper_bound_timestamp =
+            DateTime::<Utc>::from_timestamp(new_upper_bound_timstamp, 0)
+                .unwrap()
+                .naive_utc();
+        let new_upper_bound_timestamp =
+            new_upper_bound_timestamp.max(current_upper_bound_timestamp.unwrap_or_default());
         let imported = self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
-        
+
         //Watermark with id 1 is the main historic sync thread, all others are one-offs that might be manually added to the db
         let new_status = if watermark_id != 1 {
             ProcessingStatus::Done
         } else {
             ProcessingStatus::Unlocked
         };
-        tracing::debug!("updating watermark : {:?} to pointer: {:?} and upper bound timestamp: {:?}", watermark_id, next_key, new_upper_bound_timestamp);
+        tracing::debug!(
+            "updating watermark : {:?} to pointer: {:?} and upper bound timestamp: {:?}",
+            watermark_id,
+            next_key,
+            new_upper_bound_timestamp
+        );
         self.update_watermark(
             watermark_id,
             next_key,
@@ -633,15 +660,21 @@ impl ZetachainCctxDatabase {
     }
 
     #[instrument(,level="trace",skip(self),fields(batch_id = %batch_id))]
-    pub async fn query_failed_cctxs(&self, batch_id: Uuid, batch_size: u32, polling_interval: u64) -> anyhow::Result<Vec<CctxShort>> {
+    pub async fn query_failed_cctxs(
+        &self,
+        batch_id: Uuid,
+        batch_size: u32,
+        polling_interval: u64,
+    ) -> anyhow::Result<Vec<CctxShort>> {
         let statement = include_str!("query_for_update.sql").to_string();
 
         let statement = Statement::from_sql_and_values(
             DbBackend::Postgres,
             statement,
-            vec![sea_orm::Value::String(Some(Box::new("Failed".to_string()))),
-                sea_orm::Value::Int(Some(100 as i32)),
-                sea_orm::Value::BigInt(Some(3600000 as i64)),
+            vec![
+                sea_orm::Value::String(Some(Box::new("Failed".to_string()))),
+                sea_orm::Value::Int(Some(100)),
+                sea_orm::Value::BigInt(Some(3600000)),
             ],
         );
 
@@ -668,7 +701,7 @@ impl ZetachainCctxDatabase {
     pub async fn get_unlocked_watermarks(
         &self,
         kind: Kind,
-    ) -> anyhow::Result<Vec<(i32, String, i32, Option<NaiveDateTime>)>> {
+    ) -> anyhow::Result<Vec<UnlockedWatermark>> {
         let query_statement = r#"
             WITH unlocked_watermarks AS (
                 SELECT id, pointer, retries_number, upper_bound_timestamp FROM watermark WHERE kind::text = $1 AND processing_status::text = 'Unlocked'
@@ -686,20 +719,20 @@ impl ZetachainCctxDatabase {
             vec![kind.to_string().into()],
         );
 
-        let watermarks: Result<Vec<(i32, String, i32, Option<NaiveDateTime>)>, sea_orm::DbErr> = self
-            .db
-            .query_all(query_statement)
-            .await?
-            .iter()
-            .map(|r| {
-                std::result::Result::Ok((
-                    r.try_get_by_index(0)?,
-                    r.try_get_by_index(1)?,
-                    r.try_get_by_index(2)?,
-                    r.try_get_by_index(3)?,
-                ))
-            })
-            .collect::<Result<Vec<(i32, String, i32, Option<NaiveDateTime>)>, sea_orm::DbErr>>();
+        let watermarks: Result<Vec<UnlockedWatermark>, sea_orm::DbErr> =
+            self.db
+                .query_all(query_statement)
+                .await?
+                .iter()
+                .map(|r| {
+                    std::result::Result::Ok(UnlockedWatermark {
+                        watermark_id: r.try_get_by_index(0)?,
+                        pointer: r.try_get_by_index(1)?,
+                        retries_number: r.try_get_by_index(2)?,
+                        upper_bound_timestamp: r.try_get_by_index(3)?,
+                    })
+                })
+                .collect::<Result<Vec<UnlockedWatermark>, sea_orm::DbErr>>();
 
         watermarks.map_err(|e| anyhow::anyhow!(e))
     }
@@ -1196,7 +1229,6 @@ impl ZetachainCctxDatabase {
         &self,
         index: String,
     ) -> anyhow::Result<Option<CrossChainTxProto>> {
-        
         let sql = include_str!("complete_cctx.sql");
 
         let statement = Statement::from_sql_and_values(
@@ -1211,9 +1243,7 @@ impl ZetachainCctxDatabase {
             return Ok(None);
         }
 
-        
         let cctx_row = &cctx_rows[0];
-
 
         let id: i32 = cctx_row
             .try_get_by_index(0)
@@ -1275,8 +1305,7 @@ impl ZetachainCctxDatabase {
                 .map_err(|e| anyhow::anyhow!("cctx_row sender: {}", e))?,
             sender_chain_id: cctx_row
                 .try_get_by_index::<i32>(26)
-                .map_err(|e| anyhow::anyhow!("cctx_row sender_chain_id: {}", e))?
-                .into(),
+                .map_err(|e| anyhow::anyhow!("cctx_row sender_chain_id: {}", e))?,
             tx_origin: cctx_row
                 .try_get_by_index(27)
                 .map_err(|e| anyhow::anyhow!("cctx_row tx_origin: {}", e))?,
@@ -1439,8 +1468,7 @@ impl ZetachainCctxDatabase {
                     .map_err(|e| anyhow::anyhow!("outbound_row gas_priority_fee: {}", e))?,
                 hash: outbound_row
                     .try_get_by_index::<Option<String>>(10)
-                    .map_err(|e| anyhow::anyhow!("outbound_row hash: {}", e))?
-                    .map(|x| x.clone()),
+                    .map_err(|e| anyhow::anyhow!("outbound_row hash: {}", e))?,
                 ballot_index: outbound_row
                     .try_get_by_index::<String>(11)
                     .map_err(|e| anyhow::anyhow!("outbound_row ballot_index: {}", e))?,
@@ -1581,17 +1609,13 @@ impl ZetachainCctxDatabase {
             });
         }
 
-        let status_reduced = reduce_status(
-            CctxStatusProto::try_from(status.status.clone())
-                .unwrap()
-                .into(),
-        );
+        let status_reduced = reduce_status(CctxStatusProto::try_from(status.status)?);
 
         Ok(Some(CrossChainTxProto {
-            creator: creator,
-            index: index,
-            zeta_fees: zeta_fees,
-            relayed_message: relayed_message,
+            creator,
+            index,
+            zeta_fees,
+            relayed_message,
             cctx_status: Some(status),
             cctx_status_reduced: status_reduced.into(),
             inbound_params: Some(inbound),
@@ -1599,11 +1623,11 @@ impl ZetachainCctxDatabase {
             revert_options: Some(revert),
             protocol_contract_version: protocol_contract_version.into(),
             related_cctxs: related,
-            token_symbol: token_symbol,
-            token_name: token_name,
-            zrc20_contract_address: zrc20_contract_address,
-            icon_url: icon_url,
-            decimals: decimals,
+            token_symbol,
+            token_name,
+            zrc20_contract_address,
+            icon_url,
+            decimals,
         }))
     }
 
@@ -1649,8 +1673,7 @@ impl ZetachainCctxDatabase {
         if !filters.status_reduced.is_empty() {
             param_count += 1;
             sql.push_str(&format!(
-                " AND cs.status = ANY(${}::cctx_status_status[])",
-                param_count
+                " AND cs.status = ANY(${param_count}::cctx_status_status[])",
             ));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
@@ -1658,8 +1681,7 @@ impl ZetachainCctxDatabase {
                     filters
                         .status_reduced
                         .into_iter()
-                        .map(|s| self.get_status_by_reduced_status(&s))
-                        .flatten()
+                        .flat_map(|s| self.get_status_by_reduced_status(&s))
                         .map(|s| sea_orm::Value::String(Some(Box::new(s))))
                         .collect::<Vec<_>>(),
                 )),
@@ -1668,7 +1690,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.sender_address.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND ip.sender = ANY(${})", param_count));
+            sql.push_str(&format!(" AND ip.sender = ANY(${param_count})"));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
@@ -1683,7 +1705,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.receiver_address.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND cctx.receiver = ANY(${})", param_count));
+            sql.push_str(&format!(" AND cctx.receiver = ANY(${param_count})"));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
@@ -1698,7 +1720,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.asset.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND ip.asset = ANY(${})", param_count));
+            sql.push_str(&format!(" AND ip.asset = ANY(${param_count})"));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
@@ -1713,7 +1735,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.coin_type.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND ip.coin_type::text = ANY(${})", param_count));
+            sql.push_str(&format!(" AND ip.coin_type::text = ANY(${param_count})"));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
@@ -1728,7 +1750,7 @@ impl ZetachainCctxDatabase {
 
         if !filters.source_chain_id.is_empty() {
             param_count += 1;
-            sql.push_str(&format!(" AND ip.sender_chain_id = ANY(${})", param_count));
+            sql.push_str(&format!(" AND ip.sender_chain_id = ANY(${param_count})"));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::Int,
                 Some(Box::new(
@@ -1744,8 +1766,7 @@ impl ZetachainCctxDatabase {
         if !filters.target_chain_id.is_empty() {
             param_count += 1;
             sql.push_str(&format!(
-                " AND cctx.receiver_chain_id = ANY(${})",
-                param_count
+                " AND cctx.receiver_chain_id = ANY(${param_count})"
             ));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::Int,
@@ -1761,13 +1782,13 @@ impl ZetachainCctxDatabase {
 
         if let Some(start_timestamp) = filters.start_timestamp {
             param_count += 1;
-            sql.push_str(&format!(" AND cs.created_timestamp >= ${}", param_count));
+            sql.push_str(&format!(" AND cs.created_timestamp >= ${param_count}"));
             params.push(sea_orm::Value::BigInt(Some(start_timestamp)));
         }
 
         if let Some(end_timestamp) = filters.end_timestamp {
             param_count += 1;
-            sql.push_str(&format!(" AND cs.created_timestamp <= ${}", param_count));
+            sql.push_str(&format!(" AND cs.created_timestamp <= ${param_count}"));
             params.push(sea_orm::Value::BigInt(Some(end_timestamp)));
         }
 
@@ -1777,9 +1798,9 @@ impl ZetachainCctxDatabase {
         {
             param_count += 1;
             if direction == Direction::Asc {
-                sql.push_str(&format!(" AND last_update_timestamp > ${}", param_count));
+                sql.push_str(&format!(" AND last_update_timestamp > ${param_count}"));
             } else {
-                sql.push_str(&format!(" AND last_update_timestamp < ${}", param_count));
+                sql.push_str(&format!(" AND last_update_timestamp < ${param_count}"));
             }
             params.push(sea_orm::Value::ChronoDateTime(Some(Box::new(page_key))));
         }
@@ -1789,7 +1810,7 @@ impl ZetachainCctxDatabase {
             let token_ids = self
                 .prefetch_token_ids(filters.token_symbol.clone())
                 .await?;
-            sql.push_str(&format!(" AND cctx.token_id = ANY(${})", param_count));
+            sql.push_str(&format!(" AND cctx.token_id = ANY(${param_count})"));
             params.push(sea_orm::Value::Array(
                 sea_orm::sea_query::ArrayType::Int,
                 Some(Box::new(
@@ -1804,15 +1825,13 @@ impl ZetachainCctxDatabase {
         if let Some(hash) = filters.hash {
             param_count += 1;
             sql.push_str(&format!(
-                " AND (ip.observed_hash = ${} OR ip.ballot_index = ${})",
-                param_count,
-                param_count
+                " AND (ip.observed_hash = ${param_count} OR ip.ballot_index = ${param_count})",
             ));
             params.push(sea_orm::Value::String(Some(Box::new(hash))));
         }
 
         // No need to group since we're only getting the last outbound_params row per CCTX
-        sql.push_str(" ");
+        sql.push(' ');
 
         // Add ordering and pagination
         param_count += 1;
@@ -1823,10 +1842,11 @@ impl ZetachainCctxDatabase {
         ));
         params.push(sea_orm::Value::BigInt(Some(limit + 1)));
 
-        let statement = Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params.clone());
+        let statement =
+            Statement::from_sql_and_values(DbBackend::Postgres, sql.clone(), params.clone());
 
         let rows = self
-        .db
+            .db
             .query_all(statement.clone())
             .await
             .map_err(|e| anyhow::anyhow!("statement returned error: {}", e))?;
@@ -2000,18 +2020,19 @@ impl ZetachainCctxDatabase {
             .collect::<std::collections::HashMap<_, _>>();
 
         // 3. Prepare child entity models and construct the protobuf response.
-        let (status_models, inbound_models, outbound_models, revert_models, cctx_list_items) =
-            Self::prepare_child_models(&inserted_cctxs, &index_to_cctx)?;
+        let child_entities = Self::prepare_child_models(&inserted_cctxs, &index_to_cctx)?;
 
         // 4. Persist child entities inside the provided transaction.
-        self.insert_cctx_status_models(status_models, tx).await?;
-        self.insert_inbound_params_models(inbound_models, tx)
+        self.insert_cctx_status_models(child_entities.status, tx)
             .await?;
-        self.insert_outbound_params_models(outbound_models, tx)
+        self.insert_inbound_params_models(child_entities.inbound_params, tx)
             .await?;
-        self.insert_revert_options_models(revert_models, tx).await?;
+        self.insert_outbound_params_models(child_entities.outbound_params, tx)
+            .await?;
+        self.insert_revert_options_models(child_entities.revert_options, tx)
+            .await?;
 
-        Ok(cctx_list_items)
+        Ok(child_entities.cctx_list_items)
     }
 
     async fn prepare_parent_models(
@@ -2100,18 +2121,14 @@ impl ZetachainCctxDatabase {
     fn prepare_child_models(
         inserted_cctxs: &Vec<CrossChainTxEntity::Model>,
         index_to_cctx: &std::collections::HashMap<&str, &CrossChainTx>,
-    ) -> anyhow::Result<(
-        Vec<cctx_status::ActiveModel>,
-        Vec<InboundParamsEntity::ActiveModel>,
-        Vec<OutboundParamsEntity::ActiveModel>,
-        Vec<RevertOptionsEntity::ActiveModel>,
-        Vec<CctxListItemProto>,
-    )> {
-        let mut status_models = Vec::new();
-        let mut inbound_models = Vec::new();
-        let mut outbound_models = Vec::new();
-        let mut revert_models = Vec::new();
-        let mut cctx_list_items = Vec::new();
+    ) -> anyhow::Result<ChildEntities> {
+        let mut child_entities = ChildEntities {
+            inbound_params: Vec::new(),
+            outbound_params: Vec::new(),
+            revert_options: Vec::new(),
+            status: Vec::new(),
+            cctx_list_items: Vec::new(),
+        };
 
         for cctx in inserted_cctxs {
             if let Some(fetched_cctx) = index_to_cctx.get(cctx.index.as_str()) {
@@ -2126,7 +2143,7 @@ impl ZetachainCctxDatabase {
                         .ok_or(anyhow::anyhow!("Invalid timestamp"))?
                         .naive_utc();
 
-                status_models.push(cctx_status::ActiveModel {
+                child_entities.status.push(cctx_status::ActiveModel {
                     id: ActiveValue::NotSet,
                     cross_chain_tx_id: ActiveValue::Set(cctx.id),
                     status: ActiveValue::Set(
@@ -2153,134 +2170,148 @@ impl ZetachainCctxDatabase {
                 });
 
                 // Prepare inbound params model
-                inbound_models.push(InboundParamsEntity::ActiveModel {
-                    id: ActiveValue::NotSet,
-                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
-                    sender: ActiveValue::Set(fetched_cctx.inbound_params.sender.clone()),
-                    sender_chain_id: ActiveValue::Set(
-                        fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
-                    ),
-                    tx_origin: ActiveValue::Set(fetched_cctx.inbound_params.tx_origin.clone()),
-                    coin_type: ActiveValue::Set(
-                        DBCoinType::try_from(fetched_cctx.inbound_params.coin_type.clone())
+                child_entities
+                    .inbound_params
+                    .push(InboundParamsEntity::ActiveModel {
+                        id: ActiveValue::NotSet,
+                        cross_chain_tx_id: ActiveValue::Set(cctx.id),
+                        sender: ActiveValue::Set(fetched_cctx.inbound_params.sender.clone()),
+                        sender_chain_id: ActiveValue::Set(
+                            fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
+                        ),
+                        tx_origin: ActiveValue::Set(fetched_cctx.inbound_params.tx_origin.clone()),
+                        coin_type: ActiveValue::Set(
+                            DBCoinType::try_from(fetched_cctx.inbound_params.coin_type.clone())
+                                .map_err(|e| anyhow::anyhow!(e))?,
+                        ),
+                        asset: ActiveValue::Set(Some(fetched_cctx.inbound_params.asset.clone())),
+                        amount: ActiveValue::Set(fetched_cctx.inbound_params.amount.clone()),
+                        observed_hash: ActiveValue::Set(
+                            fetched_cctx.inbound_params.observed_hash.clone(),
+                        ),
+                        observed_external_height: ActiveValue::Set(
+                            fetched_cctx
+                                .inbound_params
+                                .observed_external_height
+                                .parse::<i64>()?,
+                        ),
+                        ballot_index: ActiveValue::Set(
+                            fetched_cctx.inbound_params.ballot_index.clone(),
+                        ),
+                        finalized_zeta_height: ActiveValue::Set(
+                            fetched_cctx
+                                .inbound_params
+                                .finalized_zeta_height
+                                .parse::<i64>()?,
+                        ),
+                        tx_finalization_status: ActiveValue::Set(
+                            TxFinalizationStatus::try_from(
+                                fetched_cctx.inbound_params.tx_finalization_status.clone(),
+                            )
                             .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                    asset: ActiveValue::Set(Some(fetched_cctx.inbound_params.asset.clone())),
-                    amount: ActiveValue::Set(fetched_cctx.inbound_params.amount.clone()),
-                    observed_hash: ActiveValue::Set(
-                        fetched_cctx.inbound_params.observed_hash.clone(),
-                    ),
-                    observed_external_height: ActiveValue::Set(
-                        fetched_cctx
-                            .inbound_params
-                            .observed_external_height
-                            .parse::<i64>()?,
-                    ),
-                    ballot_index: ActiveValue::Set(
-                        fetched_cctx.inbound_params.ballot_index.clone(),
-                    ),
-                    finalized_zeta_height: ActiveValue::Set(
-                        fetched_cctx
-                            .inbound_params
-                            .finalized_zeta_height
-                            .parse::<i64>()?,
-                    ),
-                    tx_finalization_status: ActiveValue::Set(
-                        TxFinalizationStatus::try_from(
-                            fetched_cctx.inbound_params.tx_finalization_status.clone(),
-                        )
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                    is_cross_chain_call: ActiveValue::Set(
-                        fetched_cctx.inbound_params.is_cross_chain_call,
-                    ),
-                    status: ActiveValue::Set(
-                        InboundStatus::try_from(fetched_cctx.inbound_params.status.clone())
+                        ),
+                        is_cross_chain_call: ActiveValue::Set(
+                            fetched_cctx.inbound_params.is_cross_chain_call,
+                        ),
+                        status: ActiveValue::Set(
+                            InboundStatus::try_from(fetched_cctx.inbound_params.status.clone())
+                                .map_err(|e| anyhow::anyhow!(e))?,
+                        ),
+                        confirmation_mode: ActiveValue::Set(
+                            ConfirmationMode::try_from(
+                                fetched_cctx.inbound_params.confirmation_mode.clone(),
+                            )
                             .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                    confirmation_mode: ActiveValue::Set(
-                        ConfirmationMode::try_from(
-                            fetched_cctx.inbound_params.confirmation_mode.clone(),
-                        )
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
-                });
+                        ),
+                    });
 
                 // Prepare outbound models
                 for outbound in &fetched_cctx.outbound_params {
-                    outbound_models.push(OutboundParamsEntity::ActiveModel {
-                        id: ActiveValue::NotSet,
-                        cross_chain_tx_id: ActiveValue::Set(cctx.id),
-                        receiver: ActiveValue::Set(outbound.receiver.clone()),
-                        receiver_chain_id: ActiveValue::Set(
-                            outbound.receiver_chain_id.parse::<i32>()?,
-                        ),
-                        coin_type: ActiveValue::Set(
-                            DBCoinType::try_from(outbound.coin_type.clone())
+                    child_entities
+                        .outbound_params
+                        .push(OutboundParamsEntity::ActiveModel {
+                            id: ActiveValue::NotSet,
+                            cross_chain_tx_id: ActiveValue::Set(cctx.id),
+                            receiver: ActiveValue::Set(outbound.receiver.clone()),
+                            receiver_chain_id: ActiveValue::Set(
+                                outbound.receiver_chain_id.parse::<i32>()?,
+                            ),
+                            coin_type: ActiveValue::Set(
+                                DBCoinType::try_from(outbound.coin_type.clone())
+                                    .map_err(|e| anyhow::anyhow!(e))?,
+                            ),
+                            amount: ActiveValue::Set(outbound.amount.clone()),
+                            tss_nonce: ActiveValue::Set(outbound.tss_nonce.clone()),
+                            gas_limit: ActiveValue::Set(outbound.gas_limit.clone()),
+                            gas_price: ActiveValue::Set(Some(outbound.gas_price.clone())),
+                            gas_priority_fee: ActiveValue::Set(Some(
+                                outbound.gas_priority_fee.clone(),
+                            )),
+                            hash: ActiveValue::Set(if outbound.hash.is_empty() {
+                                None
+                            } else {
+                                Some(outbound.hash.clone())
+                            }),
+                            ballot_index: ActiveValue::Set(Some(outbound.ballot_index.clone())),
+                            observed_external_height: ActiveValue::Set(
+                                outbound.observed_external_height.parse::<i64>()?,
+                            ),
+                            gas_used: ActiveValue::Set(outbound.gas_used.parse::<i64>()?),
+                            effective_gas_price: ActiveValue::Set(
+                                outbound.effective_gas_price.clone(),
+                            ),
+                            effective_gas_limit: ActiveValue::Set(
+                                outbound.effective_gas_limit.parse::<i64>()?,
+                            ),
+                            tss_pubkey: ActiveValue::Set(outbound.tss_pubkey.clone()),
+                            tx_finalization_status: ActiveValue::Set(
+                                TxFinalizationStatus::try_from(
+                                    outbound.tx_finalization_status.clone(),
+                                )
                                 .map_err(|e| anyhow::anyhow!(e))?,
-                        ),
-                        amount: ActiveValue::Set(outbound.amount.clone()),
-                        tss_nonce: ActiveValue::Set(outbound.tss_nonce.clone()),
-                        gas_limit: ActiveValue::Set(outbound.gas_limit.clone()),
-                        gas_price: ActiveValue::Set(Some(outbound.gas_price.clone())),
-                        gas_priority_fee: ActiveValue::Set(Some(outbound.gas_priority_fee.clone())),
-                        hash: ActiveValue::Set(if outbound.hash.is_empty() {
-                            None
-                        } else {
-                            Some(outbound.hash.clone())
-                        }),
-                        ballot_index: ActiveValue::Set(Some(outbound.ballot_index.clone())),
-                        observed_external_height: ActiveValue::Set(
-                            outbound.observed_external_height.parse::<i64>()?,
-                        ),
-                        gas_used: ActiveValue::Set(outbound.gas_used.parse::<i64>()?),
-                        effective_gas_price: ActiveValue::Set(outbound.effective_gas_price.clone()),
-                        effective_gas_limit: ActiveValue::Set(
-                            outbound.effective_gas_limit.parse::<i64>()?,
-                        ),
-                        tss_pubkey: ActiveValue::Set(outbound.tss_pubkey.clone()),
-                        tx_finalization_status: ActiveValue::Set(
-                            TxFinalizationStatus::try_from(outbound.tx_finalization_status.clone())
-                                .map_err(|e| anyhow::anyhow!(e))?,
-                        ),
-                        call_options_gas_limit: ActiveValue::Set(
-                            outbound.call_options.clone().map(|c| c.gas_limit.clone()),
-                        ),
-                        call_options_is_arbitrary_call: ActiveValue::Set(
-                            outbound.call_options.clone().map(|c| c.is_arbitrary_call),
-                        ),
-                        confirmation_mode: ActiveValue::Set(
-                            ConfirmationMode::try_from(outbound.confirmation_mode.clone())
-                                .map_err(|e| anyhow::anyhow!(e))?,
-                        ),
-                    });
+                            ),
+                            call_options_gas_limit: ActiveValue::Set(
+                                outbound.call_options.clone().map(|c| c.gas_limit.clone()),
+                            ),
+                            call_options_is_arbitrary_call: ActiveValue::Set(
+                                outbound.call_options.clone().map(|c| c.is_arbitrary_call),
+                            ),
+                            confirmation_mode: ActiveValue::Set(
+                                ConfirmationMode::try_from(outbound.confirmation_mode.clone())
+                                    .map_err(|e| anyhow::anyhow!(e))?,
+                            ),
+                        });
                 }
 
                 // Prepare revert options model
-                revert_models.push(RevertOptionsEntity::ActiveModel {
-                    id: ActiveValue::NotSet,
-                    cross_chain_tx_id: ActiveValue::Set(cctx.id),
-                    revert_address: ActiveValue::Set(Some(
-                        fetched_cctx.revert_options.revert_address.clone(),
-                    )),
-                    call_on_revert: ActiveValue::Set(fetched_cctx.revert_options.call_on_revert),
-                    abort_address: ActiveValue::Set(Some(
-                        fetched_cctx.revert_options.abort_address.clone(),
-                    )),
-                    revert_message: ActiveValue::Set(
-                        fetched_cctx
-                            .revert_options
-                            .revert_message
-                            .clone()
-                            .map(|s| sanitize_string(s)),
-                    ),
-                    revert_gas_limit: ActiveValue::Set(
-                        fetched_cctx.revert_options.revert_gas_limit.clone(),
-                    ),
-                });
+                child_entities
+                    .revert_options
+                    .push(RevertOptionsEntity::ActiveModel {
+                        id: ActiveValue::NotSet,
+                        cross_chain_tx_id: ActiveValue::Set(cctx.id),
+                        revert_address: ActiveValue::Set(Some(
+                            fetched_cctx.revert_options.revert_address.clone(),
+                        )),
+                        call_on_revert: ActiveValue::Set(
+                            fetched_cctx.revert_options.call_on_revert,
+                        ),
+                        abort_address: ActiveValue::Set(Some(
+                            fetched_cctx.revert_options.abort_address.clone(),
+                        )),
+                        revert_message: ActiveValue::Set(
+                            fetched_cctx
+                                .revert_options
+                                .revert_message
+                                .clone()
+                                .map(sanitize_string),
+                        ),
+                        revert_gas_limit: ActiveValue::Set(
+                            fetched_cctx.revert_options.revert_gas_limit.clone(),
+                        ),
+                    });
 
                 // Prepare proto list item
-                cctx_list_items.push(CctxListItemProto {
+                child_entities.cctx_list_items.push(CctxListItemProto {
                     index: cctx.index.clone(),
                     status: CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status)
                         .unwrap()
@@ -2316,13 +2347,7 @@ impl ZetachainCctxDatabase {
             }
         }
 
-        Ok((
-            status_models,
-            inbound_models,
-            outbound_models,
-            revert_models,
-            cctx_list_items,
-        ))
+        Ok(child_entities)
     }
 
     async fn insert_cctx_status_models(

@@ -101,7 +101,7 @@ pub async fn run(
                     tracing::error!("indexer error: {}", e);
                     if restart_on_error {
                         tokio::time::sleep(backoff).await;
-                        backoff = backoff * 2;
+                        backoff *= 2;
                     }
                 }
             }

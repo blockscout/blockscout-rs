@@ -10,7 +10,7 @@ impl TryFrom<String> for TxFinalizationStatus {
             "NotFinalized" => Ok(TxFinalizationStatus::NotFinalized),
             "Finalized" => Ok(TxFinalizationStatus::Finalized),
             "Executed" => Ok(TxFinalizationStatus::Executed),
-            _ => Err(format!("Invalid TxFinalizationStatus: {}", value)),
+            _ => Err(format!("Invalid TxFinalizationStatus: {value}")),
         }
     }
 }
@@ -22,7 +22,7 @@ impl TryFrom<String> for Kind {
         match value.as_str() {
             "Realtime" => Ok(Kind::Realtime),
             "Historical" => Ok(Kind::Historical),
-            _ => Err(format!("Invalid Kind: {}", value)),
+            _ => Err(format!("Invalid Kind: {value}")),
         }
     }
 } 
@@ -38,7 +38,7 @@ impl TryFrom<String> for CctxStatusStatus {
             "Aborted" => Ok(CctxStatusStatus::Aborted),
             "Reverted" => Ok(CctxStatusStatus::Reverted),
             "OutboundMined" => Ok(CctxStatusStatus::OutboundMined),
-            _ => Err(format!("Invalid CctxStatusStatus: {}", value)),
+            _ => Err(format!("Invalid CctxStatusStatus: {value}")),
         }
     }
 }
@@ -112,7 +112,7 @@ impl TryFrom<String> for InboundStatus {
             "INSUFFICIENT_DEPOSITOR_FEE" => Ok(InboundStatus::InsufficientDepositorFee),
             "INVALID_RECEIVER_ADDRESS" => Ok(InboundStatus::InvalidReceiverAddress),
             "INVALID_MEMO" => Ok(InboundStatus::InvalidMemo),
-            _ => Err(format!("Invalid InboundStatus: {}", value)),
+            _ => Err(format!("Invalid InboundStatus: {value}")),
         }
     }
 }
@@ -137,7 +137,7 @@ impl TryFrom<String> for ConfirmationMode {
         match value.as_str() {
             "SAFE" => Ok(ConfirmationMode::Safe),
             "FAST" => Ok(ConfirmationMode::Fast),
-            _ => Err(format!("Invalid ConfirmationMode: {}", value)),
+            _ => Err(format!("Invalid ConfirmationMode: {value}")),
         }
     }
 }
@@ -161,16 +161,16 @@ impl From<CoinType> for i32 {
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Token as TokenProto;
 use crate::token::Model as Token;
 
-impl Into<TokenProto> for Token {
-    fn into(self) -> TokenProto {
+impl From<Token> for TokenProto {
+    fn from(token: Token) -> Self {
         TokenProto {
-            zrc20_contract_address: self.zrc20_contract_address,
-            foreign_chain_id: self.foreign_chain_id,
-            decimals: self.decimals,
-            name: self.name,
-            symbol: self.symbol,
-            icon_url: self.icon_url,
-            coin_type: self.coin_type.into(),
+            zrc20_contract_address: token.zrc20_contract_address,
+            foreign_chain_id: token.foreign_chain_id,
+            decimals: token.decimals,
+            name: token.name,
+            symbol: token.symbol,
+            icon_url: token.icon_url,
+            coin_type: token.coin_type.into(),
         }
     }
 }
@@ -184,7 +184,7 @@ impl TryFrom<String> for CoinType {
             "Erc20" | "ERC20" => Ok(CoinType::Erc20),
             "Cmd" => Ok(CoinType::Cmd),
             "NoAssetCall" => Ok(CoinType::NoAssetCall),
-            _ => Err(format!("Invalid CoinType: {}", value)),
+            _ => Err(format!("Invalid CoinType: {value}")),
         }
     }
 }
@@ -203,7 +203,7 @@ impl TryFrom<String> for ProtocolContractVersion {
         match value.as_str() {
             "V1" => Ok(ProtocolContractVersion::V1),
             "V2" => Ok(ProtocolContractVersion::V2),
-            _ => Err(format!("Invalid ProtocolContractVersion: {}", value)),
+            _ => Err(format!("Invalid ProtocolContractVersion: {value}")),
         }
     }
 }
@@ -216,37 +216,37 @@ impl TryFrom<String> for ProcessingStatus {
             "Unlocked" => Ok(ProcessingStatus::Unlocked),
             "Failed" => Ok(ProcessingStatus::Failed),
             "Done" => Ok(ProcessingStatus::Done),
-            _ => Err(format!("Invalid ProcessingStatus: {}", value)),
+            _ => Err(format!("Invalid ProcessingStatus: {value}")),
         }
     }
 }
 
 impl Display for ProcessingStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 impl Display for CctxStatusStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 impl Display for CoinType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 impl Display for ProtocolContractVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 impl Display for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }

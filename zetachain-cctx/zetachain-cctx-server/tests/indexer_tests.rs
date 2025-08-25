@@ -85,9 +85,7 @@ async fn test_status_update() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path(
-            format!("/zeta-chain/crosschain/cctx/{}", pending_tx_index).as_str(),
-        ))
+        .and(path(format!("/zeta-chain/crosschain/cctx/{pending_tx_index}").as_str()))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "CrossChainTx": dummy_cross_chain_tx(pending_tx_index, "PendingOutbound")
         })))
@@ -96,9 +94,7 @@ async fn test_status_update() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path(
-            format!("/zeta-chain/crosschain/cctx/{}", pending_tx_index).as_str(),
-        ))
+        .and(path(format!("/zeta-chain/crosschain/cctx/{pending_tx_index}").as_str()))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "CrossChainTx": dummy_cross_chain_tx(pending_tx_index, "OutboundMined")
         })))
@@ -206,13 +202,7 @@ async fn test_status_update_links_related() {
 
     //Check import a child cctx from inboundHashToCctxData
     Mock::given(method("GET"))
-        .and(path(
-            format!(
-                "/zeta-chain/crosschain/inboundHashToCctxData/{}",
-                root_index
-            )
-            .as_str(),
-        ))
+        .and(path(format!("/zeta-chain/crosschain/inboundHashToCctxData/{root_index}").as_str()))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(dummy_related_cctxs_response(&[child_1_index])),
@@ -224,11 +214,7 @@ async fn test_status_update_links_related() {
     let child_2_index = "child_2_index";
     Mock::given(method("GET"))
         .and(path(
-            format!(
-                "/zeta-chain/crosschain/inboundHashToCctxData/{}",
-                child_1_index
-            )
-            .as_str(),
+            format!("/zeta-chain/crosschain/inboundHashToCctxData/{child_1_index}").as_str()
         ))
         .respond_with(
             ResponseTemplate::new(200)
@@ -238,17 +224,17 @@ async fn test_status_update_links_related() {
         .await;
     //This will let find out that we already have child_3_index in the database
     //And it will be updated by status update
+    let child_3_index = "child_3_index";
     Mock::given(method("GET"))
         .and(path(
             format!(
-                "/zeta-chain/crosschain/inboundHashToCctxData/{}",
-                child_2_index
+                "/zeta-chain/crosschain/inboundHashToCctxData/{child_2_index}",
             )
             .as_str(),
         ))
         .respond_with(
             ResponseTemplate::new(200)
-                .set_body_json(dummy_related_cctxs_response(&["child_3_index"])),
+                .set_body_json(dummy_related_cctxs_response(&[child_3_index])),
         )
         .mount(&mock_server)
         .await;
@@ -256,7 +242,10 @@ async fn test_status_update_links_related() {
     //This will let indexer know that there are no further children for child_3_index
     Mock::given(method("GET"))
         .and(path(
-            "/zeta-chain/crosschain/inboundHashToCctxData/child_3_index",
+            format!(
+                "/zeta-chain/crosschain/inboundHashToCctxData/{child_3_index}",
+            )
+            .as_str(),
         ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!(
             {"CrossChainTxs": []}
@@ -359,7 +348,7 @@ async fn test_status_update_links_related() {
     assert_eq!(child_2.depth, 2, "child depth has not been set");
 
     let updated_child_3 = cross_chain_tx::Entity::find()
-        .filter(cross_chain_tx::Column::Index.eq("child_3_index"))
+        .filter(cross_chain_tx::Column::Index.eq(child_3_index))
         .one(db.client().as_ref())
         .await
         .unwrap();
@@ -437,7 +426,7 @@ async fn test_get_cctx_info() {
     }
 
     let db = crate::helpers::init_db("test", "indexer_get_cctx_info").await;
-    let root_index = "root_cctx".to_string();
+    let root_index = "root_cctx_index".to_string();
     let root_cctx = dummy_cross_chain_tx(&root_index, "OutboundMined");
     let tx = db.begin().await.unwrap();
     let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
@@ -448,7 +437,8 @@ async fn test_get_cctx_info() {
         .unwrap();
     tx.commit().await.unwrap();
 
-    let child_cctx = dummy_cross_chain_tx("child_cctx", "OutboundMined");
+    let child_cctx_index = "child_cctx_index";
+    let child_cctx = dummy_cross_chain_tx(child_cctx_index, "OutboundMined");
     let tx = db.begin().await.unwrap();
     database
         .import_related_cctx(child_cctx, Uuid::new_v4(), 1, 1, 1, &tx)
@@ -497,7 +487,7 @@ async fn test_get_cctx_info() {
     .await;
     let response: serde_json::Value = test_server::send_get_request(
         &base,
-        format!("/api/v1/CctxInfo:get?cctx_id={}", root_index).as_str(),
+        format!("/api/v1/CctxInfo:get?cctx_id={root_index}").as_str(),
     )
     .await;
 
@@ -511,7 +501,7 @@ async fn test_get_cctx_info() {
     let expected_coin_type: i32 =
         zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CoinType::Erc20.into();
     assert_eq!(related_cctxs.len(), 2);
-    assert_eq!(related_cctxs[1].index, "child_cctx");
+    assert_eq!(related_cctxs[1].index, child_cctx_index);
     assert_eq!(related_cctxs[1].depth, 1);
     assert_eq!(related_cctxs[1].source_chain_id, 1);
     assert_eq!(related_cctxs[1].status, 3);
