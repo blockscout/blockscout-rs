@@ -19,6 +19,15 @@ use zetachain_cctx_entity::sea_orm_active_enums::{Kind, ProcessingStatus};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem as CctxListItemProto;
 use actix_phoenix_channel::{ChannelBroadcaster, ChannelEvent};
 use base64::Engine;
+
+fn broadcast_new_cctxs_if_any(
+    channel_broadcaster: &ChannelBroadcaster,
+    inserted: &Vec<CctxListItemProto>,
+) {
+    if !inserted.is_empty() {
+        channel_broadcaster.broadcast(ChannelEvent::new(NEW_CCTXS_TOPIC, "new_cctxs", inserted));
+    }
+}
 pub struct Indexer {
     pub settings: IndexerSettings,
     pub client: Arc<Client>,
@@ -453,9 +462,10 @@ impl Indexer {
                              .await {
                              std::result::Result::Ok((ProcessingStatus::Done, inserted)) =>  {
                                 database.mark_watermark_as_done(id,job_id).await.unwrap();
-                                if !inserted.is_empty() {
-                                    channel_broadcaster.broadcast(ChannelEvent::new(NEW_CCTXS_TOPIC, "new_cctxs", &inserted));
-                                }
+                                broadcast_new_cctxs_if_any(&channel_broadcaster, &inserted);
+                             },
+                             std::result::Result::Ok((ProcessingStatus::Unlocked, inserted)) =>  {
+                                broadcast_new_cctxs_if_any(&channel_broadcaster, &inserted);
                              },
                              std::result::Result::Err(e) => {
                                 tracing::warn!(error = %e, job_id = %job_id, "Failed to level data gap");
