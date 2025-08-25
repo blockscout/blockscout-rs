@@ -10,6 +10,7 @@ mod m20250611_103754_add_counters;
 mod m20250721_093013_make_token_balance_nullable;
 mod m20250723_084105_add_tokens;
 mod m20250729_111157_change_block_ranges_block_number_to_bigint;
+mod m20250822_103440_add_tokens_indexes;
 
 pub struct Migrator;
 
@@ -26,6 +27,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250721_093013_make_token_balance_nullable::Migration),
             Box::new(m20250723_084105_add_tokens::Migration),
             Box::new(m20250729_111157_change_block_ranges_block_number_to_bigint::Migration),
+            Box::new(m20250822_103440_add_tokens_indexes::Migration),
         ]
     }
 }

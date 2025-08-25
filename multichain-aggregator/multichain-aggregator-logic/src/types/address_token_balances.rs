@@ -60,25 +60,12 @@ pub fn fiat_balance_query() -> SimpleExpr {
         ))
 }
 
-#[derive(DerivePartialModel, Clone, Debug)]
-#[sea_orm(entity = "Entity", from_query_result)]
-pub struct ExtendedAddressTokenBalance {
-    pub id: i64,
-    pub address_hash: Vec<u8>,
-    pub value: BigDecimal,
-    pub token_id: Option<BigDecimal>,
-    #[sea_orm(nested)]
-    pub token: types::tokens::Token,
-    #[sea_orm(from_expr = r#"fiat_balance_query()"#)]
-    pub fiat_balance: Option<BigDecimal>,
-}
-
 pub fn chain_values_expr() -> SimpleExpr {
     Expr::cust_with_exprs(
         "jsonb_build_object('chain_id',$1,'value',$2)",
         [
-            Expr::col("token_chain_id").into_simple_expr(),
-            Expr::col("value").into_simple_expr(),
+            Column::ChainId.into_simple_expr(),
+            Column::Value.into_simple_expr(),
         ],
     )
 }
@@ -88,13 +75,14 @@ pub fn chain_values_expr() -> SimpleExpr {
 pub struct AggregatedAddressTokenBalance {
     pub id: i64,
     pub address_hash: Vec<u8>,
+    pub chain_id: ChainId,
     pub value: BigDecimal,
     pub token_id: Option<BigDecimal>,
     #[sea_orm(nested)]
     pub token: types::tokens::AggregatedToken,
     #[sea_orm(from_expr = r#"fiat_balance_query()"#)]
     pub fiat_balance: Option<BigDecimal>,
-    #[sea_orm(from_expr = r#"Expr::cust_with_expr("jsonb_agg($1)", chain_values_expr())"#)]
+    #[sea_orm(from_expr = r#"Expr::cust_with_expr("jsonb_build_array($1)", chain_values_expr())"#)]
     pub chain_values: Vec<ChainValue>,
 }
 

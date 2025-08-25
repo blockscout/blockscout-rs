@@ -175,6 +175,14 @@ paths:
           in: query
           required: false
           type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false
@@ -305,6 +313,74 @@ paths:
           required: true
           type: string
           format: int64
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/tokens:
+    get:
+      operationId: ClusterExplorerService_ListClusterTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListClusterTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: type
+          description: Comma-separated token types to filter by. See `TokenType`.
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/tokens/{address_hash}:
+    get:
+      operationId: ClusterExplorerService_GetAggregatedToken
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAggregatedTokenResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: address_hash
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: string
       tags:
         - ClusterExplorerService
   /api/v1/dapps:
@@ -978,6 +1054,11 @@ definitions:
       is_verified:
         type: boolean
     description: Chain-specific information.
+  v1GetAggregatedTokenResponse:
+    type: object
+    properties:
+      token:
+        $ref: '#/definitions/v1AggregatedTokenInfo'
   v1GetInteropMessageResponse:
     type: object
     properties:
@@ -1099,6 +1180,16 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Chain'
+  v1ListClusterTokensResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1AggregatedTokenInfo'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1ListDappCategoriesResponse:
     type: object
     properties:
