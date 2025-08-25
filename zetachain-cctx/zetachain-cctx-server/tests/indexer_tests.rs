@@ -21,6 +21,7 @@ use zetachain_cctx_entity::sea_orm_active_enums::{
 };
 use zetachain_cctx_entity::{cross_chain_tx, sea_orm_active_enums::Kind, watermark};
 use zetachain_cctx_logic::channel::Channel;
+use zetachain_cctx_logic::database::Relation;
 
 use crate::helpers::{
     dummy_cctx_with_pagination_response, dummy_cross_chain_tx, dummy_related_cctxs_response,
@@ -432,7 +433,7 @@ async fn test_get_cctx_info() {
     let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
     database.setup_db().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &vec![root_cctx], &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &vec![root_cctx], &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -441,7 +442,11 @@ async fn test_get_cctx_info() {
     let child_cctx = dummy_cross_chain_tx(child_cctx_index, "OutboundMined");
     let tx = db.begin().await.unwrap();
     database
-        .import_related_cctx(child_cctx, Uuid::new_v4(), 1, 1, 1, &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &vec![child_cctx], &tx, Some(Relation {
+            parent_id: 1,
+            depth: 2,
+            root_id: 1,
+        }))
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -502,7 +507,7 @@ async fn test_get_cctx_info() {
         zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CoinType::Erc20.into();
     assert_eq!(related_cctxs.len(), 2);
     assert_eq!(related_cctxs[1].index, child_cctx_index);
-    assert_eq!(related_cctxs[1].depth, 1);
+    assert_eq!(related_cctxs[1].depth, 2);
     assert_eq!(related_cctxs[1].source_chain_id, 1);
     assert_eq!(related_cctxs[1].status, 3);
     assert_eq!(related_cctxs[1].inbound_amount, "8504");

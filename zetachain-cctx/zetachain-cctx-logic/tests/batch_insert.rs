@@ -43,7 +43,7 @@ async fn test_batch_insert() {
     database.setup_db().await.unwrap();
 
     let res = database
-        .batch_insert_transactions(job_id, &cctxs, &tx)
+        .batch_insert_transactions(job_id, &cctxs, &tx, None)
         .await;
 
     tx.commit().await.unwrap();

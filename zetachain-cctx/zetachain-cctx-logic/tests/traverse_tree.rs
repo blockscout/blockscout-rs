@@ -75,7 +75,7 @@ async fn test_traverse_and_update_tree_relationships() {
     let child1_tx = helpers::dummy_cross_chain_tx(child1_index, "PendingOutbound");
     let tx = db_conn.begin().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &vec![child1_tx.clone()], &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &vec![child1_tx.clone()], &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -94,7 +94,7 @@ async fn test_traverse_and_update_tree_relationships() {
     // insert grandchild first
     let tx2 = db_conn.begin().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &vec![grandchild_tx], &tx2)
+        .batch_insert_transactions(Uuid::new_v4(), &vec![grandchild_tx], &tx2,None)
         .await
         .unwrap();
     tx2.commit().await.unwrap();

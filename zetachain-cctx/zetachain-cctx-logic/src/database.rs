@@ -52,6 +52,13 @@ pub struct UnlockedWatermark {
     pub pointer: String,
 }
 
+#[derive(Copy, Clone)]
+pub struct Relation {
+    pub parent_id: i32,
+    pub depth: i32,
+    pub root_id: i32,
+}
+
 pub type NeedUpdate = HashMap<i32, models::CrossChainTx>;
 
 /// Sanitizes strings by removing null bytes and replacing invalid UTF-8 sequences
@@ -161,66 +168,13 @@ impl ZetachainCctxDatabase {
         Ok(cctx.iter().map(|cctx| cctx.id).collect())
     }
 
-    pub async fn update_multiple_related_cctxs(
-        &self,
-        cctx_ids: Vec<i32>,
-        root_id: i32,
-        depth: i32,
-        parent_id: i32,
-        job_id: Uuid,
-        tx: &DatabaseTransaction,
-    ) -> anyhow::Result<()> {
-        tracing::debug!(
-            "job_id: {} updating multiple related cctxs: {:?} setting parent_id to {:?}",
-            job_id,
-            cctx_ids,
-            parent_id
-        );
-        CrossChainTxEntity::Entity::update_many()
-            .filter(CrossChainTxEntity::Column::Id.is_in(cctx_ids.iter().cloned()))
-            .set(CrossChainTxEntity::ActiveModel {
-                root_id: ActiveValue::Set(Some(root_id)),
-                depth: ActiveValue::Set(depth),
-                parent_id: ActiveValue::Set(Some(parent_id)),
-                last_status_update_timestamp: ActiveValue::Set(chrono::Utc::now().naive_utc()),
-                updated_by: ActiveValue::Set(job_id.to_string()),
-                ..Default::default()
-            })
-            .exec(tx)
-            .await?;
-        Ok(())
-    }
-    #[instrument(level = "trace", skip_all,fields(child_index = %child_index, child_id = %child_id, root_id = %root_id, parent_id = %parent_id, depth = %depth))]
-    pub async fn update_single_related_cctx(
-        &self,
-        child_index: &str,
-        child_id: i32,
-        root_id: i32,
-        depth: i32,
-        parent_id: i32,
-        tx: &DatabaseTransaction,
-    ) -> anyhow::Result<()> {
-        CrossChainTxEntity::Entity::update_many()
-            .filter(CrossChainTxEntity::Column::Id.eq(child_id))
-            .set(CrossChainTxEntity::ActiveModel {
-                root_id: ActiveValue::Set(Some(root_id)),
-                depth: ActiveValue::Set(depth),
-                parent_id: ActiveValue::Set(Some(parent_id)),
-                last_status_update_timestamp: ActiveValue::Set(chrono::Utc::now().naive_utc()),
-                ..Default::default()
-            })
-            .exec(tx)
-            .await?;
-        Ok(())
-    }
-
     #[instrument(level = "trace", skip_all)]
     pub async fn traverse_and_update_tree_relationships(
         &self,
         children_cctxs: Vec<CrossChainTx>,
         cctx: &CctxShort,
         job_id: Uuid,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<CctxListItemProto>> {
         let cctx_status = self.get_cctx_status(cctx.id).await?;
         let root_id = cctx.root_id.unwrap_or(cctx.id);
         let tx = self.db.begin().await?;
@@ -228,11 +182,14 @@ impl ZetachainCctxDatabase {
             .find_outdated_children_by_index(children_cctxs, cctx.id, root_id, &tx)
             .await?;
 
-        for new_cctx in need_to_import {
-            self.import_related_cctx(new_cctx, job_id, root_id, cctx.id, cctx.depth + 1, &tx)
-                .await?;
-        }
-        
+
+        let inserted = self.batch_insert_transactions(job_id, &need_to_import, &tx, Some(Relation {
+            parent_id: cctx.id,
+            depth: cctx.depth + 1,
+            root_id,
+        }))
+        .await?;
+
         let need_to_update_ids = need_to_update.keys().cloned().collect::<Vec<_>>();
         //First we update parent_id for the direct descendants
         //The root_id for both direct and indirect descendants will be inside the loop
@@ -293,7 +250,7 @@ impl ZetachainCctxDatabase {
                 .await?;
         }
         tx.commit().await?;
-        Ok(())
+        Ok(inserted)
     }
 
     #[instrument(level = "info", skip_all)]
@@ -475,7 +432,7 @@ impl ZetachainCctxDatabase {
 
         tracing::debug!("last synced cctx is absent, inserting a batch and moving watermark");
         let tx = self.db.begin().await?;
-        let inserted = self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
+        let inserted = self.batch_insert_transactions(job_id, &cctxs, &tx, None).await?;
         self.move_watermark(watermark_id, next_key, &tx).await?;
         tx.commit().await?;
         if earliest_exists {
@@ -544,7 +501,7 @@ impl ZetachainCctxDatabase {
                 .await?;
         }
 
-        let inserted = self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
+        let inserted = self.batch_insert_transactions(job_id, &cctxs, &tx, None).await?;
 
         tx.commit().await?;
         Ok(inserted)
@@ -575,7 +532,7 @@ impl ZetachainCctxDatabase {
                 .naive_utc();
         let new_upper_bound_timestamp =
             new_upper_bound_timestamp.max(current_upper_bound_timestamp.unwrap_or_default());
-        let imported = self.batch_insert_transactions(job_id, &cctxs, &tx).await?;
+        let imported = self.batch_insert_transactions(job_id, &cctxs, &tx, None ).await?;
 
         //Watermark with id 1 is the main historic sync thread, all others are one-offs that might be manually added to the db
         let new_status = if watermark_id != 1 {
@@ -942,240 +899,6 @@ impl ZetachainCctxDatabase {
         tx.commit().await?;
 
         Ok(cctx_list_item)
-    }
-    #[instrument(,level="debug",skip(self, cctx, tx),fields(index = %cctx.index, job_id = %job_id, root_id = %root_id, parent_id = %parent_id, depth = %depth))]
-    pub async fn import_related_cctx(
-        &self,
-        cctx: CrossChainTx,
-        job_id: Uuid,
-        root_id: i32,
-        parent_id: i32,
-        depth: i32,
-        tx: &DatabaseTransaction,
-    ) -> anyhow::Result<()> {
-        // Insert main cross_chain_tx record
-        let index = cctx.index.clone();
-        let token = self.calculate_token(&cctx).await?;
-        let cctx_model = CrossChainTxEntity::ActiveModel {
-            id: ActiveValue::NotSet,
-            creator: ActiveValue::Set(cctx.creator),
-            index: ActiveValue::Set(cctx.index),
-            retries_number: ActiveValue::Set(0),
-            token_id: ActiveValue::Set(token.as_ref().map(|t| t.id)),
-            receiver: ActiveValue::Set(Some(cctx.outbound_params[0].receiver.clone())),
-            receiver_chain_id: ActiveValue::Set(Some(
-                cctx.outbound_params[0]
-                    .receiver_chain_id
-                    .clone()
-                    .parse::<i32>()?,
-            )),
-            processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
-            zeta_fees: ActiveValue::Set(cctx.zeta_fees),
-            relayed_message: ActiveValue::Set(Some(cctx.relayed_message)),
-            protocol_contract_version: ActiveValue::Set(
-                ProtocolContractVersion::try_from(cctx.protocol_contract_version)
-                    .map_err(|e| anyhow::anyhow!(e))?,
-            ),
-            last_status_update_timestamp: ActiveValue::Set(Utc::now().naive_utc()),
-            root_id: ActiveValue::Set(Some(root_id)),
-            parent_id: ActiveValue::Set(Some(parent_id)),
-            depth: ActiveValue::Set(depth),
-            updated_by: ActiveValue::Set(job_id.to_string()),
-        };
-
-        let tx_result = CrossChainTxEntity::Entity::insert(cctx_model)
-            .on_conflict(
-                sea_orm::sea_query::OnConflict::column(CrossChainTxEntity::Column::Index)
-                    .do_nothing()
-                    .to_owned(),
-            )
-            .exec(tx)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to import related cctx: {}", e))?;
-
-        // Get the inserted tx id
-        let tx_id = tx_result.last_insert_id;
-
-        // Insert cctx_status
-        let status_model = cctx_status::ActiveModel {
-            id: ActiveValue::NotSet,
-            cross_chain_tx_id: ActiveValue::Set(tx_id),
-            status: ActiveValue::Set(
-                CctxStatusStatus::try_from(cctx.cctx_status.status.clone())
-                    .map_err(|e| anyhow::anyhow!(e))?,
-            ),
-            status_message: ActiveValue::Set(Some(sanitize_string(
-                cctx.cctx_status.status_message,
-            ))),
-            error_message: ActiveValue::Set(Some(sanitize_string(cctx.cctx_status.error_message))),
-            last_update_timestamp: ActiveValue::Set(
-                // parse NaiveDateTime from epoch seconds
-                chrono::DateTime::from_timestamp(
-                    cctx.cctx_status
-                        .last_update_timestamp
-                        .parse::<i64>()
-                        .unwrap_or(0),
-                    0,
-                )
-                .ok_or(anyhow::anyhow!("Invalid timestamp"))?
-                .naive_utc(),
-            ),
-            is_abort_refunded: ActiveValue::Set(cctx.cctx_status.is_abort_refunded),
-            created_timestamp: ActiveValue::Set(cctx.cctx_status.created_timestamp.parse::<i64>()?),
-            error_message_revert: ActiveValue::Set(Some(sanitize_string(
-                cctx.cctx_status.error_message_revert,
-            ))),
-            error_message_abort: ActiveValue::Set(Some(sanitize_string(
-                cctx.cctx_status.error_message_abort,
-            ))),
-        };
-        cctx_status::Entity::insert(status_model)
-            .on_conflict(
-                sea_orm::sea_query::OnConflict::column(cctx_status::Column::CrossChainTxId)
-                    .do_nothing()
-                    .to_owned(),
-            )
-            .exec(tx)
-            .instrument(
-                tracing::debug_span!("inserting cctx_status", index = %index, job_id = %job_id),
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to import related cctx_status: {}", e))?;
-
-        // Insert inbound_params
-        let inbound_model = InboundParamsEntity::ActiveModel {
-            id: ActiveValue::NotSet,
-            cross_chain_tx_id: ActiveValue::Set(tx_id),
-            sender: ActiveValue::Set(cctx.inbound_params.sender),
-            sender_chain_id: ActiveValue::Set(cctx.inbound_params.sender_chain_id.parse::<i32>()?),
-            tx_origin: ActiveValue::Set(cctx.inbound_params.tx_origin),
-            coin_type: ActiveValue::Set(
-                DBCoinType::try_from(cctx.inbound_params.coin_type)
-                    .map_err(|e| anyhow::anyhow!(e))?,
-            ),
-            asset: ActiveValue::Set(Some(cctx.inbound_params.asset)),
-            amount: ActiveValue::Set(cctx.inbound_params.amount),
-            observed_hash: ActiveValue::Set(cctx.inbound_params.observed_hash),
-            observed_external_height: ActiveValue::Set(
-                cctx.inbound_params
-                    .observed_external_height
-                    .parse::<i64>()?,
-            ),
-            ballot_index: ActiveValue::Set(cctx.inbound_params.ballot_index),
-            finalized_zeta_height: ActiveValue::Set(
-                cctx.inbound_params.finalized_zeta_height.parse::<i64>()?,
-            ),
-            tx_finalization_status: ActiveValue::Set(
-                TxFinalizationStatus::try_from(cctx.inbound_params.tx_finalization_status)
-                    .map_err(|e| anyhow::anyhow!(e))?,
-            ),
-            is_cross_chain_call: ActiveValue::Set(cctx.inbound_params.is_cross_chain_call),
-            status: ActiveValue::Set(
-                InboundStatus::try_from(cctx.inbound_params.status)
-                    .map_err(|e| anyhow::anyhow!(e))?,
-            ),
-            confirmation_mode: ActiveValue::Set(
-                ConfirmationMode::try_from(cctx.inbound_params.confirmation_mode)
-                    .map_err(|e| anyhow::anyhow!(e))?,
-            ),
-        };
-        InboundParamsEntity::Entity::insert(inbound_model)
-            .on_conflict(
-                sea_orm::sea_query::OnConflict::columns([
-                    InboundParamsEntity::Column::ObservedHash,
-                    InboundParamsEntity::Column::BallotIndex,
-                ])
-                .do_nothing()
-                .to_owned(),
-            )
-            .exec(tx)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to import related inbound_params: {}", e))?;
-
-        // Insert outbound_params
-        for outbound in cctx.outbound_params {
-            let outbound_model = OutboundParamsEntity::ActiveModel {
-                id: ActiveValue::NotSet,
-                cross_chain_tx_id: ActiveValue::Set(tx_id),
-                receiver: ActiveValue::Set(outbound.receiver),
-                receiver_chain_id: ActiveValue::Set(outbound.receiver_chain_id.parse::<i32>()?),
-                coin_type: ActiveValue::Set(
-                    DBCoinType::try_from(outbound.coin_type).map_err(|e| anyhow::anyhow!(e))?,
-                ),
-                amount: ActiveValue::Set(outbound.amount),
-                tss_nonce: ActiveValue::Set(outbound.tss_nonce),
-                gas_limit: ActiveValue::Set(outbound.gas_limit),
-                gas_price: ActiveValue::Set(Some(outbound.gas_price)),
-                gas_priority_fee: ActiveValue::Set(Some(outbound.gas_priority_fee)),
-                hash: ActiveValue::Set(if outbound.hash.is_empty() {
-                    None
-                } else {
-                    Some(outbound.hash)
-                }),
-                ballot_index: ActiveValue::Set(Some(outbound.ballot_index)),
-                observed_external_height: ActiveValue::Set(
-                    outbound.observed_external_height.parse::<i64>()?,
-                ),
-                gas_used: ActiveValue::Set(outbound.gas_used.parse::<i64>()?),
-                effective_gas_price: ActiveValue::Set(outbound.effective_gas_price),
-                effective_gas_limit: ActiveValue::Set(outbound.effective_gas_limit.parse::<i64>()?),
-                tss_pubkey: ActiveValue::Set(outbound.tss_pubkey),
-                tx_finalization_status: ActiveValue::Set(
-                    TxFinalizationStatus::try_from(outbound.tx_finalization_status)
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                ),
-                call_options_gas_limit: ActiveValue::Set(
-                    outbound.call_options.clone().map(|c| c.gas_limit),
-                ),
-                call_options_is_arbitrary_call: ActiveValue::Set(
-                    outbound.call_options.map(|c| c.is_arbitrary_call),
-                ),
-                confirmation_mode: ActiveValue::Set(
-                    ConfirmationMode::try_from(outbound.confirmation_mode)
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                ),
-            };
-            OutboundParamsEntity::Entity::insert(outbound_model)
-                .on_conflict(
-                    sea_orm::sea_query::OnConflict::columns([
-                        OutboundParamsEntity::Column::CrossChainTxId,
-                        OutboundParamsEntity::Column::Receiver,
-                        OutboundParamsEntity::Column::ReceiverChainId,
-                    ])
-                    .update_columns([
-                        OutboundParamsEntity::Column::Hash,
-                        OutboundParamsEntity::Column::TxFinalizationStatus,
-                        OutboundParamsEntity::Column::GasUsed,
-                        OutboundParamsEntity::Column::EffectiveGasPrice,
-                        OutboundParamsEntity::Column::EffectiveGasLimit,
-                        OutboundParamsEntity::Column::TssNonce,
-                        OutboundParamsEntity::Column::CallOptionsGasLimit,
-                        OutboundParamsEntity::Column::CallOptionsIsArbitraryCall,
-                        OutboundParamsEntity::Column::ConfirmationMode,
-                    ])
-                    .to_owned(),
-                )
-                .exec(tx)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to import related outbound_params: {}", e))?;
-        }
-
-        // Insert revert_options
-        let revert_model = RevertOptionsEntity::ActiveModel {
-            id: ActiveValue::NotSet,
-            cross_chain_tx_id: ActiveValue::Set(tx_id),
-            revert_address: ActiveValue::Set(Some(cctx.revert_options.revert_address)),
-            call_on_revert: ActiveValue::Set(cctx.revert_options.call_on_revert),
-            abort_address: ActiveValue::Set(Some(cctx.revert_options.abort_address)),
-            revert_message: ActiveValue::Set(cctx.revert_options.revert_message),
-            revert_gas_limit: ActiveValue::Set(cctx.revert_options.revert_gas_limit),
-        };
-        RevertOptionsEntity::Entity::insert(revert_model)
-            .exec(tx)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to import related revert_options: {}", e))?;
-
-        Ok(())
     }
 
     pub async fn get_sync_progress(&self) -> anyhow::Result<SyncProgress> {
@@ -1986,6 +1709,7 @@ impl ZetachainCctxDatabase {
         job_id: Uuid,
         cctxs: &Vec<CrossChainTx>,
         tx: &DatabaseTransaction,
+        relation: Option<Relation>,
     ) -> anyhow::Result<Vec<CctxListItemProto>> {
         // Early return for empty input.
         if cctxs.is_empty() {
@@ -1993,7 +1717,7 @@ impl ZetachainCctxDatabase {
         }
 
         // 1. Prepare and insert parent CrossChainTx records.
-        let cctx_models = self.prepare_parent_models(job_id, cctxs).await?;
+        let cctx_models = self.prepare_parent_models(job_id, cctxs, relation).await?;
         let inserted_cctxs = self.insert_parent_models(cctx_models).await?;
 
         // 2. Map fetched cctxs by index for quick access when preparing child records.
@@ -2022,6 +1746,7 @@ impl ZetachainCctxDatabase {
         &self,
         job_id: Uuid,
         cctxs: &Vec<CrossChainTx>,
+        relation: Option<Relation>,
     ) -> anyhow::Result<Vec<CrossChainTxEntity::ActiveModel>> {
         let mut models = Vec::new();
         for cctx in cctxs {
@@ -2038,7 +1763,8 @@ impl ZetachainCctxDatabase {
                     continue;
                 }
             };
-            let model = CrossChainTxEntity::ActiveModel {
+            
+            let mut model = CrossChainTxEntity::ActiveModel {
                 id: ActiveValue::NotSet,
                 creator: ActiveValue::Set(cctx.creator.clone()),
                 index: ActiveValue::Set(cctx.index.clone()),
@@ -2061,6 +1787,11 @@ impl ZetachainCctxDatabase {
                 updated_by: ActiveValue::Set(job_id.to_string()),
                 ..Default::default()
             };
+            if let Some(relation) = relation {
+                model.parent_id = ActiveValue::Set(Some(relation.parent_id));
+                model.depth = ActiveValue::Set(relation.depth);
+                model.root_id = ActiveValue::Set(Some(relation.root_id));
+            }
             models.push(model);
         }
         Ok(models)

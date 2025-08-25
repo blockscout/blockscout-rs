@@ -73,7 +73,7 @@ async fn query_cctxs_with_filters() {
     let tx = db.client().begin().await.unwrap();
     database.setup_db().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &vec![dummy_cctx_1, dummy_cctx_2], &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &vec![dummy_cctx_1, dummy_cctx_2], &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -174,7 +174,7 @@ async fn query_cctxs_with_token_symbol_filter() {
 
     let tx = db.client().begin().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &vec![dummy_cctx_1, dummy_cctx_2], &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &vec![dummy_cctx_1, dummy_cctx_2], &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();

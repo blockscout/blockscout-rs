@@ -108,7 +108,7 @@ async fn test_get_complete_cctx() {
     let cctx = cctx_response.get("CrossChainTx").unwrap();
     let cctx: CrossChainTx = serde_json::from_value(cctx.clone()).unwrap();
     let tx = db.client().begin().await.unwrap();
-    database.batch_insert_transactions(Uuid::new_v4(), &vec![cctx], &tx).await.unwrap();
+    database.batch_insert_transactions(Uuid::new_v4(), &vec![cctx], &tx, None).await.unwrap();
     tx.commit().await.unwrap();
     let cctx = database.get_complete_cctx("0x230d3138bf679c985b114ad3fef2b3eeb9a0d52852e84f67c601ffbdda776a01".to_string()).await.unwrap();
     assert!(cctx.is_some());

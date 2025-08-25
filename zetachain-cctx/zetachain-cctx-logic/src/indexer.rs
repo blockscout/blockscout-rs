@@ -163,9 +163,12 @@ async fn refresh_status_and_link_related(
         .map_err(|e| anyhow::format_err!("Failed to refresh cctx status: {}", e))? {
             channel_broadcaster.broadcast(ChannelEvent::new(CCTX_STATUS_UPDATE_TOPIC,  updated.index.clone(), &updated));
         }
-    update_cctx_relations(database.clone(), client, cctx, job_id)
+    let inserted = update_cctx_relations(database.clone(), client, cctx, job_id)
         .await
         .map_err(|e| anyhow::format_err!("Failed to update cctx relations: {}", e))?;
+    if !inserted.is_empty() {
+        channel_broadcaster.broadcast(ChannelEvent::new(NEW_CCTXS_TOPIC, "new_cctxs", &inserted));
+    }
     Ok(())
 }
 
@@ -175,7 +178,7 @@ async fn update_cctx_relations(
     client: &Client,
     cctx: &CctxShort,
     job_id: Uuid,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<CctxListItemProto>> {
     // Fetch children using the inbound hash to CCTX data endpoint
     let cross_chain_txs = client
         .get_inbound_hash_to_cctx_data(&cctx.index)
@@ -191,7 +194,7 @@ async fn update_cctx_relations(
         .collect();
     let cross_chain_txs = cctx_map.values().cloned().collect::<Vec<_>>();
 
-    database
+    let inserted = database
         .traverse_and_update_tree_relationships(cross_chain_txs.clone(), cctx, job_id)
         .await
         .map_err(|e| {
@@ -201,7 +204,7 @@ async fn update_cctx_relations(
             )
         })?;
 
-    Ok(())
+    Ok(inserted)
 }
 
 #[instrument(,level="info",skip_all, fields(job_id = %job_id))]

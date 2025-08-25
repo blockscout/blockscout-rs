@@ -45,7 +45,7 @@ async fn list_cctx_sorting() {
     let tx = db.client().begin().await.unwrap();
     database.setup_db().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &cctxs, &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &cctxs, &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -103,7 +103,7 @@ async fn list_cctx_timestamp_pagination() {
     let tx = db.client().begin().await.unwrap();
     database.setup_db().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &cctxs, &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &cctxs, &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -291,7 +291,7 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
     let tx = db.client().begin().await.unwrap();
     database.setup_db().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &cctxs, &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &cctxs, &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -462,7 +462,7 @@ async fn test_list_cctxs_endpoint() {
     database.setup_db().await.unwrap();
     let tx = db.client().begin().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &dummy_cctxs, &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &dummy_cctxs, &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -559,7 +559,7 @@ async fn test_list_cctxs_with_status_filter() {
 
     let tx = db.client().begin().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &dummy_cctxs, &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &dummy_cctxs, &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -705,7 +705,7 @@ async fn test_list_cctxs_with_filters() {
         .await
         .unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &vec![cctx_1, cctx_2], &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &vec![cctx_1, cctx_2], &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -874,7 +874,7 @@ async fn test_list_cctxs_with_status_reduced_filter() {
         .await
         .unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &all_cctxs, &tx)
+        .batch_insert_transactions(Uuid::new_v4(), &all_cctxs, &tx, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
