@@ -8,31 +8,21 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 use stats::{
-    ChartProperties, Named,
+    ChartProperties,
     counters::{
         ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
         ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
         OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
-        multichain::{
-            TotalInteropMessages, TotalInteropTransfers, TotalMultichainAddresses,
-            TotalMultichainTxns,
-        },
     },
     indexing_status::BlockscoutIndexingStatus,
     lines::{
         ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
         ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
         OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
-        multichain::{
-            accounts_growth_multichain::AccountsGrowthMultichain,
-            new_txns_multichain::NewTxnsMultichain,
-            new_txns_multichain_window::NewTxnsMultichainWindow,
-            txns_growth_multichain::TxnsGrowthMultichain,
-        },
     },
 };
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     net::SocketAddr,
     path::PathBuf,
     str::FromStr,
@@ -86,12 +76,6 @@ pub struct Settings {
     pub charts_config: PathBuf,
     pub layout_config: PathBuf,
     pub update_groups_config: PathBuf,
-    /// Used only if `multichain_mode` is enabled as a second-priority config.
-    pub multichain_charts_config: Option<PathBuf>,
-    /// Used only if `multichain_mode` is enabled as a second-priority config.
-    pub multichain_layout_config: Option<PathBuf>,
-    /// Used only if `multichain_mode` is enabled as a second-priority config.
-    pub multichain_update_groups_config: Option<PathBuf>,
     /// Location of swagger file to serve
     pub swagger_path: PathBuf,
     pub api_keys: HashMap<String, String>,
@@ -135,15 +119,6 @@ impl Default for Settings {
                 "config/blockscout_instance/update_groups.json",
             )
             .unwrap(),
-            multichain_charts_config: Some(
-                PathBuf::from_str("config/multichain/charts.json").unwrap(),
-            ),
-            multichain_layout_config: Some(
-                PathBuf::from_str("config/multichain/layout.json").unwrap(),
-            ),
-            multichain_update_groups_config: Some(
-                PathBuf::from_str("config/multichain/update_groups.json").unwrap(),
-            ),
             swagger_path: default_swagger_path(),
             blockscout_db_url: Default::default(),
             indexer_db_url: Default::default(),
@@ -165,45 +140,6 @@ impl Default for Settings {
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "STATS";
-}
-
-impl Settings {
-    fn config_paths(
-        multichain_mode: bool,
-        main_config: PathBuf,
-        multichain_config: &Option<PathBuf>,
-    ) -> Vec<PathBuf> {
-        let mut list = vec![main_config];
-        match multichain_config {
-            Some(m) if multichain_mode => list.push(m.clone()),
-            _ => (),
-        }
-        list
-    }
-
-    pub fn charts_config_paths(&self) -> Vec<PathBuf> {
-        Self::config_paths(
-            self.multichain_mode,
-            self.charts_config.clone(),
-            &self.multichain_charts_config,
-        )
-    }
-
-    pub fn layout_config_paths(&self) -> Vec<PathBuf> {
-        Self::config_paths(
-            self.multichain_mode,
-            self.layout_config.clone(),
-            &self.multichain_layout_config,
-        )
-    }
-
-    pub fn update_groups_config_paths(&self) -> Vec<PathBuf> {
-        Self::config_paths(
-            self.multichain_mode,
-            self.update_groups_config.clone(),
-            &self.multichain_update_groups_config,
-        )
-    }
 }
 
 pub fn handle_disable_internal_transactions(
@@ -321,29 +257,6 @@ pub fn handle_enable_all_eip_7702(
             charts,
             "eip-7702",
         )
-    }
-}
-
-pub fn disable_all_non_multichain_charts(charts: &mut config::charts::Config<AllChartSettings>) {
-    let multichain_charts = HashSet::from([
-        TotalInteropMessages::name(),
-        TotalInteropTransfers::name(),
-        TotalMultichainAddresses::name(),
-        TotalMultichainTxns::name(),
-        NewTxnsMultichain::name(),
-        NewTxnsMultichainWindow::name(),
-        TxnsGrowthMultichain::name(),
-        AccountsGrowthMultichain::name(),
-    ]);
-    for (name, settings) in charts.lines.iter_mut() {
-        if !multichain_charts.contains(name) {
-            settings.enabled = false;
-        }
-    }
-    for (name, settings) in charts.counters.iter_mut() {
-        if !multichain_charts.contains(name) {
-            settings.enabled = false;
-        }
     }
 }
 
