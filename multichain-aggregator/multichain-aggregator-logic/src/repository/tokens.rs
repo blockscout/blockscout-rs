@@ -246,7 +246,8 @@ where
         KeySpec::asc(Expr::col(Column::ChainId).into()),
     ];
     let page_token = page_token.map(|(m, f, h, n, a, c)| (m, f, h, n, a.to_vec(), c));
-    let cursor = Cursor::new(page_token, order_keys);
+    let cursor =
+        Cursor::new(page_token, order_keys).expect("page token length should match order keys");
     cursor.apply_pagination(
         &mut query,
         PageOptions {

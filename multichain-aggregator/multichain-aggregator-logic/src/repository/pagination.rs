@@ -2,19 +2,39 @@ use sea_orm::{
     Order, Value,
     sea_query::{ExprTrait, IntoValueTuple, NullOrdering, SelectStatement, SimpleExpr, ValueTuple},
 };
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum CursorError {
+    #[error("invalid page token length: {0}; expected {1}")]
+    InvalidPageTokenLength(usize, usize),
+}
 
 #[derive(Debug, Clone)]
 pub struct Cursor {
-    pub page_token: Option<ValueTuple>,
-    pub specs: Vec<KeySpec>,
+    page_token: Option<ValueTuple>,
+    specs: Vec<KeySpec>,
 }
 
 impl Cursor {
-    pub fn new(page_token: Option<impl IntoValueTuple>, specs: Vec<KeySpec>) -> Self {
-        Self {
-            page_token: page_token.map(|k| k.into_value_tuple()),
-            specs,
+    pub fn new(
+        page_token: Option<impl IntoValueTuple>,
+        specs: Vec<KeySpec>,
+    ) -> Result<Self, CursorError> {
+        let page_token = page_token.map(|k| k.into_value_tuple());
+
+        if let Some(page_token) = &page_token {
+            let page_token_len = value_tuple_len(page_token);
+            let specs_len = specs.len();
+            if page_token_len != specs_len {
+                return Err(CursorError::InvalidPageTokenLength(
+                    page_token_len,
+                    specs_len,
+                ));
+            }
         }
+
+        Ok(Self { page_token, specs })
     }
 
     pub fn apply_pagination(&self, q: &mut SelectStatement, opts: PageOptions) {
@@ -44,6 +64,15 @@ impl Cursor {
         }
 
         Some(expr)
+    }
+}
+
+fn value_tuple_len(v: &ValueTuple) -> usize {
+    match v {
+        ValueTuple::One(_) => 1,
+        ValueTuple::Two(_, _) => 2,
+        ValueTuple::Three(_, _, _) => 3,
+        ValueTuple::Many(v) => v.len(),
     }
 }
 
@@ -206,7 +235,8 @@ mod tests {
         let cursor = Cursor::new(
             Some((123, None::<Vec<u8>>, "test", None::<String>, 42)),
             specs,
-        );
+        )
+        .unwrap();
 
         let mut query = Entity::find().as_query().to_owned();
         cursor.apply_pagination(&mut query, PageOptions { page_size: 50 });

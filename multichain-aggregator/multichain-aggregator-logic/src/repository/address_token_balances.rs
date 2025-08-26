@@ -105,7 +105,8 @@ where
         KeySpec::desc(Expr::col(Column::Value).into()),
         KeySpec::desc(Expr::col(Column::Id).into()),
     ];
-    let cursor = Cursor::new(page_token, order_keys);
+    let cursor =
+        Cursor::new(page_token, order_keys).expect("page token length should match order keys");
     cursor.apply_pagination(
         &mut query,
         PageOptions {
