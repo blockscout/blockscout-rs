@@ -1,6 +1,5 @@
 use blockscout_service_launcher::test_database::TestDbGuard;
-use sea_orm::ColumnTrait;
-use sea_orm::{EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
 use uuid::Uuid;
 use zetachain_cctx_entity::token;

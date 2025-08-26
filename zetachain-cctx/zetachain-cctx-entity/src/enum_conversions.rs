@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use crate::sea_orm_active_enums::{CctxStatusStatus, CoinType, ConfirmationMode, InboundStatus, Kind, ProtocolContractVersion, TxFinalizationStatus, ProcessingStatus};
+use crate::sea_orm_active_enums::{
+    CctxStatusStatus, CoinType, ConfirmationMode, InboundStatus, Kind, ProcessingStatus,
+    ProtocolContractVersion, TxFinalizationStatus,
+};
 
 impl TryFrom<String> for TxFinalizationStatus {
     type Error = String;
@@ -25,7 +28,7 @@ impl TryFrom<String> for Kind {
             _ => Err(format!("Invalid Kind: {value}")),
         }
     }
-} 
+}
 
 impl TryFrom<String> for CctxStatusStatus {
     type Error = String;
@@ -158,8 +161,8 @@ impl From<CoinType> for i32 {
     }
 }
 
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Token as TokenProto;
 use crate::token::Model as Token;
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Token as TokenProto;
 
 impl From<Token> for TokenProto {
     fn from(token: Token) -> Self {

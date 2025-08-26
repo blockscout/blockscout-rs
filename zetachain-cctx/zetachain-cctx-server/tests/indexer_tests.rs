@@ -1,27 +1,25 @@
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 mod helpers;
 
 use actix_phoenix_channel::ChannelCentral;
 use blockscout_service_launcher::test_server;
 use pretty_assertions::assert_eq;
-use sea_orm::TransactionTrait;
-use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
 use serde_json::json;
 use uuid::Uuid;
-use wiremock::matchers::path_regex;
 use wiremock::{
-    matchers::{method, path, query_param},
+    matchers::{method, path, path_regex, query_param},
     Mock, MockServer, ResponseTemplate,
 };
-use zetachain_cctx_entity::cctx_status::{Column as CctxStatusColumn, Entity as CctxStatusEntity};
-use zetachain_cctx_entity::sea_orm_active_enums::CctxStatusStatus::OutboundMined;
-use zetachain_cctx_entity::sea_orm_active_enums::{
-    CoinType, ProcessingStatus, ProtocolContractVersion,
+use zetachain_cctx_entity::{
+    cctx_status::{Column as CctxStatusColumn, Entity as CctxStatusEntity},
+    cross_chain_tx,
+    sea_orm_active_enums::{
+        CctxStatusStatus::OutboundMined, CoinType, Kind, ProcessingStatus, ProtocolContractVersion,
+    },
+    watermark,
 };
-use zetachain_cctx_entity::{cross_chain_tx, sea_orm_active_enums::Kind, watermark};
-use zetachain_cctx_logic::channel::Channel;
-use zetachain_cctx_logic::database::Relation;
+use zetachain_cctx_logic::{channel::Channel, database::Relation};
 
 use crate::helpers::{
     dummy_cctx_with_pagination_response, dummy_cross_chain_tx, dummy_related_cctxs_response,
@@ -86,7 +84,9 @@ async fn test_status_update() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path(format!("/zeta-chain/crosschain/cctx/{pending_tx_index}").as_str()))
+        .and(path(
+            format!("/zeta-chain/crosschain/cctx/{pending_tx_index}").as_str(),
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "CrossChainTx": dummy_cross_chain_tx(pending_tx_index, "PendingOutbound")
         })))
@@ -95,7 +95,9 @@ async fn test_status_update() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path(format!("/zeta-chain/crosschain/cctx/{pending_tx_index}").as_str()))
+        .and(path(
+            format!("/zeta-chain/crosschain/cctx/{pending_tx_index}").as_str(),
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "CrossChainTx": dummy_cross_chain_tx(pending_tx_index, "OutboundMined")
         })))
@@ -203,7 +205,9 @@ async fn test_status_update_links_related() {
 
     //Check import a child cctx from inboundHashToCctxData
     Mock::given(method("GET"))
-        .and(path(format!("/zeta-chain/crosschain/inboundHashToCctxData/{root_index}").as_str()))
+        .and(path(
+            format!("/zeta-chain/crosschain/inboundHashToCctxData/{root_index}").as_str(),
+        ))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(dummy_related_cctxs_response(&[child_1_index])),
@@ -215,7 +219,7 @@ async fn test_status_update_links_related() {
     let child_2_index = "child_2_index";
     Mock::given(method("GET"))
         .and(path(
-            format!("/zeta-chain/crosschain/inboundHashToCctxData/{child_1_index}").as_str()
+            format!("/zeta-chain/crosschain/inboundHashToCctxData/{child_1_index}").as_str(),
         ))
         .respond_with(
             ResponseTemplate::new(200)
@@ -228,10 +232,7 @@ async fn test_status_update_links_related() {
     let child_3_index = "child_3_index";
     Mock::given(method("GET"))
         .and(path(
-            format!(
-                "/zeta-chain/crosschain/inboundHashToCctxData/{child_2_index}",
-            )
-            .as_str(),
+            format!("/zeta-chain/crosschain/inboundHashToCctxData/{child_2_index}",).as_str(),
         ))
         .respond_with(
             ResponseTemplate::new(200)
@@ -243,10 +244,7 @@ async fn test_status_update_links_related() {
     //This will let indexer know that there are no further children for child_3_index
     Mock::given(method("GET"))
         .and(path(
-            format!(
-                "/zeta-chain/crosschain/inboundHashToCctxData/{child_3_index}",
-            )
-            .as_str(),
+            format!("/zeta-chain/crosschain/inboundHashToCctxData/{child_3_index}",).as_str(),
         ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!(
             {"CrossChainTxs": []}
@@ -442,11 +440,16 @@ async fn test_get_cctx_info() {
     let child_cctx = dummy_cross_chain_tx(child_cctx_index, "OutboundMined");
     let tx = db.begin().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &vec![child_cctx], &tx, Some(Relation {
-            parent_id: 1,
-            depth: 2,
-            root_id: 1,
-        }))
+        .batch_insert_transactions(
+            Uuid::new_v4(),
+            &vec![child_cctx],
+            &tx,
+            Some(Relation {
+                parent_id: 1,
+                depth: 2,
+                root_id: 1,
+            }),
+        )
         .await
         .unwrap();
     tx.commit().await.unwrap();

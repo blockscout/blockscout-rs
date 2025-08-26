@@ -29,7 +29,7 @@ impl MigrationTrait for Migration {
                     .to_owned(),
             )
             .await?;
-        
+
         Ok(())
     }
 
@@ -60,5 +60,3 @@ enum CrossChainTx {
     RootId,
     Depth,
 }
-
-

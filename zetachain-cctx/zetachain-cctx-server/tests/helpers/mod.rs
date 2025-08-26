@@ -1,15 +1,18 @@
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use chrono::Utc;
+use rand::Rng;
 use reqwest::Url;
 use sea_orm::DatabaseConnection;
 use serde_json::Value;
 use std::sync::Arc;
-use zetachain_cctx_logic::client::Client;
-use zetachain_cctx_logic::models::{
-    CallOptions, CctxStatus, CoinType, CrossChainTx, InboundParams, OutboundParams, RevertOptions
+use zetachain_cctx_logic::{
+    client::Client,
+    models::{
+        CallOptions, CctxStatus, CoinType, CrossChainTx, InboundParams, OutboundParams,
+        RevertOptions,
+    },
 };
 use zetachain_cctx_server::Settings;
-use rand::Rng;
 
 #[allow(dead_code)]
 pub async fn init_db(db_prefix: &str, test_name: &str) -> TestDbGuard {
@@ -70,7 +73,8 @@ pub fn dummy_cross_chain_tx(index: &str, status: &str) -> CrossChainTx {
             status: status.to_string(),
             status_message: "".to_string(),
             error_message: "".to_string(),
-            last_update_timestamp: (Utc::now().timestamp() - rand::rng().random_range(1000..10000)).to_string(),
+            last_update_timestamp: (Utc::now().timestamp() - rand::rng().random_range(1000..10000))
+                .to_string(),
             is_abort_refunded: false,
             created_timestamp: "0".to_string(),
             error_message_revert: "".to_string(),
@@ -92,51 +96,53 @@ pub fn dummy_cross_chain_tx(index: &str, status: &str) -> CrossChainTx {
             status: "SUCCESS".to_string(),
             confirmation_mode: "SAFE".to_string(),
         },
-        outbound_params: vec![OutboundParams {
-            receiver: "receiver".to_string(),
-            receiver_chain_id: "2".to_string(),
-            coin_type: CoinType::Zeta,
-            amount: "1000000000000000000".to_string(),
-            tss_nonce: "42".to_string(),
-            gas_limit: "1337".to_string(),
-            gas_price: "0".to_string(),
-            gas_priority_fee: "0".to_string(),
-            hash: format!("{index}_1"),
-            ballot_index: "".to_string(),
-            observed_external_height: "0".to_string(),
-            gas_used: "0".to_string(),
-            effective_gas_price: "0".to_string(),
-            effective_gas_limit: "0".to_string(),
-            tss_pubkey: "".to_string(),
-            tx_finalization_status: "NotFinalized".to_string(),
-            call_options: Some(CallOptions {
+        outbound_params: vec![
+            OutboundParams {
+                receiver: "receiver".to_string(),
+                receiver_chain_id: "2".to_string(),
+                coin_type: CoinType::Zeta,
+                amount: "1000000000000000000".to_string(),
+                tss_nonce: "42".to_string(),
+                gas_limit: "1337".to_string(),
+                gas_price: "0".to_string(),
+                gas_priority_fee: "0".to_string(),
+                hash: format!("{index}_1"),
+                ballot_index: "".to_string(),
+                observed_external_height: "0".to_string(),
+                gas_used: "0".to_string(),
+                effective_gas_price: "0".to_string(),
+                effective_gas_limit: "0".to_string(),
+                tss_pubkey: "".to_string(),
+                tx_finalization_status: "NotFinalized".to_string(),
+                call_options: Some(CallOptions {
+                    gas_limit: "0".to_string(),
+                    is_arbitrary_call: false,
+                }),
+                confirmation_mode: "SAFE".to_string(),
+            },
+            OutboundParams {
+                receiver: "receiver2".to_string(),
+                receiver_chain_id: "3".to_string(),
+                coin_type: CoinType::ERC20,
+                amount: "42691234567890".to_string(),
+                tss_nonce: "0".to_string(),
                 gas_limit: "0".to_string(),
-                is_arbitrary_call: false,
-            }),
-            confirmation_mode: "SAFE".to_string(),
-        }, OutboundParams {
-            receiver: "receiver2".to_string(),
-            receiver_chain_id: "3".to_string(),
-            coin_type: CoinType::ERC20,
-            amount: "42691234567890".to_string(),
-            tss_nonce: "0".to_string(),
-            gas_limit: "0".to_string(),
-            gas_price: "0".to_string(),
-            gas_priority_fee: "0".to_string(),
-            hash: format!("{index}_2"),
-            ballot_index: "".to_string(),
-            observed_external_height: "0".to_string(),
-            gas_used: "0".to_string(),
-            effective_gas_price: "0".to_string(),
-            effective_gas_limit: "0".to_string(),
-            tss_pubkey: "".to_string(),
-            tx_finalization_status: "NotFinalized".to_string(),
-            call_options: Some(CallOptions {
-                gas_limit: "0".to_string(),
-                is_arbitrary_call: false,
-            }),
-            confirmation_mode: "SAFE".to_string(),
-        }
+                gas_price: "0".to_string(),
+                gas_priority_fee: "0".to_string(),
+                hash: format!("{index}_2"),
+                ballot_index: "".to_string(),
+                observed_external_height: "0".to_string(),
+                gas_used: "0".to_string(),
+                effective_gas_price: "0".to_string(),
+                effective_gas_limit: "0".to_string(),
+                tss_pubkey: "".to_string(),
+                tx_finalization_status: "NotFinalized".to_string(),
+                call_options: Some(CallOptions {
+                    gas_limit: "0".to_string(),
+                    is_arbitrary_call: false,
+                }),
+                confirmation_mode: "SAFE".to_string(),
+            },
         ],
         protocol_contract_version: "V2".to_string(),
         revert_options: RevertOptions {
@@ -149,14 +155,11 @@ pub fn dummy_cross_chain_tx(index: &str, status: &str) -> CrossChainTx {
     }
 }
 
-
 #[allow(dead_code)]
 pub fn dummy_related_cctxs_response(indices: &[&str]) -> serde_json::Value {
     let cctxs = indices
         .iter()
-        .map(|index| {
-            dummy_cross_chain_tx(index, "PendingOutbound")
-        })
+        .map(|index| dummy_cross_chain_tx(index, "PendingOutbound"))
         .map(|cctx| serde_json::json!(cctx))
         .collect::<Vec<Value>>();
 
@@ -167,14 +170,11 @@ pub fn dummy_related_cctxs_response(indices: &[&str]) -> serde_json::Value {
     cctxs_arr
 }
 
-
 #[allow(dead_code)]
 pub fn dummy_cctx_with_pagination_response(indices: &[&str], next_key: &str) -> serde_json::Value {
     let cctxs = indices
         .iter()
-        .map(|index| {
-            dummy_cross_chain_tx(index, "PendingOutbound")
-        })
+        .map(|index| dummy_cross_chain_tx(index, "PendingOutbound"))
         .map(|cctx| serde_json::json!(cctx))
         .collect::<Vec<Value>>();
 

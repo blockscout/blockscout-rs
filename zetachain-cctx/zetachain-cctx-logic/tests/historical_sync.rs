@@ -1,11 +1,9 @@
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 mod helpers;
 
 use actix_phoenix_channel::ChannelCentral;
 use pretty_assertions::assert_eq;
-use sea_orm::PaginatorTrait;
-use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
 use serde_json::json;
 use uuid::Uuid;
 use wiremock::matchers::path_regex;
@@ -14,17 +12,23 @@ use wiremock::{
     matchers::{method, path, query_param},
     Mock, MockServer, ResponseTemplate,
 };
-use zetachain_cctx_entity::cctx_status::{Column as CctxStatusColumn, Entity as CctxStatusEntity};
-use zetachain_cctx_entity::{inbound_params, outbound_params, revert_options};
+use zetachain_cctx_entity::{
+    cctx_status::{Column as CctxStatusColumn, Entity as CctxStatusEntity},
+    inbound_params, outbound_params, revert_options,
+};
 
-use zetachain_cctx_entity::cctx_status;
-use zetachain_cctx_entity::sea_orm_active_enums::ProcessingStatus;
-use zetachain_cctx_entity::{cross_chain_tx, sea_orm_active_enums::Kind, watermark};
-use zetachain_cctx_logic::channel::Channel;
-use zetachain_cctx_logic::client::{Client, RpcSettings};
-use zetachain_cctx_logic::database::ZetachainCctxDatabase;
-use zetachain_cctx_logic::indexer::Indexer;
-use zetachain_cctx_logic::settings::IndexerSettings;
+use zetachain_cctx_entity::{
+    cctx_status, cross_chain_tx,
+    sea_orm_active_enums::{Kind, ProcessingStatus},
+    watermark,
+};
+use zetachain_cctx_logic::{
+    channel::Channel,
+    client::{Client, RpcSettings},
+    database::ZetachainCctxDatabase,
+    indexer::Indexer,
+    settings::IndexerSettings,
+};
 #[tokio::test]
 async fn test_historical_sync_updates_pointer() {
     //if env var TRACING=true then call init_tests_logs()
@@ -247,11 +251,13 @@ async fn test_historical_sync_updates_pointer() {
         .all(db_conn.as_ref())
         .await
         .unwrap();
-    let max_timestamp = cctxs_with_status.iter().map(|c| c.1.as_ref().unwrap().last_update_timestamp).max().unwrap();
+    let max_timestamp = cctxs_with_status
+        .iter()
+        .map(|c| c.1.as_ref().unwrap().last_update_timestamp)
+        .max()
+        .unwrap();
     let watermark_timestamp = final_watermark.upper_bound_timestamp.unwrap();
     assert_eq!(max_timestamp, watermark_timestamp);
-
-
 }
 
 #[tokio::test]
@@ -278,7 +284,6 @@ async fn test_database_processes_one_off_watermark() {
         .exec_with_returning(db_conn.as_ref())
         .await
         .unwrap();
-
 
     let imported = database
         .import_cctxs(

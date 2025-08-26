@@ -2,10 +2,7 @@
 pub mod blockscout {
     pub mod zetachain_cctx {
         pub mod v1 {
-            include!(concat!(
-                env!("OUT_DIR"),
-                "/blockscout.zetachain_cctx.v1.rs"
-            ));
+            include!(concat!(env!("OUT_DIR"), "/blockscout.zetachain_cctx.v1.rs"));
         }
     }
 }

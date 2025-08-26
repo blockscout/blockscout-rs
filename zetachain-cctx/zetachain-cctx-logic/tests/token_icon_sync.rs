@@ -1,19 +1,24 @@
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 mod helpers;
 
 use actix_phoenix_channel::ChannelCentral;
 use pretty_assertions::assert_eq;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use wiremock::{matchers::{method, path, path_regex}, Mock, MockServer, ResponseTemplate};
 use serde_json::json;
+use wiremock::{
+    matchers::{method, path, path_regex},
+    Mock, MockServer, ResponseTemplate,
+};
 
 use zetachain_cctx_entity::token;
-use zetachain_cctx_logic::{channel::Channel, client::{Client, RpcSettings}};
-use zetachain_cctx_logic::database::ZetachainCctxDatabase;
-use zetachain_cctx_logic::indexer::Indexer;
-use zetachain_cctx_logic::settings::IndexerSettings;
+use zetachain_cctx_logic::{
+    channel::Channel,
+    client::{Client, RpcSettings},
+    database::ZetachainCctxDatabase,
+    indexer::Indexer,
+    settings::IndexerSettings,
+};
 
 fn dummy_token_response() -> serde_json::Value {
     json!({
@@ -46,25 +51,45 @@ async fn test_icon_url_synced() {
     let blockscout_server = MockServer::start().await;
 
     // Mock token list response
-    Mock::given(method("GET")).and(path("/zeta-chain/fungible/foreign_coins"))
+    Mock::given(method("GET"))
+        .and(path("/zeta-chain/fungible/foreign_coins"))
         .respond_with(ResponseTemplate::new(200).set_body_json(dummy_token_response()))
-        .mount(&api_server).await;
+        .mount(&api_server)
+        .await;
 
     // Mock cctx endpoints to noop
-    Mock::given(method("GET")).and(path("/zeta-chain/crosschain/cctx"))
+    Mock::given(method("GET"))
+        .and(path("/zeta-chain/crosschain/cctx"))
         .respond_with(ResponseTemplate::new(200).set_body_json(helpers::empty_cctx_response()))
-        .mount(&api_server).await;
-    Mock::given(method("GET")).and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(helpers::dummy_cross_chain_tx("dummy", "OutboundMined")))
-        .mount(&api_server).await;
-    Mock::given(method("GET")).and(path_regex(r"/zeta-chain/crosschain/inboundHashToCctxData/.+"))
+        .mount(&api_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(helpers::dummy_cross_chain_tx("dummy", "OutboundMined")),
+        )
+        .mount(&api_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path_regex(
+            r"/zeta-chain/crosschain/inboundHashToCctxData/.+",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"CrossChainTxs": []})))
-        .mount(&api_server).await;
+        .mount(&api_server)
+        .await;
 
     // Mock blockscout token icon endpoint
-    Mock::given(method("GET")).and(path("/api/v2/tokens/0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "icon_url": "https://example.com/icon.png" })))
-        .mount(&blockscout_server).await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/v2/tokens/0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "icon_url": "https://example.com/icon.png" })),
+        )
+        .mount(&blockscout_server)
+        .await;
 
     let client = Client::new(RpcSettings {
         url: api_server.uri().to_string(),
@@ -73,7 +98,7 @@ async fn test_icon_url_synced() {
         ..Default::default()
     });
 
-    let database = ZetachainCctxDatabase::new(db.client(),7001);
+    let database = ZetachainCctxDatabase::new(db.client(), 7001);
     database.setup_db().await.unwrap();
 
     let channel = Arc::new(ChannelCentral::new(Channel));
@@ -95,7 +120,9 @@ async fn test_icon_url_synced() {
     let handle = tokio::spawn(async move {
         tokio::time::timeout(Duration::from_millis(300), async {
             let _ = indexer.run().await;
-        }).await.ok();
+        })
+        .await
+        .ok();
     });
 
     tokio::time::sleep(Duration::from_millis(400)).await;
@@ -104,7 +131,15 @@ async fn test_icon_url_synced() {
     // Check DB for icon_url
     let conn = db.client();
     let stored = token::Entity::find()
-        .filter(token::Column::Zrc20ContractAddress.eq("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"))
-        .one(conn.as_ref()).await.unwrap().expect("token");
-    assert_eq!(stored.icon_url, Some("https://example.com/icon.png".to_string()));
-} 
+        .filter(
+            token::Column::Zrc20ContractAddress.eq("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+        )
+        .one(conn.as_ref())
+        .await
+        .unwrap()
+        .expect("token");
+    assert_eq!(
+        stored.icon_url,
+        Some("https://example.com/icon.png".to_string())
+    );
+}

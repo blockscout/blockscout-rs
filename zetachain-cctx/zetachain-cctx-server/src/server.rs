@@ -1,12 +1,8 @@
 use crate::{
     proto::{
-        cctx_info_actix::route_cctx_info,
-        cctx_info_server::CctxInfoServer,
-        health_actix::route_health,
-        health_server::HealthServer,
-        stats_actix::route_stats,
-        token_info_actix::route_token_info,
-        token_info_server::TokenInfoServer,
+        cctx_info_actix::route_cctx_info, cctx_info_server::CctxInfoServer,
+        health_actix::route_health, health_server::HealthServer, stats_actix::route_stats,
+        token_info_actix::route_token_info, token_info_server::TokenInfoServer,
     },
     services::{cctx::CctxService, stats::StatsService, token::TokenInfoService, HealthService},
     settings::Settings,
@@ -21,14 +17,8 @@ use actix_phoenix_channel::{configure_channel_websocket_route, ChannelCentral};
 use zetachain_cctx_logic::channel::Channel;
 
 use sea_orm::DatabaseConnection;
-use zetachain_cctx_logic::{
-    client::Client,
-    database::ZetachainCctxDatabase,
-    indexer::Indexer,
-};
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::
-    stats_server::StatsServer
-;
+use zetachain_cctx_logic::{client::Client, database::ZetachainCctxDatabase, indexer::Indexer};
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::stats_server::StatsServer;
 
 use std::sync::Arc;
 use tokio::time::Duration;
@@ -43,8 +33,6 @@ struct Router {
     token_info: Arc<TokenInfoService>,
     channel: Arc<ChannelCentral<Channel>>,
 }
-
-
 
 impl Router {
     pub fn grpc_router(&self) -> tonic::transport::server::Router {
@@ -62,9 +50,8 @@ impl launcher::HttpRouter for Router {
         service_config.configure(|config| route_cctx_info(config, self.cctx.clone()));
         service_config.configure(|config| route_stats(config, self.stats.clone()));
         service_config.configure(|config| route_token_info(config, self.token_info.clone()));
-        service_config.configure(|config| configure_channel_websocket_route(config, self.channel.clone()));
-
-        
+        service_config
+            .configure(|config| configure_channel_websocket_route(config, self.channel.clone()));
     }
 }
 
@@ -75,7 +62,10 @@ pub async fn run(
 ) -> Result<(), anyhow::Error> {
     launcher_tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
-    let database = Arc::new(ZetachainCctxDatabase::new(db.clone(), settings.indexer.zetachain_id));
+    let database = Arc::new(ZetachainCctxDatabase::new(
+        db.clone(),
+        settings.indexer.zetachain_id,
+    ));
     let health = Arc::new(HealthService::default());
     let cctx = Arc::new(CctxService::new(database.clone()));
     let stats = Arc::new(StatsService::new(database.clone()));
@@ -92,7 +82,7 @@ pub async fn run(
         );
         let restart_interval = settings.restart_interval;
         let restart_on_error = settings.restart_on_error;
-        
+
         tokio::spawn(async move {
             tracing::info!("starting indexer");
             let mut backoff = Duration::from_millis(restart_interval);

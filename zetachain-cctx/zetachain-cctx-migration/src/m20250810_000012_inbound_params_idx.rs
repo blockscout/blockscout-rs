@@ -14,7 +14,8 @@ impl MigrationTrait for Migration {
             CREATE INDEX IF NOT EXISTS idx_ip_observed_hash_inc
             ON inbound_params (observed_hash) INCLUDE (cross_chain_tx_id);
             "#,
-        ).await?;
+        )
+        .await?;
 
         // Covering index for cross_chain_tx_id → index-only for joins + selected cols
         db.execute_unprepared(
@@ -23,7 +24,8 @@ impl MigrationTrait for Migration {
             ON inbound_params (cross_chain_tx_id)
             INCLUDE (sender_chain_id, coin_type, asset, amount, observed_hash);
             "#,
-        ).await?;
+        )
+        .await?;
 
         // Optional: covering index for status table if you join it in same query
         db.execute_unprepared(
@@ -31,7 +33,8 @@ impl MigrationTrait for Migration {
             CREATE INDEX IF NOT EXISTS idx_cs_cctxid_inc
             ON cctx_status (cross_chain_tx_id) INCLUDE (status, created_timestamp);
             "#,
-        ).await?;
+        )
+        .await?;
 
         // Optional cleanup: drop older non-covering indexes to reduce bloat
         db.execute_unprepared(
@@ -53,7 +56,8 @@ impl MigrationTrait for Migration {
             DROP INDEX IF EXISTS idx_ip_cctxid_inc;
             DROP INDEX IF EXISTS idx_cs_cctxid_inc;
             "#,
-        ).await?;
+        )
+        .await?;
         Ok(())
     }
 }

@@ -1,32 +1,30 @@
-use std::sync::Arc;
-use std::time::Duration;
 use actix_phoenix_channel::ChannelCentral;
 use pretty_assertions::assert_eq;
-use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
-use sea_orm::PaginatorTrait;
+use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
 use serde_json::json;
-use wiremock::matchers::path_regex;
+use std::{sync::Arc, time::Duration};
 use wiremock::{
-    matchers::{method, path, query_param},
+    matchers::{method, path, path_regex, query_param},
     Mock, MockServer, ResponseTemplate,
 };
-use zetachain_cctx_entity::sea_orm_active_enums::ProcessingStatus;
-use zetachain_cctx_entity::{cross_chain_tx, sea_orm_active_enums::Kind, watermark};
+use zetachain_cctx_entity::{
+    cross_chain_tx,
+    sea_orm_active_enums::{Kind, ProcessingStatus},
+    watermark,
+};
 
 mod helpers;
 
-use zetachain_cctx_logic::channel::Channel;
 use zetachain_cctx_logic::{
+    channel::Channel,
     client::{Client, RpcSettings},
     database::ZetachainCctxDatabase,
     indexer::Indexer,
     settings::IndexerSettings,
 };
 
-
 #[tokio::test]
 async fn test_level_data_gap() {
-    
     if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
         helpers::init_tests_logs().await;
     }
@@ -59,8 +57,7 @@ async fn test_level_data_gap() {
         .mount(&mock_server)
         .await;
 
-
-        Mock::given(method("GET"))
+    Mock::given(method("GET"))
         .and(path("/zeta-chain/crosschain/cctx"))
         .and(query_param("unordered", "false"))
         .and(query_param("pagination.key", "SECOND_PAGE"))
@@ -79,7 +76,10 @@ async fn test_level_data_gap() {
         .and(query_param("unordered", "false"))
         .and(query_param("pagination.key", "THIRD_PAGE"))
         .respond_with(ResponseTemplate::new(200).set_body_json(
-            helpers::dummy_cctx_with_pagination_response(&["page_3_index_1", "page_3_index_2"], "end"),
+            helpers::dummy_cctx_with_pagination_response(
+                &["page_3_index_1", "page_3_index_2"],
+                "end",
+            ),
         ))
         .up_to_n_times(1)
         .mount(&mock_server)
@@ -97,31 +97,22 @@ async fn test_level_data_gap() {
         .mount(&mock_server)
         .await;
 
-
-
-    
-
     //supress status update/related cctx search
     Mock::given(method("GET"))
         .and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
-        .respond_with(ResponseTemplate::new(200).set_body_json( 
-            json!({
-                "CrossChainTx": helpers::dummy_cross_chain_tx("page_3_index_1", "OutboundMined")
-            })
-        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "CrossChainTx": helpers::dummy_cross_chain_tx("page_3_index_1", "OutboundMined")
+        })))
         .mount(&mock_server)
         .await;
     //supress status update/related cctx search
     Mock::given(method("GET"))
-        .and(path_regex(r"/zeta-chain/crosschain/inboundHashToCctxData/.+"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(
-                    json!({
-                        "CrossChainTxs": []
-                    })
-                ),
-        )
+        .and(path_regex(
+            r"/zeta-chain/crosschain/inboundHashToCctxData/.+",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "CrossChainTxs": []
+        })))
         .mount(&mock_server)
         .await;
 
@@ -178,7 +169,6 @@ async fn test_level_data_gap() {
             .await
             .unwrap();
         assert!(cctx.is_some(), "CCTX with index {index} not found");
-        
     }
 
     let cctx_count = cross_chain_tx::Entity::find()

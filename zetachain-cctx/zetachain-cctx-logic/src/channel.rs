@@ -1,6 +1,5 @@
 use actix_phoenix_channel::{ChannelConn, ChannelEvent, ChannelHandler};
 
-
 pub const NEW_CCTXS_TOPIC: &str = "cctxs:new_cctxs";
 pub const CCTX_STATUS_UPDATE_TOPIC: &str = "cctxs:status_update";
 
@@ -17,4 +16,3 @@ impl ChannelHandler for Channel {
         }
     }
 }
-

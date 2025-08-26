@@ -47,7 +47,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(ActixGenerator::new("proto/v1/api_config_http.yaml").unwrap()),
     ]));
     compile(
-        &["proto/v1/zetachain-cctx.proto", "proto/v1/health.proto", "proto/v1/stats.proto"],
+        &[
+            "proto/v1/zetachain-cctx.proto",
+            "proto/v1/health.proto",
+            "proto/v1/stats.proto",
+        ],
         &["proto"],
         gens,
     )?;

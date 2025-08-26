@@ -1,7 +1,6 @@
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::Utc;
-use sea_orm::TransactionTrait;
-use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
 use uuid::Uuid;
 use zetachain_cctx_entity::{
     cctx_status, cross_chain_tx,
@@ -94,7 +93,7 @@ async fn test_traverse_and_update_tree_relationships() {
     // insert grandchild first
     let tx2 = db_conn.begin().await.unwrap();
     database
-        .batch_insert_transactions(Uuid::new_v4(), &vec![grandchild_tx], &tx2,None)
+        .batch_insert_transactions(Uuid::new_v4(), &vec![grandchild_tx], &tx2, None)
         .await
         .unwrap();
     tx2.commit().await.unwrap();

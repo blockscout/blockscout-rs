@@ -42,4 +42,4 @@ enum InboundParams {
     Table,
     BallotIndex,
     ObservedHash,
-} 
+}

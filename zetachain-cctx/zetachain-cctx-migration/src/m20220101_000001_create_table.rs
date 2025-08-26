@@ -58,7 +58,10 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Watermark::Pointer).string().not_null())
                     .col(
                         ColumnDef::new(Watermark::ProcessingStatus)
-                            .enumeration("processing_status", ["Locked", "Unlocked", "Failed", "Done"])
+                            .enumeration(
+                                "processing_status",
+                                ["Locked", "Unlocked", "Failed", "Done"],
+                            )
                             .not_null()
                             .default("Unlocked"),
                     )
@@ -74,11 +77,7 @@ impl MigrationTrait for Migration {
                             .default(Expr::current_timestamp())
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(Watermark::UpdatedBy)
-                            .string()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Watermark::UpdatedBy).string().not_null())
                     .col(
                         ColumnDef::new(Watermark::RetriesNumber)
                             .integer()
@@ -88,10 +87,9 @@ impl MigrationTrait for Migration {
                     .col(
                         ColumnDef::new(Watermark::UpperBoundTimestamp)
                             .date_time()
-                            .null()
+                            .null(),
                     )
-                    .to_owned(),    
-                    
+                    .to_owned(),
             )
             .await?;
         // Create cross_chain_txs table
@@ -110,10 +108,18 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(CrossChainTx::Creator).string().not_null())
                     .col(ColumnDef::new(CrossChainTx::Index).string().not_null())
                     .col(ColumnDef::new(CrossChainTx::ZetaFees).string().not_null())
-                    .col(ColumnDef::new(CrossChainTx::RetriesNumber).integer().not_null().default(0))
+                    .col(
+                        ColumnDef::new(CrossChainTx::RetriesNumber)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
                     .col(
                         ColumnDef::new(CrossChainTx::ProcessingStatus)
-                            .enumeration("processing_status", ["Locked", "Unlocked", "Failed", "Done"])
+                            .enumeration(
+                                "processing_status",
+                                ["Locked", "Unlocked", "Failed", "Done"],
+                            )
                             .not_null()
                             .default("Unlocked"),
                     )
@@ -129,16 +135,8 @@ impl MigrationTrait for Migration {
                             .enumeration("protocol_contract_version", ["V1", "V2"])
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(CrossChainTx::RootId)
-                            .integer()
-                            .null(),
-                    )
-                    .col(
-                        ColumnDef::new(CrossChainTx::ParentId)
-                            .integer()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(CrossChainTx::RootId).integer().null())
+                    .col(ColumnDef::new(CrossChainTx::ParentId).integer().null())
                     .col(
                         ColumnDef::new(CrossChainTx::Depth)
                             .integer()
@@ -151,7 +149,7 @@ impl MigrationTrait for Migration {
             .await?;
 
         // Add foreign key constraints for self-referential relationships
-        
+
         manager
             .create_foreign_key(
                 ForeignKey::create()
@@ -275,7 +273,14 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(ColumnDef::new(InboundParams::TxOrigin).string().not_null())
-                    .col(ColumnDef::new(InboundParams::CoinType).enumeration("coin_type", ["Zeta", "Gas", "Erc20", "Cmd", "NoAssetCall"]).not_null())
+                    .col(
+                        ColumnDef::new(InboundParams::CoinType)
+                            .enumeration(
+                                "coin_type",
+                                ["Zeta", "Gas", "Erc20", "Cmd", "NoAssetCall"],
+                            )
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(InboundParams::Asset).string().null())
                     .col(ColumnDef::new(InboundParams::Amount).string().not_null())
                     .col(
@@ -314,7 +319,15 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(InboundParams::Status)
-                            .enumeration("inbound_status", ["SUCCESS", "INSUFFICIENT_DEPOSITOR_FEE", "INVALID_RECEIVER_ADDRESS", "INVALID_MEMO"])
+                            .enumeration(
+                                "inbound_status",
+                                [
+                                    "SUCCESS",
+                                    "INSUFFICIENT_DEPOSITOR_FEE",
+                                    "INVALID_RECEIVER_ADDRESS",
+                                    "INVALID_MEMO",
+                                ],
+                            )
                             .not_null(),
                     )
                     .col(
@@ -357,7 +370,14 @@ impl MigrationTrait for Migration {
                             .integer()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(OutboundParams::CoinType).enumeration("coin_type", ["Zeta", "Gas", "Erc20", "Cmd", "NoAssetCall"]).not_null())
+                    .col(
+                        ColumnDef::new(OutboundParams::CoinType)
+                            .enumeration(
+                                "coin_type",
+                                ["Zeta", "Gas", "Erc20", "Cmd", "NoAssetCall"],
+                            )
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(OutboundParams::Amount).string().not_null())
                     .col(ColumnDef::new(OutboundParams::TssNonce).string().not_null())
                     .col(ColumnDef::new(OutboundParams::GasLimit).string().not_null())
@@ -374,7 +394,11 @@ impl MigrationTrait for Migration {
                             .big_integer()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(OutboundParams::GasUsed).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(OutboundParams::GasUsed)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(OutboundParams::EffectiveGasPrice)
                             .string()
@@ -480,7 +504,7 @@ impl MigrationTrait for Migration {
                     .to_owned(),
             )
             .await?;
-            
+
         manager
             .drop_foreign_key(
                 ForeignKey::drop()
@@ -582,7 +606,7 @@ enum CrossChainTx {
     ParentId,
     Depth,
     RetriesNumber,
-    UpdatedBy
+    UpdatedBy,
 }
 
 #[derive(Iden)]

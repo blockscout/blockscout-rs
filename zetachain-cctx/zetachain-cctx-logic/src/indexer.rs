@@ -1,24 +1,27 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::Ok;
 use chrono::NaiveDateTime;
 use futures::future::join;
 
-use crate::channel::{CCTX_STATUS_UPDATE_TOPIC, NEW_CCTXS_TOPIC};
-use crate::database::ZetachainCctxDatabase;
-use crate::models::{CctxShort, PagedCCTXResponse};
-use crate::{client::Client, settings::IndexerSettings};
-use futures::stream::{select_with_strategy, PollNext};
-use futures::StreamExt;
+use crate::{
+    channel::{CCTX_STATUS_UPDATE_TOPIC, NEW_CCTXS_TOPIC},
+    client::Client,
+    database::ZetachainCctxDatabase,
+    models::{CctxShort, PagedCCTXResponse},
+    settings::IndexerSettings,
+};
+use actix_phoenix_channel::{ChannelBroadcaster, ChannelEvent};
+use base64::Engine;
+use futures::{
+    stream::{select_with_strategy, PollNext},
+    StreamExt,
+};
 use tokio::task::JoinHandle;
 use tracing::instrument;
 use uuid::Uuid;
 use zetachain_cctx_entity::sea_orm_active_enums::{Kind, ProcessingStatus};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem as CctxListItemProto;
-use actix_phoenix_channel::{ChannelBroadcaster, ChannelEvent};
-use base64::Engine;
 
 fn broadcast_new_cctxs_if_any(
     channel_broadcaster: &ChannelBroadcaster,
@@ -38,8 +41,8 @@ pub struct Indexer {
 enum IndexerJob {
     StatusUpdate(CctxShort, Uuid),        //cctx index and id to be updated
     LevelDataGap(i32, String, i32, Uuid), // Watermark (pointer) to the next page of cctxs to be fetched
-    HistoricalDataFetch(Uuid,HistoricalDataFetchJob), // Watermark (pointer) to the next page of cctxs to be fetched
-    TokenSync(Uuid),                        // Token synchronization job
+    HistoricalDataFetch(Uuid, HistoricalDataFetchJob), // Watermark (pointer) to the next page of cctxs to be fetched
+    TokenSync(Uuid),                                   // Token synchronization job
 }
 
 #[derive(Clone)]
@@ -111,16 +114,20 @@ async fn historical_sync(
     if cross_chain_txs.is_empty() {
         return Err(anyhow::anyhow!("Node returned empty response"));
     }
-    let next_key = response
-        .pagination
-        .next_key
-        .unwrap_or(
-            //base64 of the index of the last cctx in the response
-            base64::engine::general_purpose::STANDARD.encode(cross_chain_txs.last().unwrap().index.as_bytes())
-        );
+    let next_key = response.pagination.next_key.unwrap_or(
+        //base64 of the index of the last cctx in the response
+        base64::engine::general_purpose::STANDARD
+            .encode(cross_chain_txs.last().unwrap().index.as_bytes()),
+    );
     //atomically insert cctxs and update watermark
     let imported = database
-        .import_cctxs(job_id, cross_chain_txs, &next_key, job.watermark_id, job.watermark_upper_bound_timestamp)
+        .import_cctxs(
+            job_id,
+            cross_chain_txs,
+            &next_key,
+            job.watermark_id,
+            job.watermark_upper_bound_timestamp,
+        )
         .await?;
 
     tracing::debug!(
@@ -169,9 +176,14 @@ async fn refresh_status_and_link_related(
 ) -> anyhow::Result<()> {
     if let Some(updated) = refresh_cctx_status(database.clone(), client, cctx)
         .await
-        .map_err(|e| anyhow::format_err!("Failed to refresh cctx status: {}", e))? {
-            channel_broadcaster.broadcast(ChannelEvent::new(CCTX_STATUS_UPDATE_TOPIC,  updated.index.clone(), &updated));
-        }
+        .map_err(|e| anyhow::format_err!("Failed to refresh cctx status: {}", e))?
+    {
+        channel_broadcaster.broadcast(ChannelEvent::new(
+            CCTX_STATUS_UPDATE_TOPIC,
+            updated.index.clone(),
+            &updated,
+        ));
+    }
     let inserted = update_cctx_relations(database.clone(), client, cctx, job_id)
         .await
         .map_err(|e| anyhow::format_err!("Failed to update cctx relations: {}", e))?;
@@ -296,7 +308,11 @@ impl Indexer {
                                     .map(|c| c.index.clone())
                                     .collect::<Vec<String>>()
                             );
-                            broadcaster.broadcast(ChannelEvent::new(NEW_CCTXS_TOPIC, "new_cctxs", &inserted));
+                            broadcaster.broadcast(ChannelEvent::new(
+                                NEW_CCTXS_TOPIC,
+                                "new_cctxs",
+                                &inserted,
+                            ));
                         } else {
                             tracing::info!(
                                 "realtime_fetch_handler job_id: {} no new cctxs found",
@@ -412,7 +428,7 @@ impl Indexer {
                 self.database.clone(),
                 &self.client,
                 self.settings.token_batch_size,
-            )   
+            )
             .await?;
         }
 

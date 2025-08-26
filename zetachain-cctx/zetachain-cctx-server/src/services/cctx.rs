@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use tonic::{Request, Response, Status};
 
-use zetachain_cctx_logic::database::ZetachainCctxDatabase;
-use zetachain_cctx_logic::models::{ Filters};
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Direction;
+use zetachain_cctx_logic::{database::ZetachainCctxDatabase, models::Filters};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
-    cctx_info_server::CctxInfo, CrossChainTx, GetCctxInfoRequest, ListCctxsRequest, ListCctxsResponse,
+    cctx_info_server::CctxInfo, CrossChainTx, Direction, GetCctxInfoRequest, ListCctxsRequest,
+    ListCctxsResponse,
 };
 
 pub struct CctxService {
@@ -170,32 +169,36 @@ impl CctxInfo for CctxService {
             }
         };
 
-        let source_chain_id:Result<Vec<i32>, _> = parse_comma_separated(request.source_chain_id)
+        let source_chain_id: Result<Vec<i32>, _> = parse_comma_separated(request.source_chain_id)
             .into_iter()
             .map(|s| s.parse::<i32>())
             .collect::<Result<Vec<i32>, _>>();
 
-        let target_chain_id:Result<Vec<i32>, _> = parse_comma_separated(request.target_chain_id)
+        let target_chain_id: Result<Vec<i32>, _> = parse_comma_separated(request.target_chain_id)
             .into_iter()
             .map(|s| s.parse::<i32>())
             .collect::<Result<Vec<i32>, _>>();
-        
+
         let filters = Filters {
             status_reduced: parse_comma_separated(request.status_reduced),
             sender_address: parse_comma_separated(request.sender_address),
             receiver_address: parse_comma_separated(request.receiver_address),
             asset: parse_comma_separated(request.asset),
             coin_type: parse_comma_separated(request.coin_type),
-            source_chain_id: source_chain_id.map_err(|e| Status::invalid_argument(e.to_string()))? ,
-            target_chain_id: target_chain_id.map_err(|e| Status::invalid_argument(e.to_string()))?,
+            source_chain_id: source_chain_id
+                .map_err(|e| Status::invalid_argument(e.to_string()))?,
+            target_chain_id: target_chain_id
+                .map_err(|e| Status::invalid_argument(e.to_string()))?,
             token_symbol: parse_comma_separated(request.token_symbol),
             start_timestamp: request.start_timestamp,
             end_timestamp: request.end_timestamp,
             hash: request.hash,
         };
 
-        let direction = Direction::try_from(request.direction).map_err(|e| Status::invalid_argument(e.to_string()))?;
-        let content =self.database
+        let direction = Direction::try_from(request.direction)
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let content = self
+            .database
             .list_cctxs(request.limit, request.page_key, filters, direction)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;

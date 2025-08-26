@@ -13,9 +13,10 @@ impl MigrationTrait for Migration {
             ALTER TABLE cross_chain_tx 
             ALTER COLUMN root_id 
             SET DEFAULT currval(pg_get_serial_sequence('cross_chain_tx','id'));
-            "#
-        ).await?;
-        
+            "#,
+        )
+        .await?;
+
         Ok(())
     }
 
@@ -26,8 +27,9 @@ impl MigrationTrait for Migration {
             ALTER TABLE cross_chain_tx 
             ALTER COLUMN root_id 
             DROP DEFAULT;
-            "#
-        ).await?;
+            "#,
+        )
+        .await?;
         Ok(())
     }
 }

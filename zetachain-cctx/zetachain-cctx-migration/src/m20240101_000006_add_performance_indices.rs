@@ -44,8 +44,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-
-
         // Add index on cctx_status.created_timestamp for the ORDER BY clause
         manager
             .create_index(
@@ -101,8 +99,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-
-
         manager
             .drop_index(
                 Index::drop()
@@ -138,4 +134,4 @@ enum CctxStatus {
     Table,
     CrossChainTxId,
     CreatedTimestamp,
-} 
+}

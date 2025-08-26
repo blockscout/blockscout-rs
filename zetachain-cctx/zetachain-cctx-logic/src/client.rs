@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
 use tracing::instrument;
 
-use crate::models::{CCTXResponse, CrossChainTx, InboundHashToCctxResponse, PagedCCTXResponse, PagedTokenResponse};
+use crate::models::{
+    CCTXResponse, CrossChainTx, InboundHashToCctxResponse, PagedCCTXResponse, PagedTokenResponse,
+};
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -29,7 +31,8 @@ impl Client {
     pub fn new(settings: RpcSettings) -> Self {
         let http = reqwest::Client::new();
         let limiter = Arc::new(RateLimiter::direct(Quota::per_second(
-            NonZeroU32::new(settings.request_per_second).unwrap_or(NonZeroU32::new(default_request_per_second()).unwrap()),
+            NonZeroU32::new(settings.request_per_second)
+                .unwrap_or(NonZeroU32::new(default_request_per_second()).unwrap()),
         )));
         Self {
             settings,
@@ -79,22 +82,26 @@ impl Client {
         ))
     }
 
-    #[instrument(level="debug",skip_all)]
+    #[instrument(level = "debug", skip_all)]
     pub async fn fetch_cctx(&self, index: &str) -> anyhow::Result<CrossChainTx> {
         let mut url: Url = Url::parse(&self.settings.url)?;
-        url.set_path(&format!("{}zeta-chain/crosschain/cctx/{}", url.path(), index));
+        url.set_path(&format!(
+            "{}zeta-chain/crosschain/cctx/{}",
+            url.path(),
+            index
+        ));
         let request = Request::new(Method::GET, url);
         let response = self.make_request(request).await?.error_for_status()?;
         let body = response.json::<CCTXResponse>().await?;
         Ok(body.cross_chain_tx)
     }
 
-    #[instrument(level="debug",skip_all)]
+    #[instrument(level = "debug", skip_all)]
     pub async fn list_cctxs(
         &self,
         pagination_key: Option<&str>,
         unordered: bool,
-        batch_size: u32
+        batch_size: u32,
     ) -> Result<PagedCCTXResponse, Error> {
         let mut url: Url = self.settings.url.parse().unwrap();
         let path = url.path();
@@ -118,23 +125,23 @@ impl Client {
 
         let text = response.text().await?;
         let body = serde_json::from_str::<PagedCCTXResponse>(&text)
-            .map_err(|e| anyhow::anyhow!("JSON parsing error: {}\n{}", e, text))?;    
+            .map_err(|e| anyhow::anyhow!("JSON parsing error: {}\n{}", e, text))?;
         Ok(body)
     }
 
-    #[instrument(level="debug",skip_all)]
+    #[instrument(level = "debug", skip_all)]
     pub async fn get_inbound_hash_to_cctx_data(
         &self,
         cctx_index: &str,
     ) -> Result<InboundHashToCctxResponse, Error> {
         let mut url: Url = self.settings.url.parse().unwrap();
         let path = url.path();
-        url.set_path(&format!("{path}zeta-chain/crosschain/inboundHashToCctxData/{cctx_index}"));
+        url.set_path(&format!(
+            "{path}zeta-chain/crosschain/inboundHashToCctxData/{cctx_index}"
+        ));
 
         let request = Request::new(Method::GET, url.clone());
-        let response = self
-            .make_request(request)
-            .await?;
+        let response = self.make_request(request).await?;
 
         // Handle 404 by returning an empty result
         if response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -143,16 +150,17 @@ impl Client {
             });
         }
 
-        let response = response.error_for_status()
+        let response = response
+            .error_for_status()
             .map_err(|e| anyhow::anyhow!("HTTP request error: {}", e))?;
 
         let text = response.text().await?;
         let body = serde_json::from_str::<InboundHashToCctxResponse>(&text)
-            .map_err(|e| anyhow::anyhow!("JSON parsing error: {}\n{}", e, text))?;    
+            .map_err(|e| anyhow::anyhow!("JSON parsing error: {}\n{}", e, text))?;
         Ok(body)
     }
 
-    #[instrument(level="debug", skip_all)]
+    #[instrument(level = "debug", skip_all)]
     pub async fn fetch_token_icon(&self, contract_address: &str) -> anyhow::Result<Option<String>> {
         // Build URL: {blockscout_instance_url}/api/v2/tokens/{zrc20_contract_address}
         let mut url: Url = self.settings.blockscout_instance_url.parse()?;
@@ -176,7 +184,7 @@ impl Client {
     pub async fn list_tokens(
         &self,
         pagination_key: Option<&str>,
-        batch_size: u32
+        batch_size: u32,
     ) -> Result<PagedTokenResponse, Error> {
         let mut url: Url = self.settings.url.parse().unwrap();
         let path = url.path();
@@ -199,7 +207,7 @@ impl Client {
 
         let text = response.text().await?;
         let body = serde_json::from_str::<PagedTokenResponse>(&text)
-            .map_err(|e| anyhow::anyhow!("JSON parsing error: {}\n{}", e, text))?;    
+            .map_err(|e| anyhow::anyhow!("JSON parsing error: {}\n{}", e, text))?;
         Ok(body)
     }
 }

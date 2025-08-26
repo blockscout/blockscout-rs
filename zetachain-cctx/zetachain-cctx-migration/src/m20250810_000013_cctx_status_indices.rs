@@ -14,7 +14,8 @@ impl MigrationTrait for Migration {
             CREATE  INDEX  IF NOT EXISTS idx_cs_last_update_txid 
             ON cctx_status (last_update_timestamp DESC, cross_chain_tx_id);
             "#,
-        ).await?;
+        )
+        .await?;
 
         // Covering index for cross_chain_tx_id → index-only for joins + selected cols
         db.execute_unprepared(

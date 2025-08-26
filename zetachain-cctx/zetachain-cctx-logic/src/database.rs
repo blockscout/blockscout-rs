@@ -1,23 +1,20 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::models::{self, CctxShort, CrossChainTx, Filters, SyncProgress, Token};
 use anyhow::Ok;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use sea_orm::{
-    ActiveValue, DatabaseConnection, DatabaseTransaction, DbBackend, Statement, TransactionTrait,
+    ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbBackend,
+    EntityTrait, QueryFilter, QueryOrder, Statement, TransactionTrait,
 };
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use sea_orm::{ConnectionTrait, QueryOrder};
 use tracing::{instrument, Instrument};
 use uuid::Uuid;
-use zetachain_cctx_entity::sea_orm_active_enums::ProcessingStatus;
 use zetachain_cctx_entity::{
     cctx_status, cross_chain_tx as CrossChainTxEntity, inbound_params as InboundParamsEntity,
     outbound_params as OutboundParamsEntity, revert_options as RevertOptionsEntity,
     sea_orm_active_enums::{
         CctxStatusStatus, CoinType as DBCoinType, ConfirmationMode, InboundStatus, Kind,
-        ProtocolContractVersion, TxFinalizationStatus,
+        ProcessingStatus, ProtocolContractVersion, TxFinalizationStatus,
     },
     token as TokenEntity, watermark,
 };
@@ -182,13 +179,18 @@ impl ZetachainCctxDatabase {
             .find_outdated_children_by_index(children_cctxs, cctx.id, root_id, &tx)
             .await?;
 
-
-        let inserted = self.batch_insert_transactions(job_id, &need_to_import, &tx, Some(Relation {
-            parent_id: cctx.id,
-            depth: cctx.depth + 1,
-            root_id,
-        }))
-        .await?;
+        let inserted = self
+            .batch_insert_transactions(
+                job_id,
+                &need_to_import,
+                &tx,
+                Some(Relation {
+                    parent_id: cctx.id,
+                    depth: cctx.depth + 1,
+                    root_id,
+                }),
+            )
+            .await?;
 
         let need_to_update_ids = need_to_update.keys().cloned().collect::<Vec<_>>();
         //First we update parent_id for the direct descendants
@@ -432,7 +434,9 @@ impl ZetachainCctxDatabase {
 
         tracing::debug!("last synced cctx is absent, inserting a batch and moving watermark");
         let tx = self.db.begin().await?;
-        let inserted = self.batch_insert_transactions(job_id, &cctxs, &tx, None).await?;
+        let inserted = self
+            .batch_insert_transactions(job_id, &cctxs, &tx, None)
+            .await?;
         self.move_watermark(watermark_id, next_key, &tx).await?;
         tx.commit().await?;
         if earliest_exists {
@@ -501,7 +505,9 @@ impl ZetachainCctxDatabase {
                 .await?;
         }
 
-        let inserted = self.batch_insert_transactions(job_id, &cctxs, &tx, None).await?;
+        let inserted = self
+            .batch_insert_transactions(job_id, &cctxs, &tx, None)
+            .await?;
 
         tx.commit().await?;
         Ok(inserted)
@@ -532,7 +538,9 @@ impl ZetachainCctxDatabase {
                 .naive_utc();
         let new_upper_bound_timestamp =
             new_upper_bound_timestamp.max(current_upper_bound_timestamp.unwrap_or_default());
-        let imported = self.batch_insert_transactions(job_id, &cctxs, &tx, None ).await?;
+        let imported = self
+            .batch_insert_transactions(job_id, &cctxs, &tx, None)
+            .await?;
 
         //Watermark with id 1 is the main historic sync thread, all others are one-offs that might be manually added to the db
         let new_status = if watermark_id != 1 {
@@ -681,20 +689,20 @@ impl ZetachainCctxDatabase {
             vec![kind.to_string().into()],
         );
 
-        let watermarks: Result<Vec<UnlockedWatermark>, sea_orm::DbErr> =
-            self.db
-                .query_all(query_statement)
-                .await?
-                .iter()
-                .map(|r| {
-                    std::result::Result::Ok(UnlockedWatermark {
-                        watermark_id: r.try_get_by_index(0)?,
-                        pointer: r.try_get_by_index(1)?,
-                        retries_number: r.try_get_by_index(2)?,
-                        upper_bound_timestamp: r.try_get_by_index(3)?,
-                    })
+        let watermarks: Result<Vec<UnlockedWatermark>, sea_orm::DbErr> = self
+            .db
+            .query_all(query_statement)
+            .await?
+            .iter()
+            .map(|r| {
+                std::result::Result::Ok(UnlockedWatermark {
+                    watermark_id: r.try_get_by_index(0)?,
+                    pointer: r.try_get_by_index(1)?,
+                    retries_number: r.try_get_by_index(2)?,
+                    upper_bound_timestamp: r.try_get_by_index(3)?,
                 })
-                .collect::<Result<Vec<UnlockedWatermark>, sea_orm::DbErr>>();
+            })
+            .collect::<Result<Vec<UnlockedWatermark>, sea_orm::DbErr>>();
 
         watermarks.map_err(|e| anyhow::anyhow!(e))
     }
@@ -790,7 +798,10 @@ impl ZetachainCctxDatabase {
     }
 
     #[instrument(,level="trace",skip_all,fields(cctx_id = %cctx.index))]
-    pub async fn calculate_token(&self, cctx: &CrossChainTx) -> anyhow::Result<Option<TokenEntity::Model>> {
+    pub async fn calculate_token(
+        &self,
+        cctx: &CrossChainTx,
+    ) -> anyhow::Result<Option<TokenEntity::Model>> {
         let unknown_token = self.get_unknown_token().await?;
 
         match cctx.inbound_params.coin_type {
@@ -842,18 +853,21 @@ impl ZetachainCctxDatabase {
         cctx_id: i32,
         fetched_cctx: CrossChainTx,
     ) -> anyhow::Result<Option<CctxListItemProto>> {
-        let mut cctx_list_item:Option<CctxListItemProto> =None;
+        let mut cctx_list_item: Option<CctxListItemProto> = None;
         let tx = self.db.begin().await?;
         if let Some(cctx_status_row) = cctx_status::Entity::find()
             .filter(cctx_status::Column::CrossChainTxId.eq(cctx_id))
             .one(self.db.as_ref())
             .await?
         {
-            let new_status = CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status)
-                .unwrap();
+            let new_status =
+                CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status).unwrap();
             cctx_status::Entity::update(cctx_status::ActiveModel {
                 id: ActiveValue::Set(cctx_status_row.id),
-                status: ActiveValue::Set(CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone()).map_err(|e| anyhow::anyhow!(e))?),
+                status: ActiveValue::Set(
+                    CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
+                        .map_err(|e| anyhow::anyhow!(e))?,
+                ),
                 last_update_timestamp: ActiveValue::Set(
                     chrono::DateTime::from_timestamp(
                         fetched_cctx
@@ -871,29 +885,34 @@ impl ZetachainCctxDatabase {
             .filter(cctx_status::Column::Id.eq(cctx_status_row.id))
             .exec(self.db.as_ref())
             .await?;
-    
+
             let first_outbound_params = fetched_cctx.outbound_params.first().unwrap();
             let token = self.calculate_token(&fetched_cctx).await?;
-            
+
             cctx_list_item = Some(CctxListItemProto {
                 index: fetched_cctx.index,
                 status: new_status.into(),
                 status_reduced: reduce_status(new_status).into(),
                 amount: fetched_cctx.inbound_params.amount,
                 created_timestamp: fetched_cctx.cctx_status.created_timestamp.parse::<i64>()?,
-                last_update_timestamp: fetched_cctx.cctx_status.last_update_timestamp.parse::<i64>()?,
+                last_update_timestamp: fetched_cctx
+                    .cctx_status
+                    .last_update_timestamp
+                    .parse::<i64>()?,
                 source_chain_id: fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
                 target_chain_id: first_outbound_params.receiver_chain_id.parse::<i32>()?,
                 sender_address: fetched_cctx.inbound_params.sender,
                 receiver_address: first_outbound_params.receiver.clone(),
                 asset: fetched_cctx.inbound_params.asset,
-                coin_type: token.as_ref().map(|t| t.coin_type.clone().into()).unwrap_or_default(),
-                token_symbol: token.as_ref().map(|t|t.symbol.clone()),
+                coin_type: token
+                    .as_ref()
+                    .map(|t| t.coin_type.clone().into())
+                    .unwrap_or_default(),
+                token_symbol: token.as_ref().map(|t| t.symbol.clone()),
                 zrc20_contract_address: token.as_ref().map(|t| t.zrc20_contract_address.clone()),
                 decimals: token.as_ref().map(|t| t.decimals as i64),
             });
         }
-
 
         //commit transaction
         tx.commit().await?;
@@ -1763,7 +1782,7 @@ impl ZetachainCctxDatabase {
                     continue;
                 }
             };
-            
+
             let mut model = CrossChainTxEntity::ActiveModel {
                 id: ActiveValue::NotSet,
                 creator: ActiveValue::Set(cctx.creator.clone()),
@@ -2024,8 +2043,8 @@ impl ZetachainCctxDatabase {
                         ),
                     });
 
-                let status = CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status)
-                .unwrap();
+                let status =
+                    CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status).unwrap();
                 // Prepare proto list item
                 child_entities.cctx_list_items.push(CctxListItemProto {
                     index: cctx.index.clone(),

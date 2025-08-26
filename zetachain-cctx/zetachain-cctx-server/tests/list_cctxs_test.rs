@@ -1,18 +1,16 @@
 mod helpers;
-use blockscout_service_launcher::tracing::init_logs;
 use blockscout_service_launcher::{
     test_server,
-    tracing::{JaegerSettings, TracingSettings},
+    tracing::{init_logs, JaegerSettings, TracingSettings},
 };
 use chrono::Utc;
 use sea_orm::TransactionTrait;
 use std::sync::Arc;
 use uuid::Uuid;
-use zetachain_cctx_logic::models::Filters;
 use zetachain_cctx_logic::{
     client::{Client, RpcSettings},
     database::ZetachainCctxDatabase,
-    models::{CoinType, CrossChainTx},
+    models::{CoinType, CrossChainTx, Filters},
 };
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
     CctxListItem, Direction, ListCctxsResponse,
@@ -812,7 +810,10 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     .iter()
     .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingInbound"))
     .chain(
-        ["test_status_reduced_pending_4", "test_status_reduced_pending_5"]
+        [
+            "test_status_reduced_pending_4",
+            "test_status_reduced_pending_5",
+        ]
         .iter()
         .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingOutbound")),
     )

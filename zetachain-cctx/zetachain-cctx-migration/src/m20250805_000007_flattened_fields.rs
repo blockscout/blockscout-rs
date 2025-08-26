@@ -1,4 +1,6 @@
-use sea_orm_migration::{async_trait, prelude::*, sea_orm::DeriveIden, MigrationTrait, SchemaManager};
+use sea_orm_migration::{
+    async_trait, prelude::*, sea_orm::DeriveIden, MigrationTrait, SchemaManager,
+};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -19,9 +21,7 @@ impl MigrationTrait for Migration {
                             .null()
                             .to_owned(),
                     )
-                    .add_column_if_not_exists(
-                        ColumnDef::new("receiver").string().null().to_owned(),
-                    )
+                    .add_column_if_not_exists(ColumnDef::new("receiver").string().null().to_owned())
                     .to_owned(),
             )
             .await?;
@@ -41,9 +41,30 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager.alter_table(Table::alter().table(CrossChainTx::Table).drop_column(CrossChainTx::TokenId).to_owned()).await?;
-        manager.alter_table(Table::alter().table(CrossChainTx::Table).drop_column(CrossChainTx::ReceiverChainId).to_owned()).await?;
-        manager.alter_table(Table::alter().table(CrossChainTx::Table).drop_column(CrossChainTx::Receiver).to_owned()).await?;
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(CrossChainTx::Table)
+                    .drop_column(CrossChainTx::TokenId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(CrossChainTx::Table)
+                    .drop_column(CrossChainTx::ReceiverChainId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(CrossChainTx::Table)
+                    .drop_column(CrossChainTx::Receiver)
+                    .to_owned(),
+            )
+            .await?;
         Ok(())
     }
 }

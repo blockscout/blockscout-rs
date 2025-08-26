@@ -6,7 +6,6 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-
         // Create a composite unique index for outbound_params
         // This ensures each combination of (cross_chain_tx_id, receiver, receiver_chain_id) is unique
         manager
@@ -99,7 +98,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-
         manager
             .drop_index(
                 Index::drop()
@@ -154,7 +152,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-
         Ok(())
     }
 }
@@ -190,4 +187,4 @@ enum RevertOptions {
 enum CrossChainTx {
     Table,
     Index,
-} 
+}

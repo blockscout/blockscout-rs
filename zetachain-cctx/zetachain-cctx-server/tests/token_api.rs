@@ -5,11 +5,14 @@ use blockscout_service_launcher::test_server;
 use pretty_assertions::assert_eq;
 use sea_orm::{ActiveValue, EntityTrait};
 
-use zetachain_cctx_entity::{token, sea_orm_active_enums::CoinType as DbCoinType};
-use zetachain_cctx_logic::{client::{Client, RpcSettings}, database::ZetachainCctxDatabase};
+use sea_orm::{ColumnTrait, PaginatorTrait, QueryFilter};
+use zetachain_cctx_entity::{sea_orm_active_enums::CoinType as DbCoinType, token};
+use zetachain_cctx_logic::{
+    client::{Client, RpcSettings},
+    database::ZetachainCctxDatabase,
+    models::CoinType,
+};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Token as TokenProto;
-use zetachain_cctx_logic::models::CoinType;
-use sea_orm::{PaginatorTrait,QueryFilter, ColumnTrait};
 
 use uuid::Uuid;
 
@@ -26,7 +29,9 @@ async fn test_token_api_get_token_info() {
     // Insert a test token manually
     let test_token = token::ActiveModel {
         id: ActiveValue::NotSet,
-        zrc20_contract_address: ActiveValue::Set("0x0327f0660525b15Cdb8f1f5FBF0dD7Cd5Ba182aD".to_string()),
+        zrc20_contract_address: ActiveValue::Set(
+            "0x0327f0660525b15Cdb8f1f5FBF0dD7Cd5Ba182aD".to_string(),
+        ),
         asset: ActiveValue::Set(asset.to_string()),
         foreign_chain_id: ActiveValue::Set(42161),
         decimals: ActiveValue::Set(6),
@@ -57,20 +62,20 @@ async fn test_token_api_get_token_info() {
         },
         db.client(),
         Arc::new(Client::new(RpcSettings::default())),
-    ).await;
+    )
+    .await;
 
     // Test successful token retrieval
-    
 
-    let token_info: TokenProto = test_server::send_get_request(&server, &format!("/api/v1/TokenInfo:get?asset={asset}")).await;
-    
+    let token_info: TokenProto =
+        test_server::send_get_request(&server, &format!("/api/v1/TokenInfo:get?asset={asset}"))
+            .await;
 
     // Verify the response matches the inserted token
     assert_eq!(token_info.foreign_chain_id, 42161);
     assert_eq!(token_info.decimals, 6);
     assert_eq!(token_info.name, "ZetaChain ZRC20 USDC on Arbitrum One");
     assert_eq!(token_info.symbol, "USDC.ARB");
-
 }
 
 #[tokio::test]
@@ -82,7 +87,7 @@ async fn test_token_database_sync_and_query() {
     let db_conn = db.client();
 
     // Create database instance
-    let database = Arc::new(ZetachainCctxDatabase::new(db_conn.clone(),7001));
+    let database = Arc::new(ZetachainCctxDatabase::new(db_conn.clone(), 7001));
 
     // Create test tokens using the models
     let tokens = vec![
@@ -119,10 +124,7 @@ async fn test_token_database_sync_and_query() {
     database.sync_tokens(job_id, tokens).await.unwrap();
 
     // Verify tokens were inserted
-    let token_count = token::Entity::find()
-        .count(db_conn.as_ref())
-        .await
-        .unwrap();
+    let token_count = token::Entity::find().count(db_conn.as_ref()).await.unwrap();
     assert_eq!(token_count, 2);
 
     // Test get_token_by_asset method
@@ -153,29 +155,27 @@ async fn test_token_database_sync_and_query() {
     assert!(token_info3.is_none());
 
     // Test token update (sync the same tokens again with different data)
-    let updated_tokens = vec![
-        zetachain_cctx_logic::models::Token {
-            zrc20_contract_address: "0x1111111111111111111111111111111111111111".to_string(),
-            asset: "0xasset1".to_string(),
-            foreign_chain_id: "1".to_string(),
-            decimals: 18,
-            name: "Updated Test Token 1".to_string(), // Changed name
-            symbol: "UTEST1".to_string(), // Changed symbol
-            coin_type: CoinType::ERC20,
-            gas_limit: "150000".to_string(), // Changed gas limit
-            paused: true, // Changed paused status
-            liquidity_cap: "1500000000".to_string(), // Changed liquidity cap
-            icon_url: Some("https://example.com/icon.png".to_string()),
-        },
-    ];
+    let updated_tokens = vec![zetachain_cctx_logic::models::Token {
+        zrc20_contract_address: "0x1111111111111111111111111111111111111111".to_string(),
+        asset: "0xasset1".to_string(),
+        foreign_chain_id: "1".to_string(),
+        decimals: 18,
+        name: "Updated Test Token 1".to_string(), // Changed name
+        symbol: "UTEST1".to_string(),             // Changed symbol
+        coin_type: CoinType::ERC20,
+        gas_limit: "150000".to_string(),         // Changed gas limit
+        paused: true,                            // Changed paused status
+        liquidity_cap: "1500000000".to_string(), // Changed liquidity cap
+        icon_url: Some("https://example.com/icon.png".to_string()),
+    }];
 
-    database.sync_tokens(Uuid::new_v4(), updated_tokens).await.unwrap();
-
-    // Verify token count is still 2 (no new tokens added)
-    let token_count = token::Entity::find()
-        .count(db_conn.as_ref())
+    database
+        .sync_tokens(Uuid::new_v4(), updated_tokens)
         .await
         .unwrap();
+
+    // Verify token count is still 2 (no new tokens added)
+    let token_count = token::Entity::find().count(db_conn.as_ref()).await.unwrap();
     assert_eq!(token_count, 2);
 
     // Verify the token was updated
@@ -201,4 +201,4 @@ async fn test_token_database_sync_and_query() {
     assert_eq!(db_token.gas_limit, "150000");
     assert_eq!(db_token.paused, true);
     assert_eq!(db_token.liquidity_cap, "1500000000");
-} 
+}

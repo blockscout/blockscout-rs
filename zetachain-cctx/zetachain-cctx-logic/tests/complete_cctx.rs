@@ -1,10 +1,9 @@
 mod helpers;
 
-use serde_json::json;
-use zetachain_cctx_logic::database::ZetachainCctxDatabase;
-use zetachain_cctx_logic::models::CrossChainTx;
-use uuid::Uuid;
 use migration::sea_orm::TransactionTrait;
+use serde_json::json;
+use uuid::Uuid;
+use zetachain_cctx_logic::{database::ZetachainCctxDatabase, models::CrossChainTx};
 
 #[tokio::test]
 async fn test_get_complete_cctx() {
@@ -103,20 +102,39 @@ async fn test_get_complete_cctx() {
         }
     });
 
-    let token = helpers::dummy_token("BTC", "sBTC.BTC", None, "18333", zetachain_cctx_logic::models::CoinType::Gas);
-    database.sync_tokens(Uuid::new_v4(), vec![token]).await.unwrap();
+    let token = helpers::dummy_token(
+        "BTC",
+        "sBTC.BTC",
+        None,
+        "18333",
+        zetachain_cctx_logic::models::CoinType::Gas,
+    );
+    database
+        .sync_tokens(Uuid::new_v4(), vec![token])
+        .await
+        .unwrap();
     let cctx = cctx_response.get("CrossChainTx").unwrap();
     let cctx: CrossChainTx = serde_json::from_value(cctx.clone()).unwrap();
     let tx = db.client().begin().await.unwrap();
-    database.batch_insert_transactions(Uuid::new_v4(), &vec![cctx], &tx, None).await.unwrap();
+    database
+        .batch_insert_transactions(Uuid::new_v4(), &vec![cctx], &tx, None)
+        .await
+        .unwrap();
     tx.commit().await.unwrap();
-    let cctx = database.get_complete_cctx("0x230d3138bf679c985b114ad3fef2b3eeb9a0d52852e84f67c601ffbdda776a01".to_string()).await.unwrap();
+    let cctx = database
+        .get_complete_cctx(
+            "0x230d3138bf679c985b114ad3fef2b3eeb9a0d52852e84f67c601ffbdda776a01".to_string(),
+        )
+        .await
+        .unwrap();
     assert!(cctx.is_some());
     let cctx = cctx.unwrap();
-    assert_eq!(cctx.index, "0x230d3138bf679c985b114ad3fef2b3eeb9a0d52852e84f67c601ffbdda776a01");
+    assert_eq!(
+        cctx.index,
+        "0x230d3138bf679c985b114ad3fef2b3eeb9a0d52852e84f67c601ffbdda776a01"
+    );
     assert_eq!(cctx.creator, "zeta1dxyzsket66vt886ap0gnzlnu5pv0y99v086wnz");
     assert_eq!(cctx.zeta_fees, "0");
     assert_eq!(cctx.relayed_message, "000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000076465706f73697400000000000000000000000000000000000000000000000000");
     assert_eq!(cctx.token_symbol, Some("sBTC.BTC".to_string()));
-    
 }

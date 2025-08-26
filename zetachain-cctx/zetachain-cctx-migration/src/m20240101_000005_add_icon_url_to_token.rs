@@ -10,11 +10,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Token::Table)
-                    .add_column_if_not_exists(
-                        ColumnDef::new(Token::IconUrl)
-                            .string()
-                            .null(),
-                    )
+                    .add_column_if_not_exists(ColumnDef::new(Token::IconUrl).string().null())
                     .to_owned(),
             )
             .await
@@ -36,4 +32,4 @@ impl MigrationTrait for Migration {
 enum Token {
     Table,
     IconUrl,
-} 
+}
