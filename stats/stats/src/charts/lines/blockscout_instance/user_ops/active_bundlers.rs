@@ -2,30 +2,14 @@
 
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::{
-        kinds::{
-            local_db::{
-                DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days,
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
-};
+use crate::chart_prelude::*;
 
 use blockscout_db::entity::user_operations;
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use migration::IntoColumnRef;
-use sea_orm::Statement;
 
 use super::count_distinct_in_user_ops;
 
 pub struct ActiveBundlersStatement;
+impl_db_choice!(ActiveBundlersStatement, UseBlockscoutDB);
 
 impl StatementFromRange for ActiveBundlersStatement {
     fn get_statement(
@@ -56,10 +40,9 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-            user_ops: UserOpsIndexingStatus::PastOperationsIndexed,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
+            .with_user_ops(UserOpsIndexingStatus::PastOperationsIndexed)
     }
 }
 

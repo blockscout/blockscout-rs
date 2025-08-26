@@ -1,32 +1,39 @@
-use crate::{error::ParseError, proto, types::proto_address_hash_from_alloy};
+use crate::{
+    error::ParseError,
+    proto,
+    types::{proto_address_hash_from_alloy, sea_orm_wrappers::SeaOrmAddress},
+};
 use alloy_primitives::Address;
-use sea_orm::{ActiveValue::Set, prelude::BigDecimal};
+use entity::interop_messages_transfers::{ActiveModel, Entity, Model};
+use sea_orm::{ActiveValue::Set, DerivePartialModel, prelude::BigDecimal};
 
-#[derive(Debug, Clone)]
+#[derive(DerivePartialModel, Debug, Clone)]
+#[sea_orm(entity = "Entity", from_query_result)]
 pub struct InteropMessageTransfer {
-    pub token_address_hash: Option<Address>,
-    pub from_address_hash: Address,
-    pub to_address_hash: Address,
+    pub token_address_hash: Option<SeaOrmAddress>,
+    pub from_address_hash: SeaOrmAddress,
+    pub to_address_hash: SeaOrmAddress,
     pub amount: BigDecimal,
 }
 
-impl TryFrom<entity::interop_messages_transfers::Model> for InteropMessageTransfer {
+impl TryFrom<Model> for InteropMessageTransfer {
     type Error = ParseError;
 
-    fn try_from(v: entity::interop_messages_transfers::Model) -> Result<Self, Self::Error> {
+    fn try_from(v: Model) -> Result<Self, Self::Error> {
         Ok(Self {
             token_address_hash: v
                 .token_address_hash
                 .map(|a| Address::try_from(a.as_slice()))
-                .transpose()?,
-            from_address_hash: Address::try_from(v.from_address_hash.as_slice())?,
-            to_address_hash: Address::try_from(v.to_address_hash.as_slice())?,
+                .transpose()?
+                .map(Into::into),
+            from_address_hash: Address::try_from(v.from_address_hash.as_slice())?.into(),
+            to_address_hash: Address::try_from(v.to_address_hash.as_slice())?.into(),
             amount: v.amount,
         })
     }
 }
 
-impl From<InteropMessageTransfer> for entity::interop_messages_transfers::ActiveModel {
+impl From<InteropMessageTransfer> for ActiveModel {
     fn from(v: InteropMessageTransfer) -> Self {
         Self {
             token_address_hash: Set(v.token_address_hash.map(|a| a.to_vec())),

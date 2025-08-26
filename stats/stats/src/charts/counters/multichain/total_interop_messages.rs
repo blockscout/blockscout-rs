@@ -1,23 +1,9 @@
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    data_source::{
-        kinds::{
-            data_manipulation::map::MapToString,
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::IndexingStatusTrait,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use migration::{Asterisk, Func, IntoColumnRef};
 use multichain_aggregator_entity::interop_messages;
-use sea_orm::{ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, QueryTrait};
+
+use crate::chart_prelude::*;
 
 pub struct TotalInteropMessagesStatement;
+impl_db_choice!(TotalInteropMessagesStatement, UsePrimaryDB);
 
 impl StatementFromUpdateTime for TotalInteropMessagesStatement {
     fn get_statement(

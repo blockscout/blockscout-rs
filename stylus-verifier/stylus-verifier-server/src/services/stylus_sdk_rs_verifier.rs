@@ -34,6 +34,8 @@ impl StylusSdkRsVerifierService {
                 semver::Version::new(0, 5, 12),
                 semver::Version::new(0, 6, 0),
                 semver::Version::new(0, 6, 1),
+                semver::Version::new(0, 6, 2),
+                semver::Version::new(0, 6, 3),
             ],
         }
     }

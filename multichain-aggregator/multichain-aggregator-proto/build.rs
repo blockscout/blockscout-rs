@@ -32,6 +32,7 @@ fn compile(
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_721", "#[serde(rename = \"ERC-721\")]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_1155", "#[serde(rename = \"ERC-1155\")]")
         .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_404", "#[serde(rename = \"ERC-404\")]")
+        .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_7802", "#[serde(rename = \"ERC-7802\")]")
         // Comma separator for ListDappsRequest.chain_ids
         .type_attribute("ListDappsRequest", "#[serde_with::serde_as]")
         .field_attribute("ListDappsRequest.chain_ids", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
@@ -47,6 +48,7 @@ fn compile(
         .field_attribute("BatchImportRequest.interop_messages", "#[serde(default)]")
         .field_attribute("BatchImportRequest.address_coin_balances", "#[serde(default)]")
         .field_attribute("BatchImportRequest.address_token_balances", "#[serde(default)]")
+        .field_attribute("BatchImportRequest.counters", "#[serde(default)]")
         .field_attribute("BatchImportRequest.tokens", "#[serde(default)]")
         .field_attribute("BatchImportRequest.AddressImport.token_type", "#[serde(default)]")
         .field_attribute("BatchImportRequest.TokenImport.Metadata.token_type", "#[serde(default)]")

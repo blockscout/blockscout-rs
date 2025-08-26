@@ -11,14 +11,16 @@ use stats::{
     ChartProperties,
     counters::{
         ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
-        ArbitrumYesterdayOperationalTxns, OpStackNewOperationalTxns24h,
-        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
+        ArbitrumYesterdayOperationalTxns, NewZetachainCrossChainTxns24h,
+        OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
+        PendingZetachainCrossChainTxns, TotalZetachainCrossChainTxns,
     },
     indexing_status::BlockscoutIndexingStatus,
     lines::{
         ArbitrumNewOperationalTxns, ArbitrumNewOperationalTxnsWindow,
         ArbitrumOperationalTxnsGrowth, Eip7702AuthsGrowth, NewEip7702Auths,
-        OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow, OpStackOperationalTxnsGrowth,
+        NewZetachainCrossChainTxns, OpStackNewOperationalTxns, OpStackNewOperationalTxnsWindow,
+        OpStackOperationalTxnsGrowth, ZetachainCrossChainTxnsGrowth,
     },
 };
 use std::{
@@ -43,6 +45,8 @@ pub struct Settings {
     pub run_migrations: bool,
     pub blockscout_db_url: Option<String>,
     pub indexer_db_url: Option<String>,
+    /// Url for second db of indexer (currently assumed to be CCTX (cross chain transactions) indexer, see `zetachain-cctx` service)
+    pub second_indexer_db_url: Option<String>,
     /// Blockscout API url.
     ///
     /// Required. To launch without it api use [`Settings::ignore_blockscout_api_absence`].
@@ -61,6 +65,11 @@ pub struct Settings {
     pub enable_all_op_stack: bool,
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
+    /// Enable stats for zetachain CCTX data. Requires `second_indexer_db_url` to be set.
+    ///
+    /// Note: it's not a interop/multichain CCTX stats, therefore it's not compatible with
+    /// `multichain_mode`.
+    pub enable_zetachain_cctx: bool,
     /// Enable multichain mode.
     ///
     /// This will run stats service for a multichain explorer.
@@ -122,12 +131,14 @@ impl Default for Settings {
             swagger_path: default_swagger_path(),
             blockscout_db_url: Default::default(),
             indexer_db_url: Default::default(),
+            second_indexer_db_url: Default::default(),
             blockscout_api_url: None,
             ignore_blockscout_api_absence: false,
             disable_internal_transactions: false,
             enable_all_arbitrum: false,
             enable_all_op_stack: false,
             enable_all_eip_7702: false,
+            enable_zetachain_cctx: false,
             multichain_mode: false,
             create_database: Default::default(),
             run_migrations: Default::default(),
@@ -260,6 +271,38 @@ pub fn handle_enable_all_eip_7702(
     }
 }
 
+pub fn handle_enable_zetachain_cctx(
+    settings: &mut Settings,
+    charts: &mut config::charts::Config<AllChartSettings>,
+) {
+    if !settings.enable_zetachain_cctx {
+        return;
+    }
+    if settings.multichain_mode {
+        panic!(
+            "Multichain mode is not compatible with enabling local cross chain transactions stats"
+        );
+    }
+    enable_charts(
+        &[
+            NewZetachainCrossChainTxns::key().name(),
+            ZetachainCrossChainTxnsGrowth::key().name(),
+            NewZetachainCrossChainTxns24h::key().name(),
+            PendingZetachainCrossChainTxns::key().name(),
+            TotalZetachainCrossChainTxns::key().name(),
+        ],
+        charts,
+        "zetachain-cctx",
+    );
+    let check_enabled = &mut settings
+        .conditional_start
+        .zetachain_indexed_until_today
+        .enabled;
+    if check_enabled.is_none() {
+        *check_enabled = Some(true);
+    }
+}
+
 pub fn apply_multichain_mode_settings(settings: &mut Settings) {
     settings.blockscout_api_url = None;
     settings.ignore_blockscout_api_absence = true;
@@ -301,6 +344,7 @@ pub struct StartConditionSettings {
     pub blocks_ratio: ToggleableThreshold,
     pub internal_transactions_ratio: ToggleableThreshold,
     pub user_ops_past_indexing_finished: ToggleableCheck,
+    pub zetachain_indexed_until_today: ToggleableOptionalCheck,
     pub check_period_secs: u32,
 }
 
@@ -311,6 +355,7 @@ impl Default for StartConditionSettings {
             blocks_ratio: ToggleableThreshold::default(),
             internal_transactions_ratio: ToggleableThreshold::default(),
             user_ops_past_indexing_finished: ToggleableCheck::default(),
+            zetachain_indexed_until_today: ToggleableOptionalCheck::default(),
             check_period_secs: 5,
         }
     }
@@ -322,6 +367,9 @@ impl StartConditionSettings {
     }
     pub fn user_ops_checks_enabled(&self) -> bool {
         self.user_ops_past_indexing_finished.enabled
+    }
+    pub fn zetachain_checks_enabled(&self) -> bool {
+        self.zetachain_indexed_until_today.enabled.unwrap_or(false)
     }
 }
 
@@ -374,6 +422,12 @@ impl Default for ToggleableCheck {
     fn default() -> Self {
         Self { enabled: true }
     }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ToggleableOptionalCheck {
+    pub enabled: Option<bool>,
 }
 
 #[cfg(test)]

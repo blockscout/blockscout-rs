@@ -39,6 +39,7 @@ rust_decimal = { workspace = true }
 url = { workspace = true }
 futures = { workspace = true }
 recache = { workspace = true }
+amplify = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true }

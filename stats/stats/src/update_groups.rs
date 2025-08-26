@@ -321,6 +321,24 @@ construct_update_group!(NewBuilderAccountsGroup {
         BuilderAccountsGrowthWeekly,
         BuilderAccountsGrowthMonthly,
         BuilderAccountsGrowthYearly,
+        TotalBuilderAccounts,
+    ],
+});
+
+construct_update_group!(ZetachainCrossChainTxnsGroup {
+    charts: [
+        NewZetachainCrossChainTxns,
+        NewZetachainCrossChainTxnsWeekly,
+        NewZetachainCrossChainTxnsMonthly,
+        NewZetachainCrossChainTxnsYearly,
+        ZetachainCrossChainTxnsGrowth,
+        ZetachainCrossChainTxnsGrowthWeekly,
+        ZetachainCrossChainTxnsGrowthMonthly,
+        ZetachainCrossChainTxnsGrowthYearly,
+        // Zetachain cctx charts returned in transactions page.
+        NewZetachainCrossChainTxns24h,
+        PendingZetachainCrossChainTxns,
+        TotalZetachainCrossChainTxns,
     ],
 });
 

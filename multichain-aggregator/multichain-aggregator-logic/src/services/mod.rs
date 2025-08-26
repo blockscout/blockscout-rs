@@ -4,3 +4,22 @@ pub mod channel;
 pub mod cluster;
 pub mod import;
 pub mod search;
+
+pub mod macros {
+    macro_rules! maybe_cache_lookup {
+        ($cache:expr, $key:expr, $get:expr) => {
+            if let Some(cache) = $cache {
+                cache
+                    .default_request()
+                    .key($key)
+                    .execute($get)
+                    .await
+                    .map_err(|err| err.into())
+            } else {
+                $get().await
+            }
+        };
+    }
+
+    pub(crate) use maybe_cache_lookup;
+}

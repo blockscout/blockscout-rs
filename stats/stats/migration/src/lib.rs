@@ -1,4 +1,4 @@
-pub use sea_orm_migration::prelude::*;
+pub(crate) use sea_orm_migration::prelude::*;
 use sea_orm_migration::sea_orm::{Statement, TransactionTrait};
 
 mod m20220101_000001_init;

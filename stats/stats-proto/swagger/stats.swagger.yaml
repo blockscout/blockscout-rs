@@ -410,6 +410,12 @@ definitions:
         $ref: '#/definitions/v1Counter'
       op_stack_operational_transactions_24h:
         $ref: '#/definitions/v1Counter'
+      total_zetachain_cross_chain_txns:
+        $ref: '#/definitions/v1Counter'
+      new_zetachain_cross_chain_txns_24h:
+        $ref: '#/definitions/v1Counter'
+      pending_zetachain_cross_chain_txns:
+        $ref: '#/definitions/v1Counter'
   v1UpdateStatus:
     type: object
     properties:

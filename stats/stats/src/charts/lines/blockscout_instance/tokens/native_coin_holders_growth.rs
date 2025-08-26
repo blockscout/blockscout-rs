@@ -1,39 +1,15 @@
 use std::collections::{BTreeMap, HashSet};
 
 use crate::{
-    ChartError, ChartProperties, MissingDatePolicy, Named,
+    chart_prelude::*,
     charts::db_interaction::write::{create_chart, insert_data_many},
-    data_source::{
-        UpdateContext,
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, StripExt},
-                resolutions::last_value::LastValueLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource, LocalDbChartSource,
-                parameter_traits::{CreateBehaviour, UpdateBehaviour},
-                parameters::{
-                    DefaultQueryVec,
-                    update::batching::parameters::{Batch30Weeks, Batch30Years, Batch36Months},
-                },
-            },
-        },
-    },
-    define_and_impl_resolution_properties,
-    types::timespans::{DateValue, Month, Week, Year},
 };
 
 use blockscout_db::entity::address_coin_balances_daily;
 use blockscout_metrics_tools::AggregateTimer;
-use chrono::{NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
 use itertools::Itertools;
-use migration::OnConflict;
-use sea_orm::{
-    ConnectionTrait, FromQueryResult, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
-    prelude::*,
-};
+use sea_orm::ActiveValue::Set;
+
 mod db_address_balances {
     use sea_orm::prelude::*;
 

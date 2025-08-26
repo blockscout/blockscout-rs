@@ -1,24 +1,9 @@
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    charts::db_interaction::utils::interval_24h_filter,
-    data_source::{
-        kinds::{
-            data_manipulation::map::MapToString,
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-};
+use crate::chart_prelude::*;
 
 use blockscout_db::entity::transactions;
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use migration::{Asterisk, Func, IntoColumnRef};
-use sea_orm::{DbBackend, IntoSimpleExpr, QuerySelect, QueryTrait, prelude::*};
 
 pub struct NewContracts24hStatement;
+impl_db_choice!(NewContracts24hStatement, UseBlockscoutDB);
 
 impl StatementFromUpdateTime for NewContracts24hStatement {
     fn get_statement(
@@ -58,10 +43,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

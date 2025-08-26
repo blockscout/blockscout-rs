@@ -3,23 +3,7 @@
 //!
 //! Basically a [super::NewTxnsWindow] but for op stack operational txns
 
-use crate::{
-    ChartProperties, IndexingStatus, Named,
-    data_source::kinds::{
-        data_manipulation::map::Map,
-        local_db::{
-            LocalDbChartSource,
-            parameters::{
-                DefaultCreate, DefaultQueryVec, update::clear_and_query_all::ClearAllAndPassVec,
-            },
-        },
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    types::new_txns::ExtractOpStackTxns,
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
+use crate::{chart_prelude::*, types::new_txns::ExtractOpStackTxns};
 
 use super::NewTxnsWindowCombinedRemote;
 
@@ -41,10 +25,7 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

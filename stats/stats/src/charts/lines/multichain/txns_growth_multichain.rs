@@ -1,33 +1,9 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey, ChartProperties, MissingDatePolicy, Named,
-    charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::last_value::LastValueLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
-    types::timespans::{Month, Week, Year},
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct TxnsGrowthMultichainStatement;
+impl_db_choice!(TxnsGrowthMultichainStatement, UsePrimaryDB);
 
 impl StatementFromRange for TxnsGrowthMultichainStatement {
     fn get_statement(

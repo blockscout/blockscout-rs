@@ -143,6 +143,9 @@ message TransactionsPageStats {
   optional Counter transactions_24h = 4;
   optional Counter operational_transactions_24h = 5;
   optional Counter op_stack_operational_transactions_24h = 6;
+  optional Counter total_zetachain_cross_chain_txns = 7;
+  optional Counter new_zetachain_cross_chain_txns_24h = 8;
+  optional Counter pending_zetachain_cross_chain_txns = 9;
 }
 
 message GetContractsPageStatsRequest {}

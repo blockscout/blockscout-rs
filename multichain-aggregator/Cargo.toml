@@ -53,6 +53,7 @@ tracing-subscriber = "0.3.18"
 
 # misc
 alloy-primitives = "0.8"
+amplify = { version = "4", features = ["derive"], default-features = false }
 anyhow = "1.0"
 api-client-framework = { git = "https://github.com/blockscout/blockscout-rs", rev = "d60c1d8" }
 async-std = { version = "1", features = ["attributes", "tokio1"] }
@@ -64,6 +65,7 @@ cached = { version = "0.55", default-features = false }
 config = "0.13"
 chrono = "0.4.38"
 env-collector = { git = "https://github.com/blockscout/blockscout-rs", version = "0.3.0" }
+itertools = "0.14"
 regex = "1.10"
 reqwest = "0.12"
 rust_decimal = "1.37"
@@ -72,7 +74,7 @@ url = "2.4"
 futures = "0.3"
 lazy_static = { version = "1.4" }
 prometheus = { version = "0.13" }
-recache = { git = "https://github.com/blockscout/blockscout-rs", rev = "54b19d5" }
+recache = { git = "https://github.com/blockscout/blockscout-rs", branch = "lok52/recache-clone-handler"}
 
 # tests
 pretty_assertions = "1.3"

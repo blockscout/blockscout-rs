@@ -1,35 +1,9 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::sum::SumLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatus, UserOpsIndexingStatus},
-    types::timespans::{Month, Week, Year},
-    utils::sql_with_range_filter_opt,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct NewEip7702AuthsStatement;
+impl_db_choice!(NewEip7702AuthsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for NewEip7702AuthsStatement {
     fn get_statement(
@@ -97,10 +71,7 @@ impl ChartProperties for Properties {
         ChartType::Line
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::BlocksIndexed,
-            user_ops: UserOpsIndexingStatus::IndexingPastOperations,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE.with_blockscout(BlockscoutIndexingStatus::BlocksIndexed)
     }
 }
 

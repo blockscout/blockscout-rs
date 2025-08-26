@@ -137,7 +137,7 @@ mod tests {
 
     use crate::{
         ChartError, MissingDatePolicy, Named,
-        data_source::{UpdateContext, UpdateParameters, types::IndexerMigrations},
+        data_source::{UpdateContext, UpdateParameters},
         tests::init_db::init_db_all,
         types::timespans::DateValue,
     };
@@ -149,13 +149,8 @@ mod tests {
         let (db, blockscout) = init_db_all("fallback_query_works").await;
         let current_time = chrono::DateTime::from_str("2023-03-01T12:00:00Z").unwrap();
 
-        let parameters = UpdateParameters::query_parameters(
-            &db,
-            false,
-            &blockscout,
-            IndexerMigrations::latest(),
-            Some(current_time),
-        );
+        let parameters =
+            UpdateParameters::default_test_query_parameters(&db, &blockscout, Some(current_time));
         let cx = UpdateContext::from_params_now_or_override(parameters.clone());
 
         struct TestFallback;

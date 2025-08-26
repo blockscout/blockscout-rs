@@ -22,10 +22,11 @@ use stats::{
     counters::{
         ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
         ArbitrumYesterdayOperationalTxns, AverageBlockTime, AverageTxnFee24h, NewContracts24h,
-        NewTxns24h, NewVerifiedContracts24h, OpStackNewOperationalTxns24h,
-        OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns, PendingTxns30m,
-        TotalAddresses, TotalBlocks, TotalContracts, TotalTxns, TotalVerifiedContracts, TxnsFee24h,
-        YesterdayTxns,
+        NewTxns24h, NewVerifiedContracts24h, NewZetachainCrossChainTxns24h,
+        OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
+        PendingTxns30m, PendingZetachainCrossChainTxns, TotalAddresses, TotalBlocks,
+        TotalContracts, TotalTxns, TotalVerifiedContracts, TotalZetachainCrossChainTxns,
+        TxnsFee24h, YesterdayTxns,
     },
     data_source::{UpdateContext, UpdateParameters, types::IndexerMigrations},
     lines::{
@@ -46,6 +47,7 @@ pub struct ReadService {
     db: Arc<DatabaseConnection>,
     indexer: Arc<DatabaseConnection>,
     multichain_mode: bool,
+    second_indexer_db: Option<Arc<DatabaseConnection>>,
     charts: Arc<RuntimeSetup>,
     authorization: Arc<AuthorizationProvider>,
     update_service: Arc<UpdateService>,
@@ -53,10 +55,12 @@ pub struct ReadService {
 }
 
 impl ReadService {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         db: Arc<DatabaseConnection>,
         indexer: Arc<DatabaseConnection>,
         multichain_mode: bool,
+        second_indexer_db: Option<Arc<DatabaseConnection>>,
         charts: Arc<RuntimeSetup>,
         update_service: Arc<UpdateService>,
         authorization: Arc<AuthorizationProvider>,
@@ -66,6 +70,7 @@ impl ReadService {
             db,
             indexer,
             multichain_mode,
+            second_indexer_db,
             charts,
             update_service,
             authorization,
@@ -218,6 +223,9 @@ impl ReadService {
             transactions_24h: None,
             operational_transactions_24h: None,
             op_stack_operational_transactions_24h: None,
+            total_zetachain_cross_chain_txns: None,
+            new_zetachain_cross_chain_txns_24h: None,
+            pending_zetachain_cross_chain_txns: None,
         };
         vec![
             PendingTxns30m::name(),
@@ -226,6 +234,9 @@ impl ReadService {
             NewTxns24h::name(),
             ArbitrumNewOperationalTxns24h::name(),
             OpStackNewOperationalTxns24h::name(),
+            TotalZetachainCrossChainTxns::name(),
+            NewZetachainCrossChainTxns24h::name(),
+            PendingZetachainCrossChainTxns::name(),
         ]
     }
 }
@@ -247,6 +258,7 @@ impl ReadService {
                 false,
                 &self.indexer,
                 migrations,
+                self.second_indexer_db.as_deref(),
                 Some(query_time),
             ));
         query_handle
@@ -572,6 +584,9 @@ impl StatsService for ReadService {
             transactions_24h,
             operational_transactions_24h,
             op_stack_operational_transactions_24h,
+            total_zetachain_cross_chain_txns,
+            new_zetachain_cross_chain_txns_24h,
+            pending_zetachain_cross_chain_txns,
         ) = join!(
             self.query_counter(PendingTxns30m::name(), now),
             self.query_counter(TxnsFee24h::name(), now),
@@ -579,6 +594,9 @@ impl StatsService for ReadService {
             self.query_counter(NewTxns24h::name(), now),
             self.query_counter(ArbitrumNewOperationalTxns24h::name(), now),
             self.query_counter(OpStackNewOperationalTxns24h::name(), now),
+            self.query_counter(TotalZetachainCrossChainTxns::name(), now),
+            self.query_counter(NewZetachainCrossChainTxns24h::name(), now),
+            self.query_counter(PendingZetachainCrossChainTxns::name(), now),
         );
         Ok(Response::new(proto_v1::TransactionsPageStats {
             pending_transactions_30m,
@@ -587,6 +605,9 @@ impl StatsService for ReadService {
             transactions_24h,
             operational_transactions_24h,
             op_stack_operational_transactions_24h,
+            total_zetachain_cross_chain_txns,
+            new_zetachain_cross_chain_txns_24h,
+            pending_zetachain_cross_chain_txns,
         }))
     }
 

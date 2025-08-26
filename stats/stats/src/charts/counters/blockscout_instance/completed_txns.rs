@@ -1,20 +1,7 @@
-use crate::{
-    ChartProperties, MissingDatePolicy, Named,
-    data_source::{
-        kinds::{
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOne, RemoteDatabaseSource, StatementForOne},
-        },
-        types::IndexerMigrations,
-    },
-    types::TimespanValue,
-};
-
-use chrono::NaiveDate;
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct CompletedTxnsStatement;
+impl_db_choice!(CompletedTxnsStatement, UseBlockscoutDB);
 
 impl StatementForOne for CompletedTxnsStatement {
     fn get_statement(completed_migrations: &IndexerMigrations) -> Statement {

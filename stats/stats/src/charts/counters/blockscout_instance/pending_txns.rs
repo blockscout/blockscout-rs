@@ -1,27 +1,9 @@
-use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    charts::db_interaction::read::find_one_value,
-    data_source::{
-        UpdateContext,
-        kinds::{
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour},
-        },
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    range::UniversalRange,
-    types::TimespanValue,
-};
+use crate::chart_prelude::*;
 
 use blockscout_db::entity::transactions;
-use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{
-    ColumnTrait, DbBackend, EntityTrait, FromQueryResult, QueryFilter, QuerySelect, QueryTrait,
-    Statement,
-};
 
 pub struct PendingTxnsStatement;
+impl_db_choice!(PendingTxnsStatement, UseBlockscoutDB);
 
 impl PendingTxnsStatement {
     fn get_statement(inserted_from: DateTime<Utc>) -> Statement {
@@ -54,7 +36,7 @@ impl RemoteQueryBehaviour for PendingTxns30mQuery {
                 .checked_sub_signed(TimeDelta::minutes(30))
                 .unwrap_or(DateTime::<Utc>::MIN_UTC),
         );
-        let data = find_one_value::<Value>(cx, statement)
+        let data = find_one_value::<_, Value>(PendingTxnsStatement::get_db(cx)?, statement)
             .await?
             .ok_or_else(|| ChartError::Internal("query returned nothing".into()))?;
         Ok(TimespanValue {
@@ -84,10 +66,7 @@ impl ChartProperties for Properties {
         MissingDatePolicy::FillPrevious
     }
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

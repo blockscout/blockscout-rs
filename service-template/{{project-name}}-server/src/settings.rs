@@ -1,5 +1,7 @@
 use blockscout_service_launcher::{
+    {% if database -%}
     database::{DatabaseConnectSettings, DatabaseSettings},
+    {% endif -%}
     launcher::{ConfigSettings, MetricsSettings, ServerSettings},
     tracing::{JaegerSettings, TracingSettings},
 };

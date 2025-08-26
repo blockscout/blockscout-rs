@@ -22,10 +22,10 @@ just
 ```bash
 just start-postgres
 ```
-{% if migrations or entity %}
+{% if database or entity %}
 + For ORM codegen and migrations install [sea-orm-cli](https://www.sea-ql.org/SeaORM/docs/generate-entity/sea-orm-cli/)
 {% endif %}
-{% if migrations %}
+{% if database %}
 + Write initial migration inside `{{project-name}}-logic/migration/src/m20220101_000001_create_table`.
 + If you want you can create another migration by just typing:
 

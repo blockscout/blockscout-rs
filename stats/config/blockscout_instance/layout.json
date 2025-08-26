@@ -5,6 +5,7 @@
         "last_new_contracts",
         "last_new_verified_contracts",
         "total_accounts",
+        "total_builder_accounts",
         "total_addresses",
         "total_blocks",
         "total_contracts",
@@ -21,6 +22,9 @@
         "op_stack_new_operational_txns_24h",
         "new_operational_txns_24h",
         "pending_txns_30m",
+        "new_zetachain_cross_chain_txns_24h",
+        "pending_zetachain_cross_chain_txns",
+        "total_zetachain_cross_chain_txns",
         "txns_fee_24h",
         "average_txn_fee_24h"
     ],
@@ -51,6 +55,8 @@
                 "op_stack_operational_txns_growth",
                 "new_operational_txns",
                 "operational_txns_growth",
+                "new_zetachain_cross_chain_txns",
+                "zetachain_cross_chain_txns_growth",
                 "txns_success_rate",
                 "new_eip_7702_auths",
                 "eip_7702_auths_growth"

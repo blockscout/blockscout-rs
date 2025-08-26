@@ -1,39 +1,44 @@
 /// Methods intended for interacting with blockscout db
 use blockscout_db::entity::blocks;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
     sea_query::{self},
 };
-use std::fmt::Debug;
 
-use crate::{ChartError, data_source::UpdateContext, types::TimespanTrait};
+use std::{fmt::Debug, ops::Range};
 
-pub async fn find_one_value<Value>(
-    cx: &UpdateContext<'_>,
-    query: Statement,
-) -> Result<Option<Value>, ChartError>
+use crate::{
+    ChartError,
+    data_source::{UpdateContext, kinds::remote_db::RemoteQueryBehaviour},
+    range::UniversalRange,
+    types::TimespanTrait,
+};
+
+pub async fn find_one_value<C, Value>(db: &C, query: Statement) -> Result<Option<Value>, ChartError>
 where
+    C: ConnectionTrait,
     Value: FromQueryResult,
 {
     Value::find_by_statement(query)
-        .one(cx.indexer_db)
+        .one(db)
         .await
         .map_err(ChartError::IndexerDB)
 }
 
-pub async fn find_all_points<Point>(
-    cx: &UpdateContext<'_>,
+pub async fn find_all_points<C, Point>(
+    db: &C,
     statement: Statement,
 ) -> Result<Vec<Point>, ChartError>
 where
+    C: ConnectionTrait,
     Point: FromQueryResult + TimespanTrait,
     Point::Timespan: Ord,
 {
     let find_by_statement = Point::find_by_statement(statement);
     let mut data = find_by_statement
-        .all(cx.indexer_db)
+        .all(db)
         .await
         .map_err(ChartError::IndexerDB)?;
     // can't use sort_*_by_key: https://github.com/rust-lang/rust/issues/34162
@@ -130,6 +135,23 @@ pub async fn query_estimated_table_rows(
         .await?;
     let count = count.and_then(|c| c.count);
     Ok(count)
+}
+
+pub struct QueryAllBlockTimestampRange;
+
+impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
+    type Output = Range<DateTime<Utc>>;
+
+    async fn query_data(
+        cx: &UpdateContext<'_>,
+        _range: UniversalRange<DateTime<Utc>>,
+    ) -> Result<Self::Output, ChartError> {
+        let start_timestamp = get_min_date_blockscout(cx.indexer_db)
+            .await
+            .map_err(ChartError::IndexerDB)?
+            .and_utc();
+        Ok(start_timestamp..cx.time)
+    }
 }
 
 #[cfg(test)]

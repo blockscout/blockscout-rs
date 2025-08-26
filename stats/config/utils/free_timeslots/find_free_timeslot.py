@@ -8,6 +8,7 @@ import os
 from tkcalendar import Calendar
 from typing import Dict, List, Tuple
 from enum import Enum
+import math
 
 
 class DurationMenu(Enum):
@@ -25,7 +26,14 @@ class CronVisualizerGUI:
         self.canvas_width = 1000
         self.canvas_height = 200
         self.hour_width = self.canvas_width // 24
+        # Zoom settings
+        self.zoom_scale = 1.0
+        self.min_zoom = 1.0
+        self.max_zoom = 16.0
+        self.base_hour_width = self.canvas_width // 24
         self.selected_date = datetime.now()
+        # View override used to preserve focus while zooming
+        self._override_view: float | None = None
 
         self.default_duration = 20  # Duration in minutes
         self.task_durations = {}  # Will store durations from config
@@ -68,9 +76,9 @@ class CronVisualizerGUI:
         next_left_top_frame = ttk.Frame(top_frame, padding="10")
         next_left_top_frame.pack(side=tk.LEFT)
 
-        ttk.Button(left_top_frame, text="Load JSON File", command=self.load_json).pack(
-            side=tk.TOP, fill="x"
-        )
+        ttk.Button(
+            left_top_frame, text="Load schedules from JSON", command=self.load_json
+        ).pack(side=tk.TOP, fill="x")
         ttk.Button(
             left_top_frame, text="Update", command=self.update_visualization
         ).pack(side=tk.TOP, fill="x")
@@ -131,9 +139,51 @@ class CronVisualizerGUI:
             canvas_frame, width=self.canvas_width, height=self.canvas_height, bg="white"
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
+        # Horizontal scrollbar for timeline
+        h_scroll = ttk.Scrollbar(
+            canvas_frame, orient=tk.HORIZONTAL, command=self.canvas.xview
+        )
+        h_scroll.pack(fill=tk.X, side=tk.BOTTOM)
+        self.canvas.configure(xscrollcommand=h_scroll.set)
 
         # Bind mouse motion for hover effect
         self.canvas.bind("<Motion>", self.on_hover)
+
+        self.canvas.bind("<TouchpadScroll>", self.on_trackpad)
+        self.canvas.bind("<Control-TouchpadScroll>", self.on_trackpad)
+        self.canvas.bind("<Command-TouchpadScroll>", self.on_zoom_trackpad)
+        # Touchpad/Mouse scrolling (horizontal)
+        self.canvas.bind_all("<MouseWheel>", self.on_mousewheel)
+        # Linux wheel buttons fallback
+        self.canvas.bind(
+            "<Button-4>", lambda e: self.on_mousewheel_linux(e, direction=-1)
+        )
+        self.canvas.bind(
+            "<Button-5>", lambda e: self.on_mousewheel_linux(e, direction=1)
+        )
+
+        # Pinch-like zoom via modifier + wheel
+        self.canvas.bind("<Control-MouseWheel>", self.on_zoom_wheel)
+        # macOS Command key
+        self.canvas.bind("<Command-MouseWheel>", self.on_zoom_wheel)
+
+        # Keyboard zoom shortcuts
+        self.root.bind_all("<plus>", lambda e: self.zoom_by(2))
+        self.root.bind_all("<equal>", lambda e: self.zoom_by(2))  # '=' key
+        self.root.bind_all("<minus>", lambda e: self.zoom_by(1 / 2))
+
+        # Zoom controls
+        zoom_frame = ttk.Frame(next_left_top_frame)
+        zoom_frame.pack(side=tk.TOP, pady=(10, 0), fill="x")
+        ttk.Button(zoom_frame, text="Zoom In", command=self.zoom_in).pack(side=tk.LEFT)
+        ttk.Button(zoom_frame, text="Zoom Out", command=self.zoom_out).pack(
+            side=tk.LEFT, padx=(5, 0)
+        )
+        ttk.Button(zoom_frame, text="Reset", command=self.zoom_reset).pack(
+            side=tk.LEFT, padx=(5, 10)
+        )
+        self.zoom_label_var = tk.StringVar(value="Zoom: 1.0x")
+        ttk.Label(zoom_frame, textvariable=self.zoom_label_var).pack(side=tk.LEFT)
 
         # Schedule list
         list_frame = ttk.Frame(self.root, padding="10")
@@ -231,6 +281,9 @@ class CronVisualizerGUI:
             if self.duration_choice.get() == DurationMenu.CONFIG.value:
                 duration = self.task_durations.get(name, manual_duration)
             else:
+                print(
+                    f"Missing duration for {name} from JSON, using manually-set value"
+                )
                 duration = manual_duration
 
             for start_time in start_times:
@@ -245,15 +298,23 @@ class CronVisualizerGUI:
         return timeline
 
     def update_visualization(self):
+        # preserve current horizontal view position (as a fraction)
+        try:
+            start_view = self.canvas.xview()[0]
+        except Exception:
+            start_view = 0.0
         self.canvas.delete("all")
+        hour_width = max(1, int(self.base_hour_width * self.zoom_scale))
+        # update scrollable region to accommodate zoomed content
+        self.canvas.configure(scrollregion=(0, 0, hour_width * 24, self.canvas_height))
 
         # Draw hour lines and labels
         for hour in range(25):
-            x = hour * self.hour_width
+            x = hour * hour_width
             self.canvas.create_line(x, 0, x, self.canvas_height, fill="gray")
             if hour < 24:
                 self.canvas.create_text(
-                    x + self.hour_width / 2,
+                    x + hour_width / 2,
                     self.canvas_height - 20,
                     text=f"{hour:02d}:00",
                 )
@@ -267,12 +328,12 @@ class CronVisualizerGUI:
             hour = minute // 60
             minute_in_hour = minute % 60
 
-            x = hour * self.hour_width + (minute_in_hour * self.hour_width / 60)
+            x = hour * hour_width + (minute_in_hour * hour_width / 60)
             count = len(timeline[minute])
 
             if count > 0:
                 color = self.get_color(count, max_overlaps)
-                x2 = x + self.hour_width / 60
+                x2 = x + hour_width / 60
 
                 self.canvas.create_rectangle(
                     x,
@@ -306,11 +367,14 @@ class CronVisualizerGUI:
         self.update_schedule_list()
 
     def on_hover(self, event):
-        x, y = event.x, event.y
+        # translate to canvas coordinates to respect horizontal scrolling
+        x = self.canvas.canvasx(event.x)
+        y = event.y
 
         if 20 <= y <= self.canvas_height - 40:
-            hour = int(x // self.hour_width)
-            minute_in_hour = int((x % self.hour_width) / (self.hour_width / 60))
+            hour_width = max(1, int(self.base_hour_width * self.zoom_scale))
+            hour = int(x // hour_width)
+            minute_in_hour = int((x % hour_width) / (hour_width / 60))
             minute_index = hour * 60 + minute_in_hour
 
             if 0 <= minute_index < 24 * 60:
@@ -337,6 +401,68 @@ class CronVisualizerGUI:
                             break
                 else:
                     self.status_var.set(f"Time: {time_str} - No tasks")
+
+    def update_zoom_label(self):
+        self.zoom_label_var.set(f"Zoom: {self.zoom_scale:.1f}x")
+
+    def zoom_in(self):
+        if self.zoom_scale < self.max_zoom:
+            self.zoom_scale = min(self.max_zoom, self.zoom_scale * 2)
+            self.update_zoom_label()
+            self.update_visualization()
+
+    def zoom_out(self):
+        if self.zoom_scale > self.min_zoom:
+            self.zoom_scale = max(self.min_zoom, self.zoom_scale / 2)
+            self.update_zoom_label()
+            self.update_visualization()
+
+    def zoom_reset(self):
+        if self.zoom_scale != 1.0:
+            self.zoom_scale = 1.0
+            self.update_zoom_label()
+            self.update_visualization()
+
+    def on_trackpad(self, event):
+        self.canvas.config(xscrollincrement=1)
+        # Normalize scroll delta
+        delta = -event.delta / 65536
+        self.canvas.xview_scroll(delta, "units")
+
+    def on_zoom_trackpad(self, event):
+        delta = -event.delta / 65536
+        delta /= 1000
+        zoom_factor = math.e**delta
+        self.zoom_by(zoom_factor, focus_x=event.x)
+
+    def on_mousewheel(self, event):
+        self.canvas.config(xscrollincrement=10)
+        # Normalize wheel delta across platforms
+        delta = event.delta
+        if delta == 0:
+            return
+        # On Windows/mac delta is often multiples of 120/1; determine step direction
+        step = -1 if delta > 0 else 1
+        self.canvas.xview_scroll(step, "units")
+
+    def on_mousewheel_linux(self, _event, direction: int):
+        self.canvas.config(xscrollincrement=10)
+        # direction: -1 for up, +1 for down
+        self.canvas.xview_scroll(direction, "units")
+
+    def on_zoom_wheel(self, event):
+        # Determine zoom factor based on wheel direction
+        factor = 1.1 if event.delta > 0 else (1 / 1.1)
+        self.zoom_by(factor, focus_x=event.x)
+
+    def zoom_by(self, factor: float, focus_x: int | None = None):
+        new_scale = max(self.min_zoom, min(self.max_zoom, self.zoom_scale * factor))
+        if abs(new_scale - self.zoom_scale) < 1e-6:
+            return
+
+        self.zoom_scale = new_scale
+        self.update_zoom_label()
+        self.update_visualization()
 
 
 if __name__ == "__main__":

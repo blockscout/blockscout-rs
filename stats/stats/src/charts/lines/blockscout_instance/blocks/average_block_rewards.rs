@@ -1,39 +1,16 @@
 use std::{collections::HashSet, ops::Range};
 
 use crate::{
-    ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::{
-        kinds::{
-            data_manipulation::{
-                map::{MapParseTo, MapToString, StripExt},
-                resolutions::average::AverageLowerResolution,
-            },
-            local_db::{
-                DirectVecLocalDbChartSource,
-                parameters::update::batching::parameters::{
-                    Batch30Days, Batch30Weeks, Batch30Years, Batch36Months,
-                },
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    define_and_impl_resolution_properties,
+    chart_prelude::*,
     lines::{NewBlockRewardsInt, NewBlockRewardsMonthlyInt},
-    types::timespans::{Month, Week, Year},
-    utils::sql_with_range_filter_opt,
 };
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
 
 const ETH: i64 = 1_000_000_000_000_000_000;
 
-pub struct AverageBlockRewardsQuery;
+pub struct AverageBlockRewardsStatement;
+impl_db_choice!(AverageBlockRewardsStatement, UseBlockscoutDB);
 
-impl StatementFromRange for AverageBlockRewardsQuery {
+impl StatementFromRange for AverageBlockRewardsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         _: &IndexerMigrations,
@@ -60,7 +37,7 @@ impl StatementFromRange for AverageBlockRewardsQuery {
 }
 
 pub type AverageBlockRewardsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<AverageBlockRewardsQuery, NaiveDate, f64, QueryFullIndexerTimestampRange>,
+    PullAllWithAndSort<AverageBlockRewardsStatement, NaiveDate, f64, QueryFullIndexerTimestampRange>,
 >;
 
 pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;

@@ -6,7 +6,11 @@ use std::str::FromStr;
 
 use blockscout_service_launcher::test_database::TestDbGuard;
 use chrono::NaiveDate;
-use stats::tests::{init_db::init_db_blockscout, mock_blockscout::fill_mock_blockscout_data};
+use stats::tests::{
+    init_db::{init_db_blockscout, init_db_zetachain_cctx},
+    mock_blockscout::fill_mock_blockscout_data,
+    mock_zetachain_cctx::fill_mock_zetachain_cctx_data,
+};
 use tokio::sync::OnceCell;
 
 mod common_tests;
@@ -16,6 +20,7 @@ mod stats_not_indexed;
 mod stats_not_updated;
 
 static MOCK_BLOCKSCOUT: OnceCell<TestDbGuard> = OnceCell::const_new();
+static MOCK_ZETACHAIN_CCTX: OnceCell<TestDbGuard> = OnceCell::const_new();
 
 /// All tests using this must not change the state of blockscout db.
 async fn get_mock_blockscout() -> &'static TestDbGuard {
@@ -26,6 +31,24 @@ async fn get_mock_blockscout() -> &'static TestDbGuard {
             fill_mock_blockscout_data(&blockscout_db, NaiveDate::from_str("2023-03-01").unwrap())
                 .await;
             blockscout_db
+        })
+        .await
+}
+
+// Replace by reused db like `get_mock_blockscout`
+// if needed >1 time
+async fn get_mock_zetachain_cctx() -> &'static TestDbGuard {
+    MOCK_ZETACHAIN_CCTX
+        .get_or_init(|| async {
+            let test_name = "tests_with_mock_zetachain_cctx";
+            let zetachain_cctx_db = init_db_zetachain_cctx(test_name).await;
+            fill_mock_zetachain_cctx_data(
+                &zetachain_cctx_db,
+                NaiveDate::from_str("2023-03-01").unwrap(),
+                true,
+            )
+            .await;
+            zetachain_cctx_db
         })
         .await
 }

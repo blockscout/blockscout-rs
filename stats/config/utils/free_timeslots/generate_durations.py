@@ -9,6 +9,7 @@ from pathlib import Path
 def convert_camel_to_snake(name: str) -> str:
     """Convert camelCase to snake_case."""
     name = re.sub("([a-z0-9])([A-Z])", r"\1_\2", name)
+    name = re.sub("([a-zA-Z])([0-9])", r"\1_\2", name)
     return name.lower()
 
 

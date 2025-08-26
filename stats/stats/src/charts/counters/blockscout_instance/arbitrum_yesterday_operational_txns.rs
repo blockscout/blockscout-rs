@@ -1,21 +1,4 @@
-use crate::{
-    ChartError, ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    data_source::{
-        UpdateContext,
-        kinds::{
-            data_manipulation::map::{Map, MapParseTo},
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, query::query_yesterday_data},
-        },
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    lines::NewBlocksStatement,
-    range::UniversalRange,
-    types::TimespanValue,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
+use crate::{chart_prelude::*, lines::NewBlocksStatement};
 
 use super::{CalculateOperationalTxns, yesterday_txns::YesterdayTxnsInt};
 
@@ -59,10 +42,7 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
     }
 }
 

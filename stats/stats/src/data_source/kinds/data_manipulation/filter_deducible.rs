@@ -64,7 +64,7 @@ where
 mod tests {
     use crate::{
         MissingDatePolicy, Named,
-        data_source::{UpdateParameters, types::IndexerMigrations},
+        data_source::UpdateParameters,
         gettable_const,
         lines::PredefinedMockSource,
         range::UniversalRange,
@@ -137,14 +137,13 @@ mod tests {
         // db is not used in mock
         let empty_db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
 
-        let context =
-            UpdateContext::from_params_now_or_override(UpdateParameters::query_parameters(
+        let context = UpdateContext::from_params_now_or_override(
+            UpdateParameters::default_test_query_parameters(
                 &empty_db,
-                false,
                 &empty_db,
-                IndexerMigrations::latest(),
                 Some(dt("2024-07-30T09:00:00").and_utc()),
-            ));
+            ),
+        );
         assert_eq!(
             <TestedZero as DataSource>::query_data(
                 &context,

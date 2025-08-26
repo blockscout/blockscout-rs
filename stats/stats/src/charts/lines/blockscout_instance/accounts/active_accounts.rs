@@ -2,26 +2,10 @@
 
 use std::{collections::HashSet, ops::Range};
 
-use crate::{
-    ChartKey, ChartProperties, Named,
-    charts::db_interaction::read::QueryFullIndexerTimestampRange,
-    data_source::{
-        kinds::{
-            local_db::{
-                DirectVecLocalDbChartSource, parameters::update::batching::parameters::Batch30Days,
-            },
-            remote_db::{PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    utils::sql_with_range_filter_opt,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct ActiveAccountsStatement;
+impl_db_choice!(ActiveAccountsStatement, UseBlockscoutDB);
 
 impl StatementFromRange for ActiveAccountsStatement {
     fn get_statement(

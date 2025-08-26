@@ -1,34 +1,8 @@
 use std::collections::HashSet;
-
-use crate::{
-    ChartError, ChartKey, ChartProperties, IndexingStatus, Named,
-    charts::db_interaction::read::find_all_points,
-    data_source::{
-        UpdateContext,
-        kinds::{
-            data_manipulation::map::MapParseTo,
-            local_db::{
-                LocalDbChartSource,
-                parameters::{
-                    DefaultCreate, DefaultQueryVec, update::clear_and_query_all::ClearAllAndPassVec,
-                },
-            },
-            remote_db::{RemoteDatabaseSource, RemoteQueryBehaviour, StatementFromRange},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::{BlockscoutIndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus},
-    lines::NEW_TXNS_WINDOW_RANGE,
-    range::UniversalRange,
-    types::{Timespan, TimespanDuration, TimespanValue, timespans::DateValue},
-    utils::day_start,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::Statement;
-
+use crate::{chart_prelude::*, lines::NEW_TXNS_WINDOW_RANGE};
 use super::new_txns_multichain::NewTxnsMultichainStatement;
+
+impl_db_choice!(NewTxnsMultichainStatement, UsePrimaryDB);
 
 fn new_txns_multichain_window_statement(
     update_day: NaiveDate,
@@ -64,7 +38,10 @@ impl RemoteQueryBehaviour for NewTxnsMultichainWindowQuery {
             &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        find_all_points::<DateValue<String>>(cx, statement).await
+        find_all_points::<_, DateValue<String>>(
+            NewTxnsMultichainStatement::get_db(cx)?,
+            statement
+        ).await
     }
 }
 
@@ -89,10 +66,8 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus {
-            blockscout: BlockscoutIndexingStatus::NoneIndexed,
-            user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
-        }
+        IndexingStatus::LEAST_RESTRICTIVE
+            .with_blockscout(BlockscoutIndexingStatus::NoneIndexed)
     }
 }
 
@@ -142,6 +117,7 @@ mod tests {
             stats_db: &db,
             is_multichain_mode: true,
             indexer_db: &indexer,
+            second_indexer_db: None,
             indexer_applied_migrations: IndexerMigrations::latest(),
             enabled_update_charts_recursive: NewTxnsMultichainWindow::all_dependencies_chart_keys(),
             update_time_override: Some(current_time),

@@ -25,7 +25,7 @@ where
         min_indexer_block: i64,
         remote_fetch_timer: &mut AggregateTimer,
     ) -> Result<(), ChartError> {
-        // range doesn't make sense there; thus is not used
+        // range doesn't make sense there; thus it is not used
         let data = MainDep::query_data(cx, UniversalRange::full(), remote_fetch_timer).await?;
         let value = data.active_model(chart_id, Some(min_indexer_block));
         insert_data_many(cx.stats_db, vec![value])

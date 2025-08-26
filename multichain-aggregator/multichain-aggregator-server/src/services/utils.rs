@@ -1,6 +1,6 @@
 use multichain_aggregator_logic::page_token::PageTokenFormat;
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::Pagination;
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 use tonic::Status;
 
 #[allow(clippy::result_large_err)]
@@ -10,6 +10,20 @@ where
     <T as FromStr>::Err: std::fmt::Display,
 {
     T::from_str(&input).map_err(|e| Status::invalid_argument(format!("invalid value {input}: {e}")))
+}
+
+#[allow(clippy::result_large_err)]
+#[inline]
+pub fn parse_map_result<'a, E, T, F>(input: &'a str, f: F) -> Result<Vec<T>, Status>
+where
+    E: Display,
+    F: FnMut(&'a str) -> Result<T, E>,
+{
+    input
+        .split(',')
+        .map(f)
+        .collect::<Result<Vec<T>, _>>()
+        .map_err(|e| Status::invalid_argument(format!("invalid argument {input}: {e}")))
 }
 
 pub trait PageTokenExtractor<T: PageTokenFormat> {

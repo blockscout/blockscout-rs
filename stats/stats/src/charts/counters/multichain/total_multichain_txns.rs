@@ -1,21 +1,7 @@
-use crate::{
-    ChartProperties, IndexingStatus, MissingDatePolicy, Named,
-    data_source::{
-        kinds::{
-            data_manipulation::map::MapToString,
-            local_db::DirectPointLocalDbChartSource,
-            remote_db::{PullOneNowValue, RemoteDatabaseSource, StatementFromUpdateTime},
-        },
-        types::IndexerMigrations,
-    },
-    indexing_status::IndexingStatusTrait,
-};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use entity::sea_orm_active_enums::ChartType;
-use sea_orm::{DbBackend, Statement};
+use crate::chart_prelude::*;
 
 pub struct TotalMultichainTxnsStatement;
+impl_db_choice!(TotalMultichainTxnsStatement, UsePrimaryDB);
 
 impl StatementFromUpdateTime for TotalMultichainTxnsStatement {
     fn get_statement(

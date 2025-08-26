@@ -22,6 +22,7 @@ use std::{collections::HashSet, sync::Arc};
 pub struct UpdateService {
     db: Arc<DatabaseConnection>,
     indexer_db: Arc<DatabaseConnection>,
+    second_indexer_db: Option<Arc<DatabaseConnection>>,
     is_multichain_mode: bool,
     charts: Arc<RuntimeSetup>,
     status_listener: Option<IndexingStatusListener>,
@@ -54,6 +55,7 @@ impl UpdateService {
     pub async fn new(
         db: Arc<DatabaseConnection>,
         indexer_db: Arc<DatabaseConnection>,
+        second_indexer_db: Option<Arc<DatabaseConnection>>,
         charts: Arc<RuntimeSetup>,
         status_listener: Option<IndexingStatusListener>,
         is_multichain_mode: bool,
@@ -63,6 +65,7 @@ impl UpdateService {
         Ok(Self {
             db,
             indexer_db,
+            second_indexer_db,
             is_multichain_mode,
             charts,
             status_listener,
@@ -417,6 +420,7 @@ impl UpdateService {
             stats_db: &self.db,
             is_multichain_mode: self.is_multichain_mode,
             indexer_db: &self.indexer_db,
+            second_indexer_db: self.second_indexer_db.as_deref(),
             indexer_applied_migrations: active_migrations,
             enabled_update_charts_recursive: group_entry
                 .group

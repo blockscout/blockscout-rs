@@ -10,6 +10,7 @@ use crate::{
     settings::{
         Settings, apply_multichain_mode_settings, handle_disable_internal_transactions,
         handle_enable_all_arbitrum, handle_enable_all_eip_7702, handle_enable_all_op_stack,
+        handle_enable_zetachain_cctx,
     },
     update_service::UpdateService,
 };
@@ -53,13 +54,15 @@ pub async fn stats(
         &mut settings.conditional_start,
         &mut charts_config,
     );
+    handle_enable_zetachain_cctx(&mut settings, &mut charts_config);
     if settings.multichain_mode {
         apply_multichain_mode_settings(&mut settings);
     }
 
     let charts = init_runtime_setup(charts_config, layout_config, update_groups_config)?;
     let db = init_stats_db(&settings).await?;
-    let indexer = connect_to_indexer_db(&settings).await?;
+    let indexer = connect_to_main_indexer_db(&settings).await?;
+    let cctx_indexer = connect_to_second_indexer_db(&settings).await?;
 
     check_if_unsupported_charts_are_enabled(settings.multichain_mode, &charts, &indexer).await?;
     create_charts_if_needed(&db, &charts).await?;
@@ -71,7 +74,7 @@ pub async fn stats(
     let shutdown = shutdown.unwrap_or_default();
     let mut futures = JoinSet::new();
 
-    let (status_waiter_task, status_listener) = init_waiter(&settings)?;
+    let (status_waiter_task, status_listener) = init_waiter(&settings, cctx_indexer.clone())?;
     if let Some(status_waiter_task) = status_waiter_task {
         spawn_and_track(&mut futures, &shutdown.task_tracker, status_waiter_task);
     }
@@ -80,6 +83,7 @@ pub async fn stats(
         UpdateService::new(
             db.clone(),
             indexer.clone(),
+            cctx_indexer.clone(),
             charts.clone(),
             status_listener,
             settings.multichain_mode,
@@ -103,6 +107,7 @@ pub async fn stats(
             db.clone(),
             indexer.clone(),
             settings.multichain_mode,
+            cctx_indexer.clone(),
             charts,
             update_service,
             authorization,
@@ -133,7 +138,7 @@ pub async fn stats(
     });
 
     let res = futures.join_next().await;
-    on_termination(&db, &indexer, &shutdown, &mut futures).await;
+    on_termination(&db, &indexer, &cctx_indexer, &shutdown, &mut futures).await;
     res.expect("task set is not empty")?
 }
 
@@ -202,12 +207,7 @@ async fn init_stats_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnec
     Ok(db)
 }
 
-async fn connect_to_indexer_db(settings: &Settings) -> anyhow::Result<Arc<DatabaseConnection>> {
-    let url = settings
-        .indexer_db_url
-        .clone()
-        .or_else(|| settings.blockscout_db_url.clone())
-        .ok_or(anyhow!("Indexer DB URL is not set"))?;
+async fn connect_to_indexer_db_common(url: String) -> anyhow::Result<Arc<DatabaseConnection>> {
     let mut opt = ConnectOptions::new(url);
     opt.sqlx_logging_level(tracing::log::LevelFilter::Debug);
     // we'd like to have each batch to resolve in under 1 hour
@@ -218,6 +218,41 @@ async fn connect_to_indexer_db(settings: &Settings) -> anyhow::Result<Arc<Databa
     );
     let conn = Arc::new(Database::connect(opt).await.context("indexer DB")?);
     Ok(conn)
+}
+
+async fn connect_to_main_indexer_db(
+    settings: &Settings,
+) -> anyhow::Result<Arc<DatabaseConnection>> {
+    connect_to_indexer_db_common(
+        settings
+            .indexer_db_url
+            .clone()
+            .or_else(|| settings.blockscout_db_url.clone())
+            .ok_or(anyhow!("Indexer DB URL is not set"))?,
+    )
+    .await
+}
+
+/// Connection to the zetachain CCTX indexer DB (currently)
+///
+/// `None` if CCTX is not enabled
+async fn connect_to_second_indexer_db(
+    settings: &Settings,
+) -> anyhow::Result<Option<Arc<DatabaseConnection>>> {
+    let connection = if settings.enable_zetachain_cctx {
+        Some(
+            connect_to_indexer_db_common(
+                settings
+                    .second_indexer_db_url
+                    .clone()
+                    .ok_or(anyhow!("Second indexer DB URL is not set"))?,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    Ok(connection)
 }
 
 fn init_runtime_setup(
@@ -270,13 +305,14 @@ async fn create_charts_if_needed(
 /// Returns `(<waiter task>, <listener>)`
 fn init_waiter(
     settings: &Settings,
+    cctx_db: Option<Arc<DatabaseConnection>>,
 ) -> anyhow::Result<(
     Option<impl Future<Output = anyhow::Result<()>> + use<>>,
     Option<IndexingStatusListener>,
 )> {
     let blockscout_api_config = init_blockscout_api_client(settings)?;
     let (status_waiter, status_listener) = blockscout_api_config
-        .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone()))
+        .map(|c| blockscout_waiter::init(c, settings.conditional_start.clone(), cctx_db))
         .unzip();
     let status_task = status_waiter.map(|w| {
         async move {
@@ -306,6 +342,7 @@ fn init_authorization(api_keys: HashMap<String, String>) -> Arc<AuthorizationPro
 async fn on_termination(
     db: &DatabaseConnection,
     indexer: &DatabaseConnection,
+    cctx_indexer: &Option<Arc<DatabaseConnection>>,
     shutdown: &GracefulShutdownHandler,
     futures: &mut JoinSet<anyhow::Result<()>>,
 ) {
@@ -314,6 +351,11 @@ async fn on_termination(
     }
     if let Err(e) = indexer.close_by_ref().await {
         tracing::error!("Failed to close indexer db connection upon termination: {e:?}");
+    }
+    if let Some(cctx_indexer) = cctx_indexer
+        && let Err(e) = cctx_indexer.close_by_ref().await
+    {
+        tracing::error!("Failed to close CCTX indexer db connection upon termination: {e:?}");
     }
     shutdown.shutdown_token.cancel();
     futures.abort_all();
