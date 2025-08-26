@@ -186,10 +186,7 @@ pub fn base_normal_tokens_query(
     Entity::find()
         .select_only()
         // Use raw injected enum value to avoid suboptimal query plans
-        .filter(Expr::cust_with_expr(
-            "token_type <> 'ERC-7802'::token_type",
-            Column::TokenType.into_simple_expr(),
-        ))
+        .filter(Expr::cust("token_type <> 'ERC-7802'::token_type"))
         .apply_if(
             (!chain_ids.is_empty()).then_some(chain_ids),
             |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
