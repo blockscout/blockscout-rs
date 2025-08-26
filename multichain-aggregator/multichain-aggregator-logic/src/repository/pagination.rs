@@ -23,7 +23,7 @@ impl Cursor {
         };
 
         for k in self.specs.iter() {
-            push_order_for_key_with_nulls(q, k.expr.clone(), k.dir.clone(), k.nulls);
+            push_order_for_key_with_nulls(q, k.expr.clone(), k.direction.clone(), k.nulls);
         }
 
         q.limit(opts.page_size);
@@ -54,16 +54,16 @@ pub struct PageOptions {
 #[derive(Clone, Debug)]
 pub struct KeySpec {
     pub expr: SimpleExpr,
-    pub dir: Ordering,
+    pub direction: Ordering,
     pub nulls: NullOrdering,
     pub nullable: bool,
 }
 
 impl KeySpec {
-    pub fn new(expr: SimpleExpr, dir: Ordering, nulls: NullOrdering) -> Self {
+    pub fn new(expr: SimpleExpr, direction: Ordering, nulls: NullOrdering) -> Self {
         Self {
             expr,
-            dir,
+            direction,
             nulls,
             nullable: false,
         }
@@ -86,7 +86,7 @@ impl KeySpec {
     }
 
     pub fn reversed(&self) -> Self {
-        let dir = match self.dir {
+        let direction = match self.direction {
             Ordering::Asc => Ordering::Desc,
             Ordering::Desc => Ordering::Asc,
         };
@@ -95,7 +95,7 @@ impl KeySpec {
             NullOrdering::Last => NullOrdering::First,
         };
         Self {
-            dir,
+            direction,
             nulls,
             ..self.clone()
         }
@@ -125,15 +125,15 @@ impl From<Ordering> for Order {
 fn push_order_for_key_with_nulls(
     sel: &mut SelectStatement,
     expr: SimpleExpr,
-    dir: Ordering,
+    direction: Ordering,
     nulls: NullOrdering,
 ) {
-    let order = dir.into();
+    let order = direction.into();
     sel.order_by_expr_with_nulls(expr, order, nulls);
 }
 
 fn fold_key(k: &KeySpec, v: &Value, suffix: SimpleExpr) -> SimpleExpr {
-    let cmp = cmp_expr(&k.expr, &k.dir, v);
+    let cmp = cmp_expr(&k.expr, &k.direction, v);
     let eq_suffix = k
         .expr
         .clone()
@@ -177,9 +177,10 @@ mod tests {
         #[sea_orm(primary_key)]
         pub id: i32,
         pub f_1: i64,
-        pub f_2: Vec<u8>,
+        pub f_2: Option<Vec<u8>>,
         pub f_3: Option<String>,
         pub f_4: Option<String>,
+        pub f_5: Option<i64>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -194,37 +195,16 @@ mod tests {
     #[test]
     fn test_cursor() {
         let specs = vec![
-            KeySpec::new(
-                Column::F1.into_simple_expr(),
-                Ordering::Desc,
-                NullOrdering::Last,
-            ),
-            KeySpec::new(
-                Column::F2.into_simple_expr(),
-                Ordering::Desc,
-                NullOrdering::Last,
-            ),
-            KeySpec::new(
-                Column::F3.into_simple_expr(),
-                Ordering::Asc,
-                NullOrdering::Last,
-            )
-            .nullable(),
-            KeySpec::new(
-                Column::F4.into_simple_expr(),
-                Ordering::Asc,
-                NullOrdering::Last,
-            )
-            .nullable(),
-            KeySpec::new(
-                Column::Id.into_simple_expr(),
-                Ordering::Desc,
-                NullOrdering::First,
-            ),
+            KeySpec::desc(Column::F1.into_simple_expr()), // non-nullable
+            KeySpec::desc_nulls_last(Column::F2.into_simple_expr()), // nullable, NULLS LAST, cursor NULL
+            KeySpec::desc_nulls_last(Column::F3.into_simple_expr()), // nullable, NULLS LAST, cursor NOT NULL
+            KeySpec::asc_nulls_first(Column::F4.into_simple_expr()).nullable(), // nullable, NULLS FIRST, cursor NULL
+            KeySpec::asc_nulls_first(Column::F5.into_simple_expr()).nullable(), // nullable, NULLS FIRST, cursor NOT NULL
+            KeySpec::desc(Column::Id.into_simple_expr()), // non-nullable, tie-breaker
         ];
 
         let cursor = Cursor::new(
-            Some((123, vec![1, 2, 3], None::<String>, "test", 42)),
+            Some((123, None::<Vec<u8>>, "test", None::<String>, 42)),
             specs,
         );
 
@@ -237,23 +217,25 @@ mod tests {
               "test_model"."f_1",
               "test_model"."f_2",
               "test_model"."f_3",
-              "test_model"."f_4"
+              "test_model"."f_4",
+              "test_model"."f_5"
             FROM "test_model"
             WHERE "test_model"."f_1" < 123
               OR ("test_model"."f_1" = 123
-                AND ("test_model"."f_2" < ARRAY [1,2,3]
-                  OR ("test_model"."f_2" = ARRAY [1,2,3]
-                    AND ("test_model"."f_3" IS NULL
-                      AND ("test_model"."f_4" IS NULL
-                        OR "test_model"."f_4" > 'test'
-                        OR ("test_model"."f_4" = 'test'
-                          AND ("test_model"."id" < 42
-                            OR ("test_model"."id" = 42
-                              AND FALSE))))))))
-            ORDER BY "test_model"."f_1" DESC NULLS LAST,
+                AND ("test_model"."f_2" IS NULL
+                  AND ("test_model"."f_3" IS NULL
+                    OR "test_model"."f_3" < 'test'
+                    OR ("test_model"."f_3" = 'test'
+                      AND (("test_model"."f_4" IS NULL
+                        AND ("test_model"."f_5" > 42
+                          OR ("test_model"."f_5" = 42
+                            AND FALSE)))
+                      OR "test_model"."f_4" IS NOT NULL)))))
+            ORDER BY "test_model"."f_1" DESC NULLS FIRST,
               "test_model"."f_2" DESC NULLS LAST,
-              "test_model"."f_3" ASC NULLS LAST,
-              "test_model"."f_4" ASC NULLS LAST,
+              "test_model"."f_3" DESC NULLS LAST,
+              "test_model"."f_4" ASC NULLS FIRST,
+              "test_model"."f_5" ASC NULLS FIRST,
               "test_model"."id" DESC NULLS FIRST
             LIMIT 50
         "#;

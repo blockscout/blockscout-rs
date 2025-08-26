@@ -17,8 +17,8 @@ use entity::tokens::{Column, Entity};
 use rust_decimal::Decimal;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult, IdenStatic, IntoActiveModel,
-    IntoSimpleExpr, PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, Select,
-    TransactionError, TransactionTrait, prelude::Expr, sea_query::OnConflict,
+    PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, Select, TransactionError,
+    TransactionTrait, prelude::Expr, sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(db: &C, tokens: Vec<TokenUpdate>) -> Result<(), DbErr>
