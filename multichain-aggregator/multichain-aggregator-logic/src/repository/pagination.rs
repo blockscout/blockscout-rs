@@ -233,7 +233,7 @@ mod tests {
         ];
 
         let cursor = Cursor::new(
-            Some((123, None::<Vec<u8>>, "test", None::<String>, 42)),
+            Some((123, None::<Vec<u8>>, "test", None::<String>, 42, 1)),
             specs,
         )
         .unwrap();
@@ -259,7 +259,9 @@ mod tests {
                       AND (("test_model"."f_4" IS NULL
                         AND ("test_model"."f_5" > 42
                           OR ("test_model"."f_5" = 42
-                            AND FALSE)))
+                            AND ("test_model"."id" < 1
+                              OR ("test_model"."id" = 1
+                                AND FALSE)))))
                       OR "test_model"."f_4" IS NOT NULL)))))
             ORDER BY "test_model"."f_1" DESC NULLS FIRST,
               "test_model"."f_2" DESC NULLS LAST,

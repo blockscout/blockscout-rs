@@ -1,8 +1,5 @@
 use crate::{
-    repository::{
-        pagination::{Cursor, KeySpec, PageOptions},
-        tokens::base_normal_tokens_query,
-    },
+    repository::{paginate_query, pagination::KeySpec, tokens::base_normal_tokens_query},
     types::{
         ChainId,
         address_token_balances::{AddressTokenBalance, AggregatedAddressTokenBalance},
@@ -15,8 +12,8 @@ use entity::{
     tokens,
 };
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult, JoinType, PartialModelTrait,
-    QueryFilter, QuerySelect, QueryTrait,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, JoinType, PartialModelTrait, QueryFilter,
+    QuerySelect, QueryTrait,
     prelude::Expr,
     sea_query::{OnConflict, Query},
 };
@@ -91,7 +88,7 @@ where
         .to((Column::TokenAddressHash, Column::ChainId))
         .into();
 
-    let mut query = AggregatedAddressTokenBalance::select_cols(
+    let query = AggregatedAddressTokenBalance::select_cols(
         base_normal_tokens_query(chain_ids, token_types)
             .join(JoinType::InnerJoin, tokens_rel)
             .filter(Column::AddressHash.eq(address.as_slice()))
@@ -105,30 +102,16 @@ where
         KeySpec::desc(Expr::col(Column::Value).into()),
         KeySpec::desc(Expr::col(Column::Id).into()),
     ];
-    let cursor =
-        Cursor::new(page_token, order_keys).expect("page token length should match order keys");
-    cursor.apply_pagination(
-        &mut query,
-        PageOptions {
-            page_size: page_size + 1,
-        },
-    );
 
-    let balances =
-        AggregatedAddressTokenBalance::find_by_statement(db.get_database_backend().build(&query))
-            .all(db)
-            .await?;
-
-    if balances.len() as u64 > page_size {
-        Ok((
-            balances[..page_size as usize].to_vec(),
-            balances
-                .get(page_size as usize - 1)
-                .map(|a| (a.fiat_balance.clone(), a.value.clone(), a.id)),
-        ))
-    } else {
-        Ok((balances, None))
-    }
+    paginate_query(
+        db,
+        query,
+        page_size,
+        page_token,
+        order_keys,
+        |a: &AggregatedAddressTokenBalance| (a.fiat_balance.clone(), a.value.clone(), a.id),
+    )
+    .await
 }
 
 pub async fn check_if_tokens_at_address<C>(

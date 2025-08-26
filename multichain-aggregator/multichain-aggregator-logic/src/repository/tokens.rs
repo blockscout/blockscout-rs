@@ -2,7 +2,8 @@ use crate::{
     repository::{
         batch_update::batch_update,
         macros::{is_distinct_from, update_if_not_null},
-        pagination::{Cursor, KeySpec, PageOptions},
+        paginate_query,
+        pagination::KeySpec,
     },
     types::{
         ChainId,
@@ -16,7 +17,7 @@ use alloy_primitives::Address;
 use entity::tokens::{Column, Entity};
 use rust_decimal::Decimal;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult, IdenStatic, IntoActiveModel,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, IntoActiveModel,
     PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, Select, TransactionError,
     TransactionTrait, prelude::Expr, sea_query::OnConflict,
 };
@@ -233,7 +234,7 @@ pub async fn list_aggregated_tokens<C>(
 where
     C: ConnectionTrait + TransactionTrait,
 {
-    let mut query = AggregatedToken::select_cols(base_normal_tokens_query(chain_ids, token_types))
+    let query = AggregatedToken::select_cols(base_normal_tokens_query(chain_ids, token_types))
         .as_query()
         .to_owned();
 
@@ -246,36 +247,23 @@ where
         KeySpec::asc(Expr::col(Column::ChainId).into()),
     ];
     let page_token = page_token.map(|(m, f, h, n, a, c)| (m, f, h, n, a.to_vec(), c));
-    let cursor =
-        Cursor::new(page_token, order_keys).expect("page token length should match order keys");
-    cursor.apply_pagination(
-        &mut query,
-        PageOptions {
-            page_size: page_size + 1,
+
+    paginate_query(
+        db,
+        query,
+        page_size,
+        page_token,
+        order_keys,
+        |a: &AggregatedToken| {
+            (
+                a.circulating_market_cap,
+                a.fiat_value,
+                a.holders_count,
+                a.name.clone(),
+                *a.address_hash,
+                a.chain_id,
+            )
         },
-    );
-
-    let tokens = AggregatedToken::find_by_statement(db.get_database_backend().build(&query))
-        .all(db)
-        .await?
-        .into_iter()
-        .collect::<Vec<_>>();
-
-    if tokens.len() as u64 > page_size {
-        Ok((
-            tokens[..page_size as usize].to_vec(),
-            tokens.get(page_size as usize - 1).map(|a| {
-                (
-                    a.circulating_market_cap,
-                    a.fiat_value,
-                    a.holders_count,
-                    a.name.clone(),
-                    *a.address_hash,
-                    a.chain_id,
-                )
-            }),
-        ))
-    } else {
-        Ok((tokens, None))
-    }
+    )
+    .await
 }

@@ -8,13 +8,17 @@ pub mod counters;
 pub mod hashes;
 pub mod interop_message_transfers;
 pub mod interop_messages;
+pub mod pagination;
 pub mod tokens;
 
 mod batch_update;
-pub mod pagination;
 
-use sea_orm::{ConnectionTrait, Cursor, DbErr, SelectorTrait, sea_query::IntoValueTuple};
+use sea_orm::{
+    ConnectionTrait, Cursor, DbErr, FromQueryResult, SelectorTrait,
+    sea_query::{IntoValueTuple, SelectStatement},
+};
 
+// TODO: replace with `paginate_query` in all applicable places
 pub async fn paginate_cursor<S, E, R1, R2, F>(
     db: &impl ConnectionTrait,
     mut c: Cursor<S>,
@@ -39,6 +43,44 @@ where
         ))
     } else {
         Ok((results, None))
+    }
+}
+
+pub async fn paginate_query<E, P1, P2, F>(
+    db: &impl ConnectionTrait,
+    mut query: SelectStatement,
+    page_size: u64,
+    page_token: Option<P1>,
+    key_specs: Vec<pagination::KeySpec>,
+    into_page_token: F,
+) -> Result<(Vec<E>, Option<P2>), DbErr>
+where
+    E: FromQueryResult + Clone,
+    P1: IntoValueTuple,
+    F: FnOnce(&E) -> P2,
+{
+    let cursor =
+        pagination::Cursor::new(page_token, key_specs).map_err(|e| DbErr::Custom(e.to_string()))?;
+    cursor.apply_pagination(
+        &mut query,
+        pagination::PageOptions {
+            page_size: page_size + 1,
+        },
+    );
+
+    let models = E::find_by_statement(db.get_database_backend().build(&query))
+        .all(db)
+        .await?
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    if models.len() as u64 > page_size {
+        Ok((
+            models[..page_size as usize].to_vec(),
+            models.get(page_size as usize - 1).map(into_page_token),
+        ))
+    } else {
+        Ok((models, None))
     }
 }
 
