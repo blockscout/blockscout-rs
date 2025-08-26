@@ -1,7 +1,7 @@
 use crate::chart_prelude::*;
 
 pub struct TotalTokensStatement;
-impl_db_choice!(TotalTokensStatement, UseBlockscoutDB);
+impl_db_choice!(TotalTokensStatement, UsePrimaryDB);
 
 impl StatementForOne for TotalTokensStatement {
     fn get_statement(_: &IndexerMigrations) -> Statement {

@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::chart_prelude::*;
 
 pub struct NewVerifiedContractsStatement;
-impl_db_choice!(NewVerifiedContractsStatement, UseBlockscoutDB);
+impl_db_choice!(NewVerifiedContractsStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewVerifiedContractsStatement {
     fn get_statement(

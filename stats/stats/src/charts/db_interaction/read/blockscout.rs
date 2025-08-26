@@ -1,18 +1,16 @@
 /// Methods intended for interacting with blockscout db
 use blockscout_db::entity::blocks;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QueryOrder, QuerySelect, Statement,
     sea_query::{self},
 };
 
-use std::{fmt::Debug, ops::Range};
+use std::fmt::Debug;
 
 use crate::{
     ChartError,
-    data_source::{UpdateContext, kinds::remote_db::RemoteQueryBehaviour},
-    range::UniversalRange,
     types::TimespanTrait,
 };
 
@@ -135,23 +133,6 @@ pub async fn query_estimated_table_rows(
         .await?;
     let count = count.and_then(|c| c.count);
     Ok(count)
-}
-
-pub struct QueryAllBlockTimestampRange;
-
-impl RemoteQueryBehaviour for QueryAllBlockTimestampRange {
-    type Output = Range<DateTime<Utc>>;
-
-    async fn query_data(
-        cx: &UpdateContext<'_>,
-        _range: UniversalRange<DateTime<Utc>>,
-    ) -> Result<Self::Output, ChartError> {
-        let start_timestamp = get_min_date_blockscout(cx.indexer_db)
-            .await
-            .map_err(ChartError::IndexerDB)?
-            .and_utc();
-        Ok(start_timestamp..cx.time)
-    }
 }
 
 #[cfg(test)]

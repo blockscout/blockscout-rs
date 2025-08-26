@@ -8,7 +8,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::chart_prelude::*;
 
 pub struct NewBlockRewardsStatement;
-impl_db_choice!(NewBlockRewardsStatement, UseBlockscoutDB);
+impl_db_choice!(NewBlockRewardsStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewBlockRewardsStatement {
     fn get_statement(

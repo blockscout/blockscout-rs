@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::chart_prelude::*;
 
 pub struct NewBuilderAccountsStatement;
-impl_db_choice!(NewBuilderAccountsStatement, UseBlockscoutDB);
+impl_db_choice!(NewBuilderAccountsStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewBuilderAccountsStatement {
     fn get_statement(

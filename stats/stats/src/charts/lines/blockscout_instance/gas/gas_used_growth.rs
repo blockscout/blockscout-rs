@@ -5,7 +5,7 @@ use crate::chart_prelude::*;
 use rust_decimal::Decimal;
 
 pub struct GasUsedPartialStatement;
-impl_db_choice!(GasUsedPartialStatement, UseBlockscoutDB);
+impl_db_choice!(GasUsedPartialStatement, UsePrimaryDB);
 
 impl StatementFromRange for GasUsedPartialStatement {
     fn get_statement(

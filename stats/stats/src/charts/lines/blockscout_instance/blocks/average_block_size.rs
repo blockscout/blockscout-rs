@@ -5,7 +5,7 @@ use crate::chart_prelude::*;
 use super::new_blocks::{NewBlocksInt, NewBlocksMonthlyInt};
 
 pub struct AverageBlockSizeStatement;
-impl_db_choice!(AverageBlockSizeStatement, UseBlockscoutDB);
+impl_db_choice!(AverageBlockSizeStatement, UsePrimaryDB);
 
 impl StatementFromRange for AverageBlockSizeStatement {
     fn get_statement(

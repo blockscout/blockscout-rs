@@ -53,7 +53,7 @@ where
 pub async fn simple_test_chart_multichain<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
-) -> (TestDbGuard, TestDbGuard)
+) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
@@ -129,7 +129,7 @@ where
     let mut parameters = UpdateParameters {
         stats_db: &db,
         is_multichain_mode: multichain_mode,
-        indexer_db: &indexer,
+        indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: zetachain_cctx.as_deref(),
         enabled_update_charts_recursive: C::all_dependencies_chart_keys(),
@@ -479,6 +479,18 @@ pub async fn prepare_blockscout_chart_test<C: DataSource + ChartProperties>(
         .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
     let (init_time, db, indexer, _) =
         prepare_chart_test_inner::<C>(test_name, init_time, false, false).await;
+    (init_time, db, indexer)
+}
+
+pub async fn prepare_multichain_chart_test<C: DataSource + ChartProperties>(
+    test_name: &str,
+    init_time: Option<NaiveDateTime>,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
+    let init_time = init_time
+        .map(|t| t.and_utc())
+        .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
+    let (init_time, db, indexer, _) = 
+        prepare_chart_test_inner::<C>(test_name, init_time, true, false).await;
     (init_time, db, indexer)
 }
 

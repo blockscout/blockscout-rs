@@ -9,7 +9,7 @@ use blockscout_db::entity::user_operations;
 use super::count_distinct_in_user_ops;
 
 pub struct ActiveAccountAbstractionWalletsStatement;
-impl_db_choice!(ActiveAccountAbstractionWalletsStatement, UseBlockscoutDB);
+impl_db_choice!(ActiveAccountAbstractionWalletsStatement, UsePrimaryDB);
 
 impl StatementFromRange for ActiveAccountAbstractionWalletsStatement {
     fn get_statement(

@@ -3,7 +3,7 @@ use crate::chart_prelude::*;
 use blockscout_db::entity::transactions;
 
 pub struct NewContracts24hStatement;
-impl_db_choice!(NewContracts24hStatement, UseBlockscoutDB);
+impl_db_choice!(NewContracts24hStatement, UsePrimaryDB);
 
 impl StatementFromUpdateTime for NewContracts24hStatement {
     fn get_statement(

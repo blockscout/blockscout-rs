@@ -9,7 +9,7 @@ use blockscout_db::entity::user_operations;
 use super::count_distinct_in_user_ops;
 
 pub struct ActivePaymastersStatement;
-impl_db_choice!(ActivePaymastersStatement, UseBlockscoutDB);
+impl_db_choice!(ActivePaymastersStatement, UsePrimaryDB);
 
 impl StatementFromRange for ActivePaymastersStatement {
     fn get_statement(

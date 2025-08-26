@@ -1,7 +1,7 @@
 use crate::chart_prelude::*;
 
 pub struct CompletedTxnsStatement;
-impl_db_choice!(CompletedTxnsStatement, UseBlockscoutDB);
+impl_db_choice!(CompletedTxnsStatement, UsePrimaryDB);
 
 impl StatementForOne for CompletedTxnsStatement {
     fn get_statement(completed_migrations: &IndexerMigrations) -> Statement {

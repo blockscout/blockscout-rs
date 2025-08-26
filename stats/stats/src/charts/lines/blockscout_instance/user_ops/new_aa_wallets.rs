@@ -5,7 +5,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::chart_prelude::*;
 
 pub struct NewAccountAbstractionWalletsStatement;
-impl_db_choice!(NewAccountAbstractionWalletsStatement, UseBlockscoutDB);
+impl_db_choice!(NewAccountAbstractionWalletsStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewAccountAbstractionWalletsStatement {
     fn get_statement(

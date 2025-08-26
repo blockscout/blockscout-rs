@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub struct AverageGasLimitStatement;
-impl_db_choice!(AverageGasLimitStatement, UseBlockscoutDB);
+impl_db_choice!(AverageGasLimitStatement, UsePrimaryDB);
 
 impl StatementFromRange for AverageGasLimitStatement {
     fn get_statement(

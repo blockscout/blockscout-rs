@@ -141,7 +141,7 @@ mod test {
             UpdateContext, UpdateParameters,
             kinds::remote_db::{
                 RemoteQueryBehaviour, StatementFromRange,
-                db_choice::{DatabaseChoice, UseBlockscoutDB},
+                db_choice::{DatabaseChoice, UsePrimaryDB},
             },
             types::{IndexerMigrations, WrappedValue},
         },
@@ -154,7 +154,7 @@ mod test {
 
     struct TestStatement;
     impl DatabaseChoice for TestStatement {
-        type DB = UseBlockscoutDB;
+        type DB = UsePrimaryDB;
     }
     impl StatementFromRange for TestStatement {
         fn get_statement(

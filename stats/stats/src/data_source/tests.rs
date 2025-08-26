@@ -24,7 +24,7 @@ use super::{
         },
         remote_db::{
             PullAllWithAndSort, RemoteDatabaseSource, StatementFromRange,
-            db_choice::{UseBlockscoutDB, impl_db_choice},
+            db_choice::{UsePrimaryDB, impl_db_choice},
         },
     },
     types::UpdateParameters,
@@ -45,7 +45,7 @@ use crate::{
 };
 
 pub struct NewContractsQuery;
-impl_db_choice!(NewContractsQuery, UseBlockscoutDB);
+impl_db_choice!(NewContractsQuery, UsePrimaryDB);
 
 impl StatementFromRange for NewContractsQuery {
     fn get_statement(

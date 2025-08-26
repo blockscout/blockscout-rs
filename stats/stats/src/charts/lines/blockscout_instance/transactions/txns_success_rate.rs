@@ -5,7 +5,7 @@ use crate::chart_prelude::*;
 use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 
 pub struct TxnsSuccessRateStatement;
-impl_db_choice!(TxnsSuccessRateStatement, UseBlockscoutDB);
+impl_db_choice!(TxnsSuccessRateStatement, UsePrimaryDB);
 
 impl StatementFromRange for TxnsSuccessRateStatement {
     fn get_statement(

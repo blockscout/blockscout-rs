@@ -223,7 +223,7 @@ pub trait UpdateGroup: core::fmt::Debug {
 /// # use std::{ops::Range, collections::HashSet};
 ///
 /// struct DummyRemoteStatement;
-/// impl_db_choice!(DummyRemoteStatement, UseBlockscoutDB);
+/// impl_db_choice!(DummyRemoteStatement, UsePrimaryDB);
 ///
 /// impl StatementFromRange for DummyRemoteStatement {
 ///     fn get_statement(range: Option<Range<DateTime<Utc>>>, _: &IndexerMigrations, _: &HashSet<ChartKey>) -> Statement {

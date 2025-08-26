@@ -9,7 +9,7 @@ use super::new_txns::{NewTxnsInt, NewTxnsMonthlyInt};
 const ETHER: i64 = i64::pow(10, 18);
 
 pub struct AverageTxnFeeStatement;
-impl_db_choice!(AverageTxnFeeStatement, UseBlockscoutDB);
+impl_db_choice!(AverageTxnFeeStatement, UsePrimaryDB);
 
 impl StatementFromRange for AverageTxnFeeStatement {
     fn get_statement(
