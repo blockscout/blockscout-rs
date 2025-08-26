@@ -9,10 +9,7 @@ use sea_orm::{
 
 use std::fmt::Debug;
 
-use crate::{
-    ChartError,
-    types::TimespanTrait,
-};
+use crate::{ChartError, types::TimespanTrait};
 
 pub async fn find_one_value<C, Value>(db: &C, query: Statement) -> Result<Option<Value>, ChartError>
 where

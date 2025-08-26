@@ -1,6 +1,6 @@
-use std::collections::HashSet;
-use crate::{chart_prelude::*, lines::NEW_TXNS_WINDOW_RANGE};
 use super::new_txns_multichain::NewTxnsMultichainStatement;
+use crate::{chart_prelude::*, lines::NEW_TXNS_WINDOW_RANGE};
+use std::collections::HashSet;
 
 impl_db_choice!(NewTxnsMultichainStatement, UsePrimaryDB);
 
@@ -38,10 +38,8 @@ impl RemoteQueryBehaviour for NewTxnsMultichainWindowQuery {
             &cx.indexer_applied_migrations,
             &cx.enabled_update_charts_recursive,
         );
-        find_all_points::<_, DateValue<String>>(
-            NewTxnsMultichainStatement::get_db(cx)?,
-            statement
-        ).await
+        find_all_points::<_, DateValue<String>>(NewTxnsMultichainStatement::get_db(cx)?, statement)
+            .await
     }
 }
 
@@ -66,8 +64,7 @@ impl ChartProperties for Properties {
     }
 
     fn indexing_status_requirement() -> IndexingStatus {
-        IndexingStatus::LEAST_RESTRICTIVE
-            .with_blockscout(BlockscoutIndexingStatus::NoneIndexed)
+        IndexingStatus::LEAST_RESTRICTIVE.with_blockscout(BlockscoutIndexingStatus::NoneIndexed)
     }
 }
 

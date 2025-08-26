@@ -60,9 +60,7 @@ pub mod chart_prelude {
                     PullOne24hCached, PullOneNowValue, RemoteDatabaseSource, RemoteQueryBehaviour,
                     StatementForOne, StatementFromRange, StatementFromTimespan,
                     StatementFromUpdateTime,
-                    db_choice::{
-                        DatabaseChoice, UsePrimaryDB, UseZetachainCctxDB, impl_db_choice,
-                    },
+                    db_choice::{DatabaseChoice, UsePrimaryDB, UseZetachainCctxDB, impl_db_choice},
                 },
             },
             types::{Get, IndexerMigrations},

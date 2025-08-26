@@ -41,8 +41,14 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
-    let (db, blockscout, _zetachain_cctx) =
-        simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest(), false, false).await;
+    let (db, blockscout, _zetachain_cctx) = simple_test_chart_inner::<C>(
+        test_name,
+        expected,
+        IndexerMigrations::latest(),
+        false,
+        false,
+    )
+    .await;
     assert!(
         _zetachain_cctx.is_none(),
         "zetachain cctx db was initialized needlessly"
@@ -58,7 +64,14 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
-    simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest(), true, false).await
+    simple_test_chart_inner::<C>(
+        test_name,
+        expected,
+        IndexerMigrations::latest(),
+        true,
+        false,
+    )
+    .await
 }
 
 /// tests all statement kinds for different migrations combinations.
@@ -92,8 +105,14 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
-    let (db, blockscout, zetachain_cctx) =
-        simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest(), false, true).await;
+    let (db, blockscout, zetachain_cctx) = simple_test_chart_inner::<C>(
+        test_name,
+        expected,
+        IndexerMigrations::latest(),
+        false,
+        true,
+    )
+    .await;
     (
         db,
         blockscout,
@@ -489,7 +508,7 @@ pub async fn prepare_multichain_chart_test<C: DataSource + ChartProperties>(
     let init_time = init_time
         .map(|t| t.and_utc())
         .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
-    let (init_time, db, indexer, _) = 
+    let (init_time, db, indexer, _) =
         prepare_chart_test_inner::<C>(test_name, init_time, true, false).await;
     (init_time, db, indexer)
 }

@@ -37,7 +37,12 @@ impl StatementFromRange for AverageBlockRewardsStatement {
 }
 
 pub type AverageBlockRewardsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<AverageBlockRewardsStatement, NaiveDate, f64, QueryFullIndexerTimestampRange>,
+    PullAllWithAndSort<
+        AverageBlockRewardsStatement,
+        NaiveDate,
+        f64,
+        QueryFullIndexerTimestampRange,
+    >,
 >;
 
 pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;
