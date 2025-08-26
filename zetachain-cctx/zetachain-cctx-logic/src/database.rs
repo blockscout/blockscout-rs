@@ -1008,7 +1008,7 @@ impl ZetachainCctxDatabase {
             error_message: cctx_row
                 .try_get_by_index(17)
                 .map_err(|e| anyhow::anyhow!("cctx_row error_message: {}", e))?,
-            last_update_timestamp: last_update_timestamp.and_utc().timestamp() as i64,
+            last_update_timestamp: last_update_timestamp.and_utc().timestamp(),
             is_abort_refunded: cctx_row
                 .try_get_by_index(19)
                 .map_err(|e| anyhow::anyhow!("cctx_row is_abort_refunded: {}", e))?,
