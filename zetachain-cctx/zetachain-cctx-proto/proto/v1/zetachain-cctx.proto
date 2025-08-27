@@ -212,7 +212,7 @@ message RevertOptions {
   string revert_address = 1;
   bool call_on_revert = 2;
   string abort_address = 3;
-  string revert_message = 4;
+  optional string revert_message = 4;
   string revert_gas_limit = 5 ;
 }
 

@@ -141,7 +141,7 @@ async fn test_get_complete_cctx() {
 
 #[tokio::test]
 async fn test_revert_message_is_base64_encoded() {
-    let db = crate::helpers::init_db("test", "indexer_get_complete_cctx").await;
+    let db = crate::helpers::init_db("test", "indexer_revert_message_is_base64_encoded").await;
     let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
     database.setup_db().await.unwrap();
 
@@ -251,5 +251,5 @@ async fn test_revert_message_is_base64_encoded() {
         .unwrap();
     assert!(cctx.is_some());
     let cctx = cctx.unwrap();
-    assert_eq!(cctx.revert_options.unwrap().revert_message, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAFB1PKNJY2yocydi6MzwV9OZmJGgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAChodHRwczovL2FwaS5leGFtcGxlLmNvbS9tZXRhZGF0YS8vMS5qc29uAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    assert_eq!(cctx.revert_options.unwrap().revert_message, Some("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAFB1PKNJY2yocydi6MzwV9OZmJGgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAChodHRwczovL2FwaS5leGFtcGxlLmNvbS9tZXRhZGF0YS8vMS5qc29uAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string()));
 }
