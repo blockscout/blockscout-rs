@@ -1109,9 +1109,7 @@ impl ZetachainCctxDatabase {
                 .map_err(|e| anyhow::anyhow!("cctx_row abort_address: {}", e))?,
             revert_message: cctx_row
                 .try_get_by_index::<String>(44)
-                .map(|x| x.as_bytes().to_vec())
-                .map_err(|e| anyhow::anyhow!("cctx_row revert_message: {}", e))
-                .unwrap_or_default()
+                .map_err(|e| anyhow::anyhow!("cctx_row revert_message: {}", e))?
                 .into(),
             revert_gas_limit: cctx_row
                 .try_get_by_index(45)
