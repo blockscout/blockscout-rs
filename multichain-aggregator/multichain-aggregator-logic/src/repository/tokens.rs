@@ -1,22 +1,25 @@
 use crate::{
     repository::{
         batch_update::batch_update,
-        macros::{col, expr_as, is_distinct_from, map_col, update_if_not_null},
+        macros::{is_distinct_from, update_if_not_null},
+        paginate_query,
+        pagination::KeySpec,
     },
-    types::tokens::{
-        TokenType, TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata, UpdateTokenPriceData,
-        UpdateTokenType, token_chain_infos_expr,
+    types::{
+        ChainId,
+        tokens::{
+            AggregatedToken, TokenType, TokenUpdate, UpdateTokenCounters, UpdateTokenMetadata,
+            UpdateTokenPriceData, UpdateTokenType,
+        },
     },
 };
+use alloy_primitives::Address;
 use entity::tokens::{Column, Entity};
+use rust_decimal::Decimal;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DbErr, EntityTrait, IdenStatic, IntoActiveModel,
-    TransactionError, TransactionTrait,
-    prelude::Expr,
-    sea_query::{
-        IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SelectExpr, SelectStatement,
-        SimpleExpr,
-    },
+    PartialModelTrait, QueryFilter, QuerySelect, QueryTrait, Select, TransactionError,
+    TransactionTrait, prelude::Expr, sea_query::OnConflict,
 };
 
 pub async fn upsert_many<C>(db: &C, tokens: Vec<TokenUpdate>) -> Result<(), DbErr>
@@ -175,61 +178,92 @@ where
     Ok(())
 }
 
-// Select query for `AggregatedToken` struct
-// This query aggregates multiple `ERC-7802` token instances into a single struct.
-// NOTE: `name`, `symbol`, `decimals` are assumed to be the same
-pub fn aggregated_tokens_query(from: impl IntoTableRef) -> SelectStatement {
-    Query::select()
-        .exprs([
-            col!("token_address_hash"),
-            col!("token_name"),
-            col!("token_symbol"),
-            col!("token_decimals"),
-            expr_as!(Expr::val(TokenType::Erc7802), "token_token_type"),
-            map_col!("MAX($1)", "token_icon_url"),
-            map_col!("AVG($1)", "token_fiat_value"),
-            map_col!("AVG($1)", "token_circulating_market_cap"),
-            map_col!("SUM($1)", "token_total_supply"),
-            map_col!("SUM($1)", "token_holders_count"),
-            map_col!("SUM($1)", "token_transfers_count"),
-            expr_as!(
-                Expr::cust_with_expr("jsonb_agg($1)", token_chain_infos_expr()),
-                "token_chain_infos"
-            ),
-        ])
-        .from(from)
-        .and_where(Expr::col("token_token_type").eq(TokenType::Erc7802))
-        .group_by_columns([
-            "token_address_hash",
-            "token_name",
-            "token_symbol",
-            "token_decimals",
-        ])
-        .to_owned()
-}
-
 // Select query for nested `AggregatedToken` struct
 // This query converts a single-chain token into a multichain format
-pub fn normal_tokens_query(from: impl IntoTableRef) -> SelectStatement {
-    Query::select()
-        .exprs([
-            col!("token_address_hash"),
-            col!("token_name"),
-            col!("token_symbol"),
-            col!("token_decimals"),
-            col!("token_token_type"),
-            col!("token_icon_url"),
-            col!("token_fiat_value"),
-            col!("token_circulating_market_cap"),
-            col!("token_total_supply"),
-            col!("token_holders_count"),
-            col!("token_transfers_count"),
-            expr_as!(
-                Expr::cust_with_expr("jsonb_build_array($1)", token_chain_infos_expr()),
-                "token_chain_infos"
-            ),
-        ])
-        .from(from)
-        .and_where(Expr::col("token_token_type").ne(TokenType::Erc7802))
-        .to_owned()
+pub fn base_normal_tokens_query(
+    chain_ids: Vec<ChainId>,
+    token_types: Vec<TokenType>,
+) -> Select<Entity> {
+    Entity::find()
+        .select_only()
+        // Use raw injected enum value to avoid suboptimal query plans
+        .filter(Expr::cust("token_type <> 'ERC-7802'::token_type"))
+        .apply_if(
+            (!chain_ids.is_empty()).then_some(chain_ids),
+            |q, chain_ids| q.filter(Column::ChainId.is_in(chain_ids)),
+        )
+        .apply_if(
+            (!token_types.is_empty()).then_some(token_types),
+            |q, token_types| q.filter(Column::TokenType.is_in(token_types)),
+        )
+}
+
+pub async fn get_aggregated_token<C>(
+    db: &C,
+    address_hash: alloy_primitives::Address,
+    chain_id: ChainId,
+) -> Result<Option<AggregatedToken>, DbErr>
+where
+    C: ConnectionTrait + TransactionTrait,
+{
+    let token = base_normal_tokens_query(vec![chain_id], vec![])
+        .filter(Column::AddressHash.eq(address_hash.as_slice()))
+        .into_partial_model::<AggregatedToken>()
+        .one(db)
+        .await?;
+
+    Ok(token)
+}
+
+pub type ListClusterTokensPageToken = (
+    Option<Decimal>,
+    Option<Decimal>,
+    Option<i64>,
+    Option<String>,
+    Address,
+    ChainId,
+);
+
+pub async fn list_aggregated_tokens<C>(
+    db: &C,
+    chain_ids: Vec<ChainId>,
+    token_types: Vec<TokenType>,
+    page_size: u64,
+    page_token: Option<ListClusterTokensPageToken>,
+) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), DbErr>
+where
+    C: ConnectionTrait + TransactionTrait,
+{
+    let query = AggregatedToken::select_cols(base_normal_tokens_query(chain_ids, token_types))
+        .as_query()
+        .to_owned();
+
+    let order_keys = vec![
+        KeySpec::desc_nulls_last(Expr::col(Column::CirculatingMarketCap).into()),
+        KeySpec::desc_nulls_last(Expr::col(Column::FiatValue).into()),
+        KeySpec::desc_nulls_last(Expr::col(Column::HoldersCount).into()),
+        KeySpec::asc(Expr::col(Column::Name).into()),
+        KeySpec::asc(Expr::col(Column::AddressHash).into()),
+        KeySpec::asc(Expr::col(Column::ChainId).into()),
+    ];
+    let page_token = page_token.map(|(m, f, h, n, a, c)| (m, f, h, n, a.to_vec(), c));
+
+    paginate_query(
+        db,
+        query,
+        page_size,
+        page_token,
+        order_keys,
+        |a: &AggregatedToken| {
+            (
+                a.circulating_market_cap,
+                a.fiat_value,
+                a.holders_count,
+                a.name.clone(),
+                *a.address_hash,
+                a.chain_id,
+            )
+        },
+    )
+    .await
 }

@@ -4,6 +4,7 @@ use crate::{
     repository::{
         address_token_balances::{self, ListAddressTokensPageToken},
         addresses, chains, interop_message_transfers, interop_messages,
+        tokens::{self, ListClusterTokensPageToken},
     },
     services::macros::maybe_cache_lookup,
     types::{
@@ -12,7 +13,7 @@ use crate::{
         addresses::AddressInfo,
         chains::Chain,
         interop_messages::{ExtendedInteropMessage, MessageDirection},
-        tokens::TokenType,
+        tokens::{AggregatedToken, TokenType},
     },
 };
 use alloy_primitives::{Address as AddressAlloy, TxHash};
@@ -49,6 +50,23 @@ impl Cluster {
 
     pub fn chain_ids(&self) -> Vec<ChainId> {
         self.blockscout_clients.keys().cloned().collect()
+    }
+
+    pub fn validate_and_prepare_chain_ids(
+        &self,
+        chain_ids: Vec<ChainId>,
+    ) -> Result<Vec<ChainId>, ServiceError> {
+        let chain_ids = if chain_ids.is_empty() {
+            self.chain_ids()
+        } else {
+            chain_ids
+                .iter()
+                .map(|c| self.validate_chain_id(*c))
+                .collect::<Result<Vec<_>, _>>()?;
+            chain_ids
+        };
+
+        Ok(chain_ids)
     }
 
     pub async fn list_chains(&self, db: &DatabaseConnection) -> Result<Vec<Chain>, ServiceError> {
@@ -189,6 +207,7 @@ impl Cluster {
         db: &DatabaseConnection,
         address: AddressAlloy,
         token_types: Vec<TokenType>,
+        chain_ids: Vec<ChainId>,
         page_size: u64,
         page_token: Option<ListAddressTokensPageToken>,
     ) -> Result<
@@ -198,19 +217,45 @@ impl Cluster {
         ),
         ServiceError,
     > {
-        let cluster_chain_ids = self.chain_ids();
-
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids)?;
         let res = address_token_balances::list_by_address(
             db,
             address,
             token_types,
-            cluster_chain_ids,
+            chain_ids,
             page_size,
             page_token,
         )
         .await?;
 
         Ok(res)
+    }
+
+    pub async fn list_cluster_tokens(
+        &self,
+        db: &DatabaseConnection,
+        token_types: Vec<TokenType>,
+        chain_ids: Vec<ChainId>,
+        page_size: u64,
+        page_token: Option<ListClusterTokensPageToken>,
+    ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids)?;
+        let res = tokens::list_aggregated_tokens(db, chain_ids, token_types, page_size, page_token)
+            .await?;
+
+        Ok(res)
+    }
+
+    pub async fn get_aggregated_token(
+        &self,
+        db: &DatabaseConnection,
+        address: AddressAlloy,
+        chain_id: ChainId,
+    ) -> Result<Option<AggregatedToken>, ServiceError> {
+        self.validate_chain_id(chain_id)?;
+        let token = tokens::get_aggregated_token(db, address, chain_id).await?;
+
+        Ok(token)
     }
 
     async fn fetch_decoded_calldata_cached(
