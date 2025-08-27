@@ -32,6 +32,7 @@ use crate::{
 };
 
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "needs database"]
 pub async fn run_tests_with_nothing_indexed() {
     let test_name = "run_tests_with_nothing_indexed";
@@ -99,6 +100,7 @@ pub async fn run_tests_with_nothing_indexed() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "needs database"]
 pub async fn run_tests_with_user_ops_not_indexed() {
     let test_name = "run_tests_with_user_ops_not_indexed";

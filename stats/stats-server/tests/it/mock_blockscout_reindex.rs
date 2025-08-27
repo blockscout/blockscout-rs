@@ -26,6 +26,7 @@ use crate::common::{
 
 /// Uses reindexing, so needs to be independent
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "needs database"]
 async fn test_reupdate_works() {
     let test_name = "test_reupdate_works";

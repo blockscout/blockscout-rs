@@ -20,6 +20,10 @@ use crate::{
 };
 
 #[tokio::test]
+// the test already does concurrency within;
+// there was a problem with too many connections to the database,
+// so we run integration tests serially to avoid them (espeecially in CI)
+#[serial_test::serial]
 #[ignore = "needs database"]
 pub async fn run_fully_initialized_stats_tests() {
     let test_name = "run_fully_initialized_stats_tests";
