@@ -18,6 +18,8 @@ service ClusterExplorerService {
       returns (GetInteropMessageResponse) {}
   rpc GetAddress(GetAddressRequest) returns (GetAddressResponse) {}
   rpc ListAddressTokens(ListAddressTokensRequest) returns (ListAddressTokensResponse) {}
+  rpc ListClusterTokens(ListClusterTokensRequest) returns (ListClusterTokensResponse) {}
+  rpc GetAggregatedToken(GetAggregatedTokenRequest) returns (GetAggregatedTokenResponse) {}
 }
 
 message AddressHash {
@@ -149,8 +151,10 @@ message ListAddressTokensRequest {
   string address_hash = 2;
   // List of comma-separated token types to filter by. See `TokenType`.
   optional string type = 3;
-  optional uint32 page_size = 4;
-  optional string page_token = 5;
+  // Comma-separated list of chain ids to filter by.
+  repeated string chain_id = 4;
+  optional uint32 page_size = 5;
+  optional string page_token = 6;
 }
 
 message ListAddressTokensResponse {
@@ -164,3 +168,29 @@ message ListAddressTokensResponse {
   repeated AggregatedTokenBalanceInfo items = 1;
   blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
 }
+
+message ListClusterTokensRequest {
+  string cluster_id = 1;
+  // Comma-separated token types to filter by. See `TokenType`.
+  optional string type = 2;
+  // Comma-separated list of chain ids to filter by.
+  repeated string chain_id = 3;
+  optional uint32 page_size = 4;
+  optional string page_token = 5;
+}
+
+message ListClusterTokensResponse {
+  repeated AggregatedTokenInfo items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message GetAggregatedTokenRequest {
+  string cluster_id = 1;
+  string address_hash = 2;
+  string chain_id = 3;
+}
+
+message GetAggregatedTokenResponse {
+  AggregatedTokenInfo token = 1;
+}
+

@@ -62,6 +62,12 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListAddressTokens
       get: /api/v1/clusters/{cluster_id}/addresses/{address_hash}/tokens
 
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListClusterTokens
+      get: /api/v1/clusters/{cluster_id}/tokens
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetAggregatedToken
+      get: /api/v1/clusters/{cluster_id}/tokens/{address_hash}
+
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check
