@@ -590,7 +590,6 @@ definitions:
         type: string
       revert_message:
         type: string
-        format: byte
       revert_gas_limit:
         type: string
     title: RevertOptions represents the options for reverting a cctx
