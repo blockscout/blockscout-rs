@@ -767,7 +767,7 @@ impl ZetachainCctxDatabase {
         Ok(())
     }
 
-    #[instrument(,level="trace",skip(self,tx),fields(cctx_id = %cctx_id, job_id = %job_id))]
+    #[instrument(,level="debug",skip(self,tx),fields(cctx_id = %cctx_id, job_id = %job_id))]
     pub async fn update_last_status_update_timestamp(
         &self,
         cctx_id: i32,
@@ -778,7 +778,6 @@ impl ZetachainCctxDatabase {
             id: ActiveValue::Set(cctx_id),
             last_status_update_timestamp: ActiveValue::Set(chrono::Utc::now().naive_utc()),
             processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
-            retries_number: ActiveValue::Set(0),
             updated_by: ActiveValue::Set(job_id.to_string()),
             ..Default::default()
         })
