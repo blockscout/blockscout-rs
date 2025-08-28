@@ -238,7 +238,10 @@ impl ZetachainCctxDatabase {
             || cctx_status.status == CctxStatusStatus::Aborted
             || cctx_status.status == CctxStatusStatus::Reverted
         {
-            tracing::debug!("cctx {} is in final state, marking as processed", cctx.index);
+            tracing::debug!(
+                "cctx {} is in final state, marking as processed",
+                cctx.index
+            );
             self.mark_cctx_tree_processed(cctx.id, job_id, &cctx.index, &tx)
                 .await?;
             tracing::debug!(
