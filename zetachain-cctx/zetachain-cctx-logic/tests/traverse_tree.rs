@@ -116,6 +116,7 @@ async fn test_traverse_and_update_tree_relationships() {
         root_id: None,
         depth: 0,
         retries_number: 0,
+        token_id: Some(1),
     };
 
     let job_id = Uuid::new_v4();

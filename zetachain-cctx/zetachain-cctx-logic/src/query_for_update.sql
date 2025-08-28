@@ -29,4 +29,5 @@ WHERE
     cctx.index,
     cctx.root_id,
     cctx.depth,
-    cctx.retries_number;
+    cctx.retries_number,
+    cctx.token_id;

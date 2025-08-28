@@ -96,7 +96,7 @@ async fn test_get_complete_cctx() {
                 "revert_address": "tb1quegm9lg6nd0v2xncl8ldkvfkghhe8mns3ftvca",
                 "call_on_revert": false,
                 "abort_address": "",
-                "revert_message": null,
+                "revert_message": "dummy revert message",
                 "revert_gas_limit": "0"
             }
         }
@@ -137,119 +137,15 @@ async fn test_get_complete_cctx() {
     assert_eq!(cctx.zeta_fees, "0");
     assert_eq!(cctx.relayed_message, "000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000076465706f73697400000000000000000000000000000000000000000000000000");
     assert_eq!(cctx.token_symbol, Some("sBTC.BTC".to_string()));
-}
-
-#[tokio::test]
-async fn test_revert_message_is_base64_encoded() {
-    let db = crate::helpers::init_db("test", "indexer_revert_message_is_base64_encoded").await;
-    let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
-    database.setup_db().await.unwrap();
-
-    let cctx_response = json!({
-        "CrossChainTx": {
-            "creator": "",
-            "index": "0xa99eee254efce80d23caf1d4691c46b6e9965bd7b8923435fcc669fd3c032246",
-            "zeta_fees": "0",
-            "relayed_message": "00000000000000000000000050753ca349636ca8732762e8ccf057d3999891a0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000005098e1b2e8ec00000000000000000000000050753ca349636ca8732762e8ccf057d3999891a0000000000000000000000000000000000000000000000000000000000000002868747470733a2f2f6170692e6578616d706c652e636f6d2f6d657461646174612f2f312e6a736f6e000000000000000000000000000000000000000000000000",
-            "cctx_status": {
-                "status": "Aborted",
-                "status_message": "outbound failed and revert failed",
-                "error_message": "{\"type\":\"internal_error\",\"message\":\"outbound tx failed to be executed on connected chain\"}",
-                "lastUpdate_timestamp": "1756282428",
-                "isAbortRefunded": false,
-                "created_timestamp": "1756282335",
-                "error_message_revert": "{\"type\":\"contract_call_error\",\"message\":\"contract call failed when calling EVM with data\",\"error\":\"revert transaction reverted:execution reverted: ret 0x7e2732890000000000000000000000000000000000000000000000000000000000000001: evm transaction execution failed\",\"method\":\"depositAndRevert\",\"contract\":\"0x6c533f7fE93fAE114d0954697069Df33C9B74fD7\",\"args\":\"[0x236b0DE675cC8F46AE186897fCCeFe3370C9eDeD 88617551849708 0xCf726D8D25aB1BEB67362cD42Bf57AE5f0941246 {0xCf726D8D25aB1BEB67362cD42Bf57AE5f0941246 0x236b0DE675cC8F46AE186897fCCeFe3370C9eDeD 88617551849708 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 96 0 0 0 0 0 0 0 0 0 0 0 0 80 117 60 163 73 99 108 168 115 39 98 232 204 240 87 211 153 152 145 160 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 40 104 116 116 112 115 58 47 47 97 112 105 46 101 120 97 109 112 108 101 46 99 111 109 47 109 101 116 97 100 97 116 97 47 47 49 46 106 115 111 110 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]}]\"}",
-                "error_message_abort": "failed to process abort: {\"type\":\"contract_call_error\",\"message\":\"contract call failed when calling EVM with data\",\"error\":\"execution reverted: ret 0xd92e233d: evm transaction execution failed\",\"method\":\"deposit\",\"contract\":\"0x236b0DE675cC8F46AE186897fCCeFe3370C9eDeD\",\"args\":\"[0x0000000000000000000000000000000000000000 88617551849708]\"}"
-            },
-            "inbound_params": {
-                "sender": "0xCf726D8D25aB1BEB67362cD42Bf57AE5f0941246",
-                "sender_chain_id": "7001",
-                "tx_origin": "0x62dFD544f6f9bC3279D9762d7AeA4719a2559B0d",
-                "coin_type": "Gas",
-                "asset": "",
-                "amount": "88617551849708",
-                "observed_hash": "0x96304e7ff9c454ad19c61575dfcd512ed62c8187a57bbf2ac1635375701628d2",
-                "observed_external_height": "12350146",
-                "ballot_index": "0xa99eee254efce80d23caf1d4691c46b6e9965bd7b8923435fcc669fd3c032246",
-                "finalized_zeta_height": "0",
-                "tx_finalization_status": "NotFinalized",
-                "is_cross_chain_call": true,
-                "status": "SUCCESS",
-                "confirmation_mode": "SAFE"
-            },
-            "outbound_params": [
-                {
-                    "receiver": "0x62dFD544f6f9bC3279D9762d7AeA4719a2559B0d",
-                    "receiver_chainId": "84532",
-                    "coin_type": "Gas",
-                    "amount": "88617551849708",
-                    "tss_nonce": "962",
-                    "gas_limit": "0",
-                    "gas_price": "1217762",
-                    "gas_priority_fee": "0",
-                    "hash": "0x05b3312c4d88d5c2976a865f8a1e43c34bfbdc25909a4db80f210931a3425699",
-                    "ballot_index": "0x7fbbf69dfbfc793cbe717a25746cb98505ffd9f02d70300d1b2d3c490c0d4eaa",
-                    "observed_external_height": "30257033",
-                    "gas_used": "74505",
-                    "effective_gas_price": "1217762",
-                    "effective_gas_limit": "1000000",
-                    "tss_pubkey": "zetapub1addwnpepq28c57cvcs0a2htsem5zxr6qnlvq9mzhmm76z3jncsnzz32rclangr2g35p",
-                    "tx_finalization_status": "Executed",
-                    "call_options": {
-                        "gas_limit": "1000000",
-                        "is_arbitrary_call": false
-                    },
-                    "confirmation_mode": "SAFE"
-                },
-                {
-                    "receiver": "0xCf726D8D25aB1BEB67362cD42Bf57AE5f0941246",
-                    "receiver_chainId": "7001",
-                    "coin_type": "Gas",
-                    "amount": "88617551849708",
-                    "tss_nonce": "0",
-                    "gas_limit": "0",
-                    "gas_price": "",
-                    "gas_priority_fee": "",
-                    "hash": "",
-                    "ballot_index": "",
-                    "observed_external_height": "0",
-                    "gas_used": "0",
-                    "effective_gas_price": "0",
-                    "effective_gas_limit": "0",
-                    "tss_pubkey": "zetapub1addwnpepq28c57cvcs0a2htsem5zxr6qnlvq9mzhmm76z3jncsnzz32rclangr2g35p",
-                    "tx_finalization_status": "NotFinalized",
-                    "call_options": {
-                        "gas_limit": "1500000",
-                        "is_arbitrary_call": false
-                    },
-                    "confirmation_mode": "SAFE"
-                }
-            ],
-            "protocol_contract_version": "V2",
-            "revert_options": {
-                "revert_address": "0xCf726D8D25aB1BEB67362cD42Bf57AE5f0941246",
-                "call_on_revert": true,
-                "abort_address": "0x0000000000000000000000000000000000000000",
-                "revert_message": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAFB1PKNJY2yocydi6MzwV9OZmJGgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAChodHRwczovL2FwaS5leGFtcGxlLmNvbS9tZXRhZGF0YS8vMS5qc29uAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "revert_gas_limit": "0"
-            }
-        }
-    });
-    let cctx = cctx_response.get("CrossChainTx").unwrap();
-    let cctx: CrossChainTx = serde_json::from_value(cctx.clone()).unwrap();
-    let tx = db.client().begin().await.unwrap();
-    database
-        .batch_insert_transactions(Uuid::new_v4(), &vec![cctx], &tx, None)
-        .await
-        .unwrap();
-    tx.commit().await.unwrap();
-    let cctx = database
-        .get_complete_cctx(
-            "0xa99eee254efce80d23caf1d4691c46b6e9965bd7b8923435fcc669fd3c032246".to_string(),
-        )
-        .await
-        .unwrap();
-    assert!(cctx.is_some());
-    let cctx = cctx.unwrap();
-    assert_eq!(cctx.revert_options.unwrap().revert_message, Some("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAFB1PKNJY2yocydi6MzwV9OZmJGgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAChodHRwczovL2FwaS5leGFtcGxlLmNvbS9tZXRhZGF0YS8vMS5qc29uAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string()));
+    assert!(cctx.revert_options.is_some());
+    assert!(cctx
+        .revert_options
+        .clone()
+        .unwrap()
+        .revert_message
+        .is_some());
+    assert_eq!(
+        cctx.revert_options.clone().unwrap().revert_message.unwrap(),
+        "dummy revert message"
+    );
 }

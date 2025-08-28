@@ -57,13 +57,13 @@ async fn refresh_cctx_status(
     database: Arc<ZetachainCctxDatabase>,
     client: &Client,
     cctx: &CctxShort,
-) -> anyhow::Result<Option<CctxListItemProto>> {
+) -> anyhow::Result<CctxListItemProto> {
     let fetched_cctx = client
         .fetch_cctx(&cctx.index)
         .await
         .map_err(|e| anyhow::anyhow!(format!("Failed to fetch cctx: {}", e)))?;
     let updated = database
-        .update_cctx_status(cctx.id, fetched_cctx)
+        .update_cctx_status(cctx, fetched_cctx)
         .await
         .map_err(|e| anyhow::anyhow!(format!("Failed to update cctx status: {}", e)))?;
     Ok(updated)
@@ -174,16 +174,15 @@ async fn refresh_status_and_link_related(
     job_id: Uuid,
     channel_broadcaster: &ChannelBroadcaster,
 ) -> anyhow::Result<()> {
-    if let Some(updated) = refresh_cctx_status(database.clone(), client, cctx)
+    let updated = refresh_cctx_status(database.clone(), client, cctx)
         .await
-        .map_err(|e| anyhow::format_err!("Failed to refresh cctx status: {}", e))?
-    {
-        channel_broadcaster.broadcast(ChannelEvent::new(
-            CCTX_STATUS_UPDATE_TOPIC,
-            updated.index.clone(),
-            &updated,
-        ));
-    }
+        .map_err(|e| anyhow::format_err!("Failed to refresh cctx status: {}", e))?;
+    channel_broadcaster.broadcast(ChannelEvent::new(
+        CCTX_STATUS_UPDATE_TOPIC,
+        updated.index.clone(),
+        &updated,
+    ));
+
     let inserted = update_cctx_relations(database.clone(), client, cctx, job_id)
         .await
         .map_err(|e| anyhow::format_err!("Failed to update cctx relations: {}", e))?;

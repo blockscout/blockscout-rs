@@ -660,6 +660,7 @@ impl ZetachainCctxDatabase {
                     root_id: r.try_get_by_index(2)?,
                     depth: r.try_get_by_index(3)?,
                     retries_number: r.try_get_by_index(4)?,
+                    token_id: r.try_get_by_index(5)?,
                 })
             })
             .collect::<Result<Vec<CctxShort>, sea_orm::DbErr>>();
@@ -739,6 +740,7 @@ impl ZetachainCctxDatabase {
                     root_id: r.try_get_by_index(2)?,
                     depth: r.try_get_by_index(3)?,
                     retries_number: r.try_get_by_index(4)?,
+                    token_id: r.try_get_by_index(5)?,
                 })
             })
             .collect::<Result<Vec<CctxShort>, sea_orm::DbErr>>();
@@ -849,69 +851,69 @@ impl ZetachainCctxDatabase {
     #[instrument(,level="trace",skip_all)]
     pub async fn update_cctx_status(
         &self,
-        cctx_id: i32,
+        cctx: &CctxShort,
         fetched_cctx: CrossChainTx,
-    ) -> anyhow::Result<Option<CctxListItemProto>> {
-        let mut cctx_list_item: Option<CctxListItemProto> = None;
+    ) -> anyhow::Result<CctxListItemProto> {
         let tx = self.db.begin().await?;
-        if let Some(cctx_status_row) = cctx_status::Entity::find()
-            .filter(cctx_status::Column::CrossChainTxId.eq(cctx_id))
-            .one(self.db.as_ref())
-            .await?
-        {
-            let new_status =
-                CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status).unwrap();
-            cctx_status::Entity::update(cctx_status::ActiveModel {
-                id: ActiveValue::Set(cctx_status_row.id),
-                status: ActiveValue::Set(
-                    CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                ),
-                last_update_timestamp: ActiveValue::Set(
-                    chrono::DateTime::from_timestamp(
-                        fetched_cctx
-                            .cctx_status
-                            .last_update_timestamp
-                            .parse::<i64>()
-                            .unwrap_or(0),
-                        0,
-                    )
-                    .ok_or(anyhow::anyhow!("Invalid timestamp"))?
-                    .naive_utc(),
-                ),
-                ..Default::default()
-            })
-            .filter(cctx_status::Column::Id.eq(cctx_status_row.id))
-            .exec(self.db.as_ref())
-            .await?;
 
-            let first_outbound_params = fetched_cctx.outbound_params.first().unwrap();
-            let token = self.calculate_token(&fetched_cctx).await?;
+        let new_status = CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status).unwrap();
+        cctx_status::Entity::update(cctx_status::ActiveModel {
+            id: ActiveValue::Set(cctx.id),
+            status: ActiveValue::Set(
+                CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
+                    .map_err(|e| anyhow::anyhow!(e))?,
+            ),
+            last_update_timestamp: ActiveValue::Set(
+                chrono::DateTime::from_timestamp(
+                    fetched_cctx
+                        .cctx_status
+                        .last_update_timestamp
+                        .parse::<i64>()
+                        .unwrap_or(0),
+                    0,
+                )
+                .ok_or(anyhow::anyhow!("Invalid timestamp"))?
+                .naive_utc(),
+            ),
+            ..Default::default()
+        })
+        .filter(cctx_status::Column::Id.eq(cctx.id))
+        .exec(self.db.as_ref())
+        .await?;
 
-            cctx_list_item = Some(CctxListItemProto {
-                index: fetched_cctx.index,
-                status: new_status.into(),
-                status_reduced: reduce_status(new_status).into(),
-                amount: fetched_cctx.inbound_params.amount,
-                created_timestamp: fetched_cctx.cctx_status.created_timestamp.parse::<i64>()?,
-                last_update_timestamp: fetched_cctx
-                    .cctx_status
-                    .last_update_timestamp
-                    .parse::<i64>()?,
-                source_chain_id: fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
-                target_chain_id: first_outbound_params.receiver_chain_id.parse::<i32>()?,
-                sender_address: fetched_cctx.inbound_params.sender,
-                receiver_address: first_outbound_params.receiver.clone(),
-                asset: fetched_cctx.inbound_params.asset,
-                coin_type: token
-                    .as_ref()
-                    .map(|t| t.coin_type.clone().into())
-                    .unwrap_or_default(),
-                token_symbol: token.as_ref().map(|t| t.symbol.clone()),
-                zrc20_contract_address: token.as_ref().map(|t| t.zrc20_contract_address.clone()),
-                decimals: token.as_ref().map(|t| t.decimals as i64),
-            });
-        }
+        let first_outbound_params = fetched_cctx.outbound_params.first().unwrap();
+        let token = if let Some(token_id) = cctx.token_id {
+            TokenEntity::Entity::find()
+                .filter(TokenEntity::Column::Id.eq(token_id))
+                .one(self.db.as_ref())
+                .await?
+        } else {
+            None
+        };
+
+        let cctx_list_item = CctxListItemProto {
+            index: fetched_cctx.index,
+            status: new_status.into(),
+            status_reduced: reduce_status(new_status).into(),
+            amount: fetched_cctx.inbound_params.amount,
+            created_timestamp: fetched_cctx.cctx_status.created_timestamp.parse::<i64>()?,
+            last_update_timestamp: fetched_cctx
+                .cctx_status
+                .last_update_timestamp
+                .parse::<i64>()?,
+            source_chain_id: fetched_cctx.inbound_params.sender_chain_id.parse::<i32>()?,
+            target_chain_id: first_outbound_params.receiver_chain_id.parse::<i32>()?,
+            sender_address: fetched_cctx.inbound_params.sender,
+            receiver_address: first_outbound_params.receiver.clone(),
+            asset: fetched_cctx.inbound_params.asset,
+            coin_type: token
+                .as_ref()
+                .map(|t| t.coin_type.clone().into())
+                .unwrap_or_default(),
+            token_symbol: token.as_ref().map(|t| t.symbol.clone()),
+            zrc20_contract_address: token.as_ref().map(|t| t.zrc20_contract_address.clone()),
+            decimals: token.as_ref().map(|t| t.decimals as i64),
+        };
 
         //commit transaction
         tx.commit().await?;

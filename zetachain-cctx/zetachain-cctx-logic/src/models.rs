@@ -81,6 +81,7 @@ pub struct CctxShort {
     pub root_id: Option<i32>,
     pub depth: i32,
     pub retries_number: i32,
+    pub token_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
