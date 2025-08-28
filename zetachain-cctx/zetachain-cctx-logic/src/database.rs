@@ -877,7 +877,7 @@ impl ZetachainCctxDatabase {
             ),
             ..Default::default()
         })
-        .filter(cctx_status::Column::Id.eq(cctx.id))
+        .filter(cctx_status::Column::CrossChainTxId.eq(cctx.id))
         .exec(self.db.as_ref())
         .await?;
 
