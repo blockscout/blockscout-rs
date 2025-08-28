@@ -270,7 +270,7 @@ message CrossChainTx {
   InboundParams inbound_params = 11;
   repeated OutboundParams outbound_params = 12;
   ProtocolContractVersion protocol_contract_version = 13;
-  RevertOptions revert_options = 14;
+  optional RevertOptions revert_options = 14;
   repeated RelatedCctx related_cctxs = 15;
   optional string token_symbol = 16;
   optional string token_name = 17;

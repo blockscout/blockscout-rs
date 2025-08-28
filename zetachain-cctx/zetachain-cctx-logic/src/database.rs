@@ -996,13 +996,12 @@ impl ZetachainCctxDatabase {
             .try_get_by_index(18)
             .map_err(|e| anyhow::anyhow!("cctx_row last_update_timestamp: {}", e))?;
 
+        let cctx_status =
+            CctxStatusProto::from_str_name(cctx_row.try_get_by_index::<String>(15)?.as_str())
+                .ok_or(anyhow::anyhow!("Invalid status"))?;
         // Build CctxStatus
         let status = StatusProto {
-            status: CctxStatusProto::from_str_name(
-                cctx_row.try_get_by_index::<String>(15)?.as_str(),
-            )
-            .ok_or(anyhow::anyhow!("Invalid status"))?
-            .into(),
+            status: cctx_status.into(),
             status_message: cctx_row
                 .try_get_by_index(16)
                 .map_err(|e| anyhow::anyhow!("cctx_row status_message: {}", e))?,
@@ -1098,22 +1097,30 @@ impl ZetachainCctxDatabase {
             .map_err(|e| anyhow::anyhow!("cctx_row token_name: {}", e))?;
 
         // Build RevertOptions
-        let revert = RevertOptionsProto {
-            revert_address: cctx_row
-                .try_get_by_index(41)
-                .map_err(|e| anyhow::anyhow!("cctx_row revert_address: {}", e))?,
-            call_on_revert: cctx_row
-                .try_get_by_index(42)
-                .map_err(|e| anyhow::anyhow!("cctx_row call_on_revert: {}", e))?,
-            abort_address: cctx_row
-                .try_get_by_index(43)
-                .map_err(|e| anyhow::anyhow!("cctx_row abort_address: {}", e))?,
-            revert_message: cctx_row
-                .try_get_by_index::<Option<String>>(44)
-                .map_err(|e| anyhow::anyhow!("cctx_row revert_message: {}", e))?,
-            revert_gas_limit: cctx_row
-                .try_get_by_index(45)
-                .map_err(|e| anyhow::anyhow!("cctx_row revert_gas_limit: {}", e))?,
+        let revert_options: Option<RevertOptionsProto> = {
+            if cctx_status == CctxStatusProto::OutboundMined
+                || cctx_status == CctxStatusProto::PendingOutbound
+            {
+                None
+            } else {
+                Some(RevertOptionsProto {
+                    revert_address: cctx_row
+                        .try_get_by_index(41)
+                        .map_err(|e| anyhow::anyhow!("cctx_row revert_address: {}", e))?,
+                    call_on_revert: cctx_row
+                        .try_get_by_index(42)
+                        .map_err(|e| anyhow::anyhow!("cctx_row call_on_revert: {}", e))?,
+                    abort_address: cctx_row
+                        .try_get_by_index(43)
+                        .map_err(|e| anyhow::anyhow!("cctx_row abort_address: {}", e))?,
+                    revert_message: cctx_row
+                        .try_get_by_index::<Option<String>>(44)
+                        .map_err(|e| anyhow::anyhow!("cctx_row revert_message: {}", e))?,
+                    revert_gas_limit: cctx_row
+                        .try_get_by_index(45)
+                        .map_err(|e| anyhow::anyhow!("cctx_row revert_gas_limit: {}", e))?,
+                })
+            }
         };
 
         // Now get outbound params (can be multiple, so we need a separate query)
@@ -1343,7 +1350,7 @@ impl ZetachainCctxDatabase {
             cctx_status_reduced: status_reduced.into(),
             inbound_params: Some(inbound),
             outbound_params: outbounds,
-            revert_options: Some(revert),
+            revert_options,
             protocol_contract_version: protocol_contract_version.into(),
             related_cctxs: related,
             token_symbol,
