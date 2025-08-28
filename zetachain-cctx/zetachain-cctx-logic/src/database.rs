@@ -234,8 +234,11 @@ impl ZetachainCctxDatabase {
         }
 
         // If the cctx is mined, there is no need to do any additional requests
-        if cctx_status.status == CctxStatusStatus::OutboundMined {
-            tracing::debug!("cctx {} is mined, marking as processed", cctx.index);
+        if cctx_status.status == CctxStatusStatus::OutboundMined
+            || cctx_status.status == CctxStatusStatus::Aborted
+            || cctx_status.status == CctxStatusStatus::Reverted
+        {
+            tracing::debug!("cctx {} is in final state, marking as processed", cctx.index);
             self.mark_cctx_tree_processed(cctx.id, job_id, &cctx.index, &tx)
                 .await?;
             tracing::debug!(
