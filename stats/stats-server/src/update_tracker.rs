@@ -84,6 +84,14 @@ impl InitialUpdateTracker {
         self.inner.lock().await.user_ops_dependent.get_status()
     }
 
+    pub async fn get_zetachain_cctx_dependent_status(&self) -> proto_v1::ChartSubsetUpdateStatus {
+        self.inner
+            .lock()
+            .await
+            .zetachain_indexer_dependent
+            .get_status()
+    }
+
     pub async fn get_all_status(&self) -> proto_v1::ChartSubsetUpdateStatus {
         self.inner.lock().await.get_all_status()
     }

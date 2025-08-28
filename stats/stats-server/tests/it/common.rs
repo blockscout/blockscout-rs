@@ -47,6 +47,7 @@ pub enum ChartSubset {
     InternalTransactionsDependent,
     #[allow(unused)]
     UserOpsDependent,
+    ZetachainCctxDependent,
     AllCharts,
 }
 
@@ -61,6 +62,7 @@ pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
                 statuses.internal_transactions_dependent_status()
             }
             ChartSubset::UserOpsDependent => statuses.user_ops_dependent_status(),
+            ChartSubset::ZetachainCctxDependent => statuses.zetachain_cctx_dependent_status(),
             ChartSubset::AllCharts => statuses.all_status(),
         };
         if matching_status == proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate {

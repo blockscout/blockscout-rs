@@ -185,6 +185,8 @@ message UpdateStatus {
   ChartSubsetUpdateStatus internal_transactions_dependent_status = 4;
   // Status of all enabled charts that depend on indexing user operations and internal transactions
   ChartSubsetUpdateStatus user_ops_dependent_status = 5;
+  // Status of all enabled charts that depend on indexing zetachain cctx
+  ChartSubsetUpdateStatus zetachain_cctx_dependent_status = 6;
 }
 
 message BatchUpdateChartsRequest {
