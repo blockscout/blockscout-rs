@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::chart_prelude::*;
 
 pub struct NewContractsStatement;
-impl_db_choice!(NewContractsStatement, UseBlockscoutDB);
+impl_db_choice!(NewContractsStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewContractsStatement {
     fn get_statement(
@@ -94,7 +94,7 @@ impl StatementFromRange for NewContractsStatement {
 }
 
 pub type NewContractsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<NewContractsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<NewContractsStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct Properties;

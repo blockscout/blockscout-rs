@@ -6,7 +6,7 @@ use crate::chart_prelude::*;
 
 pub struct ActiveRecurringAccountsStatement<Recurrence>(PhantomData<Recurrence>);
 impl<Recurrence> DatabaseChoice for ActiveRecurringAccountsStatement<Recurrence> {
-    type DB = UseBlockscoutDB;
+    type DB = UsePrimaryDB;
 }
 
 impl<Recurrence: RecurrencePeriod> StatementFromTimespan
@@ -111,7 +111,7 @@ pub type ActiveRecurringAccountsRemote<Recurrence, Resolution> = RemoteDatabaseS
         ActiveRecurringAccountsStatement<Recurrence>,
         Resolution,
         String,
-        QueryAllBlockTimestampRange,
+        QueryFullIndexerTimestampRange,
     >,
 >;
 

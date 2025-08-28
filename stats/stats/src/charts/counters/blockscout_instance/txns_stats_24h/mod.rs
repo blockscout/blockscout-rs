@@ -11,7 +11,7 @@ pub mod txns_fee_24h;
 const ETHER: i64 = i64::pow(10, 18);
 
 pub struct TxnsStatsStatement;
-impl_db_choice!(TxnsStatsStatement, UseBlockscoutDB);
+impl_db_choice!(TxnsStatsStatement, UsePrimaryDB);
 
 impl StatementFromRange for TxnsStatsStatement {
     fn get_statement(

@@ -5,7 +5,7 @@ use crate::chart_prelude::*;
 use blockscout_db::entity::{blocks, user_operations};
 
 pub struct NewUserOpsStatement;
-impl_db_choice!(NewUserOpsStatement, UseBlockscoutDB);
+impl_db_choice!(NewUserOpsStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewUserOpsStatement {
     fn get_statement(
@@ -45,7 +45,7 @@ impl StatementFromRange for NewUserOpsStatement {
 }
 
 pub type NewUserOpsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<NewUserOpsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<NewUserOpsStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct Properties;

@@ -2,7 +2,7 @@ use crate::chart_prelude::*;
 use blockscout_db::entity::smart_contracts;
 
 pub struct TotalVerifiedContractsStatement;
-impl_db_choice!(TotalVerifiedContractsStatement, UseBlockscoutDB);
+impl_db_choice!(TotalVerifiedContractsStatement, UsePrimaryDB);
 
 impl StatementFromUpdateTime for TotalVerifiedContractsStatement {
     fn get_statement(

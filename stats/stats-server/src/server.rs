@@ -8,9 +8,9 @@ use crate::{
     read_service::ReadService,
     runtime_setup::RuntimeSetup,
     settings::{
-        Settings, apply_multichain_mode_settings, disable_all_non_multichain_charts,
-        handle_disable_internal_transactions, handle_enable_all_arbitrum,
-        handle_enable_all_eip_7702, handle_enable_all_op_stack, handle_enable_zetachain_cctx,
+        Settings, apply_multichain_mode_settings, handle_disable_internal_transactions,
+        handle_enable_all_arbitrum, handle_enable_all_eip_7702, handle_enable_all_op_stack,
+        handle_enable_zetachain_cctx,
     },
     update_service::UpdateService,
 };
@@ -43,9 +43,9 @@ pub async fn stats(
         &settings.tracing,
         &settings.jaeger,
     )?;
-    let mut charts_config = read_charts_config(&settings.charts_config_paths())?;
-    let layout_config = read_layout_config(&settings.layout_config_paths())?;
-    let update_groups_config = read_update_groups_config(&settings.update_groups_config_paths())?;
+    let mut charts_config = read_charts_config(&[settings.charts_config.clone()])?;
+    let layout_config = read_layout_config(&[settings.layout_config.clone()])?;
+    let update_groups_config = read_update_groups_config(&[settings.update_groups_config.clone()])?;
     handle_enable_all_arbitrum(settings.enable_all_arbitrum, &mut charts_config);
     handle_enable_all_op_stack(settings.enable_all_op_stack, &mut charts_config);
     handle_enable_all_eip_7702(settings.enable_all_eip_7702, &mut charts_config);
@@ -56,7 +56,6 @@ pub async fn stats(
     );
     handle_enable_zetachain_cctx(&mut settings, &mut charts_config);
     if settings.multichain_mode {
-        disable_all_non_multichain_charts(&mut charts_config);
         apply_multichain_mode_settings(&mut settings);
     }
 

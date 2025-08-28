@@ -49,3 +49,4 @@ reqwest = "0.12"
 serde_json = { workspace = true }
 wiremock = { workspace = true }
 rstest = { workspace = true }
+serial_test = { workspace = true }

@@ -5,7 +5,7 @@ use crate::chart_prelude::*;
 const ETH: i64 = 1_000_000_000_000_000_000;
 
 pub struct NativeCoinSupplyStatement;
-impl_db_choice!(NativeCoinSupplyStatement, UseBlockscoutDB);
+impl_db_choice!(NativeCoinSupplyStatement, UsePrimaryDB);
 
 impl StatementFromRange for NativeCoinSupplyStatement {
     fn get_statement(
@@ -71,7 +71,7 @@ impl StatementFromRange for NativeCoinSupplyStatement {
 
 // query returns float value
 pub type NativeCoinSupplyRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<NativeCoinSupplyStatement, NaiveDate, f64, QueryFullIndexerTimestampRange>,
 >;
 
 pub type NativeCoinSupplyRemoteString = MapToString<NativeCoinSupplyRemote>;

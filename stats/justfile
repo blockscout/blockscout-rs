@@ -64,3 +64,18 @@ restart-generate-entities:
     just stats/migrate-up
     just stats/generate-entities
     just stop-postgres
+
+run-multichain:
+    STATS__MULTICHAIN_MODE=true \
+    STATS__CHARTS_CONFIG=config/multichain/charts.json \
+    STATS__LAYOUT_CONFIG=config/multichain/layout.json \
+    STATS__UPDATE_GROUPS_CONFIG=config/multichain/update_groups.json \
+    STATS__DB_URL={{DATABASE_URL}} \
+    STATS__INDEXER_DB_URL=postgresql://postgres:admin@localhost:9433/multichain_aggregator \
+    STATS__CREATE_DATABASE=true \
+    STATS__RUN_MIGRATIONS=true \
+    STATS__SERVER__HTTP__ENABLED=true \
+    STATS__SERVER__HTTP__ADDR=0.0.0.0:8080 \
+    STATS__SERVER__HTTP__MAX_BODY_SIZE=2097152 \
+    cargo run --bin stats-server
+    

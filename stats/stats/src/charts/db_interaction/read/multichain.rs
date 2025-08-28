@@ -1,8 +1,10 @@
+use chrono::{NaiveDateTime, Utc};
 use multichain_aggregator_entity::block_ranges;
 use num_traits::ToPrimitive;
 use rust_decimal::Decimal;
 use sea_orm::{
-    DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, sea_query::Expr,
+    DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect, Statement,
+    sea_query::Expr,
 };
 
 #[derive(FromQueryResult, Debug)]
@@ -36,4 +38,34 @@ pub async fn get_min_block_multichain(multichain: &DatabaseConnection) -> Result
             Ok(i64::MAX)
         }
     }
+}
+
+#[derive(FromQueryResult, Debug)]
+struct MinTimestamp {
+    min_timestamp: Option<NaiveDateTime>,
+}
+
+// Fetching the earliest import date for the cluster’s counters or interop messages.
+pub async fn get_min_date_multichain(
+    multichain: &DatabaseConnection,
+) -> Result<NaiveDateTime, DbErr> {
+    let query = r#"
+        SELECT MIN(dt) as min_timestamp
+        FROM (
+            SELECT date::timestamp as dt FROM counters_global_imported
+            UNION ALL
+            SELECT timestamp as dt FROM interop_messages
+        ) t
+    "#;
+
+    let result = MinTimestamp::find_by_statement(Statement::from_string(
+        sea_orm::DatabaseBackend::Postgres,
+        query.to_owned(),
+    ))
+    .one(multichain)
+    .await?
+    .and_then(|r| r.min_timestamp)
+    .unwrap_or_else(|| Utc::now().naive_utc());
+
+    Ok(result)
 }

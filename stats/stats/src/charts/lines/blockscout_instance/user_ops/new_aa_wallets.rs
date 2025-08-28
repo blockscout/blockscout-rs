@@ -5,7 +5,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::chart_prelude::*;
 
 pub struct NewAccountAbstractionWalletsStatement;
-impl_db_choice!(NewAccountAbstractionWalletsStatement, UseBlockscoutDB);
+impl_db_choice!(NewAccountAbstractionWalletsStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewAccountAbstractionWalletsStatement {
     fn get_statement(
@@ -52,9 +52,10 @@ impl RemoteQueryBehaviour for NewAccountAbstractionWalletsQueryBehaviour {
         cx: &UpdateContext<'_>,
         range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Vec<DateValue<String>>, ChartError> {
-        let statement_range =
-            data_source_query_range_to_db_statement_range::<QueryAllBlockTimestampRange>(cx, range)
-                .await?;
+        let statement_range = data_source_query_range_to_db_statement_range::<
+            QueryFullIndexerTimestampRange,
+        >(cx, range)
+        .await?;
         let statement = NewAccountAbstractionWalletsStatement::get_statement(
             statement_range.clone(),
             &cx.indexer_applied_migrations,

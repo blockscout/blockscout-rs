@@ -8,7 +8,7 @@ use crate::{
 const GWEI: i64 = 1_000_000_000;
 
 pub struct AverageGasPriceStatement;
-impl_db_choice!(AverageGasPriceStatement, UseBlockscoutDB);
+impl_db_choice!(AverageGasPriceStatement, UsePrimaryDB);
 
 impl StatementFromRange for AverageGasPriceStatement {
     fn get_statement(
@@ -84,7 +84,7 @@ impl StatementFromRange for AverageGasPriceStatement {
 }
 
 pub type AverageGasPriceRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<AverageGasPriceStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<AverageGasPriceStatement, NaiveDate, f64, QueryFullIndexerTimestampRange>,
 >;
 
 pub type AverageGasPriceRemoteString = MapToString<AverageGasPriceRemote>;

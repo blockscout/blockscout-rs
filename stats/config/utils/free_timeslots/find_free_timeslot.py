@@ -51,7 +51,7 @@ class CronVisualizerGUI:
                 print(f"Failed to load durations file: {str(e)}")
 
         # Add default path
-        default_path = "../../update_groups.json"
+        default_path = "../../blockscout_instance/update_groups.json"
         if os.path.exists(default_path):
             try:
                 with open(default_path, "r") as f:

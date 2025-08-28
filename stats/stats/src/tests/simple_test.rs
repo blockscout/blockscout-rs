@@ -41,13 +41,37 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
-    let (db, blockscout, _zetachain_cctx) =
-        simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest(), false).await;
+    let (db, blockscout, _zetachain_cctx) = simple_test_chart_inner::<C>(
+        test_name,
+        expected,
+        IndexerMigrations::latest(),
+        false,
+        false,
+    )
+    .await;
     assert!(
         _zetachain_cctx.is_none(),
         "zetachain cctx db was initialized needlessly"
     );
     (db, blockscout)
+}
+
+pub async fn simple_test_chart_multichain<C>(
+    test_name: &str,
+    expected: Vec<(&str, &str)>,
+) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
+where
+    C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
+    C::Resolution: Ord + Clone + Debug,
+{
+    simple_test_chart_inner::<C>(
+        test_name,
+        expected,
+        IndexerMigrations::latest(),
+        true,
+        false,
+    )
+    .await
 }
 
 /// tests all statement kinds for different migrations combinations.
@@ -66,7 +90,7 @@ pub async fn simple_test_chart_with_migration_variants<C>(
 {
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
-        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations, false).await;
+        simple_test_chart_inner::<C>(&test_name, expected.clone(), migrations, false, false).await;
     }
 }
 
@@ -81,8 +105,14 @@ where
     C: DataSource + ChartProperties + QuerySerialized<Output = Vec<Point>>,
     C::Resolution: Ord + Clone + Debug,
 {
-    let (db, blockscout, zetachain_cctx) =
-        simple_test_chart_inner::<C>(test_name, expected, IndexerMigrations::latest(), true).await;
+    let (db, blockscout, zetachain_cctx) = simple_test_chart_inner::<C>(
+        test_name,
+        expected,
+        IndexerMigrations::latest(),
+        false,
+        true,
+    )
+    .await;
     (
         db,
         blockscout,
@@ -98,6 +128,7 @@ async fn simple_test_chart_inner<C>(
     test_name: &str,
     expected: Vec<(&str, &str)>,
     migrations: IndexerMigrations,
+    multichain_mode: bool,
     connect_zetachain_cctx: bool,
 ) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
 where
@@ -109,14 +140,14 @@ where
         test_name,
         None,
         DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap(),
-        false,
+        multichain_mode,
         connect_zetachain_cctx,
     )
     .await;
 
     let mut parameters = UpdateParameters {
         stats_db: &db,
-        is_multichain_mode: false,
+        is_multichain_mode: multichain_mode,
         indexer_db: &blockscout,
         indexer_applied_migrations: migrations,
         second_indexer_db: zetachain_cctx.as_deref(),
@@ -467,6 +498,18 @@ pub async fn prepare_blockscout_chart_test<C: DataSource + ChartProperties>(
         .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
     let (init_time, db, indexer, _) =
         prepare_chart_test_inner::<C>(test_name, init_time, false, false).await;
+    (init_time, db, indexer)
+}
+
+pub async fn prepare_multichain_chart_test<C: DataSource + ChartProperties>(
+    test_name: &str,
+    init_time: Option<NaiveDateTime>,
+) -> (DateTime<Utc>, TestDbGuard, TestDbGuard) {
+    let init_time = init_time
+        .map(|t| t.and_utc())
+        .unwrap_or(DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap());
+    let (init_time, db, indexer, _) =
+        prepare_chart_test_inner::<C>(test_name, init_time, true, false).await;
     (init_time, db, indexer)
 }
 

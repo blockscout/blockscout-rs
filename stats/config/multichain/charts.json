@@ -4,7 +4,36 @@
         "total_interop_messages": {
             "title": "Total interop messages",
             "description": "Number of interop messages over all time"
+        },
+        "total_interop_transfers": {
+            "title": "Total interop transfers",
+            "description": "Number of interop transfers over all time"
+        },
+        "total_multichain_txns": {
+            "title": "Total transactions",
+            "description": "Number of transactions across all chains in the cluster"
+        },
+        "total_multichain_addresses": {
+            "title": "Total addresses",
+            "description": "Number of addresses across all chains in the cluster"
         }
     },
-    "line_charts": {}
+    "line_charts": {
+        "new_txns_multichain": {
+            "title": "New transactions",
+            "description": "Number of new transactions across all chains"
+        },
+        "new_txns_multichain_window": {
+            "title": "Daily transactions",
+            "description": "The chart displays daily transactions across all chains for the past 30 days"
+        },
+        "txns_growth_multichain": {
+            "title": "Number of transactions",
+            "description": "Cumulative transaction growth over time across all chains"
+        },
+        "accounts_growth_multichain": {
+            "title": "Number of accounts",
+            "description": "Cumulative account growth over time across all chains"
+        }
+    }
 }

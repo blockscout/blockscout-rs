@@ -3,7 +3,7 @@ use crate::chart_prelude::*;
 use blockscout_db::entity::transactions;
 
 pub struct PendingTxnsStatement;
-impl_db_choice!(PendingTxnsStatement, UseBlockscoutDB);
+impl_db_choice!(PendingTxnsStatement, UsePrimaryDB);
 
 impl PendingTxnsStatement {
     fn get_statement(inserted_from: DateTime<Utc>) -> Statement {

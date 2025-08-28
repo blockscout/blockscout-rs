@@ -16,7 +16,7 @@ pub use all_new_txns::{
 };
 
 pub struct NewTxnsCombinedStatement;
-impl_db_choice!(NewTxnsCombinedStatement, UseBlockscoutDB);
+impl_db_choice!(NewTxnsCombinedStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewTxnsCombinedStatement {
     fn get_statement(
@@ -106,7 +106,7 @@ pub type NewTxnsCombinedRemote = RemoteDatabaseSource<
     PullAllWithAndSortCached<
         NewTxnsCombinedStatement,
         NewTxnsCombinedPoint,
-        QueryAllBlockTimestampRange,
+        QueryFullIndexerTimestampRange,
     >,
 >;
 

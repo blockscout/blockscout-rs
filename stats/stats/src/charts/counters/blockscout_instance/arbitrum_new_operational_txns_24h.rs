@@ -4,7 +4,7 @@ use blockscout_db::entity::blocks;
 use super::{CalculateOperationalTxns, NewTxns24hInt};
 
 pub struct NewBlocks24hStatement;
-impl_db_choice!(NewBlocks24hStatement, UseBlockscoutDB);
+impl_db_choice!(NewBlocks24hStatement, UsePrimaryDB);
 
 impl StatementFromUpdateTime for NewBlocks24hStatement {
     fn get_statement(

@@ -7,7 +7,7 @@ use crate::chart_prelude::*;
 const ETHER: i64 = i64::pow(10, 18);
 
 pub struct TxnsFeeStatement;
-impl_db_choice!(TxnsFeeStatement, UseBlockscoutDB);
+impl_db_choice!(TxnsFeeStatement, UsePrimaryDB);
 
 impl StatementFromRange for TxnsFeeStatement {
     fn get_statement(
@@ -84,7 +84,7 @@ impl StatementFromRange for TxnsFeeStatement {
 }
 
 pub type TxnsFeeRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<TxnsFeeStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<TxnsFeeStatement, NaiveDate, f64, QueryFullIndexerTimestampRange>,
 >;
 
 pub type TxnsFeeRemoteString = MapToString<TxnsFeeRemote>;

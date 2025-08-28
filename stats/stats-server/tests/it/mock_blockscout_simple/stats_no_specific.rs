@@ -18,6 +18,7 @@ use crate::{
 use super::common_tests::{test_main_page_ok, test_transactions_page_ok};
 
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "needs database"]
 pub async fn run_chart_pages_tests_with_disabled_chain_specific() {
     let test_name = "run_chart_pages_tests_with_disabled_chain_specific";

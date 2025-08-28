@@ -8,7 +8,7 @@ use crate::{
 const ETH: i64 = 1_000_000_000_000_000_000;
 
 pub struct AverageBlockRewardsStatement;
-impl_db_choice!(AverageBlockRewardsStatement, UseBlockscoutDB);
+impl_db_choice!(AverageBlockRewardsStatement, UsePrimaryDB);
 
 impl StatementFromRange for AverageBlockRewardsStatement {
     fn get_statement(
@@ -37,7 +37,12 @@ impl StatementFromRange for AverageBlockRewardsStatement {
 }
 
 pub type AverageBlockRewardsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<AverageBlockRewardsStatement, NaiveDate, f64, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<
+        AverageBlockRewardsStatement,
+        NaiveDate,
+        f64,
+        QueryFullIndexerTimestampRange,
+    >,
 >;
 
 pub type AverageBlockRewardsRemoteString = MapToString<AverageBlockRewardsRemote>;

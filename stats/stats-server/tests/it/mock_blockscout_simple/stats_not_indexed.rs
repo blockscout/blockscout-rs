@@ -32,6 +32,7 @@ use crate::{
 };
 
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "needs database"]
 pub async fn run_tests_with_nothing_indexed() {
     let test_name = "run_tests_with_nothing_indexed";
@@ -99,6 +100,7 @@ pub async fn run_tests_with_nothing_indexed() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "needs database"]
 pub async fn run_tests_with_user_ops_not_indexed() {
     let test_name = "run_tests_with_user_ops_not_indexed";
@@ -128,6 +130,7 @@ pub async fn run_tests_with_user_ops_not_indexed() {
     init_server(|| stats(settings, Some(shutdown_cloned)), &base).await;
 
     wait_for_subset_to_update(&base, ChartSubset::InternalTransactionsDependent).await;
+    wait_for_subset_to_update(&base, ChartSubset::ZetachainCctxDependent).await;
 
     let tests: JoinSet<_> = [
         test_lines_ok(

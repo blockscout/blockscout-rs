@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::chart_prelude::*;
 
 pub struct NewNativeCoinTransfersStatement;
-impl_db_choice!(NewNativeCoinTransfersStatement, UseBlockscoutDB);
+impl_db_choice!(NewNativeCoinTransfersStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewNativeCoinTransfersStatement {
     fn get_statement(
@@ -59,7 +59,7 @@ pub type NewNativeCoinTransfersRemote = RemoteDatabaseSource<
         NewNativeCoinTransfersStatement,
         NaiveDate,
         String,
-        QueryAllBlockTimestampRange,
+        QueryFullIndexerTimestampRange,
     >,
 >;
 

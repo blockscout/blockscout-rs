@@ -47,6 +47,7 @@ pub enum ChartSubset {
     InternalTransactionsDependent,
     #[allow(unused)]
     UserOpsDependent,
+    ZetachainCctxDependent,
     AllCharts,
 }
 
@@ -61,6 +62,7 @@ pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
                 statuses.internal_transactions_dependent_status()
             }
             ChartSubset::UserOpsDependent => statuses.user_ops_dependent_status(),
+            ChartSubset::ZetachainCctxDependent => statuses.zetachain_cctx_dependent_status(),
             ChartSubset::AllCharts => statuses.all_status(),
         };
         if matching_status == proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate {
@@ -109,9 +111,12 @@ pub fn get_test_stats_settings(
     let mut settings = Settings::build().expect("Failed to build settings");
     let (server_settings, base) = get_test_server_settings();
     settings.server = server_settings;
-    settings.charts_config = PathBuf::from_str("../config/charts.json").unwrap();
-    settings.layout_config = PathBuf::from_str("../config/layout.json").unwrap();
-    settings.update_groups_config = PathBuf::from_str("../config/update_groups.json").unwrap();
+    settings.charts_config =
+        PathBuf::from_str("../config/blockscout_instance/charts.json").unwrap();
+    settings.layout_config =
+        PathBuf::from_str("../config/blockscout_instance/layout.json").unwrap();
+    settings.update_groups_config =
+        PathBuf::from_str("../config/blockscout_instance/update_groups.json").unwrap();
     settings.db_url = stats_db.db_url();
     settings.indexer_db_url = Some(blockscout_db.db_url());
     settings.blockscout_api_url = Some(url::Url::from_str(&blockscout_api.uri()).unwrap());

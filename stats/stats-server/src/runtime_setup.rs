@@ -371,8 +371,16 @@ impl RuntimeSetup {
             Arc::new(VerifiedContractsPageGroup),
             // zetachain cross chain txns
             Arc::new(ZetachainCrossChainTxnsGroup),
-            // multichain
+            // multichain: singletons
             Arc::new(TotalInteropMessagesGroup),
+            Arc::new(TotalInteropTransfersGroup),
+            Arc::new(TotalMultichainAddressesGroup),
+            Arc::new(TotalMultichainTxnsGroup),
+            // multichain: groups
+            Arc::new(NewTxnsMultichainGroup),
+            Arc::new(NewTxnsMultichainWindowGroup),
+            Arc::new(TxnsGrowthMultichainGroup),
+            Arc::new(AccountsGrowthMultichainGroup),
         ]
     }
 

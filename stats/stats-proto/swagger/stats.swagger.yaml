@@ -434,6 +434,9 @@ definitions:
       user_ops_dependent_status:
         $ref: '#/definitions/v1ChartSubsetUpdateStatus'
         title: Status of all enabled charts that depend on indexing user operations and internal transactions
+      zetachain_cctx_dependent_status:
+        $ref: '#/definitions/v1ChartSubsetUpdateStatus'
+        title: Status of all enabled charts that depend on indexing zetachain cctx
     title: |-
       Each field represents status of charts with corresponding dependency
       as well as all charts with weaker requirements

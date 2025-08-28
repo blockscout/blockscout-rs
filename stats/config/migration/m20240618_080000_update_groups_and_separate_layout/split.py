@@ -262,6 +262,6 @@ if __name__ == "__main__":
         print("Please specify output folder")
         exit()
 
-    save_config(args.output + "/charts.json", construct_charts(parsed_file))
-    save_config(args.output + "/layout.json", construct_layout(parsed_file))
-    save_config(args.output + "/update_groups.json", construct_update_groups(parsed_file))
+    save_config(args.output + "/blockscout_instance/charts.json", construct_charts(parsed_file))
+    save_config(args.output + "/blockscout_instance/layout.json", construct_layout(parsed_file))
+    save_config(args.output + "/blockscout_instance/update_groups.json", construct_update_groups(parsed_file))

@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::chart_prelude::*;
 
 pub struct NewEip7702AuthsStatement;
-impl_db_choice!(NewEip7702AuthsStatement, UseBlockscoutDB);
+impl_db_choice!(NewEip7702AuthsStatement, UsePrimaryDB);
 
 impl StatementFromRange for NewEip7702AuthsStatement {
     fn get_statement(
@@ -53,7 +53,7 @@ impl StatementFromRange for NewEip7702AuthsStatement {
 }
 
 pub type NewEip7702AuthsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<NewEip7702AuthsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<NewEip7702AuthsStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct Properties;

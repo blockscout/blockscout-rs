@@ -27,6 +27,7 @@ use crate::{
 };
 
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "needs database"]
 pub async fn run_tests_with_charts_not_updated() {
     let test_name = "run_tests_with_charts_not_updated";

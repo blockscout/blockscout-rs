@@ -16,7 +16,7 @@ pub mod chart_prelude {
         ChartError, ChartKey, ChartProperties, MissingDatePolicy, Named,
         charts::db_interaction::{
             read::{
-                QueryAllBlockTimestampRange, cached::find_all_cached, find_all_points,
+                QueryFullIndexerTimestampRange, cached::find_all_cached, find_all_points,
                 find_one_value, query_estimated_table_rows,
                 zetachain_cctx::QueryAllCctxTimetsampRange,
             },
@@ -60,9 +60,7 @@ pub mod chart_prelude {
                     PullOne24hCached, PullOneNowValue, RemoteDatabaseSource, RemoteQueryBehaviour,
                     StatementForOne, StatementFromRange, StatementFromTimespan,
                     StatementFromUpdateTime,
-                    db_choice::{
-                        DatabaseChoice, UseBlockscoutDB, UseZetachainCctxDB, impl_db_choice,
-                    },
+                    db_choice::{DatabaseChoice, UsePrimaryDB, UseZetachainCctxDB, impl_db_choice},
                 },
             },
             types::{Get, IndexerMigrations},

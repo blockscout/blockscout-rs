@@ -2,7 +2,7 @@ use crate::chart_prelude::*;
 use blockscout_db::entity::addresses;
 
 pub struct TotalAddressesStatement;
-impl_db_choice!(TotalAddressesStatement, UseBlockscoutDB);
+impl_db_choice!(TotalAddressesStatement, UsePrimaryDB);
 
 impl StatementForOne for TotalAddressesStatement {
     fn get_statement(_: &IndexerMigrations) -> Statement {

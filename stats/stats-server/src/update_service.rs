@@ -478,26 +478,18 @@ impl UpdateService {
     }
 
     pub async fn get_initial_update_status(&self) -> proto_v1::UpdateStatus {
+        let tracker = &self.init_update_tracker;
         proto_v1::UpdateStatus {
-            all_status: self.init_update_tracker.get_all_status().await.into(),
-            independent_status: self
-                .init_update_tracker
-                .get_independent_status()
-                .await
-                .into(),
-            blocks_dependent_status: self
-                .init_update_tracker
-                .get_blocks_dependent_status()
-                .await
-                .into(),
-            internal_transactions_dependent_status: self
-                .init_update_tracker
+            all_status: tracker.get_all_status().await.into(),
+            independent_status: tracker.get_independent_status().await.into(),
+            blocks_dependent_status: tracker.get_blocks_dependent_status().await.into(),
+            internal_transactions_dependent_status: tracker
                 .get_internal_transactions_dependent_status()
                 .await
                 .into(),
-            user_ops_dependent_status: self
-                .init_update_tracker
-                .get_user_ops_dependent_status()
+            user_ops_dependent_status: tracker.get_user_ops_dependent_status().await.into(),
+            zetachain_cctx_dependent_status: tracker
+                .get_zetachain_cctx_dependent_status()
                 .await
                 .into(),
         }

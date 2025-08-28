@@ -5,7 +5,7 @@ use std::{collections::HashSet, ops::Range};
 use crate::chart_prelude::*;
 
 pub struct ActiveAccountsStatement;
-impl_db_choice!(ActiveAccountsStatement, UseBlockscoutDB);
+impl_db_choice!(ActiveAccountsStatement, UsePrimaryDB);
 
 impl StatementFromRange for ActiveAccountsStatement {
     fn get_statement(
@@ -53,7 +53,7 @@ impl StatementFromRange for ActiveAccountsStatement {
 }
 
 pub type ActiveAccountsRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<ActiveAccountsStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<ActiveAccountsStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct Properties;

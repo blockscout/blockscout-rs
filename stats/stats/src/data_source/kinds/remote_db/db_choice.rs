@@ -6,9 +6,9 @@ pub trait DBChoiceInner {
     fn select_db<'a>(cx: &'a UpdateContext<'_>) -> Result<&'a DatabaseConnection, ChartError>;
 }
 
-pub struct UseBlockscoutDB;
+pub struct UsePrimaryDB;
 
-impl DBChoiceInner for UseBlockscoutDB {
+impl DBChoiceInner for UsePrimaryDB {
     fn select_db<'a>(cx: &'a UpdateContext<'_>) -> Result<&'a DatabaseConnection, ChartError> {
         Ok(cx.indexer_db)
     }

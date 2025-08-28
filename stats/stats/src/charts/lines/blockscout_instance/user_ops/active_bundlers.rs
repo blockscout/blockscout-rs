@@ -9,7 +9,7 @@ use blockscout_db::entity::user_operations;
 use super::count_distinct_in_user_ops;
 
 pub struct ActiveBundlersStatement;
-impl_db_choice!(ActiveBundlersStatement, UseBlockscoutDB);
+impl_db_choice!(ActiveBundlersStatement, UsePrimaryDB);
 
 impl StatementFromRange for ActiveBundlersStatement {
     fn get_statement(
@@ -22,7 +22,7 @@ impl StatementFromRange for ActiveBundlersStatement {
 }
 
 pub type ActiveBundlersRemote = RemoteDatabaseSource<
-    PullAllWithAndSort<ActiveBundlersStatement, NaiveDate, String, QueryAllBlockTimestampRange>,
+    PullAllWithAndSort<ActiveBundlersStatement, NaiveDate, String, QueryFullIndexerTimestampRange>,
 >;
 
 pub struct Properties;

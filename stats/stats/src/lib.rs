@@ -21,7 +21,7 @@ pub use charts::{
     ChartError, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject, MissingDatePolicy,
     Named, ResolutionKind, counters,
     db_interaction::read::{
-        ApproxUnsignedDiff, QueryAllBlockTimestampRange, ReadError, RequestedPointsLimit,
+        ApproxUnsignedDiff, QueryFullIndexerTimestampRange, ReadError, RequestedPointsLimit,
         zetachain_cctx::query_zetachain_cctx_indexed_until,
     },
     indexing_status,
