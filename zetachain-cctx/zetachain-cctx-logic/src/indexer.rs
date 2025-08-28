@@ -166,7 +166,7 @@ async fn realtime_fetch(
         .await
 }
 
-#[instrument(,level="debug",skip(database, client,cctx), fields(job_id = %job_id, cctx_index = %cctx.index))]
+#[instrument(,level="debug",skip(database, client,cctx), fields(job_id = %job_id, cctx_index = %cctx.index, cctx_id = %cctx.id))]
 async fn refresh_status_and_link_related(
     database: Arc<ZetachainCctxDatabase>,
     client: &Client,

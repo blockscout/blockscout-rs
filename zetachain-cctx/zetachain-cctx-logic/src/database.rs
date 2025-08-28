@@ -848,7 +848,7 @@ impl ZetachainCctxDatabase {
         }
     }
 
-    #[instrument(,level="trace",skip_all)]
+    #[instrument(level="debug",skip_all)]
     pub async fn update_cctx_status(
         &self,
         cctx: &CctxShort,
