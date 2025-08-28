@@ -848,38 +848,35 @@ impl ZetachainCctxDatabase {
         }
     }
 
-    #[instrument(level="debug",skip_all)]
+    #[instrument(level = "debug", skip_all)]
     pub async fn update_cctx_status(
         &self,
         cctx: &CctxShort,
         fetched_cctx: CrossChainTx,
     ) -> anyhow::Result<CctxListItemProto> {
-        let tx = self.db.begin().await?;
-
         let new_status = CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status).unwrap();
-        cctx_status::Entity::update(cctx_status::ActiveModel {
-            id: ActiveValue::Set(cctx.id),
-            status: ActiveValue::Set(
-                CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
-                    .map_err(|e| anyhow::anyhow!(e))?,
-            ),
-            last_update_timestamp: ActiveValue::Set(
-                chrono::DateTime::from_timestamp(
-                    fetched_cctx
-                        .cctx_status
-                        .last_update_timestamp
-                        .parse::<i64>()
-                        .unwrap_or(0),
-                    0,
-                )
-                .ok_or(anyhow::anyhow!("Invalid timestamp"))?
-                .naive_utc(),
-            ),
-            ..Default::default()
-        })
-        .filter(cctx_status::Column::CrossChainTxId.eq(cctx.id))
-        .exec(self.db.as_ref())
-        .await?;
+        let new_status_db = CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
+            .map_err(|e| anyhow::anyhow!(e))?;
+        let new_last_update_timestamp = chrono::DateTime::from_timestamp(
+            fetched_cctx
+                .cctx_status
+                .last_update_timestamp
+                .parse::<i64>()
+                .unwrap_or(0),
+            0,
+        )
+        .ok_or(anyhow::anyhow!("Invalid timestamp"))?
+        .naive_utc();
+        cctx_status::Entity::update_many()
+            .set(cctx_status::ActiveModel {
+                id: ActiveValue::Set(cctx.id),
+                status: ActiveValue::Set(new_status_db),
+                last_update_timestamp: ActiveValue::Set(new_last_update_timestamp),
+                ..Default::default()
+            })
+            .filter(cctx_status::Column::CrossChainTxId.eq(cctx.id))
+            .exec(self.db.as_ref())
+            .await?;
 
         let first_outbound_params = fetched_cctx.outbound_params.first().unwrap();
         let token = if let Some(token_id) = cctx.token_id {
@@ -914,9 +911,6 @@ impl ZetachainCctxDatabase {
             zrc20_contract_address: token.as_ref().map(|t| t.zrc20_contract_address.clone()),
             decimals: token.as_ref().map(|t| t.decimals as i64),
         };
-
-        //commit transaction
-        tx.commit().await?;
 
         Ok(cctx_list_item)
     }
