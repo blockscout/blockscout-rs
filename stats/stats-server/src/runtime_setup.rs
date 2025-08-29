@@ -376,6 +376,7 @@ impl RuntimeSetup {
             Arc::new(TotalInteropTransfersGroup),
             Arc::new(TotalMultichainAddressesGroup),
             Arc::new(TotalMultichainTxnsGroup),
+            Arc::new(YesterdayTxnsMultichainGroup),
             // multichain: groups
             Arc::new(NewTxnsMultichainGroup),
             Arc::new(NewTxnsMultichainWindowGroup),

@@ -3,7 +3,8 @@
         "total_interop_messages",
         "total_interop_transfers",
         "total_multichain_txns",
-        "total_multichain_addresses"
+        "total_multichain_addresses",
+        "yesterday_txns_multichain"
     ],
     "line_chart_categories": [
         {

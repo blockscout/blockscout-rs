@@ -16,6 +16,10 @@
         "total_multichain_addresses": {
             "title": "Total addresses",
             "description": "Number of addresses across all chains in the cluster"
+        },
+        "yesterday_txns_multichain": {
+            "title": "Yesterday txns",
+            "description": "Number of transactions yesterday (0:00 - 23:59 UTC) across all chains in the cluste"
         }
     },
     "line_charts": {
