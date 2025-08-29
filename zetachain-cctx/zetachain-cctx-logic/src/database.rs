@@ -875,7 +875,6 @@ impl ZetachainCctxDatabase {
         .naive_utc();
         cctx_status::Entity::update_many()
             .set(cctx_status::ActiveModel {
-                id: ActiveValue::Set(cctx.id),
                 status: ActiveValue::Set(new_status_db),
                 last_update_timestamp: ActiveValue::Set(new_last_update_timestamp),
                 ..Default::default()
