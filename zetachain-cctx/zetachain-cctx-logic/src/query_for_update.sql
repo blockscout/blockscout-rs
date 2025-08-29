@@ -4,12 +4,11 @@ WITH selected AS (
         cctx.id
     FROM
         cross_chain_tx cctx
-        JOIN cctx_status cs ON cctx.id = cs.cross_chain_tx_id
     WHERE
         cctx.processing_status = $1 :: processing_status
         AND cctx.next_poll < NOW()
     ORDER BY
-        cs.last_update_timestamp DESC
+        cctx.last_status_update_timestamp DESC
     LIMIT
         $2 FOR
     UPDATE
