@@ -134,6 +134,20 @@ paths:
             $ref: '#/definitions/rpcStatus'
       tags:
         - StatsService
+  /api/v1/pages/multichain/main:
+    get:
+      operationId: StatsService_GetMainPageMultichainStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1MainPageMultichainStats'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - StatsService
   /api/v1/pages/transactions:
     get:
       operationId: StatsService_GetTransactionsPageStats
@@ -347,6 +361,17 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1LineChartSection'
+  v1MainPageMultichainStats:
+    type: object
+    properties:
+      total_multichain_txns:
+        $ref: '#/definitions/v1Counter'
+      total_multichain_addresses:
+        $ref: '#/definitions/v1Counter'
+      yesterday_txns_multichain:
+        $ref: '#/definitions/v1Counter'
+      new_txns_multichain_window:
+        $ref: '#/definitions/v1LineChart'
   v1MainPageStats:
     type: object
     properties:

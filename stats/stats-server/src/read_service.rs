@@ -27,11 +27,13 @@ use stats::{
         PendingTxns30m, PendingZetachainCrossChainTxns, TotalAddresses, TotalBlocks,
         TotalContracts, TotalTxns, TotalVerifiedContracts, TotalZetachainCrossChainTxns,
         TxnsFee24h, YesterdayTxns,
+        multichain::{TotalMultichainAddresses, TotalMultichainTxns, YesterdayTxnsMultichain},
     },
     data_source::{UpdateContext, UpdateParameters, types::IndexerMigrations},
     lines::{
         ArbitrumNewOperationalTxnsWindow, NEW_TXNS_WINDOW_RANGE, NewTxnsWindow,
         OpStackNewOperationalTxnsWindow,
+        multichain::new_txns_multichain_window::NewTxnsMultichainWindow,
     },
     query_dispatch::{CounterHandle, LineHandle, QuerySerializedDyn},
     range::UniversalRange,
@@ -237,6 +239,24 @@ impl ReadService {
             TotalZetachainCrossChainTxns::name(),
             NewZetachainCrossChainTxns24h::name(),
             PendingZetachainCrossChainTxns::name(),
+        ]
+    }
+
+    pub fn main_page_multichain_charts() -> Vec<String> {
+        // ensure that changes to api are reflected here;
+        // add new fields to the vec below
+        #[allow(clippy::no_effect)]
+        proto_v1::MainPageMultichainStats {
+            total_multichain_txns: None,
+            total_multichain_addresses: None,
+            yesterday_txns_multichain: None,
+            new_txns_multichain_window: None,
+        };
+        vec![
+            TotalMultichainTxns::name(),
+            TotalMultichainAddresses::name(),
+            YesterdayTxnsMultichain::name(),
+            NewTxnsMultichainWindow::name(),
         ]
     }
 }
@@ -632,6 +652,32 @@ impl StatsService for ReadService {
             new_contracts_24h,
             total_verified_contracts,
             new_verified_contracts_24h,
+        }))
+    }
+
+    async fn get_main_page_multichain_stats(
+        &self,
+        _request: Request<proto_v1::GetMainPageStatsRequest>,
+    ) -> Result<Response<proto_v1::MainPageMultichainStats>, Status> {
+        let now = Utc::now();
+
+        let (
+            total_multichain_txns,
+            total_multichain_addresses,
+            yesterday_txns_multichain,
+            new_txns_multichain_window,
+        ) = join!(
+            self.query_counter(TotalMultichainTxns::name(), now),
+            self.query_counter(TotalMultichainAddresses::name(), now),
+            self.query_counter(YesterdayTxnsMultichain::name(), now),
+            self.query_window_chart(NewTxnsMultichainWindow::name(), NEW_TXNS_WINDOW_RANGE, now),
+        );
+
+        Ok(Response::new(proto_v1::MainPageMultichainStats {
+            total_multichain_txns,
+            total_multichain_addresses,
+            yesterday_txns_multichain,
+            new_txns_multichain_window,
         }))
     }
 

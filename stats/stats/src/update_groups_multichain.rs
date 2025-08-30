@@ -14,6 +14,7 @@ singleton_groups!(
     TotalInteropTransfers,
     TotalMultichainAddresses,
     TotalMultichainTxns,
+    YesterdayTxnsMultichain,
 );
 
 construct_update_group!(NewTxnsMultichainGroup {
