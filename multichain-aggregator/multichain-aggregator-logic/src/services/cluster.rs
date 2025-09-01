@@ -240,8 +240,9 @@ impl Cluster {
         page_token: Option<ListClusterTokensPageToken>,
     ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids)?;
-        let res = tokens::list_aggregated_tokens(db, chain_ids, token_types, page_size, page_token)
-            .await?;
+        let res =
+            tokens::list_aggregated_tokens(db, chain_ids, token_types, None, page_size, page_token)
+                .await?;
 
         Ok(res)
     }

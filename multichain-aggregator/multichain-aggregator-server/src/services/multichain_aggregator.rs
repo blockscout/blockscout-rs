@@ -23,7 +23,6 @@ pub struct MultichainAggregator {
     repo: Arc<ReadWriteRepo>,
     api_key_manager: ApiKeyManager,
     dapp_client: HttpApiClient,
-    token_info_client: HttpApiClient,
     bens_client: HttpApiClient,
     api_settings: ApiSettings,
     quick_search_chains: Vec<types::ChainId>,
@@ -39,7 +38,6 @@ impl MultichainAggregator {
     pub fn new(
         repo: Arc<ReadWriteRepo>,
         dapp_client: HttpApiClient,
-        token_info_client: HttpApiClient,
         bens_client: HttpApiClient,
         api_settings: ApiSettings,
         quick_search_chains: Vec<types::ChainId>,
@@ -53,7 +51,6 @@ impl MultichainAggregator {
             api_key_manager: ApiKeyManager::new(repo.main_db().clone()),
             repo,
             dapp_client,
-            token_info_client,
             bens_client,
             api_settings,
             quick_search_chains,
@@ -343,7 +340,6 @@ impl MultichainAggregatorService for MultichainAggregator {
         let context = SearchContext {
             db: Arc::clone(&self.repo),
             dapp_client: &self.dapp_client,
-            token_info_client: &self.token_info_client,
             bens_client: &self.bens_client,
             bens_protocols: self.bens_protocols,
             domain_primary_chain_id: self.domain_primary_chain_id,
@@ -372,16 +368,16 @@ impl MultichainAggregatorService for MultichainAggregator {
             .map(parse_query)
             .collect::<Result<Vec<_>, _>>()?;
         let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
 
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
 
         let (tokens, next_page_token) = search::search_tokens(
             self.repo.read_db(),
-            &self.token_info_client,
             inner.q.to_string(),
             chain_ids,
             page_size as u64,
-            inner.page_token,
+            page_token,
         )
         .await?;
 

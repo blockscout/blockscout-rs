@@ -2,10 +2,12 @@ use crate::{
     clients::{
         bens::{get_address, lookup_domain_name},
         dapp::search_dapps,
-        token_info::search_token_infos,
     },
-    error::{ParseError, ServiceError},
-    repository::{addresses, block_ranges, hashes},
+    error::ServiceError,
+    repository::{
+        addresses, block_ranges, hashes,
+        tokens::{self, ListClusterTokensPageToken},
+    },
     services::{chains, macros::maybe_cache_lookup},
     types::{
         ChainId,
@@ -15,7 +17,7 @@ use crate::{
         domains::{Domain, DomainInfo},
         hashes::{Hash, HashType},
         search_results::QuickSearchResult,
-        token_info::Token,
+        tokens::AggregatedToken,
     },
 };
 use alloy_primitives::Address as AddressAlloy;
@@ -272,51 +274,26 @@ pub async fn search_block_numbers(
 
 pub async fn search_tokens(
     db: &DatabaseConnection,
-    token_info_client: &HttpApiClient,
     query: String,
     chain_id: Vec<ChainId>,
     page_size: u64,
-    page_token: Option<String>,
-) -> Result<(Vec<Token>, Option<String>), ServiceError> {
+    page_token: Option<ListClusterTokensPageToken>,
+) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
     if query.len() < MIN_QUERY_LENGTH {
         return Ok((vec![], None));
     }
 
-    let token_info_search_endpoint = search_token_infos::SearchTokenInfos {
-        params: search_token_infos::SearchTokenInfosParams {
-            query,
-            chain_id,
-            page_size: Some(page_size as u32),
-            page_token,
-        },
-    };
+    let (mut tokens, page_token) =
+        tokens::list_aggregated_tokens(db, chain_id, vec![], Some(query), page_size, page_token)
+            .await?;
 
-    let res = token_info_client
-        .request(&token_info_search_endpoint)
-        .await
-        .map_err(|err| anyhow::anyhow!("failed to search tokens: {:?}", err))?;
-
-    let mut tokens = res
-        .token_infos
-        .into_iter()
-        .map(|token_info| {
-            let mut token = Token::try_from(token_info)?;
-            token.icon_url = replace_coingecko_logo_uri_to_large(token.icon_url.as_str());
-            Ok(token)
-        })
-        .collect::<Result<Vec<_>, ParseError>>()?;
-
-    let pks = tokens.iter().map(|t| (&t.address, t.chain_id)).collect();
-    let pk_to_address = addresses::get_batch(db, pks).await?;
-
-    for token in tokens.iter_mut() {
-        let pk = (token.address, token.chain_id);
-        if let Some(address) = pk_to_address.get(&pk) {
-            token.is_verified_contract = address.is_verified_contract;
+    tokens.iter_mut().for_each(|token| {
+        if let Some(icon_url) = &mut token.icon_url {
+            *icon_url = replace_coingecko_logo_uri_to_large(icon_url);
         }
-    }
+    });
 
-    Ok((tokens, res.next_page_params.map(|p| p.page_token)))
+    Ok((tokens, page_token))
 }
 
 pub async fn search_dapps(
@@ -451,7 +428,6 @@ pub type DomainSearchCache = CacheHandler<RedisStore, String, (Vec<Domain>, Opti
 pub struct SearchContext<'a> {
     pub db: Arc<ReadWriteRepo>,
     pub dapp_client: &'a HttpApiClient,
-    pub token_info_client: &'a HttpApiClient,
     pub bens_client: &'a HttpApiClient,
     pub bens_protocols: Option<&'static [String]>,
     pub domain_primary_chain_id: ChainId,
@@ -586,11 +562,11 @@ impl SearchTerm {
                 }
             }
             SearchTerm::TokenInfo(query) => {
-                let (tokens, _) = search_tokens(
+                let (tokens, _) = tokens::list_aggregated_tokens(
                     db,
-                    search_context.token_info_client,
-                    query,
                     vec![],
+                    vec![],
+                    Some(query),
                     // TODO: temporary increase number of tokens to improve search quality
                     // until we have a dedicated endpoint for quick search which returns
                     // only one token per chain_id.

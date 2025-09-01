@@ -3,7 +3,7 @@ use crate::{
     proto,
     types::{
         addresses::Address, block_ranges::ChainBlockNumber, dapp::MarketplaceDapp, domains::Domain,
-        hashes::Hash, token_info::Token,
+        hashes::Hash, tokens::AggregatedToken,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -15,7 +15,7 @@ pub struct QuickSearchResult {
     pub transactions: Vec<Hash>,
     pub block_numbers: Vec<ChainBlockNumber>,
     pub dapps: Vec<MarketplaceDapp>,
-    pub tokens: Vec<Token>,
+    pub tokens: Vec<AggregatedToken>,
     pub nfts: Vec<Address>,
     pub domains: Vec<Domain>,
 }

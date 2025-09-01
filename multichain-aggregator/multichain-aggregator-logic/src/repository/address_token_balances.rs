@@ -89,7 +89,7 @@ where
         .into();
 
     let query = AggregatedAddressTokenBalance::select_cols(
-        base_normal_tokens_query(chain_ids, token_types)
+        base_normal_tokens_query(chain_ids, token_types, None)
             .join(JoinType::InnerJoin, tokens_rel)
             .filter(Column::AddressHash.eq(address.as_slice()))
             .filter(Column::Value.gt(0)),
