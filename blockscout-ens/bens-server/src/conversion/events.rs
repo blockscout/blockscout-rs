@@ -29,9 +29,9 @@ pub fn event_from_logic(
     Ok(proto::DomainEvent {
         transaction_hash: hex(e.transaction_hash),
         timestamp: e.timestamp,
-        name: e.name,
         from_address,
         action: e.method,
+        name: e.name,
     })
 }
 

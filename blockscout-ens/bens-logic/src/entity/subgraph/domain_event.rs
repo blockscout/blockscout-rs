@@ -12,8 +12,8 @@ pub struct DomainEvent {
     pub transaction_hash: TxHash,
     pub block_number: i64,
     pub timestamp: String,
-    pub name: String,
     pub from_address: Address,
     pub method: Option<String>,
     pub actions: Vec<String>,
+    pub name: Option<String>,
 }

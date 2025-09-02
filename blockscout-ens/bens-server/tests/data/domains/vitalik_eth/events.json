@@ -22,7 +22,7 @@
     "from_address": {
       "hash": "0x0904Dac3347eA47d208F3Fd67402D039a3b99859"
     },
-    "name": "vitalik.eth",
+    "name": null,
     "timestamp": "2020-02-06T18:23:40.000000Z",
     "transaction_hash": "0xc3f86218c67bee8256b74b9b65d746a40bb5318a8b57948b804dbbbc3d0d7864"
   },

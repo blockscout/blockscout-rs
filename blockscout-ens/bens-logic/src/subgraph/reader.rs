@@ -12,6 +12,7 @@ use crate::{
         domain::{DetailedDomain, Domain},
         domain_event::{DomainEvent, DomainEventTransaction},
     },
+    hex,
     protocols::{
         AddressResolveTechnique, DeployedProtocol, Network, Protocol, ProtocolError, ProtocolInfo,
         Protocoler,
@@ -252,15 +253,16 @@ impl SubgraphReader {
             &input,
         )
         .await?;
-        let domain_events = events_from_transactions(
-            name.deployed_protocol
-                .deployment_network
-                .blockscout_client
-                .clone(),
-            domain_txns,
-            name.inner.name
-        )
-        .await?;
+        let domain_events = self
+            .events_from_transactions(
+                input.network_id,
+                name.deployed_protocol
+                    .deployment_network
+                    .blockscout_client
+                    .clone(),
+                domain_txns,
+            )
+            .await?;
         Ok(domain_events)
     }
 
@@ -430,6 +432,70 @@ impl SubgraphReader {
         tracing::debug!(address_to_name =? address_to_name, "{}/{addresses_len} names found from batch request", address_to_name.len());
         Ok(address_to_name)
     }
+
+    #[instrument(name = "events_from_transactions", skip_all, fields(job_size = txns.len()), err, level = "info")]
+    async fn events_from_transactions(
+        &self,
+        network_id: i64,
+        client: Arc<BlockscoutClient>,
+        txns: Vec<DomainEventTransaction>,
+    ) -> Result<Vec<DomainEvent>, SubgraphReadError> {
+        let txn_ids: Vec<TxHash> = txns
+            .iter()
+            .map(|t| TxHash::from_slice(t.transaction_id.as_slice()))
+            .collect();
+        let mut blockscout_txns = client
+            .transactions_batch(txn_ids)
+            .await
+            .map_err(|e| anyhow!(e))?
+            .into_iter()
+            .filter_map(|(hash, result)| match result {
+                blockscout::Response::Ok(t) => Some((hash, t)),
+                e => {
+                    tracing::warn!(
+                        "invalid response from blockscout transaction '{hash:#x}' api: {e:?}"
+                    );
+                    None
+                }
+            })
+            .collect::<HashMap<_, _>>();
+        let mut events: Vec<DomainEvent> = txns
+            .into_iter()
+            .filter_map(|txn| {
+                blockscout_txns
+                    .remove(&TxHash::from_slice(txn.transaction_id.as_slice()))
+                    .map(|t| DomainEvent {
+                        transaction_hash: t.hash,
+                        block_number: t.block_number,
+                        timestamp: t.timestamp,
+                        from_address: t.from.hash,
+                        method: t.method,
+                        actions: txn.actions,
+                        name: None,
+                    })
+            })
+            .collect::<Vec<_>>();
+
+        // Batch resolve names for all unique from_address values
+        let addresses: Vec<Address> = events.iter().map(|e| e.from_address).collect();
+        if !addresses.is_empty() {
+            let names_map = self
+                .batch_resolve_address_names(BatchResolveAddressNamesInput {
+                    network_id,
+                    addresses,
+                })
+                .await?;
+            // Fill the `name` field using a resolved map (keys are 0x-lowercase strings)
+            for ev in &mut events {
+                let key = hex(ev.from_address);
+                if let Some(name) = names_map.get(&key) {
+                    ev.name = Some(name.clone());
+                }
+            }
+        }
+
+        Ok(events)
+    }
 }
 
 // remove duplicates, remove unresolvable addresses, take only MAX_RESOLVE_ADDRESSES
@@ -460,50 +526,6 @@ where
         map.entry(key).or_insert(value);
     }
     map
-}
-
-#[instrument(name = "events_from_transactions", skip_all, fields(job_size = txns.len()), err, level = "info")]
-async fn events_from_transactions(
-    client: Arc<BlockscoutClient>,
-    txns: Vec<DomainEventTransaction>,
-    domain_name: String,
-) -> Result<Vec<DomainEvent>, SubgraphReadError> {
-    let txn_ids: Vec<TxHash> = txns
-        .iter()
-        .map(|t| TxHash::from_slice(t.transaction_id.as_slice()))
-        .collect();
-    let mut blockscout_txns = client
-        .transactions_batch(txn_ids)
-        .await
-        .map_err(|e| anyhow!(e))?
-        .into_iter()
-        .filter_map(|(hash, result)| match result {
-            blockscout::Response::Ok(t) => Some((hash, t)),
-            e => {
-                tracing::warn!(
-                    "invalid response from blockscout transaction '{hash:#x}' api: {e:?}"
-                );
-                None
-            }
-        })
-        .collect::<HashMap<_, _>>();
-    let events: Vec<DomainEvent> = txns
-        .into_iter()
-        .filter_map(|txn| {
-            blockscout_txns
-                .remove(&TxHash::from_slice(txn.transaction_id.as_slice()))
-                .map(|t| DomainEvent {
-                    transaction_hash: t.hash,
-                    block_number: t.block_number,
-                    timestamp: t.timestamp,
-                    name: domain_name.clone(),
-                    from_address: t.from.hash,
-                    method: t.method,
-                    actions: txn.actions,
-                })
-        })
-        .collect::<Vec<_>>();
-    Ok(events)
 }
 
 fn lookup_output_from_domains(
@@ -875,7 +897,7 @@ mod tests {
         let history = reader
             .get_domain_history(GetDomainHistoryInput {
                 network_id: DEFAULT_CHAIN_ID,
-                name: name.clone(),
+                name,
                 sort: Default::default(),
                 order: Default::default(),
                 protocol_id: None,
@@ -889,66 +911,66 @@ mod tests {
                     "0xdd16deb1ea750037c3ed1cae5ca20ff9db0e664a5146e5a030137d277a9247f3",
                 ),
                 timestamp: "2017-06-18T08:39:14.000000Z".into(),
-                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("finalizeAuction".into()),
                 actions: vec!["new_owner".into()],
                 block_number: 3891899,
+                name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
                     "0xea30bda97a7e9afcca208d5a648e8ec1e98b245a8884bf589dec8f4aa332fb14",
                 ),
                 timestamp: "2019-07-10T05:58:51.000000Z".into(),
-                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("transferRegistrars".into()),
                 actions: vec!["new_owner".into()],
                 block_number: 8121770,
+                name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
                     "0x09922ac0caf1efcc8f68ce004f382b46732258870154d8805707a1d4b098dfd0",
                 ),
                 timestamp: "2019-10-29T13:47:34.000000Z".into(),
-                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("setAddr".into()),
                 actions: vec!["addr_changed".into()],
                 block_number: 8834378,
+                name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
                     "0xc3f86218c67bee8256b74b9b65d746a40bb5318a8b57948b804dbbbc3d0d7864",
                 ),
                 timestamp: "2020-02-06T18:23:40.000000Z".into(),
-                name: name.clone(),
                 from_address: addr("0x0904dac3347ea47d208f3fd67402d039a3b99859"),
                 method: Some("migrateAll".into()),
                 actions: vec!["new_owner".into(), "new_resolver".into()],
                 block_number: 9430706,
+                name: None,
             },
             DomainEvent {
                 transaction_hash: tx_hash(
                     "0x160ef4492c731ac6b59beebe1e234890cd55d4c556f8847624a0b47125fe4f84",
                 ),
                 timestamp: "2021-02-15T17:19:09.000000Z".into(),
-                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("multicall".into()),
                 actions: vec!["addr_changed".into()],
                 block_number: 11862656,
+                name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
                     "0xbb13efab7f1f798f63814a4d184e903e050b38c38aa407f9294079ee7b3110c9",
                 ),
                 timestamp: "2021-02-15T17:19:17.000000Z".into(),
-                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("setResolver".into()),
                 actions: vec!["new_resolver".into()],
                 block_number: 11862657,
+                name: Some("vitalik.eth".into()),
             },
         ];
         assert_eq!(expected_history, history);

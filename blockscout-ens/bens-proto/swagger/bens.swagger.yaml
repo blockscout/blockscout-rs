@@ -469,14 +469,15 @@ definitions:
       timestamp:
         type: string
         title: Timestamp of this transaction
-      name:
-        type: string
       from_address:
         $ref: '#/definitions/v1Address'
         title: /Sender of transaction
       action:
         type: string
         title: Optional. Action name
+      name:
+        type: string
+        title: Optional. ENS name of the sender (resolved from from_address)
   v1GetAddressResponse:
     type: object
     properties:
