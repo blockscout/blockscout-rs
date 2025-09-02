@@ -1,16 +1,17 @@
+use actix_phoenix_channel::ChannelCentral;
 use blockscout_service_launcher::{test_database::TestDbGuard, test_server};
 use chrono::Utc;
 use rand::Rng;
 use reqwest::Url;
 use sea_orm::DatabaseConnection;
 use serde_json::Value;
+use uuid::Uuid;
 use std::sync::Arc;
 use zetachain_cctx_logic::{
-    client::Client,
-    models::{
+    channel::Channel, client::Client, models::{
         CallOptions, CctxStatus, CoinType, CrossChainTx, InboundParams, OutboundParams,
-        RevertOptions,
-    },
+        RevertOptions, Token,
+    }
 };
 use zetachain_cctx_server::Settings;
 
@@ -40,7 +41,7 @@ pub async fn init_zetachain_cctx_server<F>(
     settings_setup: F,
     db: Arc<DatabaseConnection>,
     client: Arc<Client>,
-) -> Url
+) -> (Url, Arc<ChannelCentral<Channel>>)
 where
     F: Fn(Settings) -> Settings,
 {
@@ -57,11 +58,35 @@ where
 
         (settings_setup(settings), base)
     };
+    let channel = Arc::new(ChannelCentral::new(Channel));
+    let channel_clone = channel.clone();
 
-    test_server::init_server(|| zetachain_cctx_server::run(settings, db, client), &base).await;
-    base
+    test_server::init_server( || zetachain_cctx_server::run(settings, db, client, channel_clone), &base).await;
+    (base, channel)
 }
 
+#[allow(dead_code)]
+pub fn dummy_token(
+    name: &str,
+    symbol: &str,
+    asset: Option<String>,
+    chain_id: &str,
+    coin_type: CoinType,
+) -> Token {
+    Token {
+        foreign_chain_id: chain_id.to_string(),
+        symbol: symbol.to_string(),
+        name: name.to_string(),
+        decimals: 18,
+        zrc20_contract_address: Uuid::new_v4().to_string(),
+        asset: asset.unwrap_or("".to_string()),
+        coin_type,
+        gas_limit: "1000000000000000000".to_string(),
+        paused: false,
+        liquidity_cap: "1000000000000000000".to_string(),
+        icon_url: Some("https://example.com/icon.png".to_string()),
+    }
+}
 #[allow(dead_code)]
 pub fn dummy_cross_chain_tx(index: &str, status: &str) -> CrossChainTx {
     CrossChainTx {

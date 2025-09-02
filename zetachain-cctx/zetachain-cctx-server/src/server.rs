@@ -59,6 +59,7 @@ pub async fn run(
     settings: Settings,
     db: Arc<DatabaseConnection>,
     client: Arc<Client>,
+    channel: Arc<ChannelCentral<Channel>>,
 ) -> Result<(), anyhow::Error> {
     launcher_tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
 
@@ -71,7 +72,6 @@ pub async fn run(
     let stats = Arc::new(StatsService::new(database.clone()));
     let token_info = Arc::new(TokenInfoService::new(database.clone()));
 
-    let channel: Arc<ChannelCentral<Channel>> = Arc::new(ChannelCentral::new(Channel));
 
     if settings.indexer.enabled {
         let indexer = Indexer::new(
