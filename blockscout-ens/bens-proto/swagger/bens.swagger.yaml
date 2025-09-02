@@ -469,6 +469,8 @@ definitions:
       timestamp:
         type: string
         title: Timestamp of this transaction
+      name:
+        type: string
       from_address:
         $ref: '#/definitions/v1Address'
         title: /Sender of transaction

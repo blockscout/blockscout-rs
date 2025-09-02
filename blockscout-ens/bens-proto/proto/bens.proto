@@ -107,10 +107,11 @@ message DomainEvent {
   string transaction_hash = 1;
   // Timestamp of this transaction
   string timestamp = 2;
+  string name = 3;
   ///Sender of transaction
-  Address from_address = 3;
+  Address from_address = 4;
   // Optional. Action name
-  optional string action = 4;
+  optional string action = 5;
 }
 
 message Token {

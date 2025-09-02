@@ -258,6 +258,7 @@ impl SubgraphReader {
                 .blockscout_client
                 .clone(),
             domain_txns,
+            name.inner.name
         )
         .await?;
         Ok(domain_events)
@@ -465,6 +466,7 @@ where
 async fn events_from_transactions(
     client: Arc<BlockscoutClient>,
     txns: Vec<DomainEventTransaction>,
+    domain_name: String,
 ) -> Result<Vec<DomainEvent>, SubgraphReadError> {
     let txn_ids: Vec<TxHash> = txns
         .iter()
@@ -494,6 +496,7 @@ async fn events_from_transactions(
                     transaction_hash: t.hash,
                     block_number: t.block_number,
                     timestamp: t.timestamp,
+                    name: domain_name.clone(),
                     from_address: t.from.hash,
                     method: t.method,
                     actions: txn.actions,
@@ -872,7 +875,7 @@ mod tests {
         let history = reader
             .get_domain_history(GetDomainHistoryInput {
                 network_id: DEFAULT_CHAIN_ID,
-                name,
+                name: name.clone(),
                 sort: Default::default(),
                 order: Default::default(),
                 protocol_id: None,
@@ -886,6 +889,7 @@ mod tests {
                     "0xdd16deb1ea750037c3ed1cae5ca20ff9db0e664a5146e5a030137d277a9247f3",
                 ),
                 timestamp: "2017-06-18T08:39:14.000000Z".into(),
+                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("finalizeAuction".into()),
                 actions: vec!["new_owner".into()],
@@ -896,6 +900,7 @@ mod tests {
                     "0xea30bda97a7e9afcca208d5a648e8ec1e98b245a8884bf589dec8f4aa332fb14",
                 ),
                 timestamp: "2019-07-10T05:58:51.000000Z".into(),
+                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("transferRegistrars".into()),
                 actions: vec!["new_owner".into()],
@@ -906,6 +911,7 @@ mod tests {
                     "0x09922ac0caf1efcc8f68ce004f382b46732258870154d8805707a1d4b098dfd0",
                 ),
                 timestamp: "2019-10-29T13:47:34.000000Z".into(),
+                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("setAddr".into()),
                 actions: vec!["addr_changed".into()],
@@ -916,6 +922,7 @@ mod tests {
                     "0xc3f86218c67bee8256b74b9b65d746a40bb5318a8b57948b804dbbbc3d0d7864",
                 ),
                 timestamp: "2020-02-06T18:23:40.000000Z".into(),
+                name: name.clone(),
                 from_address: addr("0x0904dac3347ea47d208f3fd67402d039a3b99859"),
                 method: Some("migrateAll".into()),
                 actions: vec!["new_owner".into(), "new_resolver".into()],
@@ -926,6 +933,7 @@ mod tests {
                     "0x160ef4492c731ac6b59beebe1e234890cd55d4c556f8847624a0b47125fe4f84",
                 ),
                 timestamp: "2021-02-15T17:19:09.000000Z".into(),
+                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("multicall".into()),
                 actions: vec!["addr_changed".into()],
@@ -936,6 +944,7 @@ mod tests {
                     "0xbb13efab7f1f798f63814a4d184e903e050b38c38aa407f9294079ee7b3110c9",
                 ),
                 timestamp: "2021-02-15T17:19:17.000000Z".into(),
+                name: name.clone(),
                 from_address: addr("0xd8da6bf26964af9d7eed9e03e53415d37aa96045"),
                 method: Some("setResolver".into()),
                 actions: vec!["new_resolver".into()],
