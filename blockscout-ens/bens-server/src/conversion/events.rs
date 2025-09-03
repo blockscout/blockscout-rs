@@ -31,7 +31,7 @@ pub fn event_from_logic(
         timestamp: e.timestamp,
         from_address,
         action: e.method,
-        name: e.name,
+        from_address_primary_name: e.from_address_primary_name,
     })
 }
 

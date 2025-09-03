@@ -112,7 +112,7 @@ message DomainEvent {
   // Optional. Action name
   optional string action = 4;
   // Optional. ENS name of the sender (resolved from from_address)
-  optional string name = 5;
+  optional string from_address_primary_name = 5;
 }
 
 message Token {

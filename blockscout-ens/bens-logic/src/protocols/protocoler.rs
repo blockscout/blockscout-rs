@@ -206,7 +206,7 @@ impl Protocoler {
         self.protocols.values()
     }
 
-    pub fn protocol_by_slug(&self, slug: &str) -> Option<DeployedProtocol> {
+    pub fn protocol_by_slug(&'_ self, slug: &str) -> Option<DeployedProtocol<'_>> {
         self.protocols.get(slug).map(|protocol| {
             protocol
                 .deployed_on_network(self)
@@ -283,11 +283,11 @@ impl Protocoler {
     }
 
     pub fn fetch_domain_options(
-        &self,
+        &'_ self,
         name_with_tld: &str,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+    ) -> Result<Vec<DomainNameOnProtocol<'_>>, ProtocolError> {
         let tld = extract_tld(name_with_tld)?;
 
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
@@ -307,11 +307,11 @@ impl Protocoler {
     }
 
     pub fn lookup_names_options_in_network(
-        &self,
+        &'_ self,
         name: &str,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+    ) -> Result<Vec<DomainNameOnProtocol<'_>>, ProtocolError> {
         let clean = name.trim_end_matches('.');
 
         let supported_tlds: Vec<Tld> = self
@@ -353,11 +353,11 @@ impl Protocoler {
     }
 
     pub fn names_options_in_network(
-        &self,
+        &'_ self,
         name: &str,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<Vec<DomainNameOnProtocol>, ProtocolError> {
+    ) -> Result<Vec<DomainNameOnProtocol<'_>>, ProtocolError> {
         let tld = extract_tld(name)?;
         let protocols = self.protocols_of_network_for_tld(network_id, tld, maybe_filter)?;
         let names_with_protocols = protocols
@@ -368,11 +368,11 @@ impl Protocoler {
     }
 
     pub fn main_name_in_network(
-        &self,
+        &'_ self,
         name: &str,
         network_id: i64,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<DomainNameOnProtocol, ProtocolError> {
+    ) -> Result<DomainNameOnProtocol<'_>, ProtocolError> {
         let maybe_name = self
             .names_options_in_network(name, network_id, maybe_filter)?
             .pop();
@@ -384,12 +384,12 @@ impl Protocoler {
     }
 
     pub fn name_in_protocol(
-        &self,
+        &'_ self,
         name: &str,
         network_id: i64,
         protocol_id: &str,
         maybe_filter: Option<NonEmpty<String>>,
-    ) -> Result<DomainNameOnProtocol, ProtocolError> {
+    ) -> Result<DomainNameOnProtocol<'_>, ProtocolError> {
         let names = self.names_options_in_network(name, network_id, maybe_filter)?;
         let name = names
             .into_iter()

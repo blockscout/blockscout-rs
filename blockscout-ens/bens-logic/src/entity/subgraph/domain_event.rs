@@ -15,5 +15,5 @@ pub struct DomainEvent {
     pub from_address: Address,
     pub method: Option<String>,
     pub actions: Vec<String>,
-    pub name: Option<String>,
+    pub from_address_primary_name: Option<String>,
 }

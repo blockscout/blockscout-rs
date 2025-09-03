@@ -475,7 +475,7 @@ definitions:
       action:
         type: string
         title: Optional. Action name
-      name:
+      from_address_primary_name:
         type: string
         title: Optional. ENS name of the sender (resolved from from_address)
   v1GetAddressResponse:

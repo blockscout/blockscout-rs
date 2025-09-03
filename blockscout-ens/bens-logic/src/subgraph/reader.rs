@@ -198,9 +198,9 @@ impl SubgraphReader {
     }
 
     pub fn protocols_of_network(
-        &self,
+        &'_ self,
         network_id: i64,
-    ) -> Result<NonEmpty<DeployedProtocol>, ProtocolError> {
+    ) -> Result<NonEmpty<DeployedProtocol<'_>>, ProtocolError> {
         self.protocoler.protocols_of_network(network_id, None)
     }
 }
@@ -471,7 +471,7 @@ impl SubgraphReader {
                         from_address: t.from.hash,
                         method: t.method,
                         actions: txn.actions,
-                        name: None,
+                        from_address_primary_name: None,
                     })
             })
             .collect::<Vec<_>>();
@@ -486,10 +486,10 @@ impl SubgraphReader {
                 })
                 .await?;
             // Fill the `name` field using a resolved map (keys are 0x-lowercase strings)
-            for ev in &mut events {
-                let key = hex(ev.from_address);
+            for event in &mut events {
+                let key = hex(event.from_address);
                 if let Some(name) = names_map.get(&key) {
-                    ev.name = Some(name.clone());
+                    event.from_address_primary_name = Some(name.clone());
                 }
             }
         }
@@ -915,7 +915,7 @@ mod tests {
                 method: Some("finalizeAuction".into()),
                 actions: vec!["new_owner".into()],
                 block_number: 3891899,
-                name: Some("vitalik.eth".into()),
+                from_address_primary_name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -926,7 +926,7 @@ mod tests {
                 method: Some("transferRegistrars".into()),
                 actions: vec!["new_owner".into()],
                 block_number: 8121770,
-                name: Some("vitalik.eth".into()),
+                from_address_primary_name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -937,7 +937,7 @@ mod tests {
                 method: Some("setAddr".into()),
                 actions: vec!["addr_changed".into()],
                 block_number: 8834378,
-                name: Some("vitalik.eth".into()),
+                from_address_primary_name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -948,7 +948,7 @@ mod tests {
                 method: Some("migrateAll".into()),
                 actions: vec!["new_owner".into(), "new_resolver".into()],
                 block_number: 9430706,
-                name: None,
+                from_address_primary_name: None,
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -959,7 +959,7 @@ mod tests {
                 method: Some("multicall".into()),
                 actions: vec!["addr_changed".into()],
                 block_number: 11862656,
-                name: Some("vitalik.eth".into()),
+                from_address_primary_name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -970,7 +970,7 @@ mod tests {
                 method: Some("setResolver".into()),
                 actions: vec!["new_resolver".into()],
                 block_number: 11862657,
-                name: Some("vitalik.eth".into()),
+                from_address_primary_name: Some("vitalik.eth".into()),
             },
         ];
         assert_eq!(expected_history, history);
