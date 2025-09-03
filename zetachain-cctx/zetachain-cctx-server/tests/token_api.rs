@@ -53,7 +53,7 @@ async fn test_token_api_get_token_info() {
     let db_url = db.db_url();
 
     // Create the token service
-    let (server, _channel) = helpers::init_zetachain_cctx_server(
+    let server = helpers::init_zetachain_cctx_server(
         db_url,
         |mut x| {
             x.tracing.enabled = false;

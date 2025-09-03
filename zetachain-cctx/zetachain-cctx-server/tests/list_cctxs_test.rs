@@ -417,7 +417,7 @@ async fn test_list_cctxs_endpoint() {
     let db_url = db.db_url();
 
     let client = Client::new(RpcSettings::default());
-    let (base, _channel) = crate::helpers::init_zetachain_cctx_server(
+    let base = crate::helpers::init_zetachain_cctx_server(
         db_url,
         |mut x| {
             x.indexer.enabled = false;
@@ -499,7 +499,7 @@ async fn test_list_cctxs_with_status_filter() {
     let db_url = db.db_url();
 
     let client = Client::new(RpcSettings::default());
-    let (base, _channel) = crate::helpers::init_zetachain_cctx_server(
+    let base = crate::helpers::init_zetachain_cctx_server(
         db_url,
         |mut x| {
             x.tracing.enabled = false;
@@ -643,7 +643,7 @@ async fn test_list_cctxs_with_filters() {
     let db_url = db.db_url();
 
     let client = Client::new(RpcSettings::default());
-    let (base, _channel) = crate::helpers::init_zetachain_cctx_server(
+    let base = crate::helpers::init_zetachain_cctx_server(
         db_url,
         |mut x| {
             x.tracing.enabled = false;
@@ -774,7 +774,7 @@ async fn test_list_cctxs_with_status_reduced_filter() {
     let db_url = db.db_url();
 
     let client = Client::new(RpcSettings::default());
-    let (base, _channel) = crate::helpers::init_zetachain_cctx_server(
+    let base = crate::helpers::init_zetachain_cctx_server(
         db_url,
         |mut x| {
             x.tracing.enabled = false;

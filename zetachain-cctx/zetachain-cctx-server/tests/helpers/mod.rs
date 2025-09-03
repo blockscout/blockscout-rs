@@ -41,7 +41,7 @@ pub async fn init_zetachain_cctx_server<F>(
     settings_setup: F,
     db: Arc<DatabaseConnection>,
     client: Arc<Client>,
-) -> (Url, Arc<ChannelCentral<Channel>>)
+) -> Url
 where
     F: Fn(Settings) -> Settings,
 {
@@ -62,7 +62,36 @@ where
     let channel_clone = channel.clone();
 
     test_server::init_server( || zetachain_cctx_server::run(settings, db, client, channel_clone), &base).await;
-    (base, channel)
+    base
+}
+#[allow(dead_code)]
+pub async fn init_zetachain_cctx_server_with_channel<F>(
+    db_url: String,
+    settings_setup: F,
+    db: Arc<DatabaseConnection>,
+    client: Arc<Client>,
+    channel: Arc<ChannelCentral<Channel>>,
+) -> Url
+where
+    F: Fn(Settings) -> Settings,
+{
+    // Initialize tracing for server tests
+    // init_tracing();
+
+    let (settings, base) = {
+        let mut settings = Settings::default(db_url);
+        let (server_settings, base) = test_server::get_test_server_settings();
+        settings.server = server_settings;
+        settings.metrics.enabled = false;
+        settings.tracing.enabled = true;
+        settings.jaeger.enabled = false;
+
+        (settings_setup(settings), base)
+    };
+    let channel_clone = channel.clone();
+
+    test_server::init_server( || zetachain_cctx_server::run(settings, db, client, channel_clone), &base).await;
+    base
 }
 
 #[allow(dead_code)]

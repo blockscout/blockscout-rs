@@ -477,7 +477,7 @@ async fn test_get_cctx_info() {
     assert_eq!(cctx.outbound_params[0].tss_nonce, 42);
     assert_eq!(cctx.outbound_params[0].gas_limit, 1337);
 
-    let (base, _channel) = helpers::init_zetachain_cctx_server(
+    let base = helpers::init_zetachain_cctx_server(
         db.db_url(),
         |mut x| {
             x.indexer.concurrency = 1;

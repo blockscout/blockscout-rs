@@ -1,4 +1,5 @@
 mod helpers;
+use actix_phoenix_channel::ChannelCentral;
 use futures::StreamExt;
 
 use serde_json::json;
@@ -10,14 +11,15 @@ use wiremock::{
     Mock, MockServer, ResponseTemplate,
 };
 use zetachain_cctx_logic::{
+    channel::Channel,
     client::{Client, RpcSettings},
     database::ZetachainCctxDatabase,
-    models::CoinType
+    models::CoinType,
 };
 
 use crate::helpers::{dummy_cross_chain_tx, dummy_token};
+use tokio::time::timeout;
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem;
-
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn emit_imported_cctxs() {
@@ -34,7 +36,10 @@ async fn emit_imported_cctxs() {
     let gas_token = dummy_token("Test Token", "TEST", None, "1", CoinType::Gas);
 
     database
-        .sync_tokens(Uuid::new_v4(), vec![zeta_token.clone(), erc20_token.clone(), gas_token.clone()])
+        .sync_tokens(
+            Uuid::new_v4(),
+            vec![zeta_token.clone(), erc20_token.clone(), gas_token.clone()],
+        )
         .await
         .unwrap();
 
@@ -85,7 +90,9 @@ async fn emit_imported_cctxs() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path_regex("/zeta-chain/crosschain/inboundHashToCctxData/.+"))
+        .and(path_regex(
+            "/zeta-chain/crosschain/inboundHashToCctxData/.+",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "CrossChainTxs": []
         })))
@@ -95,28 +102,40 @@ async fn emit_imported_cctxs() {
         url: mock_server.uri().to_string(),
         ..Default::default()
     });
+    let channel = Arc::new(ChannelCentral::new(Channel));
+
+    let channel_clone = channel.clone();
     // Start the full server with websocket support
-    let (_base, channel) = crate::helpers::init_zetachain_cctx_server(
-        db.db_url(),
-        |mut settings| {
-            settings.websocket.enabled = true; // Enable websocket
-            settings.indexer.enabled = false; // Disable indexer for this test
-            settings.indexer.zetachain_id = 7001;
-            settings.indexer.token_sync_enabled = false;
-            settings
-        },
-        db.client(),
-        Arc::new(client),
-    )
-    .await;
+    let server_handle = tokio::spawn(async move {
+        let _ = crate::helpers::init_zetachain_cctx_server_with_channel(
+            db.db_url(),
+            |mut settings| {
+                settings.websocket.enabled = true; // Enable websocket
+                settings.indexer.enabled = false; // Disable indexer for this test
+                settings.indexer.zetachain_id = 7001;
+                settings.indexer.token_sync_enabled = false;
+                settings
+            },
+            db.client(),
+            Arc::new(client),
+            channel_clone,
+        )
+        .await;
+    });
 
     let (_client, mut receiver) = channel.build_client();
 
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    timeout(Duration::from_secs(2), async move {
+        tracing::info!("waiting for cctxs");
+        let _ = receiver.next().await.unwrap();
+        let cctxs = receiver.next().await.unwrap();
 
-    let cctxs = receiver.next().await.unwrap();
-    
-    let cctxs: Vec<CctxListItem> = serde_json::from_str(&cctxs).unwrap();
-
-    assert_eq!(cctxs.len(), 3);
+        let cctxs: Vec<CctxListItem> = serde_json::from_str(&cctxs).unwrap();
+        tracing::info!("cctxs: {:?}", cctxs);
+        assert_eq!(cctxs.len(), 3);
+    })
+    .await
+    .unwrap_or_else(|_| {
+        server_handle.abort();
+    });
 }

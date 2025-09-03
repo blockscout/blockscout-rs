@@ -14,7 +14,7 @@ async fn test_startup_works() {
     let db_url = db.db_url();
 
     let client = Client::new(RpcSettings::default());
-    let (base, _channel) = helpers::init_zetachain_cctx_server(
+    let base = helpers::init_zetachain_cctx_server(
         db_url,
         |mut x| {
             x.tracing.enabled = false;
