@@ -2,14 +2,14 @@ use crate::{
     clients::blockscout,
     error::ServiceError,
     repository::{
-        address_token_balances::{self, ListAddressTokensPageToken},
+        address_token_balances::{self, ListAddressTokensPageToken, ListTokenHoldersPageToken},
         addresses, chains, interop_message_transfers, interop_messages,
         tokens::{self, ListClusterTokensPageToken},
     },
     services::macros::maybe_cache_lookup,
     types::{
         ChainId,
-        address_token_balances::AggregatedAddressTokenBalance,
+        address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
         addresses::AddressInfo,
         chains::Chain,
         interop_messages::{ExtendedInteropMessage, MessageDirection},
@@ -256,6 +256,23 @@ impl Cluster {
         let token = tokens::get_aggregated_token(db, address, chain_id).await?;
 
         Ok(token)
+    }
+
+    pub async fn list_token_holders(
+        &self,
+        db: &DatabaseConnection,
+        address: AddressAlloy,
+        chain_id: ChainId,
+        page_size: u64,
+        page_token: Option<ListTokenHoldersPageToken>,
+    ) -> Result<(Vec<TokenHolder>, Option<ListTokenHoldersPageToken>), ServiceError> {
+        self.validate_chain_id(chain_id)?;
+        let holders = address_token_balances::list_token_holders(
+            db, address, chain_id, page_size, page_token,
+        )
+        .await?;
+
+        Ok(holders)
     }
 
     async fn fetch_decoded_calldata_cached(
