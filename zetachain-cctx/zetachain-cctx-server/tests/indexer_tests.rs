@@ -19,7 +19,7 @@ use zetachain_cctx_entity::{
     },
     watermark,
 };
-use zetachain_cctx_logic::{channel::Channel, database::Relation};
+use zetachain_cctx_logic::{channel::Channel, database::Relation, models::CctxStatusStatus};
 
 use crate::helpers::{
     dummy_cctx_with_pagination_response, dummy_cross_chain_tx, dummy_related_cctxs_response,
@@ -99,7 +99,7 @@ async fn test_status_update() {
             format!("/zeta-chain/crosschain/cctx/{pending_tx_index}").as_str(),
         ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "CrossChainTx": dummy_cross_chain_tx(pending_tx_index, "OutboundMined")
+            "CrossChainTx": dummy_cross_chain_tx(pending_tx_index, CctxStatusStatus::OutboundMined)
         })))
         .up_to_n_times(1)
         .mount(&mock_server)
@@ -196,7 +196,7 @@ async fn test_status_update_links_related() {
     Mock::given(method("GET"))
         .and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "CrossChainTx": dummy_cross_chain_tx("root_index", "OutboundMined")
+            "CrossChainTx": dummy_cross_chain_tx("root_index", CctxStatusStatus::OutboundMined)
         })))
         .mount(&mock_server)
         .await;
@@ -426,7 +426,7 @@ async fn test_get_cctx_info() {
 
     let db = crate::helpers::init_db("test", "indexer_get_cctx_info").await;
     let root_index = "root_cctx_index".to_string();
-    let root_cctx = dummy_cross_chain_tx(&root_index, "OutboundMined");
+    let root_cctx = dummy_cross_chain_tx(&root_index, CctxStatusStatus::OutboundMined);
     let tx = db.begin().await.unwrap();
     let database = ZetachainCctxDatabase::new(db.client().clone(), 7001);
     database.setup_db().await.unwrap();
@@ -437,7 +437,7 @@ async fn test_get_cctx_info() {
     tx.commit().await.unwrap();
 
     let child_cctx_index = "child_cctx_index";
-    let child_cctx = dummy_cross_chain_tx(child_cctx_index, "OutboundMined");
+    let child_cctx = dummy_cross_chain_tx(child_cctx_index, CctxStatusStatus::OutboundMined);
     let tx = db.begin().await.unwrap();
     database
         .batch_insert_transactions(

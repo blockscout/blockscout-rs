@@ -3,7 +3,7 @@ use std::fmt::Display;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use zetachain_cctx_entity::sea_orm_active_enums::CoinType as DbCoinType;
-
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CoinType as CoinTypeProto;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PagedCCTXResponse {
     #[serde(rename = "CrossChainTx")]
@@ -24,6 +24,18 @@ pub enum CoinType {
     ERC20,
     Cmd,
     NoAssetCall,
+}
+
+impl Into<CoinTypeProto> for CoinType {
+    fn into(self) -> CoinTypeProto {
+        match self {
+            CoinType::Zeta => CoinTypeProto::Zeta,
+            CoinType::Gas => CoinTypeProto::Gas,
+            CoinType::ERC20 => CoinTypeProto::Erc20,
+            CoinType::Cmd => CoinTypeProto::Cmd,
+            CoinType::NoAssetCall => CoinTypeProto::NoAssetCall,
+        }
+    }
 }
 
 impl TryFrom<String> for CoinType {

@@ -4,6 +4,7 @@ use crate::helpers::*;
 use blockscout_service_launcher::tracing::init_logs;
 use migration::sea_orm::TransactionTrait;
 use uuid::Uuid;
+use zetachain_cctx_logic::models::CctxStatusStatus;
 use zetachain_cctx_logic::{
     database::ZetachainCctxDatabase,
     models::{CoinType, Filters, Token},
@@ -26,7 +27,7 @@ async fn query_cctxs_with_filters() {
 
     let db = init_db("test", "query_cctxs_with_filters").await;
 
-    let mut dummy_cctx_1 = dummy_cross_chain_tx("dummy_cctx_1", "PendingInbound");
+    let mut dummy_cctx_1 = dummy_cross_chain_tx("dummy_cctx_1", CctxStatusStatus::PendingInbound);
     dummy_cctx_1.inbound_params.sender = "0x1234567890123456789012345678901234567890".to_string();
     dummy_cctx_1.inbound_params.sender_chain_id = "1".to_string();
 
@@ -64,7 +65,7 @@ async fn query_cctxs_with_filters() {
         .await
         .unwrap();
 
-    let mut dummy_cctx_2 = dummy_cross_chain_tx("dummy_cctx_2", "OutboundMined");
+    let mut dummy_cctx_2 = dummy_cross_chain_tx("dummy_cctx_2", CctxStatusStatus::OutboundMined);
     dummy_cctx_2.inbound_params.asset = token_usdc.asset.clone();
     dummy_cctx_2.inbound_params.coin_type = token_usdc.coin_type;
     dummy_cctx_2.inbound_params.sender_chain_id = token_usdc.foreign_chain_id.clone();
@@ -160,13 +161,13 @@ async fn query_cctxs_with_token_symbol_filter() {
         .await
         .unwrap();
 
-    let mut dummy_cctx_1 = dummy_cross_chain_tx("dummy_cctx_1", "PendingInbound");
+    let mut dummy_cctx_1 = dummy_cross_chain_tx("dummy_cctx_1", CctxStatusStatus::PendingInbound);
     dummy_cctx_1.inbound_params.asset = eth.asset.clone();
     dummy_cctx_1.inbound_params.coin_type = eth.coin_type;
     dummy_cctx_1.inbound_params.sender_chain_id = "11155111".to_string();
     dummy_cctx_1.outbound_params[0].receiver_chain_id = "7001".to_string();
 
-    let mut dummy_cctx_2 = dummy_cross_chain_tx("dummy_cctx_2", "OutboundMined");
+    let mut dummy_cctx_2 = dummy_cross_chain_tx("dummy_cctx_2", CctxStatusStatus::OutboundMined);
     dummy_cctx_2.inbound_params.asset = usdc.asset.clone();
     dummy_cctx_2.inbound_params.coin_type = usdc.coin_type;
     dummy_cctx_2.inbound_params.sender_chain_id = "7001".to_string();

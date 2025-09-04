@@ -4,8 +4,7 @@ use rand::Rng;
 use serde_json::Value;
 use uuid::Uuid;
 use zetachain_cctx_logic::models::{
-    CallOptions, CctxStatus, CoinType, CrossChainTx, InboundParams, OutboundParams, RevertOptions,
-    Token,
+    CallOptions, CctxStatus, CctxStatusStatus, CoinType, CrossChainTx, InboundParams, OutboundParams, RevertOptions, Token
 };
 
 #[allow(dead_code)]
@@ -38,14 +37,14 @@ pub async fn init_tests_logs() {
     .unwrap();
 }
 #[allow(dead_code)]
-pub fn dummy_cross_chain_tx(index: &str, status: &str) -> CrossChainTx {
+pub fn dummy_cross_chain_tx(index: &str, status: CctxStatusStatus) -> CrossChainTx {
     CrossChainTx {
         creator: "creator".to_string(),
         index: index.to_string(),
         zeta_fees: "0".to_string(),
         relayed_message: "msg".to_string(),
         cctx_status: CctxStatus {
-            status: status.try_into().unwrap(),
+            status: status.clone().try_into().unwrap(),
             status_message: "".to_string(),
             error_message: "".to_string(),
             last_update_timestamp: (Utc::now().timestamp() - rand::rng().random_range(1000..10000))
@@ -134,7 +133,7 @@ pub fn dummy_cross_chain_tx(index: &str, status: &str) -> CrossChainTx {
 pub fn dummy_related_cctxs_response(indices: &[&str]) -> serde_json::Value {
     let cctxs = indices
         .iter()
-        .map(|index| dummy_cross_chain_tx(index, "PendingOutbound"))
+        .map(|index| dummy_cross_chain_tx(index, CctxStatusStatus::PendingOutbound))
         .map(|cctx| serde_json::json!(cctx))
         .collect::<Vec<Value>>();
 
@@ -149,7 +148,7 @@ pub fn dummy_related_cctxs_response(indices: &[&str]) -> serde_json::Value {
 pub fn dummy_cctx_with_pagination_response(indices: &[&str], next_key: &str) -> serde_json::Value {
     let cctxs = indices
         .iter()
-        .map(|index| dummy_cross_chain_tx(index, "PendingOutbound"))
+        .map(|index| dummy_cross_chain_tx(index, CctxStatusStatus::PendingOutbound))
         .map(|cctx| serde_json::json!(cctx))
         .collect::<Vec<Value>>();
 

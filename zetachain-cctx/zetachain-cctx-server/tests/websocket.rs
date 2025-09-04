@@ -14,7 +14,7 @@ use zetachain_cctx_logic::{
     channel::Channel,
     client::{Client, RpcSettings},
     database::ZetachainCctxDatabase,
-    models::CoinType,
+    models::{CctxStatusStatus, CoinType},
 };
 
 use crate::helpers::{dummy_cross_chain_tx, dummy_token};
@@ -48,7 +48,7 @@ async fn emit_imported_cctxs() {
     let dummy_cctxs = [zeta_token, erc20_token, gas_token]
         .iter()
         .map(|token| {
-            let mut cctx = dummy_cross_chain_tx("dummy_cctx", "PendingOutbound");
+            let mut cctx = dummy_cross_chain_tx("dummy_cctx", CctxStatusStatus::PendingOutbound);
             cctx.inbound_params.coin_type = token.coin_type.clone();
             cctx.inbound_params.asset = token.asset.clone();
             cctx.inbound_params.sender_chain_id = token.foreign_chain_id.clone();

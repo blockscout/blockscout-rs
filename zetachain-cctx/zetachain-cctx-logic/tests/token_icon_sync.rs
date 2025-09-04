@@ -13,11 +13,7 @@ use wiremock::{
 
 use zetachain_cctx_entity::token;
 use zetachain_cctx_logic::{
-    channel::Channel,
-    client::{Client, RpcSettings},
-    database::ZetachainCctxDatabase,
-    indexer::Indexer,
-    settings::IndexerSettings,
+    channel::Channel, client::{Client, RpcSettings}, database::ZetachainCctxDatabase, indexer::Indexer, models::CctxStatusStatus, settings::IndexerSettings
 };
 
 fn dummy_token_response() -> serde_json::Value {
@@ -67,7 +63,7 @@ async fn test_icon_url_synced() {
         .and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
         .respond_with(
             ResponseTemplate::new(200)
-                .set_body_json(helpers::dummy_cross_chain_tx("dummy", "OutboundMined")),
+                .set_body_json(helpers::dummy_cross_chain_tx("dummy", CctxStatusStatus::OutboundMined)),
         )
         .mount(&api_server)
         .await;

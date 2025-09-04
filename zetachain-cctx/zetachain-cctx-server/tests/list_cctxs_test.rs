@@ -32,7 +32,7 @@ async fn list_cctx_sorting() {
     let cctxs: Vec<_> = (0..cctx_count)
         .map(|i| {
             let index_str = i.to_string();
-            let mut cctx = helpers::dummy_cross_chain_tx(&index_str, "OutboundMined");
+            let mut cctx = helpers::dummy_cross_chain_tx(&index_str, CctxStatusStatus::OutboundMined);
             cctx.cctx_status.last_update_timestamp = index_str.clone();
             cctx.inbound_params.ballot_index = index_str.clone();
             cctx.inbound_params.observed_hash = index_str;
@@ -88,7 +88,7 @@ async fn list_cctx_timestamp_pagination() {
     let cctxs: Vec<_> = (0..cctx_count)
         .map(|i| {
             let index_str = i.to_string();
-            let mut cctx = helpers::dummy_cross_chain_tx(&index_str, "OutboundMined");
+            let mut cctx = helpers::dummy_cross_chain_tx(&index_str, CctxStatusStatus::OutboundMined);
             // Set last_update_timestamp to incremental values for predictable ordering
             let timestamp_epoch = base_timestamp + (i as i64 * 100); // 100 seconds apart
             cctx.cctx_status.last_update_timestamp = timestamp_epoch.to_string();
@@ -278,7 +278,7 @@ async fn list_cctx_timestamp_conversion_edge_cases() {
         .enumerate()
         .map(|(i, &timestamp)| {
             let index_str = format!("edge_case_{i}");
-            let mut cctx = helpers::dummy_cross_chain_tx(&index_str, "OutboundMined");
+            let mut cctx = helpers::dummy_cross_chain_tx(&index_str, CctxStatusStatus::OutboundMined);
             cctx.cctx_status.last_update_timestamp = timestamp.to_string();
             cctx.inbound_params.ballot_index = index_str.clone();
             cctx.inbound_params.observed_hash = index_str;
@@ -447,7 +447,7 @@ async fn test_list_cctxs_endpoint() {
     let dummy_cctxs: Vec<CrossChainTx> = ["test_list_cctxs_endpoint_1"]
         .iter()
         .map(|x| {
-            let mut cctx = crate::helpers::dummy_cross_chain_tx(x, "PendingOutbound");
+            let mut cctx = crate::helpers::dummy_cross_chain_tx(x, CctxStatusStatus::PendingOutbound);
             cctx.inbound_params.asset = token.asset.clone();
             cctx.inbound_params.coin_type = token.coin_type.clone();
             cctx.inbound_params.sender_chain_id = token.foreign_chain_id.clone();
@@ -536,7 +536,7 @@ async fn test_list_cctxs_with_status_filter() {
         "test_list_cctxs_with_status_filter_2",
     ]
     .iter()
-    .map(|x| crate::helpers::dummy_cross_chain_tx(x, "OutboundMined"))
+    .map(|x| crate::helpers::dummy_cross_chain_tx(x, CctxStatusStatus::OutboundMined))
     .chain(
         [
             "test_list_cctxs_with_status_filter_3",
@@ -544,7 +544,7 @@ async fn test_list_cctxs_with_status_filter() {
             "test_list_cctxs_with_status_filter_5",
         ]
         .iter()
-        .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingOutbound")),
+        .map(|x| crate::helpers::dummy_cross_chain_tx(x, CctxStatusStatus::PendingOutbound)),
     )
     .map(|x| {
         let mut cctx = x;
@@ -679,7 +679,6 @@ async fn test_list_cctxs_with_filters() {
 
     cctx_1.outbound_params[0].receiver = receiver_address.to_string();
     cctx_1.outbound_params[0].receiver_chain_id = target_chain_id_1.to_string();
-    cctx_1.cctx_status.status = status_1.try_into().unwrap();
     cctx_1.cctx_status.created_timestamp = start_timestamp.to_string();
     cctx_1.cctx_status.last_update_timestamp = end_timestamp.to_string();
 
@@ -691,7 +690,6 @@ async fn test_list_cctxs_with_filters() {
     cctx_2.inbound_params.sender = sender_address.to_string();
     cctx_2.outbound_params[0].receiver = receiver_address.to_string();
     cctx_2.outbound_params[0].receiver_chain_id = target_chain_id_2.to_string();
-    cctx_2.cctx_status.status = status_2.to_string();
     cctx_2.cctx_status.created_timestamp = start_timestamp.to_string();
     cctx_2.cctx_status.last_update_timestamp = end_timestamp.to_string();
 
@@ -808,19 +806,19 @@ async fn test_list_cctxs_with_status_reduced_filter() {
         "test_status_reduced_pending_3",
     ]
     .iter()
-    .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingInbound"))
+    .map(|x| crate::helpers::dummy_cross_chain_tx(x, CctxStatusStatus::PendingInbound))
     .chain(
         [
             "test_status_reduced_pending_4",
             "test_status_reduced_pending_5",
         ]
         .iter()
-        .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingOutbound")),
+        .map(|x| crate::helpers::dummy_cross_chain_tx(x, CctxStatusStatus::PendingOutbound)),
     )
     .chain(
         ["test_status_reduced_pending_6"]
             .iter()
-            .map(|x| crate::helpers::dummy_cross_chain_tx(x, "PendingRevert")),
+            .map(|x| crate::helpers::dummy_cross_chain_tx(x, CctxStatusStatus::PendingRevert)),
     )
     .map(|x| {
         let mut cctx = x;
@@ -836,7 +834,7 @@ async fn test_list_cctxs_with_status_reduced_filter() {
         "test_status_reduced_success_2",
     ]
     .iter()
-    .map(|x| crate::helpers::dummy_cross_chain_tx(x, "OutboundMined"))
+    .map(|x| crate::helpers::dummy_cross_chain_tx(x, CctxStatusStatus::OutboundMined))
     .collect();
 
     let aborted_cctxs: Vec<CrossChainTx> = [
@@ -844,10 +842,10 @@ async fn test_list_cctxs_with_status_reduced_filter() {
         "test_status_reduced_failed_2",
     ]
     .iter()
-    .map(|x| crate::helpers::dummy_cross_chain_tx(x, "Aborted"))
+    .map(|x| crate::helpers::dummy_cross_chain_tx(x, CctxStatusStatus::Aborted))
     .collect();
     let reverted_cctxs: CrossChainTx =
-        crate::helpers::dummy_cross_chain_tx("test_status_reduced_failed_3", "Reverted");
+        crate::helpers::dummy_cross_chain_tx("test_status_reduced_failed_3", CctxStatusStatus::Reverted);
 
     let failed_cctxs: Vec<CrossChainTx> = aborted_cctxs
         .into_iter()

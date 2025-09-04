@@ -5,6 +5,13 @@ use crate::sea_orm_active_enums::{
     ProtocolContractVersion, TxFinalizationStatus,
 };
 
+use crate::token::Model as Token;
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
+    CctxStatus as CctxStatusProto, CoinType as CoinTypeProto,
+    ConfirmationMode as ConfirmationModeProto, Token as TokenProto,
+    TxFinalizationStatus as TxFinalizationStatusProto, InboundStatus as InboundStatusProto,
+};
+
 impl TryFrom<String> for TxFinalizationStatus {
     type Error = String;
 
@@ -161,8 +168,63 @@ impl From<CoinType> for i32 {
     }
 }
 
-use crate::token::Model as Token;
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Token as TokenProto;
+impl From<CctxStatusStatus> for CctxStatusProto {
+    fn from(status: CctxStatusStatus) -> Self {
+        match status {
+            CctxStatusStatus::PendingInbound => CctxStatusProto::PendingInbound,
+            CctxStatusStatus::PendingOutbound => CctxStatusProto::PendingOutbound,
+            CctxStatusStatus::PendingRevert => CctxStatusProto::PendingRevert,
+            CctxStatusStatus::Aborted => CctxStatusProto::Aborted,
+            CctxStatusStatus::Reverted => CctxStatusProto::Reverted,
+            CctxStatusStatus::OutboundMined => CctxStatusProto::OutboundMined,
+        }
+    }
+}
+
+impl From<CoinType> for CoinTypeProto {
+    fn from(coin_type: CoinType) -> Self {
+        match coin_type {
+            CoinType::Zeta => CoinTypeProto::Zeta,
+            CoinType::Gas => CoinTypeProto::Gas,
+            CoinType::Erc20 => CoinTypeProto::Erc20,
+            CoinType::Cmd => CoinTypeProto::Cmd,
+            CoinType::NoAssetCall => CoinTypeProto::NoAssetCall,
+        }
+    }
+}
+
+impl From<TxFinalizationStatus> for TxFinalizationStatusProto {
+    fn from(status: TxFinalizationStatus) -> Self {
+        match status {
+            TxFinalizationStatus::NotFinalized => TxFinalizationStatusProto::NotFinalized,
+            TxFinalizationStatus::Finalized => TxFinalizationStatusProto::Finalized,
+            TxFinalizationStatus::Executed => TxFinalizationStatusProto::Executed,
+        }
+    }
+}
+
+
+
+impl From<InboundStatus> for InboundStatusProto {
+    fn from(status: InboundStatus) -> Self {
+        match status {
+            InboundStatus::Success => InboundStatusProto::InboundSuccess,
+            InboundStatus::InsufficientDepositorFee => InboundStatusProto::InsufficientDepositorFee,
+            InboundStatus::InvalidReceiverAddress => InboundStatusProto::InvalidReceiverAddress,
+            InboundStatus::InvalidMemo => InboundStatusProto::InvalidMemo,
+        }
+    }
+}
+
+impl From<ConfirmationMode> for ConfirmationModeProto {
+    fn from(status: ConfirmationMode) -> Self {
+        match status {
+            ConfirmationMode::Safe => ConfirmationModeProto::Safe,
+            ConfirmationMode::Fast => ConfirmationModeProto::Fast,
+        }
+    }
+}
+
 
 impl From<Token> for TokenProto {
     fn from(token: Token) -> Self {

@@ -994,9 +994,10 @@ impl ZetachainCctxDatabase {
             .try_get_by_index(18)
             .map_err(|e| anyhow::anyhow!("cctx_row last_update_timestamp: {}", e))?;
 
-        let cctx_status =
-            CctxStatusProto::from_str_name(cctx_row.try_get_by_index::<String>(15)?.as_str())
-                .ok_or(anyhow::anyhow!("Invalid status"))?;
+        let cctx_status: CctxStatusProto =
+            CctxStatusStatus::try_from(cctx_row.try_get_by_index::<CctxStatusStatus>(15)?)
+                .map_err(|e| anyhow::anyhow!("Invalid status: {}", e))?
+                .into();
         // Build CctxStatus
         let status = StatusProto {
             status: cctx_status.into(),
@@ -1021,6 +1022,22 @@ impl ZetachainCctxDatabase {
                 .map_err(|e| anyhow::anyhow!("cctx_row error_message_abort: {}", e))?,
         };
 
+        let coin_type: CoinTypeProto = cctx_row
+            .try_get_by_index::<DBCoinType>(28)
+            .map_err(|e| anyhow::anyhow!("cctx_row invalid inbound_params coin_type: {}", e))?
+            .into();
+        let tx_finalization_status: TxFinalizationStatusProto = cctx_row
+            .try_get_by_index::<TxFinalizationStatus>(35)
+            .map_err(|e| anyhow::anyhow!("cctx_row invalid inbound_params tx_finalization_status: {}", e))?
+            .into();
+        let inbound_status: InboundStatusProto = cctx_row
+            .try_get_by_index::<InboundStatus>(37)
+            .map_err(|e| anyhow::anyhow!("cctx_row invalid inbound_params inbound_status: {}", e))?
+            .into();
+        let confirmation_mode: ConfirmationModeProto = cctx_row
+            .try_get_by_index::<ConfirmationMode>(38)
+            .map_err(|e| anyhow::anyhow!("cctx_row invalid inbound_params confirmation_mode: {}", e))?
+            .into();
         // Build InboundParams
         let inbound = InboundParamsProto {
             sender: cctx_row
@@ -1032,11 +1049,7 @@ impl ZetachainCctxDatabase {
             tx_origin: cctx_row
                 .try_get_by_index(27)
                 .map_err(|e| anyhow::anyhow!("cctx_row tx_origin: {}", e))?,
-            coin_type: CoinTypeProto::from_str_name(
-                cctx_row.try_get_by_index::<String>(28)?.as_str(),
-            )
-            .ok_or(anyhow::anyhow!("Invalid coin_type"))?
-            .into(),
+            coin_type: coin_type.into(),
             asset: cctx_row
                 .try_get_by_index(29)
                 .map_err(|e| anyhow::anyhow!("cctx_row asset: {}", e))?,
@@ -1055,27 +1068,12 @@ impl ZetachainCctxDatabase {
             finalized_zeta_height: cctx_row
                 .try_get_by_index(34)
                 .map_err(|e| anyhow::anyhow!("cctx_row finalized_zeta_height: {}", e))?,
-            tx_finalization_status: TxFinalizationStatusProto::from_str_name(
-                cctx_row.try_get_by_index::<String>(35)?.as_str(),
-            )
-            .ok_or(anyhow::anyhow!("Invalid tx_finalization_status"))?
-            .into(),
+            tx_finalization_status: tx_finalization_status.into(),
             is_cross_chain_call: cctx_row
                 .try_get_by_index(36)
                 .map_err(|e| anyhow::anyhow!("cctx_row is_cross_chain_call: {}", e))?,
-            status: InboundStatusProto::from_str_name(
-                cctx_row.try_get_by_index::<String>(37)?.as_str(),
-            )
-            .ok_or(anyhow::anyhow!(
-                "Invalid inbound_status:{}",
-                cctx_row.try_get_by_index::<String>(37)?.as_str()
-            ))?
-            .into(),
-            confirmation_mode: ConfirmationModeProto::from_str_name(
-                cctx_row.try_get_by_index::<String>(38)?.as_str(),
-            )
-            .ok_or(anyhow::anyhow!("Invalid inbound_confirmation_mode"))?
-            .into(),
+            status: inbound_status.into(),
+            confirmation_mode: confirmation_mode.into(),
         };
 
         let token_symbol: Option<String> = cctx_row
@@ -1158,8 +1156,20 @@ impl ZetachainCctxDatabase {
 
         let outbounds_rows = self.db.query_all(outbounds_statement).await?;
         let mut outbounds = Vec::new();
-
+        
         for outbound_row in outbounds_rows {
+            let outbound_coin_type: CoinTypeProto = outbound_row
+            .try_get_by_index::<DBCoinType>(4)
+            .map_err(|e| anyhow::anyhow!("outbound_row invalid outbound_params coin_type: {}", e))?
+            .into();
+            let outbound_tx_finalization_status: TxFinalizationStatusProto = outbound_row
+                .try_get_by_index::<TxFinalizationStatus>(17)
+                .map_err(|e| anyhow::anyhow!("outbound_row invalid outbound_params tx_finalization_status: {}", e))?
+                .into();
+            let outbound_confirmation_mode: ConfirmationModeProto = outbound_row
+                .try_get_by_index::<ConfirmationMode>(20)
+                .map_err(|e| anyhow::anyhow!("outbound_row invalid outbound_params confirmation_mode: {}", e))?
+                .into();
             outbounds.push(OutboundParamsProto {
                 receiver: outbound_row
                     .try_get_by_index::<String>(2)
@@ -1167,14 +1177,7 @@ impl ZetachainCctxDatabase {
                 receiver_chain_id: outbound_row
                     .try_get_by_index::<i32>(3)
                     .map_err(|e| anyhow::anyhow!("outbound_row receiver_chain_id: {}", e))?,
-                coin_type: CoinTypeProto::from_str_name(
-                    outbound_row
-                        .try_get_by_index::<String>(4)
-                        .map_err(|e| anyhow::anyhow!("outbound_row coin_type: {}", e))?
-                        .as_str(),
-                )
-                .ok_or(anyhow::anyhow!("Invalid coin_type"))?
-                .into(),
+                coin_type: outbound_coin_type.into(),
                 amount: outbound_row
                     .try_get_by_index::<String>(5)
                     .map_err(|e| anyhow::anyhow!("outbound_row amount: {}", e))?,
@@ -1217,14 +1220,7 @@ impl ZetachainCctxDatabase {
                 tss_pubkey: outbound_row
                     .try_get_by_index::<String>(16)
                     .map_err(|e| anyhow::anyhow!("outbound_row tss_pubkey: {}", e))?,
-                tx_finalization_status: TxFinalizationStatusProto::from_str_name(
-                    outbound_row
-                        .try_get_by_index::<String>(17)
-                        .unwrap()
-                        .as_str(),
-                )
-                .ok_or(anyhow::anyhow!("Invalid tx_finalization_status"))?
-                .into(),
+                tx_finalization_status: outbound_tx_finalization_status.into(),
                 call_options: Some(CallOptionsProto {
                     gas_limit: outbound_row
                         .try_get_by_index::<Option<String>>(18)
@@ -1234,14 +1230,7 @@ impl ZetachainCctxDatabase {
                         .try_get_by_index::<Option<bool>>(19)
                         .map_err(|e| anyhow::anyhow!("outbound_row is_arbitrary_call: {}", e))?,
                 }),
-                confirmation_mode: ConfirmationModeProto::from_str_name(
-                    outbound_row
-                        .try_get_by_index::<String>(20)
-                        .unwrap()
-                        .as_str(),
-                )
-                .ok_or(anyhow::anyhow!("Invalid confirmation_mode"))?
-                .into(),
+                confirmation_mode: outbound_confirmation_mode.into(),
             });
         }
 
@@ -1276,14 +1265,16 @@ impl ZetachainCctxDatabase {
                     gas_used: x.gas_used,
                 })
                 .collect();
+            let inbound_coin_type: CoinTypeProto = related_row
+                .try_get_by_index::<DBCoinType>(6)
+                .map_err(|e| anyhow::anyhow!("related_row invalid inbound_params coin_type: {}", e))?
+                .into();
 
-            let status = CctxStatusProto::from_str_name(
-                related_row
-                    .try_get_by_index::<String>(3)
-                    .map_err(|e| anyhow::anyhow!("related_row status: {}", e))?
-                    .as_str(),
-            )
-            .ok_or(anyhow::anyhow!("Invalid status"))?;
+            let status: CctxStatusProto = related_row
+                .try_get_by_index::<CctxStatusStatus>(3)
+                .map_err(|e| anyhow::anyhow!("related_row status: {}", e))?
+                .into();
+
 
             related.push(RelatedCctxProto {
                 index: related_row
@@ -1304,14 +1295,7 @@ impl ZetachainCctxDatabase {
                 inbound_amount: related_row
                     .try_get_by_index::<String>(5)
                     .map_err(|e| anyhow::anyhow!("related_row inbound_amount: {}", e))?,
-                inbound_coin_type: CoinTypeProto::from_str_name(
-                    related_row
-                        .try_get_by_index::<String>(6)
-                        .map_err(|e| anyhow::anyhow!("related_row inbound_coin_type: {}", e))?
-                        .as_str(),
-                )
-                .ok_or(anyhow::anyhow!("Invalid coin_type"))?
-                .into(),
+                inbound_coin_type: inbound_coin_type.into(),
                 inbound_asset: related_row
                     .try_get_by_index::<Option<String>>(7)
                     .map_err(|e| anyhow::anyhow!("related_row inbound_asset: {}", e))?,
@@ -1602,10 +1586,10 @@ impl ZetachainCctxDatabase {
             let index = row
                 .try_get_by_index(0)
                 .map_err(|e| anyhow::anyhow!("index: {}", e))?;
-            let status = row
-                .try_get_by_index::<String>(1)
-                .map_err(|e| anyhow::anyhow!("status: {}", e))?;
-            let status = CctxStatusProto::from_str_name(&status).unwrap();
+            let status: CctxStatusProto = row
+                .try_get_by_index::<CctxStatusStatus>(1)
+                .map_err(|e| anyhow::anyhow!("status: {}", e))?
+                .into();
 
             let last_update_timestamp = row
                 .try_get_by_index::<NaiveDateTime>(2)
@@ -1631,17 +1615,14 @@ impl ZetachainCctxDatabase {
             let receiver_address = row
                 .try_get_by_index(9)
                 .map_err(|e| anyhow::anyhow!("receiver_address: {}", e))?;
-            let coin_type = row
-                .try_get_by_index::<String>(10)
-                .map_err(|e| anyhow::anyhow!("coin_type: {}", e))?;
-            let status_reduced = row
-                .try_get_by_index::<String>(11)
-                .map_err(|e| anyhow::anyhow!("status_reduced: {}", e))?;
-            let status_reduced = CctxStatusReducedProto::from_str_name(&status_reduced).unwrap();
+            let coin_type: CoinTypeProto = row
+                .try_get_by_index::<DBCoinType>(10)
+                .map_err(|e| anyhow::anyhow!("coin_type: {}", e))?
+                .into();
+            let status_reduced: CctxStatusReducedProto = reduce_status(status).into();
             let token_symbol: Option<String> = row
                 .try_get_by_index(12)
                 .map_err(|e| anyhow::anyhow!("token_symbol: {}", e))?;
-            let coin_type = CoinTypeProto::from_str_name(&coin_type).unwrap();
             let zrc20_contract_address: Option<String> = row
                 .try_get_by_index(13)
                 .map_err(|e| anyhow::anyhow!("zrc20_contract_address: {}", e))?;
@@ -2046,8 +2027,9 @@ impl ZetachainCctxDatabase {
                         ),
                     });
 
-                let status: CctxStatusProto =
-                    fetched_cctx.cctx_status.clone().status.into();
+                let status: CctxStatusProto = fetched_cctx.cctx_status.clone().status.into();
+                let coin_type_proto: CoinTypeProto =
+                    fetched_cctx.inbound_params.coin_type.clone().into();
                 // Prepare proto list item
                 child_entities.cctx_list_items.push(CctxListItemProto {
                     index: cctx.index.clone(),
@@ -2071,11 +2053,7 @@ impl ZetachainCctxDatabase {
                     sender_address: fetched_cctx.inbound_params.sender.clone(),
                     receiver_address: fetched_cctx.outbound_params[0].receiver.clone(),
                     asset: fetched_cctx.inbound_params.asset.clone(),
-                    coin_type: CoinTypeProto::from_str_name(
-                        &fetched_cctx.inbound_params.coin_type.to_string(),
-                    )
-                    .unwrap()
-                    .into(),
+                    coin_type: coin_type_proto.into(),
                     token_symbol: None,
                     zrc20_contract_address: None,
                     decimals: None,

@@ -19,7 +19,7 @@ use zetachain_cctx_logic::{
     client::{Client, RpcSettings},
     database::ZetachainCctxDatabase,
     indexer::Indexer,
-    models::Token,
+    models::{CctxStatusStatus, Token},
     settings::IndexerSettings,
 };
 
@@ -81,7 +81,7 @@ async fn test_token_sync_stream_works() {
         .respond_with(
             ResponseTemplate::new(200).set_body_json(helpers::dummy_cross_chain_tx(
                 "dummy_index",
-                "OutboundMined",
+                CctxStatusStatus::OutboundMined,
             )),
         )
         .mount(&mock_server)
@@ -275,7 +275,7 @@ async fn test_token_sync_pagination() {
         .respond_with(
             ResponseTemplate::new(200).set_body_json(helpers::dummy_cross_chain_tx(
                 "dummy_index",
-                "OutboundMined",
+                CctxStatusStatus::OutboundMined,
             )),
         )
         .mount(&mock_server)

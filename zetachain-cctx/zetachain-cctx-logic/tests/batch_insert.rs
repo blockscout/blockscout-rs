@@ -2,7 +2,7 @@ use blockscout_service_launcher::test_database::TestDbGuard;
 use migration::sea_orm::TransactionTrait;
 use uuid::Uuid;
 use zetachain_cctx_entity::token as TokenEntity;
-use zetachain_cctx_logic::database::ZetachainCctxDatabase;
+use zetachain_cctx_logic::{database::ZetachainCctxDatabase, models::CctxStatusStatus};
 mod helpers;
 
 #[tokio::test]
@@ -28,7 +28,7 @@ async fn test_batch_insert() {
         zrc20_contract_address: Uuid::new_v4().to_string(),
     };
 
-    let mut cctx = helpers::dummy_cross_chain_tx("bad_cctx_index", "OutboundMined");
+    let mut cctx = helpers::dummy_cross_chain_tx("bad_cctx_index", CctxStatusStatus::OutboundMined);
 
     cctx.inbound_params.asset = token.asset.clone();
     cctx.inbound_params.coin_type = token.coin_type.clone();

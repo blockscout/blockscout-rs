@@ -71,7 +71,7 @@ async fn test_traverse_and_update_tree_relationships() {
 
     // Insert CHILD1 without parent/root links
     let child1_index = "child1";
-    let child1_tx = helpers::dummy_cross_chain_tx(child1_index, "PendingOutbound");
+    let child1_tx = helpers::dummy_cross_chain_tx(child1_index, zetachain_cctx_logic::models::CctxStatusStatus::PendingOutbound);
     let tx = db_conn.begin().await.unwrap();
     database
         .batch_insert_transactions(Uuid::new_v4(), &vec![child1_tx.clone()], &tx, None)
@@ -89,7 +89,7 @@ async fn test_traverse_and_update_tree_relationships() {
 
     // Insert GRANDCHILD that references CHILD1 as its parent, but root is unknown
     let grandchild_index = "grandchild";
-    let grandchild_tx = helpers::dummy_cross_chain_tx(grandchild_index, "PendingOutbound");
+    let grandchild_tx = helpers::dummy_cross_chain_tx(grandchild_index, zetachain_cctx_logic::models::CctxStatusStatus::PendingOutbound);
     // insert grandchild first
     let tx2 = db_conn.begin().await.unwrap();
     database

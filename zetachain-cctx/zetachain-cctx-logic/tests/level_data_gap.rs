@@ -16,11 +16,7 @@ use zetachain_cctx_entity::{
 mod helpers;
 
 use zetachain_cctx_logic::{
-    channel::Channel,
-    client::{Client, RpcSettings},
-    database::ZetachainCctxDatabase,
-    indexer::Indexer,
-    settings::IndexerSettings,
+    channel::Channel, client::{Client, RpcSettings}, database::ZetachainCctxDatabase, indexer::Indexer, models::CctxStatusStatus, settings::IndexerSettings
 };
 
 #[tokio::test]
@@ -101,7 +97,7 @@ async fn test_level_data_gap() {
     Mock::given(method("GET"))
         .and(path_regex(r"/zeta-chain/crosschain/cctx/.+"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "CrossChainTx": helpers::dummy_cross_chain_tx("page_3_index_1", "OutboundMined")
+            "CrossChainTx": helpers::dummy_cross_chain_tx("page_3_index_1", CctxStatusStatus::OutboundMined)
         })))
         .mount(&mock_server)
         .await;

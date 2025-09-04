@@ -22,6 +22,7 @@ use zetachain_cctx_entity::{
     sea_orm_active_enums::{Kind, ProcessingStatus},
     watermark,
 };
+use zetachain_cctx_logic::models::CctxStatusStatus;
 use zetachain_cctx_logic::{
     channel::Channel,
     client::{Client, RpcSettings},
@@ -105,7 +106,7 @@ async fn test_historical_sync_updates_pointer() {
         .respond_with(
             ResponseTemplate::new(200).set_body_json(helpers::dummy_cross_chain_tx(
                 "dummy_index",
-                "OutboundMined",
+                CctxStatusStatus::OutboundMined,
             )),
         )
         .mount(&mock_server)
@@ -290,7 +291,7 @@ async fn test_database_processes_one_off_watermark() {
             Uuid::new_v4(),
             vec![helpers::dummy_cross_chain_tx(
                 "dummy_index",
-                "OutboundMined",
+                CctxStatusStatus::OutboundMined,
             )],
             "ONE_OFF",
             one_off_watermark.id,
