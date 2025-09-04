@@ -69,7 +69,7 @@ async fn refresh_cctx_status(
     Ok(updated)
 }
 
-#[instrument(,level="info",skip_all, fields(job_id = %job_id, watermark_id = %watermark_id, watermark_pointer = %watermark_pointer))]
+#[instrument(,level="debug",skip_all, fields(job_id = %job_id, watermark_id = %watermark_id, watermark_pointer = %watermark_pointer))]
 async fn level_data_gap(
     job_id: Uuid,
     database: Arc<ZetachainCctxDatabase>,
@@ -99,7 +99,7 @@ async fn level_data_gap(
         .await
 }
 
-#[instrument(,level="info",skip_all, fields(job_id = %job_id))]
+#[instrument(,level="debug",skip_all, fields(job_id = %job_id))]
 async fn historical_sync(
     database: Arc<ZetachainCctxDatabase>,
     client: &Client,
@@ -286,7 +286,7 @@ impl Indexer {
         }
     }
 
-    #[instrument(,level="debug",skip(self))]
+    #[instrument(,level="info",skip(self))]
     fn realtime_fetch_handler(&self) -> JoinHandle<()> {
         let realtime_polling_interval = self.settings.realtime_polling_interval;
         let client = self.client.clone();
