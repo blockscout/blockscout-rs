@@ -1,8 +1,9 @@
 mod helpers;
-use actix_phoenix_channel::{ChannelCentral, ChannelEvent};
+use actix_phoenix_channel::ChannelCentral;
 use blockscout_service_launcher::tracing::{init_logs, JaegerSettings, TracingSettings};
 use futures::StreamExt;
 
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 
@@ -23,6 +24,16 @@ use futures::SinkExt;
 use tokio::time::timeout;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem;
+
+#[derive(Deserialize, Serialize)]
+struct ReplyOk {
+    join_ref: Option<String>,
+    ref_number: Option<String>,
+    topic: String,
+    event: String,
+    payload: serde_json::Value,
+}
+
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn emit_imported_cctxs() {
@@ -125,8 +136,8 @@ async fn emit_imported_cctxs() {
             db.db_url(),
             |mut settings| {
                 settings.tracing.enabled = false;
-                settings.websocket.enabled = true; // Enable websocket
-                settings.indexer.enabled = true; // Enable indexer for this test
+                settings.websocket.enabled = true;
+                settings.indexer.enabled = true;
                 settings.indexer.zetachain_id = 7001;
                 settings.indexer.token_sync_enabled = false;
                 settings.indexer.polling_interval = 100;
@@ -143,8 +154,8 @@ async fn emit_imported_cctxs() {
 
     // Wait for server to start and get the base URL
     let base_url = server_handle.await.unwrap();
-
-    timeout(Duration::from_secs(5), async move {
+    let mut result = true;
+    timeout(Duration::from_millis(500), async move {
         tracing::info!("waiting for cctxs");
 
         // Connect to the websocket server
@@ -158,36 +169,46 @@ async fn emit_imported_cctxs() {
         let (ws_stream, _) = connect_async(&ws_url).await.unwrap();
         let (mut write, mut read) = ws_stream.split();
 
-        // Join the channel to receive events
-        // Phoenix Channel protocol uses tuple format: (join_ref, ref, topic, event, payload)
         let join_message = serde_json::to_string(&(
-            Some("1".to_string()),        // join_ref
+            Some("1".to_string()), // join_ref
             Some("1".to_string()), // ref
             "cctxs:new_cctxs",     // topic
             "phx_join",            // event
-            "{}", // payload
+            "{}",                  // payload
         ))
         .unwrap();
 
         tracing::info!("sending join message: {}", join_message);
         write.send(Message::Text(join_message)).await.unwrap();
-        // Wait for the indexer to emit events when it finds new CCTXs
-        // The indexer should automatically broadcast events when it processes the mock data
+        
         loop {
             if let Some(message) = read.next().await {
                 match message.unwrap() {
                     Message::Text(text) => {
                         tracing::info!("received message: {}", text);
-                        let channel_event = serde_json::from_str::<ChannelEvent>(&text).unwrap();
-
-                        if channel_event.topic() == "cctxs:new_cctxs"
-                            && channel_event.event() == "new_cctxs"
+                        if let Ok(ReplyOk {
+                            join_ref: _,
+                            ref_number: _,
+                            topic,
+                            event,
+                            payload,
+                        }) = serde_json::from_str::<ReplyOk>(&text)
                         {
-                            if let Ok(cctxs) = serde_json::from_str::<Vec<CctxListItem>>(&text) {
-                                tracing::info!("parsed cctxs: {:?}", cctxs);
-                            } else {
-                                tracing::error!("failed to parse cctxs: {:?}", text);
+                            if topic == "cctxs:new_cctxs" && event == "new_cctxs" {
+                                if let Ok(cctxs) =
+                                    serde_json::from_value::<Vec<CctxListItem>>(payload.clone())
+                                {
+                                    let count = cctxs.len();
+                                    for cctx in cctxs {
+                                        result = result && cctx.decimals.is_some() && cctx.token_symbol.is_some() && cctx.zrc20_contract_address.is_some();
+                                    }
+
+                                    result = result && count == 3;
+                                    break;
+                                }
                             }
+                        } else {
+                            tracing::error!("failed to parse Phoenix Channel message: {}", text);
                         }
                     }
                     _ => {}
@@ -199,4 +220,5 @@ async fn emit_imported_cctxs() {
     .unwrap_or_else(|_| {
         tracing::error!("Test timed out");
     });
+    assert!(result);
 }

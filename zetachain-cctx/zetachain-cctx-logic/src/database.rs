@@ -34,6 +34,11 @@ pub struct ZetachainCctxDatabase {
     zetachain_id: i32,
 }
 
+struct PreparedParentModels {
+    models: Vec<CrossChainTxEntity::ActiveModel>,
+    token_map: HashMap<String, Option<TokenEntity::Model>>,
+}
+
 struct ChildEntities {
     inbound_params: Vec<InboundParamsEntity::ActiveModel>,
     outbound_params: Vec<OutboundParamsEntity::ActiveModel>,
@@ -1028,7 +1033,12 @@ impl ZetachainCctxDatabase {
             .into();
         let tx_finalization_status: TxFinalizationStatusProto = cctx_row
             .try_get_by_index::<TxFinalizationStatus>(35)
-            .map_err(|e| anyhow::anyhow!("cctx_row invalid inbound_params tx_finalization_status: {}", e))?
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "cctx_row invalid inbound_params tx_finalization_status: {}",
+                    e
+                )
+            })?
             .into();
         let inbound_status: InboundStatusProto = cctx_row
             .try_get_by_index::<InboundStatus>(37)
@@ -1036,7 +1046,9 @@ impl ZetachainCctxDatabase {
             .into();
         let confirmation_mode: ConfirmationModeProto = cctx_row
             .try_get_by_index::<ConfirmationMode>(38)
-            .map_err(|e| anyhow::anyhow!("cctx_row invalid inbound_params confirmation_mode: {}", e))?
+            .map_err(|e| {
+                anyhow::anyhow!("cctx_row invalid inbound_params confirmation_mode: {}", e)
+            })?
             .into();
         // Build InboundParams
         let inbound = InboundParamsProto {
@@ -1156,19 +1168,31 @@ impl ZetachainCctxDatabase {
 
         let outbounds_rows = self.db.query_all(outbounds_statement).await?;
         let mut outbounds = Vec::new();
-        
+
         for outbound_row in outbounds_rows {
             let outbound_coin_type: CoinTypeProto = outbound_row
-            .try_get_by_index::<DBCoinType>(4)
-            .map_err(|e| anyhow::anyhow!("outbound_row invalid outbound_params coin_type: {}", e))?
-            .into();
+                .try_get_by_index::<DBCoinType>(4)
+                .map_err(|e| {
+                    anyhow::anyhow!("outbound_row invalid outbound_params coin_type: {}", e)
+                })?
+                .into();
             let outbound_tx_finalization_status: TxFinalizationStatusProto = outbound_row
                 .try_get_by_index::<TxFinalizationStatus>(17)
-                .map_err(|e| anyhow::anyhow!("outbound_row invalid outbound_params tx_finalization_status: {}", e))?
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "outbound_row invalid outbound_params tx_finalization_status: {}",
+                        e
+                    )
+                })?
                 .into();
             let outbound_confirmation_mode: ConfirmationModeProto = outbound_row
                 .try_get_by_index::<ConfirmationMode>(20)
-                .map_err(|e| anyhow::anyhow!("outbound_row invalid outbound_params confirmation_mode: {}", e))?
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "outbound_row invalid outbound_params confirmation_mode: {}",
+                        e
+                    )
+                })?
                 .into();
             outbounds.push(OutboundParamsProto {
                 receiver: outbound_row
@@ -1267,14 +1291,15 @@ impl ZetachainCctxDatabase {
                 .collect();
             let inbound_coin_type: CoinTypeProto = related_row
                 .try_get_by_index::<DBCoinType>(6)
-                .map_err(|e| anyhow::anyhow!("related_row invalid inbound_params coin_type: {}", e))?
+                .map_err(|e| {
+                    anyhow::anyhow!("related_row invalid inbound_params coin_type: {}", e)
+                })?
                 .into();
 
             let status: CctxStatusProto = related_row
                 .try_get_by_index::<CctxStatusStatus>(3)
                 .map_err(|e| anyhow::anyhow!("related_row status: {}", e))?
                 .into();
-
 
             related.push(RelatedCctxProto {
                 index: related_row
@@ -1706,7 +1731,7 @@ impl ZetachainCctxDatabase {
         Ok(token)
     }
 
-    #[instrument(skip_all, level = "debug")]
+    #[instrument(skip_all, level = "warn")]
     pub async fn batch_insert_transactions(
         &self,
         job_id: Uuid,
@@ -1720,8 +1745,9 @@ impl ZetachainCctxDatabase {
         }
 
         // 1. Prepare and insert parent CrossChainTx records.
-        let cctx_models = self.prepare_parent_models(job_id, cctxs, relation).await?;
-        let inserted_cctxs = self.insert_parent_models(cctx_models).await?;
+        let PreparedParentModels { models, token_map } = self.prepare_parent_models(job_id, cctxs, relation).await?;
+        
+        let inserted_cctxs = self.insert_parent_models(models).await?;
 
         // 2. Map fetched cctxs by index for quick access when preparing child records.
         let index_to_cctx = cctxs
@@ -1730,7 +1756,7 @@ impl ZetachainCctxDatabase {
             .collect::<std::collections::HashMap<_, _>>();
 
         // 3. Prepare child entity models and construct the protobuf response.
-        let child_entities = Self::prepare_child_models(&inserted_cctxs, &index_to_cctx)?;
+        let child_entities = Self::prepare_child_models(&inserted_cctxs, &index_to_cctx, &token_map)?;
 
         // 4. Persist child entities inside the provided transaction.
         self.insert_cctx_status_models(child_entities.status, tx)
@@ -1750,8 +1776,9 @@ impl ZetachainCctxDatabase {
         job_id: Uuid,
         cctxs: &Vec<CrossChainTx>,
         relation: Option<Relation>,
-    ) -> anyhow::Result<Vec<CrossChainTxEntity::ActiveModel>> {
+    ) -> anyhow::Result<PreparedParentModels> {
         let mut models = Vec::new();
+        let mut token_map = HashMap::<String, Option<TokenEntity::Model>>::new();
         for cctx in cctxs {
             //if calculcate_token_id fails, we skip this cctx
             //if we fail insertion, the whole batch would be lost, which is not desired
@@ -1762,17 +1789,19 @@ impl ZetachainCctxDatabase {
                         "Failed to calculate token id for cctx {}: {}",
                         cctx.index,
                         e
-                    );
+                    );  
                     continue;
                 }
             };
+            token_map.insert(cctx.index.clone(), token.clone());
+
 
             let mut model = CrossChainTxEntity::ActiveModel {
                 id: ActiveValue::NotSet,
                 creator: ActiveValue::Set(cctx.creator.clone()),
                 index: ActiveValue::Set(cctx.index.clone()),
                 processing_status: ActiveValue::Set(ProcessingStatus::Unlocked),
-                token_id: ActiveValue::Set(token.map(|t| t.id)),
+                token_id: ActiveValue::Set(token.clone().map(|t| t.id)),
                 zeta_fees: ActiveValue::Set(cctx.zeta_fees.clone()),
                 receiver: ActiveValue::Set(Some(cctx.outbound_params[0].receiver.clone())),
                 receiver_chain_id: ActiveValue::Set(Some(
@@ -1797,7 +1826,10 @@ impl ZetachainCctxDatabase {
             }
             models.push(model);
         }
-        Ok(models)
+        Ok(PreparedParentModels {
+            models,
+            token_map,
+        })
     }
 
     async fn insert_parent_models(
@@ -1838,6 +1870,7 @@ impl ZetachainCctxDatabase {
     fn prepare_child_models(
         inserted_cctxs: &Vec<CrossChainTxEntity::Model>,
         index_to_cctx: &std::collections::HashMap<&str, &CrossChainTx>,
+        token_map: &HashMap<String, Option<TokenEntity::Model>>,
     ) -> anyhow::Result<ChildEntities> {
         let mut child_entities = ChildEntities {
             inbound_params: Vec::new(),
@@ -1850,6 +1883,7 @@ impl ZetachainCctxDatabase {
         for cctx in inserted_cctxs {
             if let Some(fetched_cctx) = index_to_cctx.get(cctx.index.as_str()) {
                 // Prepare status model
+                let token = token_map.get(cctx.index.as_str()).map(|t| t.as_ref()).flatten();
                 let last_update_timestamp = fetched_cctx
                     .cctx_status
                     .last_update_timestamp
@@ -2054,9 +2088,9 @@ impl ZetachainCctxDatabase {
                     receiver_address: fetched_cctx.outbound_params[0].receiver.clone(),
                     asset: fetched_cctx.inbound_params.asset.clone(),
                     coin_type: coin_type_proto.into(),
-                    token_symbol: None,
-                    zrc20_contract_address: None,
-                    decimals: None,
+                    token_symbol: token.map(|t| t.symbol.clone()),
+                    zrc20_contract_address: token.map(|t| t.zrc20_contract_address.clone()),
+                    decimals: token.map(|t| t.decimals as i64),
                 });
             }
         }
