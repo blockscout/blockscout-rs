@@ -1731,7 +1731,7 @@ impl ZetachainCctxDatabase {
         Ok(token)
     }
 
-    #[instrument(skip_all, level = "warn")]
+    #[instrument(skip_all, level = "debug")]
     pub async fn batch_insert_transactions(
         &self,
         job_id: Uuid,

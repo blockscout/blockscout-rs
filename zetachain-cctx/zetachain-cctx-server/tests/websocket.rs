@@ -204,6 +204,8 @@ async fn emit_imported_cctxs() {
                                     }
 
                                     result = result && count == 3;
+                                    tracing::info!("all cctxs received");
+                                    assert!(result);
                                     break;
                                 }
                             }
@@ -218,7 +220,8 @@ async fn emit_imported_cctxs() {
     })
     .await
     .unwrap_or_else(|_| {
-        tracing::error!("Test timed out");
+        
+        panic!("Test timed out, events not received");
     });
-    assert!(result);
+   
 }
