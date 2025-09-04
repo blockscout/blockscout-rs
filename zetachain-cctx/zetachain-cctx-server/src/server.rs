@@ -72,7 +72,6 @@ pub async fn run(
     let stats = Arc::new(StatsService::new(database.clone()));
     let token_info = Arc::new(TokenInfoService::new(database.clone()));
 
-
     if settings.indexer.enabled {
         let indexer = Indexer::new(
             settings.indexer.clone(),

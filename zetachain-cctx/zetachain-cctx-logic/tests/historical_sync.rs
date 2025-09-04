@@ -22,12 +22,12 @@ use zetachain_cctx_entity::{
     sea_orm_active_enums::{Kind, ProcessingStatus},
     watermark,
 };
-use zetachain_cctx_logic::models::CctxStatusStatus;
 use zetachain_cctx_logic::{
     channel::Channel,
     client::{Client, RpcSettings},
     database::ZetachainCctxDatabase,
     indexer::Indexer,
+    models::CctxStatusStatus,
     settings::IndexerSettings,
 };
 #[tokio::test]

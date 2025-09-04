@@ -999,10 +999,10 @@ impl ZetachainCctxDatabase {
             .try_get_by_index(18)
             .map_err(|e| anyhow::anyhow!("cctx_row last_update_timestamp: {}", e))?;
 
-        let cctx_status: CctxStatusProto =
-            CctxStatusStatus::try_from(cctx_row.try_get_by_index::<CctxStatusStatus>(15)?)
-                .map_err(|e| anyhow::anyhow!("Invalid status: {}", e))?
-                .into();
+        let cctx_status: CctxStatusProto = cctx_row
+            .try_get_by_index::<CctxStatusStatus>(15)
+            .map_err(|e| anyhow::anyhow!("Invalid status: {}", e))?
+            .into();
         // Build CctxStatus
         let status = StatusProto {
             status: cctx_status.into(),
@@ -1644,7 +1644,7 @@ impl ZetachainCctxDatabase {
                 .try_get_by_index::<DBCoinType>(10)
                 .map_err(|e| anyhow::anyhow!("coin_type: {}", e))?
                 .into();
-            let status_reduced: CctxStatusReducedProto = reduce_status(status).into();
+            let status_reduced: CctxStatusReducedProto = reduce_status(status);
             let token_symbol: Option<String> = row
                 .try_get_by_index(12)
                 .map_err(|e| anyhow::anyhow!("token_symbol: {}", e))?;
@@ -1745,8 +1745,9 @@ impl ZetachainCctxDatabase {
         }
 
         // 1. Prepare and insert parent CrossChainTx records.
-        let PreparedParentModels { models, token_map } = self.prepare_parent_models(job_id, cctxs, relation).await?;
-        
+        let PreparedParentModels { models, token_map } =
+            self.prepare_parent_models(job_id, cctxs, relation).await?;
+
         let inserted_cctxs = self.insert_parent_models(models).await?;
 
         // 2. Map fetched cctxs by index for quick access when preparing child records.
@@ -1756,7 +1757,8 @@ impl ZetachainCctxDatabase {
             .collect::<std::collections::HashMap<_, _>>();
 
         // 3. Prepare child entity models and construct the protobuf response.
-        let child_entities = Self::prepare_child_models(&inserted_cctxs, &index_to_cctx, &token_map)?;
+        let child_entities =
+            Self::prepare_child_models(&inserted_cctxs, &index_to_cctx, &token_map)?;
 
         // 4. Persist child entities inside the provided transaction.
         self.insert_cctx_status_models(child_entities.status, tx)
@@ -1789,12 +1791,11 @@ impl ZetachainCctxDatabase {
                         "Failed to calculate token id for cctx {}: {}",
                         cctx.index,
                         e
-                    );  
+                    );
                     continue;
                 }
             };
             token_map.insert(cctx.index.clone(), token.clone());
-
 
             let mut model = CrossChainTxEntity::ActiveModel {
                 id: ActiveValue::NotSet,
@@ -1826,10 +1827,7 @@ impl ZetachainCctxDatabase {
             }
             models.push(model);
         }
-        Ok(PreparedParentModels {
-            models,
-            token_map,
-        })
+        Ok(PreparedParentModels { models, token_map })
     }
 
     async fn insert_parent_models(
@@ -1883,7 +1881,7 @@ impl ZetachainCctxDatabase {
         for cctx in inserted_cctxs {
             if let Some(fetched_cctx) = index_to_cctx.get(cctx.index.as_str()) {
                 // Prepare status model
-                let token = token_map.get(cctx.index.as_str()).map(|t| t.as_ref()).flatten();
+                let token = token_map.get(cctx.index.as_str()).and_then(|t| t.as_ref());
                 let last_update_timestamp = fetched_cctx
                     .cctx_status
                     .last_update_timestamp
@@ -1897,10 +1895,9 @@ impl ZetachainCctxDatabase {
                 child_entities.status.push(cctx_status::ActiveModel {
                     id: ActiveValue::NotSet,
                     cross_chain_tx_id: ActiveValue::Set(cctx.id),
-                    status: ActiveValue::Set(
-                        CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
-                            .map_err(|e| anyhow::anyhow!(e))?,
-                    ),
+                    status: ActiveValue::Set(CctxStatusStatus::from(
+                        fetched_cctx.cctx_status.status.clone(),
+                    )),
                     status_message: ActiveValue::Set(Some(sanitize_string(
                         fetched_cctx.cctx_status.status_message.clone(),
                     ))),

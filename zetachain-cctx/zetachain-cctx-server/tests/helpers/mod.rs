@@ -5,13 +5,15 @@ use rand::Rng;
 use reqwest::Url;
 use sea_orm::DatabaseConnection;
 use serde_json::Value;
-use uuid::Uuid;
 use std::sync::Arc;
+use uuid::Uuid;
 use zetachain_cctx_logic::{
-    channel::Channel, client::Client, models::{
-        CallOptions, CctxStatus, CctxStatusStatus, CoinType, CrossChainTx, InboundParams, OutboundParams,
-        RevertOptions, Token,
-    }
+    channel::Channel,
+    client::Client,
+    models::{
+        CallOptions, CctxStatus, CctxStatusStatus, CoinType, CrossChainTx, InboundParams,
+        OutboundParams, RevertOptions, Token,
+    },
 };
 use zetachain_cctx_server::Settings;
 
@@ -61,7 +63,11 @@ where
     let channel = Arc::new(ChannelCentral::new(Channel));
     let channel_clone = channel.clone();
 
-    test_server::init_server( || zetachain_cctx_server::run(settings, db, client, channel_clone), &base).await;
+    test_server::init_server(
+        || zetachain_cctx_server::run(settings, db, client, channel_clone),
+        &base,
+    )
+    .await;
     base
 }
 #[allow(dead_code)]
@@ -90,7 +96,11 @@ where
     };
     let channel_clone = channel.clone();
 
-    test_server::init_server( || zetachain_cctx_server::run(settings, db, client, channel_clone), &base).await;
+    test_server::init_server(
+        || zetachain_cctx_server::run(settings, db, client, channel_clone),
+        &base,
+    )
+    .await;
     base
 }
 
@@ -124,7 +134,7 @@ pub fn dummy_cross_chain_tx(index: &str, status: CctxStatusStatus) -> CrossChain
         zeta_fees: "0".to_string(),
         relayed_message: "msg".to_string(),
         cctx_status: CctxStatus {
-            status: status.try_into().unwrap(),
+            status,
             status_message: "".to_string(),
             error_message: "".to_string(),
             last_update_timestamp: (Utc::now().timestamp() - rand::rng().random_range(1000..10000))

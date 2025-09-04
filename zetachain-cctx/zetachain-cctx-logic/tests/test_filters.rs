@@ -4,10 +4,9 @@ use crate::helpers::*;
 use blockscout_service_launcher::tracing::init_logs;
 use migration::sea_orm::TransactionTrait;
 use uuid::Uuid;
-use zetachain_cctx_logic::models::CctxStatusStatus;
 use zetachain_cctx_logic::{
     database::ZetachainCctxDatabase,
-    models::{CoinType, Filters, Token},
+    models::{CctxStatusStatus, CoinType, Filters, Token},
 };
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::Direction;
 

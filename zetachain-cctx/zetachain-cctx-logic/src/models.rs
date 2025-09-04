@@ -25,10 +25,9 @@ pub enum CoinType {
     Cmd,
     NoAssetCall,
 }
-
-impl Into<CoinTypeProto> for CoinType {
-    fn into(self) -> CoinTypeProto {
-        match self {
+impl From<CoinType> for CoinTypeProto {
+    fn from(value: CoinType) -> Self {
+        match value {
             CoinType::Zeta => CoinTypeProto::Zeta,
             CoinType::Gas => CoinTypeProto::Gas,
             CoinType::ERC20 => CoinTypeProto::Erc20,
@@ -45,7 +44,7 @@ impl TryFrom<String> for CoinType {
         let coin_type = match value.as_str() {
             "Zeta" => CoinType::Zeta,
             "Gas" => CoinType::Gas,
-            "Erc20" => CoinType::ERC20,
+            "Erc20" | "ERC20" => CoinType::ERC20,
             "Cmd" => CoinType::Cmd,
             "NoAssetCall" => CoinType::NoAssetCall,
             _ => return Err(anyhow::anyhow!("Invalid coin type: {}", value)),
@@ -102,10 +101,7 @@ pub struct Pagination {
     pub total: String,
 }
 
-
-use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
-    CctxStatus as CctxStatusProto
-};
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxStatus as CctxStatusProto;
 
 use zetachain_cctx_entity::sea_orm_active_enums::CctxStatusStatus as DbCctxStatusStatus;
 
@@ -133,9 +129,9 @@ impl TryFrom<String> for CctxStatusStatus {
     }
 }
 
-impl Into<CctxStatusProto> for CctxStatusStatus {
-    fn into(self) -> CctxStatusProto {
-        match self {
+impl From<CctxStatusStatus> for CctxStatusProto {
+    fn from(value: CctxStatusStatus) -> Self {
+        match value {
             CctxStatusStatus::PendingInbound => CctxStatusProto::PendingInbound,
             CctxStatusStatus::PendingOutbound => CctxStatusProto::PendingOutbound,
             CctxStatusStatus::PendingRevert => CctxStatusProto::PendingRevert,
@@ -146,18 +142,17 @@ impl Into<CctxStatusProto> for CctxStatusStatus {
     }
 }
 
-
-impl Into<DbCctxStatusStatus> for CctxStatusStatus {
-    fn into(self) -> DbCctxStatusStatus {
-        match self {
+impl From<CctxStatusStatus> for DbCctxStatusStatus {
+    fn from(value: CctxStatusStatus) -> Self {
+        match value {
             CctxStatusStatus::PendingInbound => DbCctxStatusStatus::PendingInbound,
             CctxStatusStatus::PendingOutbound => DbCctxStatusStatus::PendingOutbound,
             CctxStatusStatus::PendingRevert => DbCctxStatusStatus::PendingRevert,
             CctxStatusStatus::Aborted => DbCctxStatusStatus::Aborted,
             CctxStatusStatus::Reverted => DbCctxStatusStatus::Reverted,
             CctxStatusStatus::OutboundMined => DbCctxStatusStatus::OutboundMined,
+        }
     }
-}
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CctxStatus {

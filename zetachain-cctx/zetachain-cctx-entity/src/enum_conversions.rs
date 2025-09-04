@@ -8,8 +8,8 @@ use crate::sea_orm_active_enums::{
 use crate::token::Model as Token;
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
     CctxStatus as CctxStatusProto, CoinType as CoinTypeProto,
-    ConfirmationMode as ConfirmationModeProto, Token as TokenProto,
-    TxFinalizationStatus as TxFinalizationStatusProto, InboundStatus as InboundStatusProto,
+    ConfirmationMode as ConfirmationModeProto, InboundStatus as InboundStatusProto,
+    Token as TokenProto, TxFinalizationStatus as TxFinalizationStatusProto,
 };
 
 impl TryFrom<String> for TxFinalizationStatus {
@@ -203,8 +203,6 @@ impl From<TxFinalizationStatus> for TxFinalizationStatusProto {
     }
 }
 
-
-
 impl From<InboundStatus> for InboundStatusProto {
     fn from(status: InboundStatus) -> Self {
         match status {
@@ -224,7 +222,6 @@ impl From<ConfirmationMode> for ConfirmationModeProto {
         }
     }
 }
-
 
 impl From<Token> for TokenProto {
     fn from(token: Token) -> Self {

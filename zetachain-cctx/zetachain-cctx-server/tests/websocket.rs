@@ -180,48 +180,46 @@ async fn emit_imported_cctxs() {
 
         tracing::info!("sending join message: {}", join_message);
         write.send(Message::Text(join_message)).await.unwrap();
-        
+
         loop {
             if let Some(message) = read.next().await {
-                match message.unwrap() {
-                    Message::Text(text) => {
-                        tracing::info!("received message: {}", text);
-                        if let Ok(ReplyOk {
-                            join_ref: _,
-                            ref_number: _,
-                            topic,
-                            event,
-                            payload,
-                        }) = serde_json::from_str::<ReplyOk>(&text)
-                        {
-                            if topic == "cctxs:new_cctxs" && event == "new_cctxs" {
-                                if let Ok(cctxs) =
-                                    serde_json::from_value::<Vec<CctxListItem>>(payload.clone())
-                                {
-                                    let count = cctxs.len();
-                                    for cctx in cctxs {
-                                        result = result && cctx.decimals.is_some() && cctx.token_symbol.is_some() && cctx.zrc20_contract_address.is_some();
-                                    }
-
-                                    result = result && count == 3;
-                                    tracing::info!("all cctxs received");
-                                    assert!(result);
-                                    break;
+                if let Message::Text(text) = message.unwrap() {
+                    tracing::info!("received message: {}", text);
+                    if let Ok(ReplyOk {
+                        join_ref: _,
+                        ref_number: _,
+                        topic,
+                        event,
+                        payload,
+                    }) = serde_json::from_str::<ReplyOk>(&text)
+                    {
+                        if topic == "cctxs:new_cctxs" && event == "new_cctxs" {
+                            if let Ok(cctxs) =
+                                serde_json::from_value::<Vec<CctxListItem>>(payload.clone())
+                            {
+                                let count = cctxs.len();
+                                for cctx in cctxs {
+                                    result = result
+                                        && cctx.decimals.is_some()
+                                        && cctx.token_symbol.is_some()
+                                        && cctx.zrc20_contract_address.is_some();
                                 }
+
+                                result = result && count == 3;
+                                tracing::info!("all cctxs received");
+                                assert!(result);
+                                break;
                             }
-                        } else {
-                            tracing::error!("failed to parse Phoenix Channel message: {}", text);
                         }
+                    } else {
+                        tracing::error!("failed to parse Phoenix Channel message: {}", text);
                     }
-                    _ => {}
                 }
             }
         }
     })
     .await
     .unwrap_or_else(|_| {
-        
         panic!("Test timed out, events not received");
     });
-   
 }

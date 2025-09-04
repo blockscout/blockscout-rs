@@ -16,7 +16,12 @@ use zetachain_cctx_entity::{
 mod helpers;
 
 use zetachain_cctx_logic::{
-    channel::Channel, client::{Client, RpcSettings}, database::ZetachainCctxDatabase, indexer::Indexer, models::CctxStatusStatus, settings::IndexerSettings
+    channel::Channel,
+    client::{Client, RpcSettings},
+    database::ZetachainCctxDatabase,
+    indexer::Indexer,
+    models::CctxStatusStatus,
+    settings::IndexerSettings,
 };
 
 #[tokio::test]
