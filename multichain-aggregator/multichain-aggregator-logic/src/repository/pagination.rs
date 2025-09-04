@@ -70,26 +70,32 @@ impl Cursor {
     }
 
     pub fn maybe_composite_row_comparison(&self) -> Option<SimpleExpr> {
-        let all_non_nullable = self.specs.iter().all(|s| !s.nullable);
-
-        let first_dir = self.specs[0].direction.clone();
-        let all_same_direction = self.specs.iter().all(|s| s.direction == first_dir);
-
-        if self.specs.len() > 1 && all_non_nullable && all_same_direction {
-            let vals = self.page_token.as_ref()?.clone().into_iter();
-
-            let columns = SimpleExpr::Tuple(self.specs.iter().map(|s| s.expr.clone()).collect());
-            let values = SimpleExpr::Tuple(vals.map(SimpleExpr::Value).collect());
-
-            let cmp_expr = match first_dir {
-                Ordering::Asc => columns.gt(values),
-                Ordering::Desc => columns.lt(values),
-            };
-
-            Some(cmp_expr)
-        } else {
-            None
+        // At least two columns are required
+        if self.specs.len() < 2 {
+            return None;
         }
+
+        let first_dir = self.specs.first()?.direction.clone();
+        // All columns must be non-nullable and share the same direction
+        if !self
+            .specs
+            .iter()
+            .all(|s| !s.nullable && s.direction == first_dir)
+        {
+            return None;
+        }
+
+        let vals = self.page_token.as_ref()?.clone().into_iter();
+
+        let columns = SimpleExpr::Tuple(self.specs.iter().map(|s| s.expr.clone()).collect());
+        let values = SimpleExpr::Tuple(vals.map(SimpleExpr::Value).collect());
+
+        let cmp_expr = match first_dir {
+            Ordering::Asc => columns.gt(values),
+            Ordering::Desc => columns.lt(values),
+        };
+
+        Some(cmp_expr)
     }
 }
 
