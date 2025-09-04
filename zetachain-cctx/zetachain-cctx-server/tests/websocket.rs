@@ -1,5 +1,5 @@
 mod helpers;
-use actix_phoenix_channel::ChannelCentral;
+use actix_phoenix_channel::{ChannelCentral, ChannelEvent};
 use blockscout_service_launcher::tracing::{init_logs, JaegerSettings, TracingSettings};
 use futures::StreamExt;
 
@@ -19,9 +19,9 @@ use zetachain_cctx_logic::{
 };
 
 use crate::helpers::{dummy_cross_chain_tx, dummy_token};
+use futures::SinkExt;
 use tokio::time::timeout;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use futures::SinkExt;
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem;
 #[tokio::test]
 #[ignore = "Needs database to run"]
@@ -143,27 +143,32 @@ async fn emit_imported_cctxs() {
 
     // Wait for server to start and get the base URL
     let base_url = server_handle.await.unwrap();
-    
+
     timeout(Duration::from_secs(5), async move {
         tracing::info!("waiting for cctxs");
-        
+
         // Connect to the websocket server
-        let ws_url = format!("ws://{}:{}/socket/websocket?vsn=2.0.0", base_url.host_str().unwrap(), base_url.port().unwrap());
+        let ws_url = format!(
+            "ws://{}:{}/socket/websocket?vsn=2.0.0",
+            base_url.host_str().unwrap(),
+            base_url.port().unwrap()
+        );
         tracing::info!("connecting to websocket: {}", ws_url);
-        
+
         let (ws_stream, _) = connect_async(&ws_url).await.unwrap();
         let (mut write, mut read) = ws_stream.split();
-        
+
         // Join the channel to receive events
         // Phoenix Channel protocol uses tuple format: (join_ref, ref, topic, event, payload)
         let join_message = serde_json::to_string(&(
-            None::<String>, // join_ref
+            Some("1".to_string()),        // join_ref
             Some("1".to_string()), // ref
-            "cctxs:new_cctxs", // topic
-            "phx_join", // event
-            serde_json::json!({}) // payload
-        )).unwrap();
-        
+            "cctxs:new_cctxs",     // topic
+            "phx_join",            // event
+            "{}", // payload
+        ))
+        .unwrap();
+
         tracing::info!("sending join message: {}", join_message);
         write.send(Message::Text(join_message)).await.unwrap();
         // Wait for the indexer to emit events when it finds new CCTXs
@@ -173,12 +178,15 @@ async fn emit_imported_cctxs() {
                 match message.unwrap() {
                     Message::Text(text) => {
                         tracing::info!("received message: {}", text);
-                        
-                        // Try to parse as CCTXs list
-                        if let Ok(cctxs) = serde_json::from_str::<Vec<CctxListItem>>(&text) {
-                            tracing::info!("received cctxs: {:?}", cctxs);
-                            if cctxs.len() == 3 {
-                                return;
+                        let channel_event = serde_json::from_str::<ChannelEvent>(&text).unwrap();
+
+                        if channel_event.topic() == "cctxs:new_cctxs"
+                            && channel_event.event() == "new_cctxs"
+                        {
+                            if let Ok(cctxs) = serde_json::from_str::<Vec<CctxListItem>>(&text) {
+                                tracing::info!("parsed cctxs: {:?}", cctxs);
+                            } else {
+                                tracing::error!("failed to parse cctxs: {:?}", text);
                             }
                         }
                     }
