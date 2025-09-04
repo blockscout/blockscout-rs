@@ -1,5 +1,6 @@
 mod helpers;
 use actix_phoenix_channel::ChannelCentral;
+use blockscout_service_launcher::tracing::{init_logs, JaegerSettings, TracingSettings};
 use futures::StreamExt;
 
 use serde_json::json;
@@ -23,6 +24,14 @@ use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::CctxListItem;
 #[tokio::test]
 #[ignore = "Needs database to run"]
 async fn emit_imported_cctxs() {
+    if std::env::var("TEST_TRACING").unwrap_or_default() == "true" {
+        init_logs(
+            "emit_imported_cctxs",
+            &TracingSettings::default(),
+            &JaegerSettings::default(),
+        )
+        .unwrap();
+    }
     let db = crate::helpers::init_db("test", "websocket").await;
     let database = Arc::new(ZetachainCctxDatabase::new(db.client().clone(), 7001));
     let zeta_token = dummy_token("Test Token", "TEST", None, "1", CoinType::Zeta);
@@ -110,10 +119,12 @@ async fn emit_imported_cctxs() {
         let _ = crate::helpers::init_zetachain_cctx_server_with_channel(
             db.db_url(),
             |mut settings| {
+                settings.tracing.enabled = true;
                 settings.websocket.enabled = true; // Enable websocket
                 settings.indexer.enabled = false; // Disable indexer for this test
                 settings.indexer.zetachain_id = 7001;
                 settings.indexer.token_sync_enabled = false;
+                settings.indexer.polling_interval = 100;
                 settings
             },
             db.client(),
