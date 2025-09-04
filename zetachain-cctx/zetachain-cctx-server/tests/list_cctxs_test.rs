@@ -10,7 +10,7 @@ use uuid::Uuid;
 use zetachain_cctx_logic::{
     client::{Client, RpcSettings},
     database::ZetachainCctxDatabase,
-    models::{CoinType, CrossChainTx, Filters},
+    models::{CctxStatusStatus, CoinType, CrossChainTx, Filters},
 };
 use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
     CctxListItem, Direction, ListCctxsResponse,
@@ -627,8 +627,8 @@ async fn test_list_cctxs_with_filters() {
     }
 
     // Test the ListCctxs endpoint with filters
-    let status_1 = "PendingInbound";
-    let status_2 = "OutboundMined";
+    let status_1 = CctxStatusStatus::PendingInbound;
+    let status_2 = CctxStatusStatus::OutboundMined;
     let sender_address = "0x73B37B8BAbAC0e846bB2C4c581e60bFF2BFBE76e";
     let receiver_address = "0xa4dc1ebdcca3351f8d356910e7f17594c17f1747";
     let asset = "0x0000000000000000000000000000000000000000";
@@ -679,7 +679,7 @@ async fn test_list_cctxs_with_filters() {
 
     cctx_1.outbound_params[0].receiver = receiver_address.to_string();
     cctx_1.outbound_params[0].receiver_chain_id = target_chain_id_1.to_string();
-    cctx_1.cctx_status.status = status_1.to_string();
+    cctx_1.cctx_status.status = status_1.try_into().unwrap();
     cctx_1.cctx_status.created_timestamp = start_timestamp.to_string();
     cctx_1.cctx_status.last_update_timestamp = end_timestamp.to_string();
 

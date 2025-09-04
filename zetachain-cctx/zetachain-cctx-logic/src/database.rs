@@ -860,9 +860,8 @@ impl ZetachainCctxDatabase {
         cctx: &CctxShort,
         fetched_cctx: CrossChainTx,
     ) -> anyhow::Result<CctxListItemProto> {
-        let new_status = CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status).unwrap();
-        let new_status_db = CctxStatusStatus::try_from(fetched_cctx.cctx_status.status.clone())
-            .map_err(|e| anyhow::anyhow!(e))?;
+        let new_status: CctxStatusProto = fetched_cctx.cctx_status.status.clone().into();
+        let new_status_db: CctxStatusStatus = fetched_cctx.cctx_status.status.into();
         let new_last_update_timestamp = chrono::DateTime::from_timestamp(
             fetched_cctx
                 .cctx_status
@@ -1673,7 +1672,7 @@ impl ZetachainCctxDatabase {
             items,
             next_page_params: Some(Pagination {
                 page_key: next_page_key,
-                limit: next_page_items_len as u32,
+                limit: next_page_items_len as i64,
                 direction: direction.into(),
             }),
         })
@@ -2047,8 +2046,8 @@ impl ZetachainCctxDatabase {
                         ),
                     });
 
-                let status =
-                    CctxStatusProto::from_str_name(&fetched_cctx.cctx_status.status).unwrap();
+                let status: CctxStatusProto =
+                    fetched_cctx.cctx_status.clone().status.into();
                 // Prepare proto list item
                 child_entities.cctx_list_items.push(CctxListItemProto {
                     index: cctx.index.clone(),

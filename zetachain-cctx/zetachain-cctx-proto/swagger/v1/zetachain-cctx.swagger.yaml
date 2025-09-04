@@ -59,9 +59,9 @@ paths:
           required: false
           type: string
           enum:
-            - Asc
-            - Desc
-          default: Asc
+            - ASC
+            - DESC
+          default: ASC
         - name: status_reduced
           description: |-
             Comma-separated values for multiple filters
@@ -269,41 +269,41 @@ definitions:
   v1CctxStatus:
     type: string
     enum:
-      - PendingInbound
-      - PendingOutbound
-      - OutboundMined
-      - PendingRevert
-      - Reverted
-      - Aborted
-    default: PendingInbound
+      - PENDING_INBOUND
+      - PENDING_OUTBOUND
+      - OUTBOUND_MINED
+      - PENDING_REVERT
+      - REVERTED
+      - ABORTED
+    default: PENDING_INBOUND
     description: |2-
-       - PendingInbound: some observer sees inbound tx
-       - PendingOutbound: super majority observer see inbound tx
-       - OutboundMined: the corresponding outbound tx is mined
-       - PendingRevert: outbound cannot succeed; should revert inbound
-       - Reverted: inbound reverted.
-       - Aborted: inbound tx error or invalid paramters and cannot revert; just abort.
+       - PENDING_INBOUND: some observer sees inbound tx
+       - PENDING_OUTBOUND: super majority observer see inbound tx
+       - OUTBOUND_MINED: the corresponding outbound tx is mined
+       - PENDING_REVERT: outbound cannot succeed; should revert inbound
+       - REVERTED: inbound reverted.
+       - ABORTED: inbound tx error or invalid paramters and cannot revert; just abort.
   v1CctxStatusReduced:
     type: string
     enum:
-      - Pending
-      - Success
-      - Failed
-    default: Pending
+      - PENDING
+      - SUCCESS
+      - FAILED
+    default: PENDING
   v1CoinType:
     type: string
     enum:
-      - Zeta
-      - Gas
-      - Erc20
-      - Cmd
-      - NoAssetCall
-    default: Zeta
+      - ZETA
+      - GAS
+      - ERC20
+      - CMD
+      - NO_ASSET_CALL
+    default: ZETA
     title: |-
-      - Gas: Ether, BNB, Matic, Klay, BTC, etc
-       - Erc20: ERC20 token
-       - Cmd: no asset, used for admin command
-       - NoAssetCall: no asset, used for contract call
+      - GAS: Ether, BNB, Matic, Klay, BTC, etc
+       - ERC20: ERC20 token
+       - CMD: no asset, used for admin command
+       - NO_ASSET_CALL: no asset, used for contract call
   v1ConfirmationMode:
     type: string
     enum:
@@ -359,9 +359,9 @@ definitions:
   v1Direction:
     type: string
     enum:
-      - Asc
-      - Desc
-    default: Asc
+      - ASC
+      - DESC
+    default: ASC
   v1GetSyncProgressResponse:
     type: object
     properties:
@@ -433,11 +433,11 @@ definitions:
   v1InboundStatus:
     type: string
     enum:
-      - SUCCESS
+      - INBOUND_SUCCESS
       - INSUFFICIENT_DEPOSITOR_FEE
       - INVALID_RECEIVER_ADDRESS
       - INVALID_MEMO
-    default: SUCCESS
+    default: INBOUND_SUCCESS
     description: |-
       - INSUFFICIENT_DEPOSITOR_FEE: this field is specifically for Bitcoin when the deposit amount is less than
       depositor fee
@@ -511,7 +511,7 @@ definitions:
         type: string
         format: int64
       limit:
-        type: integer
+        type: string
         format: int64
       direction:
         $ref: '#/definitions/v1Direction'
@@ -623,14 +623,14 @@ definitions:
   v1TxFinalizationStatus:
     type: string
     enum:
-      - NotFinalized
-      - Finalized
-      - Executed
-    default: NotFinalized
+      - NOT_FINALIZED
+      - FINALIZED
+      - EXECUTED
+    default: NOT_FINALIZED
     title: |-
-      - NotFinalized: the corresponding tx is not finalized
-       - Finalized: the corresponding tx is finalized but not executed yet
-       - Executed: the corresponding tx is executed
+      - NOT_FINALIZED: the corresponding tx is not finalized
+       - FINALIZED: the corresponding tx is finalized but not executed yet
+       - EXECUTED: the corresponding tx is executed
   zetachainCctxv1Status:
     type: object
     properties:

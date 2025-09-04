@@ -88,7 +88,7 @@ async fn test_status_update() {
             format!("/zeta-chain/crosschain/cctx/{pending_tx_index}").as_str(),
         ))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "CrossChainTx": dummy_cross_chain_tx(pending_tx_index, "PendingOutbound")
+            "CrossChainTx": dummy_cross_chain_tx(pending_tx_index, CctxStatusStatus::PendingOutbound)
         })))
         .up_to_n_times(1)
         .mount(&mock_server)

@@ -90,9 +90,66 @@ pub struct Pagination {
     pub total: String,
 }
 
+
+use zetachain_cctx_proto::blockscout::zetachain_cctx::v1::{
+    CctxStatus as CctxStatusProto
+};
+
+use zetachain_cctx_entity::sea_orm_active_enums::CctxStatusStatus as DbCctxStatusStatus;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum CctxStatusStatus {
+    PendingInbound,
+    PendingOutbound,
+    PendingRevert,
+    Aborted,
+    Reverted,
+    OutboundMined,
+}
+impl TryFrom<String> for CctxStatusStatus {
+    type Error = String;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "PendingInbound" => Ok(CctxStatusStatus::PendingInbound),
+            "PendingOutbound" => Ok(CctxStatusStatus::PendingOutbound),
+            "PendingRevert" => Ok(CctxStatusStatus::PendingRevert),
+            "Aborted" => Ok(CctxStatusStatus::Aborted),
+            "Reverted" => Ok(CctxStatusStatus::Reverted),
+            "OutboundMined" => Ok(CctxStatusStatus::OutboundMined),
+            _ => Err(format!("Invalid CctxStatusStatus: {value}")),
+        }
+    }
+}
+
+impl Into<CctxStatusProto> for CctxStatusStatus {
+    fn into(self) -> CctxStatusProto {
+        match self {
+            CctxStatusStatus::PendingInbound => CctxStatusProto::PendingInbound,
+            CctxStatusStatus::PendingOutbound => CctxStatusProto::PendingOutbound,
+            CctxStatusStatus::PendingRevert => CctxStatusProto::PendingRevert,
+            CctxStatusStatus::Aborted => CctxStatusProto::Aborted,
+            CctxStatusStatus::Reverted => CctxStatusProto::Reverted,
+            CctxStatusStatus::OutboundMined => CctxStatusProto::OutboundMined,
+        }
+    }
+}
+
+
+impl Into<DbCctxStatusStatus> for CctxStatusStatus {
+    fn into(self) -> DbCctxStatusStatus {
+        match self {
+            CctxStatusStatus::PendingInbound => DbCctxStatusStatus::PendingInbound,
+            CctxStatusStatus::PendingOutbound => DbCctxStatusStatus::PendingOutbound,
+            CctxStatusStatus::PendingRevert => DbCctxStatusStatus::PendingRevert,
+            CctxStatusStatus::Aborted => DbCctxStatusStatus::Aborted,
+            CctxStatusStatus::Reverted => DbCctxStatusStatus::Reverted,
+            CctxStatusStatus::OutboundMined => DbCctxStatusStatus::OutboundMined,
+    }
+}
+}
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CctxStatus {
-    pub status: String,
+    pub status: CctxStatusStatus,
     pub status_message: String,
     pub error_message: String,
     #[serde(rename = "lastUpdate_timestamp")]

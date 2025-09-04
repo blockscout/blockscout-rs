@@ -50,48 +50,47 @@ message ListCctxsResponse {
 
 message Pagination {
   int64 page_key = 1;
-  uint32 limit = 2;
+  int64 limit = 2;
   Direction direction = 3;
 }
 
 enum Direction {
-  Asc = 0;
-  Desc = 1;
+  ASC = 0;
+  DESC = 1;
 }
 
 
 
 enum CoinType {
-  Zeta = 0;
-  Gas = 1;         // Ether, BNB, Matic, Klay, BTC, etc
-  Erc20 = 2;       // ERC20 token
-  Cmd = 3;         // no asset, used for admin command
-  NoAssetCall = 4; // no asset, used for contract call
+  ZETA = 0;
+  GAS = 1;         // Ether, BNB, Matic, Klay, BTC, etc
+  ERC20 = 2;       // ERC20 token
+  CMD = 3;         // no asset, used for admin command
+  NO_ASSET_CALL = 4; // no asset, used for contract call
 }
 
 
 
 enum CctxStatus {
-  PendingInbound = 0;  // some observer sees inbound tx
-  PendingOutbound = 1; // super majority observer see inbound tx
-  OutboundMined = 3;   // the corresponding outbound tx is mined
-  PendingRevert = 4;   // outbound cannot succeed; should revert inbound
-  Reverted = 5;        // inbound reverted.
-  Aborted =
-      6; // inbound tx error or invalid paramters and cannot revert; just abort.
+  PENDING_INBOUND = 0;  // some observer sees inbound tx
+  PENDING_OUTBOUND = 1; // super majority observer see inbound tx
+  OUTBOUND_MINED = 3;   // the corresponding outbound tx is mined
+  PENDING_REVERT = 4;   // outbound cannot succeed; should revert inbound
+  REVERTED = 5;        // inbound reverted.
+  ABORTED = 6; // inbound tx error or invalid paramters and cannot revert; just abort.
          // But the amount can be refunded to zetachain using and admin proposal
 }
 
 enum CctxStatusReduced {
-  Pending = 0;
-  Success = 1;
-  Failed = 2;
+  PENDING = 0;
+  SUCCESS = 1;
+  FAILED = 2;
 }
 
 enum TxFinalizationStatus {
-  NotFinalized = 0; // the corresponding tx is not finalized
-  Finalized = 1;    // the corresponding tx is finalized but not executed yet
-  Executed = 2;     // the corresponding tx is executed
+  NOT_FINALIZED = 0; // the corresponding tx is not finalized
+  FINALIZED = 1;    // the corresponding tx is finalized but not executed yet
+  EXECUTED = 2;     // the corresponding tx is executed
 }
 
 enum ConfirmationMode {
@@ -101,7 +100,7 @@ enum ConfirmationMode {
 
 // InboundStatus represents the status of an observed inbound
 enum InboundStatus {
-  SUCCESS = 0;
+  INBOUND_SUCCESS = 0;
   // this field is specifically for Bitcoin when the deposit amount is less than
   // depositor fee
   INSUFFICIENT_DEPOSITOR_FEE = 1;
