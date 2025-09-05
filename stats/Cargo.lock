@@ -874,7 +874,6 @@ dependencies = [
 [[package]]
 name = "blockscout-metrics-tools"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs?rev=980634e#980634e7adb53eb1de2c27edf13016631957cb89"
 
 [[package]]
 name = "blockscout-service-launcher"

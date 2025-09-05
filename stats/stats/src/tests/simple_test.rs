@@ -348,7 +348,7 @@ pub async fn simple_test_counter<C>(
         false,
         false,
     )
-    .await
+    .await;
 }
 
 /// `test_name` must be unique to avoid db clashes
@@ -367,7 +367,7 @@ pub async fn simple_test_counter_multichain<C>(
         true,
         false,
     )
-    .await
+    .await;
 }
 
 /// `test_name` must be unique to avoid db clashes
@@ -375,10 +375,11 @@ pub async fn simple_test_counter_with_zetachain_cctx<C>(
     test_name: &str,
     expected: &str,
     update_time: Option<NaiveDateTime>,
-) where
+) -> (TestDbGuard, TestDbGuard, TestDbGuard)
+where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
 {
-    simple_test_counter_inner::<C>(
+    let (db, blockscout, zetachain_cctx) = simple_test_counter_inner::<C>(
         test_name,
         expected,
         update_time,
@@ -386,7 +387,12 @@ pub async fn simple_test_counter_with_zetachain_cctx<C>(
         false,
         true,
     )
-    .await
+    .await;
+    (
+        db,
+        blockscout,
+        zetachain_cctx.expect("zetachain cctx db should be initialized"),
+    )
 }
 
 /// tests all statement kinds for different migrations combinations.
@@ -406,7 +412,7 @@ pub async fn simple_test_counter_with_migration_variants<C>(
     for (i, migrations) in MIGRATIONS_VARIANTS.into_iter().enumerate() {
         let test_name = format!("{test_name_base}_{i}");
         simple_test_counter_inner::<C>(&test_name, expected, update_time, migrations, false, false)
-            .await
+            .await;
     }
 }
 
@@ -417,7 +423,8 @@ async fn simple_test_counter_inner<C>(
     migrations: IndexerMigrations,
     multichain_mode: bool,
     connect_zetachain_cctx: bool,
-) where
+) -> (TestDbGuard, TestDbGuard, Option<TestDbGuard>)
+where
     C: DataSource + ChartProperties + QuerySerialized<Output = DateValue<String>>,
 {
     let max_time = DateTime::<Utc>::from_str("2023-03-01T12:00:00Z").unwrap();
@@ -447,6 +454,7 @@ async fn simple_test_counter_inner<C>(
     let cx = UpdateContext::from_params_now_or_override(parameters.clone());
     C::update_recursively(&cx).await.unwrap();
     assert_eq!(expected, get_counter::<C>(&cx).await.value);
+    (db, indexer, zetachain_cctx)
 }
 
 /// Test that the counter returns non-zero fallback value when both

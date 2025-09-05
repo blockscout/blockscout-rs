@@ -56,16 +56,24 @@ impl ChartProperties for Properties {
     }
 }
 
-pub type PendingZetachainCrossChainTxns =
-    DirectPointLocalDbChartSource<MapToString<PendingZetachainCrossChainTxnsRemote>, Properties>;
+gettable_const!(Timeout5Secs: Duration = Duration::seconds(5));
+
+pub type PendingZetachainCrossChainTxns = DirectPointCachedLocalDbChartSource<
+    MapToString<PendingZetachainCrossChainTxnsRemote>,
+    Timeout5Secs,
+    Properties,
+>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{
-        point_construction::dt, simple_test::simple_test_counter_with_zetachain_cctx,
+    use crate::{
+        data_source::{DataSource, UpdateParameters},
+        tests::{
+            point_construction::dt,
+            simple_test::{get_counter, simple_test_counter_with_zetachain_cctx},
+        },
     };
-
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_pending_zetachain_cross_chain_txns() {
@@ -75,5 +83,51 @@ mod tests {
             Some(dt("2022-11-11T11:30:00")),
         )
         .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn pending_zetachain_cross_chain_txns_cache_works() {
+        // Test cache behavior
+        let (db, blockscout, zetachain_cctx) =
+            simple_test_counter_with_zetachain_cctx::<PendingZetachainCrossChainTxns>(
+                "pending_zetachain_cross_chain_txns_cache_works",
+                "1",
+                Some(dt("2022-11-11T11:30:00")),
+            )
+            .await;
+
+        // Add another pending transaction
+        crate::tests::mock_zetachain_cctx::insert_cross_chain_txns_with_status(
+            &zetachain_cctx,
+            [(3, dt("2022-11-11T11:30:01"))],
+        )
+        .await;
+
+        let mut parameters = UpdateParameters {
+            stats_db: &db,
+            is_multichain_mode: false,
+            indexer_db: &blockscout,
+            indexer_applied_migrations: IndexerMigrations::latest(),
+            second_indexer_db: Some(&zetachain_cctx),
+            enabled_update_charts_recursive:
+                PendingZetachainCrossChainTxns::all_dependencies_chart_keys(),
+            update_time_override: Some(dt("2022-11-11T11:30:00").and_utc()),
+            force_full: false,
+        };
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+        // Query immediately - should return cached value (1)
+        let cached_result = get_counter::<PendingZetachainCrossChainTxns>(&cx).await;
+        assert_eq!(cached_result.value, "1");
+
+        // Wait for cache timeout (5 seconds)
+        parameters.update_time_override = parameters
+            .update_time_override
+            .map(|t| t + Duration::seconds(1) + Timeout5Secs::get());
+        let cx = UpdateContext::from_params_now_or_override(parameters.clone());
+
+        // Query again - should return updated value (2)
+        let updated_result = get_counter::<PendingZetachainCrossChainTxns>(&cx).await;
+        assert_eq!(updated_result.value, "2");
     }
 }

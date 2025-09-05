@@ -6,7 +6,8 @@ edition = "2024"
 [dependencies]
 entity = { path = "./entity" }
 blockscout-db = { git = "https://github.com/blockscout/blockscout-rs", rev = "26eed65" }
-blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "980634e" }
+# blockscout-metrics-tools = { git = "https://github.com/blockscout/blockscout-rs", rev = "980634e" }
+blockscout-metrics-tools = { path = "../../libs/metrics-tools" }
 multichain-aggregator-entity = { workspace = true }
 multichain-aggregator-migration = { workspace = true }
 zetachain-cctx-entity = { workspace = true }

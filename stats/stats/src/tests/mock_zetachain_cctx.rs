@@ -62,6 +62,24 @@ pub async fn fill_mock_zetachain_cctx_data(
     }
 }
 
+pub async fn insert_cross_chain_txns_with_status(
+    zetachain_cctx: &DatabaseConnection,
+    generator: impl IntoIterator<Item = (usize, NaiveDateTime)>,
+) {
+    let (cctxs, statuses): (Vec<_>, Vec<_>) = generator
+        .into_iter()
+        .map(|(i, ts)| mock_cross_chain_tx_with_status(i, ts))
+        .unzip();
+    cross_chain_tx::Entity::insert_many(cctxs.clone())
+        .exec(zetachain_cctx)
+        .await
+        .unwrap();
+    cctx_status::Entity::insert_many(statuses.clone())
+        .exec(zetachain_cctx)
+        .await
+        .unwrap();
+}
+
 fn mock_cctxs(max_date: NaiveDate) -> Vec<(cross_chain_tx::ActiveModel, cctx_status::ActiveModel)> {
     vec![
         "2022-11-09T23:59:59",
