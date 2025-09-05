@@ -38,7 +38,9 @@ use crate::{
             write::set_last_updated_at,
         },
     },
-    data_source::{DataSource, UpdateContext},
+    data_source::{
+        DataSource, UpdateContext, kinds::local_db::cached::RemoteCachedLocalDbChartSource,
+    },
     metrics,
     range::UniversalRange,
     utils::day_start,
@@ -46,6 +48,7 @@ use crate::{
 
 use super::auxiliary::PartialCumulative;
 
+pub mod cached;
 pub mod parameter_traits;
 pub mod parameters;
 
@@ -130,6 +133,17 @@ pub type DirectPointLocalDbChartSourceWithEstimate<Dependency, Estimate, C> = Lo
     QueryLastWithEstimationFallback<Estimate, C>,
     C,
 >;
+
+pub type DirectPointCachedLocalDbChartSource<Dependency, CacheTimeout, C> =
+    RemoteCachedLocalDbChartSource<
+        Dependency,
+        (),
+        DefaultCreate<C>,
+        PassPoint<Dependency>,
+        DefaultQueryLast<C>,
+        CacheTimeout,
+        C,
+    >;
 
 impl<MainDep, ResolutionDep, Create, Update, Query, ChartProps>
     LocalDbChartSource<MainDep, ResolutionDep, Create, Update, Query, ChartProps>

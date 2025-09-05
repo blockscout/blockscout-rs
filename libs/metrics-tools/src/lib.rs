@@ -60,9 +60,13 @@ impl Interval<'_> {
     pub fn discard(mut self) {
         self.discarded = true;
     }
+
+    pub fn finish(self) {
+        drop(self);
+    }
 }
 
-impl Drop for Interval<'_> {
+impl<'a> Drop for Interval<'a> {
     fn drop(&mut self) {
         if !self.discarded {
             self.recorder.add_time(self.elapsed_from_start())
