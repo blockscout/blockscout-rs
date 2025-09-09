@@ -24,7 +24,11 @@ pub fn event_from_logic(
     e: DomainEvent,
     chain_id: i64,
 ) -> Result<proto::DomainEvent, ConversionError> {
-    let from_address = Some(address_from_logic(&e.from_address, chain_id, e.from_address_ens_domain_name));
+    let from_address = Some(address_from_logic(
+        &e.from_address,
+        chain_id,
+        e.from_address_ens_domain_name
+    ));
     Ok(proto::DomainEvent {
         transaction_hash: hex(e.transaction_hash),
         timestamp: e.timestamp,

@@ -1,7 +1,4 @@
-use super::{
-    address_from_str_logic, and_not_zero_address, checksummed, maybe_protocol_filter_from_inner,
-    protocol_from_logic, resolver_from_logic, ConversionError,
-};
+use super::{address_from_logic, address_from_str_logic, and_not_zero_address, checksummed, maybe_protocol_filter_from_inner, protocol_from_logic, resolver_from_logic, ConversionError};
 use crate::conversion::order_direction_from_inner;
 use alloy::primitives::Address;
 use bens_logic::subgraph::{
@@ -106,13 +103,13 @@ pub fn batch_resolve_from_inner(
 }
 
 pub fn batch_resolve_from_logic(
-    output: BTreeMap<String, String>,
+    output: BTreeMap<Address, String>,
     chain_id: i64,
 ) -> Result<proto::BatchResolveAddressNamesResponse, ConversionError> {
     let names = output
         .into_iter()
         .map(|(address, name)| {
-            let address = address_from_str_logic(&address, chain_id)?.hash;
+            let address = address_from_logic(&address, chain_id, None).hash;
             Ok((address, name))
         })
         .collect::<Result<_, _>>()?;

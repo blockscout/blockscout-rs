@@ -12,7 +12,6 @@ use crate::{
         domain::{DetailedDomain, Domain},
         domain_event::{DomainEvent, DomainEventTransaction},
     },
-    hex,
     protocols::{
         AddressResolveTechnique, DeployedProtocol, Network, Protocol, ProtocolError, ProtocolInfo,
         Protocoler,
@@ -414,7 +413,7 @@ impl SubgraphReader {
     pub async fn batch_resolve_address_names(
         &self,
         input: BatchResolveAddressNamesInput,
-    ) -> Result<BTreeMap<String, String>, SubgraphReadError> {
+    ) -> Result<BTreeMap<Address, String>, SubgraphReadError> {
         let protocols = self
             .protocoler
             .protocols_of_network(input.network_id, None)?
@@ -424,10 +423,15 @@ impl SubgraphReader {
         let addresses_len = addresses.len();
         let result = resolve_addresses(self.pool.as_ref(), protocols, addresses).await?;
 
-        let address_to_name: BTreeMap<String, String> = iter_to_map(
+        let address_to_name: BTreeMap<Address, String> = iter_to_map(
             result
                 .into_iter()
-                .map(|d| (d.resolved_address, d.domain_name)),
+                .filter_map(|d| {
+                    d.resolved_address
+                        .parse::<Address>()
+                        .ok()
+                        .map(|addr| (addr, d.domain_name))
+                }),
         );
         tracing::debug!(address_to_name =? address_to_name, "{}/{addresses_len} names found from batch request", address_to_name.len());
         Ok(address_to_name)
@@ -487,8 +491,7 @@ impl SubgraphReader {
                 .await?;
             // Fill the `name` field using a resolved map (keys are 0x-lowercase strings)
             for event in &mut events {
-                let key = hex(event.from_address);
-                if let Some(name) = names_map.get(&key) {
+                if let Some(name) = names_map.get(&event.from_address) {
                     event.from_address_ens_domain_name = Some(name.clone());
                 }
             }
