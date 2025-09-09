@@ -27,7 +27,7 @@ pub fn event_from_logic(
     let from_address = Some(address_from_logic(
         &e.from_address,
         chain_id,
-        e.from_address_ens_domain_name
+        e.from_address_ens_domain_name,
     ));
     Ok(proto::DomainEvent {
         transaction_hash: hex(e.transaction_hash),

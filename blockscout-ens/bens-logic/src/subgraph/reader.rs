@@ -423,16 +423,13 @@ impl SubgraphReader {
         let addresses_len = addresses.len();
         let result = resolve_addresses(self.pool.as_ref(), protocols, addresses).await?;
 
-        let address_to_name: BTreeMap<Address, String> = iter_to_map(
-            result
-                .into_iter()
-                .filter_map(|d| {
-                    d.resolved_address
-                        .parse::<Address>()
-                        .ok()
-                        .map(|addr| (addr, d.domain_name))
-                }),
-        );
+        let address_to_name: BTreeMap<Address, String> =
+            iter_to_map(result.into_iter().filter_map(|d| {
+                d.resolved_address
+                    .parse::<Address>()
+                    .ok()
+                    .map(|addr| (addr, d.domain_name))
+            }));
         tracing::debug!(address_to_name =? address_to_name, "{}/{addresses_len} names found from batch request", address_to_name.len());
         Ok(address_to_name)
     }

@@ -1,4 +1,7 @@
-use super::{address_from_logic, address_from_str_logic, and_not_zero_address, checksummed, maybe_protocol_filter_from_inner, protocol_from_logic, resolver_from_logic, ConversionError};
+use super::{
+    address_from_logic, address_from_str_logic, and_not_zero_address, checksummed,
+    maybe_protocol_filter_from_inner, protocol_from_logic, resolver_from_logic, ConversionError,
+};
 use crate::conversion::order_direction_from_inner;
 use alloy::primitives::Address;
 use bens_logic::subgraph::{
