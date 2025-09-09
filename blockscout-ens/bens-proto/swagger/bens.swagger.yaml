@@ -377,6 +377,9 @@ definitions:
     properties:
       hash:
         type: string
+      ens_domain_name:
+        type: string
+        title: Optional. ENS name of the sender (resolved from hash)
   v1BatchResolveAddressNamesResponse:
     type: object
     properties:
@@ -475,9 +478,6 @@ definitions:
       action:
         type: string
         title: Optional. Action name
-      from_address_primary_name:
-        type: string
-        title: Optional. ENS name of the sender (resolved from from_address)
   v1GetAddressResponse:
     type: object
     properties:

@@ -111,8 +111,6 @@ message DomainEvent {
   Address from_address = 3;
   // Optional. Action name
   optional string action = 4;
-  // Optional. ENS name of the sender (resolved from from_address)
-  optional string from_address_primary_name = 5;
 }
 
 message Token {
@@ -128,8 +126,9 @@ enum TokenType {
 
 message Address {
   string hash = 1;
+  // Optional. ENS name of the sender (resolved from hash)
+  optional string ens_domain_name = 2;
 }
-
 
 enum Order {
   ORDER_UNSPECIFIED = 0;

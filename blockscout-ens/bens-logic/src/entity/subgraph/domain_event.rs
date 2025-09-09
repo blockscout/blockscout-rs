@@ -13,7 +13,7 @@ pub struct DomainEvent {
     pub block_number: i64,
     pub timestamp: String,
     pub from_address: Address,
+    pub from_address_ens_domain_name: Option<String>,
     pub method: Option<String>,
     pub actions: Vec<String>,
-    pub from_address_primary_name: Option<String>,
 }

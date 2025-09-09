@@ -42,9 +42,10 @@ pub fn checksummed(address: &Address, chain_id: i64) -> String {
 }
 
 #[inline]
-pub fn address_from_logic(address: &Address, chain_id: i64) -> proto::Address {
+pub fn address_from_logic(address: &Address, chain_id: i64, ens_domain_name: Option<String>) -> proto::Address {
     proto::Address {
         hash: checksummed(address, chain_id),
+        ens_domain_name,
     }
 }
 
@@ -55,7 +56,7 @@ pub fn address_from_str_logic(
 ) -> Result<proto::Address, ConversionError> {
     let addr = Address::from_str(addr)
         .map_err(|e| ConversionError::LogicOutput(format!("invalid address '{addr}': {e}")))?;
-    Ok(address_from_logic(&addr, chain_id))
+    Ok(address_from_logic(&addr, chain_id, None))
 }
 
 #[inline]
@@ -65,7 +66,7 @@ pub fn resolver_from_logic(
 ) -> Result<proto::Address, ConversionError> {
     let resolver = ResolverInSubgraph::from_str(&resolver)
         .map_err(|e| ConversionError::LogicOutput(e.to_string()))?;
-    Ok(address_from_logic(&resolver.resolver_address, chain_id))
+    Ok(address_from_logic(&resolver.resolver_address, chain_id, None))
 }
 
 #[inline]
