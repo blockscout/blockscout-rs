@@ -1,6 +1,6 @@
 use std::{collections::HashSet, ops::Range};
 
-use crate::chart_prelude::*;
+use crate::{chart_prelude::*, charts::db_interaction::read::zetachain_cctx::TIMESTAMP_COLUMN};
 
 pub struct NewZetachainCrossChainTxnsStatement;
 impl_db_choice!(NewZetachainCrossChainTxnsStatement, UseZetachainCctxDB);
@@ -14,12 +14,7 @@ impl StatementFromRange for NewZetachainCrossChainTxnsStatement {
         let date_col = "date";
         zetachain_cctx_entity::cross_chain_tx::Entity::find()
             .select_only()
-            .expr_as(
-                Func::cust("to_timestamp")
-                    .arg(zetachain_cctx_entity::cctx_status::Column::CreatedTimestamp.into_expr())
-                    .cast_as("date"),
-                date_col,
-            )
+            .expr_as(TIMESTAMP_COLUMN.into_expr().cast_as("date"), date_col)
             .expr_as(
                 Func::count(Asterisk.into_column_ref()).cast_as("TEXT"),
                 "value",
@@ -34,11 +29,8 @@ impl StatementFromRange for NewZetachainCrossChainTxnsStatement {
 }
 
 pub fn zetachain_cctx_datetime_range_filter(range: UniversalRange<DateTime<Utc>>) -> SimpleExpr {
-    let timestamp_col = zetachain_cctx_entity::cctx_status::Column::CreatedTimestamp.into_expr();
-    let (start_bound, end_bound) = range.into_inclusive_pair();
-    let start_expr = start_bound.map(|s| Expr::cust_with_values("extract(epoch from $1)", [s]));
-    let end_expr = end_bound.map(|e| Expr::cust_with_values("extract(epoch from $1)", [e]));
-    match (start_expr, end_expr) {
+    let timestamp_col = TIMESTAMP_COLUMN.into_expr();
+    match range.into_inclusive_pair() {
         (Some(start), Some(end)) => timestamp_col.clone().lte(end).and(timestamp_col.gte(start)),
         (Some(start), None) => timestamp_col.gte(start),
         (None, Some(end)) => timestamp_col.lte(end),
@@ -125,12 +117,12 @@ mod tests {
         );
         let expected = r#"
             SELECT
-                CAST(to_timestamp("cctx_status"."created_timestamp") AS date) AS "date",
+                CAST("cctx_status"."last_update_timestamp" AS date) AS "date",
                 CAST(COUNT(*) AS TEXT) AS "value"
             FROM "cross_chain_tx"
             LEFT JOIN "cctx_status" ON "cross_chain_tx"."id" = "cctx_status"."cross_chain_tx_id"
-            WHERE "cctx_status"."created_timestamp" <= (extract(epoch from '2025-01-01 23:59:59.999999 +00:00'))
-                AND "cctx_status"."created_timestamp" >= (extract(epoch from '2025-01-01 00:00:00.000000 +00:00'))
+            WHERE "cctx_status"."last_update_timestamp" <= '2025-01-01 23:59:59.999999 +00:00'
+                AND "cctx_status"."last_update_timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
             GROUP BY "date"
         "#;
         assert_eq!(normalize_sql(expected), normalize_sql(&actual.to_string()))
