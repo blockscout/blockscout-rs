@@ -4,17 +4,14 @@
   "name": "levvv.gno",
   "other_addresses": {},
   "owner": {
-    "ens_domain_name": null,
     "hash": "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE"
   },
   "wrapped_owner": null,
   "registrant": {
-    "ens_domain_name": null,
     "hash": "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE"
   },
   "registration_date": "2023-11-29T09:09:25.000Z",
   "resolved_address": {
-    "ens_domain_name": null,
     "hash": "0xc0De20A37E2dAC848F81A93BD85FE4ACDdE7C0DE"
   },
   "tokens": [
@@ -27,7 +24,6 @@
   "protocol": {{ genome_protocol | json_encode() | safe }},
   "resolved_with_wildcard": false,
   "resolver_address": {
-    "ens_domain_name": null,
     "hash": "0x6D3B3F99177FB2A5de7F9E928a9BD807bF7b5BAD"
   },
   "stored_offchain": false

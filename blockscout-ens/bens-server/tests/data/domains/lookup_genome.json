@@ -4,12 +4,10 @@
     "id": "0xefc07af2d64eead3daec2e3004575bfc86bfc43c34e316294bd01c957e70cba2",
     "name": "abcnews.gno",
     "owner": {
-      "ens_domain_name": null,
       "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
     },
     "registration_date": "2023-12-19T00:28:15.000Z",
     "resolved_address": {
-      "ens_domain_name": null,
       "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
     },
     "wrapped_owner": null,
@@ -20,12 +18,10 @@
     "id": "0x98ae83dd985941d29a5c5947cd4f69d5f192b8416d216dbbe79cb18827401b4d",
     "name": "cele0x.gno",
     "owner": {
-      "ens_domain_name": null,
       "hash": "0xc9Be4fEA6C3f0D9E39d65678D7c631C0C41e95A6"
     },
     "registration_date": "2023-12-18T19:38:30.000Z",
     "resolved_address": {
-      "ens_domain_name": null,
       "hash": "0xc9Be4fEA6C3f0D9E39d65678D7c631C0C41e95A6"
     },
     "wrapped_owner": null,

@@ -4,16 +4,13 @@
   "name": "wa🇬🇲i.eth",
   "other_addresses": {},
   "owner": {
-    "ens_domain_name": null,
     "hash": "0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401"
   },
   "registrant": {
-    "ens_domain_name": null,
     "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
   },
   "registration_date": "2021-11-12T11:36:46.000Z",
   "resolved_address": {
-    "ens_domain_name": null,
     "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
   },
   "tokens": [
@@ -29,13 +26,11 @@
     }
   ],
   "wrapped_owner": {
-    "ens_domain_name": null,
     "hash": "0x9C996076A85B46061D9a70ff81F013853A86b619"
   },
   "protocol": {{ ens_protocol | json_encode() | safe }},
   "resolved_with_wildcard": false,
   "resolver_address": {
-    "ens_domain_name": null,
     "hash": "0x4976fb03C32e5B8cfe2b6cCB31c09Ba78EBaBa41"
     },
   "stored_offchain": false

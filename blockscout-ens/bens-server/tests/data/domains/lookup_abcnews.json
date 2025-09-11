@@ -4,13 +4,11 @@
     "id": "0xefc07af2d64eead3daec2e3004575bfc86bfc43c34e316294bd01c957e70cba2",
     "name": "abcnews.gno",
     "owner": {
-      "ens_domain_name": null,
       "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
     },
     "wrapped_owner": null,
     "registration_date": "2023-12-19T00:28:15.000Z",
     "resolved_address": {
-      "ens_domain_name": null,
       "hash": "0xb1b38CEDf091714916Bc01BC4B96674b1bacdC10"
     },
     "protocol": {{ genome_protocol | json_encode() | safe }}
@@ -20,7 +18,6 @@
     "id": "0x7a68d23f9d7e32e79f09e024d21e2e12b66f74cbbc4aff0e5a36043a6a42778d",
     "name": "abcnews.eth",
     "owner": {
-      "ens_domain_name": null,
       "hash": "0xe95Ca676DE726AEe5eD7F6cd4537CDE478cC5020"
     },
     "wrapped_owner": null,

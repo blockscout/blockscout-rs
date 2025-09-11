@@ -2,11 +2,9 @@
   "id": "0x68b620f61c87062cf680144f898582a631c90e39dd1badb35c241be0a7284fff",
   "name": "sashaxyz.eth",
   "resolved_address": {
-    "ens_domain_name": null,
     "hash": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
   },
   "owner": {
-    "ens_domain_name": null,
     "hash": "0x66A6f7744ce4DEa450910B81A7168588F992eAfB"
   },
   "wrapped_owner": null,
