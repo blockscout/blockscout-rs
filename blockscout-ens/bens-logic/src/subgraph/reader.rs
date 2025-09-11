@@ -197,9 +197,9 @@ impl SubgraphReader {
     }
 
     pub fn protocols_of_network(
-        &self,
+        &'_ self,
         network_id: i64,
-    ) -> Result<NonEmpty<DeployedProtocol>, ProtocolError> {
+    ) -> Result<NonEmpty<DeployedProtocol<'_>>, ProtocolError> {
         self.protocoler.protocols_of_network(network_id, None)
     }
 }
@@ -252,14 +252,16 @@ impl SubgraphReader {
             &input,
         )
         .await?;
-        let domain_events = events_from_transactions(
-            name.deployed_protocol
-                .deployment_network
-                .blockscout_client
-                .clone(),
-            domain_txns,
-        )
-        .await?;
+        let domain_events = self
+            .events_from_transactions(
+                input.network_id,
+                name.deployed_protocol
+                    .deployment_network
+                    .blockscout_client
+                    .clone(),
+                domain_txns,
+            )
+            .await?;
         Ok(domain_events)
     }
 
@@ -411,7 +413,7 @@ impl SubgraphReader {
     pub async fn batch_resolve_address_names(
         &self,
         input: BatchResolveAddressNamesInput,
-    ) -> Result<BTreeMap<String, String>, SubgraphReadError> {
+    ) -> Result<BTreeMap<Address, String>, SubgraphReadError> {
         let protocols = self
             .protocoler
             .protocols_of_network(input.network_id, None)?
@@ -421,13 +423,78 @@ impl SubgraphReader {
         let addresses_len = addresses.len();
         let result = resolve_addresses(self.pool.as_ref(), protocols, addresses).await?;
 
-        let address_to_name: BTreeMap<String, String> = iter_to_map(
-            result
-                .into_iter()
-                .map(|d| (d.resolved_address, d.domain_name)),
-        );
+        let address_to_name: BTreeMap<Address, String> =
+            iter_to_map(result.into_iter().filter_map(|d| {
+                d.resolved_address
+                    .parse::<Address>()
+                    .ok()
+                    .map(|addr| (addr, d.domain_name))
+            }));
         tracing::debug!(address_to_name =? address_to_name, "{}/{addresses_len} names found from batch request", address_to_name.len());
         Ok(address_to_name)
+    }
+
+    #[instrument(name = "events_from_transactions", skip_all, fields(job_size = txns.len()), err, level = "info")]
+    async fn events_from_transactions(
+        &self,
+        network_id: i64,
+        client: Arc<BlockscoutClient>,
+        txns: Vec<DomainEventTransaction>,
+    ) -> Result<Vec<DomainEvent>, SubgraphReadError> {
+        let txn_ids: Vec<TxHash> = txns
+            .iter()
+            .map(|t| TxHash::from_slice(t.transaction_id.as_slice()))
+            .collect();
+        let mut blockscout_txns = client
+            .transactions_batch(txn_ids)
+            .await
+            .map_err(|e| anyhow!(e))?
+            .into_iter()
+            .filter_map(|(hash, result)| match result {
+                blockscout::Response::Ok(t) => Some((hash, t)),
+                e => {
+                    tracing::warn!(
+                        "invalid response from blockscout transaction '{hash:#x}' api: {e:?}"
+                    );
+                    None
+                }
+            })
+            .collect::<HashMap<_, _>>();
+        let mut events: Vec<DomainEvent> = txns
+            .into_iter()
+            .filter_map(|txn| {
+                blockscout_txns
+                    .remove(&TxHash::from_slice(txn.transaction_id.as_slice()))
+                    .map(|t| DomainEvent {
+                        transaction_hash: t.hash,
+                        block_number: t.block_number,
+                        timestamp: t.timestamp,
+                        from_address: t.from.hash,
+                        method: t.method,
+                        actions: txn.actions,
+                        from_address_ens_domain_name: None,
+                    })
+            })
+            .collect::<Vec<_>>();
+
+        // Batch resolve names for all unique from_address values
+        let addresses: Vec<Address> = events.iter().map(|e| e.from_address).collect();
+        if !addresses.is_empty() {
+            let names_map = self
+                .batch_resolve_address_names(BatchResolveAddressNamesInput {
+                    network_id,
+                    addresses,
+                })
+                .await?;
+            // Fill the `name` field using a resolved map (keys are 0x-lowercase strings)
+            for event in &mut events {
+                if let Some(name) = names_map.get(&event.from_address) {
+                    event.from_address_ens_domain_name = Some(name.clone());
+                }
+            }
+        }
+
+        Ok(events)
     }
 }
 
@@ -459,48 +526,6 @@ where
         map.entry(key).or_insert(value);
     }
     map
-}
-
-#[instrument(name = "events_from_transactions", skip_all, fields(job_size = txns.len()), err, level = "info")]
-async fn events_from_transactions(
-    client: Arc<BlockscoutClient>,
-    txns: Vec<DomainEventTransaction>,
-) -> Result<Vec<DomainEvent>, SubgraphReadError> {
-    let txn_ids: Vec<TxHash> = txns
-        .iter()
-        .map(|t| TxHash::from_slice(t.transaction_id.as_slice()))
-        .collect();
-    let mut blockscout_txns = client
-        .transactions_batch(txn_ids)
-        .await
-        .map_err(|e| anyhow!(e))?
-        .into_iter()
-        .filter_map(|(hash, result)| match result {
-            blockscout::Response::Ok(t) => Some((hash, t)),
-            e => {
-                tracing::warn!(
-                    "invalid response from blockscout transaction '{hash:#x}' api: {e:?}"
-                );
-                None
-            }
-        })
-        .collect::<HashMap<_, _>>();
-    let events: Vec<DomainEvent> = txns
-        .into_iter()
-        .filter_map(|txn| {
-            blockscout_txns
-                .remove(&TxHash::from_slice(txn.transaction_id.as_slice()))
-                .map(|t| DomainEvent {
-                    transaction_hash: t.hash,
-                    block_number: t.block_number,
-                    timestamp: t.timestamp,
-                    from_address: t.from.hash,
-                    method: t.method,
-                    actions: txn.actions,
-                })
-        })
-        .collect::<Vec<_>>();
-    Ok(events)
 }
 
 fn lookup_output_from_domains(
@@ -890,6 +915,7 @@ mod tests {
                 method: Some("finalizeAuction".into()),
                 actions: vec!["new_owner".into()],
                 block_number: 3891899,
+                from_address_ens_domain_name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -900,6 +926,7 @@ mod tests {
                 method: Some("transferRegistrars".into()),
                 actions: vec!["new_owner".into()],
                 block_number: 8121770,
+                from_address_ens_domain_name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -910,6 +937,7 @@ mod tests {
                 method: Some("setAddr".into()),
                 actions: vec!["addr_changed".into()],
                 block_number: 8834378,
+                from_address_ens_domain_name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -920,6 +948,7 @@ mod tests {
                 method: Some("migrateAll".into()),
                 actions: vec!["new_owner".into(), "new_resolver".into()],
                 block_number: 9430706,
+                from_address_ens_domain_name: None,
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -930,6 +959,7 @@ mod tests {
                 method: Some("multicall".into()),
                 actions: vec!["addr_changed".into()],
                 block_number: 11862656,
+                from_address_ens_domain_name: Some("vitalik.eth".into()),
             },
             DomainEvent {
                 transaction_hash: tx_hash(
@@ -940,6 +970,7 @@ mod tests {
                 method: Some("setResolver".into()),
                 actions: vec!["new_resolver".into()],
                 block_number: 11862657,
+                from_address_ens_domain_name: Some("vitalik.eth".into()),
             },
         ];
         assert_eq!(expected_history, history);
