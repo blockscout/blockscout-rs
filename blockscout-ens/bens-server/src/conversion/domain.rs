@@ -112,7 +112,7 @@ pub fn batch_resolve_from_logic(
     let names = output
         .into_iter()
         .map(|(address, name)| {
-            let address = address_from_logic(&address, chain_id, None).hash;
+            let address = checksummed(&address, chain_id);
             Ok((address, name))
         })
         .collect::<Result<_, _>>()?;
