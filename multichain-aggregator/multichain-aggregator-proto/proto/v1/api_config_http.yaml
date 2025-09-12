@@ -80,6 +80,9 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchBlocks
       get: /api/v1/clusters/{cluster_id}/search/blocks
 
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchBlockNumbers
+      get: /api/v1/clusters/{cluster_id}/search/block-numbers
+
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchTokens
       get: /api/v1/clusters/{cluster_id}/search/tokens
 
