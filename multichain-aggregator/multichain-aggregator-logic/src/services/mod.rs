@@ -3,7 +3,7 @@ pub mod chains;
 pub mod channel;
 pub mod cluster;
 pub mod import;
-pub mod search;
+pub mod quick_search;
 
 pub mod macros {
     macro_rules! maybe_cache_lookup {

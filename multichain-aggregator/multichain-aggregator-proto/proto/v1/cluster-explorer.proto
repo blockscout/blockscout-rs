@@ -20,6 +20,14 @@ service ClusterExplorerService {
   rpc ListAddressTokens(ListAddressTokensRequest) returns (ListAddressTokensResponse) {}
   rpc ListClusterTokens(ListClusterTokensRequest) returns (ListClusterTokensResponse) {}
   rpc GetAggregatedToken(GetAggregatedTokenRequest) returns (GetAggregatedTokenResponse) {}
+  rpc SearchAddresses(SearchByQueryRequest) returns (SearchAddressesResponse) {}
+  rpc SearchNfts(SearchByQueryRequest) returns (SearchNftsResponse) {}
+  rpc SearchTransactions(SearchByQueryRequest) returns (SearchTransactionsResponse) {}
+  rpc SearchBlocks(SearchByQueryRequest) returns (SearchBlocksResponse) {}
+  rpc SearchBlockNumbers(SearchByQueryRequest) returns (SearchBlockNumbersResponse) {}
+  rpc SearchTokens(SearchByQueryRequest) returns (SearchTokensResponse) {}
+  rpc SearchDomains(SearchByQueryRequest) returns (SearchDomainsResponse) {}
+  rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
 }
 
 message AddressHash {
@@ -194,3 +202,68 @@ message GetAggregatedTokenResponse {
   AggregatedTokenInfo token = 1;
 }
 
+message SearchByQueryRequest {
+  string cluster_id = 1;
+  string q = 2;
+  // Comma-separated list of chain ids to filter by.
+  repeated string chain_id = 3;
+  optional uint32 page_size = 4;
+  optional string page_token = 5;
+}
+
+message SearchTransactionsResponse {
+  repeated blockscout.multichainAggregator.v1.Hash items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message SearchBlocksResponse {
+  repeated blockscout.multichainAggregator.v1.Hash items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message SearchBlockNumbersResponse {
+  repeated blockscout.multichainAggregator.v1.ChainBlockNumber items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message SearchAddressesResponse {
+  repeated GetAddressResponse items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message SearchNftsResponse {
+  repeated blockscout.multichainAggregator.v1.Address items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message SearchTokensResponse {
+  repeated blockscout.multichainAggregator.v1.Token items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message SearchDomainsResponse {
+  repeated blockscout.multichainAggregator.v1.Domain items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message SearchDappsResponse {
+  repeated blockscout.multichainAggregator.v1.MarketplaceDapp items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
+}
+
+message QuickSearchRequest { 
+  string cluster_id = 1;
+  string q = 2; 
+}
+
+
+message QuickSearchResponse {
+  repeated GetAddressResponse addresses = 1;
+  repeated blockscout.multichainAggregator.v1.Hash blocks = 2;
+  repeated blockscout.multichainAggregator.v1.Hash transactions = 3;
+  repeated blockscout.multichainAggregator.v1.ChainBlockNumber block_numbers = 4;
+  repeated blockscout.multichainAggregator.v1.MarketplaceDapp dapps = 5;
+  repeated blockscout.multichainAggregator.v1.Token tokens = 6;
+  repeated blockscout.multichainAggregator.v1.Address nfts = 7;
+  repeated blockscout.multichainAggregator.v1.Domain domains = 8;
+}

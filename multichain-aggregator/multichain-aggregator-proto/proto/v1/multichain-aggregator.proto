@@ -235,7 +235,7 @@ message QuickSearchResponse {
 
 message ListAddressesRequest {
   string q = 1;
-  optional string chain_id = 2;
+  repeated string chain_id = 2;
   optional uint32 page_size = 3;
   optional string page_token = 4;
 }
@@ -259,7 +259,7 @@ message ListTokensResponse {
 
 message ListTransactionsRequest {
   string q = 1;
-  optional string chain_id = 2;
+  repeated string chain_id = 2;
   optional uint32 page_size = 3;
   optional string page_token = 4;
 }
@@ -271,7 +271,7 @@ message ListTransactionsResponse {
 
 message ListNftsRequest {
   string q = 1;
-  optional string chain_id = 2;
+  repeated string chain_id = 2;
   optional uint32 page_size = 3;
   optional string page_token = 4;
 }
@@ -310,8 +310,9 @@ message ListDappCategoriesResponse { repeated string items = 1; }
 
 message ListDomainsRequest {
   string q = 1;
-  optional uint32 page_size = 2;
-  optional string page_token = 3;
+  repeated string chain_id = 2;
+  optional uint32 page_size = 3;
+  optional string page_token = 4;
 }
 
 message ListDomainsResponse {
@@ -321,7 +322,7 @@ message ListDomainsResponse {
 
 message ListBlockNumbersRequest {
   string q = 1;
-  optional string chain_id = 2;
+  repeated string chain_id = 2;
   optional uint32 page_size = 3;
   optional string page_token = 4;
 }
@@ -333,7 +334,7 @@ message ListBlockNumbersResponse {
 
 message ListBlocksRequest {
   string q = 1;
-  optional string chain_id = 2;
+  repeated string chain_id = 2;
   optional uint32 page_size = 3;
   optional string page_token = 4;
 }

@@ -31,7 +31,10 @@ paths:
         - name: chain_id
           in: query
           required: false
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false
@@ -63,7 +66,10 @@ paths:
         - name: chain_id
           in: query
           required: false
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false
@@ -95,7 +101,10 @@ paths:
         - name: chain_id
           in: query
           required: false
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false
@@ -315,6 +324,269 @@ paths:
           format: int64
       tags:
         - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/search/addresses:
+    get:
+      operationId: ClusterExplorerService_SearchAddresses
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchAddressesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/search/blocks:
+    get:
+      operationId: ClusterExplorerService_SearchBlocks
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchBlocksResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/search/domains:
+    get:
+      operationId: ClusterExplorerService_SearchDomains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchDomainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/search/nfts:
+    get:
+      operationId: ClusterExplorerService_SearchNfts
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchNftsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/search/tokens:
+    get:
+      operationId: ClusterExplorerService_SearchTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/search/transactions:
+    get:
+      operationId: ClusterExplorerService_SearchTransactions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1SearchTransactionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          in: query
+          required: false
+          type: string
+        - name: chain_id
+          description: Comma-separated list of chain ids to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
+  /api/v1/clusters/{cluster_id}/search:quick:
+    get:
+      operationId: ClusterExplorerService_QuickSearch
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/blockscoutclusterExplorerv1QuickSearchResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          in: query
+          required: false
+          type: string
+      tags:
+        - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/tokens:
     get:
       operationId: ClusterExplorerService_ListClusterTokens
@@ -458,6 +730,13 @@ paths:
           in: query
           required: false
           type: string
+        - name: chain_id
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false
@@ -509,7 +788,10 @@ paths:
         - name: chain_id
           in: query
           required: false
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false
@@ -528,7 +810,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1QuickSearchResponse'
+            $ref: '#/definitions/blockscoutmultichainAggregatorv1QuickSearchResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -595,7 +877,10 @@ paths:
         - name: chain_id
           in: query
           required: false
-          type: string
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
         - name: page_size
           in: query
           required: false
@@ -837,6 +1122,92 @@ definitions:
         type: string
       circulating_market_cap:
         type: string
+  blockscoutclusterExplorerv1QuickSearchResponse:
+    type: object
+    properties:
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1GetAddressResponse'
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      block_numbers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainBlockNumber'
+      dapps:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+      nfts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      domains:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
+  blockscoutmultichainAggregatorv1QuickSearchResponse:
+    type: object
+    properties:
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      block_numbers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainBlockNumber'
+      dapps:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+      nfts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      domains:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
   googlerpcStatus:
     type: object
     properties:
@@ -1284,49 +1655,76 @@ definitions:
       page_size:
         type: integer
         format: int64
-  v1QuickSearchResponse:
+  v1SearchAddressesResponse:
     type: object
     properties:
-      addresses:
+      items:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Address'
-      blocks:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      transactions:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      block_numbers:
+          $ref: '#/definitions/v1GetAddressResponse'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1SearchBlockNumbersResponse:
+    type: object
+    properties:
+      items:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1ChainBlockNumber'
-      dapps:
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1SearchBlocksResponse:
+    type: object
+    properties:
+      items:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1MarketplaceDapp'
-      tokens:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Token'
-      nfts:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Address'
-      domains:
+          $ref: '#/definitions/v1Hash'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1SearchDomainsResponse:
+    type: object
+    properties:
+      items:
         type: array
         items:
           type: object
           $ref: '#/definitions/v1Domain'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1SearchNftsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1SearchTokensResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
+  v1SearchTransactionsResponse:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      next_page_params:
+        $ref: '#/definitions/v1Pagination'
   v1Token:
     type: object
     properties:

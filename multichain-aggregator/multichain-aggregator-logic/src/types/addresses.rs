@@ -1,5 +1,9 @@
 use super::ChainId;
-use crate::{error::ParseError, proto, types::domains::DomainInfo};
+use crate::{
+    error::ParseError,
+    proto,
+    types::{domains::DomainInfo, sea_orm_wrappers::SeaOrmAddress},
+};
 use bigdecimal::BigDecimal;
 use entity::{
     address_coin_balances,
@@ -100,35 +104,36 @@ fn chain_infos_query() -> SimpleExpr {
     .into_simple_expr()
 }
 
-#[derive(DerivePartialModel)]
+#[derive(DerivePartialModel, Debug, Clone)]
 #[sea_orm(entity = "Entity", from_query_result)]
 pub struct AddressInfo {
-    pub hash: Vec<u8>,
+    pub hash: SeaOrmAddress,
     #[sea_orm(from_expr = r#"chain_infos_query()"#)]
     pub chain_infos: Vec<ChainInfo>,
     #[sea_orm(skip)]
     pub has_tokens: bool,
     #[sea_orm(skip)]
     pub has_interop_message_transfers: bool,
+    #[sea_orm(skip)]
+    pub domain_info: Option<DomainInfo>,
 }
 
 impl AddressInfo {
-    pub fn default(hash: Vec<u8>) -> Self {
+    pub fn default(hash: SeaOrmAddress) -> Self {
         Self {
             hash,
             chain_infos: vec![],
             has_tokens: false,
             has_interop_message_transfers: false,
+            domain_info: None,
         }
     }
 }
 
-impl TryFrom<AddressInfo> for proto::GetAddressResponse {
-    type Error = ParseError;
-
-    fn try_from(v: AddressInfo) -> Result<Self, Self::Error> {
-        Ok(Self {
-            hash: alloy_primitives::Address::try_from(v.hash.as_slice())?.to_string(),
+impl From<AddressInfo> for proto::GetAddressResponse {
+    fn from(v: AddressInfo) -> Self {
+        Self {
+            hash: v.hash.to_string(),
             chain_infos: v
                 .chain_infos
                 .into_iter()
@@ -136,14 +141,36 @@ impl TryFrom<AddressInfo> for proto::GetAddressResponse {
                 .collect(),
             has_tokens: false,
             has_interop_message_transfers: false,
+        }
+    }
+}
+
+impl TryFrom<AddressInfo> for proto::Address {
+    type Error = ParseError;
+
+    fn try_from(v: AddressInfo) -> Result<Self, Self::Error> {
+        let chain_id = match v.chain_infos.as_slice() {
+            [chain_info] => chain_info.chain_id.to_string(),
+            _ => {
+                return Err(ParseError::Custom(
+                    "address info should have exactly one chain info".to_string(),
+                ));
+            }
+        };
+
+        Ok(Self {
+            hash: v.hash.to_string(),
+            domain_info: v.domain_info.map(|d| d.into()),
+            chain_id,
+            ..Default::default()
         })
     }
 }
 
-#[derive(Debug, FromJsonQueryResult, Serialize, Deserialize)]
+#[derive(Debug, FromJsonQueryResult, Serialize, Deserialize, Clone)]
 pub struct ChainInfo {
-    chain_id: ChainId,
-    coin_balance: BigDecimal,
+    pub chain_id: ChainId,
+    pub coin_balance: BigDecimal,
     is_contract: bool,
     is_verified: bool,
 }
