@@ -139,8 +139,8 @@ impl From<AddressInfo> for proto::GetAddressResponse {
                 .into_iter()
                 .map(|c| (c.chain_id.to_string(), c.into()))
                 .collect(),
-            has_tokens: false,
-            has_interop_message_transfers: false,
+            has_tokens: v.has_tokens,
+            has_interop_message_transfers: v.has_interop_message_transfers,
         }
     }
 }
