@@ -3,7 +3,7 @@ use crate::{
     services::{
         ClusterExplorer, MULTICHAIN_CLUSTER_ID,
         macros::*,
-        utils::{PageTokenExtractor, page_token_to_proto, parse_chain_ids, parse_query},
+        utils::{PageTokenExtractor, page_token_to_proto, parse_chain_ids},
     },
     settings::ApiSettings,
 };
@@ -13,7 +13,7 @@ use blockscout_service_launcher::database::ReadWriteRepo;
 use multichain_aggregator_logic::{
     clients::dapp,
     error::ServiceError,
-    services::{api_key_manager::ApiKeyManager, chains, cluster::Cluster, import},
+    services::{api_key_manager::ApiKeyManager, chains, cluster::Cluster, dapp_search, import},
     types::{self},
 };
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::*;
@@ -171,8 +171,6 @@ impl MultichainAggregatorService for MultichainAggregator {
         let cluster = self.get_multichain_cluster()?;
         let res = cluster.quick_search(inner.q, false).await?;
 
-        dbg!(&res);
-
         Ok(Response::new(res.try_into().unwrap()))
     }
 
@@ -189,8 +187,10 @@ impl MultichainAggregatorService for MultichainAggregator {
     ) -> Result<Response<ListDappsResponse>, Status> {
         let inner = request.into_inner();
 
-        let chain_ids = if inner.chain_ids.is_empty() {
-            chains::list_active_chains_cached(
+        let cluster = self.get_multichain_cluster()?;
+
+        let dapps = if inner.chain_ids.is_empty() {
+            let chain_ids = chains::list_active_chains_cached(
                 self.repo.read_db(),
                 &[chains::ChainSource::Dapp {
                     dapp_client: &self.dapp_client,
@@ -199,28 +199,26 @@ impl MultichainAggregatorService for MultichainAggregator {
             .await?
             .into_iter()
             .map(|c| c.id)
-            .collect()
+            .collect();
+
+            dapp_search::search_dapps(
+                &cluster.dapp_client,
+                inner.q,
+                inner.categories,
+                chain_ids,
+                &cluster.marketplace_enabled_cache,
+            )
+            .await?
         } else {
-            inner
-                .chain_ids
-                .into_iter()
-                .map(parse_query)
-                .collect::<Result<Vec<_>, _>>()?
+            let chain_ids = parse_chain_ids(inner.chain_ids)?;
+            cluster
+                .search_dapps(inner.q, chain_ids, inner.categories)
+                .await?
         };
 
-        let chain_ids = self
-            .marketplace_enabled_cache
-            .filter_marketplace_enabled_chains(chain_ids, |id| *id)
-            .await;
-
-        if chain_ids.is_empty() {
-            return Ok(Response::new(ListDappsResponse { items: vec![] }));
-        }
-
-        // let dapps =
-        //     search::search_dapps(&self.dapp_client, inner.q, inner.categories, chain_ids).await?;
-
-        Ok(Response::new(ListDappsResponse { items: vec![] }))
+        Ok(Response::new(ListDappsResponse {
+            items: dapps.into_iter().map(|d| d.into()).collect(),
+        }))
     }
 
     async fn list_dapp_chains(

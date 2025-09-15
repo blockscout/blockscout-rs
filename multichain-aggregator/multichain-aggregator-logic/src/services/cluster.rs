@@ -11,7 +11,7 @@ use crate::{
         tokens::{self, ListClusterTokensPageToken},
     },
     services::{
-        self,
+        self, MIN_QUERY_LENGTH, dapp_search,
         macros::maybe_cache_lookup,
         quick_search::{self, DomainSearchCache, SearchContext},
     },
@@ -21,6 +21,7 @@ use crate::{
         addresses::{Address, AddressInfo},
         block_ranges::ChainBlockNumber,
         chains::Chain,
+        dapp::MarketplaceDapp,
         domains::{Domain, DomainInfo},
         hashes::{Hash, HashType},
         interop_messages::{ExtendedInteropMessage, MessageDirection},
@@ -44,21 +45,19 @@ use std::{
 pub type DecodedCalldataCache = CacheHandler<RedisStore, String, serde_json::Value>;
 type BlockscoutClients = BTreeMap<ChainId, Arc<HttpApiClient>>;
 
-const MIN_QUERY_LENGTH: usize = 3;
-
 pub struct Cluster {
     db: DatabaseConnection,
     chain_ids: HashSet<ChainId>,
     blockscout_clients: BlockscoutClients,
     decoded_calldata_cache: Option<DecodedCalldataCache>,
     quick_search_chains: Vec<ChainId>,
-    dapp_client: HttpApiClient,
+    pub dapp_client: HttpApiClient,
     token_info_client: HttpApiClient,
     bens_client: HttpApiClient,
     bens_protocols: Option<&'static [String]>,
     domain_primary_chain_id: ChainId,
     domain_search_cache: Option<DomainSearchCache>,
-    marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
+    pub marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
 }
 
 impl Cluster {
@@ -690,6 +689,24 @@ impl Cluster {
             maybe_cache_lookup!(self.domain_search_cache.as_ref(), key, get)?;
 
         Ok((domains, next_page_token))
+    }
+
+    pub async fn search_dapps(
+        &self,
+        query: Option<String>,
+        chain_ids: Vec<ChainId>,
+        categories: Option<String>,
+    ) -> Result<Vec<MarketplaceDapp>, ServiceError> {
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+
+        dapp_search::search_dapps(
+            &self.dapp_client,
+            query,
+            categories,
+            chain_ids,
+            &self.marketplace_enabled_cache,
+        )
+        .await
     }
 
     pub async fn get_domain_info(

@@ -1,12 +1,8 @@
 use crate::{
-    clients::dapp::search_dapps,
     error::ServiceError,
     repository::addresses,
-    services::{chains, cluster::Cluster},
-    types::{
-        ChainId, dapp::MarketplaceDapp, domains::Domain, hashes::HashType,
-        search_results::QuickSearchResult,
-    },
+    services::{MIN_QUERY_LENGTH, chains, cluster::Cluster},
+    types::{ChainId, domains::Domain, hashes::HashType, search_results::QuickSearchResult},
 };
 use api_client_framework::HttpApiClient;
 use recache::{handler::CacheHandler, stores::redis::RedisStore};
@@ -14,54 +10,8 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::instrument;
 
-const MIN_QUERY_LENGTH: usize = 3;
 const QUICK_SEARCH_NUM_ITEMS: u64 = 50;
 const QUICK_SEARCH_ENTITY_LIMIT: usize = 5;
-
-pub async fn search_dapps(
-    db: &DatabaseConnection,
-    dapp_client: &HttpApiClient,
-    query: Option<String>,
-    categories: Option<String>,
-    chain_ids: Vec<ChainId>,
-    marketplace_enabled_cache: &chains::MarketplaceEnabledCache,
-) -> Result<Vec<MarketplaceDapp>, ServiceError> {
-    let chain_ids = if chain_ids.is_empty() {
-        chains::list_active_chains_cached(db, &[chains::ChainSource::Dapp { dapp_client }])
-            .await?
-            .into_iter()
-            .map(|c| c.id)
-            .collect()
-    } else {
-        chain_ids
-    };
-
-    let chain_ids = marketplace_enabled_cache
-        .filter_marketplace_enabled_chains(chain_ids, |id| *id)
-        .await;
-
-    if chain_ids.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let res = dapp_client
-        .request(&search_dapps::SearchDapps {
-            params: search_dapps::SearchDappsParams {
-                title: query,
-                categories,
-                chain_ids,
-            },
-        })
-        .await
-        .map_err(|err| anyhow::anyhow!("failed to search dapps: {:?}", err))?;
-
-    let dapps = res
-        .into_iter()
-        .filter_map(|d| d.try_into().ok())
-        .collect::<Vec<_>>();
-
-    Ok(dapps)
-}
 
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip_all, level = "info", fields(query = query))]
@@ -185,15 +135,10 @@ impl SearchTerm {
                 results.block_numbers.extend(block_numbers);
             }
             SearchTerm::Dapp(query) => {
-                let dapps = search_dapps(
-                    db,
-                    search_context.dapp_client,
-                    Some(query),
-                    None,
-                    vec![],
-                    search_context.marketplace_enabled_cache,
-                )
-                .await?;
+                let dapps = search_context
+                    .cluster
+                    .search_dapps(Some(query), vec![], None)
+                    .await?;
 
                 results.dapps.extend(dapps);
             }
