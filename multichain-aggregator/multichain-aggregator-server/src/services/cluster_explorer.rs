@@ -288,8 +288,8 @@ impl ClusterExplorerService for ClusterExplorer {
 
     async fn quick_search(
         &self,
-        request: Request<QuickSearchRequest>,
-    ) -> Result<Response<QuickSearchResponse>, Status> {
+        request: Request<ClusterQuickSearchRequest>,
+    ) -> Result<Response<ClusterQuickSearchResponse>, Status> {
         let inner = request.into_inner();
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;

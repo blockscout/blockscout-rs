@@ -611,7 +611,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/blockscoutclusterExplorerv1QuickSearchResponse'
+            $ref: '#/definitions/v1ClusterQuickSearchResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -850,7 +850,7 @@ paths:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/blockscoutmultichainAggregatorv1QuickSearchResponse'
+            $ref: '#/definitions/v1QuickSearchResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -1162,92 +1162,6 @@ definitions:
         type: string
       circulating_market_cap:
         type: string
-  blockscoutclusterExplorerv1QuickSearchResponse:
-    type: object
-    properties:
-      addresses:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1GetAddressResponse'
-      blocks:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      transactions:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      block_numbers:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1ChainBlockNumber'
-      dapps:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1MarketplaceDapp'
-      tokens:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Token'
-      nfts:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Address'
-      domains:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Domain'
-  blockscoutmultichainAggregatorv1QuickSearchResponse:
-    type: object
-    properties:
-      addresses:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Address'
-      blocks:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      transactions:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Hash'
-      block_numbers:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1ChainBlockNumber'
-      dapps:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1MarketplaceDapp'
-      tokens:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Token'
-      nfts:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Address'
-      domains:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1Domain'
   googlerpcStatus:
     type: object
     properties:
@@ -1412,6 +1326,49 @@ definitions:
       block_number:
         type: string
         format: uint64
+  v1ClusterQuickSearchResponse:
+    type: object
+    properties:
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1GetAddressResponse'
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      block_numbers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainBlockNumber'
+      dapps:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+      nfts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      domains:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
   v1CountInteropMessagesResponse:
     type: object
     properties:
@@ -1695,6 +1652,49 @@ definitions:
       page_size:
         type: integer
         format: int64
+  v1QuickSearchResponse:
+    type: object
+    properties:
+      addresses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      transactions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Hash'
+      block_numbers:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ChainBlockNumber'
+      dapps:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarketplaceDapp'
+      tokens:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Token'
+      nfts:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Address'
+      domains:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Domain'
   v1SearchAddressesResponse:
     type: object
     properties:

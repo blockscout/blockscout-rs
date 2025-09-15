@@ -27,7 +27,7 @@ service ClusterExplorerService {
   rpc SearchBlockNumbers(SearchByQueryRequest) returns (SearchBlockNumbersResponse) {}
   rpc SearchTokens(SearchByQueryRequest) returns (SearchTokensResponse) {}
   rpc SearchDomains(SearchByQueryRequest) returns (SearchDomainsResponse) {}
-  rpc QuickSearch(QuickSearchRequest) returns (QuickSearchResponse) {}
+  rpc QuickSearch(ClusterQuickSearchRequest) returns (ClusterQuickSearchResponse) {}
 }
 
 message AddressHash {
@@ -251,13 +251,12 @@ message SearchDappsResponse {
   blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
 }
 
-message QuickSearchRequest { 
+message ClusterQuickSearchRequest {
   string cluster_id = 1;
   string q = 2; 
 }
 
-
-message QuickSearchResponse {
+message ClusterQuickSearchResponse {
   repeated GetAddressResponse addresses = 1;
   repeated blockscout.multichainAggregator.v1.Hash blocks = 2;
   repeated blockscout.multichainAggregator.v1.Hash transactions = 3;

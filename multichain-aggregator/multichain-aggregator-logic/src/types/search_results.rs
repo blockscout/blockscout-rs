@@ -173,7 +173,7 @@ impl TryFrom<QuickSearchResult> for multichain_proto::QuickSearchResponse {
     }
 }
 
-impl TryFrom<QuickSearchResult> for cluster_proto::QuickSearchResponse {
+impl TryFrom<QuickSearchResult> for cluster_proto::ClusterQuickSearchResponse {
     type Error = ParseError;
 
     fn try_from(v: QuickSearchResult) -> Result<Self, Self::Error> {
