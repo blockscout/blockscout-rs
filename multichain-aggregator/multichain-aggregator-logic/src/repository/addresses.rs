@@ -2,7 +2,7 @@ use crate::{
     repository::{paginate_query, pagination::KeySpec},
     types::{
         ChainId,
-        addresses::{Address, AddressInfo},
+        addresses::{Address, AggregatedAddressInfo, ChainAddressInfo},
     },
 };
 use alloy_primitives::Address as AddressAlloy;
@@ -285,47 +285,41 @@ fn coin_balances_rel() -> RelationDef {
         .into()
 }
 
-pub async fn get_address_infos<C>(
+pub async fn get_aggregated_address_info<C>(
     db: &C,
-    addresses: Vec<AddressAlloy>,
+    address: AddressAlloy,
     cluster_chain_ids: Option<Vec<ChainId>>,
-) -> Result<Option<AddressInfo>, DbErr>
+) -> Result<Option<AggregatedAddressInfo>, DbErr>
 where
     C: ConnectionTrait,
 {
-    let address_infos = Entity::find()
+    let address_info = Entity::find()
         .join(JoinType::LeftJoin, coin_balances_rel())
-        .filter(
-            Column::Hash.is_in(
-                addresses
-                    .into_iter()
-                    .map(|a| a.to_vec())
-                    .collect::<Vec<_>>(),
-            ),
-        )
+        .filter(Column::Hash.eq(address.as_slice()))
         .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
             q.filter(Column::ChainId.is_in(cluster_chain_ids))
         })
         .group_by(Column::Hash)
-        .into_partial_model::<AddressInfo>()
+        .into_partial_model::<AggregatedAddressInfo>()
         .one(db)
         .await?;
 
-    Ok(address_infos)
+    Ok(address_info)
 }
 
-pub async fn list_address_infos<C>(
+pub async fn list_aggregated_address_infos<C>(
     db: &C,
     addresses: Vec<AddressAlloy>,
     cluster_chain_ids: Option<Vec<ChainId>>,
     page_size: u64,
-    page_token: Option<(AddressAlloy, ChainId)>,
-) -> Result<(Vec<AddressInfo>, Option<(AddressAlloy, ChainId)>), DbErr>
+    page_token: Option<AddressAlloy>,
+) -> Result<(Vec<AggregatedAddressInfo>, Option<AddressAlloy>), DbErr>
 where
     C: ConnectionTrait,
 {
-    let address_infos = AddressInfo::select_cols(
+    let address_infos = AggregatedAddressInfo::select_cols(
         Entity::find()
+            .select_only()
             .join(JoinType::LeftJoin, coin_balances_rel())
             .filter(
                 Column::Hash.is_in(
@@ -338,15 +332,57 @@ where
             .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
                 q.filter(Column::ChainId.is_in(cluster_chain_ids))
             })
-            .group_by(Column::Hash)
-            .group_by(Column::ChainId),
+            .group_by(Column::Hash),
+    )
+    .as_query()
+    .to_owned();
+
+    let order_keys = vec![KeySpec::asc(Expr::col(Column::Hash).into())];
+    let page_token = page_token.map(|address| (address.to_vec()));
+
+    paginate_query(
+        db,
+        address_infos,
+        page_size,
+        page_token,
+        order_keys,
+        |a: &AggregatedAddressInfo| *a.hash,
+    )
+    .await
+}
+
+pub async fn list_chain_address_infos<C>(
+    db: &C,
+    addresses: Vec<AddressAlloy>,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+    page_size: u64,
+    page_token: Option<(AddressAlloy, ChainId)>,
+) -> Result<(Vec<ChainAddressInfo>, Option<(AddressAlloy, ChainId)>), DbErr>
+where
+    C: ConnectionTrait,
+{
+    let address_infos = ChainAddressInfo::select_cols(
+        Entity::find()
+            .select_only()
+            .join(JoinType::LeftJoin, coin_balances_rel())
+            .filter(
+                Column::Hash.is_in(
+                    addresses
+                        .into_iter()
+                        .map(|a| a.to_vec())
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+                q.filter(Column::ChainId.is_in(cluster_chain_ids))
+            }),
     )
     .as_query()
     .to_owned();
 
     let order_keys = vec![
-        KeySpec::asc(Expr::col(Column::Hash).into()),
-        KeySpec::asc(Expr::col(Column::ChainId).into()),
+        KeySpec::asc(Column::Hash.into_simple_expr()),
+        KeySpec::asc(Column::ChainId.into_simple_expr()),
     ];
     let page_token = page_token.map(|(address, chain_id)| (address.to_vec(), chain_id));
 
@@ -356,15 +392,7 @@ where
         page_size,
         page_token,
         order_keys,
-        |a: &AddressInfo| {
-            (
-                *a.hash,
-                a.chain_infos
-                    .first()
-                    .expect("address info should have at least one chain info")
-                    .chain_id,
-            )
-        },
+        |a: &ChainAddressInfo| (*a.hash, a.chain_info.chain_id),
     )
     .await
 }

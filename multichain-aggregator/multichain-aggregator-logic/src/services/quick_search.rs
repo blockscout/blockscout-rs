@@ -1,7 +1,7 @@
 use crate::{
     error::ServiceError,
     repository::addresses,
-    services::{MIN_QUERY_LENGTH, chains, cluster::Cluster},
+    services::{MIN_QUERY_LENGTH, chains, cluster::Cluster, macros::preload_domain_info},
     types::{ChainId, domains::Domain, hashes::HashType, search_results::QuickSearchResult},
 };
 use api_client_framework::HttpApiClient;
@@ -29,17 +29,21 @@ pub async fn quick_search(
     // We need to merge all of them into a single `SearchResults` struct.
     let jobs = terms.into_iter().map(|t| t.search(search_context));
 
-    let mut results = futures::future::join_all(jobs)
-        .await
-        .into_iter()
-        .fold(QuickSearchResult::default(), |mut acc, r| {
+    let mut results = futures::future::join_all(jobs).await.into_iter().fold(
+        QuickSearchResult::default(),
+        |mut acc, r| {
             if let Ok(r) = r {
                 acc.merge(r);
             }
             acc
-        })
-        .filter_and_sort_entities_by_priority(priority_chain_ids);
+        },
+    );
 
+    if !search_context.is_aggregated {
+        results.flatten_aggregated_addresses();
+    }
+
+    let mut results = results.filter_and_sort_entities_by_priority(priority_chain_ids);
     results.balance_entities(QUICK_SEARCH_NUM_ITEMS as usize, QUICK_SEARCH_ENTITY_LIMIT);
 
     Ok(results)
@@ -58,14 +62,6 @@ pub struct SearchContext<'a> {
     pub marketplace_enabled_cache: &'a chains::MarketplaceEnabledCache,
     pub domain_search_cache: Option<&'a DomainSearchCache>,
     pub is_aggregated: bool,
-}
-
-impl<'a> SearchContext<'a> {
-    pub async fn num_active_chains(&self) -> Result<u64, ServiceError> {
-        Ok(chains::list_repo_chains_cached(self.db.as_ref(), true)
-            .await?
-            .len() as u64)
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -106,16 +102,16 @@ impl SearchTerm {
                 results.transactions.extend(transactions);
             }
             SearchTerm::AddressHash(address) => {
-                let (addresses, _) = search_context
-                    .cluster
-                    .search_addresses(
-                        address.to_string(),
-                        vec![],
-                        search_context.is_aggregated,
-                        num_active_chains,
-                        None,
-                    )
-                    .await?;
+                let (mut addresses, _) = addresses::list_aggregated_address_infos(
+                    db,
+                    vec![address],
+                    Some(active_chain_ids.clone()),
+                    1,
+                    None,
+                )
+                .await?;
+
+                preload_domain_info!(search_context.cluster, addresses);
 
                 let domains = addresses
                     .iter()
@@ -171,7 +167,7 @@ impl SearchTerm {
 
                 let addresses = domains.iter().filter_map(|d| d.address).collect::<Vec<_>>();
                 if !addresses.is_empty() {
-                    let (mut addresses, _) = addresses::list_address_infos(
+                    let (mut addresses, _) = addresses::list_aggregated_address_infos(
                         db,
                         addresses,
                         Some(active_chain_ids.clone()),
@@ -180,14 +176,7 @@ impl SearchTerm {
                     )
                     .await?;
 
-                    let domain_infos = search_context
-                        .cluster
-                        .get_domain_info(addresses.iter().map(|a| *a.hash))
-                        .await;
-
-                    addresses
-                        .iter_mut()
-                        .for_each(|a| a.domain_info = domain_infos.get(&*a.hash).cloned());
+                    preload_domain_info!(search_context.cluster, addresses);
 
                     results.addresses.extend(addresses);
                 }

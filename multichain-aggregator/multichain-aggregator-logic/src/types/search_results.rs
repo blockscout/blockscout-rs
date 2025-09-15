@@ -2,7 +2,7 @@ use super::ChainId;
 use crate::{
     error::ParseError,
     types::{
-        addresses::{Address, AddressInfo},
+        addresses::{Address, AggregatedAddressInfo},
         block_ranges::ChainBlockNumber,
         dapp::MarketplaceDapp,
         domains::Domain,
@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Default, Debug)]
 pub struct QuickSearchResult {
-    pub addresses: Vec<AddressInfo>,
+    pub addresses: Vec<AggregatedAddressInfo>,
     pub blocks: Vec<Hash>,
     pub transactions: Vec<Hash>,
     pub block_numbers: Vec<ChainBlockNumber>,
@@ -51,7 +51,7 @@ impl QuickSearchResult {
         filter_and_sort_by_priority!(
             self,
             [
-                (addresses, |e: &AddressInfo| e
+                (addresses, |e: &AggregatedAddressInfo| e
                     .chain_infos
                     .iter()
                     .max_by_key(|c| &c.coin_balance)
@@ -103,6 +103,26 @@ impl QuickSearchResult {
         });
 
         filtered_items
+    }
+
+    pub fn flatten_aggregated_addresses(&mut self) {
+        self.addresses = self
+            .addresses
+            .iter()
+            .flat_map(|address| {
+                address
+                    .chain_infos
+                    .iter()
+                    .map(|c| AggregatedAddressInfo {
+                        hash: address.hash.clone(),
+                        chain_infos: vec![c.clone()],
+                        has_tokens: address.has_tokens,
+                        has_interop_message_transfers: address.has_interop_message_transfers,
+                        domain_info: address.domain_info.clone(),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
     }
 
     pub fn balance_entities(&mut self, total_limit: usize, entity_limit: usize) {

@@ -87,9 +87,9 @@ impl From<Address> for proto::Address {
     }
 }
 
-fn chain_infos_query() -> SimpleExpr {
+fn chain_info_query() -> SimpleExpr {
     Expr::cust_with_exprs(
-        "json_agg(json_build_object('chain_id',$1,'coin_balance',$2,'is_contract',$3,'is_verified',$4))",
+        "json_build_object('chain_id',$1,'coin_balance',$2,'is_contract',$3,'is_verified',$4)",
         vec![
             Column::ChainId.into_simple_expr(),
             Func::coalesce([
@@ -104,9 +104,13 @@ fn chain_infos_query() -> SimpleExpr {
     .into_simple_expr()
 }
 
+fn chain_infos_query() -> SimpleExpr {
+    Expr::cust_with_expr("json_agg($1)", chain_info_query().into_simple_expr())
+}
+
 #[derive(DerivePartialModel, Debug, Clone)]
 #[sea_orm(entity = "Entity", from_query_result)]
-pub struct AddressInfo {
+pub struct AggregatedAddressInfo {
     pub hash: SeaOrmAddress,
     #[sea_orm(from_expr = r#"chain_infos_query()"#)]
     pub chain_infos: Vec<ChainInfo>,
@@ -118,7 +122,7 @@ pub struct AddressInfo {
     pub domain_info: Option<DomainInfo>,
 }
 
-impl AddressInfo {
+impl AggregatedAddressInfo {
     pub fn default(hash: SeaOrmAddress) -> Self {
         Self {
             hash,
@@ -130,8 +134,8 @@ impl AddressInfo {
     }
 }
 
-impl From<AddressInfo> for proto::GetAddressResponse {
-    fn from(v: AddressInfo) -> Self {
+impl From<AggregatedAddressInfo> for proto::GetAddressResponse {
+    fn from(v: AggregatedAddressInfo) -> Self {
         Self {
             hash: v.hash.to_string(),
             chain_infos: v
@@ -145,10 +149,10 @@ impl From<AddressInfo> for proto::GetAddressResponse {
     }
 }
 
-impl TryFrom<AddressInfo> for proto::Address {
+impl TryFrom<AggregatedAddressInfo> for proto::Address {
     type Error = ParseError;
 
-    fn try_from(v: AddressInfo) -> Result<Self, Self::Error> {
+    fn try_from(v: AggregatedAddressInfo) -> Result<Self, Self::Error> {
         let chain_id = match v.chain_infos.as_slice() {
             [chain_info] => chain_info.chain_id.to_string(),
             _ => {
@@ -164,6 +168,29 @@ impl TryFrom<AddressInfo> for proto::Address {
             chain_id,
             ..Default::default()
         })
+    }
+}
+
+#[derive(DerivePartialModel, Debug, Clone)]
+#[sea_orm(entity = "Entity", from_query_result)]
+pub struct ChainAddressInfo {
+    pub hash: SeaOrmAddress,
+    #[sea_orm(from_expr = r#"chain_info_query()"#)]
+    pub chain_info: ChainInfo,
+    #[sea_orm(skip)]
+    pub domain_info: Option<DomainInfo>,
+}
+
+impl From<ChainAddressInfo> for proto::Address {
+    fn from(v: ChainAddressInfo) -> Self {
+        let chain_id = v.chain_info.chain_id.to_string();
+
+        Self {
+            hash: v.hash.to_string(),
+            domain_info: v.domain_info.map(|d| d.into()),
+            chain_id,
+            ..Default::default()
+        }
     }
 }
 

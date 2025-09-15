@@ -117,8 +117,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             self,
             request,
             search_addresses_non_aggregated,
-            ListAddressesResponse,
-            try_into
+            ListAddressesResponse
         )
     }
 
@@ -126,27 +125,21 @@ impl MultichainAggregatorService for MultichainAggregator {
         &self,
         request: Request<ListNftsRequest>,
     ) -> Result<Response<ListNftsResponse>, Status> {
-        paginated_multichain_endpoint!(self, request, search_nfts, ListNftsResponse, into)
+        paginated_multichain_endpoint!(self, request, search_nfts, ListNftsResponse)
     }
 
     async fn list_transactions(
         &self,
         request: Request<ListTransactionsRequest>,
     ) -> Result<Response<ListTransactionsResponse>, Status> {
-        paginated_multichain_endpoint!(
-            self,
-            request,
-            search_transactions,
-            ListTransactionsResponse,
-            into
-        )
+        paginated_multichain_endpoint!(self, request, search_transactions, ListTransactionsResponse)
     }
 
     async fn list_blocks(
         &self,
         request: Request<ListBlocksRequest>,
     ) -> Result<Response<ListBlocksResponse>, Status> {
-        paginated_multichain_endpoint!(self, request, search_blocks, ListBlocksResponse, into)
+        paginated_multichain_endpoint!(self, request, search_blocks, ListBlocksResponse)
     }
 
     async fn list_block_numbers(
@@ -157,8 +150,7 @@ impl MultichainAggregatorService for MultichainAggregator {
             self,
             request,
             search_block_numbers,
-            ListBlockNumbersResponse,
-            into
+            ListBlockNumbersResponse
         )
     }
 
@@ -178,7 +170,7 @@ impl MultichainAggregatorService for MultichainAggregator {
         &self,
         request: Request<ListTokensRequest>,
     ) -> Result<Response<ListTokensResponse>, Status> {
-        paginated_multichain_endpoint!(self, request, search_tokens, ListTokensResponse, into)
+        paginated_multichain_endpoint!(self, request, search_tokens, ListTokensResponse)
     }
 
     async fn list_dapps(
@@ -263,12 +255,6 @@ impl MultichainAggregatorService for MultichainAggregator {
         &self,
         request: Request<ListDomainsRequest>,
     ) -> Result<Response<ListDomainsResponse>, Status> {
-        paginated_multichain_endpoint!(
-            self,
-            request,
-            search_domains_cached,
-            ListDomainsResponse,
-            into
-        )
+        paginated_multichain_endpoint!(self, request, search_domains_cached, ListDomainsResponse)
     }
 }

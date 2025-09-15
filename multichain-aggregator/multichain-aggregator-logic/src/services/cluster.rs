@@ -12,13 +12,13 @@ use crate::{
     },
     services::{
         self, MIN_QUERY_LENGTH, dapp_search,
-        macros::maybe_cache_lookup,
+        macros::{maybe_cache_lookup, preload_domain_info},
         quick_search::{self, DomainSearchCache, SearchContext},
     },
     types::{
         ChainId,
         address_token_balances::AggregatedAddressTokenBalance,
-        addresses::{Address, AddressInfo},
+        addresses::{Address, AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
         chains::Chain,
         dapp::MarketplaceDapp,
@@ -245,13 +245,16 @@ impl Cluster {
     pub async fn get_address_info_aggregated(
         &self,
         address: AddressAlloy,
-    ) -> Result<AddressInfo, ServiceError> {
+    ) -> Result<AggregatedAddressInfo, ServiceError> {
         let cluster_chain_ids = self.active_chain_ids().await?;
 
-        let mut address_info =
-            addresses::get_address_infos(&self.db, vec![address], Some(cluster_chain_ids.clone()))
-                .await?
-                .unwrap_or_else(|| AddressInfo::default(address.into()));
+        let mut address_info = addresses::get_aggregated_address_info(
+            &self.db,
+            address,
+            Some(cluster_chain_ids.clone()),
+        )
+        .await?
+        .unwrap_or_else(|| AggregatedAddressInfo::default(address.into()));
 
         let (has_tokens, has_interop_message_transfers) = futures::join!(
             address_token_balances::check_if_tokens_at_address(
@@ -458,31 +461,8 @@ impl Cluster {
         query: String,
         chain_ids: Vec<ChainId>,
         page_size: u64,
-        page_token: Option<(AddressAlloy, ChainId)>,
-    ) -> Result<(Vec<AddressInfo>, Option<(AddressAlloy, ChainId)>), ServiceError> {
-        self.search_addresses(query, chain_ids, true, page_size, page_token)
-            .await
-    }
-
-    pub async fn search_addresses_non_aggregated(
-        &self,
-        query: String,
-        chain_ids: Vec<ChainId>,
-        page_size: u64,
-        page_token: Option<(AddressAlloy, ChainId)>,
-    ) -> Result<(Vec<AddressInfo>, Option<(AddressAlloy, ChainId)>), ServiceError> {
-        self.search_addresses(query, chain_ids, false, page_size, page_token)
-            .await
-    }
-
-    pub async fn search_addresses(
-        &self,
-        query: String,
-        chain_ids: Vec<ChainId>,
-        is_aggregated: bool,
-        page_size: u64,
-        page_token: Option<(AddressAlloy, ChainId)>,
-    ) -> Result<(Vec<AddressInfo>, Option<(AddressAlloy, ChainId)>), ServiceError> {
+        page_token: Option<AddressAlloy>,
+    ) -> Result<(Vec<AggregatedAddressInfo>, Option<AddressAlloy>), ServiceError> {
         if query.len() < MIN_QUERY_LENGTH {
             return Ok((vec![], None));
         }
@@ -491,32 +471,45 @@ impl Cluster {
         let (addresses, _contract_name_query) = self.prepare_addresses_query(query).await?;
 
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
-        let (mut addresses, page_token) = if is_aggregated {
-            let address_info =
-                addresses::get_address_infos(&self.db, addresses, Some(chain_ids.clone()))
-                    .await?
-                    .map(|a| vec![a])
-                    .unwrap_or_default();
+        let (mut addresses, page_token) = addresses::list_aggregated_address_infos(
+            &self.db,
+            addresses,
+            Some(chain_ids),
+            page_size,
+            page_token,
+        )
+        .await?;
 
-            (address_info, None)
-        } else {
-            addresses::list_address_infos(
-                &self.db,
-                addresses,
-                Some(chain_ids),
-                page_size,
-                page_token,
-            )
-            .await?
-        };
+        preload_domain_info!(self, addresses);
 
-        let domain_infos = self
-            .get_domain_info(addresses.iter().map(|a| *a.hash))
-            .await;
+        Ok((addresses, page_token))
+    }
 
-        addresses
-            .iter_mut()
-            .for_each(|a| a.domain_info = domain_infos.get(&*a.hash).cloned());
+    pub async fn search_addresses_non_aggregated(
+        &self,
+        query: String,
+        chain_ids: Vec<ChainId>,
+        page_size: u64,
+        page_token: Option<(AddressAlloy, ChainId)>,
+    ) -> Result<(Vec<ChainAddressInfo>, Option<(AddressAlloy, ChainId)>), ServiceError> {
+        if query.len() < MIN_QUERY_LENGTH {
+            return Ok((vec![], None));
+        }
+
+        // TODO: optimize contract name query. Current queries are too slow.
+        let (addresses, _contract_name_query) = self.prepare_addresses_query(query).await?;
+
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+        let (mut addresses, page_token) = addresses::list_chain_address_infos(
+            &self.db,
+            addresses,
+            Some(chain_ids),
+            page_size,
+            page_token,
+        )
+        .await?;
+
+        preload_domain_info!(self, addresses);
 
         Ok((addresses, page_token))
     }
