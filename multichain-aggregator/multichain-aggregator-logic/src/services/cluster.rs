@@ -536,7 +536,12 @@ impl Cluster {
                 (vec![address], None)
             } else if domain_name_with_tld_regex().is_match(&query) {
                 let domains = self
-                    .search_domains_cached(query.clone(), vec![], 1, None)
+                    .search_domains_cached(
+                        query.clone(),
+                        vec![self.domain_primary_chain_id],
+                        1,
+                        None,
+                    )
                     .await
                     .map(|(d, _)| d)
                     .inspect_err(|err| {
