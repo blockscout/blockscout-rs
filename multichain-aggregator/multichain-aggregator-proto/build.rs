@@ -64,6 +64,7 @@ fn compile(
         vec![
             ("ListDomainsRequest", "chain_id"),
             ("ListAddressesRequest", "chain_id"),
+            ("ListNftsRequest", "chain_id"),
             ("ListBlockNumbersRequest", "chain_id"),
             ("ListBlocksRequest", "chain_id"),
             ("ListDappsRequest", "chain_ids"),

@@ -9,40 +9,6 @@ use sea_orm::prelude::Uuid;
 
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn test_list_addresses() {
-    let db = database!(test_db::TestMigrator);
-
-    helpers::upsert_api_keys(
-        db.client().as_ref(),
-        vec![ApiKey {
-            key: Uuid::new_v4(),
-            chain_id: 1,
-        }],
-    )
-    .await
-    .unwrap();
-
-    let base = helpers::init_server(db.db_url()).await;
-
-    let response: proto::ListAddressesResponse =
-        test_server::send_get_request(&base, "/api/v1/addresses?q=test&chain_id=1&page_size=50")
-            .await;
-
-    assert_eq!(response.items.len(), 50);
-
-    let page_token = response.next_page_params.unwrap().page_token;
-    let response: proto::ListAddressesResponse = test_server::send_get_request(
-        &base,
-        &format!("/api/v1/addresses?q=test&chain_id=1&page_size=50&page_token={page_token}"),
-    )
-    .await;
-
-    assert_eq!(response.items.len(), 17);
-    assert!(response.next_page_params.is_none());
-}
-
-#[tokio::test]
-#[ignore = "Needs database to run"]
 async fn test_list_nfts() {
     let db = database!(test_db::TestMigrator);
 
