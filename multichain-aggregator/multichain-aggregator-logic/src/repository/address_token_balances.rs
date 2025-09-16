@@ -2,7 +2,9 @@ use crate::{
     repository::{paginate_query, pagination::KeySpec, tokens::base_normal_tokens_query},
     types::{
         ChainId,
-        address_token_balances::{AddressTokenBalance, AggregatedAddressTokenBalance, TokenHolder},
+        address_token_balances::{
+            AddressTokenBalance, AggregatedAddressTokenBalance, TokenHolder, fiat_balance_query,
+        },
     },
 };
 use bigdecimal::BigDecimal;
@@ -98,7 +100,7 @@ where
     .to_owned();
 
     let order_keys = vec![
-        KeySpec::desc_nulls_last(Expr::col("fiat_balance").into()),
+        KeySpec::desc_nulls_last(fiat_balance_query()),
         KeySpec::desc(Expr::col(Column::Value).into()),
         KeySpec::desc(Expr::col(Column::Id).into()),
     ];
