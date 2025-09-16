@@ -11,7 +11,9 @@ use crate::{
         tokens::{self, ListClusterTokensPageToken},
     },
     services::{
-        self, MIN_QUERY_LENGTH, dapp_search,
+        self, MIN_QUERY_LENGTH,
+        coin_price::{CoinPriceCache, try_fetch_coin_price},
+        dapp_search,
         macros::{maybe_cache_lookup, preload_domain_info},
         quick_search::{self, DomainSearchCache, SearchContext},
     },
@@ -43,28 +45,31 @@ use std::{
 };
 
 pub type DecodedCalldataCache = CacheHandler<RedisStore, String, serde_json::Value>;
-type BlockscoutClients = BTreeMap<ChainId, Arc<HttpApiClient>>;
+pub type BlockscoutClients = Arc<BTreeMap<ChainId, Arc<HttpApiClient>>>;
 
 pub struct Cluster {
     db: DatabaseConnection,
-    chain_ids: HashSet<ChainId>,
+    name: String,
+    chain_ids: Vec<ChainId>,
     blockscout_clients: BlockscoutClients,
     decoded_calldata_cache: Option<DecodedCalldataCache>,
     quick_search_chains: Vec<ChainId>,
-    pub dapp_client: HttpApiClient,
+    dapp_client: HttpApiClient,
     token_info_client: HttpApiClient,
     bens_client: HttpApiClient,
     bens_protocols: Option<&'static [String]>,
     domain_primary_chain_id: ChainId,
     domain_search_cache: Option<DomainSearchCache>,
-    pub marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
+    marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
+    coin_price_cache: Option<CoinPriceCache>,
 }
 
 impl Cluster {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         db: DatabaseConnection,
-        chain_ids: HashSet<ChainId>,
+        name: String,
+        chain_ids: Vec<ChainId>,
         blockscout_clients: BlockscoutClients,
         decoded_calldata_cache: Option<DecodedCalldataCache>,
         quick_search_chains: Vec<ChainId>,
@@ -74,13 +79,15 @@ impl Cluster {
         bens_protocols: Option<&'static [String]>,
         domain_primary_chain_id: ChainId,
         domain_search_cache: Option<DomainSearchCache>,
+        marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
+        coin_price_cache: Option<CoinPriceCache>,
     ) -> Self {
         Self {
             db,
+            name,
             chain_ids,
             blockscout_clients,
             decoded_calldata_cache,
-            marketplace_enabled_cache: Default::default(),
             quick_search_chains,
             dapp_client,
             token_info_client,
@@ -88,6 +95,8 @@ impl Cluster {
             bens_protocols,
             domain_primary_chain_id,
             domain_search_cache,
+            marketplace_enabled_cache,
+            coin_price_cache,
         }
     }
 
@@ -107,7 +116,7 @@ impl Cluster {
                 .map(|c| c.id)
                 .collect()
         } else {
-            self.chain_ids.iter().cloned().collect()
+            self.chain_ids.clone()
         };
 
         Ok(chain_ids)
@@ -256,7 +265,7 @@ impl Cluster {
         .await?
         .unwrap_or_else(|| AggregatedAddressInfo::default(address.into()));
 
-        let (has_tokens, has_interop_message_transfers) = futures::join!(
+        let (has_tokens, has_interop_message_transfers, coin_price) = futures::join!(
             address_token_balances::check_if_tokens_at_address(
                 &self.db,
                 address,
@@ -266,11 +275,13 @@ impl Cluster {
                 &self.db,
                 address,
                 cluster_chain_ids,
-            )
+            ),
+            self.fetch_coin_price_cached(),
         );
 
         address_info.has_tokens = has_tokens?;
         address_info.has_interop_message_transfers = has_interop_message_transfers?;
+        address_info.exchange_rate = coin_price?;
 
         Ok(address_info)
     }
@@ -665,6 +676,19 @@ impl Cluster {
         }
 
         Ok((tokens, res.next_page_params.map(|p| p.page_token)))
+    }
+
+    pub async fn fetch_coin_price_cached(&self) -> Result<Option<String>, ServiceError> {
+        let chain_ids = self.chain_ids.clone();
+        let blockscout_clients = Arc::clone(&self.blockscout_clients);
+
+        let key = format!("{}:coin_price", self.name);
+        let get = async || {
+            Ok::<_, ServiceError>(try_fetch_coin_price(blockscout_clients, chain_ids).await)
+        };
+        let coin_price = maybe_cache_lookup!(self.coin_price_cache.as_ref(), key, get)?;
+
+        Ok(coin_price)
     }
 
     pub async fn search_domains_cached(

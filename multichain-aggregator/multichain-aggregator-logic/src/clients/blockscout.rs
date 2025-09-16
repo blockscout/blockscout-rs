@@ -44,3 +44,26 @@ pub mod decode_calldata {
         pub result: serde_json::Value,
     }
 }
+
+pub mod stats {
+    use super::*;
+
+    pub struct Stats {}
+
+    impl Endpoint for Stats {
+        type Response = StatsResponse;
+
+        fn method(&self) -> Method {
+            Method::GET
+        }
+
+        fn path(&self) -> String {
+            "/api/v2/stats".to_string()
+        }
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct StatsResponse {
+        pub coin_price: String,
+    }
+}
