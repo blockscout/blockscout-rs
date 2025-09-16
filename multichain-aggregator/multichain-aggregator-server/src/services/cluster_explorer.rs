@@ -1,6 +1,6 @@
 use crate::{
-    proto::{cluster_explorer_service_server::ClusterExplorerService, *},
-    services::utils::{PageTokenExtractor, page_token_to_proto, parse_map_result, parse_query},
+    proto::cluster_explorer_service_server::ClusterExplorerService,
+    services::{macros::*, utils::*},
     settings::ApiSettings,
 };
 use itertools::Itertools;
@@ -9,31 +9,25 @@ use multichain_aggregator_logic::{
     services::cluster::Cluster,
     types::{addresses::proto_token_type_to_db_token_type, tokens::TokenType},
 };
-use sea_orm::DatabaseConnection;
+use multichain_aggregator_proto::blockscout::cluster_explorer::v1::*;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
 pub struct ClusterExplorer {
-    db: DatabaseConnection,
     clusters: HashMap<String, Cluster>,
     api_settings: ApiSettings,
 }
 
 impl ClusterExplorer {
-    pub fn new(
-        db: DatabaseConnection,
-        clusters: HashMap<String, Cluster>,
-        api_settings: ApiSettings,
-    ) -> Self {
+    pub fn new(clusters: HashMap<String, Cluster>, api_settings: ApiSettings) -> Self {
         Self {
-            db,
             clusters,
             api_settings,
         }
     }
 
     #[allow(clippy::result_large_err)]
-    fn try_get_cluster(&self, name: &str) -> Result<&Cluster, Status> {
+    pub fn try_get_cluster(&self, name: &str) -> Result<&Cluster, Status> {
         self.clusters
             .get(name)
             .ok_or(Status::not_found(format!("cluster not found: {name}")))
@@ -54,7 +48,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let inner = request.into_inner();
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let chains = cluster.list_chains(&self.db).await?;
+        let chains = cluster.list_chains().await?;
 
         let items = chains
             .into_iter()
@@ -75,7 +69,7 @@ impl ClusterExplorerService for ClusterExplorer {
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let message = cluster
-            .get_interop_message(&self.db, init_chain_id, nonce)
+            .get_interop_message(init_chain_id, nonce)
             .await?
             .into();
 
@@ -101,7 +95,6 @@ impl ClusterExplorerService for ClusterExplorer {
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let (interop_messages, next_page_token) = cluster
             .list_interop_messages(
-                &self.db,
                 init_chain_id,
                 relay_chain_id,
                 address,
@@ -127,7 +120,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let chain_id = parse_query(inner.chain_id)?;
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
-        let count = cluster.count_interop_messages(&self.db, chain_id).await?;
+        let count = cluster.count_interop_messages(chain_id).await?;
 
         Ok(Response::new(CountInteropMessagesResponse { count }))
     }
@@ -141,11 +134,9 @@ impl ClusterExplorerService for ClusterExplorer {
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let address = parse_query(inner.address_hash)?;
 
-        let address_info = cluster.get_address_info(&self.db, address).await?;
+        let address_info = cluster.get_address_info_aggregated(address).await?;
 
-        Ok(Response::new(
-            GetAddressResponse::try_from(address_info).map_err(ServiceError::from)?,
-        ))
+        Ok(Response::new(address_info.into()))
     }
 
     async fn list_address_tokens(
@@ -157,17 +148,12 @@ impl ClusterExplorerService for ClusterExplorer {
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let token_types = parse_token_types(inner.r#type)?;
         let address = parse_query(inner.address_hash)?;
-        let chain_ids = inner
-            .chain_id
-            .into_iter()
-            .map(parse_query)
-            .collect::<Result<Vec<_>, _>>()?;
+        let chain_ids = parse_chain_ids(inner.chain_id)?;
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.extract_page_token()?;
 
         let (tokens, next_page_token) = cluster
             .list_address_tokens(
-                &self.db,
                 address,
                 token_types,
                 chain_ids,
@@ -195,22 +181,12 @@ impl ClusterExplorerService for ClusterExplorer {
 
         let cluster = self.try_get_cluster(&inner.cluster_id)?;
         let token_types = parse_token_types(inner.r#type)?;
-        let chain_ids = inner
-            .chain_id
-            .into_iter()
-            .map(parse_query)
-            .collect::<Result<Vec<_>, _>>()?;
+        let chain_ids = parse_chain_ids(inner.chain_id)?;
         let page_size = self.normalize_page_size(inner.page_size);
         let page_token = inner.page_token.extract_page_token()?;
 
         let (tokens, next_page_token) = cluster
-            .list_cluster_tokens(
-                &self.db,
-                token_types,
-                chain_ids,
-                page_size as u64,
-                page_token,
-            )
+            .list_cluster_tokens(token_types, chain_ids, page_size as u64, page_token)
             .await?;
 
         Ok(Response::new(ListClusterTokensResponse {
@@ -232,9 +208,7 @@ impl ClusterExplorerService for ClusterExplorer {
         let address = parse_query(inner.address_hash)?;
         let chain_id = parse_query(inner.chain_id)?;
 
-        let token = cluster
-            .get_aggregated_token(&self.db, address, chain_id)
-            .await?;
+        let token = cluster.get_aggregated_token(address, chain_id).await?;
 
         Ok(Response::new(GetAggregatedTokenResponse {
             token: token
@@ -256,13 +230,96 @@ impl ClusterExplorerService for ClusterExplorer {
         let page_token = inner.page_token.extract_page_token()?;
 
         let (holders, next_page_token) = cluster
-            .list_token_holders(&self.db, address, chain_id, page_size as u64, page_token)
+            .list_token_holders(address, chain_id, page_size as u64, page_token)
             .await?;
 
         Ok(Response::new(ListTokenHoldersResponse {
             items: holders.into_iter().map(|h| h.into()).collect(),
             next_page_params: page_token_to_proto(next_page_token, page_size),
         }))
+    }
+
+    async fn search_addresses(
+        &self,
+        request: Request<SearchByQueryRequest>,
+    ) -> Result<Response<SearchAddressesResponse>, Status> {
+        paginated_list_by_query_endpoint!(
+            self,
+            request,
+            search_addresses_aggregated,
+            SearchAddressesResponse
+        )
+    }
+
+    async fn search_nfts(
+        &self,
+        request: Request<SearchByQueryRequest>,
+    ) -> Result<Response<SearchNftsResponse>, Status> {
+        paginated_list_by_query_endpoint!(self, request, search_nfts, SearchNftsResponse)
+    }
+
+    async fn search_transactions(
+        &self,
+        request: Request<SearchByQueryRequest>,
+    ) -> Result<Response<SearchTransactionsResponse>, Status> {
+        paginated_list_by_query_endpoint!(
+            self,
+            request,
+            search_transactions,
+            SearchTransactionsResponse
+        )
+    }
+
+    async fn search_blocks(
+        &self,
+        request: Request<SearchByQueryRequest>,
+    ) -> Result<Response<SearchBlocksResponse>, Status> {
+        paginated_list_by_query_endpoint!(self, request, search_blocks, SearchBlocksResponse)
+    }
+
+    async fn search_block_numbers(
+        &self,
+        request: Request<SearchByQueryRequest>,
+    ) -> Result<Response<SearchBlockNumbersResponse>, Status> {
+        paginated_list_by_query_endpoint!(
+            self,
+            request,
+            search_block_numbers,
+            SearchBlockNumbersResponse
+        )
+    }
+
+    async fn search_tokens(
+        &self,
+        request: Request<SearchByQueryRequest>,
+    ) -> Result<Response<SearchTokensResponse>, Status> {
+        paginated_list_by_query_endpoint!(self, request, search_tokens, SearchTokensResponse)
+    }
+
+    async fn search_domains(
+        &self,
+        request: Request<SearchByQueryRequest>,
+    ) -> Result<Response<SearchDomainsResponse>, Status> {
+        paginated_list_by_query_endpoint!(
+            self,
+            request,
+            search_domains_cached,
+            SearchDomainsResponse
+        )
+    }
+
+    async fn quick_search(
+        &self,
+        request: Request<ClusterQuickSearchRequest>,
+    ) -> Result<Response<ClusterQuickSearchResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let result = cluster.quick_search(inner.q, true).await?;
+
+        Ok(Response::new(
+            result.try_into().map_err(ServiceError::from)?,
+        ))
     }
 }
 

@@ -1,15 +1,17 @@
 use std::{fmt::Debug, future::Future, pin::Pin, sync::Arc};
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use entity::sea_orm_active_enums::ChartType;
 use stats_proto::blockscout::stats::v1::Point;
 
 use crate::{
     RequestedPointsLimit,
+    chart_prelude::Get,
     data_source::{
         DataSource, UpdateContext,
         kinds::local_db::{
             LocalDbChartSource,
+            cached::RemoteCachedLocalDbChartSource,
             parameter_traits::{CreateBehaviour, QueryBehaviour, UpdateBehaviour},
         },
     },
@@ -159,6 +161,56 @@ where
     {
         let cx = cx.clone();
         Box::pin(async move {
+            let data = Query::query_data(&cx, range, points_limit, fill_missing_dates).await?;
+            Ok(data.serialize())
+        })
+    }
+
+    fn new_for_dynamic_dispatch() -> Self
+    where
+        Self: Sized,
+    {
+        Self(std::marker::PhantomData)
+    }
+}
+
+impl<MainDep, ResolutionDep, Create, Update, Query, CacheTimeout, ChartProps, QueryOutput>
+    QuerySerialized
+    for RemoteCachedLocalDbChartSource<
+        MainDep,
+        ResolutionDep,
+        Create,
+        Update,
+        Query,
+        CacheTimeout,
+        ChartProps,
+    >
+where
+    MainDep: DataSource + Sync,
+    ResolutionDep: DataSource + Sync,
+    Create: CreateBehaviour + Sync,
+    Update: UpdateBehaviour<MainDep, ResolutionDep, ChartProps::Resolution> + Sync,
+    Query: QueryBehaviour<Output = QueryOutput> + Sync,
+    QueryOutput: SerializableQueryOutput,
+    QueryOutput::Serialized: Send,
+    CacheTimeout: Get<Value = Duration> + Sync,
+    ChartProps: ChartProperties,
+    ChartProps::Resolution: Ord + Clone + Debug + Send,
+{
+    type Output = QueryOutput::Serialized;
+
+    fn query_data<'a>(
+        &self,
+        cx: &'a UpdateContext<'a>,
+        range: UniversalRange<DateTime<Utc>>,
+        points_limit: Option<RequestedPointsLimit>,
+        fill_missing_dates: bool,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<Self::Output, ChartError>> + Send + 'a>>
+    {
+        let cx = cx.clone();
+        Box::pin(async move {
+            Self::update_cache_if_needed(&cx, None).await?;
+            // get from "cache"
             let data = Query::query_data(&cx, range, points_limit, fill_missing_dates).await?;
             Ok(data.serialize())
         })

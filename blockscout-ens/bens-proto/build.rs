@@ -54,6 +54,10 @@ fn compile(
             ".blockscout.bens.v1.LookupAddressRequest.only_active",
             "#[serde(default)]"
         )
+        .field_attribute(
+            ".blockscout.bens.v1.Address.ens_domain_name",
+            "#[serde(skip_serializing_if = \"Option::is_none\")]"
+        )
         ;
     config.compile_protos(protos, includes)?;
     Ok(())

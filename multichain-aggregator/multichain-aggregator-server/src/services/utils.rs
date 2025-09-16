@@ -1,4 +1,4 @@
-use multichain_aggregator_logic::page_token::PageTokenFormat;
+use multichain_aggregator_logic::{page_token::PageTokenFormat, types::ChainId};
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1::Pagination;
 use std::{fmt::Display, str::FromStr};
 use tonic::Status;
@@ -49,4 +49,12 @@ pub fn page_token_to_proto<T: PageTokenFormat>(
         page_token: pt.format_page_token(),
         page_size,
     })
+}
+
+#[allow(clippy::result_large_err)]
+pub fn parse_chain_ids(chain_ids: Vec<String>) -> Result<Vec<ChainId>, Status> {
+    chain_ids
+        .into_iter()
+        .map(parse_query)
+        .collect::<Result<Vec<_>, _>>()
 }

@@ -126,8 +126,9 @@ enum TokenType {
 
 message Address {
   string hash = 1;
+  // Optional. ENS name of the sender (resolved from hash)
+  optional string ens_domain_name = 2;
 }
-
 
 enum Order {
   ORDER_UNSPECIFIED = 0;

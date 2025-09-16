@@ -71,6 +71,30 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListTokenHolders
       get: /api/v1/clusters/{cluster_id}/tokens/{address_hash}/holders
 
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchAddresses
+      get: /api/v1/clusters/{cluster_id}/search/addresses
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchNfts
+      get: /api/v1/clusters/{cluster_id}/search/nfts
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchTransactions
+      get: /api/v1/clusters/{cluster_id}/search/transactions
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchBlocks
+      get: /api/v1/clusters/{cluster_id}/search/blocks
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchBlockNumbers
+      get: /api/v1/clusters/{cluster_id}/search/block-numbers
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchTokens
+      get: /api/v1/clusters/{cluster_id}/search/tokens
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchDomains
+      get: /api/v1/clusters/{cluster_id}/search/domains
+
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.QuickSearch
+      get: /api/v1/clusters/{cluster_id}/search:quick
+
     #################### Health ####################
 
     - selector: blockscout.multichainAggregator.v1.Health.Check

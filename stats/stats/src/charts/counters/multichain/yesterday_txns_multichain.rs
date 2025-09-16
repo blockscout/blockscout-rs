@@ -48,21 +48,21 @@ mod tests {
     #[ignore = "needs database to run"]
     async fn update_yesterday_txns_multichain() {
         simple_test_counter_multichain::<YesterdayTxnsMultichain>(
-            "update_total_multichain_txns",
+            "update_yesterday_txns_multichain",
             "0",
             Some(dt("2023-02-06T00:00:00")),
         )
         .await;
 
         simple_test_counter_multichain::<YesterdayTxnsMultichain>(
-            "update_total_multichain_txns",
+            "update_yesterday_txns_multichain",
             "60",
             Some(dt("2023-02-05T00:00:00")),
         )
         .await;
 
         simple_test_counter_multichain::<YesterdayTxnsMultichain>(
-            "update_total_multichain_txns",
+            "update_yesterday_txns_multichain",
             "49",
             Some(dt("2023-02-04T00:00:00")),
         )

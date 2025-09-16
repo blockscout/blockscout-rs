@@ -6,6 +6,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
+fn prepare_comma_separated_fields(
+    config: &mut Config,
+    fields: impl IntoIterator<Item = (&'static str, &'static str)>,
+) -> &mut Config {
+    for (message, field) in fields {
+        config.type_attribute(message, "#[serde_with::serde_as]")
+            .field_attribute(format!("{}.{}", message, field), "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
+            .field_attribute(format!("{}.{}", message, field), "#[serde(default)]");
+    }
+    config
+}
+
 // custom function to include custom generator
 fn compile(
     protos: &[impl AsRef<Path>],
@@ -28,27 +40,11 @@ fn compile(
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
         .type_attribute(".google.protobuf", "#[derive(serde::Serialize,serde::Deserialize)]")
         // Rename token_type enum values
-        .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_20", "#[serde(rename = \"ERC-20\")]")
-        .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_721", "#[serde(rename = \"ERC-721\")]")
-        .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_1155", "#[serde(rename = \"ERC-1155\")]")
-        .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_404", "#[serde(rename = \"ERC-404\")]")
-        .field_attribute(".blockscout.multichainAggregator.v1.TokenType.TOKEN_TYPE_ERC_7802", "#[serde(rename = \"ERC-7802\")]")
-        // Comma separator for ListDappsRequest.chain_ids
-        .type_attribute("ListDappsRequest", "#[serde_with::serde_as]")
-        .field_attribute("ListDappsRequest.chain_ids", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
-        .field_attribute("ListDappsRequest.chain_ids", "#[serde(default)]")
-        // Comma separator for ListTokensRequest.chain_id
-        .type_attribute("ListTokensRequest", "#[serde_with::serde_as]")
-        .field_attribute("ListTokensRequest.chain_id", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
-        .field_attribute("ListTokensRequest.chain_id", "#[serde(default)]")
-        // Comma separator for ListClusterTokensRequest.chain_id
-        .type_attribute("ListClusterTokensRequest", "#[serde_with::serde_as]")
-        .field_attribute("ListClusterTokensRequest.chain_id", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
-        .field_attribute("ListClusterTokensRequest.chain_id", "#[serde(default)]")
-        // Comma separator for ListAddressTokensRequest.chain_id
-        .type_attribute("ListAddressTokensRequest", "#[serde_with::serde_as]")
-        .field_attribute("ListAddressTokensRequest.chain_id", "#[serde_as(as = \"serde_with::StringWithSeparator::<serde_with::formats::CommaSeparator, String>\")]")
-        .field_attribute("ListAddressTokensRequest.chain_id", "#[serde(default)]")
+        .field_attribute("TokenType.TOKEN_TYPE_ERC_20", "#[serde(rename = \"ERC-20\")]")
+        .field_attribute("TokenType.TOKEN_TYPE_ERC_721", "#[serde(rename = \"ERC-721\")]")
+        .field_attribute("TokenType.TOKEN_TYPE_ERC_1155", "#[serde(rename = \"ERC-1155\")]")
+        .field_attribute("TokenType.TOKEN_TYPE_ERC_404", "#[serde(rename = \"ERC-404\")]")
+        .field_attribute("TokenType.TOKEN_TYPE_ERC_7802", "#[serde(rename = \"ERC-7802\")]")
         // Make import fields optional
         .field_attribute("BatchImportRequest.addresses", "#[serde(default)]")
         .field_attribute("BatchImportRequest.block_ranges", "#[serde(default)]")
@@ -62,6 +58,22 @@ fn compile(
         .field_attribute("BatchImportRequest.TokenImport.Metadata.token_type", "#[serde(default)]")
         .field_attribute("ListAddressTokensRequest.type", "#[serde(default)]")
         .extern_path(".google.protobuf", "::prost-wkt-types");
+
+    prepare_comma_separated_fields(
+        &mut config,
+        vec![
+            ("ListDomainsRequest", "chain_id"),
+            ("ListAddressesRequest", "chain_id"),
+            ("ListNftsRequest", "chain_id"),
+            ("ListBlockNumbersRequest", "chain_id"),
+            ("ListBlocksRequest", "chain_id"),
+            ("ListDappsRequest", "chain_ids"),
+            ("ListTokensRequest", "chain_id"),
+            ("ListClusterTokensRequest", "chain_id"),
+            ("ListAddressTokensRequest", "chain_id"),
+        ],
+    );
+
     config.compile_protos(protos, includes)?;
 
     let descriptor_bytes = fs::read(descriptor_file).unwrap();

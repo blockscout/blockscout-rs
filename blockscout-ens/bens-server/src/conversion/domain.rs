@@ -106,13 +106,13 @@ pub fn batch_resolve_from_inner(
 }
 
 pub fn batch_resolve_from_logic(
-    output: BTreeMap<String, String>,
+    output: BTreeMap<Address, String>,
     chain_id: i64,
 ) -> Result<proto::BatchResolveAddressNamesResponse, ConversionError> {
     let names = output
         .into_iter()
         .map(|(address, name)| {
-            let address = address_from_str_logic(&address, chain_id)?.hash;
+            let address = checksummed(&address, chain_id);
             Ok((address, name))
         })
         .collect::<Result<_, _>>()?;

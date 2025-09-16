@@ -40,9 +40,9 @@ pub mod chart_prelude {
                     sum_point::Sum,
                 },
                 local_db::{
-                    DailyCumulativeLocalDbChartSource, DirectPointLocalDbChartSource,
-                    DirectPointLocalDbChartSourceWithEstimate, DirectVecLocalDbChartSource,
-                    LocalDbChartSource,
+                    DailyCumulativeLocalDbChartSource, DirectPointCachedLocalDbChartSource,
+                    DirectPointLocalDbChartSource, DirectPointLocalDbChartSourceWithEstimate,
+                    DirectVecLocalDbChartSource, LocalDbChartSource,
                     parameter_traits::{CreateBehaviour, UpdateBehaviour},
                     parameters::{
                         DefaultCreate, DefaultQueryVec, ValueEstimation,

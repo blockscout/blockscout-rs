@@ -13,6 +13,9 @@ use crate::{
     range::UniversalRange,
 };
 
+pub const TIMESTAMP_COLUMN: zetachain_cctx_entity::cctx_status::Column =
+    zetachain_cctx_entity::cctx_status::Column::LastUpdateTimestamp;
+
 /// `None` if no historical watermark is found or the timestamp is not set
 pub async fn query_zetachain_cctx_indexed_until<C: ConnectionTrait>(
     db: &C,
@@ -43,11 +46,10 @@ where
     let min_date = zetachain_cctx_entity::cctx_status::Entity::find()
         .select_only()
         .expr_as(
-            Func::cust("to_timestamp")
-                .arg(zetachain_cctx_entity::cctx_status::Column::CreatedTimestamp.into_expr()),
+            Func::cust("to_timestamp").arg(TIMESTAMP_COLUMN.into_expr()),
             "timestamp",
         )
-        .order_by_asc(zetachain_cctx_entity::cctx_status::Column::CreatedTimestamp)
+        .order_by_asc(TIMESTAMP_COLUMN)
         .into_model::<MinTimestamp>()
         .one(db)
         .await?;
