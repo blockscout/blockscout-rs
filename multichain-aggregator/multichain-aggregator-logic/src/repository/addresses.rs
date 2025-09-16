@@ -1,6 +1,9 @@
-use crate::types::{
-    ChainId,
-    addresses::{Address, AddressInfo},
+use crate::{
+    repository::{paginate_query, pagination::KeySpec},
+    types::{
+        ChainId,
+        addresses::{Address, AggregatedAddressInfo, ChainAddressInfo},
+    },
 };
 use alloy_primitives::Address as AddressAlloy;
 use entity::{
@@ -12,7 +15,8 @@ use regex::Regex;
 use sea_orm::{
     ActiveValue::NotSet,
     ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
-    IntoSimpleExpr, Iterable, JoinType, Order, QueryFilter, QuerySelect, QueryTrait,
+    IntoSimpleExpr, Iterable, JoinType, Order, PartialModelTrait, QueryFilter, QuerySelect,
+    QueryTrait, RelationDef,
     prelude::Expr,
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
@@ -271,34 +275,126 @@ where
     }
 }
 
-pub async fn get_address_info<C>(
-    db: &C,
-    address: AddressAlloy,
-    cluster_chain_ids: Option<Vec<ChainId>>,
-) -> Result<Option<AddressInfo>, DbErr>
-where
-    C: ConnectionTrait,
-{
-    let coin_balances_rel = Entity::belongs_to(address_coin_balances::Entity)
+fn coin_balances_rel() -> RelationDef {
+    Entity::belongs_to(address_coin_balances::Entity)
         .from((Column::Hash, Column::ChainId))
         .to((
             address_coin_balances::Column::AddressHash,
             address_coin_balances::Column::ChainId,
         ))
-        .into();
+        .into()
+}
 
+pub async fn get_aggregated_address_info<C>(
+    db: &C,
+    address: AddressAlloy,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+) -> Result<Option<AggregatedAddressInfo>, DbErr>
+where
+    C: ConnectionTrait,
+{
     let address_info = Entity::find()
-        .join(JoinType::LeftJoin, coin_balances_rel)
+        .join(JoinType::LeftJoin, coin_balances_rel())
         .filter(Column::Hash.eq(address.as_slice()))
         .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
             q.filter(Column::ChainId.is_in(cluster_chain_ids))
         })
         .group_by(Column::Hash)
-        .into_partial_model::<AddressInfo>()
+        .into_partial_model::<AggregatedAddressInfo>()
         .one(db)
         .await?;
 
     Ok(address_info)
+}
+
+pub async fn list_aggregated_address_infos<C>(
+    db: &C,
+    addresses: Vec<AddressAlloy>,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+    page_size: u64,
+    page_token: Option<AddressAlloy>,
+) -> Result<(Vec<AggregatedAddressInfo>, Option<AddressAlloy>), DbErr>
+where
+    C: ConnectionTrait,
+{
+    let address_infos = AggregatedAddressInfo::select_cols(
+        Entity::find()
+            .select_only()
+            .join(JoinType::LeftJoin, coin_balances_rel())
+            .filter(
+                Column::Hash.is_in(
+                    addresses
+                        .into_iter()
+                        .map(|a| a.to_vec())
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+                q.filter(Column::ChainId.is_in(cluster_chain_ids))
+            })
+            .group_by(Column::Hash),
+    )
+    .as_query()
+    .to_owned();
+
+    let order_keys = vec![KeySpec::asc(Expr::col(Column::Hash).into())];
+    let page_token = page_token.map(|address| (address.to_vec()));
+
+    paginate_query(
+        db,
+        address_infos,
+        page_size,
+        page_token,
+        order_keys,
+        |a: &AggregatedAddressInfo| *a.hash,
+    )
+    .await
+}
+
+pub async fn list_chain_address_infos<C>(
+    db: &C,
+    addresses: Vec<AddressAlloy>,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+    page_size: u64,
+    page_token: Option<(AddressAlloy, ChainId)>,
+) -> Result<(Vec<ChainAddressInfo>, Option<(AddressAlloy, ChainId)>), DbErr>
+where
+    C: ConnectionTrait,
+{
+    let address_infos = ChainAddressInfo::select_cols(
+        Entity::find()
+            .select_only()
+            .join(JoinType::LeftJoin, coin_balances_rel())
+            .filter(
+                Column::Hash.is_in(
+                    addresses
+                        .into_iter()
+                        .map(|a| a.to_vec())
+                        .collect::<Vec<_>>(),
+                ),
+            )
+            .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+                q.filter(Column::ChainId.is_in(cluster_chain_ids))
+            }),
+    )
+    .as_query()
+    .to_owned();
+
+    let order_keys = vec![
+        KeySpec::asc(Column::Hash.into_simple_expr()),
+        KeySpec::asc(Column::ChainId.into_simple_expr()),
+    ];
+    let page_token = page_token.map(|(address, chain_id)| (address.to_vec(), chain_id));
+
+    paginate_query(
+        db,
+        address_infos,
+        page_size,
+        page_token,
+        order_keys,
+        |a: &ChainAddressInfo| (*a.hash, a.chain_info.chain_id),
+    )
+    .await
 }
 
 fn parse_db_address(hash: &[u8]) -> AddressAlloy {

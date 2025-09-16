@@ -6,7 +6,7 @@ use crate::{
         multichain_aggregator_service_actix::route_multichain_aggregator_service,
         multichain_aggregator_service_server::MultichainAggregatorServiceServer,
     },
-    services::{ClusterExplorer, HealthService, MultichainAggregator},
+    services::{ClusterExplorer, HealthService, MULTICHAIN_CLUSTER_ID, MultichainAggregator},
     settings::Settings,
 };
 use actix_phoenix_channel::{ChannelCentral, configure_channel_websocket_route};
@@ -25,12 +25,12 @@ use multichain_aggregator_logic::{
         },
         channel::Channel,
         cluster::{Cluster, DecodedCalldataCache},
-        search::DomainSearchCache,
+        quick_search::DomainSearchCache,
     },
 };
 use recache::stores::redis::RedisStore;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
     time::Duration,
 };
@@ -177,7 +177,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         .map(|c| (c.id, c.explorer_url))
         .collect::<BTreeMap<_, _>>();
 
-    let clusters = settings
+    let mut clusters = settings
         .cluster_explorer
         .clusters
         .into_iter()
@@ -187,44 +187,63 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                 panic!("cluster {name} has no chain_ids");
             }
             let blockscout_clients = chain_ids
-                .into_iter()
+                .iter()
                 .map(|id| {
                     let url = chain_urls
-                        .get(&id)
+                        .get(id)
                         .cloned()
                         .expect("chain should be present")
                         .expect("chain url should be present")
                         .parse()
                         .expect("chain url should be valid");
                     let client = blockscout::new_client(url).expect("client should be valid");
-                    (id, Arc::new(client))
+                    (*id, Arc::new(client))
                 })
                 .collect::<BTreeMap<_, _>>();
             (
                 name.clone(),
-                Cluster::new(blockscout_clients, decoded_calldata_cache.clone()),
+                Cluster::new(
+                    repo.read_db().clone(),
+                    chain_ids,
+                    blockscout_clients,
+                    decoded_calldata_cache.clone(),
+                    settings.service.quick_search_chains.clone(),
+                    dapp_client.clone(),
+                    token_info_client.clone(),
+                    bens_client.clone(),
+                    settings.service.bens_protocols.clone().map(|p| &*p.leak()),
+                    settings.service.domain_primary_chain_id,
+                    domain_search_cache.clone(),
+                ),
             )
         })
-        .collect();
-    let cluster_explorer = Arc::new(ClusterExplorer::new(
-        repo.read_db().clone(),
-        clusters,
-        settings.service.api.clone(),
-    ));
+        .collect::<HashMap<_, _>>();
 
-    let bens_protocols = settings.service.bens_protocols.map(|p| &*p.leak());
+    clusters.insert(
+        MULTICHAIN_CLUSTER_ID.to_string(),
+        Cluster::new(
+            repo.read_db().clone(),
+            Default::default(),
+            Default::default(),
+            decoded_calldata_cache.clone(),
+            settings.service.quick_search_chains.clone(),
+            dapp_client.clone(),
+            token_info_client.clone(),
+            bens_client.clone(),
+            settings.service.bens_protocols.clone().map(|p| &*p.leak()),
+            settings.service.domain_primary_chain_id,
+            domain_search_cache.clone(),
+        ),
+    );
+    let cluster_explorer = Arc::new(ClusterExplorer::new(clusters, settings.service.api.clone()));
+
     let multichain_aggregator = Arc::new(MultichainAggregator::new(
         Arc::new(repo),
         dapp_client,
-        token_info_client,
-        bens_client,
         settings.service.api,
-        settings.service.quick_search_chains,
-        bens_protocols,
-        settings.service.domain_primary_chain_id,
         marketplace_enabled_cache,
         channel.channel_broadcaster(),
-        domain_search_cache,
+        Arc::clone(&cluster_explorer),
     ));
 
     let router = Router {
