@@ -6,7 +6,7 @@ use crate::{
     },
     error::{ParseError, ServiceError},
     repository::{
-        address_token_balances::{self, ListAddressTokensPageToken},
+        address_token_balances::{self, ListAddressTokensPageToken, ListTokenHoldersPageToken},
         addresses, block_ranges, chains, hashes, interop_message_transfers, interop_messages,
         tokens::{self, ListClusterTokensPageToken},
     },
@@ -17,7 +17,7 @@ use crate::{
     },
     types::{
         ChainId,
-        address_token_balances::AggregatedAddressTokenBalance,
+        address_token_balances::{AggregatedAddressTokenBalance, TokenHolder},
         addresses::{Address, AggregatedAddressInfo, ChainAddressInfo},
         block_ranges::ChainBlockNumber,
         chains::Chain,
@@ -327,6 +327,22 @@ impl Cluster {
         let token = tokens::get_aggregated_token(&self.db, address, chain_id).await?;
 
         Ok(token)
+    }
+
+    pub async fn list_token_holders(
+        &self,
+        address: AddressAlloy,
+        chain_id: ChainId,
+        page_size: u64,
+        page_token: Option<ListTokenHoldersPageToken>,
+    ) -> Result<(Vec<TokenHolder>, Option<ListTokenHoldersPageToken>), ServiceError> {
+        self.validate_chain_id(chain_id)?;
+        let holders = address_token_balances::list_token_holders(
+            &self.db, address, chain_id, page_size, page_token,
+        )
+        .await?;
+
+        Ok(holders)
     }
 
     async fn fetch_decoded_calldata_cached(

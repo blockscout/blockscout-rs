@@ -1,5 +1,9 @@
 use super::ChainId;
-use crate::{error::ParseError, proto, types};
+use crate::{
+    error::ParseError,
+    proto,
+    types::{self, proto_address_hash_from_alloy, sea_orm_wrappers::SeaOrmAddress},
+};
 use entity::{
     address_token_balances::{ActiveModel, Column, Entity, Model},
     tokens,
@@ -68,6 +72,24 @@ pub fn chain_values_expr() -> SimpleExpr {
             Column::Value.into_simple_expr(),
         ],
     )
+}
+
+#[derive(DerivePartialModel, Clone, Debug)]
+#[sea_orm(entity = "Entity", from_query_result)]
+pub struct TokenHolder {
+    pub address_hash: SeaOrmAddress,
+    pub token_id: Option<BigDecimal>,
+    pub value: BigDecimal,
+}
+
+impl From<TokenHolder> for proto::list_token_holders_response::TokenHolder {
+    fn from(v: TokenHolder) -> Self {
+        Self {
+            address: Some(proto_address_hash_from_alloy(&v.address_hash)),
+            token_id: v.token_id.map(|t| t.to_plain_string()),
+            value: v.value.to_plain_string(),
+        }
+    }
 }
 
 #[derive(DerivePartialModel, Clone, Debug)]

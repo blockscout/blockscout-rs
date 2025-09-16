@@ -20,6 +20,7 @@ service ClusterExplorerService {
   rpc ListAddressTokens(ListAddressTokensRequest) returns (ListAddressTokensResponse) {}
   rpc ListClusterTokens(ListClusterTokensRequest) returns (ListClusterTokensResponse) {}
   rpc GetAggregatedToken(GetAggregatedTokenRequest) returns (GetAggregatedTokenResponse) {}
+  rpc ListTokenHolders(ListTokenHoldersRequest) returns (ListTokenHoldersResponse) {}
   rpc SearchAddresses(SearchByQueryRequest) returns (SearchAddressesResponse) {}
   rpc SearchNfts(SearchByQueryRequest) returns (SearchNftsResponse) {}
   rpc SearchTransactions(SearchByQueryRequest) returns (SearchTransactionsResponse) {}
@@ -200,6 +201,25 @@ message GetAggregatedTokenRequest {
 
 message GetAggregatedTokenResponse {
   AggregatedTokenInfo token = 1;
+}
+
+message ListTokenHoldersRequest {
+  string cluster_id = 1;
+  string address_hash = 2;
+  string chain_id = 3;
+  optional uint32 page_size = 4;
+  optional string page_token = 5;
+}
+
+message ListTokenHoldersResponse {
+  message TokenHolder {
+    AddressHash address = 1;
+    optional string token_id = 2;
+    string value = 3;    
+  }
+
+  repeated TokenHolder items = 1;
+  blockscout.multichainAggregator.v1.Pagination next_page_params = 2;
 }
 
 message SearchByQueryRequest {

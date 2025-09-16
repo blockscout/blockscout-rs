@@ -217,6 +217,28 @@ impl ClusterExplorerService for ClusterExplorer {
         }))
     }
 
+    async fn list_token_holders(
+        &self,
+        request: Request<ListTokenHoldersRequest>,
+    ) -> Result<Response<ListTokenHoldersResponse>, Status> {
+        let inner = request.into_inner();
+
+        let cluster = self.try_get_cluster(&inner.cluster_id)?;
+        let address = parse_query(inner.address_hash)?;
+        let chain_id = parse_query(inner.chain_id)?;
+        let page_size = self.normalize_page_size(inner.page_size);
+        let page_token = inner.page_token.extract_page_token()?;
+
+        let (holders, next_page_token) = cluster
+            .list_token_holders(address, chain_id, page_size as u64, page_token)
+            .await?;
+
+        Ok(Response::new(ListTokenHoldersResponse {
+            items: holders.into_iter().map(|h| h.into()).collect(),
+            next_page_params: page_token_to_proto(next_page_token, page_size),
+        }))
+    }
+
     async fn search_addresses(
         &self,
         request: Request<SearchByQueryRequest>,

@@ -2,7 +2,7 @@ use crate::{
     repository::{paginate_query, pagination::KeySpec, tokens::base_normal_tokens_query},
     types::{
         ChainId,
-        address_token_balances::{AddressTokenBalance, AggregatedAddressTokenBalance},
+        address_token_balances::{AddressTokenBalance, AggregatedAddressTokenBalance, TokenHolder},
     },
 };
 use bigdecimal::BigDecimal;
@@ -137,4 +137,40 @@ where
         .await?
         .expect("expr should be present")
         .try_get_by_index(0)
+}
+
+pub type ListTokenHoldersPageToken = (BigDecimal, alloy_primitives::Address);
+
+pub async fn list_token_holders<C>(
+    db: &C,
+    address: alloy_primitives::Address,
+    chain_id: ChainId,
+    page_size: u64,
+    page_token: Option<ListTokenHoldersPageToken>,
+) -> Result<(Vec<TokenHolder>, Option<ListTokenHoldersPageToken>), DbErr>
+where
+    C: ConnectionTrait,
+{
+    let query = Entity::find()
+        .filter(Column::TokenAddressHash.eq(address.as_slice()))
+        .filter(Column::ChainId.eq(chain_id))
+        .filter(Column::Value.gt(0))
+        .as_query()
+        .to_owned();
+
+    let order_keys = vec![
+        KeySpec::desc(Expr::col(Column::Value).into()),
+        KeySpec::desc(Expr::col(Column::AddressHash).into()),
+    ];
+    let page_token = page_token.map(|(v, a)| (v, a.to_vec()));
+
+    paginate_query(
+        db,
+        query,
+        page_size,
+        page_token,
+        order_keys,
+        |a: &TokenHolder| (a.value.clone(), *a.address_hash),
+    )
+    .await
 }
