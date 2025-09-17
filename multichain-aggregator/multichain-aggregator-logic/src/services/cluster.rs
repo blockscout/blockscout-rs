@@ -281,7 +281,12 @@ impl Cluster {
 
         address_info.has_tokens = has_tokens?;
         address_info.has_interop_message_transfers = has_interop_message_transfers?;
-        address_info.exchange_rate = coin_price?;
+        address_info.exchange_rate = coin_price
+            .inspect_err(|e| {
+                tracing::error!("failed to fetch coin price: {e}");
+            })
+            .ok()
+            .flatten();
 
         Ok(address_info)
     }
