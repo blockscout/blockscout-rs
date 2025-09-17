@@ -146,6 +146,7 @@ message GetAddressResponse {
     string coin_balance = 1;
     bool is_contract = 2;
     bool is_verified = 3;
+    optional string contract_name = 4;
   }
 
   string hash = 1;

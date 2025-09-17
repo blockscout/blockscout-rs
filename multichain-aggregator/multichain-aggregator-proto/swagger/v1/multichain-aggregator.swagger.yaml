@@ -1466,6 +1466,8 @@ definitions:
         type: boolean
       is_verified:
         type: boolean
+      contract_name:
+        type: string
     description: Chain-specific information.
   v1GetAggregatedTokenResponse:
     type: object

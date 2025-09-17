@@ -89,7 +89,7 @@ impl From<Address> for proto::Address {
 
 fn chain_info_query() -> SimpleExpr {
     Expr::cust_with_exprs(
-        "json_build_object('chain_id',$1,'coin_balance',$2,'is_contract',$3,'is_verified',$4)",
+        "json_build_object('chain_id',$1,'coin_balance',$2,'is_contract',$3,'is_verified',$4,'contract_name',$5)",
         vec![
             Column::ChainId.into_simple_expr(),
             Func::coalesce([
@@ -99,6 +99,7 @@ fn chain_info_query() -> SimpleExpr {
             .into(),
             Column::IsContract.into_simple_expr(),
             Column::IsVerifiedContract.into_simple_expr(),
+            Column::ContractName.into_simple_expr(),
         ],
     )
     .into_simple_expr()
@@ -198,8 +199,9 @@ impl From<ChainAddressInfo> for proto::Address {
 pub struct ChainInfo {
     pub chain_id: ChainId,
     pub coin_balance: BigDecimal,
-    is_contract: bool,
-    is_verified: bool,
+    pub is_contract: bool,
+    pub is_verified: bool,
+    pub contract_name: Option<String>,
 }
 
 impl From<ChainInfo> for proto::get_address_response::ChainInfo {
@@ -208,6 +210,7 @@ impl From<ChainInfo> for proto::get_address_response::ChainInfo {
             coin_balance: v.coin_balance.to_string(),
             is_contract: v.is_contract,
             is_verified: v.is_verified,
+            contract_name: v.contract_name,
         }
     }
 }
