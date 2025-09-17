@@ -194,11 +194,11 @@ impl MultichainAggregatorService for MultichainAggregator {
             .collect();
 
             dapp_search::search_dapps(
-                &cluster.dapp_client,
+                &self.dapp_client,
                 inner.q,
                 inner.categories,
                 chain_ids,
-                &cluster.marketplace_enabled_cache,
+                &self.marketplace_enabled_cache,
             )
             .await?
         } else {
