@@ -4411,7 +4411,7 @@ dependencies = [
 [[package]]
 name = "recache"
 version = "0.1.0"
-source = "git+https://github.com/blockscout/blockscout-rs#69935d4474c96c48941c6871584ec5a1abbd7de7"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=096c4c1#096c4c140375e5a1802413e9a037c35f84aeaa42"
 dependencies = [
  "async-trait",
  "bon",

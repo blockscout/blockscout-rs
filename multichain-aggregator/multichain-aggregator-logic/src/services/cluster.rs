@@ -683,7 +683,7 @@ impl Cluster {
         let blockscout_clients = Arc::clone(&self.blockscout_clients);
 
         let key = format!("{}:coin_price", self.name);
-        let get = async || {
+        let get = || async {
             Ok::<_, ServiceError>(try_fetch_coin_price(blockscout_clients, chain_ids).await)
         };
         let coin_price = maybe_cache_lookup!(self.coin_price_cache.as_ref(), key, get)?;

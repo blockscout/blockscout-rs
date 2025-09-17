@@ -14,7 +14,8 @@ pub fn build_coin_price_cache(redis_cache: Arc<RedisStore>) -> CoinPriceCache {
         .build()
 }
 
-/// Try to fetch coin price from each client until we get a result
+/// Try to fetch coin price from each client until we get a result.
+/// All provided chains must share the same native coin.
 pub async fn try_fetch_coin_price(
     blockscout_clients: BlockscoutClients,
     chain_ids: Vec<ChainId>,
