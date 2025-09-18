@@ -62,7 +62,6 @@ pub struct RedisSettings {
 #[serde(deny_unknown_fields)]
 pub struct ServiceSettings {
     pub dapp_client: HttpApiClientSettings,
-    pub token_info_client: HttpApiClientSettings,
     pub bens_client: HttpApiClientSettings,
     #[serde(default)]
     pub api: ApiSettings,
@@ -142,9 +141,6 @@ impl Settings {
             service: ServiceSettings {
                 dapp_client: HttpApiClientSettings {
                     url: Url::parse("http://localhost:8050").unwrap(),
-                },
-                token_info_client: HttpApiClientSettings {
-                    url: Url::parse("http://localhost:8051").unwrap(),
                 },
                 bens_client: HttpApiClientSettings {
                     url: Url::parse("http://localhost:8052").unwrap(),

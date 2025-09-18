@@ -16,7 +16,7 @@ use blockscout_service_launcher::{
 };
 use migration::Migrator;
 use multichain_aggregator_logic::{
-    clients::{bens, blockscout, dapp, token_info},
+    clients::{bens, blockscout, dapp},
     metrics,
     services::{
         chains::{
@@ -116,7 +116,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     }
 
     let dapp_client = dapp::new_client(settings.service.dapp_client.url)?;
-    let token_info_client = token_info::new_client(settings.service.token_info_client.url)?;
     let bens_client = bens::new_client(settings.service.bens_client.url)?;
 
     let marketplace_enabled_cache = MarketplaceEnabledCache::new();
@@ -209,7 +208,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     decoded_calldata_cache.clone(),
                     settings.service.quick_search_chains.clone(),
                     dapp_client.clone(),
-                    token_info_client.clone(),
                     bens_client.clone(),
                     settings.service.bens_protocols.clone().map(|p| &*p.leak()),
                     settings.service.domain_primary_chain_id,
@@ -228,7 +226,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             decoded_calldata_cache.clone(),
             settings.service.quick_search_chains.clone(),
             dapp_client.clone(),
-            token_info_client.clone(),
             bens_client.clone(),
             settings.service.bens_protocols.clone().map(|p| &*p.leak()),
             settings.service.domain_primary_chain_id,

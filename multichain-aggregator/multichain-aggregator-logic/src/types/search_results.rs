@@ -7,7 +7,7 @@ use crate::{
         dapp::MarketplaceDapp,
         domains::Domain,
         hashes::Hash,
-        token_info::Token,
+        tokens::AggregatedToken,
     },
 };
 use multichain_aggregator_proto::blockscout::{
@@ -22,7 +22,7 @@ pub struct QuickSearchResult {
     pub transactions: Vec<Hash>,
     pub block_numbers: Vec<ChainBlockNumber>,
     pub dapps: Vec<MarketplaceDapp>,
-    pub tokens: Vec<Token>,
+    pub tokens: Vec<AggregatedToken>,
     pub nfts: Vec<Address>,
     pub domains: Vec<Domain>,
 }
@@ -61,7 +61,7 @@ impl QuickSearchResult {
                 (transactions, |e: &Hash| e.chain_id),
                 (block_numbers, |e: &ChainBlockNumber| e.chain_id),
                 (dapps, |e: &MarketplaceDapp| e.chain_id),
-                (tokens, |e: &Token| e.chain_id),
+                (tokens, |e: &AggregatedToken| e.chain_id),
                 (nfts, |e: &Address| e.chain_id)
             ]
         );

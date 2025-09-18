@@ -186,7 +186,13 @@ impl ClusterExplorerService for ClusterExplorer {
         let page_token = inner.page_token.extract_page_token()?;
 
         let (tokens, next_page_token) = cluster
-            .list_cluster_tokens(token_types, chain_ids, page_size as u64, page_token)
+            .list_cluster_tokens(
+                token_types,
+                chain_ids,
+                inner.query,
+                page_size as u64,
+                page_token,
+            )
             .await?;
 
         Ok(Response::new(ListClusterTokensResponse {
@@ -293,7 +299,7 @@ impl ClusterExplorerService for ClusterExplorer {
         &self,
         request: Request<SearchByQueryRequest>,
     ) -> Result<Response<SearchTokensResponse>, Status> {
-        paginated_list_by_query_endpoint!(self, request, search_tokens, SearchTokensResponse)
+        paginated_list_by_query_endpoint!(self, request, search_token_infos, SearchTokensResponse)
     }
 
     async fn search_domains(

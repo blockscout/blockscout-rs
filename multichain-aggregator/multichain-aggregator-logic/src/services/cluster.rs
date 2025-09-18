@@ -2,7 +2,6 @@ use crate::{
     clients::{
         bens::{get_address, lookup_domain_name},
         blockscout,
-        token_info::search_token_infos,
     },
     error::{ParseError, ServiceError},
     repository::{
@@ -26,7 +25,6 @@ use crate::{
         hashes::{Hash, HashType},
         interop_messages::{ExtendedInteropMessage, MessageDirection},
         search_results::QuickSearchResult,
-        token_info::Token,
         tokens::{AggregatedToken, TokenType},
     },
 };
@@ -52,7 +50,6 @@ pub struct Cluster {
     decoded_calldata_cache: Option<DecodedCalldataCache>,
     quick_search_chains: Vec<ChainId>,
     pub dapp_client: HttpApiClient,
-    token_info_client: HttpApiClient,
     bens_client: HttpApiClient,
     bens_protocols: Option<&'static [String]>,
     domain_primary_chain_id: ChainId,
@@ -69,7 +66,6 @@ impl Cluster {
         decoded_calldata_cache: Option<DecodedCalldataCache>,
         quick_search_chains: Vec<ChainId>,
         dapp_client: HttpApiClient,
-        token_info_client: HttpApiClient,
         bens_client: HttpApiClient,
         bens_protocols: Option<&'static [String]>,
         domain_primary_chain_id: ChainId,
@@ -83,7 +79,6 @@ impl Cluster {
             marketplace_enabled_cache: Default::default(),
             quick_search_chains,
             dapp_client,
-            token_info_client,
             bens_client,
             bens_protocols,
             domain_primary_chain_id,
@@ -307,13 +302,20 @@ impl Cluster {
         &self,
         token_types: Vec<TokenType>,
         chain_ids: Vec<ChainId>,
+        query: Option<String>,
         page_size: u64,
         page_token: Option<ListClusterTokensPageToken>,
     ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
-        let res =
-            tokens::list_aggregated_tokens(&self.db, chain_ids, token_types, page_size, page_token)
-                .await?;
+        let res = tokens::list_aggregated_tokens(
+            &self.db,
+            chain_ids,
+            token_types,
+            query,
+            page_size,
+            page_token,
+        )
+        .await?;
 
         Ok(res)
     }
@@ -616,55 +618,29 @@ impl Cluster {
         Ok((addresses, page_token))
     }
 
-    pub async fn search_tokens(
+    pub async fn search_token_infos(
         &self,
         query: String,
         chain_ids: Vec<ChainId>,
         page_size: u64,
-        page_token: Option<String>,
-    ) -> Result<(Vec<Token>, Option<String>), ServiceError> {
+        page_token: Option<ListClusterTokensPageToken>,
+    ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
         if query.len() < MIN_QUERY_LENGTH {
             return Ok((vec![], None));
         }
 
-        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+        let token_types = vec![TokenType::Erc20];
+        let (mut tokens, page_token) = self
+            .list_cluster_tokens(token_types, chain_ids, Some(query), page_size, page_token)
+            .await?;
 
-        let token_info_search_endpoint = search_token_infos::SearchTokenInfos {
-            params: search_token_infos::SearchTokenInfosParams {
-                query,
-                chain_id: chain_ids,
-                page_size: Some(page_size as u32),
-                page_token,
-            },
-        };
-
-        let res = self
-            .token_info_client
-            .request(&token_info_search_endpoint)
-            .await
-            .map_err(|err| anyhow::anyhow!("failed to search tokens: {:?}", err))?;
-
-        let mut tokens = res
-            .token_infos
-            .into_iter()
-            .map(|token_info| {
-                let mut token = Token::try_from(token_info)?;
-                token.icon_url = replace_coingecko_logo_uri_to_large(token.icon_url.as_str());
-                Ok(token)
-            })
-            .collect::<Result<Vec<_>, ParseError>>()?;
-
-        let pks = tokens.iter().map(|t| (&t.address, t.chain_id)).collect();
-        let pk_to_address = addresses::get_batch(&self.db, pks).await?;
-
-        for token in tokens.iter_mut() {
-            let pk = (token.address, token.chain_id);
-            if let Some(address) = pk_to_address.get(&pk) {
-                token.is_verified_contract = address.is_verified_contract;
+        tokens.iter_mut().for_each(|token| {
+            if let Some(icon_url) = &mut token.icon_url {
+                *icon_url = replace_coingecko_logo_uri_to_large(icon_url);
             }
-        }
+        });
 
-        Ok((tokens, res.next_page_params.map(|p| p.page_token)))
+        Ok((tokens, page_token))
     }
 
     pub async fn search_domains_cached(
@@ -766,7 +742,6 @@ impl Cluster {
         let context = SearchContext {
             db: Arc::new(self.db.clone()),
             dapp_client: &self.dapp_client,
-            token_info_client: &self.token_info_client,
             bens_client: &self.bens_client,
             bens_protocols: self.bens_protocols,
             domain_primary_chain_id: self.domain_primary_chain_id,

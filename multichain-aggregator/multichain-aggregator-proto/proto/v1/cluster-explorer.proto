@@ -185,6 +185,7 @@ message ListClusterTokensRequest {
   optional string type = 2;
   // Comma-separated list of chain ids to filter by.
   repeated string chain_id = 3;
+  optional string query = 6;
   optional uint32 page_size = 4;
   optional string page_token = 5;
 }
