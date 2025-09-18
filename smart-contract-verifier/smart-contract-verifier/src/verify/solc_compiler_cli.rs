@@ -16,24 +16,26 @@ pub async fn compile_using_cli(
     compiler_path: &Path,
     input: &SolcInput,
 ) -> Result<solc::CompilerOutput, SolcError> {
-    let output = {
-        let input = &input.0;
-        let input_args = types::InputArgs::from(input);
-        let input_files = types::InputFiles::try_from_compiler_input(input).await?;
-        Command::new(compiler_path)
-            .args(input_args.build())
-            .args(input_files.build()?)
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .output()
-            .await
-            .map_err(|err| SolcError::Io(SolcIoError::new(err, compiler_path)))?
-    };
+    let input = &input.0;
+    let input_args = types::InputArgs::from(input);
+    let input_files = types::InputFiles::try_from_compiler_input(input).await?;
+    let output = Command::new(compiler_path)
+        .args(input_args.build())
+        .args(input_files.build()?)
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .output()
+        .await
+        .map_err(|err| SolcError::Io(SolcIoError::new(err, compiler_path)))?;
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let compiler_output = if output.stderr.is_empty() {
         let output_json: types::OutputJson = serde_json::from_slice(output.stdout.as_slice())?;
-        solc::CompilerOutput::try_from(output_json)?
+        solc::CompilerOutput::try_from(types::ConvertibleOutput {
+            output_json,
+            parent_dir: input_files.files_dir.path(),
+            file_names: input_files.file_names,
+        })?
     } else {
         solc::CompilerOutput {
             errors: vec![compiler_error(stderr)],
@@ -231,31 +233,79 @@ mod types {
         pub contracts: HashMap<String, OutputContract>,
     }
 
-    fn remove_path_from_contract_name(name: String) -> String {
-        name.rsplit_once(':')
-            .map(|(_, name_cleared)| name_cleared.to_string())
-            .unwrap_or(name)
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    pub struct ConvertibleOutput<'a> {
+        pub output_json: OutputJson,
+        pub parent_dir: &'a Path,
+        pub file_names: Vec<PathBuf>,
     }
 
-    impl TryFrom<OutputJson> for solc::CompilerOutput {
+    fn split_file_and_contract_names(name: String) -> (Option<String>, String) {
+        name.rsplit_once(':')
+            .map(|(file_name, contract_name)| {
+                (Some(file_name.to_string()), contract_name.to_string())
+            })
+            .unwrap_or((None, name))
+    }
+
+    impl TryFrom<ConvertibleOutput<'_>> for solc::CompilerOutput {
         type Error = SolcError;
 
-        fn try_from(output_json: OutputJson) -> Result<Self, Self::Error> {
-            let contracts = output_json
-                .contracts
-                .into_iter()
-                .map(|(name, output)| {
-                    let name = remove_path_from_contract_name(name);
-                    output.try_into().map(|contract| (name, contract))
-                })
-                .collect::<Result<HashMap<String, solc::Contract>, _>>()?;
+        fn try_from(convertible_output: ConvertibleOutput) -> Result<Self, Self::Error> {
+            // The easiest option - we always know the compiled contract name
+            let contracts = if convertible_output.file_names.len() == 1 {
+                debug_assert!(convertible_output.output_json.contracts.len() == 1);
+
+                let full_file_path = convertible_output.file_names[0].clone();
+                let file_name = full_file_path
+                    .strip_prefix(convertible_output.parent_dir)
+                    // must never be the case, as we derive that full_file_path during InputFiles derivation
+                    .map_err(|_| SolcError::Message("compiled file has unexpected prefix".into()))?
+                    .to_string_lossy()
+                    .to_string();
+
+                let (name, output) = convertible_output
+                    .output_json
+                    .contracts
+                    .into_iter()
+                    .next()
+                    .unwrap();
+                let (_, contract_name) = split_file_and_contract_names(name);
+                let contract: solc::Contract = output.try_into()?;
+
+                BTreeMap::from([(file_name, BTreeMap::from([(contract_name, contract)]))])
+            } else {
+                // The main issue with several files is that some of the compilers (e.g., at least v0.4.8 and below)
+                // return only contract names (and omit file names) in the output. E.g., they output
+                // ```
+                // "contracts": {
+                //     "A": {...}
+                // }
+                // ```
+                // But for verification we need those file names, as blockscout expects for the verified contract `file_name`
+                // to correspond to some input file. Thus, for compilers which do not return file names it is impossible to verify
+                // multi-file inputs in an easy way.
+                //
+                // Notice that at least v0.4.10 returns fully qualified names. E.g,
+                // ```
+                // "contracts": {
+                //     "a.sol:A": {...}
+                // }
+                // ```
+                // For those, we can derive both file and contract names, however we omit supporting such cases for now.
+                // At the moment (2025) we have seen no verified contracts with compiler version v0.4.10 and below
+                // which has more than a single file. Besides, if such contracts were found they could be verified by flattening
+                // initial files. We can support them later if required.
+                return Err(SolcError::Message(
+                    "convertion of output with more than one file is not currently supported"
+                        .into(),
+                ));
+            };
+
             let contracts_raw = serde_json::to_value(&contracts)?;
             let compiler_output = serde_json::json!(
                 {
-                    "contracts": {
-                        // TODO: give filename, if only 1 file was provided
-                        "": contracts_raw
-                    }
+                    "contracts": contracts_raw
                 }
             );
             let compiler_output = serde_json::from_value(compiler_output)?;
@@ -297,13 +347,7 @@ mod tests {
         "language": "Solidity",
         "sources": {
             "a.sol": {
-            "content": "pragma solidity >=0.4.5;\n\n\ncontract A {\n   function get_a() public returns (uint256) {\n        return 88888888888;\n    }\n}"
-            },
-            "b.sol": {
-            "content": "pragma solidity >=0.4.5;\n\n\ncontract B {\n   function get_b() public returns (uint256) {\n        return 7777777777777;\n    }\n}"
-            },
-            "main.sol": {
-            "content": "pragma solidity >=0.4.5;\n\nimport \"./a.sol\";\n\nimport \"./b.sol\";\n\ncontract Main is A, B {\n   function get() public returns (uint256) {\n        return get_a() + get_b();\n    }\n}\n\n"
+                "content": "pragma solidity >=0.4.5;\n\n\ncontract A {\n   function get_a() public returns (uint256) {\n        return 88888888888;\n    }\n}"
             }
         },
         "settings": {
@@ -319,10 +363,10 @@ mod tests {
             },
             "outputSelection": {
                 "*": {
-                "*": ["*"]
+                    "*": ["*"]
                 }
             }
-            }
+        }
     }
     "#;
 
@@ -333,16 +377,6 @@ mod tests {
                 "abi": "[{\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
                 "bin": "6060604052346000575b6096806100176000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634815918114603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b905600a165627a7a7230582062ac15c74e3af0aec92b47f64d9c8909939b731732d5ee4163c6ed3af70806550029",
                 "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680634815918114603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b905600a165627a7a7230582062ac15c74e3af0aec92b47f64d9c8909939b731732d5ee4163c6ed3af70806550029"
-            },
-            "B": {
-                "abi": "[{\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
-                "bin": "6060604052346000575b6097806100176000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063f3d33cf414603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b6000650712e7ae7c7190505b905600a165627a7a723058201d98c5b92f01dbead603c6c3b4c7f04520fa048e1eacf0ce2dad63a406019c710029",
-                "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063f3d33cf414603c575b6000565b346000576046605c565b6040518082815260200191505060405180910390f35b6000650712e7ae7c7190505b905600a165627a7a723058201d98c5b92f01dbead603c6c3b4c7f04520fa048e1eacf0ce2dad63a406019c710029"
-            },
-            "Main": {
-                "abi": "[{\"inputs\":[],\"name\":\"get\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"get_a\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"get_b\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
-                "bin": "606060405234610000575b61010e806100196000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063481591811460505780636d4ce63c146070578063f3d33cf4146090575b6000565b34600057605a60b0565b6040518082815260200191505060405180910390f35b34600057607a60be565b6040518082815260200191505060405180910390f35b34600057609a60d3565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b90565b600060c660d3565b60cc60b0565b0190505b90565b6000650712e7ae7c7190505b905600a165627a7a72305820a80a9599b36625e94a3eadfd5c31475a2c507be6d1a9fa9a35e9cd4c54bce1390029",
-                "bin-runtime": "60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063481591811460505780636d4ce63c146070578063f3d33cf4146090575b6000565b34600057605a60b0565b6040518082815260200191505060405180910390f35b34600057607a60be565b6040518082815260200191505060405180910390f35b34600057609a60d3565b6040518082815260200191505060405180910390f35b60006414b230ce3890505b90565b600060c660d3565b60cc60b0565b0190505b90565b6000650712e7ae7c7190505b905600a165627a7a72305820a80a9599b36625e94a3eadfd5c31475a2c507be6d1a9fa9a35e9cd4c54bce1390029"
             }
         },
         "version": "0.4.8+commit.60cc1668"
@@ -426,7 +460,7 @@ mod tests {
             .expect("failed to convert files");
         assert!(input_files.files_dir.path().exists());
 
-        let expected_files: Vec<PathBuf> = vec!["a.sol", "b.sol", "main.sol"]
+        let expected_files: Vec<PathBuf> = vec!["a.sol"]
             .into_iter()
             .map(|name| input_files.files_dir.path().join(name))
             .collect();
@@ -457,12 +491,19 @@ mod tests {
 
     #[test]
     fn correct_output() {
+        let parent_dir = PathBuf::from("parent_dir");
+        let file_names = vec![PathBuf::from("parent_dir/a.sol")];
         let output_json: types::OutputJson = serde_json::from_str(DEFAULT_COMPILER_OUTPUT).unwrap();
-        let compiler_output = solc::CompilerOutput::try_from(output_json.clone())
+        let convertible_output = types::ConvertibleOutput {
+            output_json: output_json.clone(),
+            parent_dir: &parent_dir,
+            file_names,
+        };
+        let compiler_output = solc::CompilerOutput::try_from(convertible_output)
             .expect("failed to convert output json");
         assert_eq!(compiler_output.contracts.len(), 1);
         let filename = compiler_output.contracts.iter().next().unwrap().0;
-        assert_eq!(filename, &PathBuf::from(""));
+        assert_eq!(filename, &PathBuf::from("a.sol"));
 
         for (name, contract) in compiler_output.contracts_iter() {
             let initial_contract = output_json
@@ -535,7 +576,7 @@ mod tests {
             );
             let names: HashSet<String> =
                 output.contracts_into_iter().map(|(name, _)| name).collect();
-            let expected_names = HashSet::from_iter(["Main".into(), "A".into(), "B".into()]);
+            let expected_names = HashSet::from_iter(["A".into()]);
             assert_eq!(names, expected_names);
 
             for sources in [
