@@ -48,7 +48,7 @@ async fn test_quick_search() {
         test_server::send_get_request(&base, "/api/v1/search:quick?q=test").await;
 
     assert_eq!(response.addresses.len(), 0);
-    assert_eq!(response.tokens.len(), 2);
+    assert_eq!(response.tokens.len(), 5);
     assert!(response.tokens[0].is_verified_contract);
     assert_eq!(response.dapps.len(), 0);
     assert_eq!(response.domains.len(), 1);

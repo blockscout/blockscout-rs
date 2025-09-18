@@ -63,3 +63,33 @@ SELECT
         ELSE 'transaction'
     END AS hash_type)
 FROM generate_series(0, 999) n;
+
+
+INSERT INTO tokens (
+    address_hash,
+    chain_id,
+    name,
+    symbol,
+    decimals,
+    token_type
+)
+SELECT
+    decode(lpad(to_hex(n * 256), 40, '0'), 'hex'),
+    (mod(n, 5) + 1), -- distribute across chains 1-5
+    CASE
+        WHEN mod(n, 4) = 0 THEN 'Test Token' || n
+        ELSE NULL
+    END,
+    CASE
+        WHEN mod(n, 3) = 0 THEN 'Test Symbol' || n
+        ELSE NULL
+    END,
+    6,
+    CAST(CASE mod(n, 4)
+            WHEN 0 THEN 'ERC-20'
+            WHEN 1 THEN 'ERC-721'
+            WHEN 2 THEN 'ERC-1155'
+            ELSE 'ERC-404'
+        END AS token_type
+    )
+FROM generate_series(0, 999) n;
