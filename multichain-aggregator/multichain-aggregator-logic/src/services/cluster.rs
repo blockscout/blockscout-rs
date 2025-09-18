@@ -42,10 +42,13 @@ use std::{
 
 pub type DecodedCalldataCache = CacheHandler<RedisStore, String, serde_json::Value>;
 pub type DomainSearchCache = CacheHandler<RedisStore, String, (Vec<Domain>, Option<String>)>;
+pub type TokenSearchCache =
+    CacheHandler<RedisStore, String, (Vec<AggregatedToken>, Option<ListClusterTokensPageToken>)>;
 type BlockscoutClients = BTreeMap<ChainId, Arc<HttpApiClient>>;
 
 pub struct Cluster {
     db: DatabaseConnection,
+    name: String,
     chain_ids: HashSet<ChainId>,
     blockscout_clients: BlockscoutClients,
     decoded_calldata_cache: Option<DecodedCalldataCache>,
@@ -55,6 +58,7 @@ pub struct Cluster {
     bens_protocols: Option<&'static [String]>,
     domain_primary_chain_id: ChainId,
     domain_search_cache: Option<DomainSearchCache>,
+    token_search_cache: Option<TokenSearchCache>,
     pub marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
 }
 
@@ -62,6 +66,7 @@ impl Cluster {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         db: DatabaseConnection,
+        name: String,
         chain_ids: HashSet<ChainId>,
         blockscout_clients: BlockscoutClients,
         decoded_calldata_cache: Option<DecodedCalldataCache>,
@@ -71,9 +76,11 @@ impl Cluster {
         bens_protocols: Option<&'static [String]>,
         domain_primary_chain_id: ChainId,
         domain_search_cache: Option<DomainSearchCache>,
+        token_search_cache: Option<TokenSearchCache>,
     ) -> Self {
         Self {
             db,
+            name,
             chain_ids,
             blockscout_clients,
             decoded_calldata_cache,
@@ -84,6 +91,7 @@ impl Cluster {
             bens_protocols,
             domain_primary_chain_id,
             domain_search_cache,
+            token_search_cache,
         }
     }
 
@@ -619,7 +627,7 @@ impl Cluster {
         Ok((addresses, page_token))
     }
 
-    pub async fn search_token_infos(
+    pub async fn search_token_infos_cached(
         &self,
         query: String,
         chain_ids: Vec<ChainId>,
@@ -630,10 +638,32 @@ impl Cluster {
             return Ok((vec![], None));
         }
 
+        let is_first_page = page_token.is_none();
+        let key = format!("{}:{}:{}", self.name, query, page_size);
+
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+        let db = self.db.clone();
         let token_types = vec![TokenType::Erc20];
-        let (mut tokens, page_token) = self
-            .list_cluster_tokens(token_types, chain_ids, Some(query), page_size, page_token)
-            .await?;
+
+        let get = || async move {
+            tokens::list_aggregated_tokens(
+                &db,
+                chain_ids,
+                token_types,
+                Some(query),
+                page_size,
+                page_token,
+            )
+            .await
+            .map_err(ServiceError::from)
+        };
+
+        // cache only the first page to speed up quick search
+        let (mut tokens, page_token) = if is_first_page {
+            maybe_cache_lookup!(self.token_search_cache.as_ref(), key, get)?
+        } else {
+            get().await?
+        };
 
         tokens.iter_mut().for_each(|token| {
             if let Some(icon_url) = &mut token.icon_url {

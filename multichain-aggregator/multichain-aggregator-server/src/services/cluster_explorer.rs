@@ -299,7 +299,12 @@ impl ClusterExplorerService for ClusterExplorer {
         &self,
         request: Request<SearchByQueryRequest>,
     ) -> Result<Response<SearchTokensResponse>, Status> {
-        paginated_list_by_query_endpoint!(self, request, search_token_infos, SearchTokensResponse)
+        paginated_list_by_query_endpoint!(
+            self,
+            request,
+            search_token_infos_cached,
+            SearchTokensResponse
+        )
     }
 
     async fn search_domains(

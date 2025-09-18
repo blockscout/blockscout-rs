@@ -131,7 +131,7 @@ impl SearchTerm {
             SearchTerm::TokenInfo(query) => {
                 let (mut tokens, _) = search_context
                     .cluster
-                    .search_token_infos(
+                    .search_token_infos_cached(
                         query,
                         active_chain_ids,
                         // TODO: temporary increase number of tokens to improve search quality

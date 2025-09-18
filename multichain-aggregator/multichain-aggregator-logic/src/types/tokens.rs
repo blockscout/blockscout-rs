@@ -104,7 +104,7 @@ pub fn token_chain_infos_expr() -> SimpleExpr {
     )
 }
 
-#[derive(Debug, Clone, DerivePartialModel)]
+#[derive(Debug, Clone, DerivePartialModel, Serialize, Deserialize)]
 #[sea_orm(entity = "Entity", from_query_result)]
 pub struct AggregatedToken {
     pub address_hash: SeaOrmAddress,
