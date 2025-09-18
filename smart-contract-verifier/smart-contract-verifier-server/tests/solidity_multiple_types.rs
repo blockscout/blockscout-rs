@@ -19,6 +19,9 @@ pub struct TestInput {
     pub creation_tx_input: Option<String>,
     /// If None, the bytecode would be read from the corresponding file
     pub deployed_bytecode: Option<String>,
+
+    /// Would be filled by `test_setup` function later
+    pub file_path: Option<String>,
 }
 
 impl TestInput {
@@ -37,6 +40,8 @@ impl TestInput {
             source_code: None,
             creation_tx_input: None,
             deployed_bytecode: None,
+
+            file_path: None,
         }
     }
 
