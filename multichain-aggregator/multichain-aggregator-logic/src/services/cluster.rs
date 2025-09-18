@@ -12,7 +12,7 @@ use crate::{
     services::{
         self, MIN_QUERY_LENGTH, dapp_search,
         macros::{maybe_cache_lookup, preload_domain_info},
-        quick_search::{self, DomainSearchCache, SearchContext},
+        quick_search::{self, SearchContext},
     },
     types::{
         ChainId,
@@ -41,6 +41,7 @@ use std::{
 };
 
 pub type DecodedCalldataCache = CacheHandler<RedisStore, String, serde_json::Value>;
+pub type DomainSearchCache = CacheHandler<RedisStore, String, (Vec<Domain>, Option<String>)>;
 type BlockscoutClients = BTreeMap<ChainId, Arc<HttpApiClient>>;
 
 pub struct Cluster {
@@ -740,14 +741,9 @@ impl Cluster {
         is_aggregated: bool,
     ) -> Result<QuickSearchResult, ServiceError> {
         let context = SearchContext {
-            db: Arc::new(self.db.clone()),
-            dapp_client: &self.dapp_client,
-            bens_client: &self.bens_client,
-            bens_protocols: self.bens_protocols,
-            domain_primary_chain_id: self.domain_primary_chain_id,
-            marketplace_enabled_cache: &self.marketplace_enabled_cache,
-            domain_search_cache: self.domain_search_cache.as_ref(),
             cluster: self,
+            db: Arc::new(self.db.clone()),
+            domain_primary_chain_id: self.domain_primary_chain_id,
             is_aggregated,
         };
         let result = quick_search::quick_search(query, &self.quick_search_chains, &context).await?;

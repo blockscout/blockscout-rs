@@ -24,8 +24,7 @@ use multichain_aggregator_logic::{
             list_active_chains_cached,
         },
         channel::Channel,
-        cluster::{Cluster, DecodedCalldataCache},
-        quick_search::DomainSearchCache,
+        cluster::{Cluster, DecodedCalldataCache, DomainSearchCache},
     },
 };
 use recache::stores::redis::RedisStore;
