@@ -1,5 +1,5 @@
 use crate::{
-    clients::{dapp, token_info},
+    clients::dapp,
     error::ServiceError,
     repository,
     types::{ChainId, chains::Chain},
@@ -42,24 +42,6 @@ pub async fn list_repo_chains_cached(
     time = 600, // 10 minutes
     result = true
 )]
-async fn list_token_info_chains_cached(
-    token_info_client: &HttpApiClient,
-) -> Result<Vec<ChainId>, ServiceError> {
-    let chain_ids = token_info_client
-        .request(&token_info::list_chains::ListChains {})
-        .await?
-        .chains
-        .into_iter()
-        .filter_map(|id| ChainId::try_from(id).ok())
-        .collect();
-
-    Ok(chain_ids)
-}
-
-#[once(
-    time = 600, // 10 minutes
-    result = true
-)]
 async fn list_dapp_chains_cached(
     dapp_client: &HttpApiClient,
 ) -> Result<Vec<ChainId>, ServiceError> {
@@ -75,12 +57,7 @@ async fn list_dapp_chains_cached(
 
 pub enum ChainSource<'a> {
     Repository,
-    TokenInfo {
-        token_info_client: &'a HttpApiClient,
-    },
-    Dapp {
-        dapp_client: &'a HttpApiClient,
-    },
+    Dapp { dapp_client: &'a HttpApiClient },
 }
 
 pub async fn list_active_chains_cached(
@@ -97,10 +74,6 @@ pub async fn list_active_chains_cached(
                     .into_iter()
                     .map(|c| c.id);
                 chain_ids.extend(active_repo_chain_ids);
-            }
-            ChainSource::TokenInfo { token_info_client } => {
-                let token_info_chain_ids = list_token_info_chains_cached(token_info_client).await?;
-                chain_ids.extend(token_info_chain_ids);
             }
             ChainSource::Dapp { dapp_client } => {
                 let dapp_chain_ids = list_dapp_chains_cached(dapp_client).await?;

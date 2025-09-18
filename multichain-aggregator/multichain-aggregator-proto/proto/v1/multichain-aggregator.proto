@@ -85,9 +85,9 @@ message MarketplaceDapp {
 
 message Token {
   string address = 1;
-  string icon_url = 2;
-  string name = 3;
-  string symbol = 4;
+  optional string icon_url = 2;
+  optional string name = 3;
+  optional string symbol = 4;
   string chain_id = 5;
   bool is_verified_contract = 6;
 }

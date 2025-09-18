@@ -1,5 +1,5 @@
 use crate::{
-    repository::{paginate_query, pagination::KeySpec},
+    repository::{paginate_query, pagination::KeySpec, prepare_ts_query},
     types::{
         ChainId,
         addresses::{Address, AggregatedAddressInfo, ChainAddressInfo},
@@ -11,7 +11,6 @@ use entity::{
     addresses::{Column, Entity, Model},
     sea_orm_active_enums as db_enum,
 };
-use regex::Regex;
 use sea_orm::{
     ActiveValue::NotSet,
     ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
@@ -23,12 +22,6 @@ use sea_orm::{
         WithClause,
     },
 };
-use std::{collections::HashMap, sync::OnceLock};
-
-fn words_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"[a-zA-Z0-9]+").unwrap())
-}
 
 pub async fn upsert_many<C>(db: &C, mut addresses: Vec<Address>) -> Result<(), DbErr>
 where
@@ -156,42 +149,6 @@ where
         .await?;
 
     Ok(addresses)
-}
-
-pub async fn get_batch<C>(
-    db: &C,
-    pks: Vec<(&AddressAlloy, ChainId)>,
-) -> Result<HashMap<(AddressAlloy, ChainId), Model>, DbErr>
-where
-    C: ConnectionTrait,
-{
-    let models = Entity::find()
-        .filter(
-            Expr::tuple([
-                Column::Hash.into_simple_expr(),
-                Column::ChainId.into_simple_expr(),
-            ])
-            .is_in(
-                pks.into_iter()
-                    .map(|(address, chain_id)| {
-                        Expr::tuple([address.as_slice().into(), chain_id.into()]).into_simple_expr()
-                    })
-                    .collect::<Vec<_>>(),
-            ),
-        )
-        .all(db)
-        .await?;
-
-    let pk_to_model = models
-        .into_iter()
-        .map(|m| {
-            let address = parse_db_address(m.hash.as_slice());
-            let pk = (address, m.chain_id);
-            (pk, m)
-        })
-        .collect();
-
-    Ok(pk_to_model)
 }
 
 pub async fn list<C>(
@@ -408,12 +365,4 @@ fn non_primary_columns() -> impl Iterator<Item = Column> {
             Column::Hash | Column::ChainId | Column::CreatedAt | Column::UpdatedAt
         )
     })
-}
-
-fn prepare_ts_query(query: &str) -> String {
-    words_regex()
-        .find_iter(query.trim())
-        .map(|w| format!("{}:*", w.as_str()))
-        .collect::<Vec<String>>()
-        .join(" & ")
 }

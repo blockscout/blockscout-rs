@@ -9,7 +9,7 @@ use sea_orm::{
     ActiveValue::{NotSet, Set, Unchanged},
     DeriveIntoActiveModel, DerivePartialModel, FromJsonQueryResult, IntoActiveModel,
     IntoActiveValue, IntoSimpleExpr,
-    prelude::{BigDecimal, Decimal, Expr},
+    prelude::{BigDecimal, ColumnTrait, Decimal, Expr},
     sea_query::SimpleExpr,
 };
 use serde::{Deserialize, Serialize};
@@ -93,23 +93,6 @@ impl IntoActiveModel<ActiveModel> for UpdateTokenType {
     }
 }
 
-#[derive(DerivePartialModel, Clone, Debug)]
-#[sea_orm(entity = "Entity", from_query_result)]
-pub struct Token {
-    pub address_hash: Vec<u8>,
-    pub chain_id: ChainId,
-    pub name: Option<String>,
-    pub symbol: Option<String>,
-    pub decimals: Option<i16>,
-    pub token_type: TokenType,
-    pub icon_url: Option<String>,
-    pub fiat_value: Option<Decimal>,
-    pub circulating_market_cap: Option<Decimal>,
-    pub total_supply: Option<BigDecimal>,
-    pub holders_count: Option<i64>,
-    pub transfers_count: Option<i64>,
-}
-
 pub fn token_chain_infos_expr() -> SimpleExpr {
     Expr::cust_with_exprs(
         "jsonb_build_object('chain_id',$1,'holders_count',$2,'total_supply',$3)",
@@ -121,7 +104,7 @@ pub fn token_chain_infos_expr() -> SimpleExpr {
     )
 }
 
-#[derive(Debug, Clone, DerivePartialModel)]
+#[derive(Debug, Clone, DerivePartialModel, Serialize, Deserialize)]
 #[sea_orm(entity = "Entity", from_query_result)]
 pub struct AggregatedToken {
     pub address_hash: SeaOrmAddress,
@@ -140,6 +123,8 @@ pub struct AggregatedToken {
         from_expr = r#"Expr::cust_with_expr("jsonb_build_array($1)", token_chain_infos_expr())"#
     )]
     pub chain_infos: Vec<ChainInfo>,
+    #[sea_orm(from_expr = r#"entity::addresses::Column::IsVerifiedContract.if_null(false)"#)]
+    pub is_verified_contract: bool,
 }
 
 #[derive(Debug, Clone, FromJsonQueryResult, Serialize, Deserialize)]
@@ -163,8 +148,7 @@ impl TryFrom<AggregatedToken> for proto::AggregatedTokenInfo {
 
     fn try_from(value: AggregatedToken) -> Result<Self, Self::Error> {
         Ok(Self {
-            address_hash: alloy_primitives::Address::try_from(value.address_hash.as_slice())?
-                .to_string(),
+            address_hash: value.address_hash.to_string(),
             circulating_market_cap: value.circulating_market_cap.map(|c| c.to_string()),
             decimals: value.decimals.map(|d| d.to_string()),
             icon_url: value.icon_url,
@@ -180,5 +164,18 @@ impl TryFrom<AggregatedToken> for proto::AggregatedTokenInfo {
                 .map(|c| (c.chain_id.to_string(), c.into()))
                 .collect(),
         })
+    }
+}
+
+impl From<AggregatedToken> for proto::Token {
+    fn from(v: AggregatedToken) -> Self {
+        Self {
+            address: v.address_hash.to_string(),
+            name: v.name,
+            symbol: v.symbol,
+            icon_url: v.icon_url,
+            chain_id: v.chain_id.to_string(),
+            is_verified_contract: v.is_verified_contract,
+        }
     }
 }

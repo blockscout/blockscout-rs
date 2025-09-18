@@ -2,7 +2,6 @@
 mod helpers;
 mod test_db;
 
-use alloy_primitives::Address;
 use blockscout_service_launcher::{database, test_server};
 use multichain_aggregator_logic::types::api_keys::ApiKey;
 use multichain_aggregator_proto::blockscout::multichain_aggregator::v1 as proto;
@@ -35,12 +34,10 @@ async fn test_quick_search() {
 
     let quick_search_chains = vec![5, 3, 2, 1];
 
-    let token_info_server = mock_token_info_server().await;
     let dapp_server = mock_dapp_server().await;
     let bens_server = mock_bens_server().await;
     let base = helpers::init_server_with_setup(db.db_url(), |mut x| {
         x.service.dapp_client.url = dapp_server.uri().parse().unwrap();
-        x.service.token_info_client.url = token_info_server.uri().parse().unwrap();
         x.service.bens_client.url = bens_server.uri().parse().unwrap();
         x.service.quick_search_chains = quick_search_chains.clone();
         x
@@ -51,7 +48,7 @@ async fn test_quick_search() {
         test_server::send_get_request(&base, "/api/v1/search:quick?q=test").await;
 
     assert_eq!(response.addresses.len(), 0);
-    assert_eq!(response.tokens.len(), 2);
+    assert_eq!(response.tokens.len(), 5);
     assert!(response.tokens[0].is_verified_contract);
     assert_eq!(response.dapps.len(), 0);
     assert_eq!(response.domains.len(), 1);
@@ -71,34 +68,6 @@ async fn test_quick_search() {
         response.addresses[0].domain_info.as_ref().unwrap().name,
         "test-500.eth"
     );
-}
-
-async fn mock_token_info_server() -> MockServer {
-    let mock = MockServer::start().await;
-    let payload = json!({
-        "token_infos": [
-            {
-                "tokenAddress": Address::from_slice(&[0; 20]).to_string(),
-                "chainId": "1",
-                "iconUrl": "https://test1",
-                "tokenName": "Test Token 1",
-                "tokenSymbol": "TKN1"
-            },
-            {
-                "tokenAddress": Address::from_slice(&[1; 20]).to_string(),
-                "chainId": "10",
-                "iconUrl": "https://test2",
-                "tokenName": "Test Token 2",
-                "tokenSymbol": "TKN2"
-            }
-        ]
-    });
-    Mock::given(method("GET"))
-        .and(path("/api/v1/token-infos:search"))
-        .respond_with(ResponseTemplate::new(StatusCode::OK).set_body_json(payload))
-        .mount(&mock)
-        .await;
-    mock
 }
 
 async fn mock_dapp_server() -> MockServer {

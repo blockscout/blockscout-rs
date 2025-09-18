@@ -1,10 +1,11 @@
 use alloy_primitives::{Address, B256, Bytes};
 use amplify::Wrapper;
 use sea_orm::{ColIdx, DbErr, QueryResult, TryGetError, TryGetable};
+use serde::{Deserialize, Serialize};
 
 macro_rules! impl_sea_orm_wrapper {
     ($type:ty, $db_type:ty, $wrapper:ident, $convert:expr) => {
-        #[derive(Wrapper, Debug, Clone)]
+        #[derive(Wrapper, Debug, Clone, Serialize, Deserialize)]
         #[wrapper(Deref, FromStr)]
         pub struct $wrapper($type);
 

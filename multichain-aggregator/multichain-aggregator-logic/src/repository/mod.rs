@@ -13,10 +13,12 @@ pub mod tokens;
 
 mod batch_update;
 
+use regex::Regex;
 use sea_orm::{
     ConnectionTrait, Cursor, DbErr, FromQueryResult, SelectorTrait,
     sea_query::{IntoValueTuple, SelectStatement},
 };
+use std::sync::OnceLock;
 
 // TODO: replace with `paginate_query` in all applicable places
 pub async fn paginate_cursor<S, E, R1, R2, F>(
@@ -82,6 +84,19 @@ where
     } else {
         Ok((models, None))
     }
+}
+
+fn words_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"[a-zA-Z0-9]+").unwrap())
+}
+
+fn prepare_ts_query(query: &str) -> String {
+    words_regex()
+        .find_iter(query.trim())
+        .map(|w| format!("{}:*", w.as_str()))
+        .collect::<Vec<String>>()
+        .join(" & ")
 }
 
 pub mod macros {
