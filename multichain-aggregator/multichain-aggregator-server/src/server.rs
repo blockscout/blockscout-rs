@@ -214,6 +214,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     settings.service.bens_protocols.clone().map(|p| &*p.leak()),
                     settings.service.domain_primary_chain_id,
                     domain_search_cache.clone(),
+                    marketplace_enabled_cache.clone(),
                 ),
             )
         })
@@ -233,6 +234,7 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             settings.service.bens_protocols.clone().map(|p| &*p.leak()),
             settings.service.domain_primary_chain_id,
             domain_search_cache.clone(),
+            marketplace_enabled_cache.clone(),
         ),
     );
     let cluster_explorer = Arc::new(ClusterExplorer::new(clusters, settings.service.api.clone()));
