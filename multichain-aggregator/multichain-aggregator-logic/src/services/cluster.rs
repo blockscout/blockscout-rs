@@ -74,13 +74,13 @@ impl Cluster {
         bens_protocols: Option<&'static [String]>,
         domain_primary_chain_id: ChainId,
         domain_search_cache: Option<DomainSearchCache>,
+        marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
     ) -> Self {
         Self {
             db,
             chain_ids,
             blockscout_clients,
             decoded_calldata_cache,
-            marketplace_enabled_cache: Default::default(),
             quick_search_chains,
             dapp_client,
             token_info_client,
@@ -88,6 +88,7 @@ impl Cluster {
             bens_protocols,
             domain_primary_chain_id,
             domain_search_cache,
+            marketplace_enabled_cache,
         }
     }
 
