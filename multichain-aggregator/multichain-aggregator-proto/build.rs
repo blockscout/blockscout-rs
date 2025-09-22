@@ -66,7 +66,7 @@ fn compile(
             ("ListTokensRequest", "chain_id"),
             ("ListTransactionsRequest", "chain_id"),
             ("ListNftsRequest", "chain_id"),
-            ("ListDappsRequest", "chain_id"),
+            ("ListDappsRequest", "chain_ids"),
             ("ListDomainsRequest", "chain_id"),
             ("ListBlockNumbersRequest", "chain_id"),
             ("ListBlocksRequest", "chain_id"),

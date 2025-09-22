@@ -308,6 +308,18 @@ impl ClusterExplorerService for ClusterExplorer {
         )
     }
 
+    async fn search_dapps(
+        &self,
+        request: Request<SearchByQueryRequest>,
+    ) -> Result<Response<SearchDappsResponse>, Status> {
+        paginated_list_by_query_endpoint!(
+            self,
+            request,
+            search_dapps_paginated,
+            SearchDappsResponse
+        )
+    }
+
     async fn quick_search(
         &self,
         request: Request<ClusterQuickSearchRequest>,
