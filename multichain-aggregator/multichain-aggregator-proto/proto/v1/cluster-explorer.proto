@@ -28,6 +28,7 @@ service ClusterExplorerService {
   rpc SearchBlockNumbers(SearchByQueryRequest) returns (SearchBlockNumbersResponse) {}
   rpc SearchTokens(SearchByQueryRequest) returns (SearchTokensResponse) {}
   rpc SearchDomains(SearchByQueryRequest) returns (SearchDomainsResponse) {}
+  rpc SearchDapps(SearchByQueryRequest) returns (SearchDappsResponse) {}
   rpc QuickSearch(ClusterQuickSearchRequest) returns (ClusterQuickSearchResponse) {}
 }
 

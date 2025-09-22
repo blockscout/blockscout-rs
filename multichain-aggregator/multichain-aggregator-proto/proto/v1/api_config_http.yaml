@@ -92,6 +92,9 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchDomains
       get: /api/v1/clusters/{cluster_id}/search/domains
 
+    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.SearchDapps
+      get: /api/v1/clusters/{cluster_id}/search/dapps
+
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.QuickSearch
       get: /api/v1/clusters/{cluster_id}/search:quick
 
