@@ -72,6 +72,7 @@ fn compile(
             ("ListBlocksRequest", "chain_id"),
             ("ListClusterTokensRequest", "chain_id"),
             ("ListAddressTokensRequest", "chain_id"),
+            ("SearchByQueryRequest", "chain_id"),
         ],
     );
 
