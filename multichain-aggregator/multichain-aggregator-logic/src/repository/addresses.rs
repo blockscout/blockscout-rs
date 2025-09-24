@@ -295,7 +295,7 @@ where
     .to_owned();
 
     let order_keys = vec![KeySpec::asc(Expr::col(Column::Hash).into())];
-    let page_token = page_token.map(|address| (address.to_vec()));
+    let page_token = page_token.map(|address| address.to_vec());
 
     paginate_query(
         db,

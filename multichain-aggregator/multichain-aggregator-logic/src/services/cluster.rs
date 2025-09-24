@@ -77,6 +77,7 @@ impl Cluster {
         domain_primary_chain_id: ChainId,
         domain_search_cache: Option<DomainSearchCache>,
         token_search_cache: Option<TokenSearchCache>,
+        marketplace_enabled_cache: services::chains::MarketplaceEnabledCache,
     ) -> Self {
         Self {
             db,
@@ -84,7 +85,6 @@ impl Cluster {
             chain_ids,
             blockscout_clients,
             decoded_calldata_cache,
-            marketplace_enabled_cache: Default::default(),
             quick_search_chains,
             dapp_client,
             bens_client,
@@ -92,6 +92,7 @@ impl Cluster {
             domain_primary_chain_id,
             domain_search_cache,
             token_search_cache,
+            marketplace_enabled_cache,
         }
     }
 
@@ -719,6 +720,22 @@ impl Cluster {
             maybe_cache_lookup!(self.domain_search_cache.as_ref(), key, get)?;
 
         Ok((domains, next_page_token))
+    }
+
+    // TODO: Add working pagination for dapps
+    // Currently this method is just for compatibility with paginated_list_by_query_endpoint! macro
+    pub async fn search_dapps_paginated(
+        &self,
+        query: String,
+        chain_ids: Vec<ChainId>,
+        _page_size: u64,
+        _page_token: Option<String>,
+    ) -> Result<(Vec<MarketplaceDapp>, Option<String>), ServiceError> {
+        let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
+
+        let dapps = self.search_dapps(Some(query), chain_ids, None).await?;
+
+        Ok((dapps, None))
     }
 
     pub async fn search_dapps(
