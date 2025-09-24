@@ -318,6 +318,7 @@ impl Cluster {
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
         let res = tokens::list_aggregated_tokens(
             &self.db,
+            vec![],
             chain_ids,
             token_types,
             query,
@@ -638,6 +639,13 @@ impl Cluster {
             return Ok((vec![], None));
         }
 
+        let (addresses, tokens_query) =
+            if let Ok(address) = alloy_primitives::Address::from_str(&query) {
+                (vec![address], None)
+            } else {
+                (vec![], Some(query.to_string()))
+            };
+
         let is_first_page = page_token.is_none();
         let key = format!("{}:{}:{}", self.name, query, page_size);
 
@@ -648,9 +656,10 @@ impl Cluster {
         let get = || async move {
             tokens::list_aggregated_tokens(
                 &db,
+                addresses,
                 chain_ids,
                 token_types,
-                Some(query),
+                tokens_query,
                 page_size,
                 page_token,
             )

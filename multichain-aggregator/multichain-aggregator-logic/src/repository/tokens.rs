@@ -182,6 +182,7 @@ where
 // Select query for nested `AggregatedToken` struct
 // This query converts a single-chain token into a multichain format
 pub fn base_normal_tokens_query(
+    addresses: Vec<Address>,
     chain_ids: Vec<ChainId>,
     token_types: Vec<TokenType>,
     search_query: Option<String>,
@@ -211,6 +212,19 @@ pub fn base_normal_tokens_query(
                 ts_query,
             ))
         })
+        .apply_if(
+            (!addresses.is_empty()).then_some(addresses),
+            |q, addresses| {
+                q.filter(
+                    Column::AddressHash.is_in(
+                        addresses
+                            .into_iter()
+                            .map(|a| a.to_vec())
+                            .collect::<Vec<_>>(),
+                    ),
+                )
+            },
+        )
         .select_only()
 }
 
@@ -222,8 +236,7 @@ pub async fn get_aggregated_token<C>(
 where
     C: ConnectionTrait + TransactionTrait,
 {
-    let token = base_normal_tokens_query(vec![chain_id], vec![], None)
-        .filter(Column::AddressHash.eq(address_hash.as_slice()))
+    let token = base_normal_tokens_query(vec![address_hash], vec![chain_id], vec![], None)
         .into_partial_model::<AggregatedToken>()
         .one(db)
         .await?;
@@ -242,6 +255,7 @@ pub type ListClusterTokensPageToken = (
 
 pub async fn list_aggregated_tokens<C>(
     db: &C,
+    addresses: Vec<Address>,
     chain_ids: Vec<ChainId>,
     token_types: Vec<TokenType>,
     query: Option<String>,
@@ -251,10 +265,14 @@ pub async fn list_aggregated_tokens<C>(
 where
     C: ConnectionTrait + TransactionTrait,
 {
-    let query =
-        AggregatedToken::select_cols(base_normal_tokens_query(chain_ids, token_types, query))
-            .as_query()
-            .to_owned();
+    let query = AggregatedToken::select_cols(base_normal_tokens_query(
+        addresses,
+        chain_ids,
+        token_types,
+        query,
+    ))
+    .as_query()
+    .to_owned();
 
     let order_keys = vec![
         KeySpec::desc_nulls_last(Expr::col(Column::CirculatingMarketCap).into()),
