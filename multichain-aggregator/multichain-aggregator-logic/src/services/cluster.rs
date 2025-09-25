@@ -508,14 +508,14 @@ impl Cluster {
             return Ok((vec![], None));
         }
 
-        // TODO: optimize contract name query. Current queries are too slow.
-        let (addresses, _contract_name_query) = self.prepare_addresses_query(query).await?;
+        let (addresses, contract_name_query) = self.prepare_addresses_query(query).await?;
 
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
         let (mut addresses, page_token) = addresses::list_aggregated_address_infos(
             &self.db,
             addresses,
             Some(chain_ids),
+            contract_name_query,
             page_size,
             page_token,
         )
@@ -537,14 +537,14 @@ impl Cluster {
             return Ok((vec![], None));
         }
 
-        // TODO: optimize contract name query. Current queries are too slow.
-        let (addresses, _contract_name_query) = self.prepare_addresses_query(query).await?;
+        let (addresses, contract_name_query) = self.prepare_addresses_query(query).await?;
 
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
         let (mut addresses, page_token) = addresses::list_chain_address_infos(
             &self.db,
             addresses,
             Some(chain_ids),
+            contract_name_query,
             page_size,
             page_token,
         )
@@ -648,6 +648,24 @@ impl Cluster {
         page_size: u64,
         page_token: Option<ListClusterTokensPageToken>,
     ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
+        self.search_tokens_cached(
+            query,
+            chain_ids,
+            vec![TokenType::Erc20],
+            page_size,
+            page_token,
+        )
+        .await
+    }
+
+    pub async fn search_tokens_cached(
+        &self,
+        query: String,
+        chain_ids: Vec<ChainId>,
+        token_types: Vec<TokenType>,
+        page_size: u64,
+        page_token: Option<ListClusterTokensPageToken>,
+    ) -> Result<(Vec<AggregatedToken>, Option<ListClusterTokensPageToken>), ServiceError> {
         if query.len() < MIN_QUERY_LENGTH {
             return Ok((vec![], None));
         }
@@ -660,11 +678,17 @@ impl Cluster {
             };
 
         let is_first_page = page_token.is_none();
-        let key = format!("{}:{}:{}", self.name, query, page_size);
+        let key = {
+            let token_types_key = token_types
+                .iter()
+                .map(|t| format!("{:?}", t))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{}:{}:{}:{}", self.name, query, token_types_key, page_size)
+        };
 
         let chain_ids = self.validate_and_prepare_chain_ids(chain_ids).await?;
         let db = self.db.clone();
-        let token_types = vec![TokenType::Erc20];
 
         let get = || async move {
             tokens::list_aggregated_tokens(

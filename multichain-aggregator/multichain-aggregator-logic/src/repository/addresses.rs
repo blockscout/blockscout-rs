@@ -15,7 +15,7 @@ use sea_orm::{
     ActiveValue::NotSet,
     ColumnTrait, ConnectionTrait, DbErr, EntityName, EntityTrait, FromQueryResult, IntoActiveModel,
     IntoSimpleExpr, Iterable, JoinType, Order, PartialModelTrait, QueryFilter, QuerySelect,
-    QueryTrait, RelationDef,
+    QueryTrait, RelationDef, Select,
     prelude::Expr,
     sea_query::{
         Alias, ColumnRef, CommonTableExpression, IntoIden, OnConflict, Query, WindowStatement,
@@ -264,10 +264,44 @@ where
     Ok(address_info)
 }
 
+fn base_address_infos_query(
+    addresses: Vec<AddressAlloy>,
+    cluster_chain_ids: Option<Vec<ChainId>>,
+    contract_name_query: Option<String>,
+) -> Select<Entity> {
+    Entity::find()
+        .select_only()
+        .join(JoinType::LeftJoin, coin_balances_rel())
+        .apply_if(
+            (!addresses.is_empty()).then_some(addresses),
+            |q, addresses| {
+                q.filter(
+                    Column::Hash.is_in(
+                        addresses
+                            .into_iter()
+                            .map(|a| a.to_vec())
+                            .collect::<Vec<_>>(),
+                    ),
+                )
+            },
+        )
+        .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
+            q.filter(Column::ChainId.is_in(cluster_chain_ids))
+        })
+        .apply_if(contract_name_query, |q, query| {
+            let ts_query = prepare_ts_query(&query);
+            q.filter(Expr::cust_with_expr(
+                "to_tsvector('english', contract_name) @@ to_tsquery($1)",
+                ts_query,
+            ))
+        })
+}
+
 pub async fn list_aggregated_address_infos<C>(
     db: &C,
     addresses: Vec<AddressAlloy>,
     cluster_chain_ids: Option<Vec<ChainId>>,
+    contract_name_query: Option<String>,
     page_size: u64,
     page_token: Option<AddressAlloy>,
 ) -> Result<(Vec<AggregatedAddressInfo>, Option<AddressAlloy>), DbErr>
@@ -275,20 +309,7 @@ where
     C: ConnectionTrait,
 {
     let address_infos = AggregatedAddressInfo::select_cols(
-        Entity::find()
-            .select_only()
-            .join(JoinType::LeftJoin, coin_balances_rel())
-            .filter(
-                Column::Hash.is_in(
-                    addresses
-                        .into_iter()
-                        .map(|a| a.to_vec())
-                        .collect::<Vec<_>>(),
-                ),
-            )
-            .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
-                q.filter(Column::ChainId.is_in(cluster_chain_ids))
-            })
+        base_address_infos_query(addresses, cluster_chain_ids, contract_name_query)
             .group_by(Column::Hash),
     )
     .as_query()
@@ -312,28 +333,18 @@ pub async fn list_chain_address_infos<C>(
     db: &C,
     addresses: Vec<AddressAlloy>,
     cluster_chain_ids: Option<Vec<ChainId>>,
+    contract_name_query: Option<String>,
     page_size: u64,
     page_token: Option<(AddressAlloy, ChainId)>,
 ) -> Result<(Vec<ChainAddressInfo>, Option<(AddressAlloy, ChainId)>), DbErr>
 where
     C: ConnectionTrait,
 {
-    let address_infos = ChainAddressInfo::select_cols(
-        Entity::find()
-            .select_only()
-            .join(JoinType::LeftJoin, coin_balances_rel())
-            .filter(
-                Column::Hash.is_in(
-                    addresses
-                        .into_iter()
-                        .map(|a| a.to_vec())
-                        .collect::<Vec<_>>(),
-                ),
-            )
-            .apply_if(cluster_chain_ids, |q, cluster_chain_ids| {
-                q.filter(Column::ChainId.is_in(cluster_chain_ids))
-            }),
-    )
+    let address_infos = ChainAddressInfo::select_cols(base_address_infos_query(
+        addresses,
+        cluster_chain_ids,
+        contract_name_query,
+    ))
     .as_query()
     .to_owned();
 
