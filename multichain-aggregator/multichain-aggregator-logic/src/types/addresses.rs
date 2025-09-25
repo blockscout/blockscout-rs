@@ -121,6 +121,8 @@ pub struct AggregatedAddressInfo {
     pub has_interop_message_transfers: bool,
     #[sea_orm(skip)]
     pub domain_info: Option<DomainInfo>,
+    #[sea_orm(skip)]
+    pub exchange_rate: Option<String>,
 }
 
 impl AggregatedAddressInfo {
@@ -131,12 +133,19 @@ impl AggregatedAddressInfo {
             has_tokens: false,
             has_interop_message_transfers: false,
             domain_info: None,
+            exchange_rate: None,
         }
     }
 }
 
 impl From<AggregatedAddressInfo> for proto::GetAddressResponse {
     fn from(v: AggregatedAddressInfo) -> Self {
+        let coin_balance = v
+            .chain_infos
+            .iter()
+            .map(|c| c.coin_balance.clone())
+            .sum::<BigDecimal>()
+            .to_string();
         Self {
             hash: v.hash.to_string(),
             chain_infos: v
@@ -146,6 +155,8 @@ impl From<AggregatedAddressInfo> for proto::GetAddressResponse {
                 .collect(),
             has_tokens: v.has_tokens,
             has_interop_message_transfers: v.has_interop_message_transfers,
+            coin_balance,
+            exchange_rate: v.exchange_rate,
         }
     }
 }

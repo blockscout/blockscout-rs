@@ -119,6 +119,7 @@ impl QuickSearchResult {
                         has_tokens: address.has_tokens,
                         has_interop_message_transfers: address.has_interop_message_transfers,
                         domain_info: address.domain_info.clone(),
+                        exchange_rate: address.exchange_rate.clone(),
                     })
                     .collect::<Vec<_>>()
             })
